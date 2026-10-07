@@ -8,11 +8,21 @@ using UnityEngine;
 
 public sealed class SimulationRuntimeAdmissionTests
 {
+    private readonly List<GameObject> simulationObjects = new List<GameObject>();
     [SetUp]
     public void SetUp() => SimulationTestFactory.CleanupDefinitions();
 
     [TearDown]
-    public void TearDown() => SimulationTestFactory.CleanupDefinitions();
+    public void TearDown()
+    {
+        foreach (GameObject simulationObject in simulationObjects)
+        {
+            if (simulationObject != null)
+                UnityEngine.Object.DestroyImmediate(simulationObject);
+        }
+        simulationObjects.Clear();
+        SimulationTestFactory.CleanupDefinitions();
+    }
 
     [Test]
     public void DailyProfileScopesAdvancesAndRoutesOwnedClockThroughRuntime()
@@ -257,6 +267,225 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(afterOverflow, Is.SameAs(priorToken), "a clean sequence-capacity preflight preserves the prior valid boundary");
     }
 
+    [Test]
+    public void CompletedDailyTokenRejectsFinalCensusMismatchAfterCompletedBatchCores()
+    {
+        NpcActionData action = SimulationTestFactory.CreateAction("daily-token-final-census", NpcActionType.Travel);
+        action.baseUtility = 1f;
+        NpcRuntime npc = new NpcRuntime("npc-daily-token-final-census", SimulationTestFactory.CreateNpc("final-census"));
+        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+
+        SimulationRuntime runtime = null;
+        ContinuationCensusProtocol protocol = null;
+        int callbackCount = 0;
+        bool removedSection = false;
+        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        {
+            callbackCount++;
+            if (callbackCount != 2) return;
+
+            Dictionary<string, OwnerSectionContract> expectedSections =
+                ReadPrivateField<Dictionary<string, OwnerSectionContract>>(protocol, "expectedSections");
+            string sectionId = null;
+            foreach (string candidate in expectedSections.Keys)
+            {
+                sectionId = candidate;
+                break;
+            }
+
+            Assert.That(sectionId, Is.Not.Null.And.Not.Empty);
+            Assert.That(expectedSections.Remove(sectionId), Is.True);
+            removedSection = true;
+        });
+        runtime = CreatePublishedDailyCaptureRuntime(
+            new SimulationTime(),
+            new[] { npc },
+            new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
+            new[] { action });
+        protocol = ReadPrivateField<ContinuationCensusProtocol>(runtime, "npcRosterCensusProtocol");
+
+        bool advanced = runtime.TryAdvanceDays(
+            2,
+            out int daysAdvanced,
+            out SimulationRuntimeAdvanceFailure failure);
+
+        Assert.That(removedSection, Is.True);
+        Assert.That(callbackCount, Is.EqualTo(2));
+        Assert.That(advanced, Is.False);
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
+        Assert.That(daysAdvanced, Is.EqualTo(2), "both daily cores completed before final census publication was rejected");
+        Assert.That(runtime.CurrentDay, Is.EqualTo(2L));
+        Assert.That(ReadPrivateField<long>(runtime, "completedDailyCoreSequence"), Is.EqualTo(2L));
+        Assert.That(ReadPrivateField<DailyCaptureEligibilityToken>(runtime, "currentDailyCaptureToken"), Is.Null);
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+            out _, out DailyCaptureEligibilityFailure tokenFailure), Is.False);
+        Assert.That(tokenFailure, Is.EqualTo(DailyCaptureEligibilityFailure.RuntimeFaulted));
+    }
+
+    [Test]
+    public void CompletedDailyTokenIsNotPublishedAfterOperationScopeDisposalFault()
+    {
+        NpcActionData action = SimulationTestFactory.CreateAction("daily-token-scope-disposal", NpcActionType.Travel);
+        action.baseUtility = 1f;
+        NpcRuntime npc = new NpcRuntime("npc-daily-token-scope-disposal", SimulationTestFactory.CreateNpc("scope-disposal"));
+        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+
+        SimulationRuntime runtime = null;
+        ContinuationCensusProtocol protocol = null;
+        int callbackCount = 0;
+        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        {
+            callbackCount++;
+            WritePrivateField(protocol, "activeOperationCount", 0);
+        });
+        runtime = CreatePublishedDailyCaptureRuntime(
+            new SimulationTime(),
+            new[] { npc },
+            new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
+            new[] { action });
+        protocol = ReadPrivateField<ContinuationCensusProtocol>(runtime, "npcRosterCensusProtocol");
+
+        bool advanced = runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure);
+
+        Assert.That(callbackCount, Is.EqualTo(1));
+        Assert.That(advanced, Is.False);
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
+        Assert.That(runtime.CurrentDay, Is.EqualTo(1L), "the domain core completed before scope disposal detected the accounting fault");
+        Assert.That(ReadPrivateField<long>(runtime, "completedDailyCoreSequence"), Is.EqualTo(1L));
+        Assert.That(ReadPrivateField<DailyCaptureEligibilityToken>(runtime, "currentDailyCaptureToken"), Is.Null);
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+            out _, out DailyCaptureEligibilityFailure tokenFailure), Is.False);
+        Assert.That(tokenFailure, Is.EqualTo(DailyCaptureEligibilityFailure.RuntimeFaulted));
+    }
+
+    [Test]
+    public void CompletedDailyTokenBindsOwnerRevisionAndMutationEpochWitnesses()
+    {
+        SimulationRuntime ownerRuntime = CreatePublishedDailyCaptureRuntime(new SimulationTime());
+        Assert.That(ownerRuntime.TryAdvanceDay(out _), Is.True);
+        Assert.That(ownerRuntime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken ownerToken, out _), Is.True);
+
+        List<OwnerSectionCensusSnapshot> ownerSections = new List<OwnerSectionCensusSnapshot>(ownerToken.OwnerSections);
+        Assert.That(ownerSections, Is.Not.Empty);
+        OwnerSectionCensusSnapshot first = ownerSections[0];
+        ownerSections[0] = new OwnerSectionCensusSnapshot(
+            first.SectionId,
+            first.SchemaVersion,
+            first.Role,
+            first.OwnerInstanceIdentity,
+            first.Cardinality,
+            first.Revision + 1L);
+        WritePrivateField(ownerToken, "<OwnerSections>k__BackingField", Array.AsReadOnly(ownerSections.ToArray()));
+
+        Assert.That(ownerRuntime.TryValidateCompletedDailyCaptureToken(
+            ownerToken, out DailyCaptureEligibilityFailure ownerFailure), Is.False);
+        Assert.That(ownerFailure, Is.EqualTo(DailyCaptureEligibilityFailure.StaleToken));
+
+        SimulationRuntime epochRuntime = CreatePublishedDailyCaptureRuntime(new SimulationTime());
+        Assert.That(epochRuntime.TryAdvanceDay(out _), Is.True);
+        Assert.That(epochRuntime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken epochToken, out _), Is.True);
+        WritePrivateField(epochToken, "<MutationEpoch>k__BackingField", epochToken.MutationEpoch + 1L);
+
+        Assert.That(epochRuntime.TryValidateCompletedDailyCaptureToken(
+            epochToken, out DailyCaptureEligibilityFailure epochFailure), Is.False);
+        Assert.That(epochFailure, Is.EqualTo(DailyCaptureEligibilityFailure.StaleToken));
+    }
+
+    [Test]
+    public void CompletedDailyTokenIsUnavailableInsideEveryRegisteredOperationScope()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject simulationObject = new GameObject("daily-token-operation-scope-probes");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+        simulation.Start();
+
+        SimulationRuntime runtime = simulation.Runtime;
+        Assert.That(runtime, Is.Not.Null);
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.True,
+            advanceFailure.ToString());
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken token, out DailyCaptureEligibilityFailure tokenFailure), Is.True,
+            tokenFailure.ToString());
+
+        ContinuationCensusProtocol protocol = ReadPrivateField<ContinuationCensusProtocol>(runtime, "npcRosterCensusProtocol");
+        string[] operationIds =
+        {
+            "runtime.npc-membership",
+            "runtime.bootstrap-publication",
+            "runtime.advance-day",
+            "runtime.travel.start",
+            "runtime.travel-party.start",
+            "runtime.travel-party.advance",
+            "runtime.economy.npc-trade",
+            "runtime.economy.money-transfer",
+            "runtime.economy.market-purchase",
+            "runtime.economy.market-sale",
+            "runtime.merchant.advance-npc-trade-state",
+            "p12.institution-office.owner-commit",
+            "p12.faction.owner-commit",
+            "p12.political-claim.owner-commit",
+            "p12.political-support.owner-commit",
+            "p12.property.owner-commit",
+            "p12.estate.owner-commit",
+            "runtime.population.immigration",
+            "runtime.population.emigration",
+            "runtime.population.resident-death",
+            "runtime.population.residence-migration",
+            "runtime.person.death",
+            "runtime.person.residence-bind",
+            "runtime.person.parentage"
+        };
+        HashSet<string> registeredOperations = ReadPrivateField<HashSet<string>>(protocol, "expectedOperations");
+        CollectionAssert.AreEquivalent(operationIds, registeredOperations,
+            "the probes must cover the full currently registered Daily-v1 operation inventory");
+
+        MethodInfo beginRuntimeOperation = typeof(SimulationRuntime).GetMethod(
+            "TryEnterRuntimeAdmissionOperation",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        MethodInfo beginMembershipOperation = typeof(SimulationRuntime).GetMethod(
+            "BeginNpcMembershipCensusScope",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(beginRuntimeOperation, Is.Not.Null);
+        Assert.That(beginMembershipOperation, Is.Not.Null);
+
+        foreach (string operationId in operationIds)
+        {
+            IDisposable scope;
+            if (string.Equals(operationId, "runtime.npc-membership", StringComparison.Ordinal))
+            {
+                scope = (IDisposable)beginMembershipOperation.Invoke(runtime, null);
+                Assert.That(scope, Is.Not.Null, operationId);
+            }
+            else
+            {
+                object[] arguments = { operationId, null };
+                bool entered = (bool)beginRuntimeOperation.Invoke(runtime, arguments);
+                Assert.That(entered, Is.True, operationId);
+                scope = arguments[1] as IDisposable;
+                Assert.That(scope, Is.Not.Null, operationId);
+            }
+
+            using (scope)
+            {
+                Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+                    out _, out DailyCaptureEligibilityFailure inScopeFailure), Is.False, operationId);
+                Assert.That(inScopeFailure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress), operationId);
+            }
+
+            Assert.That(runtime.TryValidateCompletedDailyCaptureToken(
+                token, out DailyCaptureEligibilityFailure afterScopeFailure), Is.True,
+                operationId + ": " + afterScopeFailure);
+        }
+    }
     [Test]
     public void DailyProfileAdmissionAcceptsExactInitialSpatialIdentityAndLegacyNetworkCardinalities()
     {
