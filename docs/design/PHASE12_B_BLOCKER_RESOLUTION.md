@@ -1594,6 +1594,34 @@ accepted Daily-v1 runtime, not public API visibility alone.
 
 **Disposition:** no missing committed-writer notification was identified in the supported selected Daily-v1 day path. The prior clock-gap hypothesis confused the clock's next-boundary identity with a supported owner write committed after a boundary. The source confirms the selected-profile clock dispatcher and outer operation scope at `SimulationRuntime.cs:1401-1409, 8008-8108, 5329-5340`; clock dispatch behavior is implemented in `SimulationTime.cs:52-102`. This does not mean P12's completed-boundary token or eligibility coordinator has shipped: the current `IFactualReadRuntimeState.TryReadCompletedLogicalBoundary` returns the current day only after owner-thread and idleness checks, and is bounded FR-B evidence.
 
+## P12-B P8-D exact-zero registration gap — current canonical `e5405cf`
+
+Read-only source reconciliation confirms that the two schema-v1 P8-D passive
+providers are not registered or assessed by `InitializeNpcRosterCensusProtocol`.
+`SimulationRuntime` installs cloned `SpatialRouteKnowledgeStore` and
+`PersonRoutePlanStore` owners, but the 258-section partial protocol has no
+`p8d.spatial-route-observations` or `p8d.person-route-plan-history` entry.
+The accepted Daily-v1 profile and P12 technical design require these composed
+P8-D owners to be explicit-empty and reject populated state. Their day-zero
+provider values alone do not close the live census-registration requirement.
+
+The only source references to the runtime facade mutators
+`TryRecordSpatialObservations` and `TryAcceptSpatialRoutePlan` are their
+declarations; no production call site exists in this selected profile. The
+accepted profile excludes P8-D state and does not compose the external
+WorldCommand queue. The smallest supported next P12-B slice is therefore to
+register the two existing providers as `ExplicitlyEmpty` sections against the
+exact installed clones, require zero cardinality/revision at admission, and
+revalidate the selected profile at 260 sections. Do not add route support or
+an operation ID. If a future profile supplies a supported route writer, it
+must separately revise the profile boundary and commit/epoch map.
+
+The bounded design is recorded in
+[`PHASE12_P12B_P8D_EXACT_ZERO_REGISTRATION_DESIGN.md`](PHASE12_P12B_P8D_EXACT_ZERO_REGISTRATION_DESIGN.md).
+This source/design result does not imply complete owner coverage, shared-epoch
+coverage, runtime-wide quiescence, capture eligibility, export/hydration,
+P12-A readiness, P13 readiness, or P12-B completion.
+
 ### Sealed-operation entrypoint audit and ActorChoice UI disposition
 
 The sealed `ContinuationCensusProtocol` operation inventory currently registers 23 selected-profile IDs. Read-only comparison against registration and scope callsites found an explicit scope entry or bound admission callback for each registered ID:

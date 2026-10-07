@@ -1972,3 +1972,22 @@ The accepted profile correction remains in canonical: `SampleScene.unity` select
 A source-linked crosswalk of the selected Daily-v1 outer day path is recorded in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md` under the same heading. It found no uncovered successful writer in the supported daily path. The selected-profile public clock dispatcher enters the full runtime day operation, which remains active while the clock and daily core advance; the FR-B read cut rejects while that operation is active. The P12-B design treats `SimulationTime.AbsoluteDay` as boundary identity rather than a post-boundary owner write, so a separate clock mutation-epoch notification is not required. The P12 completed-boundary token, sequence, and publication/invalidation lifecycle remain design obligations and are not implemented at this baseline.
 
 This closes the current Daily-v1 day-path and sealed-operation-to-entry mapping. The 23 currently registered operation IDs each have an explicit scope entry or bound admission callback. This checks registration-to-scope consistency; it does not prove that the operation list exhausts every supported production caller or that every live owner/write is represented. The trusted local UI ActorActionChoice handler is not a current Daily-v1 path: the accepted P12 Brief explicitly rejects an external `WorldCommand` service/queue for this profile, and the reserved handler registration has no production caller in this repository. Do not add a Daily-v1 ActorChoice-capture operation scope for that excluded queue. The remaining work is the complete effective owner/cardinality and successful-commit matrix, followed by runtime-wide owner-thread/quiescence and the undelivered P12 completed-boundary eligibility coordinator. P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. No complete owner or shared-epoch coverage, global quiescence, capture eligibility, export, hydration, or downstream readiness is implied. P12-F Expedition work remains deferred until its documented P12-C/D/E prerequisites are met. Independent exact-tip review of the documentation candidate passed; the durable record is [`design/PHASE12_P12B_DAILY_V1_SOURCE_CROSSWALK_REVIEW.md`](design/PHASE12_P12B_DAILY_V1_SOURCE_CROSSWALK_REVIEW.md).
+
+## P12-B P8-D exact-zero census gap — 2026-10-06
+
+Current canonical is `e5405cf897c30224f86ce605a9efe6777f93749a`. The selected
+Daily-v1 profile already has passive providers for exact-zero P8-D route
+Knowledge and plan-history owners, but they are not registered in its sealed
+258-section protocol. Independent source audit confirms that P12 technical
+design requires these composed excluded owners to be explicitly empty; the
+registered owner inventory therefore remains partial. The two owner facades
+have no production Daily-v1 call sites, so no route operation is added. The
+bounded next slice is reviewed registration of the installed providers as
+`ExplicitlyEmpty`, exact-zero admission, and selected-profile revalidation at
+260 sections. Design: [`design/PHASE12_P12B_P8D_EXACT_ZERO_REGISTRATION_DESIGN.md`](design/PHASE12_P12B_P8D_EXACT_ZERO_REGISTRATION_DESIGN.md).
+
+This is a proposal/source finding only: it adds no code, operation, epoch
+notification, route behavior, or capture capability. P12-B remains
+`INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. P12-C
+waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on
+B–F plus a validated live-profile inventory.
