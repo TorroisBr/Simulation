@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using NUnit.Framework;
+using UnityEditor;
 using Simulation.WorldExchangeProducer;
 using UnityEngine;
 
@@ -265,8 +266,19 @@ public sealed class WorldExchangeV2ProducerTests
 
     private TesteSimulacao CreateSimulation(SimulationRuntimeAdmissionProfile profile, bool authoredGeography)
     {
-        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
-        if (authoredGeography) ConfigureGeography(config);
+        SimulationConfigData config;
+        if (profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
+        {
+            config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+                "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+            Assert.That(config, Is.Not.Null);
+            Assert.That(config.useAuthoredGeographyProfile, Is.EqualTo(authoredGeography));
+        }
+        else
+        {
+            config = SimulationTestFactory.CreateSimulationConfig();
+            if (authoredGeography) ConfigureGeography(config);
+        }
         GameObject simulationObject = new GameObject("wxd-export-test");
         simulationObjects.Add(simulationObject);
         TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();

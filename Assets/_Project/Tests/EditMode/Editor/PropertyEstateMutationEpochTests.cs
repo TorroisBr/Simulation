@@ -39,8 +39,8 @@ public sealed class PropertyEstateMutationEpochTests
             simulation.Bootstrap.PropertyOwnershipCensusProviders;
         IOwnerSectionCensusProvider estateProvider = simulation.Bootstrap.EstateCensusProvider;
 
-        Assert.That(GetExpectedSectionCount(protocol), Is.EqualTo(268),
-            "The selected Daily-v1 census includes bounded political witnesses, exact-zero P8-D route-owner sections, and eight composed P12-E military owner sections.");
+        Assert.That(GetExpectedSectionCount(protocol), Is.EqualTo(275),
+            "The selected Daily-v1 census includes the seven P8-A/B/C spatial witnesses, bounded political witnesses, exact-zero P8-D route-owner sections, and eight composed P12-E military owner sections.");
         Assert.That(propertyProviders, Has.Count.EqualTo(2));
         Assert.That(propertyProviders[0].GetCurrentCensus().OwnerInstanceIdentity,
             Is.SameAs(runtime.PropertyOwnershipStore));
