@@ -2106,3 +2106,36 @@ waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on
 B–F plus a validated live-profile inventory. The independent design review
 passed at `2a89e34`; its durable record is
 [`design/PHASE12_P12B_P8D_EXACT_ZERO_REGISTRATION_DESIGN_REVIEW.md`](design/PHASE12_P12B_P8D_EXACT_ZERO_REGISTRATION_DESIGN_REVIEW.md).
+
+## P12-B Daily-v1 spatial inventory reconciliation and admission design review — 2026-10-06
+
+The older P8-D blocker entry above records a 258-section inventory at
+`e5405cf`. It is historical relative to the current canonical code: P12-E
+military owner registration is integrated, and the exact current selected
+profile test at code tree `c9e763e2ebc2f63d9772701a0c03e35c271392f7`
+asserts 268 sections, including P8-D exact-zero owners and all eight P12-E
+sections. The executable Assets tree is unchanged from code-bearing tip
+`5b055be864afa0ace56d56381eb00fe4e993ed86` and current P12 canonical
+`d8e6c9919d9359003dfd370fbd38a47424256b26`.
+
+The accepted profile split remains in force: SampleScene selects the dedicated
+P9-B-only `Simulation-DailyV1.asset`; `Simulation-GeneralTest.asset` remains
+the separate P10-A Ruin/LocalTopology proving profile. Retained exact-tree
+P12-E validation includes selected-profile composition 24/24, five owner
+provider suites 5/5, ALL EditMode 2434/2434, official Smoke 5/5, and
+`git diff --check` PASS. The earlier exact profile-selection record remains
+available in `P12DailyProfileSeparation/VALIDATION.md`.
+
+The current 268-section admission protocol still omits the seven existing
+P8-A/B/C providers. The bounded design
+[`PHASE12_P12B_SPATIAL_PROFILE_CARDINALITY_ADMISSION_DESIGN.md`](design/PHASE12_P12B_SPATIAL_PROFILE_CARDINALITY_ADMISSION_DESIGN.md)
+passed independent technical design review at exact tip
+`ec73a0f95ca3bec0d50bd61dbe15a930d8a5635d`; its durable record is
+[`PHASE12_P12B_SPATIAL_PROFILE_CARDINALITY_ADMISSION_DESIGN_REVIEW.md`](design/PHASE12_P12B_SPATIAL_PROFILE_CARDINALITY_ADMISSION_DESIGN_REVIEW.md).
+It covers only those seven registrations and exact initial Required-section
+cardinality admission, with a 275-section target. Implementation and
+validation remain outstanding. This correction supersedes the stale 258/
+P8-D-next wording; it does not assert complete owner coverage, mutation/epoch
+coverage, global quiescence, capture eligibility, P12-B completion, P12-A
+readiness, P13 readiness, export, hydration, or Phase 12 closure. P12-B
+remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked.

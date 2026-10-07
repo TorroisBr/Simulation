@@ -4,8 +4,7 @@
 This is a bounded continuation of the accepted P12-B capability, not a new
 checkpoint ID or a readiness/closure claim.
 
-**Status:** Proposed technical contract for independent review. No
-implementation starts until review passes.
+**Status:** Independent technical design review PASS at `ec73a0f95ca3bec0d50bd61dbe15a930d8a5635d`; see [review record](PHASE12_P12B_SPATIAL_PROFILE_CARDINALITY_ADMISSION_DESIGN_REVIEW.md). Bounded implementation may proceed under the accepted P12-B capability authorization. P12-B remains incomplete.
 
 **Current base:** `codex/phase12/canonical` at
 `d8e6c9919d9359003dfd370fbd38a47424256b26`; executable code tree

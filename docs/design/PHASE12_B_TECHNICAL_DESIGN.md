@@ -179,8 +179,7 @@ make them admission sections. The current bounded follow-up design is
 [`PHASE12_P12B_SPATIAL_PROFILE_CARDINALITY_ADMISSION_DESIGN.md`](PHASE12_P12B_SPATIAL_PROFILE_CARDINALITY_ADMISSION_DESIGN.md).
 It adds those seven existing sections and enforces the current profile's
 initial cardinalities for the Required spatial/identity/network sections.
-The P8-D exact-zero sections are already registered. This follow-up remains
-subject to its own independent design review and implementation validation.
+The P8-D exact-zero sections are already registered. The bounded follow-up design passed independent review at exact design tip `ec73a0f95ca3bec0d50bd61dbe15a930d8a5635d`, recorded in [`PHASE12_P12B_SPATIAL_PROFILE_CARDINALITY_ADMISSION_DESIGN_REVIEW.md`](PHASE12_P12B_SPATIAL_PROFILE_CARDINALITY_ADMISSION_DESIGN_REVIEW.md). Existing P12-B prerequisite implementation authorization applies to this reviewed scope; implementation and promotion evidence remain outstanding.
 
 The 268-section test is a verified day-zero inventory, not complete effective
 owner/cardinality coverage over every evolved state. The supported operation
