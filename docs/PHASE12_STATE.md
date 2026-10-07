@@ -1,9 +1,65 @@
 # Phase 12 State — Save & Deterministic Continuation
 
-**Status:** PHASE 12 IN PROGRESS — P12-A WAIT_DEPENDENCY; P12-B INCOMPLETE
-(PARTIAL FOUNDATION PROMOTED).
+**Status:** PHASE 12 IN PROGRESS — P12-B COMPLETE/PROMOTED within its bounded
+profile-admission and completed-boundary lifecycle contract; P12-A
+WAIT_DEPENDENCY. P13 remains BLOCKED.
 
-## Current canonical status — P12-E military census registration promoted (2026-10-06)
+## Current canonical status — P12-B bounded completion promoted (2026-10-07)
+
+`codex/phase12/canonical` was fast-forwarded from
+`94551b08be8cc9347de35eae5051b8e578ea4c1e` to
+`0e9ed16823035d9449c96f9fc9fc8f95cf41616f`. The promoted code tip is
+`bb887989ac96c7bbf405bb9d9b3d9f904d4098b1`, with tree
+`c61aa4a0f63c244044bde97878c66a44444e42fb` and validated `Assets` subtree
+`3f3f0971129004635b9de3bfb5260ab3918d6233`. The exact-tip independent
+implementation review is PASS in
+[`PHASE12_P12B_BOUNDED_COMPLETION_IMPLEMENTATION_REVIEW_R2.md`](design/PHASE12_P12B_BOUNDED_COMPLETION_IMPLEMENTATION_REVIEW_R2.md);
+the corrected exact-source validation is recorded in
+[`P12BBoundedCompletionGate2R3/VALIDATION.md`](validation/P12BBoundedCompletionGate2R3/VALIDATION.md).
+
+The bounded P12-B contract is complete: the selected Daily-v1 supported
+owner/ingress and committed-write evidence is reconciled; runtime-wide
+owner-thread/quiescence and exact owner-coherence are enforced at successful
+outer advance boundaries; and the ephemeral completed-boundary token is
+published only after the required successful boundary work. Failed, partial,
+faulted, or incoherent advances do not issue a new token. This completes P12-B
+within its accepted contract only; it does not deliver P12-A export/staged
+hydration or claim Phase 12 closure.
+
+Validation is exact-tree and retained: nine focused suites passed, ALL EditMode
+`2460/2460`, official Smoke `5/5`, SimulationRuntime LongRun `7/7`, and
+`git diff --check` passed. All XMLs report zero failed, skipped, or
+inconclusive tests; the validation manifest records source, XML, and archived
+log hashes. The selected Daily-v1 census is `68 + 20*N + U + P`, or 278 at
+the authored baseline (`N=10`, `U=10`, `P=0`).
+
+### Refreshed dependency DAG
+
+- **P12-B:** COMPLETE/PROMOTED within the bounded contract above.
+- **P12-C:** its P12-B prerequisite is now satisfied. Preserve candidate
+  `531d835f01a9070df42d54291ffde32387fb4358`, but classify it
+  `REINTEGRATE / REVALIDATE`: it was based on `8db8cfc`, predates the current
+  canonical code, and its old review does not establish current-base
+  compatibility. Recompose only the accepted additive identity snapshot
+  seams, preserve current P18-D/P11 decision-record behavior, and obtain fresh
+  exact-tip review and required validation before promotion. P12-C is the next
+  active checkpoint; it is not yet recorded as promoted or complete.
+- **P12-D and P12-E:** wait on P12-C as well as their already satisfied
+  P12-B edge.
+- **P12-F:** waits on P12-C, P12-D, and P12-E. Expedition remains deferred to
+  its documented P12-F scope.
+- **P12-G:** waits on P12-B through P12-F and a validated live-profile
+  inventory.
+- **P12-A:** remains `WAIT_DEPENDENCY` until every included owner has exact
+  export and staged hydration, the live profile inventory is validated, and
+  its separate implementation authorization is recorded.
+- **P13:** remains `BLOCKED` on its documented continuation and causal-history
+  prerequisites.
+
+No export/hydration, P12-A readiness, P13 readiness, or formal Phase 12 closure
+is implied. The older P12-E snapshot below is retained as historical evidence.
+
+## Historical canonical snapshot — P12-E military census registration (2026-10-06)
 
 The code-bearing P12-E promotion tip is cda5a55ff6e3d9c884c95eabd0d11f3f4f4ee004.
 It was fast-forwarded from 88d476729715aa82578cb2a204e32a69263e6402 after
