@@ -5,6 +5,7 @@
 **Assets tree:** `1fccd2f8405b7e1ee167d5bc6d54d65398a5457d`
 **Parent:** `4ef42143faaf6c848deadff2c1e9d147944aae36`
 **P20 canonical base:** `fe4909a0fc371a2fedb55cb9cef086e5dbf63526`
+**P20 canonical promotion:** `dc5a1dd9d395f110c7af7e76394938ba9c626c45`
 **Current architecture contract:** `a29ddd1271fff8fc45abb3270229b43bfe89f2a9`
 **Unity:** `6000.3.9f1`
 

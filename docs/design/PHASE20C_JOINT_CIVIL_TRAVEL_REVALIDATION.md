@@ -1,6 +1,6 @@
 # P20-C — Two-Person Joint Civil Travel: Current-Canonical Revalidation
 
-**Current status (2026-10-07):** Design revalidation **PASS**; the canonical General Architect handoff marks P20-C `READY_FOR_IMPLEMENTATION`. Bounded implementation candidate `c0253cad69c0dc09ee4c601c5048eef99e13ce40` passed exact-tip implementation review and required validation. This record is not a P20-C promotion or Phase closure.
+**Current status (2026-10-07):** Design revalidation **PASS**; the canonical General Architect handoff marked P20-C `READY_FOR_IMPLEMENTATION`. Bounded implementation code `c0253cad69c0dc09ee4c601c5048eef99e13ce40` passed exact-tip implementation review and required validation, then was promoted to P20 canonical at `dc5a1dd9d395f110c7af7e76394938ba9c626c45`. Phase 20 remains open.
 
 The current architecture handoff is `docs/architecture/P20C_JOINT_CIVIL_TRAVEL_MASTER_HANDOFF.md` at `codex/architecture/world-identity-projection` tip `a29ddd1271fff8fc45abb3270229b43bfe89f2a9`. Its linked independent technical review records `PASS / READY_FOR_IMPLEMENTATION`; it closes the bounded FailedStart design correction and confirms no open product or architecture decision. The Architecture Roadmap now assigns joint travel to P20-C while preserving P20-A and the already-promoted P20-B admission checkpoint.
 
@@ -51,4 +51,4 @@ The former P20-B/joint-travel mismatch is resolved by the canonical architecture
 
 ## Implementation boundary
 
-Implementation preserves the existing P20-B and P12-Daily rejection behavior, corrects FailedStart revision synchronization/reconstructability without weakening strict restore equality, and avoids duplicate code. Exact-tip review is recorded in `PHASE20C_IMPLEMENTATION_REVIEW.md`; focused P20/P18 regressions, ALL EditMode, official Smoke, `git diff --check`, and explicit P12 Daily-v1 admission/exclusion tests are recorded in `../validation/P20C/VALIDATION.md`. The implementation remains a P20-C candidate until canonical integration; Phase 20 remains open.
+The promoted implementation preserves the existing P20-B and P12-Daily rejection behavior, corrects FailedStart revision synchronization/reconstructability without weakening strict restore equality, and avoids duplicate code. Exact-tip review is recorded in `PHASE20C_IMPLEMENTATION_REVIEW.md`; focused P20/P18 regressions, ALL EditMode, official Smoke, `git diff --check`, and explicit P12 Daily-v1 admission/exclusion tests are recorded in `../validation/P20C/VALIDATION.md`. This record does not claim Phase 20 closure.
