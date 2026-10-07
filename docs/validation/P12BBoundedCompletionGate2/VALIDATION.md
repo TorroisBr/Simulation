@@ -53,3 +53,8 @@ XML reports are retained beside this file. Raw Unity logs are retained in RawLog
 RawLogs.zip SHA-256: 0bbbca88d0a2ef9459452c84b76877c095f70fc6e8ce94d7c057233fa52a3101.
 
 git diff --check passed on all nine implementation/test files after validation. All report XMLs record zero failed and zero skipped tests. The final full, Smoke, and LongRun logs correspond to the same unchanged nine-file source set above. This record does not substitute for the required independent exact-tip implementation review or canonical promotion preflight.
+
+## R2 evidence
+
+Superseded by Gate 2 R2 for candidate code tip d6988c966288257bcc9ca2b79b264c634d6a28ab. The R2 reports, exact source hashes, and updated test counts are recorded in docs/validation/P12BBoundedCompletionGate2R2/VALIDATION.md.
+

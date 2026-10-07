@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="11" result="Passed" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-07 23:14:28Z" end-time="2026-10-07 23:14:28Z" duration="0,1630903">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2458" result="Passed" start-time="2026-10-07 23:14:28Z" end-time="2026-10-07 23:14:28Z" duration="0.163090" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3673" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12b-final-validation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2458" result="Passed" start-time="2026-10-07 23:14:28Z" end-time="2026-10-07 23:14:28Z" duration="0.148788" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="24452" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2554" name="P12SoloTravelStartOperationTests" fullname="P12SoloTravelStartOperationTests" classname="P12SoloTravelStartOperationTests" runstate="Runnable" testcasecount="11" result="Passed" start-time="2026-10-07 23:14:28Z" end-time="2026-10-07 23:14:28Z" duration="0.134824" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2555" name="DailySelectedTravelStart_BatchesOwnerCallbacksUnderNestedOperation" fullname="P12SoloTravelStartOperationTests.DailySelectedTravelStart_BatchesOwnerCallbacksUnderNestedOperation" methodname="DailySelectedTravelStart_BatchesOwnerCallbacksUnderNestedOperation" classname="P12SoloTravelStartOperationTests" runstate="Runnable" seed="966868799" result="Passed" start-time="2026-10-07 23:14:28Z" end-time="2026-10-07 23:14:28Z" duration="0.106344" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[p12-solo-travel-actor display iniciou viagem de definition-city-a display para definition-city-b display
+Custo de viagem: 2
+]]></output>
+        </test-case>
+        <test-case id="2558" name="DailySelectedTravelStart_EventSequenceExhaustionKeepsTravelAndBatchesEventId" fullname="P12SoloTravelStartOperationTests.DailySelectedTravelStart_EventSequenceExhaustionKeepsTravelAndBatchesEventId" methodname="DailySelectedTravelStart_EventSequenceExhaustionKeepsTravelAndBatchesEventId" classname="P12SoloTravelStartOperationTests" runstate="Runnable" seed="1802981795" result="Passed" start-time="2026-10-07 23:14:28Z" end-time="2026-10-07 23:14:28Z" duration="0.003561" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Cannot allocate domain EventId: Simulation record sequence is exhausted.
+p12-solo-travel-actor display iniciou viagem de definition-city-a display para definition-city-b display
+Custo de viagem: 2
+]]></output>
+        </test-case>
+        <test-case id="2556" name="DailySelectedTravelStart_StaleOwnerBaselineFaultsBeforeCharge" fullname="P12SoloTravelStartOperationTests.DailySelectedTravelStart_StaleOwnerBaselineFaultsBeforeCharge" methodname="DailySelectedTravelStart_StaleOwnerBaselineFaultsBeforeCharge" classname="P12SoloTravelStartOperationTests" runstate="Runnable" seed="1786195031" result="Passed" start-time="2026-10-07 23:14:28Z" end-time="2026-10-07 23:14:28Z" duration="0.002177" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2557" name="DailySelectedTravelStart_WrongBoundProviderFaultsBeforeCharge" fullname="P12SoloTravelStartOperationTests.DailySelectedTravelStart_WrongBoundProviderFaultsBeforeCharge" methodname="DailySelectedTravelStart_WrongBoundProviderFaultsBeforeCharge" classname="P12SoloTravelStartOperationTests" runstate="Runnable" seed="927082889" result="Passed" start-time="2026-10-07 23:14:28Z" end-time="2026-10-07 23:14:28Z" duration="0.000783" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2560" name="ExceptionAfterCharge_FlushesCommittedAccountBeforeRuntimeFault" fullname="P12SoloTravelStartOperationTests.ExceptionAfterCharge_FlushesCommittedAccountBeforeRuntimeFault" methodname="ExceptionAfterCharge_FlushesCommittedAccountBeforeRuntimeFault" classname="P12SoloTravelStartOperationTests" runstate="Runnable" seed="334594548" result="Passed" start-time="2026-10-07 23:14:28Z" end-time="2026-10-07 23:14:28Z" duration="0.000961" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2559" name="FailedTravelStartAfterCharge_CompensatesWithinSingleSoloOperation" fullname="P12SoloTravelStartOperationTests.FailedTravelStartAfterCharge_CompensatesWithinSingleSoloOperation" methodname="FailedTravelStartAfterCharge_CompensatesWithinSingleSoloOperation" classname="P12SoloTravelStartOperationTests" runstate="Runnable" seed="902889316" result="Passed" start-time="2026-10-07 23:14:28Z" end-time="2026-10-07 23:14:28Z" duration="0.001476" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2565" name="LegacyTravelExecution_RemainsOutsideP12OperationAdmission" fullname="P12SoloTravelStartOperationTests.LegacyTravelExecution_RemainsOutsideP12OperationAdmission" methodname="LegacyTravelExecution_RemainsOutsideP12OperationAdmission" classname="P12SoloTravelStartOperationTests" runstate="Runnable" seed="88229133" result="Passed" start-time="2026-10-07 23:14:28Z" end-time="2026-10-07 23:14:28Z" duration="0.001667" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[p12-solo-travel-actor display iniciou viagem de definition-city-a display para definition-city-b display
+Custo de viagem: 2
+]]></output>
+        </test-case>
+        <test-case id="2564" name="ScheduledRequestActionContract_DoesNotAcceptTravelAsEscapeDirective" fullname="P12SoloTravelStartOperationTests.ScheduledRequestActionContract_DoesNotAcceptTravelAsEscapeDirective" methodname="ScheduledRequestActionContract_DoesNotAcceptTravelAsEscapeDirective" classname="P12SoloTravelStartOperationTests" runstate="Runnable" seed="1175219601" result="Passed" start-time="2026-10-07 23:14:28Z" end-time="2026-10-07 23:14:28Z" duration="0.000333" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2562" name="SelectedTravelFromNonCityLocation_DoesNotInventSourceCitySection" fullname="P12SoloTravelStartOperationTests.SelectedTravelFromNonCityLocation_DoesNotInventSourceCitySection" methodname="SelectedTravelFromNonCityLocation_DoesNotInventSourceCitySection" classname="P12SoloTravelStartOperationTests" runstate="Runnable" seed="483126568" result="Passed" start-time="2026-10-07 23:14:28Z" end-time="2026-10-07 23:14:28Z" duration="0.002025" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[p12-non-city-traveler display iniciou viagem de definition-city-a display para definition-city-b display
+Custo de viagem: 2
+]]></output>
+        </test-case>
+        <test-case id="2561" name="SelectedTravelNoOp_ClosesWithoutMutationEpoch" fullname="P12SoloTravelStartOperationTests.SelectedTravelNoOp_ClosesWithoutMutationEpoch" methodname="SelectedTravelNoOp_ClosesWithoutMutationEpoch" classname="P12SoloTravelStartOperationTests" runstate="Runnable" seed="1848435264" result="Passed" start-time="2026-10-07 23:14:28Z" end-time="2026-10-07 23:14:28Z" duration="0.000821" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2563" name="SelectedTravelWithUnprojectedCurrentCity_DoesNotPreflightOrReportCitySection" fullname="P12SoloTravelStartOperationTests.SelectedTravelWithUnprojectedCurrentCity_DoesNotPreflightOrReportCitySection" methodname="SelectedTravelWithUnprojectedCurrentCity_DoesNotPreflightOrReportCitySection" classname="P12SoloTravelStartOperationTests" runstate="Runnable" seed="961674691" result="Passed" start-time="2026-10-07 23:14:28Z" end-time="2026-10-07 23:14:28Z" duration="0.002438" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[p12-solo-travel-actor display iniciou viagem de definition-city-a display para definition-city-b display
+Custo de viagem: 2
+Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
