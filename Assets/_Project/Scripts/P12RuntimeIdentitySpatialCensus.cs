@@ -124,7 +124,8 @@ public sealed partial class SimulationRuntime
         string sectionId,
         int schemaVersion,
         OwnerSectionRole role,
-        object expectedOwner)
+        object expectedOwner,
+        bool requireZeroRevision = false)
     {
         if (protocol == null || provider == null || expectedOwner == null)
             return false;
@@ -145,6 +146,7 @@ public sealed partial class SimulationRuntime
             || !ReferenceEquals(witness.OwnerInstanceIdentity, expectedOwner)
             || witness.Cardinality < 0
             || witness.Revision < 0L
+            || (requireZeroRevision && witness.Revision != 0L)
             || ((role == OwnerSectionRole.ExplicitlyEmpty || role == OwnerSectionRole.Excluded)
                 && witness.Cardinality != 0))
             return false;
@@ -152,6 +154,49 @@ public sealed partial class SimulationRuntime
         OwnerSectionContract contract = new OwnerSectionContract(sectionId, schemaVersion, role);
         return protocol.RegisterExpectedSection(contract, out _)
             && protocol.RegisterCensusProvider(sectionId, provider, out _);
+    }
+
+    private bool TryRegisterP12P8DExactZeroOwnerSections(ContinuationCensusProtocol protocol)
+    {
+        if (protocol == null
+            || spatialRouteKnowledgeStore == null
+            || personRoutePlanStore == null)
+            return false;
+
+        try
+        {
+            IReadOnlyList<PersonRoutePlan> planHistory = personRoutePlanStore.History;
+            if (planHistory == null
+                || personRoutePlanStore.PlanCount != 0
+                || planHistory.Count != 0)
+                return false;
+
+            SpatialRouteObservationCensusProvider routeObservationsProvider =
+                new SpatialRouteObservationCensusProvider(spatialRouteKnowledgeStore);
+            PersonRoutePlanHistoryCensusProvider routePlanHistoryProvider =
+                new PersonRoutePlanHistoryCensusProvider(personRoutePlanStore);
+
+            return TryRegisterP12FixedOwnerSection(
+                    protocol,
+                    routeObservationsProvider,
+                    SpatialRouteObservationCensusProvider.SectionId,
+                    SpatialRouteObservationCensusProvider.SchemaVersion,
+                    OwnerSectionRole.ExplicitlyEmpty,
+                    spatialRouteKnowledgeStore,
+                    requireZeroRevision: true)
+                && TryRegisterP12FixedOwnerSection(
+                    protocol,
+                    routePlanHistoryProvider,
+                    PersonRoutePlanHistoryCensusProvider.SectionId,
+                    PersonRoutePlanHistoryCensusProvider.SchemaVersion,
+                    OwnerSectionRole.ExplicitlyEmpty,
+                    personRoutePlanStore,
+                    requireZeroRevision: true);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private bool TryValidateP12RuntimeIdentitySpatialOwnerBaselines()

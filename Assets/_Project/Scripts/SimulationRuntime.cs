@@ -1996,6 +1996,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             || (requireP12RuntimeIdentitySpatialCensusOwners
                 && !TryRegisterP12RuntimeIdentitySpatialCensusOwners(protocol))
             || (requireP12ReceiptCensusOwners && !TryRegisterP12ExactZeroReceiptOwners(protocol))
+            || (runtimeAdmissionContext != null
+                && !TryRegisterP12P8DExactZeroOwnerSections(protocol))
             || !protocol.SealExpectedSectionInventory(out _)
             || !protocol.SealCensusProviderInventory(out _))
         {
