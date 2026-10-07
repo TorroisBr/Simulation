@@ -1705,3 +1705,34 @@ then implement the eight registrations and exact 268-section admission test.
 This does not deliver any military/conflict/war/battle export or hydration,
 does not claim the owners' writes share the P12 epoch, and does not make the
 profile capture-eligible.
+
+## Current P12-B owner/operation/epoch refresh after P12-E census promotion — 2026-10-06
+
+**Audited canonical:** codex/phase12/canonical at
+cda5a55ff6e3d9c884c95eabd0d11f3f4f4ee004. The promoted implementation is
+5b055be864afa0ace56d56381eb00fe4e993ed86, tree
+c9e763e2ebc2f63d9772701a0c03e35c271392f7. Exact-tip implementation review
+and validation evidence are linked from PHASE12_STATE.md.
+
+| Selected Daily-v1 owner/path | Current evidence | Remaining P12-B boundary |
+|---|---|---|
+| P12-E ArmedForce force, contingent, and relevant-Person projections | Three Required schema-v1 sections bind to the exact installed ArmedForceStore and its one shared local revision. Each is zero rows/revision at selected-profile day zero. | Census only. No normal Daily-v1 writer was found; do not add an operation or epoch callback. |
+| Contingent manpower and armed-force positions | Required sections bind to their exact installed stores and report zero rows/revision at day zero. | Census only. P16-A movement is selected only by the separate P16AOneHopMilitary composition. |
+| Conflict, War, and Battle | Required sections bind to their exact installed stores and report zero rows/revision at day zero. | Census only. P17-A crossing/concession paths require the separate P17AWithdrawalWar composition. |
+| Daily-v1 fixed-owner inventory | The selected profile inventory assertion is 268 sections; all eight new Required contracts have registered providers and exact owner identity. The exact-inventory composition test and validation evidence are on the unchanged code tree. | This is a day-zero, selected-profile snapshot. It does not prove all evolved cardinalities or that every supported write updates the shared epoch. |
+| Daily-v1 committed-write map | The preceding source crosswalk maps the selected day loop and its registered owner operations. A source diff from 62e12f9 to cda5a55 changes only the four census-initialization lines that add the P8-D and P12-E registration calls; no daily-loop code changed. The post-publication P12-E mutation call-site search found only P16-A/P17-A military facades, both composition-gated outside Daily-v1; bootstrap clone writes occur before admission. | No newly supported Daily-v1 committed writer is identified. Preserve the existing bounded operation/owner wrappers; do not infer the operation list exhausts all possible APIs. |
+| Owner thread and active operations | The census operation inventory is sealed and bound to the admission context's expected owner thread. The runtime's FR-B read cut checks owner-thread identity, advance lease, active operation contexts, and sealed active-operation count. | This is not global quiescence proof: it is only as complete as the registered owners/operations and their routed callers. |
+| Completed boundary | TryReadCompletedLogicalBoundary currently returns CurrentDay after profile, owner-thread, and idle checks. | It does not require a successful advance sequence and is not a P12 capture token. The P12-B token must remain blocked until the full supported owner/write/invalidation and quiescence evidence is complete. |
+
+The P12-E registration supersedes the prior statement that its eight sections
+were absent from the sealed inventory. The selected Daily-v1 profile remains
+the P9-B-only profile, with P10-A Ruin/LocalTopology separate. P12-B remains
+INCOMPLETE, P12-A remains WAIT_DEPENDENCY, P13 remains BLOCKED, and P12-F
+Expedition remains deferred behind P12-C/D/E. No export, hydration, capture
+eligibility, complete shared-epoch coverage, or Phase closure is claimed.
+
+**Disposition:** do not implement a P12-E operation from the current evidence.
+Continue the remaining owner/cardinality and runtime-wide owner-thread/
+quiescence evidence. Then revalidate the completed-boundary design against
+the full exact supported-write matrix before issuing any token. A token
+implementation without those prerequisites would overstate P12-B readiness.

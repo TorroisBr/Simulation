@@ -1044,3 +1044,30 @@ complete effective-profile owner census across evolved states or all writer
 paths; it does not establish shared-epoch coverage, quiescence, capture
 eligibility, export, hydration, P12-A readiness, or P13 readiness. P12-B
 remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and P13 remains blocked.
+
+### P12-E military owner registration and current Daily-v1 writer audit — 2026-10-06
+
+Canonical P12 tip cda5a55 promotes the reviewed registration implementation
+5b055be (tree c9e763e). The Daily-v1 selected-profile inventory now checks
+268 sections, including exactly eight P12-E Required sections: ArmedForce
+force/contingent/relevant-Person projections, contingent manpower, armed-force
+positions, Conflict, War, and Battle. The three ArmedForce projections bind
+to one exact owner and share its local revision. Validation and exact-tip
+review evidence are linked from PHASE12_STATE.md.
+
+The new sections are passive admission census only. Current production
+post-publication call-site inspection found no normal Daily-v1 writer for these
+P12-E owners; bootstrap clone writes occur before admission.
+P16-A/P17-A military movement and War mutation facades require their separate
+composition profiles. The registration adds no supported Daily-v1 operation
+or epoch notice. The prior Daily-v1 day-path crosswalk remains current because
+the code delta from 62e12f9 to cda5a55 only adds the P8-D/P12-E census
+registration calls.
+
+The remaining P12-B evidence is complete effective owner/cardinality coverage
+across supported runtime evolution, the full supported-write/shared-epoch
+matrix, runtime-wide owner-thread/quiescence, and a completed-boundary token
+tied to a successful advance sequence. The FR-B current-day read is not such a
+token. This inventory remains partial; P12-B is INCOMPLETE, P12-A is
+WAIT_DEPENDENCY, and P13 is BLOCKED. No export, hydration, capture eligibility,
+or Phase closure is implied.

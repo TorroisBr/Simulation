@@ -3,7 +3,84 @@
 **Status:** PHASE 12 IN PROGRESS — P12-A WAIT_DEPENDENCY; P12-B INCOMPLETE
 (PARTIAL FOUNDATION PROMOTED).
 
-## Current canonical status — P8-D exact-zero admission promoted
+## Current canonical status — P12-E military census registration promoted (2026-10-06)
+
+The code-bearing P12-E promotion tip is cda5a55ff6e3d9c884c95eabd0d11f3f4f4ee004.
+It was fast-forwarded from 88d476729715aa82578cb2a204e32a69263e6402 after
+exact-tip review and validation preflight. This State and matrix refresh is a
+docs-only descendant of that promotion.
+
+The promoted code is 5b055be864afa0ace56d56381eb00fe4e993ed86, tree
+c9e763e2ebc2f63d9772701a0c03e35c271392f7. Independent implementation review
+passed for that exact code/tree and is recorded in
+[PHASE12_P12B_P12E_MILITARY_OWNER_REGISTRATION_IMPLEMENTATION_REVIEW.md](design/PHASE12_P12B_P12E_MILITARY_OWNER_REGISTRATION_IMPLEMENTATION_REVIEW.md).
+The selected Daily-v1 admission inventory is now 268 sections, up from 260.
+This adds exactly eight existing schema-v1 P12-E owner sections as Required:
+three ArmedForce projections sharing one owner/revision, contingent manpower,
+armed-force positions, and Conflict, War, and Battle.
+
+Validation on the unchanged code tree passed the focused composition suite
+24/24, five owner-provider suites 5/5 total, Property/Estate 5/5, ALL EditMode
+2434/2434, official Smoke 5/5, and git diff --check. Exact XML/log hashes and
+artifact names are in
+[the validation manifest](validation/P12BP12EMilitaryOwnerCensusRegistration_VALIDATION.md).
+No tests were rerun for the later docs-only review-whitespace correction.
+
+The selected profile remains the dedicated P9-B-only UnityBootstrap-Daily-v1;
+P10-A Ruin/LocalTopology remains a separate proving profile. A current-source
+call-site audit found no normal Daily-v1 writer for the newly registered
+P12-E owners. The military movement and War mutation paths are gated by the
+separate P16-A/P17-A composition profiles. This census promotion adds no
+operation, writer, mutation callback, shared-epoch notification, P17 state,
+or gameplay.
+
+P12-B remains INCOMPLETE; P12-A remains WAIT_DEPENDENCY; P13 remains BLOCKED.
+The change does not establish complete owner/cardinality coverage, complete
+shared-epoch coverage, global quiescence, capture eligibility, export,
+hydration, downstream readiness, or Phase 12 closure. P12-F Expedition stays
+deferred behind P12-C/D/E.
+
+### Refreshed numbered-phase DAG and readiness
+
+Remote canonical States were refreshed after the promotion. P8 and P9 are
+closed in their recorded scopes; P10-A/B are promoted and Phase 10 remains
+open; P11 is closed in its bounded scope; P14-A/B, P15-A, P16-A, P17-A, and
+P20-A/B are promoted while their Phases remain open; P18 is formally closed
+within its recorded scope. P19 public Mod API/loader implementation remains
+deferred to its documented entry gates. No dependent checkpoint becomes ready
+merely from P12-E census registration.
+
+The active dependency chain remains P12-B incomplete; P12-C waits on B;
+P12-D and P12-E wait on B and C; P12-F waits on C/D/E; P12-G waits on B
+through F plus a validated live-profile inventory; P12-A waits for complete
+included-owner export/staged hydration, validated live inventory, and its
+separate implementation authorization. P13 remains blocked on supported P12
+continuation and recoverable causal history. Phase numbers do not change these
+documented dependency edges.
+
+### Next P12-B blocker
+
+The current Daily-v1 day-path crosswalk remains applicable: comparing
+SimulationRuntime.cs from the prior crosswalk baseline 62e12f9 to this
+promotion shows only four lines registering the P8-D and P12-E fixed owners;
+the daily loop itself did not change. The refreshed audit records that no
+newly supported in-profile write path was found. Do not add a military
+operation or infer shared-epoch coverage from the Required census sections.
+
+The remaining high-value P12-B work is source-linked proof of complete
+effective owner/cardinality coverage and runtime-wide owner-thread/quiescence,
+followed by the completed-boundary lifecycle. The current FR-B
+TryReadCompletedLogicalBoundary check verifies the Daily-v1 profile, owner
+thread, and idle operation state, but returns the current day without a
+successful-advance sequence or P12 capture token. Do not issue or claim a
+capture token until the supported owner/write and invalidation matrix is
+complete. The detailed current audit is appended to
+[PHASE12_B_BLOCKER_RESOLUTION.md](design/PHASE12_B_BLOCKER_RESOLUTION.md).
+
+## Historical canonical status — P8-D exact-zero admission promoted (baseline 77030ff)
+
+The following record preserves the P8-D promotion-time snapshot. The current
+canonical status and later P12-E evidence are recorded above.
 
 The remote `codex/phase12/canonical` branch is at
 `77030ff8cd09d1c7999c63f46e8fea511c60336b` (tree
@@ -126,7 +203,7 @@ P12-B–P12-G capability decomposition in
 | Checkpoint | Status | Current evidence and limits |
 |---|---|---|
 | P12-A — `UnityBootstrap-Daily-v1` profile integration | `WAIT_DEPENDENCY` | Scope accepted. No included-owner export plus staged-hydration coverage or validated complete live profile inventory exists yet. Its separate implementation authorization remains outstanding. |
-| P12-B — profile admission and completed-boundary lifecycle | `INCOMPLETE — PARTIAL FOUNDATION PROMOTED` | In addition to the promoted non-admitting kernel, receipt owners, P8-A–D, and RuntimeIdentity witnesses, cumulative stack `b889b4747738d933fe48311ef89fc33a40e3dfa0` adds passive witnesses for record sequence, ActorChoice, RuntimeIdAllocator, ArmedForce/manpower/position, Conflict/War/Battle, Estate/Property, and Institution/Office. Follow-up promotions add P12-D Genealogy parentage, legacy `SpatialNetworkRuntime` location/route witnesses, day-zero per-NPC `SpatialKnowledgeRuntime` witnesses, roster-following SpatialKnowledge census at `0021b0aa13fb6ae6d5f27c129c67ba452dbacb4e` (code `2c782a7`), the per-City NPC-presence projection witness at `10fb58d088e515d76bb86de2d7381c9ea9cb7483` (code `aafa81e`), roster-following per-NPC Inventory witnesses at `15e5a543f3896c02f9dbd9c36c9ba75bc90dac2b`, and the passive TravelParty owner witness at `b78a271f9c552b40bade1a45168388eafa670f59` (code/test `260a688`, review `e891058`), followed by the per-City Market stock-row census witness at `533c1e54f362218f222bf567dc1cacb8fdf68600` (code `3b2a9c2`, exact-tip review record `9dbae5b`), and the per-NPC MoneyAccount identity/cardinality/local-revision census at `9f615d84c80b797397b85ea1fac2e32361081370` (code `2bdd099`, exact-tip review record `f79cc55`). See the promoted-stack sections and linked candidate evidence. The static writer map and partial profile evidence remain in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. There is no complete profile census or shared-epoch coverage for all supported writes, no global Unity owner-thread/quiescence proof, and no capture token. |
+| P12-B — profile admission and completed-boundary lifecycle | INCOMPLETE — PARTIAL FOUNDATION PROMOTED | Current canonical is cda5a55; code 5b055be/tree c9e763e registers eight P12-E Required owner sections and raises the tested Daily-v1 inventory to 268. The exact-tip review, validation manifest, current-source audit, and remaining limits are recorded above and in docs/design/PHASE12_B_BLOCKER_RESOLUTION.md. No complete owner/cardinality or shared-epoch coverage, global quiescence proof, or capture token is claimed. |
 | P12-C — identity, provenance, deterministic roots | `BLOCKED_ON_P12-B` | The `RuntimeIdAllocator` passive census and record-sequence witness promoted at `b889b47` are inventory evidence only; they do not provide C exports/hydration, deterministic-root state, or provenance. Preserve `codex/phase12/P12CIdentityRuntimeSnapshot` at `531d835` for selective reintegration only after B readiness and revalidation. |
 | P12-D — factual roots and Person/population relations | `BLOCKED_ON_P12-B_AND_C` | Owner inventory and accepted scope remain; no complete export/hydration capability is claimed. |
 | P12-E — core and official daily-domain owners | `BLOCKED_ON_P12-B_AND_C` | Owner inventory and accepted scope remain; effective-profile provider coverage and exact owner exports are incomplete. |
