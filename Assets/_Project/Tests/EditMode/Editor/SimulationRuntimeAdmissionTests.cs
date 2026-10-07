@@ -81,49 +81,34 @@ public sealed class SimulationRuntimeAdmissionTests
     [Test]
     public void DailyProfileAdmissionRejectsZeroForRequiredP8AGeography()
     {
-        SimulationRuntime runtime = CreateSpatialAdmissionRuntime(
-            spatialAuthorityStore: new SpatialAuthorityStore());
-
-        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
-        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+        AssertDailyProfileAdmissionRejected(() => CreateSpatialAdmissionRuntime(
+            spatialAuthorityStore: new SpatialAuthorityStore()));
     }
 
     [Test]
     public void DailyProfileAdmissionRejectsExtraRequiredP8AHex()
     {
-        SimulationRuntime runtime = CreateSpatialAdmissionRuntime(
-            spatialAuthorityStore: CreateAdjacentSpatialAuthority());
-
-        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
-        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+        AssertDailyProfileAdmissionRejected(() => CreateSpatialAdmissionRuntime(
+            spatialAuthorityStore: CreateAdjacentSpatialAuthority()));
     }
 
     [TestCase(0)]
     [TestCase(9)]
     public void DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality(int npcCount)
     {
-        SimulationRuntime runtime = CreateSpatialAdmissionRuntime(npcCount: npcCount);
-
-        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
-        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+        AssertDailyProfileAdmissionRejected(() => CreateSpatialAdmissionRuntime(npcCount: npcCount));
     }
 
     [Test]
     public void DailyProfileAdmissionRejectsZeroForRequiredLegacySpatialNetworkSection()
     {
-        SimulationRuntime runtime = CreateSpatialAdmissionRuntime(populateLegacyNetwork: false);
-
-        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
-        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+        AssertDailyProfileAdmissionRejected(() => CreateSpatialAdmissionRuntime(populateLegacyNetwork: false));
     }
 
     [Test]
     public void DailyProfileAdmissionRejectsWrongRequiredLegacySpatialNetworkRouteCardinality()
     {
-        SimulationRuntime runtime = CreateSpatialAdmissionRuntime(legacyNetworkRouteCount: 1);
-
-        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
-        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+        AssertDailyProfileAdmissionRejected(() => CreateSpatialAdmissionRuntime(legacyNetworkRouteCount: 1));
     }
 
     [Test]
@@ -1627,7 +1612,7 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
-    public void UnityBootstrapDailyContinuesToAdmitP14AExogenousMaterialFlow()
+    public void P14AExogenousMaterialFlowRunsInItsSingleCityProvingProfile()
     {
         SimulationConfigData config = CreateP14AdmissionConfig(
             LocalMaterialFlowProfile.ExogenousDaily, 0, out ItemData item);
@@ -1635,7 +1620,7 @@ public sealed class SimulationRuntimeAdmissionTests
         try
         {
             TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
-            ConfigureSelectedBootstrap(bootstrap, config);
+            ConfigureUnscopedBootstrap(bootstrap, config);
 
             InvokeInitializeSimulation(bootstrap, null);
 
@@ -2063,6 +2048,12 @@ public sealed class SimulationRuntimeAdmissionTests
             null
         });
         Assert.That(accepted, Is.False, witness.SectionId);
+    }
+
+    private static void AssertDailyProfileAdmissionRejected(Action compose)
+    {
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(compose);
+        Assert.That(failure.Message, Does.Contain("P12 runtime-admission adapter could not bind"));
     }
 
     private static void ConfigureUnscopedBootstrap(TesteSimulacao bootstrap, SimulationConfigData config)

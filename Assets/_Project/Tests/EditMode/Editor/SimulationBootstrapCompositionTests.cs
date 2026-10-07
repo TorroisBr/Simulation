@@ -199,8 +199,9 @@ public sealed class SimulationBootstrapCompositionTests
     [Test]
     public void UnityBootstrapDailyV1PreDraftFailureNeverPublishesIdentityOrRetries()
     {
-        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
-        ConfigureGeography(config);
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
         GameObject simulationObject = new GameObject("world-identity-daily-pre-draft-failure-test");
         simulationObjects.Add(simulationObject);
         TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
@@ -285,8 +286,9 @@ public sealed class SimulationBootstrapCompositionTests
     public void SelectedDailyProfilePublishesCoherentFactualReadOnlyAfterBootstrapCloses()
     {
         const string factionCapabilityId = "simulation.faction-truth/v1";
-        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
-        ConfigureGeography(config);
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
         GameObject simulationObject = new GameObject("frb-live-publication-test");
         simulationObjects.Add(simulationObject);
         TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
