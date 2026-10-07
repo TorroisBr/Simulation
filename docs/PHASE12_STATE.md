@@ -2211,3 +2211,12 @@ The retained validation remains exact-tree: runtime admission 59/59, composition
 The selected `UnityBootstrap-Daily-v1` profile now rejects authored P14-A ExogenousDaily material-flow configuration before WorldId allocation and runtime/owner construction. Standalone unscoped P14-A remains covered, and P10-A Ruin/LocalTopology remains a separate proving profile. Validation remains focused admission 59/59, composition 24/24, exact selected-profile inventory 1/1, ALL EditMode 2443/2443, official Smoke 5/5, and `git diff --check` PASS.
 
 This is only a profile-boundary correction. P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. It makes no complete owner/shared-epoch, global quiescence, capture eligibility, export, hydration, downstream readiness, or Phase 12 closure claim. The wider owner/successful-write-to-operation-and-epoch matrix remains the next P12-B evidence obligation.
+
+
+### P12-B selected Daily-v1 temporal owner/cardinality witness — 2026-10-07
+
+Code candidate `cb299879b35dc01d8ec65dec36fd258f3d7f85b1` (commit tree `5f0201661e5e781597bc884ca7d290ce08a43266`, Assets tree `4d00528482829fcb3bcde58ff1bcbe4ba69f116b`) adds test-only temporal assertions to the selected Daily-v1 roster lifecycle test. At 10 → 11 → 10 → 11 NPC roster cardinalities it checks section IDs, exact owner identity, cardinality and local revision for MoneyAccount, Inventory, both SpatialKnowledge sections, and ten Knowledge sections per live NPC. The existing identity-registry assertions remain in place across unregister/re-registration.
+
+Post-profile-separation validation is recorded in [`P12DailyTemporalCensus/VALIDATION.md`](validation/P12DailyTemporalCensus/VALIDATION.md): exact Daily admission rejection 1/1; exact selected-profile geography and owner/cardinality inventory 1/1; temporal owner-family roster test 1/1; ALL EditMode 2443/2443; official Smoke 5/5; `git diff --check` PASS. P10-A remains a separate proving profile.
+
+This is a bounded temporal witness, not complete owner coverage. It adds no runtime behavior and establishes no complete commit/operation/epoch mapping, shared-epoch coverage, quiescence, capture eligibility, export, hydration, or phase readiness. The broader P12-B owner/operation/epoch matrix remains incomplete. P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains open. The candidate awaits independent exact-tip review and canonical consideration.
