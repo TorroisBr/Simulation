@@ -1,12 +1,14 @@
 # P20-C — Two-Person Joint Civil Travel: Current-Canonical Revalidation
 
-**Status:** User scope accepted on 2026-10-07. Master source revalidation: **preliminary compatible**. Independent current-base design review and Architecture Roadmap reconciliation remain pending. This record is not a P20-C promotion, implementation review, Phase closure, or Unity validation claim.
+**Current status (2026-10-07):** Design revalidation **PASS**; the canonical General Architect handoff marks P20-C `READY_FOR_IMPLEMENTATION`. Bounded implementation candidate `c0253cad69c0dc09ee4c601c5048eef99e13ce40` passed exact-tip implementation review and required validation. This record is not a P20-C promotion or Phase closure.
+
+The current architecture handoff is `docs/architecture/P20C_JOINT_CIVIL_TRAVEL_MASTER_HANDOFF.md` at `codex/architecture/world-identity-projection` tip `a29ddd1271fff8fc45abb3270229b43bfe89f2a9`. Its linked independent technical review records `PASS / READY_FOR_IMPLEMENTATION`; it closes the bounded FailedStart design correction and confirms no open product or architecture decision. The Architecture Roadmap now assigns joint travel to P20-C while preserving P20-A and the already-promoted P20-B admission checkpoint.
 
 ## Current canonical baselines
 
 | Authority | Refreshed tip | Relevance |
 |---|---|---|
-| Architecture | codex/architecture/world-identity-projection at e16796014d348e3b59da7ed848101c4c03926ba5 | Current multi-participant and extensibility contracts; includes both alignment records. |
+| Architecture | codex/architecture/world-identity-projection at a29ddd1271fff8fc45abb3270229b43bfe89f2a9 | Current P20-A/B/C identities, both alignment records, and the reviewed P20-C implementation handoff. |
 | P8 | codex/phase8/canonical at 470667d | Closed spatial/travel authorities, including individual Person travel. |
 | P18 | codex/phase18/canonical at 8ac2d78 | Closed logical timeline, activity lifecycle, and availability/decision capabilities. |
 | P20 | codex/phase20/canonical at fe4909a0fc371a2fedb55cb9cef086e5dbf63526 | P20-A and P20-B current state and code. |
@@ -39,14 +41,14 @@ The P20-B State explicitly limits that checkpoint to the Daily-v1 empty-owner ce
 4. **The accepted P20 semantics still fit.** Independent decisions, current-truth validation, coherent coordinated transitions, distinct outcomes, and separation from persistent membership remain consistent with the current P20 Brief and multi-participant alignment.
 5. **Conditional input remains conditional.** The reused design does not require P11 external command capture; no new command queue or public API is selected here.
 
-These checks find no semantic conflict in reusing the design under P20-C. They do not substitute for the independent current-base technical-design review required before implementation readiness.
+These checks find no semantic conflict in reusing the design under P20-C. The independent current-base technical-design review and architecture identity reconciliation have now passed; this source record carries the refreshed baseline rather than treating the older preliminary review as current authority.
 
 ## Dependency edges and gates
 
 P20-C consumes promoted P18-A/B/C, P20-A, and P8-E capabilities. It must integrate with and preserve the P20-B Daily-profile admission boundary. The P20-B relationship is an admission/owner-identity compatibility constraint, not a new traveler behavior dependency. P18-D, P19 loader work, P12 save completion, P13 fork, P14, P15-P17, Groups, and War are not prerequisites for this bounded consumer.
 
-The Architecture Roadmap still carries the historical P20-B/joint-travel mismatch. The General Architect must update that canonical artifact and the current P20 technical-design handoff. The additive architecture reconciliation handoff is separate from this P20 candidate.
+The former P20-B/joint-travel mismatch is resolved by the canonical architecture identity reconciliation. No P20-B history is rewritten; the joint-travel consumer is P20-C.
 
-## Next review boundary
+## Implementation boundary
 
-The historical P20-B technical-design PASS is useful source evidence but does not independently approve a P20-C design at current canonical tips. The General Architect should review this exact revalidation and issue a P20-C handoff or findings. Any implementation candidate must preserve the existing P20-B and P12-Daily rejection behavior, audit the current canonical joint-travel code before changing it, avoid duplicate code, and obtain a fresh exact-tip code review if its code tree changes. No tests were run for this documentation-only revalidation.
+Implementation preserves the existing P20-B and P12-Daily rejection behavior, corrects FailedStart revision synchronization/reconstructability without weakening strict restore equality, and avoids duplicate code. Exact-tip review is recorded in `PHASE20C_IMPLEMENTATION_REVIEW.md`; focused P20/P18 regressions, ALL EditMode, official Smoke, `git diff --check`, and explicit P12 Daily-v1 admission/exclusion tests are recorded in `../validation/P20C/VALIDATION.md`. The implementation remains a P20-C candidate until canonical integration; Phase 20 remains open.
