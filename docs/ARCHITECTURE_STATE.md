@@ -204,3 +204,40 @@ The user approved promotion of that exact candidate. Final remote preflight foun
 Canonical meaning is in `SIMULATION_ARCHITECTURE.md` §92A; the [capability DAG audit](architecture/P12_CAPABILITY_DAG_AUDIT.md) and [independent review](architecture/P12_CAPABILITY_DAG_REVIEW.md) record scope and evidence. P12 still owes full deterministic continuation for every admitted owner of `UnityBootstrap-Daily-v1`, and P12-B remains incomplete. There is no global `PHASE 12 FOUNDATION READY` milestone. P13 fork implementation remains capability-blocked; P15/P16 are not implementation-authorized by this promotion. New owners must prove exclusion from the selected P12 composition or tested fail-closed rejection before their domain checkpoint is promoted.
 
 The [Master handoff](architecture/P12_CAPABILITY_DAG_MASTER_HANDOFF.md) records the refreshed executable design set, product decisions, dependency gates, and serial integration boundaries. Numbered-phase States continue to own their own delivery history; this architecture promotion reopens none of them.
+
+## P12-B bounded completion design promotion — 2026-10-07
+
+**Status:** ARCHITECTURE_PROMOTED — documentation/technical-design only.
+**Canonical branch:** `codex/architecture/world-identity-projection`.
+**Previous architecture SHA:** `a29ddd1271fff8fc45abb3270229b43bfe89f2a9`.
+**Approved candidate / promoted content SHA:**
+`f513d4249fc3ba91f5e7b3db3f5f1818bd0eae45` from
+`codex/architecture/p12b-bounded-completion-design`.
+
+The user approved the exact candidate. Final preflight verified matching
+local/remote architecture and candidate refs, unchanged candidate contents,
+clean fast-forward ancestry, the applicable independent PASS technical and
+assembled-tip reviews, and full-diff `git diff --check`. The candidate adds
+only the contract, independent review and Master handoff. This State record is
+additive promotion metadata; the reviewed candidate files remain unchanged.
+No numbered-phase canonical ref or implementation worktree was modified.
+
+The [bounded contract](architecture/P12B_BOUNDED_COMPLETION_CONTRACT.md) and
+[Master handoff](architecture/P12B_BOUNDED_COMPLETION_MASTER_HANDOFF.md) remain
+current against P12 remote `94551b08be8cc9347de35eae5051b8e578ea4c1e`.
+Independent [technical review](architecture/P12B_BOUNDED_COMPLETION_DESIGN_REVIEW.md)
+remains **PASS / READY_FOR_IMPLEMENTATION** for one bounded completion slice
+inside existing P12-B. Evidence closure comes first: exhaustive supported
+Daily-v1 owners/ingresses/transitions and runtime-wide owner-thread/quiescence
+using the existing protocol, epochs, contexts and advance lease. The immutable
+ephemeral SimulationRuntime-owned token issues only after a fully successful
+positive outer advance and final coherent census/health assessment; failure,
+partial completion, throw, fault or idleness cannot issue a token.
+
+P12-B delivery remains **INCOMPLETE**. P12-C still depends on promoted B;
+D/E depend on B+C; F depends on C/D/E; G depends on B–F plus validated inventory.
+P12-A and P13 retain their separate dependency gates. Full allocator state stays
+C; deeper Knowledge/Expedition stays F. No Daily-v1 widening, runtime code,
+save/hydration capability or closed-phase reopening is implied. The Master
+uses current source, discards no durable history, and does not replay stale
+ActorChoice branches. No product/architecture decision remains open.
