@@ -4,6 +4,7 @@
 **Checkpoint:** P12-B, Daily-v1 profile admission and completed-boundary eligibility.
 **Validation base:** P12 canonical 94551b08be8cc9347de35eae5051b8e578ea4c1e; architecture canonical 47eff220c7ce00f6e7c759bdc2b76780bb46f628.
 **Implementation branch/base:** codex/phase12/P12BBoundedCompletion at cba4e655ac102a7a1c061c32ae6c2c279f1e5dc8.
+**Validated Assets subtree:** 2fad533d34fbde3e1d446f4b8f9abb423ffac2a7, from implementation commit caabbfdae2158bac79dfdfc9ceff97d5570b708f.
 **Unity:** 6000.3.9f1 (7a9955a4f2fa).
 
 ## Scope and evidence boundary
