@@ -1,9 +1,56 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Collections.ObjectModel;
+
+public sealed class RuntimeIdAllocatorCounterSnapshot
+{
+    public string FamilyId { get; }
+    public long NextSequence { get; }
+
+    public RuntimeIdAllocatorCounterSnapshot(string familyId, long nextSequence)
+    {
+        FamilyId = familyId;
+        NextSequence = nextSequence;
+    }
+}
+
+public sealed class RuntimeIdAllocatorSnapshot
+{
+    public const string CurrentSchemaId = "runtime-id-allocator";
+    public const int CurrentSchemaVersion = 1;
+
+    private readonly ReadOnlyCollection<RuntimeIdAllocatorCounterSnapshot> counters;
+
+    public string SchemaId { get; }
+    public int SchemaVersion { get; }
+    public IReadOnlyList<RuntimeIdAllocatorCounterSnapshot> Counters => counters;
+
+    public RuntimeIdAllocatorSnapshot(
+        string schemaId,
+        int schemaVersion,
+        IEnumerable<RuntimeIdAllocatorCounterSnapshot> counters)
+    {
+        SchemaId = schemaId;
+        SchemaVersion = schemaVersion;
+
+        if (counters != null)
+        {
+            this.counters = new ReadOnlyCollection<RuntimeIdAllocatorCounterSnapshot>(
+                new List<RuntimeIdAllocatorCounterSnapshot>(counters));
+        }
+    }
+}
 
 public sealed class RuntimeIdAllocator
 {
+    private static readonly string[] SupportedFamilyIds =
+    {
+        "npc", "city", "location", "route", "event", "directive", "decision",
+        "travel-party", "organization", "site", "expedition", "local-place",
+        "local-connection", "notable-item"
+    };
+
     private readonly object censusOwnerIdentity = new object();
     private long nextNpcSequence = 1;
     private long nextCitySequence = 1;
@@ -25,6 +72,10 @@ public sealed class RuntimeIdAllocator
     private Action p12DecisionIdMutationCommitted;
     private Func<bool> p12TravelPartyIdMutationAdmission;
     private Action p12TravelPartyIdMutationCommitted;
+
+    public RuntimeIdAllocator()
+    {
+    }
 
     internal object CensusOwnerIdentity => censusOwnerIdentity;
 
@@ -48,6 +99,137 @@ public sealed class RuntimeIdAllocator
             case RuntimeIdAllocatorCensusCounter.NotableItems: return nextNotableItemSequence - 1L;
             default: throw new ArgumentOutOfRangeException(nameof(counter));
         }
+    }
+
+    public RuntimeIdAllocatorSnapshot CaptureSnapshot()
+    {
+        return new RuntimeIdAllocatorSnapshot(
+            RuntimeIdAllocatorSnapshot.CurrentSchemaId,
+            RuntimeIdAllocatorSnapshot.CurrentSchemaVersion,
+            new[]
+            {
+                new RuntimeIdAllocatorCounterSnapshot("npc", nextNpcSequence),
+                new RuntimeIdAllocatorCounterSnapshot("city", nextCitySequence),
+                new RuntimeIdAllocatorCounterSnapshot("location", nextLocationSequence),
+                new RuntimeIdAllocatorCounterSnapshot("route", nextRouteSequence),
+                new RuntimeIdAllocatorCounterSnapshot("event", nextEventSequence),
+                new RuntimeIdAllocatorCounterSnapshot("directive", nextDirectiveSequence),
+                new RuntimeIdAllocatorCounterSnapshot("decision", nextDecisionSequence),
+                new RuntimeIdAllocatorCounterSnapshot("travel-party", nextTravelPartySequence),
+                new RuntimeIdAllocatorCounterSnapshot("organization", nextOrganizationSequence),
+                new RuntimeIdAllocatorCounterSnapshot("site", nextExplorableSiteSequence),
+                new RuntimeIdAllocatorCounterSnapshot("expedition", nextExpeditionSequence),
+                new RuntimeIdAllocatorCounterSnapshot("local-place", nextLocalPlaceSequence),
+                new RuntimeIdAllocatorCounterSnapshot("local-connection", nextLocalConnectionSequence),
+                new RuntimeIdAllocatorCounterSnapshot("notable-item", nextNotableItemSequence)
+            });
+    }
+
+    internal static bool TryCreateStagedFromSnapshot(
+        RuntimeIdAllocatorSnapshot snapshot,
+        out RuntimeIdAllocator allocator,
+        out string diagnostic)
+    {
+        allocator = null;
+        diagnostic = null;
+
+        if (snapshot == null)
+        {
+            diagnostic = "Runtime ID allocator snapshot is null.";
+            return false;
+        }
+
+        if (string.Equals(snapshot.SchemaId, RuntimeIdAllocatorSnapshot.CurrentSchemaId, StringComparison.Ordinal) == false
+            || snapshot.SchemaVersion != RuntimeIdAllocatorSnapshot.CurrentSchemaVersion)
+        {
+            diagnostic = "Runtime ID allocator snapshot schema is unsupported.";
+            return false;
+        }
+
+        if (snapshot.Counters == null)
+        {
+            diagnostic = "Runtime ID allocator snapshot counters are missing.";
+            return false;
+        }
+
+        Dictionary<string, long> nextSequences = new Dictionary<string, long>(StringComparer.Ordinal);
+        foreach (RuntimeIdAllocatorCounterSnapshot counter in snapshot.Counters)
+        {
+            if (counter == null || string.IsNullOrWhiteSpace(counter.FamilyId) == true)
+            {
+                diagnostic = "Runtime ID allocator snapshot contains a missing family.";
+                return false;
+            }
+
+            if (ArrayContains(SupportedFamilyIds, counter.FamilyId) == false)
+            {
+                diagnostic = "Runtime ID allocator snapshot contains an unknown family '" + counter.FamilyId + "'.";
+                return false;
+            }
+
+            if (nextSequences.ContainsKey(counter.FamilyId) == true)
+            {
+                diagnostic = "Runtime ID allocator snapshot contains duplicate family '" + counter.FamilyId + "'.";
+                return false;
+            }
+
+            if (counter.NextSequence < 1L || counter.NextSequence == long.MaxValue)
+            {
+                diagnostic = "Runtime ID allocator snapshot contains an invalid or exhausted next sequence for '" + counter.FamilyId + "'.";
+                return false;
+            }
+
+            nextSequences.Add(counter.FamilyId, counter.NextSequence);
+        }
+
+        if (nextSequences.Count != SupportedFamilyIds.Length)
+        {
+            diagnostic = "Runtime ID allocator snapshot does not contain the exact supported family set.";
+            return false;
+        }
+
+        foreach (string familyId in SupportedFamilyIds)
+        {
+            if (nextSequences.ContainsKey(familyId) == false)
+            {
+                diagnostic = "Runtime ID allocator snapshot is missing family '" + familyId + "'.";
+                return false;
+            }
+        }
+
+        allocator = new RuntimeIdAllocator(nextSequences);
+        return true;
+    }
+
+    private RuntimeIdAllocator(IDictionary<string, long> nextSequences)
+    {
+        nextNpcSequence = nextSequences["npc"];
+        nextCitySequence = nextSequences["city"];
+        nextLocationSequence = nextSequences["location"];
+        nextRouteSequence = nextSequences["route"];
+        nextEventSequence = nextSequences["event"];
+        nextDirectiveSequence = nextSequences["directive"];
+        nextDecisionSequence = nextSequences["decision"];
+        nextTravelPartySequence = nextSequences["travel-party"];
+        nextOrganizationSequence = nextSequences["organization"];
+        nextExplorableSiteSequence = nextSequences["site"];
+        nextExpeditionSequence = nextSequences["expedition"];
+        nextLocalPlaceSequence = nextSequences["local-place"];
+        nextLocalConnectionSequence = nextSequences["local-connection"];
+        nextNotableItemSequence = nextSequences["notable-item"];
+    }
+
+    private static bool ArrayContains(string[] values, string expected)
+    {
+        for (int index = 0; index < values.Length; index++)
+        {
+            if (string.Equals(values[index], expected, StringComparison.Ordinal) == true)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public string AllocateNpcId()

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using NUnit.Framework;
@@ -197,6 +199,155 @@ public sealed class SimulationRecordSequenceP12InvalidationTests
         AssertEpoch(runtime, 1L);
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure finalAssessment), Is.True,
             finalAssessment.ToString());
+    }
+
+    [Test]
+    public void SelectedDailyRuntimeRebindsRestoredIdentityOwnersAndPreservesOccurrenceReplay()
+    {
+        TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture();
+        foreach (NpcRuntime member in fixture.Members)
+        {
+            member.SpatialKnowledge.DiscoverLocation(fixture.World.A.Location.RuntimeId);
+            member.SpatialKnowledge.DiscoverRoute(fixture.World.RouteAB.RuntimeId);
+        }
+
+        RuntimeIdAllocator sourceAllocator = fixture.Records.Allocator;
+        sourceAllocator.AllocateEventId();
+        sourceAllocator.AllocateDecisionId();
+        sourceAllocator.AllocateTravelPartyId();
+        SimulationRecordSequence sourceSequence = fixture.Records.Sequence;
+        sourceSequence.Allocate();
+
+        OwnerSectionCensusWitness sourceEvent = RuntimeIdAllocatorCensusProvider
+            .CreateEventCounterProvider(sourceAllocator).GetCurrentCensus();
+        OwnerSectionCensusWitness sourceDecision = RuntimeIdAllocatorCensusProvider
+            .CreateDecisionCounterProvider(sourceAllocator).GetCurrentCensus();
+        OwnerSectionCensusWitness sourceTravelParty = RuntimeIdAllocatorCensusProvider
+            .CreateTravelPartyCounterProvider(sourceAllocator).GetCurrentCensus();
+        OwnerSectionCensusWitness sourceSequenceWitness = new SimulationRecordSequenceCensusProvider(sourceSequence)
+            .GetCurrentCensus();
+
+        RuntimeIdAllocator restoredAllocator = RestoreAllocator(sourceAllocator.CaptureSnapshot());
+        SimulationRecordSequence restoredSequence = RestoreRecordSequence(sourceSequence.CaptureSnapshot());
+        RecordFixture records = CreateRecordFixture(restoredAllocator, restoredSequence);
+        TravelSystem travelSystem = fixture.World.CreateTravelSystem(records.Time, records.EventRecorder);
+        TravelPartySystem travelPartySystem = new TravelPartySystem(
+            fixture.Parties,
+            restoredAllocator,
+            fixture.World.IdentityRegistry,
+            travelSystem,
+            records.Time,
+            restoredSequence,
+            records.EventRecorder);
+
+        SimulationRuntime runtime = new SimulationRuntime(
+            records.Time,
+            new[] { fixture.World.A, fixture.World.B, fixture.World.C },
+            fixture.Members,
+            economyEnabled: false,
+            configuredActions: Array.Empty<NpcActionData>(),
+            npcDecisionSystem: new NpcDecisionSystem(new List<INpcActionProvider>()),
+            travelSystem: travelSystem,
+            travelPartySystem: travelPartySystem,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            recordSequence: restoredSequence,
+            runtimeIdAllocator: restoredAllocator);
+        IOwnerSectionCensusProvider eventProvider =
+            RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(restoredAllocator);
+        IOwnerSectionCensusProvider decisionProvider =
+            RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(restoredAllocator);
+        IOwnerSectionCensusProvider travelPartyProvider =
+            RuntimeIdAllocatorCensusProvider.CreateTravelPartyCounterProvider(restoredAllocator);
+        SimulationRecordSequenceCensusProvider sequenceProvider =
+            new SimulationRecordSequenceCensusProvider(restoredSequence);
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialAssessment), Is.True,
+            initialAssessment.ToString());
+        Assert.That(runtime.HasSameRuntimeIdAllocatorEventCounterOwner(eventProvider), Is.True);
+        Assert.That(runtime.HasSameRuntimeIdAllocatorDecisionCounterOwner(decisionProvider), Is.True);
+        Assert.That(runtime.HasSameSimulationRecordSequenceOwner(sequenceProvider), Is.True);
+        Assert.That(eventProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.Not.SameAs(sourceEvent.OwnerInstanceIdentity));
+        Assert.That(decisionProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.Not.SameAs(sourceDecision.OwnerInstanceIdentity));
+        Assert.That(travelPartyProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.Not.SameAs(sourceTravelParty.OwnerInstanceIdentity));
+        Assert.That(sequenceProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.Not.SameAs(sourceSequenceWitness.OwnerInstanceIdentity));
+        Assert.That(eventProvider.GetCurrentCensus().Revision, Is.EqualTo(1L));
+        Assert.That(decisionProvider.GetCurrentCensus().Revision, Is.EqualTo(1L));
+        Assert.That(travelPartyProvider.GetCurrentCensus().Revision, Is.EqualTo(1L));
+        Assert.That(sequenceProvider.GetCurrentCensus().Revision, Is.EqualTo(1L));
+
+        Assert.That(restoredAllocator.AllocateEventId(), Is.EqualTo("event-000002"));
+        Assert.That(eventProvider.GetCurrentCensus().Revision, Is.EqualTo(2L));
+        AssertEpoch(runtime, 1L);
+
+        Assert.That(restoredAllocator.AllocateDecisionId(), Is.EqualTo("decision-000002"));
+        Assert.That(decisionProvider.GetCurrentCensus().Revision, Is.EqualTo(2L));
+        AssertEpoch(runtime, 2L);
+
+        ActionExecutionContext travelPartyContext = new ActionExecutionContext(
+            "restored-runtime-travel-party",
+            new[]
+            {
+                new ActionExecutionParticipant(fixture.Bruno.RuntimeId, ActionExecutionParticipantRole.Performer),
+                new ActionExecutionParticipant(fixture.Caio.RuntimeId, ActionExecutionParticipantRole.Performer),
+                new ActionExecutionParticipant(fixture.Marta.RuntimeId, ActionExecutionParticipantRole.Support)
+            },
+            fixture.World.B.Location.RuntimeId,
+            fixture.World.RouteAB.RuntimeId);
+        Assert.That(runtime.TryStartTravelParty(travelPartyContext), Is.True);
+        Assert.That(travelPartyProvider.GetCurrentCensus().Revision, Is.EqualTo(2L));
+        Assert.That(eventProvider.GetCurrentCensus().Revision, Is.EqualTo(3L));
+        Assert.That(sequenceProvider.GetCurrentCensus().Revision, Is.EqualTo(2L));
+        AssertEpoch(runtime, 3L);
+
+        Assert.That(Enum.IsDefined(typeof(NpcDecisionOrigin), NpcDecisionOrigin.ActorChoice), Is.True);
+        NpcDecisionRecord occurrence = RecordOccurrence(
+            records.DecisionRecorder,
+            "restored-owner-occurrence",
+            NpcDecisionOrigin.ActorChoice);
+        Assert.That(occurrence, Is.Not.Null);
+        Assert.That(occurrence.Origin, Is.EqualTo(NpcDecisionOrigin.ActorChoice));
+        Assert.That(sequenceProvider.GetCurrentCensus().Revision, Is.EqualTo(3L));
+        Assert.That(decisionProvider.GetCurrentCensus().Revision, Is.EqualTo(3L));
+        long afterOccurrenceEpoch = ReadEpoch(runtime);
+
+        NpcDecisionRecord replay = RecordOccurrence(
+            records.DecisionRecorder,
+            "restored-owner-occurrence",
+            NpcDecisionOrigin.ActorChoice);
+        Assert.That(replay, Is.SameAs(occurrence));
+        Assert.That(sequenceProvider.GetCurrentCensus().Revision, Is.EqualTo(3L));
+        Assert.That(decisionProvider.GetCurrentCensus().Revision, Is.EqualTo(3L));
+        Assert.That(ReadEpoch(runtime), Is.EqualTo(afterOccurrenceEpoch),
+            "replaying an existing P18-D occurrence receipt does not allocate or invalidate again");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure finalAssessment), Is.True,
+            finalAssessment.ToString());
+    }
+
+    [Test]
+    public void RestoredDailyIdentityOwnerPreflightRejectsWithoutConsumingCounter()
+    {
+        RuntimeIdAllocator sourceAllocator = new RuntimeIdAllocator();
+        sourceAllocator.AllocateEventId();
+        SimulationRecordSequence sourceSequence = new SimulationRecordSequence();
+        sourceSequence.Allocate();
+        RuntimeIdAllocator restoredAllocator = RestoreAllocator(sourceAllocator.CaptureSnapshot());
+        SimulationRecordSequence restoredSequence = RestoreRecordSequence(sourceSequence.CaptureSnapshot());
+        RecordFixture records = CreateRecordFixture(restoredAllocator, restoredSequence);
+        SimulationRuntime runtime = CreateRuntime(records, restoredSequence, restoredAllocator);
+        IOwnerSectionCensusProvider eventProvider =
+            RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(restoredAllocator);
+        ContinuationCensusProtocol protocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
+            .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(runtime);
+        typeof(ContinuationCensusProtocol)
+            .GetField("mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(protocol, long.MaxValue);
+
+        Assert.Throws<InvalidOperationException>(() => restoredAllocator.AllocateEventId());
+        Assert.That(eventProvider.GetCurrentCensus().Revision, Is.EqualTo(1L));
+        Assert.That(restoredAllocator.CaptureSnapshot().Counters
+            .Single(counter => counter.FamilyId == "event").NextSequence, Is.EqualTo(2L));
+        AssertProtocolFaulted(runtime);
     }
 
     [Test]
@@ -524,19 +675,68 @@ public sealed class SimulationRecordSequenceP12InvalidationTests
     private static SimulationRuntime CreateRuntime(
         RecordFixture records,
         SimulationRecordSequence sequence,
-        RuntimeIdAllocator runtimeIdAllocator = null)
+        RuntimeIdAllocator runtimeIdAllocator = null,
+        TravelPartySystem travelPartySystem = null,
+        TravelSystem travelSystem = null)
     {
         return new SimulationRuntime(
             records != null ? records.Time : new SimulationTime(),
             null,
             null,
             decisionRecorder: records != null ? records.DecisionRecorder : null,
+            travelSystem: travelSystem,
+            travelPartySystem: travelPartySystem,
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
             recordSequence: sequence,
             runtimeIdAllocator: runtimeIdAllocator);
     }
 
-    private static NpcDecisionRecord RecordOccurrence(NpcDecisionRecorder recorder, string operationIdentity)
+    private static RecordFixture CreateRecordFixture(
+        RuntimeIdAllocator allocator,
+        SimulationRecordSequence sequence)
+    {
+        SimulationTime time = new SimulationTime();
+        NpcDecisionStore decisions = new NpcDecisionStore();
+        NpcDecisionRecorder decisionRecorder = new NpcDecisionRecorder(allocator, time, sequence, decisions);
+        HistoryStore history = new HistoryStore();
+        DomainEventStore events = new DomainEventStore(history, new HistoryPolicy());
+        DomainEventRecorder eventRecorder = new DomainEventRecorder(allocator, time, sequence, events);
+        return new RecordFixture(
+            allocator,
+            time,
+            sequence,
+            decisions,
+            decisionRecorder,
+            history,
+            events,
+            eventRecorder,
+            new NpcChronicleService(decisions, events));
+    }
+
+    private static RuntimeIdAllocator RestoreAllocator(RuntimeIdAllocatorSnapshot snapshot)
+    {
+        MethodInfo factory = typeof(RuntimeIdAllocator).GetMethod(
+            "TryCreateStagedFromSnapshot", BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.That(factory, Is.Not.Null);
+        object[] arguments = { snapshot, null, null };
+        Assert.That((bool)factory.Invoke(null, arguments), Is.True, arguments[2] as string);
+        return arguments[1] as RuntimeIdAllocator;
+    }
+
+    private static SimulationRecordSequence RestoreRecordSequence(SimulationRecordSequenceSnapshot snapshot)
+    {
+        MethodInfo factory = typeof(SimulationRecordSequence).GetMethod(
+            "TryCreateStagedFromSnapshot", BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.That(factory, Is.Not.Null);
+        object[] arguments = { snapshot, null, null };
+        Assert.That((bool)factory.Invoke(null, arguments), Is.True, arguments[2] as string);
+        return arguments[1] as SimulationRecordSequence;
+    }
+
+    private static NpcDecisionRecord RecordOccurrence(
+        NpcDecisionRecorder recorder,
+        string operationIdentity,
+        NpcDecisionOrigin origin = NpcDecisionOrigin.Autonomous)
     {
         MethodInfo method = typeof(NpcDecisionRecorder).GetMethod(
             "TryRecordOccurrenceOnce", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -547,7 +747,7 @@ public sealed class SimulationRecordSequenceP12InvalidationTests
             "fingerprint-" + operationIdentity,
             "actor",
             NpcDecisionType.Action,
-            NpcDecisionOrigin.Autonomous,
+            origin,
             "action",
             null,
             null,
@@ -562,6 +762,13 @@ public sealed class SimulationRecordSequenceP12InvalidationTests
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
             out long actual, out ContinuationCensusFailure failure), Is.True, failure.ToString());
         Assert.That(actual, Is.EqualTo(expected));
+    }
+
+    private static long ReadEpoch(SimulationRuntime runtime)
+    {
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long actual, out ContinuationCensusFailure failure), Is.True, failure.ToString());
+        return actual;
     }
 
     private static void AssertProtocolFaulted(SimulationRuntime runtime)

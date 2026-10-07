@@ -1,6 +1,23 @@
 using System;
 using System.Collections.Generic;
 
+public sealed class SimulationRecordSequenceSnapshot
+{
+    public const string CurrentSchemaId = "simulation-record-sequence";
+    public const int CurrentSchemaVersion = 1;
+
+    public string SchemaId { get; }
+    public int SchemaVersion { get; }
+    public long NextSequence { get; }
+
+    public SimulationRecordSequenceSnapshot(string schemaId, int schemaVersion, long nextSequence)
+    {
+        SchemaId = schemaId;
+        SchemaVersion = schemaVersion;
+        NextSequence = nextSequence;
+    }
+}
+
 public sealed class SimulationRecordSequence
 {
     private long nextSequence = 1L;
@@ -10,6 +27,54 @@ public sealed class SimulationRecordSequence
 
     internal object CensusOwnerIdentity => censusOwnerIdentity;
     internal long CensusRevision => nextSequence - 1L;
+
+    public SimulationRecordSequence()
+    {
+    }
+
+    public SimulationRecordSequenceSnapshot CaptureSnapshot()
+    {
+        return new SimulationRecordSequenceSnapshot(
+            SimulationRecordSequenceSnapshot.CurrentSchemaId,
+            SimulationRecordSequenceSnapshot.CurrentSchemaVersion,
+            nextSequence);
+    }
+
+    internal static bool TryCreateStagedFromSnapshot(
+        SimulationRecordSequenceSnapshot snapshot,
+        out SimulationRecordSequence sequence,
+        out string diagnostic)
+    {
+        sequence = null;
+        diagnostic = null;
+
+        if (snapshot == null)
+        {
+            diagnostic = "Simulation record sequence snapshot is null.";
+            return false;
+        }
+
+        if (string.Equals(snapshot.SchemaId, SimulationRecordSequenceSnapshot.CurrentSchemaId, StringComparison.Ordinal) == false
+            || snapshot.SchemaVersion != SimulationRecordSequenceSnapshot.CurrentSchemaVersion)
+        {
+            diagnostic = "Simulation record sequence snapshot schema is unsupported.";
+            return false;
+        }
+
+        if (snapshot.NextSequence < 1L || snapshot.NextSequence == long.MaxValue)
+        {
+            diagnostic = "Simulation record sequence snapshot contains an invalid or exhausted next sequence.";
+            return false;
+        }
+
+        sequence = new SimulationRecordSequence(snapshot.NextSequence);
+        return true;
+    }
+
+    private SimulationRecordSequence(long restoredNextSequence)
+    {
+        nextSequence = restoredNextSequence;
+    }
 
     public long Allocate()
     {
