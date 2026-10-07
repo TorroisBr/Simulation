@@ -95,7 +95,7 @@ attach only after their own capabilities and readable facts exist:
 | P14 material flow | Reserve, production, stock and exhaustion. | P14-B is promoted; Lab still needs coherent reserve/stock observation and non-Unity execution. |
 | P15 construction | Structure absent before, present after the approved runtime mutation. | P15-A is promoted; Lab still needs a supported non-Unity operation and factual structure read. |
 | P16 movement | Force position and carried supply before/after one passage. | P16-A is promoted; Lab still needs a supported non-Unity operation and factual military/spatial reads. |
-| P20 shared activity | Independent decisions, coordinated start/lifecycle and individual effects. | P20-A synthetic shared behavior is promoted; Lab still needs a non-Unity execution/observation path. P20-B planning is held for the checkpoint-identity reconciliation below. |
+| P20 shared activity | Independent decisions, coordinated start/lifecycle and individual effects. | P20-A synthetic shared behavior is promoted; Lab still needs a non-Unity execution/observation path. P20-B remains promoted Daily-profile census admission. P20-C joint travel follows the current-base design/handoff gate below. |
 | P12 continuation | Save, advance, restore and compare a supported profile. | The specific P12 save/load continuation capability and its exact owner coverage. |
 | P13 historical fork | Inspect a simulated boundary and compare source/fork continuations. | Actual P13 reconstruction/fork capability, recoverable causal history and provenance. |
 
@@ -110,19 +110,41 @@ candidates retain their existing gates and status. Demonstration classification
 for any subsequent checkpoint follows `EXECUTION_MODEL.md`; a scenario is not
 silently added to an in-flight implementation contract.
 
-**Existing P20-B record conflict:** this Roadmap's 2026-10-03 product direction
-names P20-B as joint civil travel, while current `PHASE20_STATE.md` on
-`codex/phase20/canonical` names promoted P20-B as Daily-profile empty-owner
-admission/census for that travel owner. The latter does not establish a human
-joint-travel demonstration. This candidate does not reassign the checkpoint ID
-or decide whether a travel slice has another ID. Resolve the owning planning/
-State discrepancy before attaching a P20-B Lab scenario or changing P20-B
-readiness. P20-A's promoted synthetic operation remains an independently
-identifiable possible Lab consumer.
+## P20 checkpoint identity reconciliation — accepted 2026-10-07
+
+The accepted decision resolves the earlier Roadmap/State conflict:
+**P20-A — Synthetic Multi-participant Operation** remains promoted;
+**P20-B — Daily-profile census admission** retains its already-promoted
+scope, evidence and history; **P20-C — Two-Person Joint Civil Travel** names
+the real travel consumer. Exactly two Persons is the bounded proving fixture,
+not a universal Activity cardinality, role or interval limit.
+
+The dated 2026-10-03 proposal below used P20-B for joint travel. That historical
+label is superseded by P20-C for current planning; old decision/design/review
+records remain identifiable and are not rewritten. P20-B's admission promotion
+neither proves P20-C delivery nor provides a joint-travel Lab demonstration.
+See the [identity handoff](architecture/P20_CHECKPOINT_IDENTITY_RECONCILIATION_HANDOFF.md)
+and [P20-C Master handoff](architecture/P20C_JOINT_CIVIL_TRAVEL_MASTER_HANDOFF.md)
+for current-base technical review, exact readiness and remaining gates.
+
+```text
+P18-A/B/C promoted + P20-A promoted + P8-E promoted
+  → P20-C current-base review → Master validation/integration workflow
+P20-B promoted Daily census boundary + current P12 composition
+  → compatibility/rejection gate before P20-C domain promotion
+P20-C promoted + supported non-Unity execution/read path
+  → joint-travel Lab demonstration (follow-up, no retrospective domain gate)
+```
+
+P20-C does not require P18-D, full P12, P13, P19 or persistent Group/Party.
+P11 remains conditional on separately selected external commands. P12's
+`UnityBootstrap-Daily-v1` still admits only absent/empty P20 travel ownership
+and rejects populated state. No implementation or Phase closure is claimed
+by this architecture/planning reconciliation.
 
 ## P10 / P14 / P20 promoted product direction — 2026-10-03
 
-A bounded checkpoint may prove one case without making it the universal model. The promoted [product-direction and checkpoint sequence](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) treats varied local topology, finite/multiple sources and shared-activity consumers as compatible capabilities. It preserves promoted P10-A, P14-A and P20-A within their delivered profiles. At this **2026-10-03 planning decision**, the next bounded scopes were `P10-B` deterministic procedural topology for one Ruin instance, `P14-B` finite availability for one source, and `P20-B` joint civil travel by two Persons; all three were then `READY_FOR_TECHNICAL_DESIGN`, not implementation. The status is historical: current owning Phase States record P10-B and P14-B promoted, while the P20-B identity/scope discrepancy is recorded above and remains unresolved here. Later P14-C mixed sources waits on the selected P14-B proof; P14-D inter-City transfer still needs a bounded product/transport contract.
+A bounded checkpoint may prove one case without making it the universal model. The promoted [product-direction and checkpoint sequence](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) treats varied local topology, finite/multiple sources and shared-activity consumers as compatible capabilities. It preserves promoted P10-A, P14-A and P20-A within their delivered profiles. At this **2026-10-03 planning decision**, the next bounded scopes were `P10-B` deterministic procedural topology for one Ruin instance, `P14-B` finite availability for one source, and `P20-B` joint civil travel by two Persons; all three were then `READY_FOR_TECHNICAL_DESIGN`, not implementation. The status is historical: current owning Phase States record P10-B and P14-B promoted, while the historical P20-B travel label is now superseded by P20-C under the 2026-10-07 reconciliation above. Later P14-C mixed sources waits on the selected P14-B proof; P14-D inter-City transfer still needs a bounded product/transport contract.
 
 ```text
 P9 ordered genesis + P8 site/Location + P10-A topology owner
@@ -133,10 +155,10 @@ P14-B + P14-A → P14-C selected mixed finite/exogenous multi-source proof
 second factual City + applicable transport/transaction contract
   → future P14-D bounded transfer; autonomous trade is later
 P18-A/B/C + P20-A + P8-E explicit Person travel
-  → P20-B joint-travel technical design
+  → P20-C joint-travel technical design (historical 2026-10-03 label: P20-B)
 ```
 
-P10-B needs a compatible site-instance/definition seam because P10-A's single-instance profile uses a definition ID as its site key. P14-B must keep its reserve and market-stock mutation coherent without changing P14-A's exogenous meaning. P20-B must coordinate two individual travel transitions without making a two-person roster, shared role or common duration a universal Activity invariant. Future content, trade AI and other multi-person work remain separately scoped. New authoritative state or selected-profile composition still passes architecture §92A and the P12 exclusion/rejection rule; P12's accepted profile does not grow automatically. No closed phase is reopened by this promotion.
+P10-B needs a compatible site-instance/definition seam because P10-A's single-instance profile uses a definition ID as its site key. P14-B must keep its reserve and market-stock mutation coherent without changing P14-A's exogenous meaning. P20-C must coordinate two individual travel transitions without making a two-person roster, shared role or common duration a universal Activity invariant. Future content, trade AI and other multi-person work remain separately scoped. New authoritative state or selected-profile composition still passes architecture §92A and the P12 exclusion/rejection rule; P12's accepted profile does not grow automatically. No closed phase is reopened by this promotion.
 
 ## Bounded next-slice planning promotion — 2026-10-03
 
@@ -178,7 +200,7 @@ While P12-B admission is incomplete, a new owner must either stay outside the se
 | P17 | Deferred by strategic/domain/product prerequisites, not P12. | P16, territory/political authority and War semantics; no implementation checkpoint. |
 | P18 | Bounded A–D scope closed; a future intraday save profile requires specific temporal-state coverage. | No reopening for P12. |
 | P19 | Public-surface design may use real consumers; durable mod-state support needs specific P12/P13 integration. | Bounded public-extension-surface design ready; loader scope/implementation remain deferred; no blanket P12 gate. |
-| P20 | P20-A promoted; future saved shared activity requires specific temporal/participant-state coverage. | P20-B joint travel is `READY_FOR_TECHNICAL_DESIGN`; no universal two-person rule. |
+| P20 | P20-A synthetic operation and P20-B Daily-profile census admission are promoted; future shared-activity save needs specific state coverage. | P20-C joint travel uses the refreshed design/Master handoff for exact readiness; no universal two-person rule or P12 scope growth. |
 
 ```text
 canonical semantics + per-owner continuation-aware gate

@@ -1,5 +1,12 @@
 # P10 / P14 / P20 product direction and bounded checkpoint sequence
 
+**Current identity annotation — 2026-10-07:** the dated joint-travel proposal
+in this 2026-10-03 record used P20-B; the accepted current identity is P20-C —
+Two-Person Joint Civil Travel. P20-B remains the already-promoted Daily-profile
+census admission checkpoint. Historical labels/statuses below describe their
+original planning snapshot and are retained. See the current
+[P20-C Master handoff](P20C_JOINT_CIVIL_TRAVEL_MASTER_HANDOFF.md).
+
 **Status:** promoted architecture/planning direction from candidate `ad9132ab9d41b0314185709e14b5a09d023094b4` on base `3bf09249b7dd9e255c3493aacfd75c96080a31e3`, 2026-10-03. The user's product direction supersedes this file's earlier framing of compatible capabilities as mutually exclusive choices. A bounded checkpoint proves one case without making that case the universal model. P10-B, P14-B and P20-B are `READY_FOR_TECHNICAL_DESIGN`, not implementation authorization or delivered capability. P10-A, P14-A and P20-A remain promoted within their original profiles.
 
 ## P10 — procedural local topology

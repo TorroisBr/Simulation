@@ -2,9 +2,11 @@
 
 **Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12,
 91–93. **Readiness:** P20-A synthetic operation is `PROMOTED` in the owning
-State; P20-B joint civil travel is `READY_FOR_TECHNICAL_DESIGN` under the
-promoted 2026-10-03 product direction. No further implementation
-checkpoint is approved.
+State; P20-B remains the promoted Daily-profile census admission checkpoint.
+P20-C is Two-Person Joint Civil Travel under the accepted 2026-10-07 identity
+reconciliation. Its current-base readiness and Master gate are recorded in
+[the durable handoff](../architecture/P20C_JOINT_CIVIL_TRAVEL_MASTER_HANDOFF.md).
+This Brief makes no implementation or delivery claim for P20-C.
 
 **P12 dependency clarification (2026-10-03):** P20-A did not require P12 Save.
 A future supported shared-activity save/fork profile needs exact participant,
@@ -26,7 +28,7 @@ to demonstrate the generic capability.
 
 ## Semantic boundaries
 
-- **Bounded proof versus model:** P20-A's exactly two Persons are a synthetic fixture rule. P20-B may again use two Persons for a joint travel proof, but neither fixes the universal participant count, roles, effects or interval. Required four-person work, optional helpers and several workers in the same role remain valid future definitions.
+- **Bounded proof versus model:** P20-A's exactly two Persons are a synthetic fixture rule. P20-C uses two Persons for a joint travel proof, but neither fixes the universal participant count, roles, effects or interval. Required four-person work, optional helpers and several workers in the same role remain valid future definitions.
 - **Start validity versus contribution:** minimum/maximum headcounts, required/optional roles and current availability decide whether an instance may start. Each participant's effect on duration, output or outcome is a separate domain rule and need not scale linearly. One role can have many participants; an activity can have multiple distinct roles. No universal role catalog or contribution formula is selected now.
 
 - **Definition versus instance:** content/rules define activity and applicable
@@ -100,6 +102,33 @@ to demonstrate the generic capability.
   domain commit boundaries, commands and diagnostics. Isolate writers and
   review integrations; participant logic must not accumulate in `AdvanceDay`.
 
-## P20-B next consumer — 2026-10-03
+## Historical P20-B travel proposal — 2026-10-03 (current identity: P20-C)
 
 Joint travel of two independent Persons over one supported civil leg remains the smallest real consumer recommended for technical design. It consumes promoted P18-A/B/C, P20-A coordination seams and relevant P8-E explicit Person travel/position/passage capability. P8-E has no group travel or automatic intraday execution, so P20-B must design a coherent shared start and individual domain-owned travel transitions, stale/current passage checks, reservations, cancellation and distinct participant effects/Knowledge. P11 is conditional on adding external commands. The v1 traveler requirement may be narrow without making exactly two, one role, one common full-duration interval or travel itself universal Activity semantics. No persistent Group, generic workflow engine, production, mod loader or War scope is approved.
+
+
+## P20-C — Two-Person Joint Civil Travel — accepted 2026-10-07
+
+P20-B's promoted identity, Daily-profile admission and owning State/evidence
+remain intact. The historical travel scope above is now P20-C; old design and
+review filenames remain immutable sources. This is an identity reconciliation,
+not a new Phase or reinterpretation of delivered P20-B behavior.
+
+The bounded proof requires independent assent by two distinct Persons,
+P18-owned joint reservations/start, one supported P8 civil leg and separate
+Knowledge/position/progress. First arrival commits individually; second
+arrival settles lifecycle and releases both reservations coherently.
+Pre-start cancellation and AbortAfterLeg preserve already committed travel.
+Two equivalent traveler slots impose no generic cardinality or role ceiling.
+
+Hard capability edges are promoted P18-A/B/C, P20-A and P8-E. Promoted P20-B
+is the compatibility/admission boundary, not a new travel behavior prerequisite.
+Revalidate current P12 fail-closed exclusion before domain promotion; do not
+widen Daily-v1. The [refreshed technical record](../architecture/P20C_TECHNICAL_DESIGN_RECORD.md)
+and [Master handoff](../architecture/P20C_JOINT_CIVIL_TRAVEL_MASTER_HANDOFF.md)
+name bases, technical boundaries, required validation and exact readiness.
+
+Audit existing code before selecting any delta. Its historical presence is
+not P20-C delivery. Demonstrability is FOLLOW-UP_DEMONSTRATION after the
+consumer capability and supported Lab execution/read path exist; this adds
+no retrospective Lab/non-Unity requirement to the domain proof.
