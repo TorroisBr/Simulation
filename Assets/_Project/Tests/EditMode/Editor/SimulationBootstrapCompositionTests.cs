@@ -1838,6 +1838,41 @@ public sealed class SimulationBootstrapCompositionTests
         NpcRuntime[] roster = runtime.NpcRuntimes
             .OrderBy(npc => npc.RuntimeId, System.StringComparer.Ordinal)
             .ToArray();
+        ContinuationCensusProtocol protocol = ReadPrivateField<ContinuationCensusProtocol>(
+            runtime,
+            "npcRosterCensusProtocol");
+
+        IReadOnlyList<IOwnerSectionCensusProvider> travelStateProviders =
+            protocol.NpcTravelStateFamilyProviders;
+        Assert.That(travelStateProviders, Has.Count.EqualTo(roster.Length));
+        foreach (NpcRuntime npc in roster)
+        {
+            OwnerSectionCensusWitness witness = travelStateProviders
+                .Select(provider => provider.GetCurrentCensus())
+                .Single(candidate => candidate.SectionId == NpcTravelStateCensusProvider.SectionIdFor(npc.RuntimeId));
+            Assert.That(witness.SchemaVersion, Is.EqualTo(NpcTravelStateCensusProvider.SchemaVersion));
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(npc));
+            Assert.That(witness.Cardinality, Is.EqualTo(1));
+            Assert.That(witness.Revision, Is.EqualTo(npc.TravelStateRevision));
+        }
+
+        IReadOnlyList<IOwnerSectionCensusProvider> planProviders = protocol.NpcPlanFamilyProviders;
+        Assert.That(planProviders, Has.Count.EqualTo(roster.Length * 2));
+        foreach (NpcRuntime npc in roster)
+        {
+            object merchantPlan = ReadNonPublicProperty(npc, "ExistingMerchantTradePlan");
+            object travelPlan = ReadNonPublicProperty(npc, "ExistingTravelPlan");
+            AssertNpcPlanWitness(
+                planProviders,
+                NpcPlanCensusProvider.MerchantTradePlanKind,
+                npc,
+                merchantPlan);
+            AssertNpcPlanWitness(
+                planProviders,
+                NpcPlanCensusProvider.TravelPlanKind,
+                npc,
+                travelPlan);
+        }
 
         OwnerSectionCensusWitness[] accountWitnesses = runtime.MoneyAccountCensusProviders
             .Select(provider => provider.GetCurrentCensus())
@@ -1970,6 +2005,124 @@ public sealed class SimulationBootstrapCompositionTests
                 Assert.That(witness.Revision, Is.EqualTo(revisions[i]));
             }
         }
+
+        OwnerSectionCensusWitness[] lifecycleWitnesses = protocol.LifecycleOwnerFamilyProviders
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+        PersonRuntime[] people = runtime.PersonStore.Persons
+            .OrderBy(person => person.PersonId.Value, System.StringComparer.Ordinal)
+            .ToArray();
+        int unboundNpcCount = roster.Count(npc => ReadNonPublicProperty(npc, "BoundPersonRuntime") == null);
+        Assert.That(lifecycleWitnesses, Has.Length.EqualTo(roster.Length * 3 + unboundNpcCount + people.Length));
+        foreach (NpcRuntime npc in roster)
+        {
+            OwnerSectionCensusWitness life = lifecycleWitnesses.Single(candidate =>
+                candidate.SectionId == NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, residence: false));
+            Assert.That(life.SchemaVersion, Is.EqualTo(NpcLifecycleCensusProvider.SchemaVersion));
+            Assert.That(life.OwnerInstanceIdentity, Is.SameAs(npc));
+            Assert.That(life.Cardinality, Is.EqualTo(1));
+            Assert.That(life.Revision, Is.EqualTo(ReadNonPublicLongProperty(npc, "LifeStateRevision")));
+
+            OwnerSectionCensusWitness status = lifecycleWitnesses.Single(candidate =>
+                candidate.SectionId == P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(npc.RuntimeId));
+            Assert.That(status.SchemaVersion, Is.EqualTo(P12CrimeJusticeCensusProvider.SchemaVersion));
+            Assert.That(status.OwnerInstanceIdentity, Is.SameAs(npc));
+            Assert.That(status.Cardinality, Is.EqualTo(1));
+            Assert.That(status.Revision, Is.EqualTo(ReadNonPublicLongProperty(npc, "P12CrimeJusticeRevision")));
+
+            OwnerSectionCensusWitness action = lifecycleWitnesses.Single(candidate =>
+                candidate.SectionId == NpcCurrentActionCensusProvider.SectionIdFor(npc.RuntimeId));
+            Assert.That(action.SchemaVersion, Is.EqualTo(NpcCurrentActionCensusProvider.SchemaVersion));
+            Assert.That(action.OwnerInstanceIdentity, Is.SameAs(npc));
+            Assert.That(action.Cardinality, Is.EqualTo(npc.CurrentActionRuntime == null ? 0 : 1));
+            Assert.That(action.Revision, Is.EqualTo(ReadNonPublicLongProperty(npc, "CurrentActionRevision")));
+
+            PersonRuntime boundPerson = ReadNonPublicProperty(npc, "BoundPersonRuntime") as PersonRuntime;
+            if (boundPerson == null)
+            {
+                OwnerSectionCensusWitness residence = lifecycleWitnesses.Single(candidate =>
+                    candidate.SectionId == NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, residence: true));
+                Assert.That(residence.SchemaVersion, Is.EqualTo(NpcLifecycleCensusProvider.SchemaVersion));
+                Assert.That(residence.OwnerInstanceIdentity, Is.SameAs(npc));
+                Assert.That(residence.Cardinality, Is.EqualTo(1));
+                Assert.That(residence.Revision, Is.EqualTo(ReadNonPublicLongProperty(npc, "ResidenceRevision")));
+            }
+            else
+            {
+                Assert.That(lifecycleWitnesses.Any(candidate =>
+                    candidate.SectionId == NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, residence: true)),
+                    Is.False,
+                    "A Person-backed NPC's residence is owned by its Person section.");
+            }
+        }
+
+        foreach (PersonRuntime person in people)
+        {
+            OwnerSectionCensusWitness witness = lifecycleWitnesses.Single(candidate =>
+                candidate.SectionId == PersonLifeResidenceCensusProvider.SectionIdFor(person.PersonId));
+            Assert.That(witness.SchemaVersion, Is.EqualTo(PersonLifeResidenceCensusProvider.SchemaVersion));
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(person));
+            Assert.That(witness.Cardinality, Is.EqualTo(1));
+            Assert.That(witness.Revision, Is.EqualTo(ReadNonPublicLongProperty(person, "LifeResidenceRevision")));
+        }
+
+        IDictionary expectedSections = ReadPrivateField<IDictionary>(protocol, "expectedSections");
+        Assert.That(expectedSections.Count, Is.EqualTo(
+            65 + (20 * roster.Length) + unboundNpcCount + people.Length),
+            "The fixed 65 sections plus current dynamic owner-family formula must match the sealed Daily-v1 inventory.");
+    }
+
+    private static void AssertNpcPlanWitness(
+        IReadOnlyList<IOwnerSectionCensusProvider> providers,
+        int kind,
+        NpcRuntime npc,
+        object expectedPlanOwner)
+    {
+        OwnerSectionCensusWitness witness = providers
+            .Select(provider => provider.GetCurrentCensus())
+            .Single(candidate => candidate.SectionId == NpcPlanCensusProvider.SectionIdFor(kind, npc.RuntimeId));
+        Assert.That(witness.SchemaVersion, Is.EqualTo(NpcPlanCensusProvider.SchemaVersion));
+        Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(expectedPlanOwner));
+        Assert.That(witness.Cardinality, Is.EqualTo(1));
+        Assert.That(witness.Revision, Is.EqualTo(ReadNonPublicLongProperty(expectedPlanOwner, "Revision")));
+    }
+
+    [Test]
+    public void SelectedDailyV1PersonMaterializationReconcilesDynamicOwnerCardinality()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject simulationObject = new GameObject("selected-daily-v1-materialized-owner-census-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+
+        simulation.Start();
+        SimulationRuntime runtime = simulation.Bootstrap.Runtime;
+        AssertSelectedDailyNpcOwnerFamilies(runtime);
+
+        PersonId personId = new PersonId("daily-dynamic-owner-person");
+        PersonRuntime person = new PersonRuntime(personId);
+        Assert.That(runtime.TryRegisterPerson(person, out PersonStoreFailure registrationFailure),
+            Is.True, registrationFailure.ToString());
+        AssertSelectedDailyNpcOwnerFamilies(runtime);
+
+        Assert.That(runtime.TryMaterializePerson(
+            personId,
+            SimulationTestFactory.CreateNpc("daily-dynamic-owner-person-definition"),
+            "daily-dynamic-owner-person-npc",
+            null,
+            0f,
+            out NpcRuntime materializedNpc,
+            out PersonMaterializationFailure failure), Is.True, failure.ToString());
+        Assert.That(ReadNonPublicProperty(materializedNpc, "BoundPersonRuntime"), Is.SameAs(person));
+        AssertSelectedDailyNpcOwnerFamilies(runtime);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure), Is.True,
+            censusFailure.ToString());
     }
 
     [Test]
@@ -2430,6 +2583,24 @@ public sealed class SimulationBootstrapCompositionTests
         T value = field.GetValue(target) as T;
         Assert.That(value, Is.Not.Null, "Expected existing owner field " + fieldName + ".");
         return value;
+    }
+
+    private static object ReadNonPublicProperty(object target, string propertyName)
+    {
+        Assert.That(target, Is.Not.Null, "Expected an owner before reading " + propertyName + ".");
+        PropertyInfo property = target.GetType().GetProperty(
+            propertyName,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        Assert.That(property, Is.Not.Null,
+            "Expected property " + propertyName + " on " + target.GetType().Name + ".");
+        return property.GetValue(target);
+    }
+
+    private static long ReadNonPublicLongProperty(object target, string propertyName)
+    {
+        object value = ReadNonPublicProperty(target, propertyName);
+        Assert.That(value, Is.TypeOf<long>(), "Expected long property " + propertyName + ".");
+        return (long)value;
     }
 
     private static void InvokeBootstrapInitialize(TesteSimulacao simulation, System.Action<string> stageCompleted)
