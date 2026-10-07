@@ -1,6 +1,6 @@
 # P14-C — Multiple Identifiable Sources v1: Technical Design
 
-**Status:** `DESIGN_CANDIDATE`; independent technical review pending. This is a bounded technical design, not an implementation, canonical promotion, Phase closure, or P12 readiness claim.
+**Status:** `DESIGN_CANDIDATE`; independent technical design review PASS (recorded in `docs/PHASE14C_DESIGN_REVIEW.md`). This is a bounded technical design, not an implementation, canonical promotion, Phase closure, or P12 readiness claim.
 
 ## Exact planning baseline
 
