@@ -63,12 +63,21 @@ public class CityProductionConfig
     public int initialReserve;
     public string productionSourceId;
     public string contentRevision = "1";
+    public CityProductionSourceKind sourceKind = CityProductionSourceKind.Unspecified;
+}
+
+public enum CityProductionSourceKind
+{
+    Unspecified,
+    ExogenousDaily,
+    FiniteReserveDaily
 }
 
 public enum LocalMaterialFlowProfile
 {
     ExogenousDaily,
-    FiniteReserveDaily
+    FiniteReserveDaily,
+    MixedSourcesDaily
 }
 
 [Serializable]

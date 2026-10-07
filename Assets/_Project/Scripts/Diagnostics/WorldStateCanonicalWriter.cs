@@ -691,9 +691,16 @@ public static class WorldStateCanonicalWriter
                     flow.MarketStoreSemanticId, flow.LocationId, flow.ItemDefinitionId, flow.ContentRevision,
                     flow.EffectiveConfiguration, flow.CalendarIdentity, flow.CalendarVersion,
                     flow.EconomyEnabled ? "true" : "false", IntValue(flow.PopulationCount), FloatValue(flow.ConsumptionPer1000Population),
-                    Int64Value(flow.AbsoluteDay), IntValue(flow.OpeningStock), IntValue(flow.ConfiguredSourceQuantity),
+                    Int64Value(flow.AbsoluteDay), IntValue(flow.OpeningStock), Int64Value(flow.ConfiguredSourceQuantity),
                     IntValue(flow.AppliedSourceQuantity), flow.SourceRejectionReason,
                     IntValue(flow.RequestedFreeConsumption), IntValue(flow.ActualFreeConsumption), IntValue(flow.ClosingStock));
+                foreach (CityDailyMaterialFlowSourceOutcome source in flow.SourceOutcomes)
+                {
+                    AppendLine(output, "CITY_MATERIAL_FLOW_SOURCE", flow.SettlementSemanticId,
+                        source.ProductionSourceId, source.Kind.ToString(),
+                        IntValue(source.ConfiguredQuantity), IntValue(source.PlannedQuantity),
+                        IntValue(source.AppliedQuantity), source.RejectionReason);
+                }
             }
 
             foreach (string residentNpcRuntimeId in city.ResidentNpcRuntimeIds)

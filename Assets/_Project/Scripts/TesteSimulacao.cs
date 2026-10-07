@@ -1144,7 +1144,10 @@ public class TesteSimulacao : MonoBehaviour
         if (!FiniteSourceProfileAdmission.TryValidateAuthoredCityCardinality(
                 config.Cities, out string cardinalityRejection))
             throw new System.InvalidOperationException(
-                "P14-B finite source profile rejected before CityRuntime construction: " + cardinalityRejection);
+                (FiniteSourceProfileAdmission.HasMixedSourceProfile(config.Cities)
+                    ? "P14-C mixed-source profile rejected before CityRuntime construction: "
+                    : "P14-B finite source profile rejected before CityRuntime construction: ")
+                + cardinalityRejection);
 
         if (admissionContext == null
             || admissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
@@ -1153,6 +1156,10 @@ public class TesteSimulacao : MonoBehaviour
         if (FiniteSourceProfileAdmission.HasFiniteReserveProfile(config.Cities))
             throw new System.InvalidOperationException(
                 "P14-B finite source profile is not admitted by the Unity bootstrap daily profile.");
+
+        if (FiniteSourceProfileAdmission.HasMixedSourceProfile(config.Cities))
+            throw new System.InvalidOperationException(
+                "P14-C mixed-source profile is not admitted by the Unity bootstrap daily profile.");
 
         if (FiniteSourceProfileAdmission.HasAuthoredMaterialFlowCity(config.Cities))
             throw new System.InvalidOperationException(
