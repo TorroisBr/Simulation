@@ -3,7 +3,7 @@
 **Status:** Scope accepted by the user on 2026-10-07. Current-base design revalidation is preliminary and awaits independent General Architect review.
 **Architecture baseline:** codex/architecture/world-identity-projection at e16796014d348e3b59da7ed848101c4c03926ba5.
 **P20 canonical baseline:** codex/phase20/canonical at fe4909a0fc371a2fedb55cb9cef086e5dbf63526.
-**Phase 20 candidate:** codex/phase20/P20CIdentityReconciliation at 7461d9b9e9b3fd8d5593dd8bd58c0a19dfb56924; see docs/design/PHASE20C_JOINT_CIVIL_TRAVEL_REVALIDATION.md.
+**Phase 20 candidate:** codex/phase20/P20CIdentityReconciliation at 22be1e07ef7a6dc40a82b7ebf490c103a4a293d7; see docs/design/PHASE20C_JOINT_CIVIL_TRAVEL_REVALIDATION.md.
 
 ## Checkpoint identity
 

@@ -4,7 +4,7 @@
 **Status:** User decision recorded; canonical Roadmap change requested. This branch is an additive handoff only and does not modify canonical architecture.
 **Canonical architecture baseline:** codex/architecture/world-identity-projection at e16796014d348e3b59da7ed848101c4c03926ba5.
 **Owning phase baseline:** codex/phase20/canonical at fe4909a0fc371a2fedb55cb9cef086e5dbf63526.
-**P20 scope candidate:** codex/phase20/P20CIdentityReconciliation at 7461d9b9e9b3fd8d5593dd8bd58c0a19dfb56924.
+**P20 scope candidate:** codex/phase20/P20CIdentityReconciliation at 22be1e07ef7a6dc40a82b7ebf490c103a4a293d7.
 
 ## Decision received
 
