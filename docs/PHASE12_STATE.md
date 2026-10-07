@@ -2284,6 +2284,11 @@ remains the complete source-linked owner/cardinality and successful-commit
 matrix, followed by runtime-wide owner-thread/quiescence proof and a
 completed-boundary token tied to successful advance sequence.
 
+Independent exact-tip documentation review passed for candidate
+`4cb2559ddbf7c95d84c446ab76e172493e59aa31` against base
+`c7c8bbf01c599312971d80c99020965e7cfb924b`; findings and retained evidence
+are recorded in [`PHASE12_DAILY_PROFILE_ARCHITECTURE_REVALIDATION_REVIEW.md`](PHASE12_DAILY_PROFILE_ARCHITECTURE_REVALIDATION_REVIEW.md).
+
 The architecture branch's current Execution Model also carries older
 human-approval wording for routine canonical promotion. The active run retains
 the user's explicit standing authority for bounded promotions after all exact-
