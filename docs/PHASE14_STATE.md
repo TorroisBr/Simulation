@@ -1,11 +1,10 @@
 # Phase 14 State — Productive Sources & Material Flow v1
 
-**Status:** PHASE 14 IN PROGRESS — P14-A AND P14-B PROMOTED; REMAINING PHASE WORK OPEN
+**Status:** PHASE 14 IN PROGRESS — P14-A, P14-B, AND P14-C PROMOTED; REMAINING PHASE WORK OPEN
 
-**Canonical implementation base:** `codex/phase8/canonical` at
-`470667d37863384edadb3d93ef64d8004aff46a3`.
+**Canonical implementation base:** codex/phase14/canonical at 191f571df442c97b616bae63cd11b643bd23978c (P14-C promotion tip; this State-only follow-up is recorded below).
 
-**Architecture baseline:** `f6924e63d8e5731da1d33021d0361e7defe6dad7`, including
+**Architecture baseline:** `e16796014d348e3b59da7ed848101c4c03926ba5`, including
 `docs/architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md` and
 `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`.
 
@@ -24,7 +23,8 @@ Phase 14 remains open; this promotion does not close the Phase.
 | Checkpoint | Status | Scope / evidence |
 |---|---|---|
 | P14-A — Local Daily Material Flow v1 | PROMOTED | Approved scope: one authored City, one exogenous daily source for one item, that City's free population consumption, and closing stock `opening + applied source − actual free consumption`. The source has no inputs, reserves, depletion, or transformation. Settlement owns the material; the market is custodian. Contract: `docs/design/PHASE14A_LOCAL_DAILY_MATERIAL_FLOW_CHECKPOINT.md`. |
-| P14-B - Finite Reserve Daily Source v1 | PROMOTED | Code `709bf0ec198da5c64c276ba4ab6084faccba87ff`, tree `5b5b18cb652d383e9ae9202066a95766c9097c20`; exact-tip review, validation, and the fast-forward to `codex/phase14/canonical` at `82b6a8acd8489509b4434b79519a32b815fe8aa7` are recorded below. |
+| P14-B — Finite Reserve Daily Source v1 | PROMOTED | Code 709bf0ec198da5c64c276ba4ab6084faccba87ff, tree 5b5b18cb652d383e9ae9202066a95766c9097c20; exact-tip review and validation recorded below. |
+| P14-C — Multiple Identifiable Sources v1 | PROMOTED | Implementation 6d9498d31bff1dc75e7071fe88ce2f80c37a7ebf, tree 76142065bdcfcd01c2f58e7ba4dd0cdfef01ea92; exact-tip review, validation, and promotion recorded below. |
 
 The user approved this bounded profile and current-base independent review
 passed for checkpoint content `7a9e8d71ed7a53578b7dc36ef1cafd03b856b0f0` with
@@ -98,10 +98,22 @@ until the approved objective is delivered, required review and validation pass,
 the capability is canonically promoted with human approval, and a separate
 closure record is independently reviewed.
 
-## Current P14-C design candidate — 2026-10-07
+## P14-C bounded checkpoint promotion — 2026-10-07
 
-Architecture `e16796014d348e3b59da7ed848101c4c03926ba5` promotes the ordered P14-C multiple-identifiable-sources direction. The P14-B dependency is satisfied by the current canonical P14 State `06e9c30101a74bd618d3651885c489c79fe866bb`. The design and Brief updates are carried on branch `codex/phase14/P14CMultipleIdentifiableSourcesDesign` based on current P12 canonical `405f70e58a7a1dd8be255798b795faff095f44b4`, which is a descendant of P14 canonical and preserves the P14-B code. Its advance from `c7c8bbf` is docs-only and leaves the implementation base unchanged.
+The architecture-ordered P14-C direction is implemented within the reviewed contract in docs/design/PHASE14C_MULTIPLE_IDENTIFIABLE_SOURCES_CHECKPOINT.md. The P14-B dependency was satisfied at P14 canonical 06e9c301; implementation used current P12 canonical 405f70e as its integration base. The user accepted the bounded proving profile on 2026-10-07 and clarified that its cardinality is fixture-only.
 
-**P14-C status: `DESIGN_CANDIDATE`; independent technical design review PASS.** The proposed bounded proof uses one City/item, one exogenous and one finite-reserve source with distinct stable IDs, deterministic ordinal source order, source-level whole-output overflow handling, a single prepared production install/receipt, and the existing free same-City sink. The profile remains separate from P10 Ruin; P12 Daily-v1 rejects authored P14-A/B/C material-flow profiles before identity/owner construction while preserving the separate standalone P14 proving profiles. The exact contract, implementation boundary, and focused/full validation plan are in [`PHASE14C_MULTIPLE_IDENTIFIABLE_SOURCES_CHECKPOINT.md`](design/PHASE14C_MULTIPLE_IDENTIFIABLE_SOURCES_CHECKPOINT.md). Exact-tip review: [`PHASE14C_DESIGN_REVIEW.md`](PHASE14C_DESIGN_REVIEW.md), against candidate `97fd0f302c51a54be3de9469e7e3dff625eaaa8b`.
+**P14-C status: PROMOTED.** Phase 14 remains open.
 
-No implementation, capability promotion, P12 continuation claim, or Phase 14 closure is implied. P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked.
+### Promotion and evidence
+
+Following refreshed remote-ref checks and final preflight, codex/phase14/canonical was fast-forwarded from 06e9c30101a74bd618d3651885c489c79fe866bb to 191f571df442c97b616bae63cd11b643bd23978c. The candidate branch and P14 canonical are synchronized at that promotion tip before this State-only follow-up.
+
+Implementation commit: 6d9498d31bff1dc75e7071fe88ce2f80c37a7ebf. Its reviewed code tree is 76142065bdcfcd01c2f58e7ba4dd0cdfef01ea92, based on ce29f21878bda260ac96b723965d49ebe2aa5320. The exact-tip independent review is recorded in docs/design/P14C_IMPLEMENTATION_REVIEW.md. The validated candidate and test evidence are recorded in docs/PHASE14C_IMPLEMENTATION_CANDIDATE.md; the archive docs/validation/P14C/P14C-implementation-validation-7614206.zip has SHA-256 EECC8970EC94890BA502E1439B6470A876E3FA6630DEE31EDE9AB0B7A9FA08E0.
+
+Validation on the exact implementation tree passed: P14-C focused 9/9, ALL EditMode 2455/2455, official Smoke 5/5, SimulationRuntimeLongRunTests 7/7, and git diff --check. The first exact-tip review identified a stale finite-source revision/day gap for zero-output outcomes; implementation 6d9498d closes it and adds the overflow/stale-owner regression. The fresh exact-tip review returned VALIDATED_CANDIDATE.
+
+### Bounded scope and limits
+
+The proving profile is one authored City and Location, one Market item, one exogenous source, one finite-reserve source, and the existing free same-City population sink. This is a proving fixture, not a universal material-flow limit on Cities, items, or source count/type. The capability preserves distinct stable source identity, source-specific availability policy, deterministic composition, and one coherent atomic daily stock result; finite reserves cannot underflow silently or produce twice for a P18D occurrence.
+
+P14-A and P14-B remain unchanged. The P10 Ruin profile remains separate, and P8 one-owner-per-Location is unchanged. P12 UnityBootstrap-Daily-v1 still rejects P14 material-flow profiles before identity/owner construction. P12-B remains incomplete; P12-A remains WAIT_DEPENDENCY; P13 remains blocked. This promotion adds no capture eligibility, complete owner/epoch coverage, export/hydration readiness, P19 loader/API, or Phase 14 closure.
