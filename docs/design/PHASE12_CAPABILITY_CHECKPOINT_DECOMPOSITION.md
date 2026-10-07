@@ -33,12 +33,14 @@ authorization.
 ## Boundary and decomposition rule
 
 The sole profile is the accepted `UnityBootstrap-Daily-v1`: the
-SampleScene-selected `Simulation-GeneralTest.asset` through the validated
+SampleScene-selected `Simulation-DailyV1.asset` through the validated
 `TesteSimulacao.InitializeSimulation` path, one compatible build/runtime and
 current-host numeric profile, built-in providers selected by effective
 configuration, and capture only after a successful completed daily advance.
 The selected profile includes P9-B authored geography and exactly the P8-A
-Hex/anchored-Location/scale facts described in the accepted contract. It has
+Hex/anchored-Location/scale facts described in the accepted contract.
+`Simulation-GeneralTest.asset` remains the separate P10-A Ruin/LocalTopology
+proving profile and is rejected before identity allocation by Daily-v1. It has
 no external `WorldCommand` service or queue. Preserve P11 `ActorChoiceStore`
 terminal causal history where that store is composed.
 
@@ -350,8 +352,7 @@ cause profile admission to reject:
 - Generated P9/P10 worlds or generated content; only selected P9-B authored
   bootstrap provenance and its exact selected P8-A output are retained.
 - P10 Ruin/LocalTopology output (not composed by this profile).
-- P14-A material-flow state (not configured by the selected GeneralTest City
-  assets).
+- P14-A material-flow state (not configured by the selected Daily-v1 profile).
 - P18 timeline, intraday state, activity lifecycle/availability, external
   inputs or continuation extension state (not composed by the selected legacy
   daily bootstrap).
