@@ -1919,3 +1919,46 @@ live-profile inventory; P13 remains blocked on supported continuation and
 recoverable causal history. The separate PoliticalSupportStore owner and its
 existing runtime write paths remain outside this promotion and require their
 own source/contract reconciliation before further P12-B wiring.
+
+## P12-B PoliticalSupportStore owner mutation promotion — 2026-10-07
+
+Under the standing bounded-promotion authorization, `codex/phase12/canonical`
+advanced by fast-forward from `2760fe199909708f22ea61d3eb2dd929b542521b` to
+`a145c60b8b81bcff23ae86142b6192e4718ac87d`. The promoted implementation
+code is `3b0e73824e600b5754cfd32d5bcf1ec37d78142c`, tree
+`d4c3d901f4cd4a7b23da11edbe5c8a05f215136a`. The exact candidate evidence tip
+is `6f09476793d3736579c1e7484d531860fde69c8a`; the independent exact-tip
+implementation review record is
+[`PHASE12_P12B_POLITICAL_SUPPORT_OWNER_MUTATION_IMPLEMENTATION_REVIEW.md`](design/PHASE12_P12B_POLITICAL_SUPPORT_OWNER_MUTATION_IMPLEMENTATION_REVIEW.md),
+published with the promotion record at `a145c60`. The candidate's reviewed
+code tree and validation artifacts were unchanged at final preflight.
+
+The selected Daily-v1 inventory now contains 258-section partial inventory. This
+slice adds the exact installed PoliticalSupport relation-row count/local
+revision section and a bounded `p12.political-support.owner-commit` operation
+over the existing runtime registration, add, and end-transition commit
+facades. Successful commits publish the relevant revision once; existing
+PoliticalWorldRevision and rejection behavior remain intact. The current
+bootstrap boundary is exact owner identity with zero rows and revision zero.
+
+Validation recorded for the unchanged reviewed tree: eight focused suites
+109/109, ALL EditMode 2434/2434, official Smoke 5/5, and
+`git diff --check` PASS. Exact XML/log hashes are retained in
+[`P12BPoliticalSupport/VALIDATION.md`](validation/P12BPoliticalSupport/VALIDATION.md).
+
+This closes only that owner census and its three existing facade writes.
+P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains
+blocked; Phase 12 remains open. It does not establish complete owner/writer
+or shared-epoch coverage, global quiescence, capture eligibility, export,
+hydration, downstream readiness, or Phase closure. Daily-v1 remains the
+P9-B-only profile, and P10-A remains a separate proving profile.
+
+The numbered-phase DAG is unchanged: P12-C waits on B; P12-D and P12-E wait
+on B and C; P12-F waits on C/D/E; P12-G waits on B through F plus a validated
+live-profile inventory; P13 remains dependency-gated. The next blocker task is
+a current-canonical, source-linked refresh of the selected-profile
+owner/operation/epoch crosswalk. The existing operation-footprint refresh is
+based on canonical `70bc1e50` and predates multiple promoted operations,
+including the current PoliticalSupport slice; it cannot select the next
+implementation by itself. Keep P12-F Expedition work deferred until its
+documented P12-C/D/E prerequisites are met.

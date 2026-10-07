@@ -1521,3 +1521,56 @@ and its existing supported paths, prepare a separate bounded design and
 independent review. If it does not, keep it outside this profile and advance
 the next documented P12-B obligation. No PoliticalSupportStore implementation
 readiness is claimed by this matrix refresh.
+
+## P12-B owner/operation/epoch refresh — after PoliticalSupport promotion — 2026-10-07
+
+P12 canonical was advanced from `2760fe199909708f22ea61d3eb2dd929b542521b`
+to reviewed tip `a145c60b8b81bcff23ae86142b6192e4718ac87d`. The promoted code
+is `3b0e73824e600b5754cfd32d5bcf1ec37d78142c`, tree
+`d4c3d901f4cd4a7b23da11edbe5c8a05f215136a`; the exact-tip implementation
+review and validation manifest are recorded in `PHASE12_STATE.md` and
+`PHASE12_P12B_POLITICAL_SUPPORT_OWNER_MUTATION_IMPLEMENTATION_REVIEW.md`.
+
+| Daily-v1 owner or write boundary | Current evidence | Remaining boundary |
+|---|---|---|
+| PoliticalSupportStore relations | One Required section, `p12e.political-support.relations`, binds the exact runtime-owned PoliticalSupport clone to active-plus-ended relation row count and its local revision. The selected-profile inventory is 258 sections. The sealed operation inventory now includes `p12.political-support.owner-commit`; its preflight/commit/notification wrapper covers the existing registration, add, and end-transition runtime facades. Successful writes publish the changed relation section once and preserve the existing PoliticalWorldRevision behavior. | Only this section and these three runtime facade paths are covered. Proposal reads remain read-only; this adds no other political owner/writer coverage and does not imply complete shared-epoch coverage. |
+| Current runtime operation inventory | The exact current code registers the selected profile's membership, bootstrap-publication, daily-advance, travel/economy/merchant operations, accepted owner-commit operations (including PoliticalSupport), and population lifecycle operations. Operation inventory is sealed and bound to the selected owner thread. | An operation ID and sealed list alone do not prove every authoritative owner is included or that every supported successful path refreshes its exact changed sections. Existing operation-footprint documentation is based on canonical `70bc1e50` and predates many later promotions; treat it as a source-audit lead, not a current-base result. |
+| Remaining P12-B proof | The promoted daily profile has a tested 258-section partial inventory and multiple bounded mutation adapters. The accepted P12-B boundary still requires a complete effective owner/cardinality inventory, a source-linked mapping of every supported successful write to its Required sections and shared epoch, plus runtime-wide owner-thread/quiescence and completed-boundary admission evidence. | The next action is a current-tip source reconciliation of the owner and operation matrices. Do not add another passive census or a broad runtime callback until it identifies an exact supported Daily-v1 commit path that lacks required invalidation. Exclude P12-F Expedition execution while its P12-C/D/E prerequisites remain unmet. |
+| Readiness / numbered DAG | P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P12-C waits on B; P12-D and P12-E wait on B and C; P12-F waits on C/D/E; P12-G waits on B through F plus a validated live-profile inventory; P13 remains blocked. | This promotion changes no dependency edge and establishes no capture eligibility, export, hydration, downstream readiness, or Phase closure. |
+
+**Disposition:** continue with the current-canonical owner/operation/epoch
+reconciliation. The older `70bc1e50` operation-footprint audit predates the
+current runtime integrations, so its old “next” rows cannot safely select an
+implementation checkpoint. Prefer an uncovered supported multi-owner commit
+if the refreshed source evidence proves one; otherwise record the remaining
+owner-thread/quiescence evidence gap without inventing product behavior.
+
+
+### Current-source disposition after PoliticalSupport
+
+A read-only source revalidation at `a145c60` confirms the PoliticalSupport
+row above and finds no next normal selected-Daily-v1 committed-write gap
+supported by current production call paths.
+
+`PoliticalKnowledgeStore` has local `Count`/`Revision` writes for holder
+registration and observation, and `SimulationRuntime` exposes corresponding
+facades without a P12 section or operation. Repository call-site search found
+no production caller beyond those facade definitions; tests are the only
+callers found. The Phase 12 Brief assigns Knowledge and decision state to
+P12-F, which waits for P12-C/D/E. `PoliticalDecisionStore` has the same
+current reachability limitation. These APIs are evidence for later
+P12-F owner reconciliation, not authorization to add a P12-B census or
+operation now.
+
+The previously reviewed runtime-admission adapter is already part of canonical.
+It binds the selected Daily-v1 runtime to the captured Unity `Start` thread,
+scopes the bootstrap validation tail and admitted daily advances, and can
+assess idleness of explicitly registered operations. That accounting remains
+bounded by its registered owner/operation inventories; it is not complete
+owner coverage, a general synchronization lock, or capture eligibility.
+
+**Disposition:** no new implementation checkpoint is justified from these
+political facades. Continue the remaining P12-B effective-profile owner and
+supported-write reconciliation, keeping deferred P12-F owners out until their
+documented dependencies clear. The exact evidence boundary remains the
+accepted Daily-v1 runtime, not public API visibility alone.
