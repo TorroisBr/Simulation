@@ -1,9 +1,9 @@
 # P14-C Technical Design Review
 
-**Verdict: PASS**  
-**Reviewed candidate:** `97fd0f302c51a54be3de9469e7e3dff625eaaa8b`  
-**Candidate base:** `405f70e58a7a1dd8be255798b795faff095f44b4` (P12 canonical; direct `origin/codex/phase12/canonical` lookup at review time returned the same SHA)  
-**P14 canonical dependency:** `06e9c30101a74bd618d3651885c489c79fe866bb`  
+**Verdict: PASS**
+**Reviewed candidate:** `97fd0f302c51a54be3de9469e7e3dff625eaaa8b`
+**Candidate base:** `405f70e58a7a1dd8be255798b795faff095f44b4` (P12 canonical; direct `origin/codex/phase12/canonical` lookup at review time returned the same SHA)
+**P14 canonical dependency:** `06e9c30101a74bd618d3651885c489c79fe866bb`
 **Architecture:** `e16796014d348e3b59da7ed848101c4c03926ba5`
 
 ## Review scope
