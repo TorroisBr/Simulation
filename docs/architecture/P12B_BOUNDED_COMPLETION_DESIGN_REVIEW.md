@@ -60,3 +60,14 @@ the Master handoff; it introduces no new simulation semantics. Current P12
 promotion process is taken from its own canonical EXECUTION_MODEL, including
 the authorized bounded autonomous promotion class. Formal Phase closure and
 genuine architecture/product decisions retain their applicable human gates.
+
+## Final assembled-tip applicability
+
+Independent exact-tip assembly review PASS at
+`ab103b07b24ca5c23e9573ff62d7eae87856c065`. Full architecture-base
+`a29ddd1..ab103b0` diff contains only the three contract/review/handoff files.
+The `40e3b7e..ab103b0` contract delta changes readiness/review metadata and
+P12 promotion-policy wording only; approved token/scope semantics are unchanged.
+Reviewer independently verified origin P1294551, local P12 ancestor4d015 and
+full-diff `git diff --check` PASS. This final appended record is review evidence
+only; it changes no design, executable tree, readiness gate or canonical ref.
