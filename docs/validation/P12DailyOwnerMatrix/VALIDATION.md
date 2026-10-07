@@ -2,7 +2,7 @@
 
 **Canonical base:** `89b2368e9756069b2f52cd7cf17c26735f7c103f`
 
-**Candidate code:** recorded by the candidate commit that adds the test-only census coverage.
+**Candidate code:** `c50c4237d1e1023567f5ca0b24376a23d84bd4b7`
 
 **Unity:** `6000.3.9f1`
 
