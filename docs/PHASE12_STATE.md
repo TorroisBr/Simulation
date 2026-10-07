@@ -1990,4 +1990,6 @@ This is a proposal/source finding only: it adds no code, operation, epoch
 notification, route behavior, or capture capability. P12-B remains
 `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. P12-C
 waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on
-B–F plus a validated live-profile inventory.
+B–F plus a validated live-profile inventory. The independent design review
+passed at `2a89e34`; its durable record is
+[`design/PHASE12_P12B_P8D_EXACT_ZERO_REGISTRATION_DESIGN_REVIEW.md`](design/PHASE12_P12B_P8D_EXACT_ZERO_REGISTRATION_DESIGN_REVIEW.md).
