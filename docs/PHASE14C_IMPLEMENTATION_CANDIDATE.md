@@ -1,7 +1,7 @@
 # P14-C Implementation Candidate — 2026-10-07
 
 **Checkpoint:** P14-C — Multiple Identifiable Sources v1
-**Status:** validated implementation candidate; fresh exact-tip review pending
+**Status:** VALIDATED_CANDIDATE; exact-tip independent review PASS
 **Implementation commit:** `6d9498d31bff1dc75e7071fe88ce2f80c37a7ebf`
 **Implementation tree:** `76142065bdcfcd01c2f58e7ba4dd0cdfef01ea92`
 **Implementation base:** `ce29f21878bda260ac96b723965d49ebe2aa5320`
@@ -41,7 +41,7 @@ P14-A and P14-B contracts remain unchanged. The P10 Ruin profile remains separat
 
 ## Independent review history
 
-The first exact-tip review returned `NEEDS_CHANGES` for implementation `12eadd3648b30d444b0fbb6b6f829d19ee256e9e`, tree `0f0323b0a9b0ec0c579535691590beeaa259d22c`. It found that a zero-applied finite source outcome did not recheck the captured source revision/day before installation. Commit `6d9498d` fixes the guard and adds `PreparedP18ProductionRejectsStaleFiniteOwnerWhenFiniteSourceOverflowed`. A fresh exact-tip review of the corrected tree is pending.
+The first exact-tip review returned `NEEDS_CHANGES` for implementation `12eadd3648b30d444b0fbb6b6f829d19ee256e9e`, tree `0f0323b0a9b0ec0c579535691590beeaa259d22c`. It found that a zero-applied finite source outcome did not recheck the captured source revision/day before installation. Commit `6d9498d` fixes the guard and adds `PreparedP18ProductionRejectsStaleFiniteOwnerWhenFiniteSourceOverflowed`. The fresh exact-tip review passed and is recorded in [P14C_IMPLEMENTATION_REVIEW.md](design/P14C_IMPLEMENTATION_REVIEW.md).
 
 ## Validation on the exact implementation tree
 
@@ -56,4 +56,4 @@ Unity version: `6000.3.9f1`. All results below were run after the final code cha
 
 `git diff --check` passed on the implementation diff. The durable archive [`P14C-implementation-validation-7614206.zip`](validation/P14C/P14C-implementation-validation-7614206.zip) contains each exact XML and Unity log above; archive SHA-256: `EECC8970EC94890BA502E1439B6470A876E3FA6630DEE31EDE9AB0B7A9FA08E0`.
 
-This candidate still requires fresh exact-tip independent review. It is not canonical promotion, P12 readiness, P12-B completion, P12-A readiness, P13 readiness, or Phase 14 closure.
+Exact-tip independent review passed on 6d9498d / tree 76142065. This candidate is not canonical promotion, P12 readiness, P12-B completion, P12-A readiness, P13 readiness, or Phase 14 closure.
