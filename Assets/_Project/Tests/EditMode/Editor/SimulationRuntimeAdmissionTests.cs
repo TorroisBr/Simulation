@@ -1654,6 +1654,43 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void UnityBootstrapDailyRejectsMixedP14CSourcesBeforeIdentityOrOwnerConstruction()
+    {
+        SimulationConfigData config = CreateP14AdmissionConfig(
+            LocalMaterialFlowProfile.MixedSourcesDaily, 7, out _);
+        GameObject bootstrapObject = new GameObject("P14-C rejected by P12 Daily profile");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(bootstrap, config);
+            int worldIdentityAllocations = 0;
+            WritePrivateField(bootstrap, "worldIdentityAllocator", new Func<WorldId>(() =>
+            {
+                worldIdentityAllocations++;
+                return null;
+            }));
+
+            TargetInvocationException thrown = Assert.Throws<TargetInvocationException>(() =>
+                InvokeInitializeSimulation(bootstrap, null));
+
+            Assert.That(thrown.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.That(thrown.InnerException.Message, Does.Contain("P14-C"));
+            Assert.That(worldIdentityAllocations, Is.Zero);
+            Assert.That(ReadPrivateField<RuntimeIdAllocator>(bootstrap, "runtimeIdAllocator"), Is.Null);
+            Assert.That(ReadPrivateField<SimulationRuntime>(bootstrap, "simulationRuntime"), Is.Null);
+            Assert.That(ReadPrivateField<List<CityRuntime>>(bootstrap, "cityRuntimeList"), Is.Empty);
+            Assert.That(bootstrap.Bootstrap, Is.Null);
+            Assert.That(bootstrap.Runtime, Is.Null);
+            Assert.That(bootstrap.CurrentDay, Is.Zero);
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    [Test]
     public void P14AExogenousMaterialFlowRunsInItsSingleCityProvingProfile()
     {
         SimulationConfigData config = CreateP14AdmissionConfig(
@@ -1682,6 +1719,46 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(city.LastMaterialFlow.AppliedSourceQuantity, Is.EqualTo(5));
             Assert.That(city.LastMaterialFlow.ActualFreeConsumption, Is.EqualTo(1));
             Assert.That(city.LastMaterialFlow.ClosingStock, Is.EqualTo(14));
+            Assert.That(bootstrap.CurrentDay, Is.EqualTo(1));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    [Test]
+    public void P14CMixedSourcesRunInTheirStandaloneSingleCityProvingProfile()
+    {
+        SimulationConfigData config = CreateP14AdmissionConfig(
+            LocalMaterialFlowProfile.MixedSourcesDaily, 7, out ItemData item);
+        GameObject bootstrapObject = new GameObject("P14-C mixed-source standalone profile");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            ConfigureUnscopedBootstrap(bootstrap, config);
+
+            InvokeInitializeSimulation(bootstrap, null);
+
+            Assert.That(bootstrap.Bootstrap, Is.Not.Null);
+            Assert.That(bootstrap.Runtime.Cities.Count, Is.EqualTo(1));
+            CityRuntime city = bootstrap.Runtime.Cities[0];
+            Assert.That(city.Market.GetAmount(item), Is.EqualTo(10));
+            Assert.That(bootstrap.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.True,
+                advanceFailure.ToString());
+            Assert.That(city.FiniteProductionSources, Is.Not.Null);
+            Assert.That(city.FiniteProductionSources.Source.RemainingReserve, Is.EqualTo(4));
+            Assert.That(city.LastMaterialFlow.SourceOutcomes.Count, Is.EqualTo(2));
+            Assert.That(city.LastMaterialFlow.SourceOutcomes[0].ProductionSourceId,
+                Is.EqualTo("source.p14.admission.exogenous"));
+            Assert.That(city.LastMaterialFlow.SourceOutcomes[0].AppliedQuantity, Is.EqualTo(5));
+            Assert.That(city.LastMaterialFlow.SourceOutcomes[1].ProductionSourceId,
+                Is.EqualTo("source.p14.admission.finite"));
+            Assert.That(city.LastMaterialFlow.SourceOutcomes[1].AppliedQuantity, Is.EqualTo(3));
+            Assert.That(city.LastMaterialFlow.OpeningStock, Is.EqualTo(10));
+            Assert.That(city.LastMaterialFlow.ActualFreeConsumption, Is.EqualTo(1));
+            Assert.That(city.LastMaterialFlow.ClosingStock, Is.EqualTo(17));
             Assert.That(bootstrap.CurrentDay, Is.EqualTo(1));
         }
         finally
@@ -1947,14 +2024,32 @@ public sealed class SimulationRuntimeAdmissionTests
         {
             paymentMode = ConsumptionPaymentMode.Free
         };
-        city.productionConfigs.Add(new CityProductionConfig
+        if (profile == LocalMaterialFlowProfile.MixedSourcesDaily)
         {
-            item = item,
-            amountPerDay = 5,
-            initialReserve = initialReserve,
-            productionSourceId = "source.p14.admission",
-            contentRevision = "p14-content-v1"
-        });
+            city.productionConfigs.Add(new CityProductionConfig
+            {
+                item = item, amountPerDay = 5, initialReserve = 0,
+                productionSourceId = "source.p14.admission.exogenous",
+                contentRevision = "p14-content-v1", sourceKind = CityProductionSourceKind.ExogenousDaily
+            });
+            city.productionConfigs.Add(new CityProductionConfig
+            {
+                item = item, amountPerDay = 3, initialReserve = initialReserve,
+                productionSourceId = "source.p14.admission.finite",
+                contentRevision = "p14-content-v1", sourceKind = CityProductionSourceKind.FiniteReserveDaily
+            });
+        }
+        else
+        {
+            city.productionConfigs.Add(new CityProductionConfig
+            {
+                item = item,
+                amountPerDay = 5,
+                initialReserve = initialReserve,
+                productionSourceId = "source.p14.admission",
+                contentRevision = "p14-content-v1"
+            });
+        }
         config.cities.Add(city);
         return config;
     }

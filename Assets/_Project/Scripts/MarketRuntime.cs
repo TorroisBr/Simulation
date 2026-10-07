@@ -318,6 +318,11 @@ public class MarketRuntime
         revision == expectedRevision && revisionIncrements >= 0
         && revisionIncrements <= long.MaxValue - expectedRevision;
 
+    internal bool CanInstallMaterialFlow(long expectedRevision, long revisionIncrements) =>
+        CanInstall(expectedRevision, revisionIncrements) && CanCommitP12OwnerMutation();
+
+    internal void NotifyMaterialFlowInstalled() => NotifyP12OwnerMutation();
+
     internal void InstallPrepared(long expectedRevision, PreparedMarketState replacement)
     {
         items = replacement.Items;

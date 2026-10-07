@@ -14,8 +14,9 @@ public sealed class FiniteProductionSourceStore
         string settlementSemanticId,
         string marketStoreSemanticId)
     {
-        if (profile != LocalMaterialFlowProfile.FiniteReserveDaily)
-            throw new ArgumentException("Finite source state requires the finite-reserve profile.", nameof(profile));
+        if (profile != LocalMaterialFlowProfile.FiniteReserveDaily
+            && profile != LocalMaterialFlowProfile.MixedSourcesDaily)
+            throw new ArgumentException("Finite source state requires a finite-source profile.", nameof(profile));
         if (config == null) throw new ArgumentNullException(nameof(config));
         if (config.item == null || string.IsNullOrWhiteSpace(config.item.DefinitionId))
             throw new ArgumentException("Finite production requires an item definition identity.", nameof(config));

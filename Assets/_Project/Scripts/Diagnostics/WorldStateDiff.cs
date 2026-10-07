@@ -1571,13 +1571,15 @@ public sealed class WorldStateDiff
             before == null ? null : WorldStateCanonicalWriter.IntValue(before.OpeningStock),
             after == null ? null : WorldStateCanonicalWriter.IntValue(after.OpeningStock), differences);
         CompareValue("LocalDailyMaterialFlow", identity, "ConfiguredSourceQuantity",
-            before == null ? null : WorldStateCanonicalWriter.IntValue(before.ConfiguredSourceQuantity),
-            after == null ? null : WorldStateCanonicalWriter.IntValue(after.ConfiguredSourceQuantity), differences);
+            before == null ? null : WorldStateCanonicalWriter.Int64Value(before.ConfiguredSourceQuantity),
+            after == null ? null : WorldStateCanonicalWriter.Int64Value(after.ConfiguredSourceQuantity), differences);
         CompareValue("LocalDailyMaterialFlow", identity, "AppliedSourceQuantity",
             before == null ? null : WorldStateCanonicalWriter.IntValue(before.AppliedSourceQuantity),
             after == null ? null : WorldStateCanonicalWriter.IntValue(after.AppliedSourceQuantity), differences);
         CompareValue("LocalDailyMaterialFlow", identity, "SourceRejectionReason",
             WorldStateCanonicalWriter.StringValue(before?.SourceRejectionReason), WorldStateCanonicalWriter.StringValue(after?.SourceRejectionReason), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "SourceOutcomes",
+            MaterialFlowSourceOutcomesValue(before), MaterialFlowSourceOutcomesValue(after), differences);
         CompareValue("LocalDailyMaterialFlow", identity, "RequestedFreeConsumption",
             before == null ? null : WorldStateCanonicalWriter.IntValue(before.RequestedFreeConsumption),
             after == null ? null : WorldStateCanonicalWriter.IntValue(after.RequestedFreeConsumption), differences);
@@ -1587,6 +1589,22 @@ public sealed class WorldStateDiff
         CompareValue("LocalDailyMaterialFlow", identity, "ClosingStock",
             before == null ? null : WorldStateCanonicalWriter.IntValue(before.ClosingStock),
             after == null ? null : WorldStateCanonicalWriter.IntValue(after.ClosingStock), differences);
+    }
+
+    private static string MaterialFlowSourceOutcomesValue(LocalDailyMaterialFlowResult flow)
+    {
+        if (flow == null) return null;
+        List<string> parts = new List<string>();
+        foreach (CityDailyMaterialFlowSourceOutcome outcome in flow.SourceOutcomes)
+        {
+            parts.Add(outcome.ProductionSourceId);
+            parts.Add(outcome.Kind.ToString());
+            parts.Add(WorldStateCanonicalWriter.IntValue(outcome.ConfiguredQuantity));
+            parts.Add(WorldStateCanonicalWriter.IntValue(outcome.PlannedQuantity));
+            parts.Add(WorldStateCanonicalWriter.IntValue(outcome.AppliedQuantity));
+            parts.Add(outcome.RejectionReason);
+        }
+        return SpatialStableKey.Encode(parts.ToArray());
     }
 
     private static void SortDifferences(List<WorldStateDifference> differences)
