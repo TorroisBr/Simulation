@@ -719,8 +719,8 @@ public sealed class SimulationBootstrapCompositionTests
         IDictionary expectedCensusSections = (IDictionary)typeof(ContinuationCensusProtocol)
             .GetField("expectedSections", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(censusProtocol);
-        Assert.That(expectedCensusSections.Count, Is.EqualTo(260),
-            "The selected ten-NPC/two-City Daily-v1 partial inventory also includes exact-zero P8-D route-owner witnesses.");
+        Assert.That(expectedCensusSections.Count, Is.EqualTo(268),
+            "The selected ten-NPC/two-City Daily-v1 partial inventory includes exact-zero P8-D witnesses and all eight composed P12-E military owner sections.");
         string[] identitySpatialSectionIds =
         {
             RuntimeIdentityRegistryCensusProvider.NpcsSectionId,
@@ -758,6 +758,52 @@ public sealed class SimulationBootstrapCompositionTests
             PersonRoutePlanHistoryCensusProvider.SectionId,
             PersonRoutePlanHistoryCensusProvider.SchemaVersion,
             runtime.PersonRoutePlanStore);
+        string[] militaryOwnerSectionIds =
+        {
+            ArmedForceStoreCensusProvider.ForcesSectionId,
+            ArmedForceStoreCensusProvider.ContingentsSectionId,
+            ArmedForceStoreCensusProvider.RelevantPersonReferencesSectionId,
+            ContingentManpowerCensusProvider.SectionId,
+            ArmedForceSpatialCensusProvider.SectionId,
+            PersistentConflictCensusProvider.SectionId,
+            PersistentWarCensusProvider.SectionId,
+            PersistentBattleCensusProvider.SectionId
+        };
+        object[] militaryOwnerIdentities =
+        {
+            runtime.ArmedForceStore,
+            runtime.ArmedForceStore,
+            runtime.ArmedForceStore,
+            runtime.ContingentManpowerStateStore,
+            runtime.ArmedForceSpatialStateStore,
+            runtime.ConflictStore,
+            runtime.WarStore,
+            runtime.BattleStore
+        };
+        int[] militaryOwnerSchemaVersions =
+        {
+            ArmedForceStoreCensusProvider.SchemaVersion,
+            ArmedForceStoreCensusProvider.SchemaVersion,
+            ArmedForceStoreCensusProvider.SchemaVersion,
+            ContingentManpowerCensusProvider.SchemaVersion,
+            ArmedForceSpatialCensusProvider.SchemaVersion,
+            PersistentConflictCensusProvider.SchemaVersion,
+            PersistentWarCensusProvider.SchemaVersion,
+            PersistentBattleCensusProvider.SchemaVersion
+        };
+        Assert.That(militaryOwnerSectionIds, Has.Length.EqualTo(8));
+        for (int i = 0; i < militaryOwnerSectionIds.Length; i++)
+        {
+            string sectionId = militaryOwnerSectionIds[i];
+            Assert.That(expectedCensusSections.Contains(sectionId), Is.True, sectionId);
+            Assert.That(((OwnerSectionContract)expectedCensusSections[sectionId]).Role,
+                Is.EqualTo(OwnerSectionRole.Required), sectionId);
+            AssertRegisteredRequiredProvider(
+                registeredSections,
+                sectionId,
+                militaryOwnerSchemaVersions[i],
+                militaryOwnerIdentities[i]);
+        }
         Assert.That(expectedCensusSections.Contains(NpcDecisionRecorder.OccurrenceReceiptSectionId), Is.True);
         Assert.That(expectedCensusSections.Contains(EconomyTransactionService.KeyedSaleReceiptSectionId), Is.True);
         string[] institutionOfficeSectionIds =
@@ -1769,6 +1815,47 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(witness.Revision, Is.Zero);
 
         OwnerSectionCensusWitness repeatedWitness = provider.GetCurrentCensus();
+        Assert.That(repeatedWitness.OwnerInstanceIdentity, Is.SameAs(expectedOwner));
+        Assert.That(repeatedWitness.Cardinality, Is.Zero);
+        Assert.That(repeatedWitness.Revision, Is.Zero);
+    }
+
+    private static void AssertRegisteredRequiredProvider(
+        IDictionary registeredSections,
+        string sectionId,
+        int schemaVersion,
+        object expectedOwner)
+    {
+        Assert.That(registeredSections, Is.Not.Null);
+        Assert.That(registeredSections.Contains(sectionId), Is.True, sectionId);
+
+        object registeredSection = registeredSections[sectionId];
+        FieldInfo contractField = registeredSection.GetType().GetField(
+            "Contract",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        FieldInfo providerField = registeredSection.GetType().GetField(
+            "Provider",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        Assert.That(contractField, Is.Not.Null);
+        Assert.That(providerField, Is.Not.Null);
+
+        OwnerSectionContract contract = (OwnerSectionContract)contractField.GetValue(registeredSection);
+        IOwnerSectionCensusProvider provider =
+            (IOwnerSectionCensusProvider)providerField.GetValue(registeredSection);
+        Assert.That(contract.SectionId, Is.EqualTo(sectionId));
+        Assert.That(contract.SchemaVersion, Is.EqualTo(schemaVersion));
+        Assert.That(contract.Role, Is.EqualTo(OwnerSectionRole.Required));
+        Assert.That(provider, Is.Not.Null);
+
+        OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+        Assert.That(witness.SectionId, Is.EqualTo(sectionId));
+        Assert.That(witness.SchemaVersion, Is.EqualTo(schemaVersion));
+        Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(expectedOwner));
+        Assert.That(witness.Cardinality, Is.Zero);
+        Assert.That(witness.Revision, Is.Zero);
+
+        OwnerSectionCensusWitness repeatedWitness = provider.GetCurrentCensus();
+        Assert.That(repeatedWitness.SectionId, Is.EqualTo(sectionId));
         Assert.That(repeatedWitness.OwnerInstanceIdentity, Is.SameAs(expectedOwner));
         Assert.That(repeatedWitness.Cardinality, Is.Zero);
         Assert.That(repeatedWitness.Revision, Is.Zero);

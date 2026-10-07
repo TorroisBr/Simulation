@@ -199,6 +199,87 @@ public sealed partial class SimulationRuntime
         }
     }
 
+    private bool TryRegisterP12EMilitaryOwnerSections(ContinuationCensusProtocol protocol)
+    {
+        if (protocol == null
+            || armedForceStore == null
+            || contingentManpowerStateStore == null
+            || armedForceSpatialStateStore == null
+            || conflictStore == null
+            || warStore == null
+            || battleStore == null)
+            return false;
+
+        try
+        {
+            IReadOnlyList<IOwnerSectionCensusProvider> armedForceProviders =
+                ArmedForceStoreCensusProvider.CreateProviders(armedForceStore);
+            if (armedForceProviders == null || armedForceProviders.Count != 3)
+                return false;
+
+            return TryRegisterP12FixedOwnerSection(
+                    protocol,
+                    armedForceProviders[0],
+                    ArmedForceStoreCensusProvider.ForcesSectionId,
+                    ArmedForceStoreCensusProvider.SchemaVersion,
+                    OwnerSectionRole.Required,
+                    armedForceStore)
+                && TryRegisterP12FixedOwnerSection(
+                    protocol,
+                    armedForceProviders[1],
+                    ArmedForceStoreCensusProvider.ContingentsSectionId,
+                    ArmedForceStoreCensusProvider.SchemaVersion,
+                    OwnerSectionRole.Required,
+                    armedForceStore)
+                && TryRegisterP12FixedOwnerSection(
+                    protocol,
+                    armedForceProviders[2],
+                    ArmedForceStoreCensusProvider.RelevantPersonReferencesSectionId,
+                    ArmedForceStoreCensusProvider.SchemaVersion,
+                    OwnerSectionRole.Required,
+                    armedForceStore)
+                && TryRegisterP12FixedOwnerSection(
+                    protocol,
+                    new ContingentManpowerCensusProvider(contingentManpowerStateStore),
+                    ContingentManpowerCensusProvider.SectionId,
+                    ContingentManpowerCensusProvider.SchemaVersion,
+                    OwnerSectionRole.Required,
+                    contingentManpowerStateStore)
+                && TryRegisterP12FixedOwnerSection(
+                    protocol,
+                    new ArmedForceSpatialCensusProvider(armedForceSpatialStateStore),
+                    ArmedForceSpatialCensusProvider.SectionId,
+                    ArmedForceSpatialCensusProvider.SchemaVersion,
+                    OwnerSectionRole.Required,
+                    armedForceSpatialStateStore)
+                && TryRegisterP12FixedOwnerSection(
+                    protocol,
+                    new PersistentConflictCensusProvider(conflictStore),
+                    PersistentConflictCensusProvider.SectionId,
+                    PersistentConflictCensusProvider.SchemaVersion,
+                    OwnerSectionRole.Required,
+                    conflictStore)
+                && TryRegisterP12FixedOwnerSection(
+                    protocol,
+                    new PersistentWarCensusProvider(warStore),
+                    PersistentWarCensusProvider.SectionId,
+                    PersistentWarCensusProvider.SchemaVersion,
+                    OwnerSectionRole.Required,
+                    warStore)
+                && TryRegisterP12FixedOwnerSection(
+                    protocol,
+                    new PersistentBattleCensusProvider(battleStore),
+                    PersistentBattleCensusProvider.SectionId,
+                    PersistentBattleCensusProvider.SchemaVersion,
+                    OwnerSectionRole.Required,
+                    battleStore);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private bool TryValidateP12RuntimeIdentitySpatialOwnerBaselines()
     {
         if (!requireP12RuntimeIdentitySpatialCensusOwners)
