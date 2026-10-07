@@ -69,6 +69,121 @@ public sealed class SimulationRuntimeAdmissionTests
             afterBatch.ToString());
     }
 
+    [Test]
+    public void DailyProfileAdmissionAcceptsExactInitialSpatialIdentityAndLegacyNetworkCardinalities()
+    {
+        SimulationRuntime runtime = CreateSpatialAdmissionRuntime();
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.True,
+            failure.ToString());
+    }
+
+    [Test]
+    public void DailyProfileAdmissionRejectsZeroForRequiredP8AGeography()
+    {
+        SimulationRuntime runtime = CreateSpatialAdmissionRuntime(
+            spatialAuthorityStore: new SpatialAuthorityStore());
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+    }
+
+    [Test]
+    public void DailyProfileAdmissionRejectsExtraRequiredP8AHex()
+    {
+        SimulationRuntime runtime = CreateSpatialAdmissionRuntime(
+            spatialAuthorityStore: CreateAdjacentSpatialAuthority());
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+    }
+
+    [TestCase(0)]
+    [TestCase(9)]
+    public void DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality(int npcCount)
+    {
+        SimulationRuntime runtime = CreateSpatialAdmissionRuntime(npcCount: npcCount);
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+    }
+
+    [Test]
+    public void DailyProfileAdmissionRejectsZeroForRequiredLegacySpatialNetworkSection()
+    {
+        SimulationRuntime runtime = CreateSpatialAdmissionRuntime(populateLegacyNetwork: false);
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+    }
+
+    [Test]
+    public void DailyProfileAdmissionRejectsWrongRequiredLegacySpatialNetworkRouteCardinality()
+    {
+        SimulationRuntime runtime = CreateSpatialAdmissionRuntime(legacyNetworkRouteCount: 1);
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+    }
+
+    [Test]
+    public void FixedOwnerAdmissionRejectsPopulatedExplicitlyEmptyP8BAndP8CSections()
+    {
+        SpatialAuthorityStore passageAuthority = CreateAdjacentSpatialAuthority();
+        HexBoundaryKey boundary = new HexBoundaryKey(new HexId("admission-hex-a"), new HexId("admission-hex-b"));
+        Assert.That(passageAuthority.PassageAuthority.TryRegisterConnection(
+            new PassageOptionRecord(
+                TraversalOptionRef.ForConnection(new ConnectionId("admission-connection")),
+                boundary,
+                "admission-road",
+                "v1"),
+            PassageCondition.Open,
+            out SpatialAuthorityFailure passageFailure), Is.True, passageFailure?.ToString());
+        Assert.That(passageAuthority.TryRegisterCrossing(
+            new CrossingRecord(
+                new CrossingId("admission-crossing"),
+                boundary,
+                new HexId("admission-hex-a"),
+                "admission-bridge",
+                "v1",
+                null),
+            out SpatialAuthorityFailure crossingFailure), Is.True, crossingFailure?.ToString());
+
+        SpatialAuthorityStore singleLocationAuthority = CreateSingleLocationSpatialAuthority();
+        LegacySpatialAnchorBindingStore populatedAnchors =
+            new LegacySpatialAnchorBindingStore(singleLocationAuthority);
+        Assert.That(populatedAnchors.TryBindCity(
+            "admission-city",
+            new LocationId("admission-location"),
+            out SpatialAnchorBindingFailure anchorFailure), Is.True, anchorFailure?.ToString());
+
+        PersonStore people = new PersonStore();
+        PersonId personId = new PersonId("admission-person");
+        Assert.That(people.TryRegister(new PersonRuntime(personId), out PersonStoreFailure personFailure), Is.True,
+            personFailure.ToString());
+        PersonSpatialPositionStore populatedPositions = new PersonSpatialPositionStore(
+            people,
+            singleLocationAuthority,
+            new SpatialPassageTraversalOptionResolver(singleLocationAuthority.PassageAuthority));
+        Assert.That(populatedPositions.TrySetAt(
+            personId,
+            StablePositionReference.ForLocation(new LocationId("admission-location")),
+            out PersonSpatialPositionFailure positionFailure), Is.True, positionFailure.ToString());
+
+        AssertFixedOwnerAdmissionRejectsNonzero(
+            new SpatialPassageStateCensusProvider(passageAuthority),
+            passageAuthority.PassageAuthority);
+        AssertFixedOwnerAdmissionRejectsNonzero(
+            new SpatialCrossingCensusProvider(passageAuthority),
+            passageAuthority);
+        AssertFixedOwnerAdmissionRejectsNonzero(
+            new LegacySpatialAnchorBindingCensusProvider(populatedAnchors),
+            populatedAnchors);
+        AssertFixedOwnerAdmissionRejectsNonzero(
+            new PersonSpatialPositionCensusProvider(populatedPositions),
+            populatedPositions);
+    }
+
     [TestCase(false, true)]
     [TestCase(true, false)]
     public void FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing(
@@ -1815,6 +1930,139 @@ public sealed class SimulationRuntimeAdmissionTests
         });
         config.cities.Add(city);
         return config;
+    }
+
+    private static SimulationRuntime CreateSpatialAdmissionRuntime(
+        int npcCount = 10,
+        bool populateLegacyNetwork = true,
+        int legacyNetworkRouteCount = 2,
+        SpatialAuthorityStore spatialAuthorityStore = null)
+    {
+        CityRuntime[] cities =
+        {
+            SimulationTestFactory.CreateCity("admission-city-a", "admission-city-location-a"),
+            SimulationTestFactory.CreateCity("admission-city-b", "admission-city-location-b")
+        };
+        RuntimeIdentityRegistry identities = new RuntimeIdentityRegistry();
+        foreach (CityRuntime city in cities)
+            Assert.That(identities.RegisterCity(city), Is.True);
+
+        NpcRuntime[] npcs = new NpcRuntime[npcCount];
+        for (int i = 0; i < npcs.Length; i++)
+        {
+            string id = "admission-npc-" + i;
+            npcs[i] = new NpcRuntime(id, SimulationTestFactory.CreateNpc(id), cities[i % cities.Length], 1f);
+            Assert.That(identities.RegisterNpc(npcs[i]), Is.True);
+        }
+
+        SpatialLocationRuntime[] locations =
+        {
+            new SpatialLocationRuntime("admission-network-location-a"),
+            new SpatialLocationRuntime("admission-network-location-b")
+        };
+        SpatialNetworkRuntime network = new SpatialNetworkRuntime(identities);
+        for (int i = 0; i < locations.Length; i++)
+        {
+            bool registered = populateLegacyNetwork
+                ? network.RegisterLocation(locations[i])
+                : identities.RegisterLocation(locations[i]);
+            Assert.That(registered, Is.True);
+        }
+
+        SpatialRouteRuntime[] routes =
+        {
+            new SpatialRouteRuntime("admission-network-route-a", locations[0], locations[1], 1),
+            new SpatialRouteRuntime("admission-network-route-b", locations[1], locations[0], 1)
+        };
+        for (int i = 0; i < routes.Length; i++)
+        {
+            bool registered = populateLegacyNetwork && i < legacyNetworkRouteCount
+                ? network.RegisterRoute(routes[i])
+                : identities.RegisterRoute(routes[i]);
+            Assert.That(registered, Is.True);
+        }
+
+        return new SimulationRuntime(
+            new SimulationTime(),
+            cities,
+            npcs,
+            economyEnabled: false,
+            explorableSiteStore: new ExplorableSiteStore(),
+            spatialAuthorityStore: spatialAuthorityStore ?? CreateSingleLocationSpatialAuthority(),
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            runtimeIdentityRegistry: identities,
+            spatialNetworkRuntime: network,
+            requireP12RuntimeIdentitySpatialCensusOwners: true);
+    }
+
+    private static SpatialAuthorityStore CreateSingleLocationSpatialAuthority()
+    {
+        const string hexId = "admission-hex";
+        const string locationId = "admission-location";
+        SpatialGeographyDefinition geography = new SpatialGeographyDefinition(
+            new SpatialWorldScaleContext("admission-scale", "fixture", "v1", 1m, "step"),
+            new[]
+            {
+                new HexRecord(
+                    new HexId(hexId),
+                    new HexCoordinate(0, 0),
+                    new TerrainReference(new TerrainDefinitionId("terrain.admission"), "v1"))
+            },
+            new[] { new LocationRecord(new LocationId(locationId), new HexId(hexId)) });
+        SpatialAuthorityStore authority = new SpatialAuthorityStore();
+        if (!authority.TryComposeGeography(geography, out SpatialAuthorityFailure failure))
+            throw new InvalidOperationException("Could not create the single-location P8-A admission fixture: " + failure);
+        return authority;
+    }
+
+    private static SpatialAuthorityStore CreateAdjacentSpatialAuthority()
+    {
+        HexRecord[] hexes =
+        {
+            CreateAdmissionHex("admission-hex-a", 0, 0),
+            CreateAdmissionHex("admission-hex-b", 1, 0)
+        };
+        SpatialGeographyDefinition geography = new SpatialGeographyDefinition(
+            new SpatialWorldScaleContext("admission-passage-scale", "fixture", "v1", 1m, "step"),
+            hexes,
+            new[] { new LocationRecord(new LocationId("admission-passage-location"), new HexId("admission-hex-a")) });
+        SpatialAuthorityStore authority = new SpatialAuthorityStore();
+        if (!authority.TryComposeGeography(geography, out SpatialAuthorityFailure failure))
+            throw new InvalidOperationException("Could not create the adjacent P8-B admission fixture: " + failure);
+        return authority;
+    }
+
+    private static HexRecord CreateAdmissionHex(string id, int q, int r)
+    {
+        return new HexRecord(
+            new HexId(id),
+            new HexCoordinate(q, r),
+            new TerrainReference(new TerrainDefinitionId("terrain.admission"), "v1"));
+    }
+
+    private static void AssertFixedOwnerAdmissionRejectsNonzero(
+        IOwnerSectionCensusProvider provider,
+        object expectedOwner)
+    {
+        OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+        Assert.That(witness.Cardinality, Is.GreaterThan(0));
+        Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(expectedOwner));
+        MethodInfo registration = typeof(SimulationRuntime).GetMethod(
+            "TryRegisterP12FixedOwnerSection",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.That(registration, Is.Not.Null);
+        bool accepted = (bool)registration.Invoke(null, new object[]
+        {
+            new ContinuationCensusProtocol(),
+            provider,
+            witness.SectionId,
+            witness.SchemaVersion,
+            OwnerSectionRole.ExplicitlyEmpty,
+            expectedOwner,
+            false,
+            null
+        });
+        Assert.That(accepted, Is.False, witness.SectionId);
     }
 
     private static void ConfigureUnscopedBootstrap(TesteSimulacao bootstrap, SimulationConfigData config)

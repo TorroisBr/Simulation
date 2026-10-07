@@ -719,8 +719,8 @@ public sealed class SimulationBootstrapCompositionTests
         IDictionary expectedCensusSections = (IDictionary)typeof(ContinuationCensusProtocol)
             .GetField("expectedSections", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(censusProtocol);
-        Assert.That(expectedCensusSections.Count, Is.EqualTo(268),
-            "The selected ten-NPC/two-City Daily-v1 partial inventory includes exact-zero P8-D witnesses and all eight composed P12-E military owner sections.");
+        Assert.That(expectedCensusSections.Count, Is.EqualTo(275),
+            "The selected ten-NPC/two-City Daily-v1 partial inventory includes the P8-A/B/C spatial witnesses, exact-zero P8-D witnesses, and all eight composed P12-E military owner sections.");
         string[] identitySpatialSectionIds =
         {
             RuntimeIdentityRegistryCensusProvider.NpcsSectionId,
@@ -735,13 +735,32 @@ public sealed class SimulationBootstrapCompositionTests
             SpatialNetworkCensusProvider.RoutesSectionId,
             ExplorableSiteCensusProvider.SectionId,
             SpatialRouteObservationCensusProvider.SectionId,
-            PersonRoutePlanHistoryCensusProvider.SectionId
+            PersonRoutePlanHistoryCensusProvider.SectionId,
+            SpatialHexCensusProvider.SectionId,
+            SpatialLocationCensusProvider.SectionId,
+            SpatialScaleContextCensusProvider.SectionId,
+            SpatialPassageStateCensusProvider.SectionId,
+            SpatialCrossingCensusProvider.SectionId,
+            LegacySpatialAnchorBindingCensusProvider.SectionId,
+            PersonSpatialPositionCensusProvider.SectionId
+        };
+        HashSet<string> requiredSpatialIdentitySections = new HashSet<string>
+        {
+            RuntimeIdentityRegistryCensusProvider.NpcsSectionId,
+            RuntimeIdentityRegistryCensusProvider.CitiesSectionId,
+            RuntimeIdentityRegistryCensusProvider.LocationsSectionId,
+            RuntimeIdentityRegistryCensusProvider.RoutesSectionId,
+            SpatialNetworkCensusProvider.LocationsSectionId,
+            SpatialNetworkCensusProvider.RoutesSectionId,
+            SpatialHexCensusProvider.SectionId,
+            SpatialLocationCensusProvider.SectionId,
+            SpatialScaleContextCensusProvider.SectionId
         };
         for (int i = 0; i < identitySpatialSectionIds.Length; i++)
         {
             Assert.That(expectedCensusSections.Contains(identitySpatialSectionIds[i]), Is.True);
             Assert.That(((OwnerSectionContract)expectedCensusSections[identitySpatialSectionIds[i]]).Role,
-                Is.EqualTo(i < 4 || (i >= 8 && i < 10)
+                Is.EqualTo(requiredSpatialIdentitySections.Contains(identitySpatialSectionIds[i])
                     ? OwnerSectionRole.Required
                     : OwnerSectionRole.ExplicitlyEmpty));
         }
@@ -758,6 +777,63 @@ public sealed class SimulationBootstrapCompositionTests
             PersonRoutePlanHistoryCensusProvider.SectionId,
             PersonRoutePlanHistoryCensusProvider.SchemaVersion,
             runtime.PersonRoutePlanStore);
+        long spatialAuthorityRevision = runtime.SpatialAuthorityStore.Revision;
+        AssertRegisteredOwnerProvider(
+            registeredSections,
+            SpatialHexCensusProvider.SectionId,
+            SpatialHexCensusProvider.SchemaVersion,
+            OwnerSectionRole.Required,
+            runtime.SpatialAuthorityStore,
+            expectedCardinality: 1,
+            expectedRevision: spatialAuthorityRevision);
+        AssertRegisteredOwnerProvider(
+            registeredSections,
+            SpatialLocationCensusProvider.SectionId,
+            SpatialLocationCensusProvider.SchemaVersion,
+            OwnerSectionRole.Required,
+            runtime.SpatialAuthorityStore,
+            expectedCardinality: 1,
+            expectedRevision: spatialAuthorityRevision);
+        AssertRegisteredOwnerProvider(
+            registeredSections,
+            SpatialScaleContextCensusProvider.SectionId,
+            SpatialScaleContextCensusProvider.SchemaVersion,
+            OwnerSectionRole.Required,
+            runtime.SpatialAuthorityStore,
+            expectedCardinality: 1,
+            expectedRevision: spatialAuthorityRevision);
+        AssertRegisteredOwnerProvider(
+            registeredSections,
+            SpatialPassageStateCensusProvider.SectionId,
+            SpatialPassageStateCensusProvider.SchemaVersion,
+            OwnerSectionRole.ExplicitlyEmpty,
+            runtime.SpatialAuthorityStore.PassageAuthority,
+            expectedCardinality: 0,
+            expectedRevision: spatialAuthorityRevision);
+        AssertRegisteredOwnerProvider(
+            registeredSections,
+            SpatialCrossingCensusProvider.SectionId,
+            SpatialCrossingCensusProvider.SchemaVersion,
+            OwnerSectionRole.ExplicitlyEmpty,
+            runtime.SpatialAuthorityStore,
+            expectedCardinality: 0,
+            expectedRevision: spatialAuthorityRevision);
+        AssertRegisteredOwnerProvider(
+            registeredSections,
+            LegacySpatialAnchorBindingCensusProvider.SectionId,
+            LegacySpatialAnchorBindingCensusProvider.SchemaVersion,
+            OwnerSectionRole.ExplicitlyEmpty,
+            runtime.LegacySpatialAnchorBindingStore,
+            expectedCardinality: 0,
+            expectedRevision: runtime.LegacySpatialAnchorBindingStore.Revision);
+        AssertRegisteredOwnerProvider(
+            registeredSections,
+            PersonSpatialPositionCensusProvider.SectionId,
+            PersonSpatialPositionCensusProvider.SchemaVersion,
+            OwnerSectionRole.ExplicitlyEmpty,
+            runtime.PersonSpatialPositionStore,
+            expectedCardinality: 0,
+            expectedRevision: runtime.PersonSpatialPositionStore.Revision);
         string[] militaryOwnerSectionIds =
         {
             ArmedForceStoreCensusProvider.ForcesSectionId,
@@ -1818,6 +1894,51 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(repeatedWitness.OwnerInstanceIdentity, Is.SameAs(expectedOwner));
         Assert.That(repeatedWitness.Cardinality, Is.Zero);
         Assert.That(repeatedWitness.Revision, Is.Zero);
+    }
+
+    private static void AssertRegisteredOwnerProvider(
+        IDictionary registeredSections,
+        string sectionId,
+        int schemaVersion,
+        OwnerSectionRole expectedRole,
+        object expectedOwner,
+        int expectedCardinality,
+        long expectedRevision)
+    {
+        Assert.That(registeredSections, Is.Not.Null);
+        Assert.That(registeredSections.Contains(sectionId), Is.True, sectionId);
+
+        object registeredSection = registeredSections[sectionId];
+        FieldInfo contractField = registeredSection.GetType().GetField(
+            "Contract",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        FieldInfo providerField = registeredSection.GetType().GetField(
+            "Provider",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        Assert.That(contractField, Is.Not.Null);
+        Assert.That(providerField, Is.Not.Null);
+
+        OwnerSectionContract contract = (OwnerSectionContract)contractField.GetValue(registeredSection);
+        IOwnerSectionCensusProvider provider =
+            (IOwnerSectionCensusProvider)providerField.GetValue(registeredSection);
+        Assert.That(contract.SectionId, Is.EqualTo(sectionId));
+        Assert.That(contract.SchemaVersion, Is.EqualTo(schemaVersion));
+        Assert.That(contract.Role, Is.EqualTo(expectedRole));
+        Assert.That(provider, Is.Not.Null);
+
+        OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+        Assert.That(witness.SectionId, Is.EqualTo(sectionId));
+        Assert.That(witness.SchemaVersion, Is.EqualTo(schemaVersion));
+        Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(expectedOwner));
+        Assert.That(witness.Cardinality, Is.EqualTo(expectedCardinality));
+        Assert.That(witness.Revision, Is.EqualTo(expectedRevision));
+
+        OwnerSectionCensusWitness repeatedWitness = provider.GetCurrentCensus();
+        Assert.That(repeatedWitness.SectionId, Is.EqualTo(witness.SectionId));
+        Assert.That(repeatedWitness.SchemaVersion, Is.EqualTo(witness.SchemaVersion));
+        Assert.That(repeatedWitness.OwnerInstanceIdentity, Is.SameAs(witness.OwnerInstanceIdentity));
+        Assert.That(repeatedWitness.Cardinality, Is.EqualTo(witness.Cardinality));
+        Assert.That(repeatedWitness.Revision, Is.EqualTo(witness.Revision));
     }
 
     private static void AssertRegisteredRequiredProvider(
