@@ -391,7 +391,7 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
         failure = committed ? ActivityFailure.None : ActivityFailure.TimelinePublicationFailed; return committed;
     }
 
-    /// <summary>P20-B-only terminal seam for duration-null, consumer-managed activities.</summary>
+    /// <summary>Coordinated terminal seam for duration-null, consumer-managed activities.</summary>
     internal bool TryConsumerManagedTerminal(SimulationTimeline timeline, string id, ActivityLifecycleState terminal,
         string disposition, out ActivityFailure failure)
     {
