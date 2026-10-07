@@ -72,7 +72,7 @@ to demonstrate the generic capability.
   reservation ownership, independent decision path, deterministic participant
   ordering, duplicate/overlapping commitments, stale and loss-of-participant
   behavior, atomic start/release, pending scheduler invalidation and effects.
-  Exact APIs, schema and v1 consumer choice are not invented in this Brief.
+  P20-C selects joint civil travel as a bounded v1 consumer; exact APIs and schema remain technical-design-owned.
 - **Extensibility:** a future code mod can define a new multi-participant activity
   and policies/effects through semantic contracts without changing `NpcRuntime`
   or adding a dedicated manager to the base game. P19 exposes supported public
@@ -95,3 +95,13 @@ to demonstrate the generic capability.
 - **Hotspots:** temporal/activity/availability authorities, actor decisions,
   domain commit boundaries, commands and diagnostics. Isolate writers and
   review integrations; participant logic must not accumulate in `AdvanceDay`.
+
+## P20-C — Two-Person Joint Civil Travel consumer
+
+The user accepted this bounded consumer scope on 2026-10-07 under the new identity **P20-C**. The accepted proving case coordinates two distinct Persons across one supported civil leg through independent assent, P18-owned commitments/lifecycle, and P8-owned per-Person travel facts. The exactly-two arrangement is fixture scope only; it does not define a universal participant or role limit.
+
+P20-A remains the Synthetic Multi-participant Operation. P20-B remains the promoted Daily-profile empty-owner census/admission checkpoint, with its existing history and scope intact. P20-C must preserve P20-B's UnityBootstrap-Daily-v1 empty-owner contract: Daily-v1 continues to reject populated P20 travel state. It does not expand P12 Daily-v1, add save/load, or depend on P12-B completion.
+
+P20-C consumes promoted P18-A/B/C, P20-A, and P8-E capabilities. It preserves independent Person identity, Knowledge, and outcomes, uses one supported leg, and does not add persistent Group/Party membership, general-purpose role/participant policy, P11 external-command capture, P18-D, P19 loader, or War/gameplay scope. See ../design/PHASE20C_JOINT_CIVIL_TRAVEL_REVALIDATION.md for current-base evidence and the General Architect handoff status.
+
+The prior P20-B joint-travel technical design and its review remain historical artifacts. Their semantics may be reused after independent current-base review under P20-C. The exact interfaces and implementation sequence remain technical-design-owned.
