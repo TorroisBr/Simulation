@@ -2326,3 +2326,13 @@ behavior or census section changes. P12-B remains `INCOMPLETE`; P12-A remains
 `WAIT_DEPENDENCY`; P13 remains `BLOCKED`. No complete owner/shared-epoch
 coverage, global quiescence, capture eligibility, export, hydration, downstream
 readiness, or Phase 12 closure is claimed.
+
+## P12-B current Daily-v1 ingress and P14-C profile revalidation — 2026-10-07
+
+The selected-flow audit compared current P12 canonical `f191f87fe548469ba3f329fa083be5adc49656a2`, architecture `e16796014d348e3b59da7ed848101c4c03926ba5`, and P14 canonical `09fcbe46ffb5a7d80377185692d550310debc110`. The source-linked owner/commit ledger and owner-thread/quiescence evidence now record the current selected call graph and the P14-C profile boundary. The audit found no currently supported Daily-v1 ingress or successful commit omitted from the existing 23-operation crosswalk.
+
+`SampleScene` selects the dedicated `Simulation-DailyV1.asset`; its normal path captures/checks the Unity owner thread and routes the Space action through `Simulate` to `runtime.advance-day`. The selected asset has no scheduled directives or external command queue. The separate WorldObserver command-console demo is not part of this profile. The public Expedition facade remains a call-graph caveat without a selected Daily-v1 caller and remains deferred to P12-F dependencies. This closes only the bounded current-source reconciliation. It does not prove every possible ingress, every reachable owner state, or all future callbacks/direct store-reference access.
+
+P14-A/B/C remain separate material-flow proving profiles. At current P12 canonical, `ValidateP14SourceAdmission` applies the generic `HasAuthoredMaterialFlowCity` rejection before WorldId allocation; current P14 canonical additionally has an explicit mixed-source P14-C diagnostic and the `UnityBootstrapDailyRejectsMixedP14CSourcesBeforeIdentityOrOwnerConstruction` test. P12 Daily-v1 gains no owner, operation, or profile scope from this revalidation; the 275-row authored baseline is unchanged. P14-C's retained validation remains tied to code `6d9498d31bff1dc75e7071fe88ce2f80c37a7ebf` / tree `76142065bdcfcd01c2f58e7ba4dd0cdfef01ea92`: focused 9/9, ALL EditMode 2455/2455, official Smoke 5/5, SimulationRuntimeLongRun 7/7, and `git diff --check` PASS.
+
+P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`. Remaining blockers are runtime-wide owner-thread/quiescence proof and a completed-boundary token tied to a successful advance sequence, alongside the unresolved effective-owner/reachable-state completeness boundary. No complete owner/shared-epoch coverage, capture eligibility, export, hydration, downstream readiness, or Phase 12 closure is implied.

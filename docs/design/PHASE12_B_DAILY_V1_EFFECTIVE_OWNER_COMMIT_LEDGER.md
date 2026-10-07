@@ -2,7 +2,7 @@
 
 **Audit baseline:** `codex/phase12/canonical` at `405f70e58a7a1dd8be255798b795faff095f44b4`
 **Architecture:** `e16796014d348e3b59da7ed848101c4c03926ba5`
-**Profile:** SampleScene → `Simulation-DailyV1.asset`, accepted P9-B-only continuation profile. P10-A Ruin/LocalTopology remains a separate proving profile; Daily-v1 rejects P14-A before identity/owner construction.
+**Profile:** SampleScene → `Simulation-DailyV1.asset`, accepted P9-B-only continuation profile. P10-A Ruin/LocalTopology remains a separate proving profile. P12 Daily-v1 rejects P14-A/B/C material-flow profiles before identity/owner construction; current P14-C code also has an explicit mixed-source rejection diagnostic and test.
 **Disposition:** bounded source-linked evidence ledger; not an exhaustiveness or readiness certification.
 
 This ledger consolidates the selected-profile section inventory with the previously reviewed [23-operation matrix](PHASE12_B_DAILY_V1_REGISTERED_OPERATION_MATRIX.md). It records section identity patterns, installed owner, cardinality and local-revision source, and the known successful ingress/invalidation boundary. The values below describe the profile's current provider contract and census reads; they do not promise a particular revision value after runtime mutations.
@@ -14,6 +14,14 @@ This ledger consolidates the selected-profile section inventory with the previou
 Primary source evidence: `SimulationRuntime.InitializeNpcRosterCensusProtocol` and its registration helpers; `P12RuntimeIdentitySpatialCensus`; `P12PopulationLifecycleCensus`; `P12CrimeJusticeInvalidation`; `ContinuationCensusProtocol` roster-family registration and census assessment; and the `SelectedDailyV1NpcMembershipCommitsIdentityAndKeepsItAfterUnregister`, `SelectedDailyV1PersonMaterializationReconcilesDynamicOwnerCardinality`, and selected-profile inventory tests in `SimulationBootstrapCompositionTests`. Retained XML and review evidence are in `P12DailyOwnerMatrix`, `P12DailyTemporalCensus`, and `PHASE12_P12B_DAILY_TEMPORAL_CENSUS_REVIEW.md` / `PHASE12_P12B_DAILY_OWNER_MATRIX_IMPLEMENTATION_REVIEW.md`.
 
 The count is exact for the admitted baseline and current temporal witness cases. The source does not yet prove that these rows cover every effective state reachable through every supported public ingress, or that the 23 registered operation IDs exhaust those ingress paths.
+
+## Current-source ingress and P14-C profile revalidation — 2026-10-07
+
+This targeted audit uses P12 canonical `f191f87fe548469ba3f329fa083be5adc49656a2`, current architecture `e16796014d348e3b59da7ed848101c4c03926ba5`, and P14 canonical `09fcbe46ffb5a7d80377185692d550310debc110` (P14-C code `6d9498d31bff1dc75e7071fe88ce2f80c37a7ebf`, tree `76142065bdcfcd01c2f58e7ba4dd0cdfef01ea92`). It traced the accepted `SampleScene` to `Simulation-DailyV1.asset` composition and its normal startup, frame-advance, registered-operation, and successful-commit callsites against this ledger and the 23-operation matrix. No currently supported accepted-profile ingress or successful commit was identified outside the existing crosswalk.
+
+The selected asset has no scheduled directives or external `WorldCommand` queue. `TesteSimulacao.Start` captures the Unity thread; `Update` checks it and routes the normal Space action through `Simulate` to the runtime advance. `TryAdvanceDay` and positive `TryAdvanceDays` enforce the bound thread and enter `runtime.advance-day`. The public travel-party start facade enters its registered runtime scope. The separate WorldObserver command-console scene is not composed by SampleScene. The public Expedition facade remains a call-graph caveat without a selected Daily-v1 caller and stays deferred to P12-F dependencies. These findings reconcile the current supported path; they do not certify every reachable state, every direct store-reference use, or every future callback/extension path.
+
+P14-A/B/C are separate material-flow proving profiles and remain outside the accepted Daily-v1 contract. At P12 `f191f87`, `TesteSimulacao.ValidateP14SourceAdmission` applies the generic `FiniteSourceProfileAdmission.HasAuthoredMaterialFlowCity` rejection before `worldIdentityAllocator?.Invoke()`, so the mixed-source P14-C shape is rejected before WorldId or runtime-owner construction. Current P14 canonical additionally exposes the specific `HasMixedSourceProfile` diagnostic and the `UnityBootstrapDailyRejectsMixedP14CSourcesBeforeIdentityOrOwnerConstruction` test. This profile correction adds no P12 census owner or operation and does not change the 275-row baseline.
 
 ## Fixed rows — 65 at the accepted profile
 
