@@ -119,7 +119,7 @@ internal sealed class P20JointCivilTravel
             revision ?? Revision, lifecycleRevision ?? ExpectedLifecycleRevision);
 }
 
-/// <summary>Bounded P20-B shared activity for two Persons and one explicit P8 civil leg.</summary>
+/// <summary>Bounded P20-C shared activity for two Persons and one explicit P8 civil leg.</summary>
 public sealed class P20JointCivilTravelOwner
 {
     public const string ActivityDefinitionId = "p20-joint-civil-travel";
@@ -429,6 +429,8 @@ public sealed class P20JointCivilTravelOwner
         {
             if (instance.DefinitionId != ActivityDefinitionId) { failureDisposition = null; return true; }
             failureDisposition = "joint-owner-state-missing";
+            prepared = new JointTransitionCommit(this, operations, null, null, null, instance.Revision,
+                false, false, failureDisposition, null, null);
             return false;
         }
         if (current.ExpectedLifecycleRevision != instance.Revision
@@ -437,10 +439,13 @@ public sealed class P20JointCivilTravelOwner
             || !instance.Participants.SequenceEqual(current.PersonIds, StringComparer.Ordinal)
             || current.PersonIds.Any(id => !current.Assents.TryGetValue(id, out P20JointCivilTravelAssent assent) || !assent.Accepted))
         {
-            prepared = new JointTransitionCommit(this, current, current, false, "scheduled-instance-stale-or-incomplete", null, null);
+            prepared = new JointTransitionCommit(this, operations, null, current, null, instance.Revision,
+                false, false, "scheduled-instance-stale-or-incomplete", null, null);
             failureDisposition = "scheduled-instance-stale-or-incomplete";
             return false;
         }
+        P20JointCivilTravel next = current.With(lifecycleRevision: checked(instance.Revision + 1L));
+        Dictionary<string, P20JointCivilTravel> stagedOperations = StageOperationRoot(next);
         List<P8EJointTravelParticipant> participants = new List<P8EJointTravelParticipant>(2);
         foreach (string id in current.PersonIds)
         {
@@ -448,7 +453,8 @@ public sealed class P20JointCivilTravelOwner
             TraversalCostContext context = movementContext(person);
             if (context == null)
             {
-                prepared = new JointTransitionCommit(this, current, current, false, "movement-context-unavailable", null, null);
+                prepared = new JointTransitionCommit(this, operations, stagedOperations, current, next,
+                    instance.Revision, false, true, "movement-context-unavailable", null, null);
                 failureDisposition = "movement-context-unavailable";
                 return false;
             }
@@ -457,12 +463,13 @@ public sealed class P20JointCivilTravelOwner
         if (!travel.TryPrepareJointCivilLeg(participants, current.SharedSegmentStableKey,
             out PreparedP8EJointCivilLeg preparedLeg, out P8ETravelFailure travelFailure))
         {
-            prepared = new JointTransitionCommit(this, current, current, false, "joint-travel-precondition-failed", null, null);
+            prepared = new JointTransitionCommit(this, operations, stagedOperations, current, next,
+                instance.Revision, false, true, "joint-travel-precondition-failed", null, null);
             failureDisposition = "joint-travel-precondition-failed";
             return false;
         }
-        P20JointCivilTravel next = current.With(lifecycleRevision: instance.Revision + 1L);
-        prepared = new JointTransitionCommit(this, current, next, true, null, preparedLeg, null);
+        prepared = new JointTransitionCommit(this, operations, stagedOperations, current, next,
+            instance.Revision, true, true, null, preparedLeg, null);
         failureDisposition = null;
         return true;
     }
@@ -478,8 +485,9 @@ public sealed class P20JointCivilTravelOwner
         if (terminal == ActivityLifecycleState.Cancelled
             && (instance.State == ActivityLifecycleState.Proposed || instance.State == ActivityLifecycleState.Scheduled))
         {
-            prepared = new JointTransitionCommit(this, current,
-                current.With(lifecycleRevision: instance.Revision + 1L), true, null, null, null);
+            P20JointCivilTravel cancelled = current.With(lifecycleRevision: instance.Revision + 1L);
+            prepared = new JointTransitionCommit(this, operations, StageOperationRoot(cancelled), current, cancelled,
+                instance.Revision, true, false, null, null, null);
             return true;
         }
         if ((terminal != ActivityLifecycleState.Completed && terminal != ActivityLifecycleState.Interrupted)
@@ -493,34 +501,60 @@ public sealed class P20JointCivilTravelOwner
             || !travel.TryGetPlanDestination(new PersonId(terminalArrivalPersonId), out HexId destination)
             || otherDestination != destination) return false;
         P20JointCivilTravel next = current.With(lifecycleRevision: instance.Revision + 1L);
-        prepared = new JointTransitionCommit(this, current, next, true, null, null, arrival);
+        prepared = new JointTransitionCommit(this, operations, StageOperationRoot(next), current, next,
+            instance.Revision, true, false, null, null, arrival);
         return true;
     }
 
-    private sealed class JointTransitionCommit : IActivityLifecycleTransitionCommit
+    private Dictionary<string, P20JointCivilTravel> StageOperationRoot(P20JointCivilTravel next)
+    {
+        Dictionary<string, P20JointCivilTravel> staged = new Dictionary<string, P20JointCivilTravel>(operations, StringComparer.Ordinal);
+        staged[next.ActivityInstanceId] = next;
+        return staged;
+    }
+
+    private sealed class JointTransitionCommit : IActivityLifecycleTransitionCommit, IActivityLifecycleStartFailureCommit
     {
         private readonly P20JointCivilTravelOwner owner;
+        private readonly Dictionary<string, P20JointCivilTravel> expectedOperations;
+        private readonly Dictionary<string, P20JointCivilTravel> stagedOperations;
         private readonly P20JointCivilTravel expected;
         private readonly P20JointCivilTravel next;
+        private readonly long expectedLifecycleRevision;
         private readonly bool allowed;
+        private readonly bool failedStartReady;
         private readonly string failure;
         private readonly PreparedP8EJointCivilLeg jointStart;
         private readonly PreparedP8EPersonFinalArrival finalArrival;
         public bool StartAllowed => allowed;
         public string FailureDisposition => failure;
-        public bool CanCommit => owner.operations.TryGetValue(expected.ActivityInstanceId, out P20JointCivilTravel current)
-            && ReferenceEquals(current, expected) && (jointStart == null || jointStart.CanInstall)
-            && (finalArrival == null || finalArrival.CanInstall);
-        internal JointTransitionCommit(P20JointCivilTravelOwner owner, P20JointCivilTravel expected,
-            P20JointCivilTravel next, bool allowed, string failure, PreparedP8EJointCivilLeg jointStart,
+        public bool CanCommit => IsExpectedCurrent() && allowed
+            && (jointStart == null || jointStart.CanInstall) && (finalArrival == null || finalArrival.CanInstall);
+        public bool CanCommitFailedStart => failedStartReady && IsExpectedCurrent()
+            && owner.composition.Store.TryGet(expected.ActivityInstanceId, out ActivityInstanceSnapshot instance)
+            && instance.State == ActivityLifecycleState.Scheduled
+            && instance.Revision == expectedLifecycleRevision;
+        internal JointTransitionCommit(P20JointCivilTravelOwner owner,
+            Dictionary<string, P20JointCivilTravel> expectedOperations,
+            Dictionary<string, P20JointCivilTravel> stagedOperations,
+            P20JointCivilTravel expected, P20JointCivilTravel next, long expectedLifecycleRevision,
+            bool allowed, bool failedStartReady, string failure, PreparedP8EJointCivilLeg jointStart,
             PreparedP8EPersonFinalArrival finalArrival)
-        { this.owner = owner; this.expected = expected; this.next = next; this.allowed = allowed; this.failure = failure;
-            this.jointStart = jointStart; this.finalArrival = finalArrival; }
+        {
+            this.owner = owner; this.expectedOperations = expectedOperations; this.stagedOperations = stagedOperations;
+            this.expected = expected; this.next = next; this.expectedLifecycleRevision = expectedLifecycleRevision;
+            this.allowed = allowed; this.failedStartReady = failedStartReady; this.failure = failure;
+            this.jointStart = jointStart; this.finalArrival = finalArrival;
+        }
+        private bool IsExpectedCurrent() => expected != null && ReferenceEquals(owner.operations, expectedOperations)
+            && owner.operations.TryGetValue(expected.ActivityInstanceId, out P20JointCivilTravel current)
+            && ReferenceEquals(current, expected);
         public void CommitStarted()
-        { jointStart.InstallPrepared(); owner.operations[next.ActivityInstanceId] = next; }
-        public void CommitFailedStart() { }
+        { jointStart.InstallPrepared(); owner.operations = stagedOperations; }
+        public void CommitFailedStart()
+        { owner.operations = stagedOperations; }
         public void CommitTerminal()
-        { finalArrival?.InstallPrepared(); owner.operations[next.ActivityInstanceId] = next; }
+        { finalArrival?.InstallPrepared(); owner.operations = stagedOperations; }
     }
 
     private sealed class TransitionParticipant : IActivityLifecycleTransitionParticipant

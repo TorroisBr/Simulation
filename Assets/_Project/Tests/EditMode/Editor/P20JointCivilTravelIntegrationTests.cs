@@ -278,6 +278,190 @@ public sealed class P20JointCivilTravelIntegrationTests
     }
 
     [Test]
+    public void FailedStartSynchronizesP20RevisionAndRestoresWithoutStartingAgain()
+    {
+        Fixture fixture = new Fixture();
+        ActivityLifecycleStore lifecycle = new ActivityLifecycleStore("joint-travel-failed-start-world");
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(2, 2, 3));
+        ActivityLifecycleComposition composition = new ActivityLifecycleComposition(lifecycle, calendar, new LogicalTick(0));
+        P20JointCivilTravelOwner owner = new P20JointCivilTravelOwner(composition, fixture.Travel,
+            person => fixture.Contexts[person.Value]);
+        Assert.That(owner.TryCreate(new ActivityDefinition(P20JointCivilTravelOwner.ActivityDefinitionId, "v1"),
+            "joint-failed-start-reconstruct", fixture.Segment.StableKey, new LogicalTick(1),
+            new[] { "person-a", "person-b" }, out P20JointCivilTravelSnapshot proposal, out ActivityFailure createFailure),
+            Is.True, createFailure.ToString());
+        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-a", true, "failed-start-consent-a")), Is.True);
+        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-b", true, "failed-start-consent-b")), Is.True);
+        Assert.That(owner.TrySchedule(proposal.ActivityInstanceId, out ActivityFailure scheduleFailure),
+            Is.True, scheduleFailure.ToString());
+        Assert.That(owner.TryGet(proposal.ActivityInstanceId, out P20JointCivilTravelSnapshot scheduledOwner), Is.True);
+        long nextReceiptSequence = lifecycle.NextTransitionSequence;
+        long positionRevision = fixture.Positions.Revision;
+        long planRevision = fixture.Plans.Revision;
+        Assert.That(fixture.Spatial.PassageAuthority.TryChangePassageCondition(fixture.Segment.Boundary,
+            fixture.Segment.Option, PassageCondition.Closed, out SpatialAuthorityFailure passageFailure), Is.True,
+            passageFailure.ToString());
+
+        Assert.That(composition.Timeline.TrySealInputsThrough(new LogicalTick(1), out TimelineFailure sealFailure),
+            Is.True, sealFailure.ToString());
+        Assert.That(composition.Timeline.TryAdvanceTo(new LogicalTick(1), out TimelineFailure advanceFailure),
+            Is.True, advanceFailure.ToString());
+        Assert.That(lifecycle.TryGet(proposal.ActivityInstanceId, out ActivityInstanceSnapshot failedLifecycle), Is.True);
+        Assert.That(failedLifecycle.State, Is.EqualTo(ActivityLifecycleState.Cancelled));
+        Assert.That(failedLifecycle.Revision, Is.EqualTo(scheduledOwner.ExpectedLifecycleRevision + 1L));
+        Assert.That(failedLifecycle.TerminalInstant, Is.EqualTo(new LogicalTick(1)));
+        Assert.That(failedLifecycle.Disposition, Is.EqualTo("joint-travel-precondition-failed"));
+        Assert.That(lifecycle.GetCommitment("person-a"), Is.Null);
+        Assert.That(lifecycle.GetCommitment("person-b"), Is.Null);
+        Assert.That(lifecycle.PendingWork, Is.Empty);
+        ActivityTransitionReceipt[] failedReceipts = lifecycle.SnapshotTransitionReceipts()
+            .Where(receipt => receipt.ActivityInstanceId == proposal.ActivityInstanceId
+                && receipt.Kind == ActivityTransitionKind.FailedStart).ToArray();
+        Assert.That(failedReceipts, Has.Length.EqualTo(1));
+        Assert.That(failedReceipts[0].Sequence, Is.EqualTo(nextReceiptSequence));
+        Assert.That(failedReceipts[0].ActivityRevision, Is.EqualTo(failedLifecycle.Revision));
+        Assert.That(failedReceipts[0].Instant, Is.EqualTo(new LogicalTick(1)));
+        Assert.That(failedReceipts[0].Disposition, Is.EqualTo("joint-travel-precondition-failed"));
+
+        Assert.That(owner.TryGet(proposal.ActivityInstanceId, out P20JointCivilTravelSnapshot failedOwner), Is.True);
+        Assert.That(failedOwner.State, Is.EqualTo(P20JointCivilTravelState.FailedToStart));
+        Assert.That(failedOwner.ExpectedLifecycleRevision, Is.EqualTo(failedLifecycle.Revision));
+        Assert.That(failedOwner.Revision, Is.EqualTo(scheduledOwner.Revision),
+            "A failed start must not create a new consent or coordination order.");
+        Assert.That(fixture.Positions.Revision, Is.EqualTo(positionRevision));
+        Assert.That(fixture.Plans.Revision, Is.EqualTo(planRevision));
+
+        ActivityLifecycleStore restoredLifecycle = lifecycle.Clone();
+        ActivityLifecycleComposition restoredComposition = new ActivityLifecycleComposition(
+            restoredLifecycle, calendar, new LogicalTick(1));
+        P20JointCivilTravelOwner restoredOwner = new P20JointCivilTravelOwner(restoredComposition, fixture.Travel,
+            person => fixture.Contexts[person.Value]);
+        IReadOnlyList<P20JointCivilTravelSnapshot> savedOwnerState = owner.SnapshotOwnerState();
+        Assert.That(restoredOwner.TryRestoreOwnerState(savedOwnerState), Is.True,
+            "A committed FailedStart must retain the strict P18/P20 lifecycle token equality needed for reconstruction.");
+        Assert.That(restoredOwner.TryGet(proposal.ActivityInstanceId, out P20JointCivilTravelSnapshot restored), Is.True);
+        Assert.That(restored.State, Is.EqualTo(P20JointCivilTravelState.FailedToStart));
+        Assert.That(restored.ExpectedLifecycleRevision, Is.EqualTo(failedLifecycle.Revision));
+
+        Assert.That(restoredComposition.Timeline.TrySealInputsThrough(new LogicalTick(2), out sealFailure),
+            Is.True, sealFailure.ToString());
+        Assert.That(restoredComposition.Timeline.TryAdvanceTo(new LogicalTick(2), out advanceFailure),
+            Is.True, advanceFailure.ToString());
+        Assert.That(restoredLifecycle.PendingWork, Is.Empty);
+        Assert.That(restoredLifecycle.SnapshotTransitionReceipts()
+            .Count(receipt => receipt.ActivityInstanceId == proposal.ActivityInstanceId
+                && receipt.Kind == ActivityTransitionKind.Start), Is.EqualTo(0));
+        Assert.That(restoredLifecycle.SnapshotTransitionReceipts()
+            .Count(receipt => receipt.ActivityInstanceId == proposal.ActivityInstanceId
+                && receipt.Kind == ActivityTransitionKind.FailedStart), Is.EqualTo(1));
+        Assert.That(fixture.Positions.Revision, Is.EqualTo(positionRevision));
+        Assert.That(fixture.Plans.Revision, Is.EqualTo(planRevision));
+
+        Assert.That(restoredLifecycle.TryGet(proposal.ActivityInstanceId, out ActivityInstanceSnapshot restoredTerminal), Is.True);
+        P20JointCivilTravelSnapshot saved = savedOwnerState.Single();
+        SortedDictionary<string, P20JointCivilTravelAssent> assents =
+            new SortedDictionary<string, P20JointCivilTravelAssent>(StringComparer.Ordinal);
+        foreach (P20JointCivilTravelAssent assent in saved.Assents) assents.Add(assent.PersonId, assent);
+        P20JointCivilTravel staleOperation = new P20JointCivilTravel(saved.ActivityInstanceId,
+            saved.SharedSegmentStableKey, saved.ProposedStart, saved.PersonIds, assents,
+            saved.AbortAfterLegRequested, saved.AbortCausalInputIdentity, saved.AbortAcceptedAt,
+            saved.AbortAcceptedOrder, saved.Revision, saved.ExpectedLifecycleRevision - 1L);
+        P20JointCivilTravelSnapshot staleSnapshot = new P20JointCivilTravelSnapshot(
+            staleOperation, restoredTerminal, failedStart: true);
+        P20JointCivilTravelOwner staleRestorer = new P20JointCivilTravelOwner(
+            new ActivityLifecycleComposition(restoredLifecycle.Clone(), calendar, new LogicalTick(1)), fixture.Travel,
+            person => fixture.Contexts[person.Value]);
+        Assert.That(staleRestorer.TryRestoreOwnerState(new[] { staleSnapshot }), Is.False,
+            "Restore must continue to reject a stale lifecycle token.");
+    }
+
+    [Test]
+    public void P18StartValidatorRejectionCommitsFailedStartWithoutInstallingP8Travel()
+    {
+        Fixture fixture = new Fixture();
+        ActivityLifecycleStore lifecycle = new ActivityLifecycleStore("joint-travel-validator-failure-world",
+            startValidator: new RejectingStartValidator());
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(2, 2, 3));
+        ActivityLifecycleComposition composition = new ActivityLifecycleComposition(lifecycle, calendar, new LogicalTick(0));
+        P20JointCivilTravelOwner owner = new P20JointCivilTravelOwner(composition, fixture.Travel,
+            person => fixture.Contexts[person.Value]);
+        Assert.That(owner.TryCreate(new ActivityDefinition(P20JointCivilTravelOwner.ActivityDefinitionId, "v1"),
+            "joint-validator-failed-start", fixture.Segment.StableKey, new LogicalTick(1),
+            new[] { "person-a", "person-b" }, out P20JointCivilTravelSnapshot proposal, out ActivityFailure createFailure),
+            Is.True, createFailure.ToString());
+        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-a", true, "validator-consent-a")), Is.True);
+        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-b", true, "validator-consent-b")), Is.True);
+        Assert.That(owner.TrySchedule(proposal.ActivityInstanceId, out ActivityFailure scheduleFailure),
+            Is.True, scheduleFailure.ToString());
+        Assert.That(owner.TryGet(proposal.ActivityInstanceId, out P20JointCivilTravelSnapshot scheduledOwner), Is.True);
+        long positionRevision = fixture.Positions.Revision;
+        long planRevision = fixture.Plans.Revision;
+
+        Assert.That(composition.Timeline.TrySealInputsThrough(new LogicalTick(1), out TimelineFailure sealFailure),
+            Is.True, sealFailure.ToString());
+        Assert.That(composition.Timeline.TryAdvanceTo(new LogicalTick(1), out TimelineFailure advanceFailure),
+            Is.True, advanceFailure.ToString());
+        Assert.That(lifecycle.TryGet(proposal.ActivityInstanceId, out ActivityInstanceSnapshot failedLifecycle), Is.True);
+        Assert.That(failedLifecycle.State, Is.EqualTo(ActivityLifecycleState.Cancelled));
+        Assert.That(failedLifecycle.Disposition, Is.EqualTo("fixture-start-rejected"));
+        Assert.That(lifecycle.SnapshotTransitionReceipts().Any(receipt =>
+            receipt.ActivityInstanceId == proposal.ActivityInstanceId
+            && receipt.Kind == ActivityTransitionKind.FailedStart
+            && receipt.Instant == new LogicalTick(1)
+            && receipt.ActivityRevision == failedLifecycle.Revision), Is.True);
+        Assert.That(owner.TryGet(proposal.ActivityInstanceId, out P20JointCivilTravelSnapshot failedOwner), Is.True);
+        Assert.That(failedOwner.State, Is.EqualTo(P20JointCivilTravelState.FailedToStart));
+        Assert.That(failedOwner.ExpectedLifecycleRevision, Is.EqualTo(failedLifecycle.Revision));
+        Assert.That(failedOwner.Revision, Is.EqualTo(scheduledOwner.Revision));
+        Assert.That(lifecycle.GetCommitment("person-a"), Is.Null);
+        Assert.That(lifecycle.GetCommitment("person-b"), Is.Null);
+        Assert.That(fixture.Positions.Revision, Is.EqualTo(positionRevision));
+        Assert.That(fixture.Plans.Revision, Is.EqualTo(planRevision));
+        Assert.That(fixture.Positions.TryGetPosition(new PersonId("person-a"), out PersonSpatialPosition positionA), Is.True);
+        Assert.That(fixture.Positions.TryGetPosition(new PersonId("person-b"), out PersonSpatialPosition positionB), Is.True);
+        Assert.That(positionA.IsInTransit, Is.False);
+        Assert.That(positionB.IsInTransit, Is.False);
+    }
+
+    [Test]
+    public void MissingP20CoordinationStateDoesNotConsumeOrTerminalizeScheduledStart()
+    {
+        ActivityLifecycleStore lifecycle = new ActivityLifecycleStore("joint-travel-missing-owner-world");
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(2, 2, 3));
+        ActivityLifecycleComposition composition = new ActivityLifecycleComposition(lifecycle, calendar, new LogicalTick(0));
+        Assert.That(lifecycle.TryPropose(new ActivityDefinition(P20JointCivilTravelOwner.ActivityDefinitionId, "v1"),
+            "missing-p20-owner", out ActivityInstanceSnapshot proposed, out ActivityFailure proposalFailure),
+            Is.True, proposalFailure.ToString());
+        Assert.That(lifecycle.TrySchedule(composition.Timeline, proposed.Id, new LogicalTick(0),
+            new LogicalTick(1), null, new[] { "person-a", "person-b" }, out ActivityFailure scheduleFailure),
+            Is.True, scheduleFailure.ToString());
+        P20JointCivilTravelOwner owner = new P20JointCivilTravelOwner(composition,
+            new Fixture().Travel, _ => new TraversalCostContext("movement", "v1", 1m, 1m, 1m));
+        DueWorkReference scheduledStart = lifecycle.PendingWork.Single();
+        int receiptCount = lifecycle.SnapshotTransitionReceipts().Count;
+
+        Assert.That(composition.Timeline.TrySealInputsThrough(new LogicalTick(1), out TimelineFailure sealFailure),
+            Is.True, sealFailure.ToString());
+        Assert.That(composition.Timeline.TryAdvanceTo(new LogicalTick(1), out _), Is.False,
+            "Missing required P20 state must leave the start due for repair/retry.");
+        Assert.That(lifecycle.TryGet(proposed.Id, out ActivityInstanceSnapshot stillScheduled), Is.True);
+        Assert.That(stillScheduled.State, Is.EqualTo(ActivityLifecycleState.Scheduled));
+        Assert.That(stillScheduled.Revision, Is.EqualTo(proposed.Revision + 1L));
+        Assert.That(lifecycle.PendingWork, Has.Count.EqualTo(1));
+        Assert.That(lifecycle.PendingWork[0], Is.SameAs(scheduledStart));
+        Assert.That(lifecycle.GetCommitment("person-a"), Is.Not.Null);
+        Assert.That(lifecycle.GetCommitment("person-b"), Is.Not.Null);
+        Assert.That(lifecycle.SnapshotTransitionReceipts().Count, Is.EqualTo(receiptCount));
+        Assert.That(lifecycle.SnapshotTransitionReceipts().Any(receipt =>
+            receipt.ActivityInstanceId == proposed.Id && receipt.Kind == ActivityTransitionKind.FailedStart), Is.False);
+        Assert.That(owner.InstanceCount, Is.EqualTo(0));
+    }
+
+    [Test]
     public void StalePreparedTerminalArrivalCannotCommitASecondOwnerRoot()
     {
         Fixture fixture = new Fixture();
@@ -400,6 +584,12 @@ public sealed class P20JointCivilTravelIntegrationTests
 
         private static void Record(SpatialRouteKnowledgeStore knowledge, PersonId person, SpatialObservation observation)
         { Assert.That(knowledge.TryRecordObservation(person, observation, 0L, out SpatialKnowledgeFailure failure), Is.True, failure.ToString()); }
+    }
+
+    private sealed class RejectingStartValidator : IActivityStartValidator
+    {
+        public bool TryValidate(ActivityInstanceSnapshot instance, LogicalTick instant, out string disposition)
+        { disposition = "fixture-start-rejected"; return false; }
     }
 
     private sealed class Resolver : ISpatialTraversalOptionResolver

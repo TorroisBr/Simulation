@@ -33,6 +33,12 @@ internal interface IActivityLifecycleTransitionCommit
     void CommitTerminal();
 }
 
+/// <summary>Optional preflight for a coordinated start that is being terminalized by a failed-start transition.</summary>
+internal interface IActivityLifecycleStartFailureCommit
+{
+    bool CanCommitFailedStart { get; }
+}
+
 internal sealed class AcceptActivityStartValidator : IActivityStartValidator
 {
     public static readonly AcceptActivityStartValidator Instance = new AcceptActivityStartValidator();
@@ -137,7 +143,7 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
     private IActivityLifecycleTransitionParticipant transitionParticipant;
     private SimulationTimeline authoritativeTimeline;
     private long nextIdentity;
-    private readonly List<ActivityTransitionReceipt> transitionReceipts = new List<ActivityTransitionReceipt>();
+    private List<ActivityTransitionReceipt> transitionReceipts = new List<ActivityTransitionReceipt>();
     private long nextTransitionSequence = 1;
 
     public ActivityLifecycleStore(string worldId, long nextIdentity = 0, IActivityStartValidator startValidator = null)
@@ -481,7 +487,14 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
         IActivityLifecycleTransitionCommit coordinated, out TimelineFailure failure)
     {
         if (!IsCurrent(reference)) { failure = TimelineFailure.StaleWork; return false; }
-        if (coordinated != null && !coordinated.CanCommit) { failure = TimelineFailure.StaleWork; return false; }
+        if (coordinated != null)
+        {
+            bool coordinatedCanCommit = kind == ActivityTransitionKind.Start && !startAllowed
+                && coordinated is IActivityLifecycleStartFailureCommit failedStartCommit
+                ? failedStartCommit.CanCommitFailedStart
+                : coordinated.CanCommit;
+            if (!coordinatedCanCommit) { failure = TimelineFailure.StaleWork; return false; }
+        }
         ActivityInstance item = instances[reference.InstanceId];
         long revision; try { revision = checked(item.Revision + 1); } catch (OverflowException) { failure = TimelineFailure.DispatchFailed; return false; }
         if (kind == ActivityTransitionKind.Start && !startAllowed)
@@ -492,9 +505,12 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
             string failedDisposition = string.IsNullOrWhiteSpace(failureDisposition) ? "start-precondition-failed" : failureDisposition;
             if (!TryStageReceipt(item, terminalRevision, ActivityTransitionKind.FailedStart, reference.DueAt, item.Participants, failedDisposition, out ActivityTransitionReceipt failedReceipt))
             { failure = TimelineFailure.DispatchFailed; return false; }
+            List<ActivityTransitionReceipt> stagedReceipts = StageReceiptHistory(failedReceipt);
             item.Revision = terminalRevision; item.State = ActivityLifecycleState.Cancelled;
             item.TerminalInstant = reference.DueAt; item.Disposition = failedDisposition;
-            pending = terminalPending; ReleaseCommitments(item); PublishReceipt(failedReceipt); coordinated?.CommitFailedStart(); failure = TimelineFailure.None; return true;
+            pending = terminalPending; ReleaseCommitments(item); transitionReceipts = stagedReceipts;
+            nextTransitionSequence = failedReceipt.Sequence + 1L;
+            coordinated?.CommitFailedStart(); failure = TimelineFailure.None; return true;
         }
         if (!TryStageReceipt(item, revision, kind, reference.DueAt, item.Participants, kind == ActivityTransitionKind.Start ? "started" : "completed", out ActivityTransitionReceipt receipt))
         { failure = TimelineFailure.DispatchFailed; return false; }
@@ -502,14 +518,25 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
             ? Reference(item, revision, ActivityTransitionKind.Complete, item.PlannedEnd.Value) : null;
         List<DueWorkReference> stagedPending = pending.Where(fact => fact.InstanceId != item.Id).ToList();
         if (completion != null) stagedPending.Add(completion);
+        List<ActivityTransitionReceipt> nextReceipts = StageReceiptHistory(receipt);
         item.Revision = revision;
         if (kind == ActivityTransitionKind.Start)
         {
             item.State = ActivityLifecycleState.Active; item.ActualStart = reference.DueAt;
-            pending = stagedPending; PublishReceipt(receipt); coordinated?.CommitStarted(); failure = TimelineFailure.None; return true;
+            pending = stagedPending; transitionReceipts = nextReceipts; nextTransitionSequence = receipt.Sequence + 1L;
+            coordinated?.CommitStarted(); failure = TimelineFailure.None; return true;
         }
         item.State = ActivityLifecycleState.Completed; item.TerminalInstant = reference.DueAt;
-        pending = stagedPending; ReleaseCommitments(item); PublishReceipt(receipt); failure = TimelineFailure.None; return true;
+        pending = stagedPending; ReleaseCommitments(item); transitionReceipts = nextReceipts;
+        nextTransitionSequence = receipt.Sequence + 1L; failure = TimelineFailure.None; return true;
+    }
+
+    private List<ActivityTransitionReceipt> StageReceiptHistory(ActivityTransitionReceipt receipt)
+    {
+        List<ActivityTransitionReceipt> staged = new List<ActivityTransitionReceipt>(transitionReceipts.Count + 1);
+        staged.AddRange(transitionReceipts);
+        staged.Add(receipt);
+        return staged;
     }
 
     private bool TryStageReceipt(ActivityInstance item, long revision, ActivityTransitionKind kind, LogicalTick instant,
