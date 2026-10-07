@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="10" result="Passed" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-07 23:28:19Z" end-time="2026-10-07 23:28:19Z" duration="0,1969413">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2460" result="Passed" start-time="2026-10-07 23:28:19Z" end-time="2026-10-07 23:28:19Z" duration="0.196941" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3675" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12b-final-validation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2460" result="Passed" start-time="2026-10-07 23:28:19Z" end-time="2026-10-07 23:28:19Z" duration="0.177264" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="100972" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2566" name="P12TravelPartyAdvanceTests" fullname="P12TravelPartyAdvanceTests" classname="P12TravelPartyAdvanceTests" runstate="Runnable" testcasecount="10" result="Passed" start-time="2026-10-07 23:28:19Z" end-time="2026-10-07 23:28:19Z" duration="0.128570" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2574" name="DailyTravelPartyAdvanceBatchesOwnersAndSequenceUnderNestedOperation" fullname="P12TravelPartyAdvanceTests.DailyTravelPartyAdvanceBatchesOwnersAndSequenceUnderNestedOperation" methodname="DailyTravelPartyAdvanceBatchesOwnersAndSequenceUnderNestedOperation" classname="P12TravelPartyAdvanceTests" runstate="Runnable" seed="1639628781" result="Passed" start-time="2026-10-07 23:28:19Z" end-time="2026-10-07 23:28:19Z" duration="0.096887" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2570" name="FailedGroupStartCompensatesWithinPreflightedTravelRevisionCapacity" fullname="P12TravelPartyAdvanceTests.FailedGroupStartCompensatesWithinPreflightedTravelRevisionCapacity" methodname="FailedGroupStartCompensatesWithinPreflightedTravelRevisionCapacity" classname="P12TravelPartyAdvanceTests" runstate="Runnable" seed="598338427" result="Passed" start-time="2026-10-07 23:28:19Z" end-time="2026-10-07 23:28:19Z" duration="0.004217" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Cannot allocate domain EventId: Simulation record sequence is exhausted.
+]]></output>
+        </test-case>
+        <test-case id="2572" name="FinalArrivalPreflightsAllMemberTravelRevisionsBeforeChangingAnyOwner" fullname="P12TravelPartyAdvanceTests.FinalArrivalPreflightsAllMemberTravelRevisionsBeforeChangingAnyOwner" methodname="FinalArrivalPreflightsAllMemberTravelRevisionsBeforeChangingAnyOwner" classname="P12TravelPartyAdvanceTests" runstate="Runnable" seed="1736826919" result="Passed" start-time="2026-10-07 23:28:19Z" end-time="2026-10-07 23:28:19Z" duration="0.001687" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2569" name="GroupStartReservesTravelRevisionCapacityBeforeAnyMemberOrEconomyWrite" fullname="P12TravelPartyAdvanceTests.GroupStartReservesTravelRevisionCapacityBeforeAnyMemberOrEconomyWrite" methodname="GroupStartReservesTravelRevisionCapacityBeforeAnyMemberOrEconomyWrite" classname="P12TravelPartyAdvanceTests" runstate="Runnable" seed="1861962870" result="Passed" start-time="2026-10-07 23:28:19Z" end-time="2026-10-07 23:28:19Z" duration="0.000519" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2573" name="SelectedDailyRosterReconciliationTracksCityPresenceAndSameIdReplacement" fullname="P12TravelPartyAdvanceTests.SelectedDailyRosterReconciliationTracksCityPresenceAndSameIdReplacement" methodname="SelectedDailyRosterReconciliationTracksCityPresenceAndSameIdReplacement" classname="P12TravelPartyAdvanceTests" runstate="Runnable" seed="1517467268" result="Passed" start-time="2026-10-07 23:28:19Z" end-time="2026-10-07 23:28:19Z" duration="0.007009" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2571" name="SynchronizedStartDayClearPreflightsAllMemberTravelRevisions" fullname="P12TravelPartyAdvanceTests.SynchronizedStartDayClearPreflightsAllMemberTravelRevisions" methodname="SynchronizedStartDayClearPreflightsAllMemberTravelRevisions" classname="P12TravelPartyAdvanceTests" runstate="Runnable" seed="1178866009" result="Passed" start-time="2026-10-07 23:28:19Z" end-time="2026-10-07 23:28:19Z" duration="0.000743" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2576" name="TravelPartyExceptionReportsEarlierMemberProgressBeforeFaultingDailyRuntime" fullname="P12TravelPartyAdvanceTests.TravelPartyExceptionReportsEarlierMemberProgressBeforeFaultingDailyRuntime" methodname="TravelPartyExceptionReportsEarlierMemberProgressBeforeFaultingDailyRuntime" classname="P12TravelPartyAdvanceTests" runstate="Runnable" seed="2087533974" result="Passed" start-time="2026-10-07 23:28:19Z" end-time="2026-10-07 23:28:19Z" duration="0.002673" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2575" name="TravelPartyPreflightFailureDoesNotMutatePartyMembers" fullname="P12TravelPartyAdvanceTests.TravelPartyPreflightFailureDoesNotMutatePartyMembers" methodname="TravelPartyPreflightFailureDoesNotMutatePartyMembers" classname="P12TravelPartyAdvanceTests" runstate="Runnable" seed="1853170502" result="Passed" start-time="2026-10-07 23:28:19Z" end-time="2026-10-07 23:28:19Z" duration="0.001073" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2568" name="TravelProgressMutatorsIncrementOnceForCommitsAndRejectAtSaturation" fullname="P12TravelPartyAdvanceTests.TravelProgressMutatorsIncrementOnceForCommitsAndRejectAtSaturation" methodname="TravelProgressMutatorsIncrementOnceForCommitsAndRejectAtSaturation" classname="P12TravelPartyAdvanceTests" runstate="Runnable" seed="263074860" result="Passed" start-time="2026-10-07 23:28:19Z" end-time="2026-10-07 23:28:19Z" duration="0.001100" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2567" name="TravelStateProviderUsesExactOnePerNpcOwnersAndOrdinalSections" fullname="P12TravelPartyAdvanceTests.TravelStateProviderUsesExactOnePerNpcOwnersAndOrdinalSections" methodname="TravelStateProviderUsesExactOnePerNpcOwnersAndOrdinalSections" classname="P12TravelPartyAdvanceTests" runstate="Runnable" seed="495120356" result="Passed" start-time="2026-10-07 23:28:19Z" end-time="2026-10-07 23:28:19Z" duration="0.000927" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
