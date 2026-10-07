@@ -46,3 +46,9 @@ If a future chosen production consumer requires several actors, its shared
 participation/commitment coordination consumes relevant P20 capability on P18.
 Static source/stock truth and passive production remain independent; no crew,
 job, hunting or meal system is introduced for this requirement.
+
+## Architecture-ordered P14-C checkpoint — 2026-10-07
+
+The current architecture product-direction record (`P10_P14_P20_NEXT_SCOPE_DECISIONS.md` at architecture tip `e16796014d348e3b59da7ed848101c4c03926ba5`) sequences **P14-C — Multiple Identifiable Sources v1** after promoted P14-B. The bounded proving case is one City/item with two distinct source IDs, deterministic source ordering, and one closing material balance; the recommended proof combines one P14-A exogenous source and one P14-B finite source. P14-A and P14-B remain unchanged. This is a separate P14 profile and does not combine the P10 Ruin profile, add a City/Location, or widen P12 Daily-v1.
+
+P14-B is promoted at State `06e9c30101a74bd618d3651885c489c79fe866bb`; its dependency for the recommended P14-C proof is satisfied. The bounded design candidate is [`PHASE14C_MULTIPLE_IDENTIFIABLE_SOURCES_CHECKPOINT.md`](../design/PHASE14C_MULTIPLE_IDENTIFIABLE_SOURCES_CHECKPOINT.md). It remains under independent technical review; no P14-C implementation has started.
