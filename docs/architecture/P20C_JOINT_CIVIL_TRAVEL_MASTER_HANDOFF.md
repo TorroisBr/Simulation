@@ -3,10 +3,14 @@
 **Design verdict:** PASS after bounded correction and refreshed record.
 **Technical readiness:** READY_FOR_IMPLEMENTATION; see
 [P20C_TECHNICAL_REVIEW.md](P20C_TECHNICAL_REVIEW.md).
-**Scheduling:** MUST WAIT for normal architecture-canonical promotion and
-a safe Master hotspot window. **P20-C delivery:** NOT PROMOTED.
-No code implementation is authorized in this Architect task.
-**Architecture canonical base:** `e16796014d348e3b59da7ed848101c4c03926ba5`.
+**Scheduling:** READY_FOR_MASTER_IMPLEMENTATION_HANDOFF after approved
+architecture promotion; serialize the actual shared hotspots with their owners.
+**P20-C delivery:** NOT PROMOTED. No runtime implementation is part of this
+Architect promotion.
+**Reviewed architecture base:** `e16796014d348e3b59da7ed848101c4c03926ba5`.
+**Promoted architecture content:** `eadfce01f44e7d0d649b2b93103abb10a21c6a37`
+on `codex/architecture/world-identity-projection`, approved/promoted 2026-10-07.
+The additive promotion-status record is in `../ARCHITECTURE_STATE.md`.
 **Current technical contract:** [P20C_TECHNICAL_DESIGN_RECORD.md](P20C_TECHNICAL_DESIGN_RECORD.md)
 plus the immutable retained design ref it names.
 
@@ -65,8 +69,9 @@ for Architect code edits.
 
 ## Execution and delivery gate
 
-After current-base technical approval and normal architecture promotion,
-Master may schedule an isolated P20-C validation/integration workflow. It must
+The technical approval and architecture promotion are complete. Master may
+schedule an isolated P20-C implementation/validation/integration workflow.
+It must
 refresh refs, inspect existing code, choose only necessary corrections,
 validate the refreshed design's full contract, and obtain independent exact-tip
 implementation review before requesting domain promotion. A docs-only State

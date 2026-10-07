@@ -126,12 +126,15 @@ neither proves P20-C delivery nor provides a joint-travel Lab demonstration.
 See the [identity handoff](architecture/P20_CHECKPOINT_IDENTITY_RECONCILIATION_HANDOFF.md)
 and [P20-C Master handoff](architecture/P20C_JOINT_CIVIL_TRAVEL_MASTER_HANDOFF.md)
 for the current-base PASS / READY_FOR_IMPLEMENTATION technical verdict and
-remaining canonical-promotion/Master validation gates. Existing code is not
-P20-C delivery evidence; its FailedStart reconstruction correction is required.
+Master integration/validation gates. Architecture promotion is complete at
+`eadfce01f44e7d0d649b2b93103abb10a21c6a37`; P20-C is technically
+READY_FOR_IMPLEMENTATION and its Master handoff is current. Existing code is
+not P20-C delivery evidence; its FailedStart reconstruction correction remains
+required before domain promotion.
 
 ```text
 P18-A/B/C promoted + P20-A promoted + P8-E promoted
-  → P20-C current-base review → Master validation/integration workflow
+  → P20-C reviewed design promoted → Master implementation/validation workflow
 P20-B promoted Daily census boundary + current P12 composition
   → compatibility/rejection gate before P20-C domain promotion
 P20-C promoted + supported non-Unity execution/read path

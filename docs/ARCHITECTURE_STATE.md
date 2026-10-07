@@ -1,5 +1,56 @@
 # General Architecture State
 
+## P20 checkpoint identity/design promotion — 2026-10-07
+
+**Status:** ARCHITECTURE_PROMOTED for architecture/documentation only.
+**Canonical branch:** `codex/architecture/world-identity-projection`.
+**Previous canonical architecture SHA:** `e16796014d348e3b59da7ed848101c4c03926ba5`.
+**User-approved candidate and promoted content SHA:**
+`eadfce01f44e7d0d649b2b93103abb10a21c6a37` from
+`codex/architecture/p20c-reconciliation-review`.
+
+The user explicitly approved the unchanged, independently reviewed candidate.
+Final preflight confirmed matching local/remote architecture and candidate
+tips, clean writer checkout, fast-forward ancestry, applicable independent
+PASS at the exact candidate, a nine-file Markdown-only diff and successful
+`git diff --check`. The approved content was fast-forwarded and pushed to
+the canonical architecture branch. This additive State/handoff refresh records
+that completed promotion; it changes no technical or product contract.
+
+P20-A remains Synthetic Multi-participant Operation; P20-B remains promoted
+Daily-profile census admission. Its owning State, historical design/review/
+promotion evidence and Git history remain preserved. P20-C names Two-Person
+Joint Civil Travel; two Persons is only the bounded fixture.
+P20-C's [reviewed technical contract](architecture/P20C_TECHNICAL_DESIGN_RECORD.md)
+remains PASS / READY_FOR_IMPLEMENTATION, including the required same-commit
+P20/P18 FailedStart revision-token synchronization and reconstruction tests.
+No further product or semantic decision is required.
+
+**Refreshed affected readiness/DAG:**
+
+- Promoted P18-A/B/C + P20-A + P8-E → P20-C Master implementation workflow.
+  The architecture-canonical gate is now satisfied; scheduling requires a
+  safe, serialized hotspot window, not another architecture decision.
+- P20-B's existing Daily-profile census boundary + current P12 composition
+  → P20-C compatibility/rejection validation before domain promotion.
+  Daily-v1 still admits absent/empty P20 state and rejects populated state.
+- Existing P20-C travel code → REVALIDATE/correct the specified FailedStart
+  reconstruction path and produce current-base P20-C implementation evidence.
+  P20-C runtime capability remains NOT PROMOTED.
+- P20-C promoted consumer + supported Lab execution/read path → follow-up
+  joint-travel demonstration; no hidden Lab prerequisite.
+- Unrelated delivered scopes and active numbered-phase fronts →
+  UPSTREAM_IRRELEVANT to this documentation-only identity/status publication.
+  Their own canonical refs, States, implementation and gates remain intact.
+
+The [P20-C Master handoff](architecture/P20C_JOINT_CIVIL_TRAVEL_MASTER_HANDOFF.md)
+is current and implementation-ready. Master must inspect existing code before
+selecting any delta, preserve P20-A isolation, serialize P8/P18/runtime/P12
+hotspots, validate current P12 integration and obtain independent exact-tip
+implementation review before requesting P20-C domain promotion.
+No runtime code or numbered-phase canonical branch is changed; no P12 scope
+growth, Phase closure or Unity test pass is claimed.
+
 ## P20 checkpoint reconciliation candidate — 2026-10-07
 
 **Status:** VALIDATED_CANDIDATE for architecture/planning only, pending normal
