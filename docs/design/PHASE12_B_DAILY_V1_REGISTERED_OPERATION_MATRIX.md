@@ -1,0 +1,61 @@
+# P12-B selected Daily-v1 registered operation matrix
+
+**Audit base:** `89b2368e9756069b2f52cd7cf17c26735f7c103f`
+
+**Profile:** selected `UnityBootstrap-Daily-v1`, after the accepted P9-B-only profile correction.
+
+**Status:** source-linked audit of the 23 currently registered operation IDs; not a completeness certification.
+
+This matrix maps each registered operation to the known runtime entrypoint, owner/revision families, invalidation boundary, and retained focused tests. The profile correction and later census-evidence promotion are test/configuration-boundary work; they do not change the production operation implementation audited here.
+
+## Registered operations
+
+### Runtime composition and outer boundaries
+
+1. **`runtime.npc-membership`** — `TryRegisterNpc`, `TryUnregisterNpc`, Person materialization, and existing-NPC binding. Changes the fixed RuntimeIdentity NPC section, the exact per-NPC owner sections for each new/removed runtime, Person membership/materialization binding sections, and affected City-presence sections. Each owner keeps its local revision. The membership scope reserves one epoch and reconciles the exact changed-provider set at the outer scope close. Evidence: `SelectedDailyV1NpcMembershipCommitsIdentityAndKeepsItAfterUnregister`, P12 population/materialization lifecycle tests, and owner-specific census suites.
+2. **`runtime.bootstrap-publication`** — profile validation through publication after runtime and census construction. The authored P9 geography and baseline owners exist before the sealed baseline; publication is not a post-baseline domain write. Scope remains active through validation/publication and revokes failed publication. Evidence: `BootstrapScopesValidationThroughPublicationAndRevokesFailedPublication`, `UnityBootstrapDailyV1PreDraftFailureNeverPublishesIdentityOrRetries`, `SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne`, and the admission counterpart.
+3. **`runtime.advance-day`** — SampleScene clock action through the runtime-owned clock dispatcher and daily core. The outer day scope stays active while nested successful owner writes notify their exact changed sections; it is not one day-wide epoch. `SimulationTime.AbsoluteDay` is the boundary identity, not a separate post-boundary owner revision. Evidence: `DailyProfileScopesAdvancesAndRoutesOwnedClockThroughRuntime`, wrong-thread/interrupted-advance coverage, and the daily owner suites listed below.
+
+### Travel
+
+4. **`runtime.travel.start`** — selected solo Travel action. Writes the actor MoneyAccount, NPC TravelState, the origin City-presence section if changed, TravelPlan, both SpatialKnowledge sections, RuntimeIdAllocator event counter, and record sequence as applicable. Each owner keeps its own revision. Preflight and nested work remain inside the operation; changed sections flush at close, and compensation or a later event failure preserves notification for already committed leaves. Evidence: `P12SoloTravelStartOperationTests.DailySelectedTravelStart_BatchesOwnerCallbacksUnderNestedOperation` and its compensation, no-op, and rejection cases.
+5. **`runtime.travel-party.start`** — runtime/TeseSimulacao group-start facade. Writes the TravelParty store and allocator plus affected participant travel, City-presence, SpatialKnowledge, account, record-sequence, event-counter, and Knowledge owners as applicable. The adapter preflights and sends one changed-section epoch batch at close. Evidence: `P12TravelPartyStartOperationTests.RuntimeStartRegistersExactAllocatorWitnessAndPublishesOneSharedEpoch` plus compensation, saturation, and wrong-thread cases.
+6. **`runtime.travel-party.advance`** — daily `TravelPartySystem.AdvanceParties`. Writes the Party store, member TravelState, arrival City-presence, SpatialKnowledge, and record sequence where affected. Exact roster preflight and one changed-section epoch batch occur at scope close under the outer day operation. Evidence: `P12TravelPartyAdvanceTests.DailyTravelPartyAdvanceBatchesOwnersAndSequenceUnderNestedOperation`, partial-progress/failure, and roster-reconciliation cases.
+
+### Economy and merchant work
+
+7. **`runtime.economy.npc-trade`** — buyer/seller MoneyAccount and Inventory owners. Preflights four exact sections; owner-local revisions and per-leaf notifications follow actual commits, including successful compensation. A later failed leaf does not erase earlier committed facts. Evidence: `P12NpcTrade_NotifiesEachCommittedAccountAndInventoryOwner`, compensation/stale/saturation tests, and `EconomyTransactionTests.NpcTrade_SuccessMovesItemsAndMoneyAtomically`.
+8. **`runtime.economy.money-transfer`** — source/destination MoneyAccount sections and local revisions. The scope spans transfer or compensation; each committed debit/credit leaf is notified. Evidence: `P12MoneyTransfer_ScopesExactAccountCommitsAndKeepsZeroValueAsNoOp`, compensation/wrong-thread cases, and the MoneyTransfer domain suite.
+9. **`runtime.economy.market-purchase`** — exact actor account, Inventory, and City Market stock-row owners and revisions. Scope stays active over debit/remove/add/refund work; each committed owner leaf is notified. Evidence: `P12MarketWrappers_UseSharedServiceAndNotifyEveryCommittedOwner`, P12 market-purchase tests, and Open purchase tests.
+10. **`runtime.economy.market-sale`** — the same account, Inventory, and City stock-row owners for sale/credit/removal/addition/refund paths. Notifications follow each committed leaf inside the sale scope. Evidence: P12 market-sale tests, `P12MarketWrappers_UseSharedServiceAndNotifyEveryCommittedOwner`, and Open sale tests.
+11. **`runtime.merchant.advance-npc-trade-state`** — one actor MerchantTradePlan and TravelPlan, two SpatialKnowledge sections, and three CommercialKnowledge sections sharing their owner's revision. The scope validates exact owners and batches the union of changed sections once at close. Evidence: `MerchantOperationBatchesChangedOwnerSectionsOnceAndHoldsScopeThroughCommit` and `DailyKnowledgeWritersRefreshOwnerBaselinesBeforeMerchantRosterCall`.
+
+### Other bounded owner commits
+
+12. **`p12.institution-office.owner-commit`** — Institution and Office record, incumbency, and tenure views (`p12e.institution.records`, `p12e.office.records`, `.incumbencies`, `.tenures`) over the exact InstitutionStore/OfficeStore revisions. Successful façade commits notify affected views together. Evidence: `InstitutionOfficeCensusTests.SelectedDailyV1InstitutionOfficeCommitsAdvanceOneSharedEpoch`.
+13. **`p12.faction.owner-commit`** — faction records and affiliation views on the exact FactionStore shared revision. Registration/add/end façade paths notify the affected sections. Evidence: `P12FactionStoreCensusTests.DailyProfileTracksEverySuccessfulFacadeCommitAndLeavesRejectedCommitsUnchanged`.
+14. **`p12.political-claim.owner-commit`** — political-claim records and recognition views on the exact store revision. A logical mutation can advance the shared local revision while changing one view's count; both views are refreshed as required. Evidence: `P12PoliticalClaimCensusTests.DailyProfileTracksSuccessfulFacadeCommitsAndLeavesRejectedCommitsUnchanged`.
+15. **`p12.political-support.owner-commit`** — PoliticalSupport relation section and its store-local revision. Registration/add/end transitions notify; proposals and read-only queries do not. Evidence: `P12PoliticalSupportCensusTests.DailyProfileTracksCommitsAndLeavesProposalsAndRejectedWritesUnchanged`.
+16. **`p12.property.owner-commit`** — property ownership and transfer-history sections with their exact owners/local revisions. Registration and transfer, including nested succession transfer, notify affected sections after commit. Evidence: `PropertyEstateMutationEpochTests.DailyAdmissionRegistersExactOwnersAndTracksBoundedPropertyEstateCommits`.
+17. **`p12.estate.owner-commit`** — Estate records and exact EstateStore/local revision, through the explicit estate-opening scope. Evidence: the same Property/Estate mutation test and Estate owner-census tests.
+
+### Population and Person lifecycle
+
+18. **`runtime.population.immigration`** — City aggregate plus the exact NPC-residence or Person-life/residence owner, and affected NPC life/current-action sections. Local revisions and epoch capacity are preflighted; one notification follows the completed operation. Evidence: `SelectedDailyProfileTracksImmigrationEmigrationAndResidentDeathOnceEach`.
+19. **`runtime.population.emigration`** — the same City aggregate and NPC/Person residence owner families, with one reserved epoch notification after the paired change. Evidence: the same selected-profile population lifecycle test.
+20. **`runtime.population.resident-death`** — City aggregate, NPC life-state and NPC residence or Person life/residence, plus current-action if death clears it. Revisions and epoch capacity are reserved before writes; one completion notification follows. Evidence: the selected-profile population lifecycle test and Person-backed resident-death cases.
+21. **`runtime.population.residence-migration`** — origin/destination City aggregate sections and the exact NPC residence or Person life/residence section. Paired population/residence commits preflight local revisions and publish one reserved epoch. Evidence: `PairedResidenceMigrationRequiresRuntimeBoundaryAndAdvancesOneEpoch`.
+22. **`runtime.person.death`** — supported unkeyed, receipt-free direct Person death. Changes Person life/residence, and when materialized the NPC life/current-action sections and resident City aggregate as applicable. One complete reserved operation epoch covers these owners. Keyed/receipt-bearing forms are rejected under P12. Evidence: `PersonResidenceBindingAndReceiptFreeDeathUseCompleteOneEpochBoundaries` and direct Person death cases.
+23. **`runtime.person.residence-bind`** — exact `p12b.person-life-residence/{PersonId}` section and Person local revision for existing-resident binding; one reserved operation notification. Evidence: the Person binding/lifecycle test above.
+
+## Profile exclusions and evidence boundary
+
+- P9-B P8-A geography is authored before runtime baseline; no later Daily writer is implied.
+- P8-B/C and P8-E mutators have no selected Daily-v1 callsite. P10-A and P14-A/B are rejected before identity allocation under this profile.
+- P18 timeline/receipt paths and external WorldCommand input are outside this Daily-v1 contract. The ActorChoice queue has no selected production registration/caller.
+- Military owner witnesses are Required at zero, while P16/P17 mutation paths are configuration-gated. Expedition autonomy is not composed by the production Daily bootstrap and remains deferred to P12-F dependencies.
+- Institution, faction, claim, support, property, and estate façades are supported runtime entrypoints even when the automatic daily actor loop does not call them; their focused suites exercise successful and rejected façade paths.
+
+This audit accounts for all 23 registered operation IDs and their current known scopes. Registration-to-scope mapping does not prove those IDs exhaust every supported production ingress, that all 275 effective section/cardinality rows are documented, or that every successful commit path has been independently observed. No specific additional supported Daily-v1 writer or missing epoch edge was identified. The remaining evidence work is to link every effective census row to its exact owner/revision and every supported successful ingress to its committed sections and enclosing scope; then prove runtime-wide owner-thread/quiescence and validate a completed-boundary token tied to the successful advance sequence. An idle `CurrentDay` read is not that token.
+
+P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`. This matrix grants no capture, export, hydration, or downstream readiness.
