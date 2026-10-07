@@ -57,4 +57,3 @@ git diff --check passed on all nine implementation/test files after validation. 
 ## R2 evidence
 
 Superseded by Gate 2 R2 for candidate code tip d6988c966288257bcc9ca2b79b264c634d6a28ab. The R2 reports, exact source hashes, and updated test counts are recorded in docs/validation/P12BBoundedCompletionGate2R2/VALIDATION.md.
-
