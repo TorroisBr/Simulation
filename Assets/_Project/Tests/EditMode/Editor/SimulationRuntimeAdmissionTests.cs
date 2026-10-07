@@ -1612,6 +1612,48 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void UnityBootstrapDailyRejectsExogenousMaterialFlowBeforeIdentityOrOwnerConstruction()
+    {
+        SimulationConfigData config = CreateP14AdmissionConfig(
+            LocalMaterialFlowProfile.ExogenousDaily, 0, out _);
+        GameObject bootstrapObject = new GameObject("P14-A rejected by P12 Daily profile");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(bootstrap, config);
+            int worldIdentityAllocations = 0;
+            WritePrivateField(bootstrap, "worldIdentityAllocator", new Func<WorldId>(() =>
+            {
+                worldIdentityAllocations++;
+                return null;
+            }));
+            List<string> completedStages = new List<string>();
+
+            TargetInvocationException thrown = Assert.Throws<TargetInvocationException>(() =>
+                InvokeInitializeSimulation(bootstrap, completedStages.Add));
+
+            Assert.That(thrown.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.That(thrown.InnerException.Message, Does.Contain("P14-A"));
+            Assert.That(completedStages, Is.Empty, "resolve-profile fails before its stage completion callback");
+            Assert.That(worldIdentityAllocations, Is.Zero);
+            Assert.That(ReadPrivateField<RuntimeIdAllocator>(bootstrap, "runtimeIdAllocator"), Is.Null);
+            Assert.That(ReadPrivateField<SimulationRuntime>(bootstrap, "simulationRuntime"), Is.Null);
+            Assert.That(ReadPrivateField<SimulationBootstrapComposition>(bootstrap, "draftComposition"), Is.Null);
+            Assert.That(ReadPrivateField<SimulationBootstrapComposition>(bootstrap, "publishedComposition"), Is.Null);
+            Assert.That(ReadPrivateField<List<CityRuntime>>(bootstrap, "cityRuntimeList"), Is.Empty);
+            Assert.That(ReadPrivateField<bool>(bootstrap, "bootstrapFailed"), Is.True);
+            Assert.That(bootstrap.Bootstrap, Is.Null);
+            Assert.That(bootstrap.Runtime, Is.Null);
+            Assert.That(bootstrap.CurrentDay, Is.Zero);
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    [Test]
     public void P14AExogenousMaterialFlowRunsInItsSingleCityProvingProfile()
     {
         SimulationConfigData config = CreateP14AdmissionConfig(

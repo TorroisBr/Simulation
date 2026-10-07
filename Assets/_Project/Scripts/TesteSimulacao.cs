@@ -488,12 +488,16 @@ public class TesteSimulacao : MonoBehaviour
                 "P14-B finite source profile rejected before CityRuntime construction: " + cardinalityRejection);
 
         if (admissionContext == null
-            || admissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
-            || !FiniteSourceProfileAdmission.HasFiniteReserveProfile(config.Cities))
+            || admissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
             return;
 
-        throw new System.InvalidOperationException(
-            "P14-B finite source profile is not admitted by the Unity bootstrap daily profile.");
+        if (FiniteSourceProfileAdmission.HasFiniteReserveProfile(config.Cities))
+            throw new System.InvalidOperationException(
+                "P14-B finite source profile is not admitted by the Unity bootstrap daily profile.");
+
+        if (FiniteSourceProfileAdmission.HasAuthoredMaterialFlowCity(config.Cities))
+            throw new System.InvalidOperationException(
+                "P14-A authored material-flow profile is not admitted by the Unity bootstrap daily profile.");
     }
 
     private void ValidateCandidateProfile()
