@@ -268,6 +268,52 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyCaptureTokenSurvivesCleanAbsoluteDayOverflowPreflight()
+    {
+        SimulationRuntime runtime = CreatePublishedDailyCaptureRuntime(
+            new SimulationTime(long.MaxValue - 1L));
+
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstFailure), Is.True,
+            firstFailure.ToString());
+        Assert.That(runtime.CurrentDay, Is.EqualTo(long.MaxValue));
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken priorToken,
+            out DailyCaptureEligibilityFailure priorFailure), Is.True, priorFailure.ToString());
+        Assert.That(priorToken.AbsoluteDay, Is.EqualTo(long.MaxValue));
+        Assert.That(priorToken.CompletedCoreSequence, Is.EqualTo(1L));
+
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure overflowFailure), Is.False);
+        Assert.That(overflowFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow));
+        Assert.That(runtime.CurrentDay, Is.EqualTo(long.MaxValue));
+        Assert.That(ReadPrivateField<long>(runtime, "completedDailyCoreSequence"), Is.EqualTo(1L));
+        Assert.That(runtime.TryValidateCompletedDailyCaptureToken(
+            priorToken, out DailyCaptureEligibilityFailure validateFailure), Is.True,
+            validateFailure.ToString());
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken retainedToken,
+            out DailyCaptureEligibilityFailure retainedFailure), Is.True, retainedFailure.ToString());
+        Assert.That(retainedToken, Is.SameAs(priorToken));
+    }
+
+    [Test]
+    public void DailyCapturePartialBatchAtAbsoluteDayOverflowPublishesNoToken()
+    {
+        SimulationRuntime runtime = CreatePublishedDailyCaptureRuntime(
+            new SimulationTime(long.MaxValue - 2L));
+
+        Assert.That(runtime.TryAdvanceDays(
+            3, out int daysAdvanced, out SimulationRuntimeAdvanceFailure failure), Is.False);
+
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow));
+        Assert.That(daysAdvanced, Is.EqualTo(2));
+        Assert.That(runtime.CurrentDay, Is.EqualTo(long.MaxValue));
+        Assert.That(ReadPrivateField<long>(runtime, "completedDailyCoreSequence"), Is.EqualTo(2L));
+        Assert.That(ReadPrivateField<DailyCaptureEligibilityToken>(runtime, "currentDailyCaptureToken"), Is.Null);
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+            out _, out DailyCaptureEligibilityFailure tokenFailure), Is.False);
+        Assert.That(tokenFailure, Is.EqualTo(DailyCaptureEligibilityFailure.NoCompletedBoundary));
+    }
+    [Test]
     public void CompletedDailyTokenRejectsFinalCensusMismatchAfterCompletedBatchCores()
     {
         NpcActionData action = SimulationTestFactory.CreateAction("daily-token-final-census", NpcActionType.Travel);
