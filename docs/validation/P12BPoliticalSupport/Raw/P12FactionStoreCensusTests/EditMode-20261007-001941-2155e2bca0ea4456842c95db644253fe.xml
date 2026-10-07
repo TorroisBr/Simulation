@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="5" result="Passed" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-07 00:19:49Z" end-time="2026-10-07 00:19:49Z" duration="0,0878983">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2434" result="Passed" start-time="2026-10-07 00:19:49Z" end-time="2026-10-07 00:19:49Z" duration="0.087898" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3648" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12b-political-claim-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2434" result="Passed" start-time="2026-10-07 00:19:49Z" end-time="2026-10-07 00:19:49Z" duration="0.077123" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="70140" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2508" name="P12FactionStoreCensusTests" fullname="P12FactionStoreCensusTests" classname="P12FactionStoreCensusTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-07 00:19:49Z" end-time="2026-10-07 00:19:49Z" duration="0.064685" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2513" name="DailyProfileRejectsFactionCommitAgainstStaleSectionBaselineBeforeMutation" fullname="P12FactionStoreCensusTests.DailyProfileRejectsFactionCommitAgainstStaleSectionBaselineBeforeMutation" methodname="DailyProfileRejectsFactionCommitAgainstStaleSectionBaselineBeforeMutation" classname="P12FactionStoreCensusTests" runstate="Runnable" seed="1130594792" result="Passed" start-time="2026-10-07 00:19:49Z" end-time="2026-10-07 00:19:49Z" duration="0.049803" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2511" name="DailyProfileRejectsFactionCommitOffOwnerThreadBeforeMutation" fullname="P12FactionStoreCensusTests.DailyProfileRejectsFactionCommitOffOwnerThreadBeforeMutation" methodname="DailyProfileRejectsFactionCommitOffOwnerThreadBeforeMutation" classname="P12FactionStoreCensusTests" runstate="Runnable" seed="1780598066" result="Passed" start-time="2026-10-07 00:19:49Z" end-time="2026-10-07 00:19:49Z" duration="0.000919" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2512" name="DailyProfileRejectsFactionCommitWhenSharedEpochIsExhausted" fullname="P12FactionStoreCensusTests.DailyProfileRejectsFactionCommitWhenSharedEpochIsExhausted" methodname="DailyProfileRejectsFactionCommitWhenSharedEpochIsExhausted" classname="P12FactionStoreCensusTests" runstate="Runnable" seed="2126574312" result="Passed" start-time="2026-10-07 00:19:49Z" end-time="2026-10-07 00:19:49Z" duration="0.000395" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2510" name="DailyProfileTracksEverySuccessfulFacadeCommitAndLeavesRejectedCommitsUnchanged" fullname="P12FactionStoreCensusTests.DailyProfileTracksEverySuccessfulFacadeCommitAndLeavesRejectedCommitsUnchanged" methodname="DailyProfileTracksEverySuccessfulFacadeCommitAndLeavesRejectedCommitsUnchanged" classname="P12FactionStoreCensusTests" runstate="Runnable" seed="2119742301" result="Passed" start-time="2026-10-07 00:19:49Z" end-time="2026-10-07 00:19:49Z" duration="0.004069" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2509" name="ProvidersExposeSeparateCountsForOneExactOwnerAndSharedRevision" fullname="P12FactionStoreCensusTests.ProvidersExposeSeparateCountsForOneExactOwnerAndSharedRevision" methodname="ProvidersExposeSeparateCountsForOneExactOwnerAndSharedRevision" classname="P12FactionStoreCensusTests" runstate="Runnable" seed="1580668907" result="Passed" start-time="2026-10-07 00:19:49Z" end-time="2026-10-07 00:19:49Z" duration="0.001299" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="7" result="Passed" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-07 00:18:54Z" end-time="2026-10-07 00:18:54Z" duration="0,167567">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2434" result="Passed" start-time="2026-10-07 00:18:54Z" end-time="2026-10-07 00:18:54Z" duration="0.167567" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3648" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12b-political-claim-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2434" result="Passed" start-time="2026-10-07 00:18:54Z" end-time="2026-10-07 00:18:54Z" duration="0.138701" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="84640" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2833" name="PoliticalKnowledgeSupportWorldIntegrationTests" fullname="PoliticalKnowledgeSupportWorldIntegrationTests" classname="PoliticalKnowledgeSupportWorldIntegrationTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-07 00:18:54Z" end-time="2026-10-07 00:18:54Z" duration="0.124052" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2837" name="ConsumerKnowledgeSnapshotsCannotMutateWorldKnowledge" fullname="PoliticalKnowledgeSupportWorldIntegrationTests.ConsumerKnowledgeSnapshotsCannotMutateWorldKnowledge" methodname="ConsumerKnowledgeSnapshotsCannotMutateWorldKnowledge" classname="PoliticalKnowledgeSupportWorldIntegrationTests" runstate="Runnable" seed="1224633813" result="Passed" start-time="2026-10-07 00:18:54Z" end-time="2026-10-07 00:18:54Z" duration="0.036950" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2836" name="FactionPoliticalKnowledgeHolderIsIndependentFromMemberKnowledge" fullname="PoliticalKnowledgeSupportWorldIntegrationTests.FactionPoliticalKnowledgeHolderIsIndependentFromMemberKnowledge" methodname="FactionPoliticalKnowledgeHolderIsIndependentFromMemberKnowledge" classname="PoliticalKnowledgeSupportWorldIntegrationTests" runstate="Runnable" seed="783076573" result="Passed" start-time="2026-10-07 00:18:54Z" end-time="2026-10-07 00:18:54Z" duration="0.005220" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2840" name="PoliticalKnowledgeDiagnosticsRejectForgedClaimStateAndOrphanProvenance" fullname="PoliticalKnowledgeSupportWorldIntegrationTests.PoliticalKnowledgeDiagnosticsRejectForgedClaimStateAndOrphanProvenance" methodname="PoliticalKnowledgeDiagnosticsRejectForgedClaimStateAndOrphanProvenance" classname="PoliticalKnowledgeSupportWorldIntegrationTests" runstate="Runnable" seed="1691444963" result="Passed" start-time="2026-10-07 00:18:54Z" end-time="2026-10-07 00:18:54Z" duration="0.039771" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2835" name="PoliticalKnowledgeIsHolderScopedAndCannotReceiveFutureObservations" fullname="PoliticalKnowledgeSupportWorldIntegrationTests.PoliticalKnowledgeIsHolderScopedAndCannotReceiveFutureObservations" methodname="PoliticalKnowledgeIsHolderScopedAndCannotReceiveFutureObservations" classname="PoliticalKnowledgeSupportWorldIntegrationTests" runstate="Runnable" seed="2159005" result="Passed" start-time="2026-10-07 00:18:54Z" end-time="2026-10-07 00:18:54Z" duration="0.014277" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2838" name="PoliticalSupportAppearsInCanonicalDiagnosticsAndDiffs" fullname="PoliticalKnowledgeSupportWorldIntegrationTests.PoliticalSupportAppearsInCanonicalDiagnosticsAndDiffs" methodname="PoliticalSupportAppearsInCanonicalDiagnosticsAndDiffs" classname="PoliticalKnowledgeSupportWorldIntegrationTests" runstate="Runnable" seed="708435762" result="Passed" start-time="2026-10-07 00:18:54Z" end-time="2026-10-07 00:18:54Z" duration="0.010821" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2839" name="PoliticalSupportDiagnosticsKeepDistinctDelimiterPairsAndRejectMalformedEndpointsSafely" fullname="PoliticalKnowledgeSupportWorldIntegrationTests.PoliticalSupportDiagnosticsKeepDistinctDelimiterPairsAndRejectMalformedEndpointsSafely" methodname="PoliticalSupportDiagnosticsKeepDistinctDelimiterPairsAndRejectMalformedEndpointsSafely" classname="PoliticalKnowledgeSupportWorldIntegrationTests" runstate="Runnable" seed="1030398691" result="Passed" start-time="2026-10-07 00:18:54Z" end-time="2026-10-07 00:18:54Z" duration="0.005501" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2834" name="SupportIsWorldOwnedAndUsesAuthoritativeCurrentDayTransitions" fullname="PoliticalKnowledgeSupportWorldIntegrationTests.SupportIsWorldOwnedAndUsesAuthoritativeCurrentDayTransitions" methodname="SupportIsWorldOwnedAndUsesAuthoritativeCurrentDayTransitions" classname="PoliticalKnowledgeSupportWorldIntegrationTests" runstate="Runnable" seed="656259422" result="Passed" start-time="2026-10-07 00:18:54Z" end-time="2026-10-07 00:18:54Z" duration="0.002851" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
