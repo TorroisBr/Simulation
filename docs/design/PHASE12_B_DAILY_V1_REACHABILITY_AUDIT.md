@@ -2,9 +2,10 @@
 
 **Audit status:** the exact-base source audit found one supported
 operation/epoch gap and three missing fixed owner rows. The bounded correction
-is implemented and focused validation passes; independent exact-tip review of
-this Gate 1 evidence is pending. The completed-boundary token remains gated on
-that review.
+is implemented, focused validation passes, and the exact-tip Gate 1 review is
+PASS (recorded in
+[`PHASE12_B_DAILY_V1_GATE1_REVIEW_RECORD.md`](PHASE12_B_DAILY_V1_GATE1_REVIEW_RECORD.md)).
+The owner-thread/quiescence and completed-boundary-token gates remain open.
 
 **Exact source baseline:** P12 canonical
 `94551b08be8cc9347de35eae5051b8e578ea4c1e`.
