@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="7" result="Passed" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-07 03:20:08Z" end-time="2026-10-07 03:20:08Z" duration="0,2176236">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2442" result="Passed" start-time="2026-10-07 03:20:08Z" end-time="2026-10-07 03:20:08Z" duration="0.217624" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3657" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12b-spatial-profile-cardinality-validation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2442" result="Passed" start-time="2026-10-07 03:20:08Z" end-time="2026-10-07 03:20:08Z" duration="0.201584" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="75828" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3536" name="WorldExchangeV2ProducerTests" fullname="WorldExchangeV2ProducerTests" classname="WorldExchangeV2ProducerTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-07 03:20:08Z" end-time="2026-10-07 03:20:08Z" duration="0.186025" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3537" name="ArtifactUsesCanonicalIdentityCompleteFactionCoverageAndUnsupportedOtherCollections" fullname="WorldExchangeV2ProducerTests.ArtifactUsesCanonicalIdentityCompleteFactionCoverageAndUnsupportedOtherCollections" methodname="ArtifactUsesCanonicalIdentityCompleteFactionCoverageAndUnsupportedOtherCollections" classname="WorldExchangeV2ProducerTests" runstate="Runnable" seed="422464791" result="Passed" start-time="2026-10-07 03:20:08Z" end-time="2026-10-07 03:20:08Z" duration="0.019115" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3541" name="AtomicPublisherWritesAndReplacesOnlyValidatedWorldArtifacts" fullname="WorldExchangeV2ProducerTests.AtomicPublisherWritesAndReplacesOnlyValidatedWorldArtifacts" methodname="AtomicPublisherWritesAndReplacesOnlyValidatedWorldArtifacts" classname="WorldExchangeV2ProducerTests" runstate="Runnable" seed="1740550008" result="Passed" start-time="2026-10-07 03:20:08Z" end-time="2026-10-07 03:20:08Z" duration="0.009675" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3538" name="EmptyFactionOwnerIsKnownEmptyAndNeverConfusedWithUnsupportedCollections" fullname="WorldExchangeV2ProducerTests.EmptyFactionOwnerIsKnownEmptyAndNeverConfusedWithUnsupportedCollections" methodname="EmptyFactionOwnerIsKnownEmptyAndNeverConfusedWithUnsupportedCollections" classname="WorldExchangeV2ProducerTests" runstate="Runnable" seed="470453244" result="Passed" start-time="2026-10-07 03:20:08Z" end-time="2026-10-07 03:20:08Z" duration="0.000679" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3539" name="FactionIdentityMappingIsStrictUtf8ReversibleAndStable" fullname="WorldExchangeV2ProducerTests.FactionIdentityMappingIsStrictUtf8ReversibleAndStable" methodname="FactionIdentityMappingIsStrictUtf8ReversibleAndStable" classname="WorldExchangeV2ProducerTests" runstate="Runnable" seed="331636405" result="Passed" start-time="2026-10-07 03:20:08Z" end-time="2026-10-07 03:20:08Z" duration="0.000655" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3542" name="PublishedBootstrapExportsOneCoherentFactionProjectionWithoutMembershipOrWorldName" fullname="WorldExchangeV2ProducerTests.PublishedBootstrapExportsOneCoherentFactionProjectionWithoutMembershipOrWorldName" methodname="PublishedBootstrapExportsOneCoherentFactionProjectionWithoutMembershipOrWorldName" classname="WorldExchangeV2ProducerTests" runstate="Runnable" seed="1301997072" result="Passed" start-time="2026-10-07 03:20:08Z" end-time="2026-10-07 03:20:08Z" duration="0.139905" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3540" name="SerializationIsByteDeterministicAndEscapesNamesWithoutAddingClaims" fullname="WorldExchangeV2ProducerTests.SerializationIsByteDeterministicAndEscapesNamesWithoutAddingClaims" methodname="SerializationIsByteDeterministicAndEscapesNamesWithoutAddingClaims" classname="WorldExchangeV2ProducerTests" runstate="Runnable" seed="1926967213" result="Passed" start-time="2026-10-07 03:20:08Z" end-time="2026-10-07 03:20:08Z" duration="0.000840" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3543" name="UnavailableOrInvalidFactualReadBlocksExportAndPreservesReviewedDiagnostic" fullname="WorldExchangeV2ProducerTests.UnavailableOrInvalidFactualReadBlocksExportAndPreservesReviewedDiagnostic" methodname="UnavailableOrInvalidFactualReadBlocksExportAndPreservesReviewedDiagnostic" classname="WorldExchangeV2ProducerTests" runstate="Runnable" seed="1911657015" result="Passed" start-time="2026-10-07 03:20:08Z" end-time="2026-10-07 03:20:08Z" duration="0.004811" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
