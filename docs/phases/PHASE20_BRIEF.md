@@ -104,6 +104,10 @@ to demonstrate the generic capability.
 
 ## Historical P20-B travel proposal — 2026-10-03 (current identity: P20-C)
 
+The following paragraph preserves the dated proposal language. Its travel
+references to P20-B now denote P20-C; they are not current instructions for the
+promoted P20-B admission checkpoint.
+
 Joint travel of two independent Persons over one supported civil leg remains the smallest real consumer recommended for technical design. It consumes promoted P18-A/B/C, P20-A coordination seams and relevant P8-E explicit Person travel/position/passage capability. P8-E has no group travel or automatic intraday execution, so P20-B must design a coherent shared start and individual domain-owned travel transitions, stale/current passage checks, reservations, cancellation and distinct participant effects/Knowledge. P11 is conditional on adding external commands. The v1 traveler requirement may be narrow without making exactly two, one role, one common full-duration interval or travel itself universal Activity semantics. No persistent Group, generic workflow engine, production, mod loader or War scope is approved.
 
 

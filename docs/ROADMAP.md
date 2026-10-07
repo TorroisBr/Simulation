@@ -125,7 +125,9 @@ records remain identifiable and are not rewritten. P20-B's admission promotion
 neither proves P20-C delivery nor provides a joint-travel Lab demonstration.
 See the [identity handoff](architecture/P20_CHECKPOINT_IDENTITY_RECONCILIATION_HANDOFF.md)
 and [P20-C Master handoff](architecture/P20C_JOINT_CIVIL_TRAVEL_MASTER_HANDOFF.md)
-for current-base technical review, exact readiness and remaining gates.
+for the current-base PASS / READY_FOR_IMPLEMENTATION technical verdict and
+remaining canonical-promotion/Master validation gates. Existing code is not
+P20-C delivery evidence; its FailedStart reconstruction correction is required.
 
 ```text
 P18-A/B/C promoted + P20-A promoted + P8-E promoted
@@ -210,7 +212,7 @@ complete continuation of chosen world/profile + causal history + compatible exec
   → P13 authoritative reconstruction and independent fork
 ```
 
-P13 retention/checkpoint and causal-input design is ready as isolated architecture work; P15-A/P16-A have approved bounded scope and reviewed technical design, so the Master may start isolated implementation workflows before P12 closure after checking current prerequisites. P10-B/P14-B/P20-B are bounded design candidates, not implementation-ready capabilities. The Master may run P15-A/P16-A in separate worktrees while P12-B continues, serializing shared `SimulationRuntime`, spatial/domain owner and persistence-composition hotspots at integration. No closed phase is reopened by this dependency clarification.
+P13 retention/checkpoint and causal-input design is ready as isolated architecture work; P15-A/P16-A have approved bounded scope and reviewed technical design, so the Master may start isolated implementation workflows before P12 closure after checking current prerequisites. At this dated snapshot, P10-B/P14-B and the travel proposal then labeled P20-B were bounded design candidates, not implementation-ready capabilities. Current travel identity/readiness is P20-C as recorded above. The Master may run P15-A/P16-A in separate worktrees while P12-B continues, serializing shared `SimulationRuntime`, spatial/domain owner and persistence-composition hotspots at integration. No closed phase is reopened by this dependency clarification.
 
 WI-A, FR-B and FR-C integrations and the bounded WX-D World Exchange v2 producer have since been promoted/handed off through P12 canonical. Simulation-External `main` at `0ce8403` owns the v2 `collectionCoverage` contract. These delivered cross-cutting slices do not supply P12 capture, save/load or P13 fork. The checkpoint table below records **their planning readiness when its 2026-10-01 design was promoted**, not current delivery; use current owning States and code for delivery.
 

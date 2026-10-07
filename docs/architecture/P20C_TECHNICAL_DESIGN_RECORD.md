@@ -1,7 +1,8 @@
 # P20-C — Two-Person Joint Civil Travel: refreshed technical design record
 
 **Checkpoint:** P20-C. **Date:** 2026-10-07.
-**Disposition:** retained semantic design with bounded current-base corrections;
+**Disposition:** refreshed technical contract — PASS / READY_FOR_IMPLEMENTATION,
+retaining the semantic design with bounded current-base corrections;
 independent review is recorded in [P20C_TECHNICAL_REVIEW.md](P20C_TECHNICAL_REVIEW.md).
 This record and its immutable source together form the current technical
 contract; historical P20-B travel documents alone are not current instructions.

@@ -1,5 +1,40 @@
 # General Architecture State
 
+## P20 checkpoint reconciliation candidate — 2026-10-07
+
+**Status:** VALIDATED_CANDIDATE for architecture/planning only, pending normal
+human canonical promotion approval.
+**Canonical branch/base verified locally and remotely:**
+`codex/architecture/world-identity-projection` at
+`e16796014d348e3b59da7ed848101c4c03926ba5`.
+**Candidate branch:** `codex/architecture/p20c-reconciliation-review`.
+**Source:** draft PR #1, head `9f24c4483bb4db0364cd3699f24f0e3d0868717c`;
+reviewed reconciliation/design content `461a045cbdc81c1e34faedc56e73b0c6878d3213`.
+
+The user accepted the checkpoint identity decision: P20-A remains Synthetic
+Multi-participant Operation; P20-B remains the promoted Daily-profile census
+admission checkpoint; P20-C becomes Two-Person Joint Civil Travel. Two Persons
+is only the proving fixture. Roadmap, Brief, decision annotation and Lab
+dependencies now carry that reconciliation in this candidate. Historical
+architecture entries below, historical design/review refs and numbered-phase
+P20-B promotion/State evidence remain intact.
+
+The [refreshed P20-C contract](architecture/P20C_TECHNICAL_DESIGN_RECORD.md)
+received [independent PASS / READY_FOR_IMPLEMENTATION](architecture/P20C_TECHNICAL_REVIEW.md).
+The old design cannot be dispatched unchanged: the refreshed record names
+current identity/bases/APIs and closes a concrete FailedStart revision/
+reconstruction boundary. Existing code still needs that bounded correction
+and P20-C-specific validation/integration review before a delivery claim.
+Master scheduling waits for architecture-canonical promotion and safe hotspot
+ownership; there is no remaining product or semantic choice in this slice.
+
+The [durable Master handoff](architecture/P20C_JOINT_CIVIL_TRAVEL_MASTER_HANDOFF.md)
+preserves P20-B's absent/empty admission and populated-owner rejection and
+requires compatibility proof against current P12. No P12 scope/file change,
+P20-C runtime implementation, Phase closure, active Master checkout edit or
+reopening of closed phases is included. Documentation validation consists of
+full-diff review and diff-check; no Unity run is claimed.
+
 ## Development/presentation artifact authority promotion — 2026-10-05
 
 **Status:** `ARCHITECTURE_PROMOTED` for documentation/architecture only.

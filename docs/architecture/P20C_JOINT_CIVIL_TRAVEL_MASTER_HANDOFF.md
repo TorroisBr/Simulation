@@ -1,9 +1,11 @@
 # P20-C Master handoff — Two-Person Joint Civil Travel
 
-**Status:** current-base technical design prepared for independent review.
-**Readiness:** review outcome is recorded in
-[P20C_TECHNICAL_REVIEW.md](P20C_TECHNICAL_REVIEW.md); no P20-C code promotion
-or implementation authorization is implied.
+**Design verdict:** PASS after bounded correction and refreshed record.
+**Technical readiness:** READY_FOR_IMPLEMENTATION; see
+[P20C_TECHNICAL_REVIEW.md](P20C_TECHNICAL_REVIEW.md).
+**Scheduling:** MUST WAIT for normal architecture-canonical promotion and
+a safe Master hotspot window. **P20-C delivery:** NOT PROMOTED.
+No code implementation is authorized in this Architect task.
 **Architecture canonical base:** `e16796014d348e3b59da7ed848101c4c03926ba5`.
 **Current technical contract:** [P20C_TECHNICAL_DESIGN_RECORD.md](P20C_TECHNICAL_DESIGN_RECORD.md)
 plus the immutable retained design ref it names.
