@@ -1,10 +1,10 @@
 # P12-B P12-E military owner census registration — implementation review
 
-**Verdict:** `VALIDATED_CANDIDATE`  
-**Canonical base/current-at-review:** `88d476729715aa82578cb2a204e32a69263e6402`  
-**Exact code candidate:** `5b055be864afa0ace56d56381eb00fe4e993ed86`  
-**Exact code tree:** `c9e763e2ebc2f63d9772701a0c03e35c271392f7`  
-**Evidence/docs tip reviewed:** `98d8c9d83cc70e827a6e8162e59df4fee164e3a8`  
+**Verdict:** `VALIDATED_CANDIDATE`
+**Canonical base/current-at-review:** `88d476729715aa82578cb2a204e32a69263e6402`
+**Exact code candidate:** `5b055be864afa0ace56d56381eb00fe4e993ed86`
+**Exact code tree:** `c9e763e2ebc2f63d9772701a0c03e35c271392f7`
+**Evidence/docs tip reviewed:** `98d8c9d83cc70e827a6e8162e59df4fee164e3a8`
 **Independent reviewer:** `p12_action_owner_audit`
 
 ## Review result
