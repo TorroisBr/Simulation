@@ -2,7 +2,9 @@
 
 **Decision:** A — one bounded completion slice within the already accepted
 P12-B checkpoint. No new numbered checkpoint, writer feature or Phase.
-**Status:** TECHNICAL_DESIGN_IN_PROGRESS pending independent review.
+**Status:** PASS / READY_FOR_IMPLEMENTATION for the bounded ordered workflow.
+Independent semantic design review: `40e3b7edc4c742a48f2284e2e3f7d97b61b49d5e`.
+P12-B delivery remains INCOMPLETE; Gate 1 evidence closure precedes issuance.
 **Date:** 2026-10-07.
 **Implementation source base:** `origin/codex/phase12/canonical` at
 `94551b08be8cc9347de35eae5051b8e578ea4c1e`.
@@ -311,7 +313,9 @@ window; parallel evidence/test preparation may use isolated worktrees.
 Do not claim B complete from a reviewed design, green existing tests or the
 23-operation list. Review full base-to-candidate diff, token ordering and all
 failure/reentrancy paths, admission versus guard faults and reconstruction
-data. Domain canonical promotion retains its normal human gate.
+data. Domain promotion follows current owning P12 EXECUTION_MODEL policy, including
+its authorized bounded autonomous promotion class when every criterion passes.
+Formal Phase closure and genuine product/architecture changes retain human gates.
 
 ## 9. Required validation and closure
 
