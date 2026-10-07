@@ -318,11 +318,14 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
         stagedPending.AddRange(work);
         if (!TryStageReceipt(item, revision, ActivityTransitionKind.Schedule, timeline.CurrentInstant, participants, "scheduled", out ActivityTransitionReceipt scheduledReceipt))
         { failure = ActivityFailure.RevisionOverflow; return false; }
+        List<ActivityTransitionReceipt> stagedReceipts = StageReceiptHistory(scheduledReceipt);
+        long stagedNextTransitionSequence = scheduledReceipt.Sequence + 1L;
         bool committed = timeline.TryCommitOwnerFacts(work, () =>
         {
             item.Participants = stagedParticipants; item.PlannedStart = start; item.PlannedEnd = end;
             item.Revision = revision; item.State = ActivityLifecycleState.Scheduled;
-            commitments = stagedCommitments; pending = stagedPending; PublishReceipt(scheduledReceipt);
+            commitments = stagedCommitments; pending = stagedPending; transitionReceipts = stagedReceipts;
+            nextTransitionSequence = stagedNextTransitionSequence;
             commitParticipant?.Invoke(); return TimelineFailure.None;
         }, out _);
         if (!committed) { failure = ActivityFailure.TimelinePublicationFailed; return false; }
@@ -375,11 +378,15 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
         List<DueWorkReference> stagedPending = pending.Where(fact => fact.InstanceId != item.Id).ToList();
         if (!TryStageReceipt(item, revision, kind, authoritativeInstant, item.Participants, disposition, out ActivityTransitionReceipt receipt))
         { failure = ActivityFailure.RevisionOverflow; return false; }
+        List<ActivityTransitionReceipt> stagedReceipts = StageReceiptHistory(receipt);
+        long stagedNextTransitionSequence = receipt.Sequence + 1L;
+        Dictionary<string, List<ActivityParticipantCommitment>> stagedCommitments = StageCommitmentRelease(item);
         bool committed = timeline.TryCommitOwnerFacts(Array.Empty<DueWorkReference>(), () =>
         {
             if (coordinated != null && !coordinated.CanCommit) return TimelineFailure.StaleWork;
             item.Revision = revision; item.State = terminal; item.TerminalInstant = authoritativeInstant; item.Disposition = disposition ?? string.Empty;
-            pending = stagedPending; ReleaseCommitments(item); PublishReceipt(receipt); coordinated?.CommitTerminal(); return TimelineFailure.None;
+            pending = stagedPending; commitments = stagedCommitments; transitionReceipts = stagedReceipts;
+            nextTransitionSequence = stagedNextTransitionSequence; coordinated?.CommitTerminal(); return TimelineFailure.None;
         }, out _);
         failure = committed ? ActivityFailure.None : ActivityFailure.TimelinePublicationFailed; return committed;
     }
@@ -406,11 +413,15 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
         List<DueWorkReference> stagedPending = pending.Where(fact => fact.InstanceId != item.Id).ToList();
         if (!TryStageReceipt(item, revision, kind, instant, item.Participants, disposition, out ActivityTransitionReceipt receipt))
         { failure = ActivityFailure.RevisionOverflow; return false; }
+        List<ActivityTransitionReceipt> stagedReceipts = StageReceiptHistory(receipt);
+        long stagedNextTransitionSequence = receipt.Sequence + 1L;
+        Dictionary<string, List<ActivityParticipantCommitment>> stagedCommitments = StageCommitmentRelease(item);
         bool committed = timeline.TryCommitOwnerFacts(Array.Empty<DueWorkReference>(), () =>
         {
             if (!coordinated.CanCommit) return TimelineFailure.StaleWork;
             item.Revision = revision; item.State = terminal; item.TerminalInstant = instant; item.Disposition = disposition ?? string.Empty;
-            pending = stagedPending; ReleaseCommitments(item); PublishReceipt(receipt); coordinated.CommitTerminal();
+            pending = stagedPending; commitments = stagedCommitments; transitionReceipts = stagedReceipts;
+            nextTransitionSequence = stagedNextTransitionSequence; coordinated.CommitTerminal();
             return TimelineFailure.None;
         }, out _);
         failure = committed ? ActivityFailure.None : ActivityFailure.TimelinePublicationFailed;
@@ -506,10 +517,12 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
             if (!TryStageReceipt(item, terminalRevision, ActivityTransitionKind.FailedStart, reference.DueAt, item.Participants, failedDisposition, out ActivityTransitionReceipt failedReceipt))
             { failure = TimelineFailure.DispatchFailed; return false; }
             List<ActivityTransitionReceipt> stagedReceipts = StageReceiptHistory(failedReceipt);
+            long failedNextTransitionSequence = failedReceipt.Sequence + 1L;
+            Dictionary<string, List<ActivityParticipantCommitment>> failedCommitments = StageCommitmentRelease(item);
             item.Revision = terminalRevision; item.State = ActivityLifecycleState.Cancelled;
             item.TerminalInstant = reference.DueAt; item.Disposition = failedDisposition;
-            pending = terminalPending; ReleaseCommitments(item); transitionReceipts = stagedReceipts;
-            nextTransitionSequence = failedReceipt.Sequence + 1L;
+            pending = terminalPending; commitments = failedCommitments; transitionReceipts = stagedReceipts;
+            nextTransitionSequence = failedNextTransitionSequence;
             coordinated?.CommitFailedStart(); failure = TimelineFailure.None; return true;
         }
         if (!TryStageReceipt(item, revision, kind, reference.DueAt, item.Participants, kind == ActivityTransitionKind.Start ? "started" : "completed", out ActivityTransitionReceipt receipt))
@@ -519,6 +532,9 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
         List<DueWorkReference> stagedPending = pending.Where(fact => fact.InstanceId != item.Id).ToList();
         if (completion != null) stagedPending.Add(completion);
         List<ActivityTransitionReceipt> nextReceipts = StageReceiptHistory(receipt);
+        long stagedNextTransitionSequence = receipt.Sequence + 1L;
+        Dictionary<string, List<ActivityParticipantCommitment>> stagedCommitments = kind == ActivityTransitionKind.Complete
+            ? StageCommitmentRelease(item) : null;
         item.Revision = revision;
         if (kind == ActivityTransitionKind.Start)
         {
@@ -527,8 +543,8 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
             coordinated?.CommitStarted(); failure = TimelineFailure.None; return true;
         }
         item.State = ActivityLifecycleState.Completed; item.TerminalInstant = reference.DueAt;
-        pending = stagedPending; ReleaseCommitments(item); transitionReceipts = nextReceipts;
-        nextTransitionSequence = receipt.Sequence + 1L; failure = TimelineFailure.None; return true;
+        pending = stagedPending; commitments = stagedCommitments; transitionReceipts = nextReceipts;
+        nextTransitionSequence = stagedNextTransitionSequence; failure = TimelineFailure.None; return true;
     }
 
     private List<ActivityTransitionReceipt> StageReceiptHistory(ActivityTransitionReceipt receipt)
@@ -546,17 +562,20 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
         try { receipt = new ActivityTransitionReceipt(worldId, nextTransitionSequence, item.Id, revision, kind, instant, participants, disposition); checked { _ = nextTransitionSequence + 1; } return true; }
         catch (OverflowException) { return false; }
     }
-    private void PublishReceipt(ActivityTransitionReceipt receipt)
-    { transitionReceipts.Add(receipt); nextTransitionSequence = checked(receipt.Sequence + 1); }
-
-    private void ReleaseCommitments(ActivityInstance item)
+    private Dictionary<string, List<ActivityParticipantCommitment>> StageCommitmentRelease(ActivityInstance item)
     {
+        Dictionary<string, List<ActivityParticipantCommitment>> staged =
+            new Dictionary<string, List<ActivityParticipantCommitment>>(commitments, StringComparer.Ordinal);
         foreach (string participant in item.Participants)
             if (commitments.TryGetValue(participant, out List<ActivityParticipantCommitment> values))
             {
-                values.RemoveAll(c => c.ActivityInstanceId == item.Id);
-                if (values.Count == 0) commitments.Remove(participant);
+                List<ActivityParticipantCommitment> remaining = new List<ActivityParticipantCommitment>(values.Count);
+                foreach (ActivityParticipantCommitment commitment in values)
+                    if (commitment.ActivityInstanceId != item.Id) remaining.Add(commitment);
+                if (remaining.Count == 0) staged.Remove(participant);
+                else if (remaining.Count != values.Count) staged[participant] = remaining;
             }
+        return staged;
     }
     private static string WorkId(string instanceId, ActivityTransitionKind kind) => SpatialStableKey.Encode(instanceId, kind == ActivityTransitionKind.Start ? "start" : "complete");
     private DueWorkReference Reference(ActivityInstance item, long revision, ActivityTransitionKind kind, LogicalTick at) =>
