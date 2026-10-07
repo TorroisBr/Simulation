@@ -62,6 +62,11 @@ Extend `SimulationBootstrapCompositionTests.SelectedDailyV1ProfileBootstrapsItsA
    revision.
 5. The initial census assessment still succeeds.
 
+Update the existing fixed-inventory assertion in
+`PropertyEstateMutationEpochTests.DailyV1ProfileAddsPropertyEstateSectionsAlongsideIdentitySpatialOwners`
+from 260 to 268; that test remains a property/estate regression and does not
+need duplicate provider assertions.
+
 Run the focused selected-profile composition suite, the affected provider
 regressions, ALL EditMode, official Smoke, and `git diff --check` on the final
 code tree. Record exact Unity evidence before independent implementation
@@ -75,6 +80,8 @@ review.
   eight-section registration method, reusing the existing fixed-owner helper.
 - `Assets/_Project/Tests/EditMode/Editor/SimulationBootstrapCompositionTests.cs`:
   exact 268-section and provider-binding regression.
+- `Assets/_Project/Tests/EditMode/Editor/PropertyEstateMutationEpochTests.cs`:
+  keep its existing selected-profile inventory expectation current.
 
 These files are already a shared P12 census/composition hotspot; implement and
 integrate this slice serially on its isolated branch. No provider implementation
@@ -106,3 +113,9 @@ day-zero witnesses are empty. No edits or tests were made by the reviewer.
 **Implementation readiness:** established for this bounded registration slice
 under the accepted P12-B prerequisite authorization. Implement serially at
 the existing `SimulationRuntime` census hotspot; P12-B remains incomplete.
+
+**Test-surface addendum:** after the PASS, source inspection found a second
+existing hard-coded `260` selected-profile inventory assertion in
+`PropertyEstateMutationEpochTests`. Updating that assertion to 268 is test-only
+maintenance for the same registration and does not alter the reviewed scope;
+independent confirmation of this design-record addendum is pending.
