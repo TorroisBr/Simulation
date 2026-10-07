@@ -44,4 +44,4 @@ The historical P20-B joint-travel technical design at 8afc463fb71112a0c7b8902e7e
 
 P20-C consumes promoted P18-A/B/C, P20-A, and P8-E; it must preserve P20-B's Daily profile admission boundary. It does not require P18-D, P12-B completion, P19 loader work, save/load, or P13 fork.
 
-**Status:** P20-C scope accepted; current-base independent design review and canonical Architecture Roadmap reconciliation pending. No P20-C promotion, code-tree change, Unity validation, P12 readiness, or Phase 20 closure is claimed. The handoff artifact is being prepared for the General Architect on a separate architecture candidate branch.
+**Status:** P20-C scope accepted; current-base independent design review and canonical Architecture Roadmap reconciliation pending. No P20-C promotion, code-tree change, Unity validation, P12 readiness, or Phase 20 closure is claimed. The General Architect handoff is durably published at `codex/architecture/P20B-P20CIdentityReconciliationHandoff` (commit `64c08ba`; draft PR #1). Canonical Roadmap reconciliation and independent current-base design review remain pending.
