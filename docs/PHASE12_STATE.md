@@ -2250,3 +2250,43 @@ The current-tip source crosswalk is recorded in [`PHASE12_B_DAILY_V1_REGISTERED_
 This closes the registration-to-scope crosswalk only. It does not prove that the 23 IDs exhaust all supported ingress, or that every effective owner/cardinality row and successful commit path has been enumerated. The next bounded evidence task is the exact 275-section effective owner/provider/revision ledger paired with supported-ingress and committed-write coverage; after that, prove runtime-wide owner-thread/quiescence and validate completed-boundary eligibility against the successful advance sequence. No speculative mutation or epoch wiring is justified by the current audit.
 
 P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains open. P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B–F and a validated live-profile inventory. No owner/shared-epoch completeness, quiescence, capture eligibility, export, hydration, or downstream readiness is implied.
+
+## Current architecture and Daily-v1 profile revalidation — 2026-10-07
+
+The architecture branch `codex/architecture/world-identity-projection` is
+current at `e16796014d348e3b59da7ed848101c4c03926ba5`. This refresh incorporates
+architecture §2's development-artifact boundary, §§91A–91B's WorldId and
+factual-reader contracts, §92A's continuation-aware owner requirements, the
+2026-09-26 intraday/extensibility alignment (`4b6dd1d`), and the
+multi-participant activity alignment (`c285466`). The updated profile rule was
+revalidated against current P12 canonical `c7c8bbf01c599312971d80c99020965e7cfb924b`.
+
+**Classification: `REVALIDATE` — PASS for the selected Daily-v1 composition.**
+The P12 Brief explicitly selects `SampleScene` → `Simulation-DailyV1.asset` as
+the approved P9-B-only profile input. The asset has no authored P10-A Ruin;
+`Simulation-GeneralTest.asset` remains the separate P10-A proving profile, and
+Daily-v1 admission rejects that profile before identity allocation. The exact
+composition test checks the admitted selected profile and its 275-section
+partial census; retained temporal roster and Person-materialization tests
+recheck the supported dynamic owner/cardinality cases. Validation on code
+`c50c4237d1e1023567f5ca0b24376a23d84bd4b7` / tree
+`d26ad1c0235bcc78104930ce9a2fce6883558603` remains applicable: exact Daily
+admission 1/1, selected-profile inventory 1/1, temporal roster 1/1, Person
+registration/materialization 1/1, ALL EditMode 2444/2444, official Smoke 5/5,
+and `git diff --check` PASS. The code has not changed since that validation.
+
+This targeted revalidation does not certify that the full 275-row effective
+owner/commit/epoch matrix is exhaustive. It preserves the accepted profile and
+does not infer a new owner, complete owner/shared-epoch coverage, runtime-wide
+quiescence, capture eligibility, export, hydration, P12-A readiness, P12-B
+completion, P13 readiness, or Phase closure. The P12-B next evidence task
+remains the complete source-linked owner/cardinality and successful-commit
+matrix, followed by runtime-wide owner-thread/quiescence proof and a
+completed-boundary token tied to successful advance sequence.
+
+The architecture branch's current Execution Model also carries older
+human-approval wording for routine canonical promotion. The active run retains
+the user's explicit standing authority for bounded promotions after all exact-
+tip review, validation, ancestry, tree, and scope conditions pass; this
+governance wording mismatch does not change technical readiness or authorize
+Phase closure.
