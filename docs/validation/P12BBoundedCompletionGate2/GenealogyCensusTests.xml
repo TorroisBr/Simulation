@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="7" result="Passed" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-07 22:32:25Z" end-time="2026-10-07 22:32:25Z" duration="0,1704097">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2454" result="Passed" start-time="2026-10-07 22:32:25Z" end-time="2026-10-07 22:32:25Z" duration="0.170410" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3669" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12b-final-validation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2454" result="Passed" start-time="2026-10-07 22:32:25Z" end-time="2026-10-07 22:32:25Z" duration="0.162638" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="84984" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="1898" name="GenealogyCensusTests" fullname="GenealogyCensusTests" classname="GenealogyCensusTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-07 22:32:25Z" end-time="2026-10-07 22:32:25Z" duration="0.150411" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="1905" name="OrdinaryAddAndRemoveRemainClosedAtSaturatedRevision" fullname="GenealogyCensusTests.OrdinaryAddAndRemoveRemainClosedAtSaturatedRevision" methodname="OrdinaryAddAndRemoveRemainClosedAtSaturatedRevision" classname="GenealogyCensusTests" runstate="Runnable" seed="629811285" result="Passed" start-time="2026-10-07 22:32:25Z" end-time="2026-10-07 22:32:25Z" duration="0.040212" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1904" name="RuntimeCloneWitnessUsesInstalledReplayBaselineAndLeavesSourceUnchanged" fullname="GenealogyCensusTests.RuntimeCloneWitnessUsesInstalledReplayBaselineAndLeavesSourceUnchanged" methodname="RuntimeCloneWitnessUsesInstalledReplayBaselineAndLeavesSourceUnchanged" classname="GenealogyCensusTests" runstate="Runnable" seed="1135451831" result="Passed" start-time="2026-10-07 22:32:25Z" end-time="2026-10-07 22:32:25Z" duration="0.001311" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1903" name="RuntimeWitnessTracksSuccessfulAddRemoveAndSameCardinalityReplacement" fullname="GenealogyCensusTests.RuntimeWitnessTracksSuccessfulAddRemoveAndSameCardinalityReplacement" methodname="RuntimeWitnessTracksSuccessfulAddRemoveAndSameCardinalityReplacement" classname="GenealogyCensusTests" runstate="Runnable" seed="721518123" result="Passed" start-time="2026-10-07 22:32:25Z" end-time="2026-10-07 22:32:25Z" duration="0.002099" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1899" name="SelectedBootstrapPublishesStableExactZeroInstalledOwnerWitness" fullname="GenealogyCensusTests.SelectedBootstrapPublishesStableExactZeroInstalledOwnerWitness" methodname="SelectedBootstrapPublishesStableExactZeroInstalledOwnerWitness" classname="GenealogyCensusTests" runstate="Runnable" seed="1212204310" result="Passed" start-time="2026-10-07 22:32:25Z" end-time="2026-10-07 22:32:25Z" duration="0.078537" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1900" name="SelectedDailyCensusRegistersGateOneOwnersAndTracksParentageOperation" fullname="GenealogyCensusTests.SelectedDailyCensusRegistersGateOneOwnersAndTracksParentageOperation" methodname="SelectedDailyCensusRegistersGateOneOwnersAndTracksParentageOperation" classname="GenealogyCensusTests" runstate="Runnable" seed="1433455899" result="Passed" start-time="2026-10-07 22:32:25Z" end-time="2026-10-07 22:32:25Z" duration="0.012077" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1902" name="SelectedDailyParentageRejectsWhenMutationEpochCapacityIsExhausted" fullname="GenealogyCensusTests.SelectedDailyParentageRejectsWhenMutationEpochCapacityIsExhausted" methodname="SelectedDailyParentageRejectsWhenMutationEpochCapacityIsExhausted" classname="GenealogyCensusTests" runstate="Runnable" seed="49921176" result="Passed" start-time="2026-10-07 22:32:25Z" end-time="2026-10-07 22:32:25Z" duration="0.003673" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1901" name="SelectedDailyParentageRejectsWrongThreadBeforeOwnerWrite" fullname="GenealogyCensusTests.SelectedDailyParentageRejectsWrongThreadBeforeOwnerWrite" methodname="SelectedDailyParentageRejectsWrongThreadBeforeOwnerWrite" classname="GenealogyCensusTests" runstate="Runnable" seed="1950362475" result="Passed" start-time="2026-10-07 22:32:25Z" end-time="2026-10-07 22:32:25Z" duration="0.004236" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

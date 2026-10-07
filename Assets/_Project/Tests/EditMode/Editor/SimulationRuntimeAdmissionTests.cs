@@ -41,7 +41,9 @@ public sealed class SimulationRuntimeAdmissionTests
             economyEnabled: false,
             configuredActions: new[] { action },
             npcDecisionSystem: new NpcDecisionSystem(new System.Collections.Generic.List<INpcActionProvider> { provider }),
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            worldId: new WorldId(Guid.NewGuid()));
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
 
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure before), Is.True, before.ToString());
         Assert.That(records.Time.TryAdvanceDay(out SimulationTimeAdvanceFailure directClockFailure), Is.True,
@@ -67,6 +69,192 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(operationObservations, Is.EqualTo(3), "one outer scope covers each full multi-day batch");
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure afterBatch), Is.True,
             afterBatch.ToString());
+    }
+
+    [Test]
+    public void CompletedDailyTokenRequiresSuccessfulPositiveAdvanceAndNoOpsPreserveIt()
+    {
+        SimulationTime time = new SimulationTime();
+        SimulationRuntime runtime = CreatePublishedDailyCaptureRuntime(time);
+
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+            out _, out DailyCaptureEligibilityFailure beforeAdvance), Is.False);
+        Assert.That(beforeAdvance, Is.EqualTo(DailyCaptureEligibilityFailure.NoCompletedBoundary));
+        Assert.That(runtime.TryAdvanceDays(0, out int zeroDays, out _), Is.True);
+        Assert.That(zeroDays, Is.Zero);
+        Assert.That(runtime.TryAdvanceDays(-1, out _, out SimulationRuntimeAdvanceFailure invalid), Is.False);
+        Assert.That(invalid, Is.EqualTo(SimulationRuntimeAdvanceFailure.InvalidDayCount));
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+            out _, out DailyCaptureEligibilityFailure stillNoBoundary), Is.False);
+        Assert.That(stillNoBoundary, Is.EqualTo(DailyCaptureEligibilityFailure.NoCompletedBoundary));
+
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstAdvance), Is.True,
+            firstAdvance.ToString());
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken firstToken,
+            out DailyCaptureEligibilityFailure firstReadFailure), Is.True, firstReadFailure.ToString());
+        Assert.That(firstToken.AbsoluteDay, Is.EqualTo(1L));
+        Assert.That(firstToken.CompletedCoreSequence, Is.EqualTo(1L));
+        Assert.That(firstToken.OwnerSections, Is.Not.Empty);
+        Assert.That(runtime.TryValidateCompletedDailyCaptureToken(firstToken, out _), Is.True);
+
+        Assert.That(runtime.TryAdvanceDays(0, out _, out _), Is.True);
+        Assert.That(runtime.TryAdvanceDays(-2, out _, out _), Is.False);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure readOnlyAssessment), Is.True,
+            readOnlyAssessment.ToString());
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken afterNoOps,
+            out DailyCaptureEligibilityFailure afterNoOpsFailure), Is.True, afterNoOpsFailure.ToString());
+        Assert.That(afterNoOps, Is.SameAs(firstToken));
+
+        Assert.That(time.TryAdvanceDay(out SimulationTimeAdvanceFailure directClockFailure), Is.True,
+            directClockFailure.ToString());
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken directClockToken,
+            out DailyCaptureEligibilityFailure directClockReadFailure), Is.True,
+            directClockReadFailure.ToString());
+        Assert.That(directClockToken, Is.Not.SameAs(firstToken));
+        Assert.That(directClockToken.AbsoluteDay, Is.EqualTo(2L));
+        Assert.That(directClockToken.CompletedCoreSequence, Is.EqualTo(2L));
+        Assert.That(runtime.TryValidateCompletedDailyCaptureToken(firstToken, out DailyCaptureEligibilityFailure stale), Is.False);
+        Assert.That(stale, Is.EqualTo(DailyCaptureEligibilityFailure.StaleToken));
+
+        Assert.That(runtime.TryAdvanceDays(3, out int daysAdvanced, out SimulationRuntimeAdvanceFailure batchFailure),
+            Is.True, batchFailure.ToString());
+        Assert.That(daysAdvanced, Is.EqualTo(3));
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken batchToken,
+            out DailyCaptureEligibilityFailure batchReadFailure), Is.True, batchReadFailure.ToString());
+        Assert.That(batchToken.AbsoluteDay, Is.EqualTo(5L));
+        Assert.That(batchToken.CompletedCoreSequence, Is.EqualTo(5L));
+    }
+
+    [Test]
+    public void CompletedDailyTokenIsUnavailableDuringCallbacksAndBatchPublishesOnlyOnceAtReturn()
+    {
+        NpcActionData action = SimulationTestFactory.CreateAction("daily-token-probe", NpcActionType.Travel);
+        action.baseUtility = 1f;
+        NpcRuntime npc = new NpcRuntime("npc-daily-token-probe", SimulationTestFactory.CreateNpc("daily-token-probe"));
+        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+
+        SimulationRuntime runtime = null;
+        int callbackCount = 0;
+        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        {
+            Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+                out _, out DailyCaptureEligibilityFailure failure), Is.False);
+            Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
+            callbackCount++;
+        });
+        runtime = CreatePublishedDailyCaptureRuntime(
+            new SimulationTime(),
+            new[] { npc },
+            new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
+            new[] { action });
+
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstFailure), Is.True,
+            firstFailure.ToString());
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(out _, out _), Is.True);
+        Assert.That(runtime.TryAdvanceDays(2, out int daysAdvanced, out SimulationRuntimeAdvanceFailure batchFailure),
+            Is.True, batchFailure.ToString());
+        Assert.That(daysAdvanced, Is.EqualTo(2));
+        Assert.That(callbackCount, Is.EqualTo(3));
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken token,
+            out DailyCaptureEligibilityFailure readFailure), Is.True, readFailure.ToString());
+        Assert.That(token.AbsoluteDay, Is.EqualTo(3L));
+        Assert.That(token.CompletedCoreSequence, Is.EqualTo(3L));
+    }
+
+    [Test]
+    public void PartialBatchExceptionKeepsOnlyNormallyCompletedCoreSequenceAndIssuesNoToken()
+    {
+        NpcActionData action = SimulationTestFactory.CreateAction("daily-token-throw", NpcActionType.Travel);
+        action.baseUtility = 1f;
+        NpcRuntime npc = new NpcRuntime("npc-daily-token-throw", SimulationTestFactory.CreateNpc("daily-token-throw"));
+        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+
+        SimulationRuntime runtime = null;
+        int callbackCount = 0;
+        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        {
+            callbackCount++;
+            if (callbackCount == 2) throw new InvalidOperationException("injected second-day callback failure");
+        });
+        runtime = CreatePublishedDailyCaptureRuntime(
+            new SimulationTime(),
+            new[] { npc },
+            new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
+            new[] { action });
+
+        Assert.Throws<InvalidOperationException>(() => runtime.TryAdvanceDays(
+            2, out _, out SimulationRuntimeAdvanceFailure _));
+
+        Assert.That(runtime.CurrentDay, Is.EqualTo(2L), "the failed second core may already have advanced time");
+        Assert.That(ReadPrivateField<long>(runtime, "completedDailyCoreSequence"), Is.EqualTo(1L));
+        Assert.That(ReadPrivateField<DailyCaptureEligibilityToken>(runtime, "currentDailyCaptureToken"), Is.Null);
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+            out _, out DailyCaptureEligibilityFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.RuntimeFaulted));
+    }
+
+    [Test]
+    public void SupportedSameDayRosterMutationInvalidatesTokenAndTokensCannotCrossRuntimes()
+    {
+        NpcRuntime initialNpc = new NpcRuntime("npc-before-token-mutation", SimulationTestFactory.CreateNpc("before-token"));
+        SimulationRuntime runtime = CreatePublishedDailyCaptureRuntime(
+            new SimulationTime(), new[] { initialNpc });
+        Assert.That(runtime.TryAdvanceDay(out _), Is.True);
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken original,
+            out DailyCaptureEligibilityFailure originalFailure), Is.True, originalFailure.ToString());
+
+        NpcRuntime addedNpc = new NpcRuntime("npc-after-token-mutation", SimulationTestFactory.CreateNpc("after-token"));
+        Assert.That(runtime.TryRegisterNpc(addedNpc, out WorldNpcRegistryFailure registerFailure), Is.True,
+            registerFailure.ToString());
+        Assert.That(runtime.TryValidateCompletedDailyCaptureToken(original, out DailyCaptureEligibilityFailure changed), Is.False);
+        Assert.That(changed, Is.EqualTo(DailyCaptureEligibilityFailure.StaleToken));
+
+        SimulationRuntime secondRuntime = CreatePublishedDailyCaptureRuntime(new SimulationTime());
+        Assert.That(secondRuntime.TryAdvanceDay(out _), Is.True);
+        Assert.That(secondRuntime.TryValidateCompletedDailyCaptureToken(original, out DailyCaptureEligibilityFailure crossRuntime), Is.False);
+        Assert.That(crossRuntime, Is.EqualTo(DailyCaptureEligibilityFailure.StaleToken));
+    }
+
+    [Test]
+    public void WrongThreadTokenValidationFaultsAdmissionAndSequenceOverflowRejectsBeforeClockWrite()
+    {
+        SimulationRuntime wrongThreadRuntime = CreatePublishedDailyCaptureRuntime(new SimulationTime());
+        Assert.That(wrongThreadRuntime.TryAdvanceDay(out _), Is.True);
+        Assert.That(wrongThreadRuntime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken token, out _), Is.True);
+        bool validFromWorker = true;
+        DailyCaptureEligibilityFailure workerFailure = DailyCaptureEligibilityFailure.None;
+        Thread worker = new Thread(() => validFromWorker = wrongThreadRuntime.TryValidateCompletedDailyCaptureToken(
+            token, out workerFailure));
+        worker.Start();
+        worker.Join();
+        Assert.That(validFromWorker, Is.False);
+        Assert.That(workerFailure, Is.EqualTo(DailyCaptureEligibilityFailure.WrongOwnerThread));
+        Assert.That(wrongThreadRuntime.TryGetCompletedDailyCaptureToken(out _, out DailyCaptureEligibilityFailure faulted), Is.False);
+        Assert.That(faulted, Is.EqualTo(DailyCaptureEligibilityFailure.RuntimeFaulted));
+
+        SimulationRuntime overflowRuntime = CreatePublishedDailyCaptureRuntime(new SimulationTime());
+        WritePrivateField(overflowRuntime, "completedDailyCoreSequence", long.MaxValue - 2L);
+        Assert.That(overflowRuntime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure finalAvailableAdvance), Is.True,
+            finalAvailableAdvance.ToString());
+        Assert.That(overflowRuntime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken priorToken, out DailyCaptureEligibilityFailure priorTokenFailure),
+            Is.True, priorTokenFailure.ToString());
+        Assert.That(priorToken.CompletedCoreSequence, Is.EqualTo(long.MaxValue - 1L));
+        Assert.That(overflowRuntime.TryAdvanceDays(2, out _, out SimulationRuntimeAdvanceFailure overflow), Is.False);
+        Assert.That(overflow, Is.EqualTo(SimulationRuntimeAdvanceFailure.CompletedBoundarySequenceOverflow));
+        Assert.That(overflowRuntime.CurrentDay, Is.EqualTo(1L));
+        Assert.That(ReadPrivateField<long>(overflowRuntime, "completedDailyCoreSequence"), Is.EqualTo(long.MaxValue - 1L));
+        Assert.That(overflowRuntime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken afterOverflow, out DailyCaptureEligibilityFailure afterOverflowFailure),
+            Is.True, afterOverflowFailure.ToString());
+        Assert.That(afterOverflow, Is.SameAs(priorToken), "a clean sequence-capacity preflight preserves the prior valid boundary");
     }
 
     [Test]
@@ -394,7 +582,9 @@ public sealed class SimulationRuntimeAdmissionTests
             new[] { merchant },
             merchantSystem: merchantSystem,
             configuration: configuration,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            worldId: new WorldId(Guid.NewGuid()));
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
 
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
             Is.True, beforeFailure.ToString());
@@ -1088,7 +1278,9 @@ public sealed class SimulationRuntimeAdmissionTests
             new[] { city },
             new NpcRuntime[0],
             economyEnabled: true,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            worldId: new WorldId(Guid.NewGuid()));
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
         EconomyTransactionService service = new EconomyTransactionService();
         BindP12CensusRuntime(service, runtime);
         long initialMarketRevision = city.Market.Revision;
@@ -1124,7 +1316,9 @@ public sealed class SimulationRuntimeAdmissionTests
             new[] { city },
             new NpcRuntime[0],
             economyEnabled: true,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            worldId: new WorldId(Guid.NewGuid()));
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
         EconomyTransactionService service = new EconomyTransactionService();
         BindP12CensusRuntime(service, runtime);
         long initialMarketRevision = city.Market.Revision;
@@ -1159,7 +1353,9 @@ public sealed class SimulationRuntimeAdmissionTests
             new[] { city },
             new NpcRuntime[0],
             economyEnabled: true,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            worldId: new WorldId(Guid.NewGuid()));
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
         EconomyTransactionService service = new EconomyTransactionService();
         BindP12CensusRuntime(service, runtime);
         long initialMarketRevision = city.Market.Revision;
@@ -2130,6 +2326,26 @@ public sealed class SimulationRuntimeAdmissionTests
             BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(method, Is.Not.Null);
         method.Invoke(bootstrap, new object[] { stageCompleted });
+    }
+
+    private static SimulationRuntime CreatePublishedDailyCaptureRuntime(
+        SimulationTime time,
+        NpcRuntime[] npcRuntimes = null,
+        NpcDecisionSystem npcDecisionSystem = null,
+        IReadOnlyList<NpcActionData> configuredActions = null)
+    {
+        SimulationRuntime runtime = new SimulationRuntime(
+            time ?? new SimulationTime(),
+            null,
+            npcRuntimes,
+            economyEnabled: false,
+            configuredActions: configuredActions,
+            npcDecisionSystem: npcDecisionSystem,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            worldId: new WorldId(Guid.NewGuid()));
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True,
+            "The test runtime must complete the selected-profile publication boundary before issuing a daily token.");
+        return runtime;
     }
 
     private static T ReadPrivateField<T>(object target, string name)

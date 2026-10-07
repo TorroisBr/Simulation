@@ -474,7 +474,7 @@ public sealed class P12CrimeJusticeInvalidationTests
         ScheduledDirectiveSystem scheduledDirectiveSystem = null,
         SimulationTime simulationTime = null)
     {
-        return new SimulationRuntime(
+        SimulationRuntime runtime = new SimulationRuntime(
             simulationTime ?? new SimulationTime(),
             cities,
             npcs,
@@ -484,7 +484,10 @@ public sealed class P12CrimeJusticeInvalidationTests
             npcDecisionSystem: decisionSystem,
             configuration: configuration ?? SimulationConfigurationDefaults.Create(),
             randomSource: randomSource,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            worldId: new WorldId(System.Guid.NewGuid()));
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
+        return runtime;
     }
 
     private static IDisposable EnterDailyAdvanceOperation(SimulationRuntime runtime)

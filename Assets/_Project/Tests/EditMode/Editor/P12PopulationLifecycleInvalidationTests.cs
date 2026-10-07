@@ -548,7 +548,9 @@ public sealed class P12PopulationLifecycleInvalidationTests
             configuration: CreateP12Configuration(),
             configuredActions: new[] { action },
             npcDecisionSystem: new NpcDecisionSystem(new List<INpcActionProvider>()),
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            worldId: new WorldId(System.Guid.NewGuid()));
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
 
         runtime.AdvanceDay();
 
@@ -1034,7 +1036,9 @@ public sealed class P12PopulationLifecycleInvalidationTests
             spatialAuthorityStore: spatial,
             legacySpatialAnchorBindingStore: anchorBindings,
             personSpatialPositionStore: positions,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            worldId: new WorldId(System.Guid.NewGuid()));
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
         return new P12ActorChoiceFixture(runtime, records, city, person, actor, item, sellAction);
     }
 

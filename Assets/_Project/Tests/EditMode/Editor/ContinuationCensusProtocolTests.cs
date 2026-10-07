@@ -303,6 +303,69 @@ public sealed class ContinuationCensusProtocolTests
     }
 
     [Test]
+    public void QuiescentSnapshotCopiesCurrentOwnersInOrdinalSectionOrder()
+    {
+        object firstOwner = new object();
+        object secondOwner = new object();
+        MutableWitnessProvider first = new MutableWitnessProvider(CreateWitness(
+            ReceiptSectionId, firstOwner, cardinality: 2, revision: 4L));
+        MutableWitnessProvider second = new MutableWitnessProvider(CreateWitness(
+            SecondarySectionId, secondOwner, cardinality: 0, revision: 0L));
+        ContinuationCensusProtocol protocol = CreateTwoSectionProtocol(first, second);
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure baseline), Is.True,
+            baseline.ToString());
+
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> snapshots,
+            out long epoch,
+            out ContinuationCensusFailure failure), Is.True, failure.ToString());
+
+        Assert.That(epoch, Is.Zero);
+        Assert.That(snapshots, Has.Count.EqualTo(2));
+        Assert.That(snapshots[0].SectionId, Is.EqualTo(SecondarySectionId));
+        Assert.That(snapshots[0].Role, Is.EqualTo(OwnerSectionRole.Required));
+        Assert.That(snapshots[0].OwnerInstanceIdentity, Is.SameAs(secondOwner));
+        Assert.That(snapshots[0].Cardinality, Is.Zero);
+        Assert.That(snapshots[0].Revision, Is.Zero);
+        Assert.That(snapshots[1].SectionId, Is.EqualTo(ReceiptSectionId));
+        Assert.That(snapshots[1].OwnerInstanceIdentity, Is.SameAs(firstOwner));
+        Assert.That(snapshots[1].Cardinality, Is.EqualTo(2));
+        Assert.That(snapshots[1].Revision, Is.EqualTo(4L));
+    }
+
+    [Test]
+    public void PendingMutationEpochReservationPreventsQuiescenceAndSnapshot()
+    {
+        ContinuationCensusProtocol protocol = CreateOperationProtocol();
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure baseline), Is.True,
+            baseline.ToString());
+        Assert.That(protocol.TryEnterOperation(
+            "runtime.advance", out SimulationOperationScope scope, out ContinuationCensusFailure enterFailure), Is.True,
+            enterFailure.ToString());
+        Assert.That(protocol.TryReserveMutationEpochCapacity(
+            out ContinuationMutationEpochReservation reservation,
+            out ContinuationCensusFailure reserveFailure), Is.True, reserveFailure.ToString());
+        scope.Dispose();
+
+        Assert.That(protocol.TryAssessRegisteredOperationQuiescence(out ContinuationCensusFailure quiescenceFailure),
+            Is.False);
+        Assert.That(quiescenceFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            out _, out _, out ContinuationCensusFailure snapshotFailure), Is.False);
+        Assert.That(snapshotFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+
+        protocol.ReleaseMutationEpochReservation(reservation);
+        Assert.That(protocol.TryAssessRegisteredOperationQuiescence(out ContinuationCensusFailure idle), Is.True,
+            idle.ToString());
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> snapshots,
+            out long epoch,
+            out ContinuationCensusFailure afterReleaseFailure), Is.True, afterReleaseFailure.ToString());
+        Assert.That(snapshots, Has.Count.EqualTo(1));
+        Assert.That(epoch, Is.Zero);
+    }
+
+    [Test]
     public void UnregisteredOperationCannotEnterAfterInventorySeal()
     {
         ContinuationCensusProtocol protocol = CreateOperationProtocol();

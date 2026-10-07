@@ -452,7 +452,9 @@ public sealed class P12SoloTravelStartOperationTests
             runtimeIdAllocator: records.Allocator,
             runtimeAdmissionContext: admitted
                 ? SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1()
-                : null);
+                : null,
+            worldId: new WorldId(System.Guid.NewGuid()));
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
         return new ActorFixture(world, records, npc, action, travel, provider, runtime);
     }
 

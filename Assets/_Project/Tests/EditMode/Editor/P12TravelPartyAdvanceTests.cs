@@ -331,7 +331,7 @@ public sealed class P12TravelPartyAdvanceTests
         SimulationRecordSequence sequence = null,
         RuntimeIdAllocator runtimeIdAllocator = null)
     {
-        return new SimulationRuntime(
+        SimulationRuntime runtime = new SimulationRuntime(
             time ?? new SimulationTime(),
             cities,
             npcs,
@@ -342,7 +342,10 @@ public sealed class P12TravelPartyAdvanceTests
             travelPartySystem: travelPartySystem,
             recordSequence: sequence,
             runtimeIdAllocator: runtimeIdAllocator,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            worldId: new WorldId(System.Guid.NewGuid()));
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
+        return runtime;
     }
 
     private static ActionExecutionContext CreatePartyContext(TravelPartyFixture fixture)

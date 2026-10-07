@@ -38,6 +38,33 @@ public sealed class OwnerSectionContract
     public OwnerSectionRole Role { get; }
 }
 
+/// <summary>Copied live owner evidence captured only at a quiescent boundary.</summary>
+internal sealed class OwnerSectionCensusSnapshot
+{
+    internal OwnerSectionCensusSnapshot(
+        string sectionId,
+        int schemaVersion,
+        OwnerSectionRole role,
+        object ownerInstanceIdentity,
+        int cardinality,
+        long revision)
+    {
+        SectionId = sectionId ?? throw new ArgumentNullException(nameof(sectionId));
+        SchemaVersion = schemaVersion;
+        Role = role;
+        OwnerInstanceIdentity = ownerInstanceIdentity ?? throw new ArgumentNullException(nameof(ownerInstanceIdentity));
+        Cardinality = cardinality;
+        Revision = revision;
+    }
+
+    internal string SectionId { get; }
+    internal int SchemaVersion { get; }
+    internal OwnerSectionRole Role { get; }
+    internal object OwnerInstanceIdentity { get; }
+    internal int Cardinality { get; }
+    internal long Revision { get; }
+}
+
 /// <summary>Reads a live witness from one concrete owner instance.</summary>
 public interface IOwnerSectionCensusProvider
 {
@@ -2060,12 +2087,113 @@ public sealed class ContinuationCensusProtocol
         }
         if (!TryRequireOwnerThread(out failure)) return false;
 
-        if (activeOperationCount != 0)
+        if (activeOperationCount != 0 || activeMutationEpochReservation != null)
         {
             failure = ContinuationCensusFailure.OperationInProgress;
             return false;
         }
 
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    /// <summary>
+    /// Reads a copied, ordinally ordered census only when every registered
+    /// section is current and the sealed operation tracker has no active scope
+    /// or pending mutation-epoch reservation. This is a read-only boundary
+    /// witness; it does not grant profile admission or make the protocol a lock.
+    /// </summary>
+    internal bool TryCaptureQuiescentOwnerSectionSnapshot(
+        out IReadOnlyList<OwnerSectionCensusSnapshot> snapshots,
+        out long observedMutationEpoch,
+        out ContinuationCensusFailure failure)
+    {
+        snapshots = null;
+        observedMutationEpoch = 0L;
+        if (IsFaulted())
+        {
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+
+        if (!expectedSectionsSealed
+            || !providersSealed
+            || expectedSections.Count == 0
+            || !operationsSealed
+            || expectedOperations.Count == 0)
+        {
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        if (!TryRequireOwnerThread(out failure)) return false;
+        if (activeOperationCount != 0 || activeMutationEpochReservation != null)
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
+
+        failure = ContinuationCensusFailure.None;
+        bool dynamicFamiliesMatch =
+            (spatialKnowledgeRoster == null || TryValidateSpatialKnowledgeFamilyMatchesRoster(out failure))
+            && (npcTravelStateRoster == null || TryValidateNpcTravelStateFamilyMatchesRoster(out failure))
+            && (inventoryRoster == null || TryValidateInventoryFamilyMatchesRoster(out failure))
+            && (moneyAccountRoster == null || TryValidateMoneyAccountFamilyMatchesRoster(out failure))
+            && (npcKnowledgeRoster == null || TryValidateNpcKnowledgeFamilyMatchesRoster(out failure))
+            && (npcPlanRoster == null || TryValidateNpcPlanFamilyMatchesRoster(out failure));
+        if (!dynamicFamiliesMatch || registeredSections.Count != expectedSections.Count)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        long startingEpoch = mutationEpoch;
+        List<OwnerSectionContract> orderedContracts = new List<OwnerSectionContract>(expectedSections.Values);
+        orderedContracts.Sort((left, right) => StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+        List<OwnerSectionCensusSnapshot> observed =
+            new List<OwnerSectionCensusSnapshot>(orderedContracts.Count);
+        foreach (OwnerSectionContract contract in orderedContracts)
+        {
+            if (!registeredSections.TryGetValue(contract.SectionId, out RegisteredSection section)
+                || !section.HasBaseline
+                || !TryReadAndValidate(
+                    section,
+                    allowRevisionAdvance: false,
+                    out OwnerSectionCensusWitness witness,
+                    out failure))
+            {
+                Fault();
+                if (failure == ContinuationCensusFailure.None)
+                    failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+
+            observed.Add(new OwnerSectionCensusSnapshot(
+                contract.SectionId,
+                contract.SchemaVersion,
+                contract.Role,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision));
+        }
+
+        if (IsFaulted())
+        {
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+        if (!TryRequireOwnerThread(out failure)) return false;
+        if (activeOperationCount != 0
+            || activeMutationEpochReservation != null
+            || mutationEpoch != startingEpoch)
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
+
+        snapshots = Array.AsReadOnly(observed.ToArray());
+        observedMutationEpoch = startingEpoch;
         failure = ContinuationCensusFailure.None;
         return true;
     }

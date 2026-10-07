@@ -39,7 +39,7 @@ public sealed class PropertyEstateMutationEpochTests
             simulation.Bootstrap.PropertyOwnershipCensusProviders;
         IOwnerSectionCensusProvider estateProvider = simulation.Bootstrap.EstateCensusProvider;
 
-        Assert.That(GetExpectedSectionCount(protocol), Is.EqualTo(275),
+        Assert.That(GetExpectedSectionCount(protocol), Is.EqualTo(278),
             "The selected Daily-v1 census includes the seven P8-A/B/C spatial witnesses, bounded political witnesses, exact-zero P8-D route-owner sections, and eight composed P12-E military owner sections.");
         Assert.That(propertyProviders, Has.Count.EqualTo(2));
         Assert.That(propertyProviders[0].GetCurrentCensus().OwnerInstanceIdentity,
@@ -74,26 +74,33 @@ public sealed class PropertyEstateMutationEpochTests
         AssertEstateWitness(estateProvider, runtime.EstateStore, 0, 0L);
         Assert.That(ReadMutationEpoch(runtime), Is.Zero);
 
+        PersonId deceased = new PersonId("p12-property-estate-deceased");
+        PersonId heir = new PersonId("p12-property-estate-heir");
+        Assert.That(runtime.TryAddParentage(deceased, heir, out PersonGenealogyFailure genealogyFailure),
+            Is.True, genealogyFailure.ToString());
+        long epochAfterGenealogy = ReadMutationEpoch(runtime);
+        Assert.That(epochAfterGenealogy, Is.EqualTo(1L));
+
         PersonId firstOwner = new PersonId("p12-property-estate-first-owner");
         PersonId secondOwner = new PersonId("p12-property-estate-second-owner");
         PropertyId firstProperty = new PropertyId("p12-property-estate-first-property");
         Assert.That(runtime.TryRegisterPropertyOwnership(
             new PropertyOwnershipRecord(firstProperty, firstOwner),
             out PropertyFoundationFailure registrationFailure), Is.True, registrationFailure.ToString());
-        AssertMutation(runtime, propertyProviders, estateProvider, 1L, 1, 0, 1L, 0, 0L);
+        AssertMutation(runtime, propertyProviders, estateProvider, epochAfterGenealogy + 1L, 1, 0, 1L, 0, 0L);
 
         Assert.That(runtime.TryRegisterPropertyOwnership(
             new PropertyOwnershipRecord(firstProperty, secondOwner),
             out PropertyFoundationFailure duplicateFailure), Is.False);
         Assert.That(duplicateFailure.Code, Is.EqualTo(PropertyFoundationFailureCode.DuplicatePropertyId));
-        AssertMutation(runtime, propertyProviders, estateProvider, 1L, 1, 0, 1L, 0, 0L);
+        AssertMutation(runtime, propertyProviders, estateProvider, epochAfterGenealogy + 1L, 1, 0, 1L, 0, 0L);
 
         Assert.That(runtime.TryTransferProperty(
             firstProperty,
             secondOwner,
             runtime.CurrentDay,
             out PropertyTransferFailure transferFailure), Is.True, transferFailure.ToString());
-        AssertMutation(runtime, propertyProviders, estateProvider, 2L, 1, 1, 2L, 0, 0L);
+        AssertMutation(runtime, propertyProviders, estateProvider, epochAfterGenealogy + 2L, 1, 1, 2L, 0, 0L);
 
         Assert.That(runtime.TryTransferProperty(
             firstProperty,
@@ -101,10 +108,9 @@ public sealed class PropertyEstateMutationEpochTests
             runtime.CurrentDay,
             out PropertyTransferFailure sameOwnerFailure), Is.False);
         Assert.That(sameOwnerFailure.Code, Is.EqualTo(PropertyTransferFailureCode.SameOwner));
-        AssertMutation(runtime, propertyProviders, estateProvider, 2L, 1, 1, 2L, 0, 0L);
+        AssertMutation(runtime, propertyProviders, estateProvider, epochAfterGenealogy + 2L, 1, 1, 2L, 0, 0L);
 
         EstateId estateId = new EstateId("p12-property-estate-record");
-        PersonId deceased = new PersonId("p12-property-estate-deceased");
         Assert.That(runtime.TryOpenEstate(
             estateId,
             deceased,
@@ -112,7 +118,7 @@ public sealed class PropertyEstateMutationEpochTests
             out EstateRecord openedEstate,
             out EstateFoundationFailure estateFailure), Is.True, estateFailure.ToString());
         Assert.That(openedEstate.EstateId, Is.EqualTo(estateId));
-        AssertMutation(runtime, propertyProviders, estateProvider, 3L, 1, 1, 2L, 1, 1L);
+        AssertMutation(runtime, propertyProviders, estateProvider, epochAfterGenealogy + 3L, 1, 1, 2L, 1, 1L);
 
         Assert.That(runtime.TryOpenEstate(
             estateId,
@@ -121,15 +127,14 @@ public sealed class PropertyEstateMutationEpochTests
             out _,
             out EstateFoundationFailure duplicateEstateFailure), Is.False);
         Assert.That(duplicateEstateFailure.Code, Is.EqualTo(EstateFoundationFailureCode.DuplicateEstateId));
-        AssertMutation(runtime, propertyProviders, estateProvider, 3L, 1, 1, 2L, 1, 1L);
+        AssertMutation(runtime, propertyProviders, estateProvider, epochAfterGenealogy + 3L, 1, 1, 2L, 1, 1L);
 
         PropertyId estateProperty = new PropertyId("p12-property-estate-succession-property");
         Assert.That(runtime.TryRegisterPropertyOwnership(
             new PropertyOwnershipRecord(estateProperty, deceased),
             out PropertyFoundationFailure estatePropertyFailure), Is.True, estatePropertyFailure.ToString());
-        AssertMutation(runtime, propertyProviders, estateProvider, 4L, 2, 1, 3L, 1, 1L);
+        AssertMutation(runtime, propertyProviders, estateProvider, epochAfterGenealogy + 4L, 2, 1, 3L, 1, 1L);
 
-        PersonId heir = new PersonId("p12-property-estate-heir");
         Assert.That(runtime.TryProposeEstateSuccession(
             estateId,
             estateProperty,
@@ -145,20 +150,20 @@ public sealed class PropertyEstateMutationEpochTests
             runtime.CurrentDay,
             out PropertyTransferFailure interveningTransferFailure), Is.True,
             interveningTransferFailure.ToString());
-        AssertMutation(runtime, propertyProviders, estateProvider, 5L, 2, 2, 4L, 1, 1L);
+        AssertMutation(runtime, propertyProviders, estateProvider, epochAfterGenealogy + 5L, 2, 2, 4L, 1, 1L);
         Assert.That(runtime.TryApplyEstateSuccession(
             staleSuccession,
             out EstateSuccessionFailure staleSuccessionFailure), Is.False);
         Assert.That(staleSuccessionFailure.Code,
             Is.EqualTo(EstateSuccessionFailureCode.PropertyTransferFailed));
-        AssertMutation(runtime, propertyProviders, estateProvider, 5L, 2, 2, 4L, 1, 1L);
+        AssertMutation(runtime, propertyProviders, estateProvider, epochAfterGenealogy + 5L, 2, 2, 4L, 1, 1L);
 
         PropertyId secondEstateProperty = new PropertyId("p12-property-estate-succession-property-2");
         Assert.That(runtime.TryRegisterPropertyOwnership(
             new PropertyOwnershipRecord(secondEstateProperty, deceased),
             out PropertyFoundationFailure secondEstatePropertyFailure), Is.True,
             secondEstatePropertyFailure.ToString());
-        AssertMutation(runtime, propertyProviders, estateProvider, 6L, 3, 2, 5L, 1, 1L);
+        AssertMutation(runtime, propertyProviders, estateProvider, epochAfterGenealogy + 6L, 3, 2, 5L, 1, 1L);
         Assert.That(runtime.TryProposeEstateSuccession(
             estateId,
             secondEstateProperty,
@@ -174,7 +179,7 @@ public sealed class PropertyEstateMutationEpochTests
             secondEstateProperty,
             out PropertyOwnershipRecord transferredEstateProperty), Is.True);
         Assert.That(transferredEstateProperty.OwnerPersonId, Is.EqualTo(heir));
-        AssertMutation(runtime, propertyProviders, estateProvider, 7L, 3, 3, 6L, 1, 1L);
+        AssertMutation(runtime, propertyProviders, estateProvider, epochAfterGenealogy + 7L, 3, 3, 6L, 1, 1L);
     }
 
     [Test]
@@ -185,6 +190,8 @@ public sealed class PropertyEstateMutationEpochTests
         PersonId heir = new PersonId("p12-property-estate-heir");
         EstateId estateId = new EstateId("p12-property-estate-thread-record");
         PropertyId propertyId = new PropertyId("p12-property-estate-thread-property");
+        Assert.That(runtime.TryAddParentage(deceased, heir, out PersonGenealogyFailure genealogyFailure),
+            Is.True, genealogyFailure.ToString());
         Assert.That(runtime.TryOpenEstate(
             estateId,
             deceased,
@@ -316,13 +323,11 @@ public sealed class PropertyEstateMutationEpochTests
         Assert.That(persons.TryRegister(new PersonRuntime(heir, 0L), out _), Is.True);
 
         GenealogyStore genealogy = new GenealogyStore();
-        Assert.That(genealogy.TryAddParentage(deceased, heir, out GenealogyFailure genealogyFailure),
-            Is.True, genealogyFailure.ToString());
         PropertyOwnershipStore properties = new PropertyOwnershipStore(persons);
         EstateStore estates = new EstateStore(persons);
         prepareInitialOwners?.Invoke(persons, properties, estates);
 
-        return new SimulationRuntime(
+        SimulationRuntime runtime = new SimulationRuntime(
             simulationTime: new SimulationTime(day),
             cities: System.Array.Empty<CityRuntime>(),
             npcRuntimes: null,
@@ -331,7 +336,10 @@ public sealed class PropertyEstateMutationEpochTests
             genealogyStore: genealogy,
             propertyOwnershipStore: properties,
             estateStore: estates,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            worldId: new WorldId(Guid.NewGuid()));
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
+        return runtime;
     }
 
     private TesteSimulacao CreateSelectedDailyV1Simulation()
