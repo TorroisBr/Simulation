@@ -1,7 +1,14 @@
 # P12-B — Profile Admission and Completed-Boundary Eligibility
 
-**Status:** Independent technical design review PASS. This documentation-only
-design is based on planning commit
+**Status:** Independent technical design review PASS on the original bounded
+P12-B lifecycle design. Current profile/source assumptions were revalidated
+against P12 canonical `d8e6c9919d9359003dfd370fbd38a47424256b26`. The
+current-profile revalidation below supersedes the historical composition
+description in Section 2. This document does not deliver code or establish
+P12-B readiness. The live owner/cardinality and committed-write matrices,
+owner-thread/quiescence proof, and completed-boundary lifecycle remain open.
+
+The original documentation-only design is based on planning commit
 `36618a801607656e339110b683bc6a666a26aeeb`; this document defines a technical
 boundary within that scope. It does not deliver code, start P12-B
 implementation, or establish P12-A readiness. The selected composition is
@@ -71,14 +78,15 @@ publish a restored runtime. Those capabilities belong to P12-C through P12-G
 and the final P12-A integration. A P12-B admission result is not proof that
 every owner is covered.
 
-## 2. Canonical composition evidence and blocking mismatch
+## 2. Historical composition evidence and original blocking mismatch
 
-The selected Unity scene is `Assets/Scenes/SampleScene.unity`; its serialized
-`TesteSimulacao` reference selects `Simulation-GeneralTest.asset` (asset GUID
-`ba87bf49ee034da6bda3daeef8e40c3f`). The asset contains authored module,
-City, NPC, action, job, status, inventory, and other bootstrap inputs. The
-asset's module flags are inputs only: `EffectiveSimulationConfiguration`
-after normal resolution determines the daily policies and providers.
+This subsection records the original 2026-09-29 profile mismatch. It is
+superseded by the current profile revalidation below. At that historical
+baseline, `SampleScene.unity` selected `Simulation-GeneralTest.asset`; that
+asset and the former inventory findings are not the current Daily-v1 contract.
+The asset's module flags remain inputs only:
+`EffectiveSimulationConfiguration` after normal resolution determines the
+daily policies and providers.
 
 In the inspected `TesteSimulacao.InitializeSimulation` path, initialization
 resolves calendar/configuration, creates `SimulationTime`, the deterministic
@@ -114,10 +122,9 @@ gates are evidenced against this canonical composition.
 
 The accepted P12-A profile remains unchanged. Do not conditionally accept
 either half as `UnityBootstrap-Daily-v1`, synthesize an ActorChoiceStore, omit
-P9-B provenance, or add an external `WorldCommand` queue. The exact combined
-source is promoted to P12 canonical; the live composition/provider inventory
-has been refreshed against it and records that the existing P11 store is
-composed. P12-A's
+P9-B provenance, or add an external `WorldCommand` queue. The historical
+combined source was promoted to P12 canonical; the current composition and
+provider evidence is recorded in the revalidation below. P12-A's
 P11 causal-state rule applies where that selected runtime composes
 ActorChoiceStore; external queue composition remains excluded. Admission must
 reject until the complete owner census, mutation invalidation, and admission
@@ -127,6 +134,65 @@ Person-backed NPCs. This composition therefore proves the P11 store and its
 continuation state owner, not that SampleScene NPCs can execute SellGoods
 choices. Any future such execution requires a separate upstream Person-backed
 actor capability and does not expand P9-B authored-geography scope.
+
+### Current profile and owner-cardinality revalidation — 2026-10-06
+
+The current selected runtime is `Assets/Scenes/SampleScene.unity` →
+`Simulation-DailyV1.asset` → `TesteSimulacao.InitializeSimulation`, using the
+accepted P9-B authored-geography profile. `Simulation-GeneralTest.asset`
+remains the separate P10-A Ruin/LocalTopology proving profile and is rejected
+by the Daily-v1 path before publication. This follows the accepted P12 Brief
+and the user's profile-separation decision; no P10-A owner or LocalTopology
+facts are added to this profile.
+
+The current P12 canonical tip is `d8e6c9919d9359003dfd370fbd38a47424256b26`.
+Its executable Assets tree is unchanged from reviewed P12-E code
+`5b055be864afa0ace56d56381eb00fe4e993ed86`, tree
+`c9e763e2ebc2f63d9772701a0c03e35c271392f7`; the intervening commits are
+documentation-only. The retained exact-tree validation in
+[`P12BP12EMilitaryOwnerCensusRegistration_VALIDATION.md`](../validation/P12BP12EMilitaryOwnerCensusRegistration_VALIDATION.md)
+includes the current selected-profile test and the 268-section assertion:
+focused composition 24/24, owner-provider suites 5/5 total, ALL EditMode
+2434/2434, official Smoke 5/5, and `git diff --check` PASS. The profile
+separation validation at code `75ca59a` separately records the scene/config
+selection and P10-A rejection; the later 268-section run is on the current
+executable tree. These retained results are reused because the code tree has
+not changed since those runs.
+
+The selected profile has ten authored NPC identities, two Cities, one P9-B
+Hex and anchored P8-A Location, two legacy runtime-ID Locations and two
+Routes. Current witnesses also report the exact installed owner and local
+revision for its other composed/explicitly-empty sections. The protocol seals
+268 sections. `runtime.npc-membership` is temporal: the initial identity
+cardinality is ten at bootstrap, and the existing membership operation
+updates the registry witness/epoch when a Person-backed NPC is materialized;
+unregistering removes it from the active roster but retains its typed identity.
+The existing test proves the `10 → 11` identity count/revision transition and
+the retained count after unregister. Therefore ten is an initial admission
+precondition, not a permanent maximum.
+
+Current code does not yet register the existing P8-A `Hex`, `Location`, and
+scale-context witnesses or the P8-B passage/crossing and P8-C City/Site anchor
+and Person-position witnesses in the sealed protocol. The selected-profile
+composition tests read those providers directly, but direct test reads do not
+make them admission sections. The current bounded follow-up design is
+[`PHASE12_P12B_SPATIAL_PROFILE_CARDINALITY_ADMISSION_DESIGN.md`](PHASE12_P12B_SPATIAL_PROFILE_CARDINALITY_ADMISSION_DESIGN.md).
+It adds those seven existing sections and enforces the current profile's
+initial cardinalities for the Required spatial/identity/network sections.
+The P8-D exact-zero sections are already registered. This follow-up remains
+subject to its own independent design review and implementation validation.
+
+The 268-section test is a verified day-zero inventory, not complete effective
+owner/cardinality coverage over every evolved state. The supported operation
+matrix remains partial: current selected Daily-v1 operations and their entry
+scopes are reconciled in `PHASE12_B_BLOCKER_RESOLUTION.md`, but the complete
+mapping from every supported committed write to all owner revisions and the
+shared epoch is not established. Existing FR-B boundary reading checks owner
+thread and idleness but has no successful-advance sequence token; it is not
+global quiescence proof or capture eligibility. P12-B remains blocked on the
+remaining owner/write matrix, runtime-wide owner-thread/quiescence evidence,
+and the completion of its accepted boundary lifecycle. No export, hydration,
+P12-A readiness, P13 readiness, or Phase closure is implied.
 
 ## 3. Admission manifest and owner boundary
 
