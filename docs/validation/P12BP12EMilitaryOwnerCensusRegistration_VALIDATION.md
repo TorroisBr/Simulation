@@ -1,9 +1,9 @@
 # P12-B P12-E military owner census registration — validation
 
-**Canonical base:** `88d476729715aa82578cb2a204e32a69263e6402`  
-**Code candidate:** `5b055be864afa0ace56d56381eb00fe4e993ed86`  
-**Code tree:** `c9e763e2ebc2f63d9772701a0c03e35c271392f7`  
-**Unity:** `6000.3.9f1`  
+**Canonical base:** `88d476729715aa82578cb2a204e32a69263e6402`
+**Code candidate:** `5b055be864afa0ace56d56381eb00fe4e993ed86`
+**Code tree:** `c9e763e2ebc2f63d9772701a0c03e35c271392f7`
+**Unity:** `6000.3.9f1`
 **Result:** all required validation passed on the code tree above.
 
 All XML and log files are retained in

@@ -1,7 +1,7 @@
 # P12-B — P12-E military owner census registration
 
-**Checkpoint:** P12-B partial profile-census registration  
-**Design baseline:** `88d476729715aa82578cb2a204e32a69263e6402`  
+**Checkpoint:** P12-B partial profile-census registration
+**Design baseline:** `88d476729715aa82578cb2a204e32a69263e6402`
 **Status:** Proposed for independent technical review; implementation has not started.
 
 ## Contract and basis
