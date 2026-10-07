@@ -2197,3 +2197,9 @@ This remains a candidate pending exact-tip review and canonical integration.
 Standalone unscoped P14-A behavior remains covered. This candidate adds no
 census section, operation, mutation callback, or shared-epoch claim, and it
 does not change P12-B/P12-A/P13 readiness.
+
+### P14-A Daily-v1 early-rejection correction — exact-tip review
+
+Independent exact-tip implementation review passed for candidate `c1d37a8c8658beee87d682d27952a7f7d4970fc1` against P12 canonical `2d61e19e8c82bfc729d613d3462a087dfba8ac8f`. Reviewed code remains `65315888a080d2df3fcddd7f977fe8136566a9bb`, tree `ea356e4e1241b82395cfeb3821705589252d87a4`; later branch content is documentation/evidence only. The reviewer found no issues. The durable exact-tip findings are in [`PHASE12_P12B_DAILY_P14_ADMISSION_IMPLEMENTATION_REVIEW.md`](design/PHASE12_P12B_DAILY_P14_ADMISSION_IMPLEMENTATION_REVIEW.md).
+
+The retained validation remains exact-tree: runtime admission 59/59, composition 24/24, selected Daily-v1 inventory 1/1, ALL EditMode 2443/2443, official Smoke 5/5, and `git diff --check` PASS. This candidate remains limited to the early rejection of P14-A authored material-flow configuration under selected Daily-v1; P10-A remains separate and standalone P14-A remains covered. P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. Canonical promotion is the next orchestration action under the standing bounded-promotion authorization.
