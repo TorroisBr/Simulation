@@ -52,8 +52,7 @@ internal sealed class P14CMixedSourceProductionPreparation
         if (!market.CanInstall(MarketRevision, MarketRevisionIncrements)) return false;
         if (MarketRevisionIncrements > 0
             && !market.CanInstallMaterialFlow(MarketRevision, MarketRevisionIncrements)) return false;
-        return finiteAppliedQuantity == 0
-            || finiteSource.CanInstall(finiteSourceRevision, absoluteDay);
+        return finiteSource.CanInstall(finiteSourceRevision, absoluteDay);
     }
 
     internal bool Install()

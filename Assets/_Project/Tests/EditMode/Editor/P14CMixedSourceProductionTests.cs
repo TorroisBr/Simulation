@@ -267,6 +267,26 @@ public sealed class P14CMixedSourceProductionTests
         Assert.That(staleSource.TryResolveDailyEconomyReceipt(sourceManifest, sourceStep, out _, out _), Is.False);
     }
 
+    [Test]
+    public void PreparedP18ProductionRejectsStaleFiniteOwnerWhenFiniteSourceOverflowed()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p14c-overflow-stale-source-item");
+        CityRuntime city = new CityRuntime("runtime.p14c.overflow-stale-source",
+            CreateCity("p14c-overflow-stale-source-city", item, int.MaxValue - 2, 0f, reverseSourceRows: false),
+            new SpatialLocationRuntime("legacy.p14c.overflow-stale-source"));
+        BoundaryContinuationManifest manifest = CreateManifest(city, 12L,
+            CityDailyEconomyStepKind.Production);
+        BoundaryContinuationStep step = manifest.Steps[0];
+
+        IBoundaryContinuationStepCommit prepared = Prepare(city, manifest, step);
+        SetPrivateLong(city.FiniteProductionSources.Source, "revision", 1L);
+
+        Assert.That(prepared.TryCommit(out _), Is.False);
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(int.MaxValue - 2));
+        Assert.That(city.FiniteProductionSources.Source.RemainingReserve, Is.EqualTo(7));
+        Assert.That(city.TryResolveDailyEconomyReceipt(manifest, step, out _, out _), Is.False);
+    }
+
     private static CityData CreateCity(string id, ItemData item, int openingStock,
         float consumptionPer1000, bool reverseSourceRows)
     {
