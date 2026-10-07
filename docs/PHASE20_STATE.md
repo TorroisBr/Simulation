@@ -4,7 +4,7 @@
 
 ## Formal closure marker — Multi-participant Activities v1
 
-The user formally approved Phase 20 closure and promotion on 2026-10-07. This State-only marker closes Phase 20 within the independently reviewed v1 objective and the promoted P20-A/B/C scopes. The exact closure-marker commit and canonical promotion SHA are recorded in the docs-only promotion follow-up after fast-forward.
+The user formally approved Phase 20 closure and promotion on 2026-10-07. This State-only marker closes Phase 20 within the independently reviewed v1 objective and the promoted P20-A/B/C scopes. The formal State-only closure marker and promoted P20 canonical SHA are b3c6b42572b8199a98a9ccf8c5d4971c0922271f, promoted by clean fast-forward from 4cab96b62b17d2eb6e6b197d9de868aac31044b3 and verified on origin/codex/phase20/canonical.
 
 **Closure review:** PASS, independently recorded in docs/design/PHASE20_CLOSURE_REVIEW.md at reviewed candidate tip 7b03dc206ad5f8095af6677a352b02ffb6dc05dc. It reviews closure candidate commit 2daf91b1607c09a62d3dcd7d91e01cdad5b04a8 against P20 canonical base 4cab96b62b17d2eb6e6b197d9de868aac31044b3. The review found every mandatory P20 v1 checkpoint promoted and the recorded evidence and limitations accurate. It ran no tests; closure is documentation-only and relies on the exact-tip promoted validation evidence retained below.
 

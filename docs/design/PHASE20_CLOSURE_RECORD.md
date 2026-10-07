@@ -3,6 +3,7 @@
 **Disposition:** CLOSED / COMPLETED within the approved v1 objective and promoted P20-A, P20-B, and P20-C scopes.
 
 **Formal approval:** The user approved closure and canonical promotion on 2026-10-07.
+**Formal closure marker / promoted P20 canonical SHA:** b3c6b42572b8199a98a9ccf8c5d4971c0922271f, promoted by clean fast-forward from 4cab96b62b17d2eb6e6b197d9de868aac31044b3 and verified on origin/codex/phase20/canonical.
 **Reviewed closure candidate:** codex/phase20/P20ClosureCandidate at 7b03dc206ad5f8095af6677a352b02ffb6dc05dc.
 **Closure candidate document commit:** 2daf91b1607c09a62d3dcd7d91e01cdad5b04a8.
 **Independent review:** PASS, recorded in PHASE20_CLOSURE_REVIEW.md at 7b03dc206ad5f8095af6677a352b02ffb6dc05dc, against P20 canonical base 4cab96b62b17d2eb6e6b197d9de868aac31044b3.
