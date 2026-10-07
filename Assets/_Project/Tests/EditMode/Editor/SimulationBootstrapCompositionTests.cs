@@ -721,8 +721,8 @@ public sealed class SimulationBootstrapCompositionTests
         IDictionary expectedCensusSections = (IDictionary)typeof(ContinuationCensusProtocol)
             .GetField("expectedSections", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(censusProtocol);
-        Assert.That(expectedCensusSections.Count, Is.EqualTo(275),
-            "The selected ten-NPC/two-City Daily-v1 partial inventory includes the P8-A/B/C spatial witnesses, exact-zero P8-D witnesses, and all eight composed P12-E military owner sections.");
+        Assert.That(expectedCensusSections.Count, Is.EqualTo(278),
+            "The selected ten-NPC/two-City Daily-v1 inventory includes the P8-A/B/C spatial witnesses, exact-zero P8-D witnesses, all eight composed P12-E military owner sections, and the three bounded Gate 1 fixed owners.");
         string[] identitySpatialSectionIds =
         {
             RuntimeIdentityRegistryCensusProvider.NpcsSectionId,
@@ -2068,8 +2068,8 @@ public sealed class SimulationBootstrapCompositionTests
 
         IDictionary expectedSections = ReadPrivateField<IDictionary>(protocol, "expectedSections");
         Assert.That(expectedSections.Count, Is.EqualTo(
-            65 + (20 * roster.Length) + unboundNpcCount + people.Length),
-            "The fixed 65 sections plus current dynamic owner-family formula must match the sealed Daily-v1 inventory.");
+            68 + (20 * roster.Length) + unboundNpcCount + people.Length),
+            "The 68 fixed sections plus current dynamic owner-family formula must match the sealed Daily-v1 inventory.");
     }
 
     private static void AssertNpcPlanWitness(

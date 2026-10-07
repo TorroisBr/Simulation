@@ -191,7 +191,13 @@ public sealed class SimulationRuntimeSpatialInvariantReport
 
 public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 {
+    private static readonly string[] P12GenealogyOwnerSectionIds =
+    {
+        GenealogyCensusProvider.SectionId
+    };
+
     private const string NpcMembershipCensusOperationId = "runtime.npc-membership";
+    private const string PersonParentageCensusOperationId = "runtime.person.parentage";
     private const string BootstrapPublicationCensusOperationId = "runtime.bootstrap-publication";
     private const string DailyAdvanceCensusOperationId = "runtime.advance-day";
     private const string SoloTravelStartCensusOperationId = "runtime.travel.start";
@@ -1939,6 +1945,43 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             && (acceptedOrigin == WorldCommandOrigin.GM || acceptedOrigin == WorldCommandOrigin.Scenario);
     }
 
+    private bool TryRegisterP12GateOneFixedOwnerSections(ContinuationCensusProtocol protocol)
+    {
+        if (protocol == null
+            || genealogyStore == null
+            || politicalKnowledgeStore == null
+            || politicalDecisionStore == null)
+            return false;
+
+        return TryRegisterP12FixedOwnerSection(
+                protocol,
+                new GenealogyCensusProvider(genealogyStore),
+                GenealogyCensusProvider.SectionId,
+                GenealogyCensusProvider.SchemaVersion,
+                OwnerSectionRole.Required,
+                genealogyStore,
+                requireZeroRevision: true,
+                expectedInitialCardinality: 0)
+            && TryRegisterP12FixedOwnerSection(
+                protocol,
+                new PoliticalKnowledgeStoreCensusProvider(politicalKnowledgeStore),
+                PoliticalKnowledgeStoreCensusProvider.SectionId,
+                PoliticalKnowledgeStoreCensusProvider.SchemaVersion,
+                OwnerSectionRole.Required,
+                politicalKnowledgeStore,
+                requireZeroRevision: true,
+                expectedInitialCardinality: 0)
+            && TryRegisterP12FixedOwnerSection(
+                protocol,
+                new PoliticalDecisionStoreCensusProvider(politicalDecisionStore),
+                PoliticalDecisionStoreCensusProvider.SectionId,
+                PoliticalDecisionStoreCensusProvider.SchemaVersion,
+                OwnerSectionRole.Required,
+                politicalDecisionStore,
+                requireZeroRevision: true,
+                expectedInitialCardinality: 0);
+    }
+
     private void InitializeNpcRosterCensusProtocol()
     {
         ContinuationCensusProtocol protocol = new ContinuationCensusProtocol();
@@ -1992,6 +2035,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             || (runtimeAdmissionContext != null && !TryRegisterPoliticalSupportCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterPropertyEstateCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterP12PopulationCensusProviders(protocol))
+            || (runtimeAdmissionContext != null && !TryRegisterP12GateOneFixedOwnerSections(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterP12CrimeSocialAppraisalOwnerSections(protocol))
             || (requireP12RuntimeIdentitySpatialCensusOwners
                 && !TryRegisterP12RuntimeIdentitySpatialCensusOwners(protocol))
@@ -2017,6 +2061,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     out _)
                 && protocol.RegisterExpectedOperation(
                     DailyAdvanceCensusOperationId,
+                    out _)
+                && protocol.RegisterExpectedOperation(
+                    PersonParentageCensusOperationId,
                     out _)
                 && (travelPartySystem == null
                     || protocol.RegisterExpectedOperation(
@@ -5131,6 +5178,39 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         return true;
     }
 
+    private bool TryBeginP12GenealogyOwnerCommit(out SimulationOperationScope scope)
+    {
+        scope = null;
+        if (runtimeAdmissionContext == null) return true;
+
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || !npcRosterCensusProtocol.TryValidateUnchangedSections(P12GenealogyOwnerSectionIds, out _)
+            || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
+            || !TryEnterRuntimeAdmissionOperation(PersonParentageCensusOperationId, out scope))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        return true;
+    }
+
+    private void NotifyP12GenealogyOwnerCommit()
+    {
+        if (runtimeAdmissionContext == null) return;
+        try
+        {
+            if (npcRosterCensusProtocol == null
+                || !NotifyP12MutationSections(P12GenealogyOwnerSectionIds))
+                FaultRuntimeAdmission();
+        }
+        catch
+        {
+            FaultRuntimeAdmission();
+        }
+    }
+
     private bool TryBeginP12PropertyEstateOwnerCommit(
         string operationContractId,
         IEnumerable<string> sectionIds,
@@ -7562,13 +7642,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         PersonId childId,
         out PersonGenealogyFailure failure)
     {
-        bool added = PersonGenealogySystem.TryAddParentage(this, parentId, childId, out failure);
-        if (added)
-        {
-            AdvancePoliticalWorldRevision();
-        }
-
-        return added;
+        return TryApplyP12GenealogyMutation(true, parentId, childId, out failure);
     }
 
     public bool TryRemoveParentage(
@@ -7576,13 +7650,44 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         PersonId childId,
         out PersonGenealogyFailure failure)
     {
-        bool removed = PersonGenealogySystem.TryRemoveParentage(this, parentId, childId, out failure);
-        if (removed)
+        return TryApplyP12GenealogyMutation(false, parentId, childId, out failure);
+    }
+
+    internal bool TryApplyP12GenealogyMutation(
+        bool add,
+        PersonId parentId,
+        PersonId childId,
+        out PersonGenealogyFailure failure)
+    {
+        SimulationOperationScope p12Scope;
+        if (!TryBeginP12GenealogyOwnerCommit(out p12Scope))
         {
-            AdvancePoliticalWorldRevision();
+            failure = PersonGenealogyFailure.RuntimeFaulted;
+            return false;
         }
 
-        return removed;
+        try
+        {
+            bool committed = add
+                ? PersonGenealogySystem.TryAddParentage(this, parentId, childId, out failure)
+                : PersonGenealogySystem.TryRemoveParentage(this, parentId, childId, out failure);
+            if (committed)
+            {
+                AdvancePoliticalWorldRevision();
+                NotifyP12GenealogyOwnerCommit();
+            }
+
+            return committed;
+        }
+        catch
+        {
+            FaultRuntimeAdmission();
+            throw;
+        }
+        finally
+        {
+            p12Scope?.Dispose();
+        }
     }
 
     public bool ContainsParentage(PersonId parentId, PersonId childId)

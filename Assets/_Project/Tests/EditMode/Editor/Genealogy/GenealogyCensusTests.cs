@@ -1,4 +1,7 @@
+using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
+using System.Threading;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -34,6 +37,140 @@ public sealed class GenealogyCensusTests
 
         AssertWitness(provider.GetCurrentCensus(), installed, 0, 0L);
         AssertWitness(provider.GetCurrentCensus(), installed, 0, 0L);
+    }
+
+    [Test]
+    public void SelectedDailyCensusRegistersGateOneOwnersAndTracksParentageOperation()
+    {
+        TesteSimulacao simulation = CreateSelectedSampleSimulation();
+        SimulationRuntime runtime = simulation.Runtime;
+        GenealogyStore genealogy = GetInstalledGenealogyStore(runtime);
+        PoliticalKnowledgeStore politicalKnowledge = GetPrivateField<PoliticalKnowledgeStore>(
+            runtime, "politicalKnowledgeStore");
+        PoliticalDecisionStore politicalDecisions = GetPrivateField<PoliticalDecisionStore>(
+            runtime, "politicalDecisionStore");
+        ContinuationCensusProtocol protocol = GetCensusProtocol(runtime);
+
+        IDictionary expectedSections = (IDictionary)typeof(ContinuationCensusProtocol).GetField(
+            "expectedSections", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(protocol);
+        Assert.That(expectedSections.Count, Is.EqualTo(278));
+        HashSet<string> expectedOperations = (HashSet<string>)typeof(ContinuationCensusProtocol).GetField(
+            "expectedOperations", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(protocol);
+        Assert.That(expectedOperations.Count, Is.EqualTo(24));
+        Assert.That(expectedOperations, Does.Contain("runtime.person.parentage"));
+
+        AssertRegisteredRequiredOwner(protocol, GenealogyCensusProvider.SectionId,
+            GenealogyCensusProvider.SchemaVersion, genealogy, 0, 0L);
+        AssertRegisteredRequiredOwner(protocol, PoliticalKnowledgeStoreCensusProvider.SectionId,
+            PoliticalKnowledgeStoreCensusProvider.SchemaVersion, politicalKnowledge, 0, 0L);
+        AssertRegisteredRequiredOwner(protocol, PoliticalDecisionStoreCensusProvider.SectionId,
+            PoliticalDecisionStoreCensusProvider.SchemaVersion, politicalDecisions, 0, 0L);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialCensusFailure),
+            Is.True, initialCensusFailure.ToString());
+
+        PersonId parent = new PersonId("selected-genealogy-parent");
+        PersonId child = new PersonId("selected-genealogy-child");
+        PersonId otherChild = new PersonId("selected-genealogy-other-child");
+        Assert.That(runtime.TryRegisterPerson(new PersonRuntime(parent), out PersonStoreFailure parentFailure),
+            Is.True, parentFailure.ToString());
+        Assert.That(runtime.TryRegisterPerson(new PersonRuntime(child), out PersonStoreFailure childFailure),
+            Is.True, childFailure.ToString());
+        Assert.That(runtime.TryRegisterPerson(new PersonRuntime(otherChild), out PersonStoreFailure otherFailure),
+            Is.True, otherFailure.ToString());
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure registeredCensusFailure),
+            Is.True, registeredCensusFailure.ToString());
+
+        long epoch = ReadMutationEpoch(protocol);
+        Assert.That(runtime.TryAddParentage(parent, child, out PersonGenealogyFailure runtimeAddFailure),
+            Is.True, runtimeAddFailure.ToString());
+        Assert.That(ReadMutationEpoch(protocol), Is.EqualTo(++epoch));
+        Assert.That(genealogy.Count, Is.EqualTo(1));
+        Assert.That(genealogy.Revision, Is.EqualTo(1L));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure afterRuntimeAdd),
+            Is.True, afterRuntimeAdd.ToString());
+
+        Assert.That(runtime.TryAddParentage(new PersonId("selected-genealogy-unregistered"), child,
+            out PersonGenealogyFailure missingParentFailure), Is.False);
+        Assert.That(missingParentFailure, Is.EqualTo(PersonGenealogyFailure.ParentNotRegistered));
+        Assert.That(ReadMutationEpoch(protocol), Is.EqualTo(epoch));
+        Assert.That(genealogy.Count, Is.EqualTo(1));
+        Assert.That(genealogy.Revision, Is.EqualTo(1L));
+
+        Assert.That(runtime.TryAddParentage(parent, child,
+            out PersonGenealogyFailure duplicateFailure), Is.False);
+        Assert.That(duplicateFailure, Is.EqualTo(PersonGenealogyFailure.DuplicateParentage));
+        Assert.That(ReadMutationEpoch(protocol), Is.EqualTo(epoch));
+        Assert.That(genealogy.Count, Is.EqualTo(1));
+        Assert.That(genealogy.Revision, Is.EqualTo(1L));
+
+        Assert.That(runtime.TryAddParentage(parent, otherChild,
+            out PersonGenealogyFailure secondAddFailure), Is.True, secondAddFailure.ToString());
+        Assert.That(ReadMutationEpoch(protocol), Is.EqualTo(++epoch));
+        Assert.That(genealogy.Count, Is.EqualTo(2));
+        Assert.That(genealogy.Revision, Is.EqualTo(2L));
+
+        Assert.That(runtime.TryRemoveParentage(parent, child, out PersonGenealogyFailure runtimeRemoveFailure),
+            Is.True, runtimeRemoveFailure.ToString());
+        Assert.That(ReadMutationEpoch(protocol), Is.EqualTo(++epoch));
+        Assert.That(genealogy.Count, Is.EqualTo(1));
+        Assert.That(genealogy.Revision, Is.EqualTo(3L));
+
+        Assert.That(runtime.TryRemoveParentage(parent, otherChild,
+            out PersonGenealogyFailure secondRemoveFailure), Is.True, secondRemoveFailure.ToString());
+        Assert.That(ReadMutationEpoch(protocol), Is.EqualTo(++epoch));
+        Assert.That(genealogy.Count, Is.Zero);
+        Assert.That(genealogy.Revision, Is.EqualTo(4L));
+        Assert.That(runtime.TryRemoveParentage(parent, otherChild,
+            out PersonGenealogyFailure missingFailure), Is.False);
+        Assert.That(missingFailure, Is.EqualTo(PersonGenealogyFailure.ParentageNotFound));
+        Assert.That(ReadMutationEpoch(protocol), Is.EqualTo(epoch));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure finalCensusFailure),
+            Is.True, finalCensusFailure.ToString());
+    }
+
+    [Test]
+    public void SelectedDailyParentageRejectsWrongThreadBeforeOwnerWrite()
+    {
+        TesteSimulacao simulation = CreateSelectedSampleSimulation();
+        SimulationRuntime runtime = simulation.Runtime;
+        GenealogyStore genealogy = GetInstalledGenealogyStore(runtime);
+        PersonId parent = new PersonId("selected-genealogy-wrong-thread-parent");
+        PersonId child = new PersonId("selected-genealogy-wrong-thread-child");
+        Assert.That(runtime.TryRegisterPerson(new PersonRuntime(parent), out _), Is.True);
+        Assert.That(runtime.TryRegisterPerson(new PersonRuntime(child), out _), Is.True);
+
+        bool added = true;
+        PersonGenealogyFailure failure = PersonGenealogyFailure.None;
+        Thread thread = new Thread(() =>
+        {
+            added = runtime.TryAddParentage(parent, child, out failure);
+        });
+        thread.Start();
+        thread.Join();
+
+        Assert.That(added, Is.False);
+        Assert.That(failure, Is.EqualTo(PersonGenealogyFailure.RuntimeFaulted));
+        Assert.That(genealogy.Count, Is.Zero);
+        Assert.That(genealogy.Revision, Is.Zero);
+    }
+
+    [Test]
+    public void SelectedDailyParentageRejectsWhenMutationEpochCapacityIsExhausted()
+    {
+        TesteSimulacao simulation = CreateSelectedSampleSimulation();
+        SimulationRuntime runtime = simulation.Runtime;
+        GenealogyStore genealogy = GetInstalledGenealogyStore(runtime);
+        ContinuationCensusProtocol protocol = GetCensusProtocol(runtime);
+        PersonId parent = new PersonId("selected-genealogy-epoch-parent");
+        PersonId child = new PersonId("selected-genealogy-epoch-child");
+        Assert.That(runtime.TryRegisterPerson(new PersonRuntime(parent), out _), Is.True);
+        Assert.That(runtime.TryRegisterPerson(new PersonRuntime(child), out _), Is.True);
+        SetPrivateField(protocol, "mutationEpoch", long.MaxValue);
+
+        Assert.That(runtime.TryAddParentage(parent, child, out PersonGenealogyFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(PersonGenealogyFailure.RuntimeFaulted));
+        Assert.That(genealogy.Count, Is.Zero);
+        Assert.That(genealogy.Revision, Is.Zero);
     }
 
     [Test]
@@ -167,15 +304,78 @@ public sealed class GenealogyCensusTests
     private TesteSimulacao CreateSelectedSampleSimulation()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
-            "Assets/_Project/Data/Simulations/Simulation-GeneralTest.asset");
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
         Assert.That(config, Is.Not.Null);
         simulationObject = new GameObject("genealogy-census-test");
         TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
         typeof(TesteSimulacao).GetField(
             "simulationConfig",
             BindingFlags.Instance | BindingFlags.NonPublic).SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField(
+            "runtimeAdmissionProfile",
+            BindingFlags.Instance | BindingFlags.NonPublic).SetValue(
+                simulation,
+                SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
         simulation.Start();
         return simulation;
+    }
+
+    private static ContinuationCensusProtocol GetCensusProtocol(SimulationRuntime runtime)
+    {
+        FieldInfo field = typeof(SimulationRuntime).GetField(
+            "npcRosterCensusProtocol",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null);
+        ContinuationCensusProtocol protocol = field.GetValue(runtime) as ContinuationCensusProtocol;
+        Assert.That(protocol, Is.Not.Null);
+        return protocol;
+    }
+
+    private static T GetPrivateField<T>(object instance, string fieldName) where T : class
+    {
+        FieldInfo field = instance.GetType().GetField(
+            fieldName,
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, fieldName);
+        T value = field.GetValue(instance) as T;
+        Assert.That(value, Is.Not.Null, fieldName);
+        return value;
+    }
+
+    private static long ReadMutationEpoch(ContinuationCensusProtocol protocol)
+    {
+        Assert.That(protocol.TryReadMutationEpoch(out long epoch, out ContinuationCensusFailure failure),
+            Is.True, failure.ToString());
+        return epoch;
+    }
+
+    private static void AssertRegisteredRequiredOwner(
+        ContinuationCensusProtocol protocol,
+        string sectionId,
+        int schemaVersion,
+        object owner,
+        int cardinality,
+        long revision)
+    {
+        IDictionary sections = (IDictionary)typeof(ContinuationCensusProtocol).GetField(
+            "registeredSections", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(protocol);
+        Assert.That(sections.Contains(sectionId), Is.True, sectionId);
+        object section = sections[sectionId];
+        FieldInfo contractField = section.GetType().GetField(
+            "Contract", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        FieldInfo providerField = section.GetType().GetField(
+            "Provider", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        OwnerSectionContract contract = (OwnerSectionContract)contractField.GetValue(section);
+        IOwnerSectionCensusProvider provider = (IOwnerSectionCensusProvider)providerField.GetValue(section);
+        OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+
+        Assert.That(contract.Role, Is.EqualTo(OwnerSectionRole.Required));
+        Assert.That(contract.SchemaVersion, Is.EqualTo(schemaVersion));
+        Assert.That(witness.SectionId, Is.EqualTo(sectionId));
+        Assert.That(witness.SchemaVersion, Is.EqualTo(schemaVersion));
+        Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(owner));
+        Assert.That(witness.Cardinality, Is.EqualTo(cardinality));
+        Assert.That(witness.Revision, Is.EqualTo(revision));
     }
 
     private static GenealogyStore GetInstalledGenealogyStore(SimulationRuntime runtime)

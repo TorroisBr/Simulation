@@ -4,9 +4,9 @@
 
 **Profile:** selected `UnityBootstrap-Daily-v1`, after the accepted P9-B-only profile correction.
 
-**Status:** source-linked audit of the 23 currently registered operation IDs; not a completeness certification.
+**Status:** source-linked audit of the 24 currently registered operation IDs; not a completeness certification.
 
-This matrix maps each registered operation to the known runtime entrypoint, owner/revision families, invalidation boundary, and retained focused tests. The profile correction and later census-evidence promotion are test/configuration-boundary work; they do not change the production operation implementation audited here.
+This matrix maps each registered operation to the known runtime entrypoint, owner/revision families, invalidation boundary, and retained focused tests. The first 23 rows reflect the prior sealed inventory; the current Gate 1 correction adds the parentage operation described below. The profile correction and later census-evidence promotion are test/configuration-boundary work; they do not change the production operation implementation audited here.
 
 ## Registered operations
 
@@ -47,6 +47,7 @@ This matrix maps each registered operation to the known runtime entrypoint, owne
 21. **`runtime.population.residence-migration`** — origin/destination City aggregate sections and the exact NPC residence or Person life/residence section. Paired population/residence commits preflight local revisions and publish one reserved epoch. Evidence: `PairedResidenceMigrationRequiresRuntimeBoundaryAndAdvancesOneEpoch`.
 22. **`runtime.person.death`** — supported unkeyed, receipt-free direct Person death. Changes Person life/residence, and when materialized the NPC life/current-action sections and resident City aggregate as applicable. One complete reserved operation epoch covers these owners. Keyed/receipt-bearing forms are rejected under P12. Evidence: `PersonResidenceBindingAndReceiptFreeDeathUseCompleteOneEpochBoundaries` and direct Person death cases.
 23. **`runtime.person.residence-bind`** — exact `p12b.person-life-residence/{PersonId}` section and Person local revision for existing-resident binding; one reserved operation notification. Evidence: the Person binding/lifecycle test above.
+24. **`runtime.person.parentage`** — both public `SimulationRuntime.TryAddParentage` / `TryRemoveParentage` and public `PersonGenealogySystem` add/remove entrypoints converge on one runtime admission wrapper. The Required `p12d.genealogy.parentage` section binds the exact installed `GenealogyStore`; each successful add/remove notifies its local revision/cardinality once under the shared owner-thread operation scope. Rejected/no-op calls notify nothing. The exact-zero political Knowledge/decision census sections are Required owners with no P12-B writer operation; their producer paths remain deferred to P12-F. Evidence: selected Daily-v1 owner registration, successful/rejected add/remove, wrong-thread and epoch-capacity tests in `GenealogyCensusTests`.
 
 ## Profile exclusions and evidence boundary
 
@@ -56,6 +57,6 @@ This matrix maps each registered operation to the known runtime entrypoint, owne
 - Military owner witnesses are Required at zero, while P16/P17 mutation paths are configuration-gated. Expedition autonomy is not composed by the production Daily bootstrap and remains deferred to P12-F dependencies.
 - Institution, faction, claim, support, property, and estate façades are supported runtime entrypoints even when the automatic daily actor loop does not call them; their focused suites exercise successful and rejected façade paths.
 
-This audit accounts for all 23 registered operation IDs and their current known scopes. Registration-to-scope mapping does not prove those IDs exhaust every supported production ingress, that all 275 effective section/cardinality rows are documented, or that every successful commit path has been independently observed. No specific additional supported Daily-v1 writer or missing epoch edge was identified. The remaining evidence work is to link every effective census row to its exact owner/revision and every supported successful ingress to its committed sections and enclosing scope; then prove runtime-wide owner-thread/quiescence and validate a completed-boundary token tied to the successful advance sequence. An idle `CurrentDay` read is not that token.
+The matrix now accounts for 24 registered operation IDs and the 278 fixed-section baseline plus the dynamic `20*N + U + P` owner families. Registration-to-scope mapping remains bounded to the selected Daily-v1 profile; the separate Gate 1 audit reconciles the supported roots, exact owners, and commits. The remaining completion work is runtime-wide owner-thread/quiescence and a completed-boundary token tied to the successful advance sequence. An idle `CurrentDay` read is not that token.
 
 P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`. This matrix grants no capture, export, hydration, or downstream readiness.
