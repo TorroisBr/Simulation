@@ -1,12 +1,12 @@
 # P14-C Implementation Candidate — 2026-10-07
 
-**Checkpoint:** P14-C — Multiple Identifiable Sources v1  
-**Status:** validated implementation candidate; exact-tip independent review pending  
-**Implementation commit:** `12eadd3648b30d444b0fbb6b6f829d19ee256e9e`  
-**Implementation tree:** `0f0323b0a9b0ec0c579535691590beeaa259d22c`  
-**Implementation base:** `ce29f21878bda260ac96b723965d49ebe2aa5320`  
-**P14 canonical at candidate start:** `06e9c30101a74bd618d3651885c489c79fe866bb`  
-**P12 canonical at candidate start:** `405f70e58a7a1dd8be255798b795faff095f44b4`  
+**Checkpoint:** P14-C — Multiple Identifiable Sources v1
+**Status:** validated implementation candidate; exact-tip independent review pending
+**Implementation commit:** `12eadd3648b30d444b0fbb6b6f829d19ee256e9e`
+**Implementation tree:** `0f0323b0a9b0ec0c579535691590beeaa259d22c`
+**Implementation base:** `ce29f21878bda260ac96b723965d49ebe2aa5320`
+**P14 canonical at candidate start:** `06e9c30101a74bd618d3651885c489c79fe866bb`
+**P12 canonical at candidate start:** `405f70e58a7a1dd8be255798b795faff095f44b4`
 **Architecture:** `e16796014d348e3b59da7ed848101c4c03926ba5`
 
 ## Accepted scope and limits
