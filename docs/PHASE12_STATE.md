@@ -72,17 +72,20 @@ Current design revalidation uses architecture canonical 47eff220c7ce00f6e7c759bd
 - **P12-B and P12-C:** remain COMPLETE/PROMOTED within their recorded bounded
   contracts; the current P12-D slice does not reopen them.
 - **P12-D:** IN PROGRESS. Genealogy, SpatialNetwork, and Person local-owner
-  snapshots are promoted. The Site owner candidate at cf9fb050 is not promoted:
-  exact-tip review found that AddCore can admit duplicate SiteInstanceId values
-  which staging rejects, and asked for a selected Daily-v1 exact-empty census
-  assertion. The implementation is resolving both findings; fresh exact-tip
-  review and integrated ALL EditMode/official Smoke gates remain outstanding.
-  The City/NPC reference-order design correction at 4d1b7d32 and its referenced
-  City proposal at 837bcdaf await independent exact-content review. No City
-  implementation is in progress. Daily-v1 Site remains required-empty and
-  bound to the exact P12-B owner/token; P10-A remains a separate proving
-  profile. City/population and the D/E/F NPC adapter remain serialized shared
-  owner work; whole-D staging remains outstanding.
+  snapshots are promoted. The Site implementation now preserves live `AddCore`
+  behavior but rejects non-round-trippable duplicate `SiteInstanceId` state
+  during snapshot capture; its updated focused and selected Daily-v1 checks
+  pass. Fresh exact-tip review and integrated ALL EditMode/official Smoke gates
+  remain outstanding.
+  Independent review of the City/NPC reference-order design at 4d1b7d32 and
+  City proposal 837bcdaf returned NEEDS_CHANGES at review tip b08acd1e. The
+  construction/reference ordering passes, but the design must keep
+  `p12d.explorable-sites` required-empty for Daily-v1 and consume P12-E's typed
+  `NOT_COMPOSED` LocalTopology witness; generic multi-site hydration is deferred
+  to a future profile that admits it. No City implementation is in progress.
+  P10-A remains a separate proving profile. City/population and the D/E/F NPC
+  adapter remain serialized shared-owner work; whole-D staging remains
+  outstanding.
 - **P12-E:** The LocalTopology NOT_COMPOSED correction passed exact-content
   design review at cdea870ef9eeb27603d021bac97ec56a81856617 (durable review
   branch tip d40e222affe67690287887195dfdc425798cd7e1). Current-base
