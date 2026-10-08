@@ -13,6 +13,16 @@ This evidence validates only the reviewed P12-E owner export and private staged 
 - Exact `Assets` subtree: `96a74b341f5c2ae07f53d7a16682a7d3e183f033`.
 - Branch: `codex/phase12/P12EArmedForceManpowerPositionSnapshotImplementation`.
 
+Source blobs in the implementation commit:
+
+| File | Blob |
+|---|---|
+| `Assets/_Project/Scripts/ArmedForceStore.cs` | `44cf3322191a553db86f7e685fad5114272fa4f6` |
+| `Assets/_Project/Scripts/MilitaryManpowerFoundation.cs` | `ca97d42b0f440ea7ba76b4d7df4213466de68c77` |
+| `Assets/_Project/Scripts/ArmedForceSpatialPosition.cs` | `8eb40bdf9cb4aa3092e58fa6a998201600eb7e5a` |
+| `Assets/_Project/Scripts/P12EMilitaryOwnerSnapshot.cs` | `4233f5a8c2aa68152b3db0b496153953101e3c42` |
+| `Assets/_Project/Tests/EditMode/Editor/P12EMilitaryOwnerSnapshotTests.cs` | `c3ed388e7ebb5029d4527b8a059a776420757454` |
+
 The implementation was tested from the exact code tree above. This work does not add runtime integration, census admission or epoch wiring, quiescence, P12-D assembly, P12-G, capture eligibility, export/hydration composition, or P12-B/P12-A/P13 readiness claims.
 
 ## Validation results
