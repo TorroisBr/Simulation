@@ -72,29 +72,39 @@ Current design revalidation uses architecture canonical 47eff220c7ce00f6e7c759bd
 - **P12-B and P12-C:** remain COMPLETE/PROMOTED within their recorded bounded
   contracts; the current P12-D slice does not reopen them.
 - **P12-D:** IN PROGRESS. Genealogy, SpatialNetwork, and Person local-owner
-  snapshots are promoted. The Site implementation now preserves live `AddCore`
-  behavior but rejects non-round-trippable duplicate `SiteInstanceId` state
-  during snapshot capture; its updated focused and selected Daily-v1 checks
-  pass. Fresh exact-tip review and integrated ALL EditMode/official Smoke gates
-  remain outstanding.
-  Independent review of the City/NPC reference-order design at 4d1b7d32 and
-  City proposal 837bcdaf returned NEEDS_CHANGES at review tip b08acd1e. The
-  construction/reference ordering passes, but the design must keep
-  `p12d.explorable-sites` required-empty for Daily-v1 and consume P12-E's typed
-  `NOT_COMPOSED` LocalTopology witness; generic multi-site hydration is deferred
-  to a future profile that admits it. No City implementation is in progress.
-  P10-A remains a separate proving profile. City/population and the D/E/F NPC
-  adapter remain serialized shared-owner work; whole-D staging remains
-  outstanding.
+  snapshots are promoted. The isolated Site implementation candidate is
+  `f4f0f5d6` with `Assets` tree
+  `71d917e5bd4090368f5be1536a6cbb2e789bed64`. Exact-tip implementation review
+  PASS is recorded at `8290a9a9`; current-base revalidation PASS
+  (`BASE_DRIFT_ONLY`) is recorded at `16dce50d` against P12 canonical
+  `dbba3e9`. Site census 12/12, selected Daily-v1 exact-empty profile 1/1, ALL
+  EditMode 2556/2556, official Smoke 5/5, and `git diff --check` pass; artifacts
+  and hashes are in
+  [`validation/P12DExplorableSiteOwnerSnapshot/VALIDATION.md`](validation/P12DExplorableSiteOwnerSnapshot/VALIDATION.md).
+  The live `AddCore` path is unchanged; capture rejects duplicate
+  `SiteInstanceId` state that cannot round-trip. Current integration still
+  provides only the isolated owner factory, without P12-B token/vector binding,
+  whole-D cross-owner validation, runtime publication, or P12-A integration.
+  Independent City/NPC design review of original candidate `4d1b7d32` found
+  profile-boundary issues at `b08acd1e`; corrected candidate `9e0dcce1` passed
+  exact-content review at `c65499d3`. The correction preserves Daily-v1's
+  `p12d.explorable-sites` required-empty section, consumes P12-E's typed
+  `NOT_COMPOSED` LocalTopology witness, and defers generic populated-site rows
+  to a future profile. It grants no City/NPC implementation readiness because
+  field-complete owner evidence is still absent. P10-A remains a separate
+  proving profile. City/population and the D/E/F NPC adapter remain serialized
+  shared-owner work; whole-D staging remains outstanding.
 - **P12-E:** The LocalTopology NOT_COMPOSED correction passed exact-content
   design review at cdea870ef9eeb27603d021bac97ec56a81856617 (durable review
   branch tip d40e222affe67690287887195dfdc425798cd7e1). Current-base
   revalidation against P12 63cb5e7 and architecture 47eff220 is PASS and
   classifies the Person promotion as BASE_DRIFT_ONLY. The corrected design
-  requires typed provider absence for Daily-v1 and keeps P10 separate. No E
-  owner slice is READY_FOR_IMPLEMENTATION: complete owner fields, writes and
-  revisions, detached export, and staged reconstruction evidence remain
-  outstanding.
+  requires typed provider absence for Daily-v1 and keeps P10 separate. The
+  docs-only correction and review records were promoted from 63cb5e7 to P12
+  canonical `dbba3e9`; the correction adds no capability and the readiness DAG
+  is unchanged. No E owner slice is READY_FOR_IMPLEMENTATION: complete owner
+  fields, writes and revisions, detached export, and staged reconstruction
+  evidence remain outstanding.
 - **P12-F:** waits for P12-D and P12-E. Expedition remains in its accepted
   P12-F scope and is not advanced by this D slice.
 - **P12-G:** waits for P12-B through P12-F and a validated live-profile

@@ -13,14 +13,21 @@ integration, P12-A readiness, P13 readiness, or Phase 12 closure.
   `8290a9a9fa19409a48349a053bf3c9794aba28de`.
 - Current-base integration branch: `codex/phase12/P12DSiteCurrentBaseIntegration`,
   based on current P12 canonical `dbba3e9a227f66da0381e3e042e826518d63c240`.
-  Integration changes only the P12-E design/State and the Site review document;
-  the `Assets` tree remains exactly `71d917e5bd4090368f5be1536a6cbb2e789bed64`.
+  The integration includes the P12-E design/State correction, the Site review
+  document, and the corrected P12-D City/NPC boundary design and exact-content
+  review. The `Assets` tree remains exactly
+  `71d917e5bd4090368f5be1536a6cbb2e789bed64`.
 - Independent current-base review: PASS, classified `BASE_DRIFT_ONLY`, review
   branch `codex/phase12/P12DSiteCurrentBaseIntegrationReview`, record commit
-  `16dce50d34969391da99364c3414a0845af42187`. It confirms review `8290a9a`
-  remains included and validates compatibility with the promoted P12-E
-  `NOT_COMPOSED` correction. All validation below applies to that same
-  unchanged `Assets` tree.
+  `16dce50d34969391da99364c3414a0845af42187`. That review assessed integration
+  tip `497c772ba6888a1ed632e682564fab94b8f3739f` against P12 canonical
+  `dbba3e9`; it confirms review `8290a9a` remains included, the code tree is
+  unchanged, and the Site snapshot is compatible with the P12-E
+  `NOT_COMPOSED` correction. The corrected City/NPC design was merged
+  afterward at `9e0dcce1e0d348dba3853be67a2565a5f4826be1` with exact-content
+  review `c65499d3baa52a134016fce5a0cefee8f0e09c4e`. A final integration
+  revalidation is required for the assembled candidate; validation below
+  remains bound to the same unchanged `Assets` tree.
 
 The implementation changes only the Site owner snapshot, `ExplorableSiteStore`,
 its `.meta`, and census tests. Capture rejects duplicate runtime/site-instance
