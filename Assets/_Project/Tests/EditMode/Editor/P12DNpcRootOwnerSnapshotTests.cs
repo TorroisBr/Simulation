@@ -13,6 +13,114 @@ public sealed class P12DNpcRootOwnerSnapshotTests
     public void TearDown() => SimulationTestFactory.CleanupDefinitions();
 
     [Test]
+    public void DailyV1Package_StagesPersonFirstAndPreservesOneOrderedCityNpcGraph()
+    {
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "p12d-owner-package-city", "p12d-owner-package-location");
+        CityRuntime destination = SimulationTestFactory.CreateCity(
+            "p12d-owner-package-destination", "p12d-owner-package-destination-location");
+        NpcRuntime npc = new NpcRuntime(
+            "p12d-owner-package-npc",
+            SimulationTestFactory.CreateNpc("p12d-owner-package-npc-definition"), city, 0f);
+        DailyFixture fixture = CreateDailyFixture(city, npc, destination);
+        DailyCaptureEligibilityToken token = CompleteDailyBoundary(fixture.Runtime);
+        RuntimeIdentityRegistry stagedIdentities = new RuntimeIdentityRegistry();
+
+        long sourceMembershipRevision = city.ImportantNpcRevision;
+        long sourcePersonRevision = fixture.Runtime.PersonStore.Revision;
+        long sourceGenealogyRevision = fixture.Runtime.GenealogyStoreForWorldBoundary.Revision;
+        long sourceSpatialRevision = fixture.SpatialNetwork.Revision;
+        Assert.That(TryStageDailyPackage(
+            fixture, token, stagedIdentities,
+            out P12DDailyV1OwnerPackage package,
+            out P12DDailyV1OwnerPackageFailure failure), Is.True, failure.ToString());
+
+        Assert.That(package, Is.Not.Null);
+        Assert.That(package.WorldId, Is.SameAs(token.WorldId));
+        Assert.That(package.Cities, Has.Count.EqualTo(fixture.Cities.Length));
+        Assert.That(package.Npcs, Has.Count.EqualTo(fixture.Npcs.Length));
+        Assert.That(package.Cities[0], Is.Not.SameAs(fixture.Cities[0]));
+        Assert.That(package.Npcs.Single(value => value.RuntimeId == npc.RuntimeId), Is.Not.SameAs(npc));
+        Assert.That(package.Cities[0].ImportantNpcRevision, Is.EqualTo(sourceMembershipRevision));
+        Assert.That(package.Cities[0].ImportantNpcs.Select(value => value.RuntimeId),
+            Is.EqualTo(city.ImportantNpcs.Select(value => value.RuntimeId)));
+        Assert.That(package.Cities[0].ImportantNpcs.Single(), Is.SameAs(
+            package.Npcs.Single(value => value.RuntimeId == npc.RuntimeId)));
+        Assert.That(package.Persons.Revision, Is.EqualTo(sourcePersonRevision));
+        Assert.That(package.Genealogy.Revision, Is.EqualTo(sourceGenealogyRevision));
+        Assert.That(package.SpatialNetwork.Revision, Is.EqualTo(sourceSpatialRevision));
+        Assert.That(package.EmptyExplorableSites.Count, Is.Zero);
+        Assert.That(package.EmptyExplorableSites.Revision, Is.Zero);
+        Assert.That(package.RuntimeIdentities.CensusRevision, Is.EqualTo(
+            fixture.Identities.CensusRevision));
+        Assert.That(city.ImportantNpcRevision, Is.EqualTo(sourceMembershipRevision));
+        Assert.That(fixture.Runtime.PersonStore.Revision, Is.EqualTo(sourcePersonRevision));
+        Assert.That(fixture.Runtime.GenealogyStoreForWorldBoundary.Revision,
+            Is.EqualTo(sourceGenealogyRevision));
+        Assert.That(fixture.SpatialNetwork.Revision, Is.EqualTo(sourceSpatialRevision));
+    }
+
+    [Test]
+    public void DailyV1Package_PreflightsCityLocationReciprocityBeforeAnyMembershipFill()
+    {
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "p12d-owner-package-invalid-city", "p12d-owner-package-invalid-location");
+        CityRuntime destination = SimulationTestFactory.CreateCity(
+            "p12d-owner-package-invalid-destination", "p12d-owner-package-invalid-destination-location");
+        NpcRuntime npc = new NpcRuntime(
+            "p12d-owner-package-invalid-npc",
+            SimulationTestFactory.CreateNpc("p12d-owner-package-invalid-npc-definition"), city, 0f);
+        DailyFixture fixture = CreateDailyFixture(city, npc, destination);
+        long sourceRevision = city.ImportantNpcRevision;
+        int sourceMemberCount = city.ImportantNpcs.Count;
+        DailyCaptureEligibilityToken token = CompleteDailyBoundary(fixture.Runtime);
+        object stamp = new object();
+        Assert.That(P12DNpcRootOwnerSnapshot.TryCapture(
+            fixture.Runtime, token, stamp, token.OwnerSections,
+            out P12DNpcDProjection d, out P12DNpcFProjection f, out _), Is.True);
+
+        List<P12DCityRootOwnerSnapshot.StagingCaptureEnvelope> cityCaptures =
+            new List<P12DCityRootOwnerSnapshot.StagingCaptureEnvelope>();
+        Dictionary<string, string> cityLocationIds = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (CityRuntime sourceCity in fixture.Cities)
+        {
+            Assert.That(P12DCityRootOwnerSnapshot.TryCaptureForStaging(
+                sourceCity, token, stamp, token.OwnerSections,
+                out P12DCityRootOwnerSnapshot.StagingCaptureEnvelope cityCapture, out _), Is.True);
+            cityCaptures.Add(cityCapture);
+            cityLocationIds.Add(cityCapture.Snapshot.CityRuntimeId,
+                cityCapture.Snapshot.LegacyLocationRuntimeId);
+        }
+
+        Dictionary<string, SpatialLocationRuntime> locationsById = fixture.SpatialNetwork.Locations
+            .ToDictionary(value => value.RuntimeId, StringComparer.Ordinal);
+        Assert.That(P12DDailyV1OwnerPackage.TryPreflightRelations(
+            fixture.Runtime.PersonStore.CaptureOwnerSnapshot(),
+            fixture.Runtime.GenealogyStoreForWorldBoundary.CaptureOwnerSnapshot(),
+            cityCaptures, d.Rows, locationsById, cityLocationIds), Is.True,
+            "The captured source graph must be internally consistent before mutation of the detached projection.");
+
+        // Simulate malformed staged input without corrupting live owners after the completed boundary.
+        // The destination location exists, but it does not belong to the NPC's captured current City.
+        P12DNpcDProjection detachedWrongLocation = ReplaceDRow(d, npc.RuntimeId, source => CopyDRow(
+            source, source.PersonIdValue, source.ResidenceSettlementRuntimeId,
+            source.CurrentCityRuntimeId, destination.Location.RuntimeId,
+            source.DestinationCityRuntimeId, source.DestinationLocationRuntimeId,
+            source.CurrentActionDefinitionId));
+
+        Assert.That(P12DDailyV1OwnerPackage.TryPreflightRelations(
+            fixture.Runtime.PersonStore.CaptureOwnerSnapshot(),
+            fixture.Runtime.GenealogyStoreForWorldBoundary.CaptureOwnerSnapshot(),
+            cityCaptures, detachedWrongLocation.Rows, locationsById, cityLocationIds), Is.False,
+            "A destination Location owned by another City must be rejected before membership fill.");
+        Assert.That(city.ImportantNpcRevision, Is.EqualTo(sourceRevision));
+        Assert.That(city.ImportantNpcs, Has.Count.EqualTo(sourceMemberCount));
+        Assert.That(city.ImportantNpcs.Single(), Is.SameAs(npc));
+        Assert.That(npc.CurrentCity, Is.SameAs(city));
+        Assert.That(npc.CurrentLocation, Is.SameAs(city.Location));
+    }
+
+    [Test]
     public void CaptureAndStage_PreserveNpcDAndFValuesWithoutReplayingWrites()
     {
         ItemData item = SimulationTestFactory.CreateItem("p12d-npc-snapshot-item", 12f);
@@ -733,6 +841,8 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         internal NpcRuntime[] Npcs;
         internal string[] RouteIds;
         internal ExplorableSiteStore SiteStore;
+        internal RuntimeIdentityRegistry Identities;
+        internal SpatialNetworkRuntime SpatialNetwork;
     }
 
     private static P12DNpcDProjection ReplaceDRow(
@@ -845,7 +955,44 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             spatialNetworkRuntime: network,
             requireP12RuntimeIdentitySpatialCensusOwners: true,
             worldId: new WorldId(Guid.NewGuid()));
-        return new DailyFixture { Runtime = runtime, Cities = cities, Npcs = npcs, RouteIds = routeIds, SiteStore = siteStore };
+        return new DailyFixture
+        {
+            Runtime = runtime,
+            Cities = cities,
+            Npcs = npcs,
+            RouteIds = routeIds,
+            SiteStore = siteStore,
+            Identities = identities,
+            SpatialNetwork = network
+        };
+    }
+
+    private static bool TryStageDailyPackage(
+        DailyFixture fixture,
+        DailyCaptureEligibilityToken token,
+        RuntimeIdentityRegistry stagedIdentities,
+        out P12DDailyV1OwnerPackage package,
+        out P12DDailyV1OwnerPackageFailure failure)
+    {
+        return P12DDailyV1OwnerPackage.TryCaptureAndStage(
+            fixture.Runtime,
+            token,
+            new object(),
+            token.OwnerSections,
+            fixture.Identities,
+            fixture.SpatialNetwork,
+            fixture.SiteStore,
+            stagedIdentities,
+            token.WorldId,
+            fixture.Cities.Select(value => value.CityData).ToArray(),
+            Array.Empty<ItemData>(),
+            fixture.Npcs.Select(value => value.NpcData).ToArray(),
+            Array.Empty<NpcActionData>(),
+            Array.Empty<NpcStatusData>(),
+            Array.Empty<ExplorableSiteData>(),
+            Array.Empty<string>(),
+            out package,
+            out failure);
     }
 
     private static SpatialAuthorityStore CreateSpatialAuthority()
