@@ -20,7 +20,7 @@ public sealed class P12CP9GenesisManifestSnapshotTests
     {
         for (int i = simulationObjects.Count - 1; i >= 0; i--)
         {
-            if (simulationObjects[i] != null) Object.DestroyImmediate(simulationObjects[i]);
+            if (simulationObjects[i] != null) UnityEngine.Object.DestroyImmediate(simulationObjects[i]);
         }
         simulationObjects.Clear();
         SimulationTestFactory.CleanupDefinitions();
@@ -51,7 +51,7 @@ public sealed class P12CP9GenesisManifestSnapshotTests
 
         for (int i = simulationObjects.Count - 1; i >= 0; i--)
         {
-            if (simulationObjects[i] != null) Object.DestroyImmediate(simulationObjects[i]);
+            if (simulationObjects[i] != null) UnityEngine.Object.DestroyImmediate(simulationObjects[i]);
         }
         simulationObjects.Clear();
         SimulationTestFactory.CleanupDefinitions();
