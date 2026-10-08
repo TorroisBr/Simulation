@@ -322,6 +322,245 @@ public sealed class P12DCityRootOwnerSnapshotTests
     }
 
     [Test]
+    public void RelationAssembly_PreservesCapturedOrderAndRevisionWithoutGameplayMutations()
+    {
+        CityRuntime sourceCity = SimulationTestFactory.CreateCity(
+            "city-root-assembly-order", "city-root-assembly-location");
+        NpcRuntime sourceNpcB = new NpcRuntime(
+            "city-root-assembly-b", SimulationTestFactory.CreateNpc("assembly-b"), sourceCity, 0f);
+        NpcRuntime sourceNpcA = new NpcRuntime(
+            "city-root-assembly-a", SimulationTestFactory.CreateNpc("assembly-a"), sourceCity, 0f);
+        NpcRuntime[] sourceRoster = { sourceNpcA, sourceNpcB };
+        List<OwnerSectionCensusSnapshot> sections = CreateAssemblyOwnerSections(
+            new[] { sourceCity }, sourceRoster);
+        DailyCaptureEligibilityToken token = CreateToken(sourceCity, sections);
+        object captureStamp = new object();
+
+        Assert.That(P12DCityNpcProjectionCaptureEvidence.TryCreate(
+            token, captureStamp, token.OwnerSections, sourceRoster,
+            out P12DCityNpcProjectionCaptureEvidence dEvidence,
+            out P12DCityNpcProjectionCaptureFailure dFailure), Is.True, dFailure.ToString());
+        Assert.That(P12DCityNpcProjectionCaptureEvidence.TryCreate(
+            token, captureStamp, token.OwnerSections, sourceRoster,
+            out P12DCityNpcProjectionCaptureEvidence fEvidence,
+            out P12DCityNpcProjectionCaptureFailure fFailure), Is.True, fFailure.ToString());
+        Assert.That(dEvidence.HasSameCaptureIdentity(fEvidence), Is.True);
+
+        Assert.That(P12DCityRootOwnerSnapshot.TryCapture(
+            sourceCity, token, captureStamp, token.OwnerSections,
+            out P12DCityRootOwnerSnapshot citySnapshot, out _), Is.True);
+        Assert.That(citySnapshot.ImportantNpcRuntimeIds,
+            Is.EqualTo(new[] { sourceNpcB.RuntimeId, sourceNpcA.RuntimeId }));
+        Assert.That(citySnapshot.TryStage(
+            new[] { sourceCity.CityData }, Array.Empty<ItemData>(), new[] { sourceCity.Location },
+            out CityRuntime stagedCity, out P12DCityMembershipLinker linker, out _), Is.True);
+
+        long stagedRevision = stagedCity.ImportantNpcRevision;
+        int stagedPopulation = stagedCity.Population.CurrentPopulation;
+        long stagedPopulationRevision = stagedCity.Population.Revision;
+        long stagedMarketRevision = stagedCity.Market.Revision;
+        Assert.That(NpcRuntime.TryCreateForStagedPresence(
+            sourceNpcB.RuntimeId, sourceNpcB.NpcData, stagedCity, stagedCity.Location,
+            out NpcRuntime stagedNpcB), Is.True);
+        Assert.That(NpcRuntime.TryCreateForStagedPresence(
+            sourceNpcA.RuntimeId, sourceNpcA.NpcData, stagedCity, stagedCity.Location,
+            out NpcRuntime stagedNpcA), Is.True);
+        Assert.That(stagedNpcA, Is.Not.SameAs(sourceNpcA));
+        Assert.That(stagedNpcB, Is.Not.SameAs(sourceNpcB));
+
+        Assert.That(P12DCityNpcRelationAssembler.TryFillMembershipsOnce(
+            dEvidence, fEvidence, new[] { linker }, new[] { stagedNpcA, stagedNpcB },
+            out P12DCityNpcRelationAssemblyFailure assemblyFailure), Is.True, assemblyFailure.ToString());
+
+        Assert.That(stagedCity.ImportantNpcs, Is.EqualTo(new[] { stagedNpcB, stagedNpcA }));
+        Assert.That(stagedCity.ImportantNpcRevision, Is.EqualTo(citySnapshot.ImportantNpcRevision));
+        Assert.That(stagedCity.ImportantNpcRevision, Is.EqualTo(stagedRevision));
+        Assert.That(stagedCity.Population.CurrentPopulation, Is.EqualTo(stagedPopulation));
+        Assert.That(stagedCity.Population.Revision, Is.EqualTo(stagedPopulationRevision));
+        Assert.That(stagedCity.Market.Revision, Is.EqualTo(stagedMarketRevision));
+        Assert.That(stagedNpcB.CurrentCity, Is.SameAs(stagedCity));
+        Assert.That(stagedNpcA.CurrentCity, Is.SameAs(stagedCity));
+        Assert.That(stagedNpcB.CurrentLocation, Is.SameAs(stagedCity.Location));
+        Assert.That(stagedNpcA.CurrentLocation, Is.SameAs(stagedCity.Location));
+        Assert.That(stagedNpcA.CurrentAction, Is.Null);
+        Assert.That(stagedNpcB.CurrentAction, Is.Null);
+        Assert.That(stagedNpcA.Money, Is.Zero);
+        Assert.That(stagedNpcB.Money, Is.Zero);
+        Assert.That(sourceCity.ImportantNpcs, Is.EqualTo(new[] { sourceNpcB, sourceNpcA }));
+    }
+
+    [Test]
+    public void SplitNpcProjectionEvidence_RequiresExactTokenStampAndRevisionVectorIdentity()
+    {
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "city-root-projection-evidence", "city-root-projection-location");
+        NpcRuntime[] sourceRoster = Array.Empty<NpcRuntime>();
+        List<OwnerSectionCensusSnapshot> sections = CreateAssemblyOwnerSections(
+            new[] { city }, sourceRoster);
+        DailyCaptureEligibilityToken token = CreateToken(city, sections);
+        object stamp = new object();
+        Assert.That(P12DCityNpcProjectionCaptureEvidence.TryCreate(
+            token, stamp, token.OwnerSections, sourceRoster, out var dEvidence, out _), Is.True);
+        Assert.That(P12DCityNpcProjectionCaptureEvidence.TryCreate(
+            token, stamp, token.OwnerSections, sourceRoster, out var matchingFEvidence, out _), Is.True);
+        Assert.That(dEvidence.HasSameCaptureIdentity(matchingFEvidence), Is.True);
+
+        Assert.That(P12DCityNpcProjectionCaptureEvidence.TryCreate(
+            token, new object(), token.OwnerSections, sourceRoster, out var differentStampEvidence, out _), Is.True);
+        Assert.That(dEvidence.HasSameCaptureIdentity(differentStampEvidence), Is.False);
+
+        List<OwnerSectionCensusSnapshot> copiedVector = new List<OwnerSectionCensusSnapshot>(sections);
+        Assert.That(P12DCityNpcProjectionCaptureEvidence.TryCreate(
+            token, stamp, copiedVector, sourceRoster, out _, out P12DCityNpcProjectionCaptureFailure vectorFailure),
+            Is.False);
+        Assert.That(vectorFailure, Is.EqualTo(P12DCityNpcProjectionCaptureFailure.InvalidContext));
+
+        DailyCaptureEligibilityToken differentToken = CreateToken(city, sections);
+        Assert.That(P12DCityNpcProjectionCaptureEvidence.TryCreate(
+            differentToken, stamp, differentToken.OwnerSections, sourceRoster,
+            out var differentTokenEvidence, out _), Is.True);
+        Assert.That(dEvidence.HasSameCaptureIdentity(differentTokenEvidence), Is.False);
+    }
+
+    [TestCase("local")]
+    [TestCase("merchant")]
+    public void ProjectionEvidence_RejectsPopulatedOrMismatchedReceiptOwnerRows(string ownerKind)
+    {
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "city-root-receipt-evidence-" + ownerKind,
+            "city-root-receipt-location-" + ownerKind);
+        NpcRuntime npc = new NpcRuntime(
+            "city-root-receipt-npc-" + ownerKind,
+            SimulationTestFactory.CreateNpc("receipt-evidence-" + ownerKind));
+        List<OwnerSectionCensusSnapshot> validSections = CreateAssemblyOwnerSections(
+            new[] { city }, new[] { npc });
+        DailyCaptureEligibilityToken validToken = CreateToken(city, validSections);
+        Assert.That(P12DCityNpcProjectionCaptureEvidence.TryCreate(
+            validToken, new object(), validToken.OwnerSections, new[] { npc }, out _, out _), Is.True);
+
+        string sectionId = ownerKind == "local"
+            ? P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(npc.RuntimeId)
+            : P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(npc.RuntimeId);
+        int sectionIndex = validSections.FindIndex(section => section.SectionId == sectionId);
+        Assert.That(sectionIndex, Is.GreaterThanOrEqualTo(0));
+        OwnerSectionCensusSnapshot original = validSections[sectionIndex];
+
+        List<OwnerSectionCensusSnapshot> populatedSections = new List<OwnerSectionCensusSnapshot>(validSections);
+        populatedSections[sectionIndex] = new OwnerSectionCensusSnapshot(
+            original.SectionId, original.SchemaVersion, OwnerSectionRole.Required,
+            original.OwnerInstanceIdentity, 1, 1L);
+        DailyCaptureEligibilityToken populatedToken = CreateToken(city, populatedSections);
+        Assert.That(P12DCityNpcProjectionCaptureEvidence.TryCreate(
+            populatedToken, new object(), populatedToken.OwnerSections, new[] { npc }, out _,
+            out P12DCityNpcProjectionCaptureFailure populatedFailure), Is.False);
+        Assert.That(populatedFailure,
+            Is.EqualTo(P12DCityNpcProjectionCaptureFailure.InvalidReceiptOwnerEvidence));
+
+        List<OwnerSectionCensusSnapshot> mismatchedSections = new List<OwnerSectionCensusSnapshot>(validSections);
+        mismatchedSections[sectionIndex] = new OwnerSectionCensusSnapshot(
+            original.SectionId, original.SchemaVersion, OwnerSectionRole.Required,
+            new object(), 0, 0L);
+        DailyCaptureEligibilityToken mismatchedToken = CreateToken(city, mismatchedSections);
+        Assert.That(P12DCityNpcProjectionCaptureEvidence.TryCreate(
+            mismatchedToken, new object(), mismatchedToken.OwnerSections, new[] { npc }, out _,
+            out P12DCityNpcProjectionCaptureFailure mismatchFailure), Is.False);
+        Assert.That(mismatchFailure,
+            Is.EqualTo(P12DCityNpcProjectionCaptureFailure.InvalidReceiptOwnerEvidence));
+    }
+
+    [Test]
+    public void RelationAssemblyRejectsDanglingCrossOwnerAndNonreciprocalLinksWithoutPartialFill()
+    {
+        CityRuntime sourceCityA = SimulationTestFactory.CreateCity(
+            "city-root-assembly-a", "city-root-assembly-location-a");
+        CityRuntime sourceCityB = SimulationTestFactory.CreateCity(
+            "city-root-assembly-b", "city-root-assembly-location-b");
+        NpcRuntime sourceNpcA = new NpcRuntime(
+            "city-root-assembly-npc-a", SimulationTestFactory.CreateNpc("assembly-npc-a"), sourceCityA, 0f);
+        NpcRuntime sourceNpcB = new NpcRuntime(
+            "city-root-assembly-npc-b", SimulationTestFactory.CreateNpc("assembly-npc-b"), sourceCityB, 0f);
+        NpcRuntime[] sourceRoster = { sourceNpcA, sourceNpcB };
+        List<OwnerSectionCensusSnapshot> sections = CreateAssemblyOwnerSections(
+            new[] { sourceCityA, sourceCityB }, sourceRoster);
+        DailyCaptureEligibilityToken token = CreateToken(sourceCityA, sections);
+        object captureStamp = new object();
+        Assert.That(P12DCityNpcProjectionCaptureEvidence.TryCreate(
+            token, captureStamp, token.OwnerSections, sourceRoster, out var dEvidence, out _), Is.True);
+        Assert.That(P12DCityNpcProjectionCaptureEvidence.TryCreate(
+            token, captureStamp, token.OwnerSections, sourceRoster, out var fEvidence, out _), Is.True);
+
+        P12DCityMembershipLinker linkerA = CaptureAndStageCity(
+            sourceCityA, token, captureStamp, out CityRuntime stagedCityA);
+        P12DCityMembershipLinker linkerB = CaptureAndStageCity(
+            sourceCityB, token, captureStamp, out CityRuntime stagedCityB);
+        long revisionA = stagedCityA.ImportantNpcRevision;
+        long revisionB = stagedCityB.ImportantNpcRevision;
+
+        Assert.That(P12DCityNpcRelationAssembler.TryFillMembershipsOnce(
+            dEvidence, fEvidence, new[] { linkerA, linkerB }, new[]
+            {
+                CreateStagedPresenceNpc(sourceNpcA.RuntimeId, stagedCityA),
+            }, out _), Is.False, "A captured City member with no staged NPC must reject.");
+        AssertNoMembershipPublication(stagedCityA, revisionA, stagedCityB, revisionB);
+
+        Assert.That(NpcRuntime.TryCreateForStagedPresence(
+            sourceNpcA.RuntimeId, sourceNpcA.NpcData, stagedCityB, stagedCityB.Location,
+            out NpcRuntime crossOwnerNpcA), Is.True);
+        Assert.That(NpcRuntime.TryCreateForStagedPresence(
+            sourceNpcB.RuntimeId, sourceNpcB.NpcData, stagedCityA, stagedCityA.Location,
+            out NpcRuntime crossOwnerNpcB), Is.True);
+        Assert.That(P12DCityNpcRelationAssembler.TryFillMembershipsOnce(
+            dEvidence, fEvidence, new[] { linkerA, linkerB }, new[] { crossOwnerNpcA, crossOwnerNpcB }, out _),
+            Is.False, "A City membership linked to an NPC staged under another City must reject.");
+        AssertNoMembershipPublication(stagedCityA, revisionA, stagedCityB, revisionB);
+
+        Assert.That(NpcRuntime.TryCreateForStagedPresence(
+            sourceNpcA.RuntimeId, sourceNpcA.NpcData, stagedCityA, stagedCityA.Location,
+            out NpcRuntime correctNpcA), Is.True);
+        Assert.That(NpcRuntime.TryCreateForStagedPresence(
+            sourceNpcB.RuntimeId, sourceNpcB.NpcData, stagedCityB, stagedCityB.Location,
+            out NpcRuntime nonreciprocalNpcB), Is.True);
+        typeof(NpcRuntime).GetField("currentLocation", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(nonreciprocalNpcB, new SpatialLocationRuntime("wrong-assembly-location"));
+        Assert.That(P12DCityNpcRelationAssembler.TryFillMembershipsOnce(
+            dEvidence, fEvidence, new[] { linkerA, linkerB }, new[] { correctNpcA, nonreciprocalNpcB }, out _),
+            Is.False, "A City/NPC current-location mismatch must reject.");
+        AssertNoMembershipPublication(stagedCityA, revisionA, stagedCityB, revisionB);
+    }
+
+    [Test]
+    public void RelationAssemblyRejectsDuplicateNpcRuntimeIdsWithoutPartialFill()
+    {
+        CityRuntime sourceCity = SimulationTestFactory.CreateCity(
+            "city-root-assembly-duplicate", "city-root-assembly-duplicate-location");
+        NpcRuntime sourceNpc = new NpcRuntime(
+            "city-root-assembly-duplicate-npc", SimulationTestFactory.CreateNpc("assembly-duplicate"),
+            sourceCity, 0f);
+        List<OwnerSectionCensusSnapshot> sections = CreateAssemblyOwnerSections(
+            new[] { sourceCity }, new[] { sourceNpc });
+        DailyCaptureEligibilityToken token = CreateToken(sourceCity, sections);
+        object captureStamp = new object();
+        Assert.That(P12DCityNpcProjectionCaptureEvidence.TryCreate(
+            token, captureStamp, token.OwnerSections, new[] { sourceNpc }, out var dEvidence, out _), Is.True);
+        Assert.That(P12DCityNpcProjectionCaptureEvidence.TryCreate(
+            token, captureStamp, token.OwnerSections, new[] { sourceNpc }, out var fEvidence, out _), Is.True);
+        P12DCityMembershipLinker linker = CaptureAndStageCity(
+            sourceCity, token, captureStamp, out CityRuntime stagedCity);
+        long revision = stagedCity.ImportantNpcRevision;
+        Assert.That(NpcRuntime.TryCreateForStagedPresence(
+            sourceNpc.RuntimeId, sourceNpc.NpcData, stagedCity, stagedCity.Location, out NpcRuntime first), Is.True);
+        Assert.That(NpcRuntime.TryCreateForStagedPresence(
+            sourceNpc.RuntimeId, sourceNpc.NpcData, stagedCity, stagedCity.Location, out NpcRuntime duplicate), Is.True);
+
+        Assert.That(P12DCityNpcRelationAssembler.TryFillMembershipsOnce(
+            dEvidence, fEvidence, new[] { linker }, new[] { first, duplicate },
+            out P12DCityNpcRelationAssemblyFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(P12DCityNpcRelationAssemblyFailure.InvalidNpcRoster));
+        Assert.That(stagedCity.ImportantNpcs, Is.Empty);
+        Assert.That(stagedCity.ImportantNpcRevision, Is.EqualTo(revision));
+    }
+
+    [Test]
     public void CaptureAndStage_PreservePopulationReceiptsAfterRollbackPruning()
     {
         CityRuntime city = SimulationTestFactory.CreateCity("city-root-rollback", "city-root-rollback-location");
@@ -469,13 +708,73 @@ public sealed class P12DCityRootOwnerSnapshotTests
             sections);
     }
 
+    private static List<OwnerSectionCensusSnapshot> CreateAssemblyOwnerSections(
+        IReadOnlyList<CityRuntime> cities,
+        IReadOnlyList<NpcRuntime> npcs)
+    {
+        List<OwnerSectionCensusSnapshot> sections = new List<OwnerSectionCensusSnapshot>();
+        foreach (CityRuntime city in cities)
+            sections.AddRange(CreateOwnerSections(city));
+
+        foreach (IOwnerSectionCensusProvider provider in P12DNpcReceiptOwnerCensusProvider.CreateProviders(npcs))
+        {
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            sections.Add(new OwnerSectionCensusSnapshot(
+                witness.SectionId,
+                witness.SchemaVersion,
+                OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision));
+        }
+
+        return sections;
+    }
+
+    private static P12DCityMembershipLinker CaptureAndStageCity(
+        CityRuntime sourceCity,
+        DailyCaptureEligibilityToken token,
+        object captureStamp,
+        out CityRuntime stagedCity)
+    {
+        Assert.That(P12DCityRootOwnerSnapshot.TryCapture(
+            sourceCity,
+            token,
+            captureStamp,
+            token.OwnerSections,
+            out P12DCityRootOwnerSnapshot snapshot,
+            out P12DCityRootOwnerSnapshotFailure captureFailure), Is.True, captureFailure.ToString());
+        ItemData[] items = sourceCity.Market.Items.Select(row => row.Item).ToArray();
+        Assert.That(snapshot.TryStage(
+            new[] { sourceCity.CityData },
+            items,
+            new[] { sourceCity.Location },
+            out stagedCity,
+            out P12DCityMembershipLinker linker,
+            out P12DCityRootOwnerSnapshotFailure stageFailure), Is.True, stageFailure.ToString());
+        return linker;
+    }
+
+    private static void AssertNoMembershipPublication(
+        CityRuntime stagedCityA,
+        long expectedRevisionA,
+        CityRuntime stagedCityB,
+        long expectedRevisionB)
+    {
+        Assert.That(stagedCityA.ImportantNpcs, Is.Empty);
+        Assert.That(stagedCityB.ImportantNpcs, Is.Empty);
+        Assert.That(stagedCityA.ImportantNpcRevision, Is.EqualTo(expectedRevisionA));
+        Assert.That(stagedCityB.ImportantNpcRevision, Is.EqualTo(expectedRevisionB));
+    }
+
     private static NpcRuntime CreateStagedPresenceNpc(string runtimeId, CityRuntime stagedCity)
     {
-        NpcRuntime npc = new NpcRuntime(runtimeId, SimulationTestFactory.CreateNpc("definition-" + runtimeId));
-        typeof(NpcRuntime).GetField("currentCity", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(npc, stagedCity);
-        typeof(NpcRuntime).GetField("currentLocation", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(npc, stagedCity.Location);
+        Assert.That(NpcRuntime.TryCreateForStagedPresence(
+            runtimeId,
+            SimulationTestFactory.CreateNpc("definition-" + runtimeId),
+            stagedCity,
+            stagedCity.Location,
+            out NpcRuntime npc), Is.True);
         return npc;
     }
 }

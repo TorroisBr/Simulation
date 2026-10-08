@@ -320,7 +320,39 @@ public class NpcRuntime : ICapabilityConditionSource
         {
             startingCity.AddImportantNpc(this);
 		}
-	}
+    }
+
+    /// <summary>
+    /// Creates one unpublished staged NPC with its exact direct presence
+    /// references. Unlike the gameplay constructor path, this does not add the
+    /// NPC to a City or advance any City owner revision; the City membership
+    /// projection is linked separately in captured order after all NPCs exist.
+    /// </summary>
+    internal static bool TryCreateForStagedPresence(
+        string runtimeId,
+        NpcData npcData,
+        CityRuntime currentCity,
+        SpatialLocationRuntime currentLocation,
+        out NpcRuntime staged)
+    {
+        staged = null;
+        if (string.IsNullOrWhiteSpace(runtimeId)
+            || npcData == null
+            || (currentLocation != null && string.IsNullOrWhiteSpace(currentLocation.RuntimeId))
+            || (currentCity != null
+                && (currentCity.Location == null
+                    || string.IsNullOrWhiteSpace(currentCity.RuntimeId)
+                    || !ReferenceEquals(currentLocation, currentCity.Location))))
+        {
+            return false;
+        }
+
+        NpcRuntime candidate = new NpcRuntime(runtimeId, npcData);
+        candidate.currentCity = currentCity;
+        candidate.currentLocation = currentLocation;
+        staged = candidate;
+        return true;
+    }
 
     internal bool TryAssignPersonId(PersonId personId)
     {
