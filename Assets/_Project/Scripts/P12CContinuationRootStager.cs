@@ -3,18 +3,77 @@ using System.Globalization;
 using System.Text;
 
 /// <summary>
+/// Detached value for the identity of the same causal world continuation.
+/// </summary>
+internal sealed class P12CWorldIdentitySnapshot
+{
+    internal const string CurrentSnapshotContract = "p12c.world-identity-snapshot/v1";
+    internal const int CurrentSnapshotSchemaVersion = 1;
+
+    internal P12CWorldIdentitySnapshot(string snapshotContract, int schemaVersion, string worldIdValue)
+    {
+        SnapshotContract = snapshotContract;
+        SchemaVersion = schemaVersion;
+        WorldIdValue = worldIdValue;
+    }
+
+    internal string SnapshotContract { get; }
+    internal int SchemaVersion { get; }
+    internal string WorldIdValue { get; }
+
+    internal static bool TryCapture(WorldId source, out P12CWorldIdentitySnapshot snapshot, out string diagnostic)
+    {
+        snapshot = null;
+        diagnostic = null;
+        if (source == null || !WorldId.TryParse(source.Value, out WorldId validated)
+            || !string.Equals(validated.Value, source.Value, StringComparison.Ordinal))
+        {
+            diagnostic = "P12-C requires the canonical WorldId already published by the validated composition.";
+            return false;
+        }
+
+        snapshot = new P12CWorldIdentitySnapshot(CurrentSnapshotContract, CurrentSnapshotSchemaVersion, source.Value);
+        return true;
+    }
+
+    internal bool TryStage(out WorldId staged, out string diagnostic)
+    {
+        staged = null;
+        diagnostic = null;
+        if (!string.Equals(SnapshotContract, CurrentSnapshotContract, StringComparison.Ordinal)
+            || SchemaVersion != CurrentSnapshotSchemaVersion)
+        {
+            diagnostic = "P12-C WorldId snapshot schema is unsupported.";
+            return false;
+        }
+
+        if (!WorldId.TryParse(WorldIdValue, out staged)
+            || !string.Equals(staged.Value, WorldIdValue, StringComparison.Ordinal))
+        {
+            staged = null;
+            diagnostic = "P12-C WorldId snapshot value is not canonical.";
+            return false;
+        }
+
+        return true;
+    }
+}
+
+/// <summary>
 /// One privately staged set of the already-supported P12-C continuation roots.
 /// It is not published to an active SimulationRuntime.
 /// </summary>
 internal sealed class P12CStagedContinuationRoot
 {
     internal P12CStagedContinuationRoot(
+        WorldId worldIdentity,
         RuntimeIdAllocator runtimeIdAllocator,
         SimulationRecordSequence recordSequence,
         SpatialAuthorityStore spatialAuthority,
         SimulationGenesisManifest genesisManifest,
         DeterministicRandomSource deterministicRandom)
     {
+        WorldIdentity = worldIdentity;
         RuntimeIdAllocator = runtimeIdAllocator;
         RecordSequence = recordSequence;
         SpatialAuthority = spatialAuthority;
@@ -22,6 +81,7 @@ internal sealed class P12CStagedContinuationRoot
         DeterministicRandom = deterministicRandom;
     }
 
+    internal WorldId WorldIdentity { get; }
     internal RuntimeIdAllocator RuntimeIdAllocator { get; }
     internal SimulationRecordSequence RecordSequence { get; }
     internal SpatialAuthorityStore SpatialAuthority { get; }
@@ -38,6 +98,7 @@ internal static class P12CContinuationRootStager
     private const string SpatialAuthorityOutputOwner = "SpatialAuthorityStore";
 
     internal static bool TryStage(
+        P12CWorldIdentitySnapshot worldIdentitySnapshot,
         RuntimeIdAllocatorSnapshot allocatorSnapshot,
         SimulationRecordSequenceSnapshot recordSequenceSnapshot,
         P12CSpatialAuthoritySnapshot spatialSnapshot,
@@ -51,6 +112,15 @@ internal static class P12CContinuationRootStager
 
         try
         {
+            if (worldIdentitySnapshot == null)
+            {
+                diagnostic = "P12-C WorldId snapshot is required.";
+                return false;
+            }
+
+            if (!worldIdentitySnapshot.TryStage(out WorldId stagedWorldIdentity, out diagnostic))
+                return false;
+
             if (genesisManifestSnapshot == null)
             {
                 diagnostic = "P12-C P9-B genesis manifest snapshot is required.";
@@ -142,6 +212,7 @@ internal static class P12CContinuationRootStager
             }
 
             staged = new P12CStagedContinuationRoot(
+                stagedWorldIdentity,
                 stagedAllocator,
                 stagedRecordSequence,
                 stagedSpatialAuthority,
@@ -219,13 +290,12 @@ internal static class P12CContinuationRootStager
         string expectedRecord)
     {
         if (records == null) return false;
-        string prefix = tag + "|";
         int count = 0;
         bool exactMatch = false;
         for (int i = 0; i < records.Count; i++)
         {
             string record = records[i];
-            if (record == null || !record.StartsWith(prefix, StringComparison.Ordinal)) continue;
+            if (record == null || !record.StartsWith(tag, StringComparison.Ordinal)) continue;
             count++;
             if (string.Equals(record, expectedRecord, StringComparison.Ordinal)) exactMatch = true;
         }

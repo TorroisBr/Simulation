@@ -17,6 +17,8 @@ public sealed class P12CPrivateRootCompositionTests
     private RuntimeIdAllocatorSnapshot allocatorSnapshot;
     private SimulationRecordSequenceSnapshot recordSequenceSnapshot;
     private DeterministicRandomRootSnapshot randomRootSnapshot;
+    private object worldIdentitySnapshot;
+    private WorldId sourceWorldIdentity;
     private SpatialAuthorityStore sourceSpatialOwner;
     private SimulationGenesisManifest sourceManifestOwner;
     private long sourceSpatialRevision;
@@ -42,10 +44,13 @@ public sealed class P12CPrivateRootCompositionTests
         Assert.That(simulation.Bootstrap, Is.Not.Null);
         SimulationGenesisManifest sourceManifest = simulation.Bootstrap.Manifest;
         SpatialAuthorityStore sourceSpatial = simulation.Bootstrap.SpatialAuthority;
+        sourceWorldIdentity = simulation.Bootstrap.WorldId;
         sourceManifestOwner = sourceManifest;
         sourceSpatialOwner = sourceSpatial;
         Assert.That(sourceManifest.SelectedP9ContractIdentity, Is.EqualTo(P9GeographyIdentity));
         Assert.That(sourceManifest.SelectedP9SchemaVersion, Is.EqualTo(P9GeographySchema));
+        Assert.That(TryCaptureWorldIdentity(sourceWorldIdentity, out worldIdentitySnapshot, out string worldIdentityDiagnostic),
+            Is.True, worldIdentityDiagnostic);
         Assert.That(sourceSpatial, Is.Not.Null);
         sourceSpatialRevision = sourceSpatial.Revision;
         sourceManifestFingerprint = sourceManifest.Fingerprint;
@@ -85,6 +90,7 @@ public sealed class P12CPrivateRootCompositionTests
         Assert.That(independentlyStagedManifest.Seed, Is.EqualTo(manifestSnapshot.Seed));
 
         Assert.That(TryStage(
+            worldIdentitySnapshot,
             allocatorSnapshot,
             recordSequenceSnapshot,
             spatialSnapshot,
@@ -93,6 +99,9 @@ public sealed class P12CPrivateRootCompositionTests
             out object staged,
             out string diagnostic), Is.True, diagnostic);
         Assert.That(staged, Is.Not.Null);
+        WorldId stagedWorldIdentity = (WorldId)Read(staged, "WorldIdentity");
+        Assert.That(stagedWorldIdentity.Value, Is.EqualTo(sourceWorldIdentity.Value));
+        Assert.That(stagedWorldIdentity, Is.Not.SameAs(sourceWorldIdentity));
         RuntimeIdAllocator stagedAllocator = (RuntimeIdAllocator)Read(staged, "RuntimeIdAllocator");
         SimulationRecordSequence stagedSequence = (SimulationRecordSequence)Read(staged, "RecordSequence");
         Assert.That(stagedAllocator, Is.TypeOf<RuntimeIdAllocator>());
@@ -180,6 +189,33 @@ public sealed class P12CPrivateRootCompositionTests
             recordSequenceSnapshot,
             spatialSnapshot,
             duplicatedManifest,
+            randomRootSnapshot);
+    }
+
+    [TestCase("authored-hex")]
+    [TestCase("authored-location")]
+    [TestCase("authored-scale")]
+    public void RejectsBareMalformedReservedP9GeographyTags(string tag)
+    {
+        List<string> records = new List<string>(manifestSnapshot.CanonicalProvenanceRecords) { tag };
+        string fingerprint = SimulationGenesisPipeline.ComputeFingerprint(records);
+        P12CP9GenesisManifestSnapshot malformedManifest = CopyManifestForTest(
+            manifestSnapshot,
+            fingerprint: fingerprint,
+            selectedFingerprint: fingerprint,
+            canonicalRecords: records,
+            replaceCanonicalRecords: true);
+
+        Assert.That(malformedManifest.TryStageManifest(
+            out SimulationGenesisManifest locallyStaged,
+            out string manifestDiagnostic), Is.True, manifestDiagnostic,
+            "The re-fingerprinted bare reserved tag must exercise aggregate validation.");
+        Assert.That(locallyStaged, Is.Not.Null);
+        AssertWholeRootRejected(
+            allocatorSnapshot,
+            recordSequenceSnapshot,
+            spatialSnapshot,
+            malformedManifest,
             randomRootSnapshot);
     }
 
@@ -293,6 +329,7 @@ public sealed class P12CPrivateRootCompositionTests
     [TestCase("spatial")]
     [TestCase("manifest")]
     [TestCase("random")]
+    [TestCase("world-identity")]
     public void RejectsNullOwnerSnapshotsWithoutReturningPartialRoots(string owner)
     {
         RuntimeIdAllocatorSnapshot allocator = allocatorSnapshot;
@@ -307,10 +344,41 @@ public sealed class P12CPrivateRootCompositionTests
             case "spatial": spatial = null; break;
             case "manifest": manifest = null; break;
             case "random": random = null; break;
+            case "world-identity":
+                AssertWholeRootRejectedWithIdentity(null, allocator, sequence, spatial, manifest, random);
+                return;
             default: throw new ArgumentOutOfRangeException(nameof(owner), owner, "Unknown owner.");
         }
 
         AssertWholeRootRejected(allocator, sequence, spatial, manifest, random);
+    }
+
+    [TestCase("unsupported-contract")]
+    [TestCase("unsupported-schema")]
+    [TestCase("uppercase-value")]
+    [TestCase("empty-value")]
+    public void RejectsMalformedWorldIdentitySnapshotsWithoutReturningPartialRoots(string defect)
+    {
+        string contract = "p12c.world-identity-snapshot/v1";
+        int schema = 1;
+        string value = sourceWorldIdentity.Value;
+        switch (defect)
+        {
+            case "unsupported-contract": contract = "unrelated-world-identity/v1"; break;
+            case "unsupported-schema": schema++; break;
+            case "uppercase-value": value = value.ToUpperInvariant(); break;
+            case "empty-value": value = "world:"; break;
+            default: throw new ArgumentOutOfRangeException(nameof(defect), defect, "Unknown identity defect.");
+        }
+
+        object invalidIdentity = CreateWorldIdentitySnapshot(contract, schema, value);
+        AssertWholeRootRejectedWithIdentity(
+            invalidIdentity,
+            allocatorSnapshot,
+            recordSequenceSnapshot,
+            spatialSnapshot,
+            manifestSnapshot,
+            randomRootSnapshot);
     }
 
     [TestCase("unsupported-schema")]
@@ -628,6 +696,30 @@ public sealed class P12CPrivateRootCompositionTests
         return result;
     }
 
+    private static bool TryCaptureWorldIdentity(WorldId source, out object snapshot, out string diagnostic)
+    {
+        Type type = InnerType("P12CWorldIdentitySnapshot");
+        MethodInfo method = type.GetMethod("TryCapture", BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.That(method, Is.Not.Null);
+        object[] arguments = { source, null, null };
+        bool result = (bool)method.Invoke(null, arguments);
+        snapshot = arguments[1];
+        diagnostic = arguments[2] as string;
+        return result;
+    }
+
+    private static object CreateWorldIdentitySnapshot(string contract, int schema, string value)
+    {
+        Type type = InnerType("P12CWorldIdentitySnapshot");
+        ConstructorInfo constructor = type.GetConstructor(
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            null,
+            new[] { typeof(string), typeof(int), typeof(string) },
+            null);
+        Assert.That(constructor, Is.Not.Null);
+        return constructor.Invoke(new object[] { contract, schema, value });
+    }
+
     private static RuntimeIdAllocatorSnapshot CreateAllocatorSnapshotWithGaps()
     {
         return new RuntimeIdAllocatorSnapshot(
@@ -665,6 +757,7 @@ public sealed class P12CPrivateRootCompositionTests
     }
 
     private static bool TryStage(
+        object worldIdentity,
         RuntimeIdAllocatorSnapshot allocator,
         SimulationRecordSequenceSnapshot sequence,
         object spatial,
@@ -677,33 +770,57 @@ public sealed class P12CPrivateRootCompositionTests
         Assert.That(stagerType, Is.Not.Null);
         MethodInfo method = stagerType.GetMethod("TryStage", BindingFlags.Static | BindingFlags.NonPublic);
         Assert.That(method, Is.Not.Null);
-        object[] arguments = { allocator, sequence, spatial, manifest, random, null, null };
+        object[] arguments = { worldIdentity, allocator, sequence, spatial, manifest, random, null, null };
         bool result = (bool)method.Invoke(null, arguments);
-        staged = arguments[5];
-        diagnostic = arguments[6] as string;
+        staged = arguments[6];
+        diagnostic = arguments[7] as string;
         return result;
     }
 
-    private static void AssertWholeRootAccepted(
+    private void AssertWholeRootAccepted(
         RuntimeIdAllocatorSnapshot allocator,
         SimulationRecordSequenceSnapshot sequence,
         object spatial,
         P12CP9GenesisManifestSnapshot manifest,
         DeterministicRandomRootSnapshot random)
     {
-        Assert.That(TryStage(allocator, sequence, spatial, manifest, random, out object staged, out string diagnostic),
+        AssertWholeRootAcceptedWithIdentity(worldIdentitySnapshot, allocator, sequence, spatial, manifest, random);
+    }
+
+    private static void AssertWholeRootAcceptedWithIdentity(
+        object identity,
+        RuntimeIdAllocatorSnapshot allocator,
+        SimulationRecordSequenceSnapshot sequence,
+        object spatial,
+        P12CP9GenesisManifestSnapshot manifest,
+        DeterministicRandomRootSnapshot random)
+    {
+        Assert.That(TryStage(identity, allocator, sequence, spatial, manifest, random,
+                out object staged, out string diagnostic),
             Is.True, diagnostic);
         Assert.That(staged, Is.Not.Null);
     }
 
-    private static void AssertWholeRootRejected(
+    private void AssertWholeRootRejected(
         RuntimeIdAllocatorSnapshot allocator,
         SimulationRecordSequenceSnapshot sequence,
         object spatial,
         P12CP9GenesisManifestSnapshot manifest,
         DeterministicRandomRootSnapshot random)
     {
-        Assert.That(TryStage(allocator, sequence, spatial, manifest, random, out object staged, out string diagnostic),
+        AssertWholeRootRejectedWithIdentity(worldIdentitySnapshot, allocator, sequence, spatial, manifest, random);
+    }
+
+    private static void AssertWholeRootRejectedWithIdentity(
+        object identity,
+        RuntimeIdAllocatorSnapshot allocator,
+        SimulationRecordSequenceSnapshot sequence,
+        object spatial,
+        P12CP9GenesisManifestSnapshot manifest,
+        DeterministicRandomRootSnapshot random)
+    {
+        Assert.That(TryStage(identity, allocator, sequence, spatial, manifest, random,
+                out object staged, out string diagnostic),
             Is.False);
         Assert.That(staged, Is.Null);
         Assert.That(diagnostic, Is.Not.Empty);
