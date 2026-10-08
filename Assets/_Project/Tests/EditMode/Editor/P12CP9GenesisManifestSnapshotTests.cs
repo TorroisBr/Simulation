@@ -39,6 +39,9 @@ public sealed class P12CP9GenesisManifestSnapshotTests
         Assert.That(snapshot.SnapshotContract, Is.EqualTo(P12CP9GenesisManifestSnapshot.SnapshotContractIdentity));
         Assert.That(snapshot.SnapshotSchemaVersion, Is.EqualTo(P12CP9GenesisManifestSnapshot.CurrentSchemaVersion));
         Assert.That(snapshot.P12AdmissionProfile, Is.EqualTo(SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1));
+        Assert.That(HasRecordWithPrefixAndText(snapshot.CanonicalProvenanceRecords,
+            "action-required-status:", "status/Status-Livre"), Is.True,
+            "Daily-v1 Viajar has a required status recorded as a raw DefinitionId.");
         AssertManifestMatchesSnapshot(source, snapshot);
         Assert.That(snapshot.CanonicalProvenanceRecords, Is.Not.SameAs(source.CanonicalProvenanceRecords));
         Assert.That(snapshot.AuthoredDefinitionIds, Is.Not.SameAs(source.AuthoredDefinitionIds));
@@ -310,6 +313,14 @@ public sealed class P12CP9GenesisManifestSnapshotTests
     {
         for (int i = 0; i < records.Count; i++)
             Assert.That(records[i].StartsWith(prefix, StringComparison.Ordinal), Is.False, records[i]);
+    }
+
+    private static bool HasRecordWithPrefixAndText(IReadOnlyList<string> records, string prefix, string text)
+    {
+        for (int i = 0; i < records.Count; i++)
+            if (records[i].StartsWith(prefix, StringComparison.Ordinal)
+                && records[i].IndexOf(text, StringComparison.Ordinal) >= 0) return true;
+        return false;
     }
 
     private static void AssertManifestMatchesSnapshot(

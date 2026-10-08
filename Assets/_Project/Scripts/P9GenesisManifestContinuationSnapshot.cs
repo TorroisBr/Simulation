@@ -671,7 +671,7 @@ public sealed class P12CP9GenesisManifestSnapshot
             }
             else if (IsActionStatusRecordKind(kind))
             {
-                if (!AddPackedDefinitionId(expectedIds, "status", values, 1, 0)) return false;
+                if (!AddDefinitionId(expectedIds, "status", values, 1)) return false;
             }
         }
 
@@ -703,6 +703,7 @@ public sealed class P12CP9GenesisManifestSnapshot
                 || kind.StartsWith("npc-default-status:", StringComparison.Ordinal)
                 || kind.StartsWith("npc-trait:", StringComparison.Ordinal)
                 || kind.StartsWith("inventory:", StringComparison.Ordinal)
+                || kind.StartsWith("known-site:", StringComparison.Ordinal)
                 || kind.StartsWith("job-preference:", StringComparison.Ordinal)
                 || IsActionStatusRecordKind(kind)));
     }
