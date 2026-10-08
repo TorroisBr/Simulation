@@ -293,6 +293,82 @@ public sealed class P12DNpcReceiptOwnerCensusTests
         Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
     }
 
+    [Test]
+    public void SaturatedEpochCommittedRosterAddFaultsWithoutPublishingReceiptMapsOrProviders()
+    {
+        SimulationRuntime runtime = CreateIdentityBoundDailyRuntime(out _);
+        NpcRuntime added = CreateNpc("p12d-saturated-epoch-roster-add");
+        ContinuationCensusProtocol protocol = ReadPrivateField<ContinuationCensusProtocol>(
+            runtime, "npcRosterCensusProtocol");
+        IReadOnlyList<IOwnerSectionCensusProvider> providersBefore =
+            runtime.NpcReceiptOwnerCensusProviders;
+        object sectionIdsBefore = GetPrivateField(protocol, "npcReceiptOwnerSectionIds");
+        object npcOwnersBefore = GetPrivateField(protocol, "npcReceiptOwnerNpcOwnersBySection");
+        object receiptOwnersBefore = GetPrivateField(protocol, "npcReceiptOwnersBySection");
+        object registeredSectionsBefore = GetPrivateField(protocol, "registeredSections");
+        object expectedSectionsBefore = GetPrivateField(protocol, "expectedSections");
+        int registeredSectionCountBefore = ReadCollectionCount(registeredSectionsBefore);
+        int expectedSectionCountBefore = ReadCollectionCount(expectedSectionsBefore);
+        Assert.That(providersBefore.Count, Is.EqualTo(20));
+
+        IDisposable scope = (IDisposable)typeof(SimulationRuntime).GetMethod(
+                "BeginNpcMembershipCensusScope", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(runtime, null);
+        Assert.That(scope, Is.Not.Null);
+        try
+        {
+            MethodInfo register = typeof(SimulationRuntime).GetMethod(
+                "TryRegisterNpcWithinMembershipCensus",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(register, Is.Not.Null);
+            object[] arguments = { added, scope, WorldNpcRegistryFailure.None };
+            bool committed = (bool)register.Invoke(runtime, arguments);
+            Assert.That(committed, Is.True);
+            Assert.That(arguments[2], Is.EqualTo(WorldNpcRegistryFailure.None));
+            Assert.That(runtime.NpcRuntimes, Does.Contain(added));
+
+            // Exhaust capacity after membership has committed but before the outer
+            // boundary performs its atomic owner-family reconciliation.
+            SetPrivateField(protocol, "mutationEpoch", long.MaxValue);
+        }
+        finally
+        {
+            scope.Dispose();
+        }
+
+        Assert.That(ReadPrivateField<long>(protocol, "mutationEpoch"), Is.EqualTo(long.MaxValue));
+        Assert.That(runtime.NpcReceiptOwnerCensusProviders, Is.SameAs(providersBefore));
+        Assert.That(runtime.NpcReceiptOwnerCensusProviders.Count, Is.EqualTo(20));
+        Assert.That(GetPrivateField(protocol, "npcReceiptOwnerSectionIds"), Is.SameAs(sectionIdsBefore));
+        Assert.That(GetPrivateField(protocol, "npcReceiptOwnerNpcOwnersBySection"), Is.SameAs(npcOwnersBefore));
+        Assert.That(GetPrivateField(protocol, "npcReceiptOwnersBySection"), Is.SameAs(receiptOwnersBefore));
+        Assert.That(GetPrivateField(protocol, "registeredSections"), Is.SameAs(registeredSectionsBefore));
+        Assert.That(GetPrivateField(protocol, "expectedSections"), Is.SameAs(expectedSectionsBefore));
+        Assert.That(((HashSet<string>)sectionIdsBefore).Count, Is.EqualTo(20));
+        Assert.That(((Dictionary<string, NpcRuntime>)npcOwnersBefore).Count, Is.EqualTo(20));
+        Assert.That(((Dictionary<string, object>)receiptOwnersBefore).Count, Is.EqualTo(20));
+        Assert.That(ReadCollectionCount(registeredSectionsBefore), Is.EqualTo(registeredSectionCountBefore));
+        Assert.That(ReadCollectionCount(expectedSectionsBefore), Is.EqualTo(expectedSectionCountBefore));
+        Assert.That(ContainsPrivateKey(sectionIdsBefore,
+            P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(added.RuntimeId)), Is.False);
+        Assert.That(ContainsPrivateKey(sectionIdsBefore,
+            P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(added.RuntimeId)), Is.False);
+        AssertNoProvider(runtime,
+            P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(added.RuntimeId));
+        AssertNoProvider(runtime,
+            P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(added.RuntimeId));
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure), Is.False);
+        Assert.That(censusFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out _, out ContinuationCensusFailure epochFailure), Is.False);
+        Assert.That(epochFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+
+        Assert.That(runtime.TryRegisterNpc(CreateNpc("p12d-after-saturated-epoch"),
+            out WorldNpcRegistryFailure admissionFailure), Is.False);
+        Assert.That(admissionFailure, Is.EqualTo(WorldNpcRegistryFailure.RuntimeFaulted));
+    }
+
     private static void AssertWitness(
         IOwnerSectionCensusProvider provider,
         NpcRuntime npc,
@@ -357,6 +433,21 @@ public sealed class P12DNpcReceiptOwnerCensusTests
     {
         foreach (IOwnerSectionCensusProvider provider in runtime.NpcReceiptOwnerCensusProviders)
             Assert.That(provider.GetCurrentCensus().SectionId, Is.Not.EqualTo(sectionId));
+    }
+
+    private static bool ContainsPrivateKey(object collection, string key)
+    {
+        MethodInfo contains = collection.GetType().GetMethod("ContainsKey", new[] { typeof(string) })
+            ?? collection.GetType().GetMethod("Contains", new[] { typeof(string) });
+        Assert.That(contains, Is.Not.Null);
+        return (bool)contains.Invoke(collection, new object[] { key });
+    }
+
+    private static int ReadCollectionCount(object collection)
+    {
+        PropertyInfo count = collection.GetType().GetProperty("Count");
+        Assert.That(count, Is.Not.Null);
+        return (int)count.GetValue(collection);
     }
 
     private static long ReadEpoch(SimulationRuntime runtime)

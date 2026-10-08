@@ -58,3 +58,5 @@ The earlier implementation-time constructor-order compile failure and stale 278-
 ## Current-tip test follow-up — 2026-10-08
 
 The review-requested exact-tip test additions and their current-tip results are documented in [`VALIDATION-FOLLOWUP-95A5466.md`](VALIDATION-FOLLOWUP-95A5466.md). That follow-up validates the new receipt-owner cases on the updated candidate and preserves the original implementation validation above unchanged.
+
+The subsequent saturated-epoch roster reconciliation case and its 13/13 focused, 2582/2582 ALL EditMode, and 5/5 official Smoke results are documented in [`VALIDATION-FOLLOWUP-50C9206.md`](VALIDATION-FOLLOWUP-50C9206.md). This follow-up also preserves the earlier exact-tip evidence.
