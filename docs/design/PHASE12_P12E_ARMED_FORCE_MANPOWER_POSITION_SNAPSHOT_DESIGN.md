@@ -376,6 +376,28 @@ precondition. The E1 correction is not yet reviewed; additionally, the current
 general P12-E design blob recorded above has an earlier R1 `NEEDS_CHANGES`
 review against a stale blob, so its current applicability must be confirmed
 in fresh review. A design review does not itself promote code, close P12-E,
-establish complete owner coverage, satisfy P12-A, complete P12-B, or unblock
-P13. P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. P12-B remains
-incomplete.
+establish complete owner coverage, satisfy P12-A, or unblock P13. P12-B is
+COMPLETE/PROMOTED within its bounded profile-admission and completed-boundary
+lifecycle contract; this design does not claim complete owner, write, or
+shared-epoch coverage. P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked.
+
+## 8. Human demonstrability
+
+**Classification: `NOT_MEANINGFUL_FOR_THIS_CHECKPOINT`.** This slice adds
+owner-value export and private staged reconstruction infrastructure. It has no
+standalone user-facing behavior to demonstrate: a restored graph is not
+published or exposed to an application surface here, because P12-G publication
+and P12-A profile integration are outside this slice. Inspecting or displaying
+the detached DTO would not demonstrate Simulation execution.
+
+The smallest useful proof for this checkpoint is the automated owner snapshot
+and private-factory round-trip/rejection coverage in Section 6. It exercises
+the actual owner authorities and token-bound census evidence, but is correctness
+validation rather than a human demonstration. There is no approved application
+or read surface for this private graph, and no approved non-Unity scenario host
+is in scope. The current proof harness therefore remains Unity/EditMode
+coupled; this slice does not create a Lab surface. The Simulation Lab may
+consume a later profile that composes and publishes these owners, after its own
+reviewed composition and read surface exist. That is a separate follow-up and
+is not a prerequisite for this checkpoint. This assessment adds no validation
+obligation or implementation scope.
