@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="10" result="Passed" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 15:53:54Z" end-time="2026-10-08 15:53:54Z" duration="0,1613455">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2569" result="Passed" start-time="2026-10-08 15:53:54Z" end-time="2026-10-08 15:53:54Z" duration="0.161346" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3805" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-battle-snapshot-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2569" result="Passed" start-time="2026-10-08 15:53:54Z" end-time="2026-10-08 15:53:54Z" duration="0.138766" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="62968" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2721" name="P17ARuntimeTests" fullname="P17ARuntimeTests" classname="P17ARuntimeTests" runstate="Runnable" testcasecount="10" result="Passed" start-time="2026-10-08 15:53:54Z" end-time="2026-10-08 15:53:54Z" duration="0.114253" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2729" name="BattleVictoryAloneLeavesP17WithdrawalGoalPendingAndWarActive" fullname="P17ARuntimeTests.BattleVictoryAloneLeavesP17WithdrawalGoalPendingAndWarActive" methodname="BattleVictoryAloneLeavesP17WithdrawalGoalPendingAndWarActive" classname="P17ARuntimeTests" runstate="Runnable" seed="792041129" result="Passed" start-time="2026-10-08 15:53:54Z" end-time="2026-10-08 15:53:54Z" duration="0.078775" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2723" name="ExplicitConcessionMayEndWarWhileWithdrawalGoalRemainsPending" fullname="P17ARuntimeTests.ExplicitConcessionMayEndWarWhileWithdrawalGoalRemainsPending" methodname="ExplicitConcessionMayEndWarWhileWithdrawalGoalRemainsPending" classname="P17ARuntimeTests" runstate="Runnable" seed="697361509" result="Passed" start-time="2026-10-08 15:53:54Z" end-time="2026-10-08 15:53:54Z" duration="0.003739" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2728" name="ExplicitConcessionProvenanceSurvivesRuntimeWarStoreClone" fullname="P17ARuntimeTests.ExplicitConcessionProvenanceSurvivesRuntimeWarStoreClone" methodname="ExplicitConcessionProvenanceSurvivesRuntimeWarStoreClone" classname="P17ARuntimeTests" runstate="Runnable" seed="1124548237" result="Passed" start-time="2026-10-08 15:53:54Z" end-time="2026-10-08 15:53:54Z" duration="0.002255" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2731" name="P17CommandAndDayAdvanceRejectOffOwnerThreadAndUseOneExclusiveLease" fullname="P17ARuntimeTests.P17CommandAndDayAdvanceRejectOffOwnerThreadAndUseOneExclusiveLease" methodname="P17CommandAndDayAdvanceRejectOffOwnerThreadAndUseOneExclusiveLease" classname="P17ARuntimeTests" runstate="Runnable" seed="544806202" result="Passed" start-time="2026-10-08 15:53:54Z" end-time="2026-10-08 15:53:54Z" duration="0.002900" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2725" name="P17ConfigurationRejectsDuplicateParticipantsFactionsSidesAndMissingBinding" fullname="P17ARuntimeTests.P17ConfigurationRejectsDuplicateParticipantsFactionsSidesAndMissingBinding" methodname="P17ConfigurationRejectsDuplicateParticipantsFactionsSidesAndMissingBinding" classname="P17ARuntimeTests" runstate="Runnable" seed="436017418" result="Passed" start-time="2026-10-08 15:53:54Z" end-time="2026-10-08 15:53:54Z" duration="0.000922" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2726" name="P17RuntimeFaultLatchRejectsCrossingAndConcession" fullname="P17ARuntimeTests.P17RuntimeFaultLatchRejectsCrossingAndConcession" methodname="P17RuntimeFaultLatchRejectsCrossingAndConcession" classname="P17ARuntimeTests" runstate="Runnable" seed="933174757" result="Passed" start-time="2026-10-08 15:53:54Z" end-time="2026-10-08 15:53:54Z" duration="0.000969" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2730" name="P17StateIsRejectedByStandardAndSelectedDailyCompositionsWithOrWithoutP16Input" fullname="P17ARuntimeTests.P17StateIsRejectedByStandardAndSelectedDailyCompositionsWithOrWithoutP16Input" methodname="P17StateIsRejectedByStandardAndSelectedDailyCompositionsWithOrWithoutP16Input" classname="P17ARuntimeTests" runstate="Runnable" seed="1544711753" result="Passed" start-time="2026-10-08 15:53:54Z" end-time="2026-10-08 15:53:54Z" duration="0.002515" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2724" name="RuntimeRejectsWrongAuthorityParticipantRawEndAndInvalidCrossingWithoutMutation" fullname="P17ARuntimeTests.RuntimeRejectsWrongAuthorityParticipantRawEndAndInvalidCrossingWithoutMutation" methodname="RuntimeRejectsWrongAuthorityParticipantRawEndAndInvalidCrossingWithoutMutation" classname="P17ARuntimeTests" runstate="Runnable" seed="1217291338" result="Passed" start-time="2026-10-08 15:53:54Z" end-time="2026-10-08 15:53:54Z" duration="0.001586" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2727" name="WarStoreRejectsStaleP17ConcessionRevisionAndBoundaryDayWithoutMutation" fullname="P17ARuntimeTests.WarStoreRejectsStaleP17ConcessionRevisionAndBoundaryDayWithoutMutation" methodname="WarStoreRejectsStaleP17ConcessionRevisionAndBoundaryDayWithoutMutation" classname="P17ARuntimeTests" runstate="Runnable" seed="1346347560" result="Passed" start-time="2026-10-08 15:53:54Z" end-time="2026-10-08 15:53:54Z" duration="0.000349" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2722" name="WithdrawalCrossingProvesGoalWithoutEndingWarAndLaterConcessionEndsIt" fullname="P17ARuntimeTests.WithdrawalCrossingProvesGoalWithoutEndingWarAndLaterConcessionEndsIt" methodname="WithdrawalCrossingProvesGoalWithoutEndingWarAndLaterConcessionEndsIt" classname="P17ARuntimeTests" runstate="Runnable" seed="370709076" result="Passed" start-time="2026-10-08 15:53:54Z" end-time="2026-10-08 15:53:54Z" duration="0.006244" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="7" result="Passed" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 15:53:32Z" end-time="2026-10-08 15:53:32Z" duration="0,214914">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2569" result="Passed" start-time="2026-10-08 15:53:32Z" end-time="2026-10-08 15:53:32Z" duration="0.214914" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3805" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-battle-snapshot-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2569" result="Passed" start-time="2026-10-08 15:53:32Z" end-time="2026-10-08 15:53:32Z" duration="0.202332" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="17256" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="1286" name="BattleSpatialBindingTests" fullname="BattleSpatialBindingTests" classname="BattleSpatialBindingTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-08 15:53:32Z" end-time="2026-10-08 15:53:32Z" duration="0.178965" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="1290" name="ActiveBattleLocation_IsImmutable_AndResolutionRemainsDeferred" fullname="BattleSpatialBindingTests.ActiveBattleLocation_IsImmutable_AndResolutionRemainsDeferred" methodname="ActiveBattleLocation_IsImmutable_AndResolutionRemainsDeferred" classname="BattleSpatialBindingTests" runstate="Runnable" seed="1554764322" result="Passed" start-time="2026-10-08 15:53:32Z" end-time="2026-10-08 15:53:32Z" duration="0.023136" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1292" name="Diagnostics_IncludeBattleLocation_AndDetectPendingLocationChanges" fullname="BattleSpatialBindingTests.Diagnostics_IncludeBattleLocation_AndDetectPendingLocationChanges" methodname="Diagnostics_IncludeBattleLocation_AndDetectPendingLocationChanges" classname="BattleSpatialBindingTests" runstate="Runnable" seed="1743142062" result="Passed" start-time="2026-10-08 15:53:32Z" end-time="2026-10-08 15:53:32Z" duration="0.097629" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1289" name="InvalidSpatialReference_IsRejectedAtomically_AndParticipantLocationIsNotInferred" fullname="BattleSpatialBindingTests.InvalidSpatialReference_IsRejectedAtomically_AndParticipantLocationIsNotInferred" methodname="InvalidSpatialReference_IsRejectedAtomically_AndParticipantLocationIsNotInferred" classname="BattleSpatialBindingTests" runstate="Runnable" seed="1902778367" result="Passed" start-time="2026-10-08 15:53:32Z" end-time="2026-10-08 15:53:32Z" duration="0.001484" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1288" name="PendingBattle_AcceptsHexLocationAndSubLocationReferences" fullname="BattleSpatialBindingTests.PendingBattle_AcceptsHexLocationAndSubLocationReferences" methodname="PendingBattle_AcceptsHexLocationAndSubLocationReferences" classname="BattleSpatialBindingTests" runstate="Runnable" seed="225225797" result="Passed" start-time="2026-10-08 15:53:32Z" end-time="2026-10-08 15:53:32Z" duration="0.008508" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1287" name="PendingBattle_AllowsMissingAndExplicitSpatialReferences_ButActiveRequiresOne" fullname="BattleSpatialBindingTests.PendingBattle_AllowsMissingAndExplicitSpatialReferences_ButActiveRequiresOne" methodname="PendingBattle_AllowsMissingAndExplicitSpatialReferences_ButActiveRequiresOne" classname="BattleSpatialBindingTests" runstate="Runnable" seed="1498718273" result="Passed" start-time="2026-10-08 15:53:32Z" end-time="2026-10-08 15:53:32Z" duration="0.000273" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1291" name="SimulationRuntime_ComposesBattleAgainstClonedWorldSpatialAuthority" fullname="BattleSpatialBindingTests.SimulationRuntime_ComposesBattleAgainstClonedWorldSpatialAuthority" methodname="SimulationRuntime_ComposesBattleAgainstClonedWorldSpatialAuthority" classname="BattleSpatialBindingTests" runstate="Runnable" seed="1970171171" result="Passed" start-time="2026-10-08 15:53:32Z" end-time="2026-10-08 15:53:32Z" duration="0.033748" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1293" name="SpatialBattleCanonicalProjection_IsIndependentOfInsertionOrder" fullname="BattleSpatialBindingTests.SpatialBattleCanonicalProjection_IsIndependentOfInsertionOrder" methodname="SpatialBattleCanonicalProjection_IsIndependentOfInsertionOrder" classname="BattleSpatialBindingTests" runstate="Runnable" seed="768184340" result="Passed" start-time="2026-10-08 15:53:32Z" end-time="2026-10-08 15:53:32Z" duration="0.001307" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="9" result="Passed" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 15:53:43Z" end-time="2026-10-08 15:53:43Z" duration="0,1834491">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2569" result="Passed" start-time="2026-10-08 15:53:43Z" end-time="2026-10-08 15:53:43Z" duration="0.183449" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3805" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-battle-snapshot-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2569" result="Passed" start-time="2026-10-08 15:53:43Z" end-time="2026-10-08 15:53:43Z" duration="0.167889" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="76552" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2771" name="PersistentConflictWarBattleStateTests" fullname="PersistentConflictWarBattleStateTests" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" testcasecount="9" result="Passed" start-time="2026-10-08 15:53:43Z" end-time="2026-10-08 15:53:43Z" duration="0.151085" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2774" name="ConflictStore_RequiresTwoValidSidesAndExplicitArmedForceBindings" fullname="PersistentConflictWarBattleStateTests.ConflictStore_RequiresTwoValidSidesAndExplicitArmedForceBindings" methodname="ConflictStore_RequiresTwoValidSidesAndExplicitArmedForceBindings" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="1864341930" result="Passed" start-time="2026-10-08 15:53:43Z" end-time="2026-10-08 15:53:43Z" duration="0.014553" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2780" name="Diagnostics_ReportsPersistentCrossReferenceAndLifecycleViolations" fullname="PersistentConflictWarBattleStateTests.Diagnostics_ReportsPersistentCrossReferenceAndLifecycleViolations" methodname="Diagnostics_ReportsPersistentCrossReferenceAndLifecycleViolations" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="1757307070" result="Passed" start-time="2026-10-08 15:53:43Z" end-time="2026-10-08 15:53:43Z" duration="0.026350" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2777" name="Lifecycle_UsesAtomicRevisionAndKeepsEndedReferencesQueryable" fullname="PersistentConflictWarBattleStateTests.Lifecycle_UsesAtomicRevisionAndKeepsEndedReferencesQueryable" methodname="Lifecycle_UsesAtomicRevisionAndKeepsEndedReferencesQueryable" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="1774904856" result="Passed" start-time="2026-10-08 15:53:43Z" end-time="2026-10-08 15:53:43Z" duration="0.001177" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2772" name="P17A_WarOwnerConfigurationFreezesBindingsAndCommitsOnlyReasonedConcession" fullname="PersistentConflictWarBattleStateTests.P17A_WarOwnerConfigurationFreezesBindingsAndCommitsOnlyReasonedConcession" methodname="P17A_WarOwnerConfigurationFreezesBindingsAndCommitsOnlyReasonedConcession" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="402783492" result="Passed" start-time="2026-10-08 15:53:43Z" end-time="2026-10-08 15:53:43Z" duration="0.012324" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2775" name="ParticipantBindings_AreDomainOwnedAndDoNotPropagateThroughArmedForceHierarchy" fullname="PersistentConflictWarBattleStateTests.ParticipantBindings_AreDomainOwnedAndDoNotPropagateThroughArmedForceHierarchy" methodname="ParticipantBindings_AreDomainOwnedAndDoNotPropagateThroughArmedForceHierarchy" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="1846308135" result="Passed" start-time="2026-10-08 15:53:43Z" end-time="2026-10-08 15:53:43Z" duration="0.001646" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2778" name="SimulationRuntime_ComposesIndependentWorldBoundStoresWithoutAdvanceDayProcessing" fullname="PersistentConflictWarBattleStateTests.SimulationRuntime_ComposesIndependentWorldBoundStoresWithoutAdvanceDayProcessing" methodname="SimulationRuntime_ComposesIndependentWorldBoundStoresWithoutAdvanceDayProcessing" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="811931567" result="Passed" start-time="2026-10-08 15:53:43Z" end-time="2026-10-08 15:53:43Z" duration="0.034958" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2779" name="SnapshotCanonicalAndDiff_AreIndependentOfPersistentStoreInsertionOrder" fullname="PersistentConflictWarBattleStateTests.SnapshotCanonicalAndDiff_AreIndependentOfPersistentStoreInsertionOrder" methodname="SnapshotCanonicalAndDiff_AreIndependentOfPersistentStoreInsertionOrder" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="1562636807" result="Passed" start-time="2026-10-08 15:53:43Z" end-time="2026-10-08 15:53:43Z" duration="0.047873" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2773" name="TypedIdentities_AreStableDistinctAndLookupDoesNotReuseIds" fullname="PersistentConflictWarBattleStateTests.TypedIdentities_AreStableDistinctAndLookupDoesNotReuseIds" methodname="TypedIdentities_AreStableDistinctAndLookupDoesNotReuseIds" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="954923931" result="Passed" start-time="2026-10-08 15:53:43Z" end-time="2026-10-08 15:53:43Z" duration="0.000530" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2776" name="WarAndBattle_KeepSeparateSideModelsAndValidateOptionalReferences" fullname="PersistentConflictWarBattleStateTests.WarAndBattle_KeepSeparateSideModelsAndValidateOptionalReferences" methodname="WarAndBattle_KeepSeparateSideModelsAndValidateOptionalReferences" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="1914773140" result="Passed" start-time="2026-10-08 15:53:43Z" end-time="2026-10-08 15:53:43Z" duration="0.001320" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

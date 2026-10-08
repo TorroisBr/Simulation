@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="6" result="Passed" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 15:53:03Z" end-time="2026-10-08 15:53:03Z" duration="0,0910763">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2569" result="Passed" start-time="2026-10-08 15:53:03Z" end-time="2026-10-08 15:53:03Z" duration="0.091076" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3805" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-battle-snapshot-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2569" result="Passed" start-time="2026-10-08 15:53:03Z" end-time="2026-10-08 15:53:03Z" duration="0.077813" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="37948" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2762" name="PersistentBattleOwnerSnapshotTests" fullname="PersistentBattleOwnerSnapshotTests" classname="PersistentBattleOwnerSnapshotTests" runstate="Runnable" testcasecount="6" result="Passed" start-time="2026-10-08 15:53:03Z" end-time="2026-10-08 15:53:03Z" duration="0.057041" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2766" name="CaptureRejectsWrongProfileStaleVectorDuplicateWitnessAndComposedLocalTopology" fullname="PersistentBattleOwnerSnapshotTests.CaptureRejectsWrongProfileStaleVectorDuplicateWitnessAndComposedLocalTopology" methodname="CaptureRejectsWrongProfileStaleVectorDuplicateWitnessAndComposedLocalTopology" classname="PersistentBattleOwnerSnapshotTests" runstate="Runnable" seed="1619668125" result="Passed" start-time="2026-10-08 15:53:03Z" end-time="2026-10-08 15:53:03Z" duration="0.021845" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2763" name="EmptyOwnerSnapshot_CapturesExactSectionAndStagesAsExactZero" fullname="PersistentBattleOwnerSnapshotTests.EmptyOwnerSnapshot_CapturesExactSectionAndStagesAsExactZero" methodname="EmptyOwnerSnapshot_CapturesExactSectionAndStagesAsExactZero" classname="PersistentBattleOwnerSnapshotTests" runstate="Runnable" seed="1101316027" result="Passed" start-time="2026-10-08 15:53:03Z" end-time="2026-10-08 15:53:03Z" duration="0.003983" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2764" name="OwnerSnapshot_RoundTripsPendingActiveAndResolvedRowsWithoutReplayingConsequences" fullname="PersistentBattleOwnerSnapshotTests.OwnerSnapshot_RoundTripsPendingActiveAndResolvedRowsWithoutReplayingConsequences" methodname="OwnerSnapshot_RoundTripsPendingActiveAndResolvedRowsWithoutReplayingConsequences" classname="PersistentBattleOwnerSnapshotTests" runstate="Runnable" seed="544733753" result="Passed" start-time="2026-10-08 15:53:03Z" end-time="2026-10-08 15:53:03Z" duration="0.013568" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2765" name="SnapshotIsDetachedFromLaterSourceWritesAndCollectionsAreReadOnly" fullname="PersistentBattleOwnerSnapshotTests.SnapshotIsDetachedFromLaterSourceWritesAndCollectionsAreReadOnly" methodname="SnapshotIsDetachedFromLaterSourceWritesAndCollectionsAreReadOnly" classname="PersistentBattleOwnerSnapshotTests" runstate="Runnable" seed="1358731478" result="Passed" start-time="2026-10-08 15:53:03Z" end-time="2026-10-08 15:53:03Z" duration="0.002386" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2768" name="SnapshotPreservesSaturatedRevisionWithoutReplayingWrites" fullname="PersistentBattleOwnerSnapshotTests.SnapshotPreservesSaturatedRevisionWithoutReplayingWrites" methodname="SnapshotPreservesSaturatedRevisionWithoutReplayingWrites" classname="PersistentBattleOwnerSnapshotTests" runstate="Runnable" seed="86735867" result="Passed" start-time="2026-10-08 15:53:03Z" end-time="2026-10-08 15:53:03Z" duration="0.000477" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2767" name="StageRejectsMalformedRowsReferencesAndUnsupportedDailyTopologyWithoutChangingParents" fullname="PersistentBattleOwnerSnapshotTests.StageRejectsMalformedRowsReferencesAndUnsupportedDailyTopologyWithoutChangingParents" methodname="StageRejectsMalformedRowsReferencesAndUnsupportedDailyTopologyWithoutChangingParents" classname="PersistentBattleOwnerSnapshotTests" runstate="Runnable" seed="1945617542" result="Passed" start-time="2026-10-08 15:53:03Z" end-time="2026-10-08 15:53:03Z" duration="0.001600" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="20" result="Passed" total="20" passed="20" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 15:53:20Z" end-time="2026-10-08 15:53:21Z" duration="0,2589431">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2569" result="Passed" start-time="2026-10-08 15:53:20Z" end-time="2026-10-08 15:53:21Z" duration="0.258943" total="20" passed="20" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3805" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-battle-snapshot-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2569" result="Passed" start-time="2026-10-08 15:53:20Z" end-time="2026-10-08 15:53:21Z" duration="0.252829" total="20" passed="20" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="34020" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="1236" name="BattleOutcomeApplicationTests" fullname="BattleOutcomeApplicationTests" classname="BattleOutcomeApplicationTests" runstate="Runnable" testcasecount="20" result="Passed" start-time="2026-10-08 15:53:20Z" end-time="2026-10-08 15:53:21Z" duration="0.237653" total="20" passed="20" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="1237" name="Apply_MultipleSourcesCommitsExactDeathsAndSingleStoreRevisions" fullname="BattleOutcomeApplicationTests.Apply_MultipleSourcesCommitsExactDeathsAndSingleStoreRevisions" methodname="Apply_MultipleSourcesCommitsExactDeathsAndSingleStoreRevisions" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="29735965" result="Passed" start-time="2026-10-08 15:53:20Z" end-time="2026-10-08 15:53:21Z" duration="0.156125" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1238" name="Apply_SameSourceDeathsAggregateIntoOnePopulationTransition" fullname="BattleOutcomeApplicationTests.Apply_SameSourceDeathsAggregateIntoOnePopulationTransition" methodname="Apply_SameSourceDeathsAggregateIntoOnePopulationTransition" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="1870132548" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.001821" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1239" name="Apply_UsesMixedD6B2DeathWoundAndCapturePartitionsExactly" fullname="BattleOutcomeApplicationTests.Apply_UsesMixedD6B2DeathWoundAndCapturePartitionsExactly" methodname="Apply_UsesMixedD6B2DeathWoundAndCapturePartitionsExactly" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="1093421240" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.003631" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1240" name="Apply_ZeroConsequencesOnlyChangesBattleTerminalState" fullname="BattleOutcomeApplicationTests.Apply_ZeroConsequencesOnlyChangesBattleTerminalState" methodname="Apply_ZeroConsequencesOnlyChangesBattleTerminalState" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="712008858" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.017895" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1242" name="D6B2PlanningThatSeesStaleManpowerIsRejectedWithoutApplyingItsPlan" fullname="BattleOutcomeApplicationTests.D6B2PlanningThatSeesStaleManpowerIsRejectedWithoutApplyingItsPlan" methodname="D6B2PlanningThatSeesStaleManpowerIsRejectedWithoutApplyingItsPlan" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="1381917112" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.002965" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1256" name="EventFailureAndMissingRecorderReturnPostCommitWarningWithoutRollback" fullname="BattleOutcomeApplicationTests.EventFailureAndMissingRecorderReturnPostCommitWarningWithoutRollback" methodname="EventFailureAndMissingRecorderReturnPostCommitWarningWithoutRollback" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="348607880" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.003027" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1241" name="ExpectedFingerprintMismatchAndResolvedRetryNeverReplan" fullname="BattleOutcomeApplicationTests.ExpectedFingerprintMismatchAndResolvedRetryNeverReplan" methodname="ExpectedFingerprintMismatchAndResolvedRetryNeverReplan" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="795200624" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.003520" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1253" name="FaultedRuntimeRejectsBeforeD5OrD6B2Planning" fullname="BattleOutcomeApplicationTests.FaultedRuntimeRejectsBeforeD5OrD6B2Planning" methodname="FaultedRuntimeRejectsBeforeD5OrD6B2Planning" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="370344354" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.000709" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1243" name="PendingBattleIsRejectedBeforePlanning" fullname="BattleOutcomeApplicationTests.PendingBattleIsRejectedBeforePlanning" methodname="PendingBattleIsRejectedBeforePlanning" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="2107164934" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.000680" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1254" name="ReentrantApplicationIsRejectedWithoutBlockingOuterApply" fullname="BattleOutcomeApplicationTests.ReentrantApplicationIsRejectedWithoutBlockingOuterApply" methodname="ReentrantApplicationIsRejectedWithoutBlockingOuterApply" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="933682559" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.001045" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1252" name="RollbackFailureFaultsRuntimeAndNextApplyRejectsBeforePlanning" fullname="BattleOutcomeApplicationTests.RollbackFailureFaultsRuntimeAndNextApplyRejectsBeforePlanning" methodname="RollbackFailureFaultsRuntimeAndNextApplyRejectsBeforePlanning" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="90699594" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.001458" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1257" name="RuntimeComposesWorldBoundServiceAndResolvedOutcomeDiagnosticsAreDeterministic" fullname="BattleOutcomeApplicationTests.RuntimeComposesWorldBoundServiceAndResolvedOutcomeDiagnosticsAreDeterministic" methodname="RuntimeComposesWorldBoundServiceAndResolvedOutcomeDiagnosticsAreDeterministic" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="387811806" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.018722" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1251" name="SecondSourcePreparationFailure_HappensBeforeAnyTransactionWrite" fullname="BattleOutcomeApplicationTests.SecondSourcePreparationFailure_HappensBeforeAnyTransactionWrite" methodname="SecondSourcePreparationFailure_HappensBeforeAnyTransactionWrite" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="1041319179" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.001886" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1249" name="TerminalBattleStoreCommitFailure_RollsBackEarlierDomainWrites" fullname="BattleOutcomeApplicationTests.TerminalBattleStoreCommitFailure_RollsBackEarlierDomainWrites" methodname="TerminalBattleStoreCommitFailure_RollsBackEarlierDomainWrites" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="1471063579" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.002245" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1250" name="TerminalBattleStoreExceptionAfterAssignment_RestoresBattleAndEarlierDomains" fullname="BattleOutcomeApplicationTests.TerminalBattleStoreExceptionAfterAssignment_RestoresBattleAndEarlierDomains" methodname="TerminalBattleStoreExceptionAfterAssignment_RestoresBattleAndEarlierDomains" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="2055843156" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.002136" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="1248" name="UnexpectedMidTransactionFailure_RestoresWorldTruthAndEveryRevision" fullname="BattleOutcomeApplicationTests.UnexpectedMidTransactionFailure_RestoresWorldTruthAndEveryRevision" classname="BattleOutcomeApplicationTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.008062" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="1244" name="UnexpectedMidTransactionFailure_RestoresWorldTruthAndEveryRevision(&quot;AfterManpowerCommit&quot;)" fullname="BattleOutcomeApplicationTests.UnexpectedMidTransactionFailure_RestoresWorldTruthAndEveryRevision(&quot;AfterManpowerCommit&quot;)" methodname="UnexpectedMidTransactionFailure_RestoresWorldTruthAndEveryRevision" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="76994741" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.001995" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="1245" name="UnexpectedMidTransactionFailure_RestoresWorldTruthAndEveryRevision(&quot;AfterFirstSourceCommit&quot;)" fullname="BattleOutcomeApplicationTests.UnexpectedMidTransactionFailure_RestoresWorldTruthAndEveryRevision(&quot;AfterFirstSourceCommit&quot;)" methodname="UnexpectedMidTransactionFailure_RestoresWorldTruthAndEveryRevision" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="401974685" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.001406" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="1246" name="UnexpectedMidTransactionFailure_RestoresWorldTruthAndEveryRevision(&quot;BeforeBattleCommit&quot;)" fullname="BattleOutcomeApplicationTests.UnexpectedMidTransactionFailure_RestoresWorldTruthAndEveryRevision(&quot;BeforeBattleCommit&quot;)" methodname="UnexpectedMidTransactionFailure_RestoresWorldTruthAndEveryRevision" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="2007611761" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.001413" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="1247" name="UnexpectedMidTransactionFailure_RestoresWorldTruthAndEveryRevision(&quot;AfterBattleCommit&quot;)" fullname="BattleOutcomeApplicationTests.UnexpectedMidTransactionFailure_RestoresWorldTruthAndEveryRevision(&quot;AfterBattleCommit&quot;)" methodname="UnexpectedMidTransactionFailure_RestoresWorldTruthAndEveryRevision" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="521188011" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.001389" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="1255" name="UnsupportedNumericProfileAndMissingPolicyRejectWithoutMutation" fullname="BattleOutcomeApplicationTests.UnsupportedNumericProfileAndMissingPolicyRejectWithoutMutation" methodname="UnsupportedNumericProfileAndMissingPolicyRejectWithoutMutation" classname="BattleOutcomeApplicationTests" runstate="Runnable" seed="886697107" result="Passed" start-time="2026-10-08 15:53:21Z" end-time="2026-10-08 15:53:21Z" duration="0.001033" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
