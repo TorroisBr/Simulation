@@ -6,6 +6,69 @@ COMPLETE/PROMOTED within its accepted identity, genesis-provenance, and
 deterministic-root continuation scope; P12-A remains `WAIT_DEPENDENCY`. P13
 remains `BLOCKED`.
 
+## P12-D NPC D/F root owner snapshot — promotion integration candidate (2026-10-08)
+
+The refreshed P12 canonical base for this candidate bundle is
+`5acc3fff94f74fcb718610825caadf645423d672`. The bounded implementation is
+candidate `7fb74bbc36bbc954e7ba0160b32657fbf9de2890` on
+`codex/phase12/P12DNpcRootSnapshotImplementation`; its reviewed code tree is
+`fcb19211f9e407fd4fe0553355abe293ae993780`, with exact `Assets` subtree
+`d7e95170c31947fb611a7461133b60ce75ad1e4d`. Independent exact-tip review
+returned `PASS — VALIDATED_CANDIDATE` at review commit
+`e3628b2986c633ef0a147dcc4fb0b967339fe36c`, recorded in
+[`design/PHASE12_D_NPC_ROOT_OWNER_SNAPSHOT_IMPLEMENTATION_REVIEW_7FB74.md`](design/PHASE12_D_NPC_ROOT_OWNER_SNAPSHOT_IMPLEMENTATION_REVIEW_7FB74.md).
+The promotion-integration candidate is a docs-only descendant that retains the
+implementation and review evidence. This entry records the candidate bundle;
+it does not itself advance `codex/phase12/canonical`.
+
+The bounded P12-D slice captures NPC D/F values once under the same completed
+Daily-v1 boundary token, stamp, and component revision vector; merges disjoint
+D/F projections; and privately stages exact owner values and typed references
+without replaying gameplay actions or writers. P18 LocalObservation and
+MerchantTradeState are exact-zero census evidence only; their receipt data is
+not exported or replayed. Daily-v1 continues to exclude ExplorableSite and
+LocalTopology. The slice does not implement whole-D graph/runtime/bootstrap
+publication or P12-G atomic publication.
+
+Exact-tree validation passed: NPC D/F snapshot 22/22, City-root regression
+17/17, receipt-owner regression 13/13, ALL EditMode 2624/2624, official Smoke
+5/5, and cumulative `git diff --check`. XML, compressed-log, and decompressed
+raw-log hashes are recorded and cross-checked in
+[`validation/P12DNpcRootOwnerSnapshot/VALIDATION.md`](validation/P12DNpcRootOwnerSnapshot/VALIDATION.md).
+
+### Refreshed P12 dependency DAG
+
+- P12-B and P12-C remain COMPLETE/PROMOTED within their accepted bounded
+  contracts.
+- P12-D remains IN PROGRESS. Its promoted Genealogy, SpatialNetwork, Person,
+  ExplorableSite, City, exact-zero receipt census, and City/NPC relation-order
+  assembly remain intact. The NPC D/F snapshot candidate has exact-tip review
+  and validation PASS but is not canonical until its promotion preflight is
+  completed. Whole-D package/graph integration and runtime/bootstrap
+  publication remain outstanding.
+- P12-E remains IN PROGRESS; Battle and the ArmedForce/manpower/position owner
+  snapshot are promoted, while wider accepted owner coverage and integration
+  remain outstanding.
+- P12-F waits for P12-C, P12-D, and P12-E.
+- P12-G waits for P12-B through P12-F and a validated live-profile inventory.
+- P12-A remains WAIT_DEPENDENCY pending complete included-owner export and
+  staged hydration, validated live inventory, and separate implementation
+  authorization. P13 remains BLOCKED on its explicit continuation
+  prerequisites.
+
+Before the next D package-integration checkpoint, obtain a separate
+current-base readiness review. It must resolve the Person staging-order
+discrepancy: the D technical design describes restoring Persons after NPC
+staging, while the current-base crosswalk and implementation API stage and bind
+Persons before NPC staging. It must also reconcile stale P12-G City ownership
+wording that describes merged D/E City ownership with the current D design's
+single D-owned City package. This candidate does not resolve those issues or
+claim whole-D integration.
+
+P12-D remains IN PROGRESS, P12-A remains WAIT_DEPENDENCY, P13 remains BLOCKED,
+and Phase 12 remains open. This candidate does not claim capture eligibility,
+profile-wide export/hydration, P12-A or P13 readiness, or Phase closure.
+
 ## Latest canonical promotion — P12-E ArmedForce/manpower/position owner snapshot (2026-10-08)
 
 After refreshed preflight, `codex/phase12/canonical` advanced from
