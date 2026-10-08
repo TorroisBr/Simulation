@@ -494,8 +494,8 @@ public sealed class P12CP9GenesisManifestSnapshot
 
     private static bool SequenceEquals(IReadOnlyList<string> actual, IReadOnlyList<string> expected)
     {
-        if (actual == null || actual.Count != expected.Length) return false;
-        for (int i = 0; i < expected.Length; i++)
+        if (actual == null || expected == null || actual.Count != expected.Count) return false;
+        for (int i = 0; i < expected.Count; i++)
             if (!string.Equals(actual[i], expected[i], StringComparison.Ordinal)) return false;
         return true;
     }
