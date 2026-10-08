@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="12" result="Passed" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 14:15:10Z" end-time="2026-10-08 14:15:10Z" duration="0,3640448">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2556" result="Passed" start-time="2026-10-08 14:15:10Z" end-time="2026-10-08 14:15:10Z" duration="0.364045" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3790" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12d-explorable-site-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2556" result="Passed" start-time="2026-10-08 14:15:10Z" end-time="2026-10-08 14:15:10Z" duration="0.322917" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="64156" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="1804" name="ExplorableSiteCensusTests" fullname="ExplorableSiteCensusTests" classname="ExplorableSiteCensusTests" runstate="Runnable" testcasecount="12" result="Passed" start-time="2026-10-08 14:15:10Z" end-time="2026-10-08 14:15:10Z" duration="0.225568" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="1808" name="FaultedOwnerGuardRejectsAddWithoutChangingTheSiteWitness" fullname="ExplorableSiteCensusTests.FaultedOwnerGuardRejectsAddWithoutChangingTheSiteWitness" methodname="FaultedOwnerGuardRejectsAddWithoutChangingTheSiteWitness" classname="ExplorableSiteCensusTests" runstate="Runnable" seed="1177332608" result="Passed" start-time="2026-10-08 14:15:10Z" end-time="2026-10-08 14:15:10Z" duration="0.066741" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1807" name="InvalidAndDuplicateAddsLeaveTheSiteWitnessUnchanged" fullname="ExplorableSiteCensusTests.InvalidAndDuplicateAddsLeaveTheSiteWitnessUnchanged" methodname="InvalidAndDuplicateAddsLeaveTheSiteWitnessUnchanged" classname="ExplorableSiteCensusTests" runstate="Runnable" seed="207210607" result="Passed" start-time="2026-10-08 14:15:10Z" end-time="2026-10-08 14:15:10Z" duration="0.000822" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1810" name="OwnerSnapshot_EmptyCaptureIsDetachedStableAndStagesAsExactZero" fullname="ExplorableSiteCensusTests.OwnerSnapshot_EmptyCaptureIsDetachedStableAndStagesAsExactZero" methodname="OwnerSnapshot_EmptyCaptureIsDetachedStableAndStagesAsExactZero" classname="ExplorableSiteCensusTests" runstate="Runnable" seed="1395596364" result="Passed" start-time="2026-10-08 14:15:10Z" end-time="2026-10-08 14:15:10Z" duration="0.004133" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1814" name="OwnerSnapshot_IsDetachedFromLaterSiteMutationsAndExposesReadOnlyRows" fullname="ExplorableSiteCensusTests.OwnerSnapshot_IsDetachedFromLaterSiteMutationsAndExposesReadOnlyRows" methodname="OwnerSnapshot_IsDetachedFromLaterSiteMutationsAndExposesReadOnlyRows" classname="ExplorableSiteCensusTests" runstate="Runnable" seed="1685253084" result="Passed" start-time="2026-10-08 14:15:10Z" end-time="2026-10-08 14:15:10Z" duration="0.004371" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1816" name="OwnerSnapshot_LateStagingFailureDoesNotPublishPartialOwnerOrChangeInputs" fullname="ExplorableSiteCensusTests.OwnerSnapshot_LateStagingFailureDoesNotPublishPartialOwnerOrChangeInputs" methodname="OwnerSnapshot_LateStagingFailureDoesNotPublishPartialOwnerOrChangeInputs" classname="ExplorableSiteCensusTests" runstate="Runnable" seed="1775967603" result="Passed" start-time="2026-10-08 14:15:10Z" end-time="2026-10-08 14:15:10Z" duration="0.002255" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1811" name="OwnerSnapshot_PreservesOrderedIdentityDefinitionSharedLocationAndExactRevision" fullname="ExplorableSiteCensusTests.OwnerSnapshot_PreservesOrderedIdentityDefinitionSharedLocationAndExactRevision" methodname="OwnerSnapshot_PreservesOrderedIdentityDefinitionSharedLocationAndExactRevision" classname="ExplorableSiteCensusTests" runstate="Runnable" seed="188645110" result="Passed" start-time="2026-10-08 14:15:10Z" end-time="2026-10-08 14:15:10Z" duration="0.003593" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1815" name="OwnerSnapshot_RejectsInvalidIdentityDefinitionLocationAndRevisionFacts" fullname="ExplorableSiteCensusTests.OwnerSnapshot_RejectsInvalidIdentityDefinitionLocationAndRevisionFacts" methodname="OwnerSnapshot_RejectsInvalidIdentityDefinitionLocationAndRevisionFacts" classname="ExplorableSiteCensusTests" runstate="Runnable" seed="1077794282" result="Passed" start-time="2026-10-08 14:15:10Z" end-time="2026-10-08 14:15:10Z" duration="0.000933" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1813" name="OwnerSnapshotCapture_RejectsDuplicateSiteInstanceIdsWithoutChangingLiveOwner" fullname="ExplorableSiteCensusTests.OwnerSnapshotCapture_RejectsDuplicateSiteInstanceIdsWithoutChangingLiveOwner" methodname="OwnerSnapshotCapture_RejectsDuplicateSiteInstanceIdsWithoutChangingLiveOwner" classname="ExplorableSiteCensusTests" runstate="Runnable" seed="1810779169" result="Passed" start-time="2026-10-08 14:15:10Z" end-time="2026-10-08 14:15:10Z" duration="0.000525" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1812" name="OwnerSnapshotConstructor_CopiesRowsFromTheInputCollection" fullname="ExplorableSiteCensusTests.OwnerSnapshotConstructor_CopiesRowsFromTheInputCollection" methodname="OwnerSnapshotConstructor_CopiesRowsFromTheInputCollection" classname="ExplorableSiteCensusTests" runstate="Runnable" seed="432774744" result="Passed" start-time="2026-10-08 14:15:10Z" end-time="2026-10-08 14:15:10Z" duration="0.000381" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1809" name="SaturatedRevisionRejectsNewSiteWithoutWrappingOrChangingCardinality" fullname="ExplorableSiteCensusTests.SaturatedRevisionRejectsNewSiteWithoutWrappingOrChangingCardinality" methodname="SaturatedRevisionRejectsNewSiteWithoutWrappingOrChangingCardinality" classname="ExplorableSiteCensusTests" runstate="Runnable" seed="1739208650" result="Passed" start-time="2026-10-08 14:15:10Z" end-time="2026-10-08 14:15:10Z" duration="0.000313" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1805" name="SelectedP10AProfileHasAnExactWitnessForItsPublishedSiteOwner" fullname="ExplorableSiteCensusTests.SelectedP10AProfileHasAnExactWitnessForItsPublishedSiteOwner" methodname="SelectedP10AProfileHasAnExactWitnessForItsPublishedSiteOwner" classname="ExplorableSiteCensusTests" runstate="Runnable" seed="733835837" result="Passed" start-time="2026-10-08 14:15:10Z" end-time="2026-10-08 14:15:10Z" duration="0.126835" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1806" name="SuccessfulAddAdvancesSiteCardinalityAndRevisionExactlyOnce" fullname="ExplorableSiteCensusTests.SuccessfulAddAdvancesSiteCardinalityAndRevisionExactlyOnce" methodname="SuccessfulAddAdvancesSiteCardinalityAndRevisionExactlyOnce" classname="ExplorableSiteCensusTests" runstate="Runnable" seed="2051801096" result="Passed" start-time="2026-10-08 14:15:10Z" end-time="2026-10-08 14:15:10Z" duration="0.000508" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
