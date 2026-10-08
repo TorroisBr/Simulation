@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="10" result="Passed" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 19:37:37Z" end-time="2026-10-08 19:37:37Z" duration="0,10633">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2602" result="Passed" start-time="2026-10-08 19:37:37Z" end-time="2026-10-08 19:37:37Z" duration="0.106330" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3846" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-current-base-revalidation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2602" result="Passed" start-time="2026-10-08 19:37:37Z" end-time="2026-10-08 19:37:37Z" duration="0.092288" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="117280" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2645" name="P12EMilitaryOwnerSnapshotTests" fullname="P12EMilitaryOwnerSnapshotTests" classname="P12EMilitaryOwnerSnapshotTests" runstate="Runnable" testcasecount="10" result="Passed" start-time="2026-10-08 19:37:37Z" end-time="2026-10-08 19:37:37Z" duration="0.075299" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2650" name="CaptureRejectsP16ProfileAndP17ProvenanceExtensions" fullname="P12EMilitaryOwnerSnapshotTests.CaptureRejectsP16ProfileAndP17ProvenanceExtensions" methodname="CaptureRejectsP16ProfileAndP17ProvenanceExtensions" classname="P12EMilitaryOwnerSnapshotTests" runstate="Runnable" seed="698087729" result="Passed" start-time="2026-10-08 19:37:37Z" end-time="2026-10-08 19:37:37Z" duration="0.022139" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2649" name="CaptureRejectsStaleVectorProviderAndP10TopologyWithoutRetainingAnything" fullname="P12EMilitaryOwnerSnapshotTests.CaptureRejectsStaleVectorProviderAndP10TopologyWithoutRetainingAnything" methodname="CaptureRejectsStaleVectorProviderAndP10TopologyWithoutRetainingAnything" classname="P12EMilitaryOwnerSnapshotTests" runstate="Runnable" seed="607279057" result="Passed" start-time="2026-10-08 19:37:37Z" end-time="2026-10-08 19:37:37Z" duration="0.002021" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2655" name="CaptureRequiresTheExactFiveRequiredTokenBoundOwnerStamps" fullname="P12EMilitaryOwnerSnapshotTests.CaptureRequiresTheExactFiveRequiredTokenBoundOwnerStamps" methodname="CaptureRequiresTheExactFiveRequiredTokenBoundOwnerStamps" classname="P12EMilitaryOwnerSnapshotTests" runstate="Runnable" seed="462488373" result="Passed" start-time="2026-10-08 19:37:37Z" end-time="2026-10-08 19:37:37Z" duration="0.001829" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2646" name="EmptySnapshot_CapturesFiveExactSectionsAndStagesWithoutChangingLiveOwners" fullname="P12EMilitaryOwnerSnapshotTests.EmptySnapshot_CapturesFiveExactSectionsAndStagesWithoutChangingLiveOwners" methodname="EmptySnapshot_CapturesFiveExactSectionsAndStagesWithoutChangingLiveOwners" classname="P12EMilitaryOwnerSnapshotTests" runstate="Runnable" seed="2106402916" result="Passed" start-time="2026-10-08 19:37:37Z" end-time="2026-10-08 19:37:37Z" duration="0.008076" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2647" name="PopulatedSnapshot_RoundTripsOwnerFieldsTypedReferencesAndLocalRevisions" fullname="P12EMilitaryOwnerSnapshotTests.PopulatedSnapshot_RoundTripsOwnerFieldsTypedReferencesAndLocalRevisions" methodname="PopulatedSnapshot_RoundTripsOwnerFieldsTypedReferencesAndLocalRevisions" classname="P12EMilitaryOwnerSnapshotTests" runstate="Runnable" seed="169535372" result="Passed" start-time="2026-10-08 19:37:37Z" end-time="2026-10-08 19:37:37Z" duration="0.020441" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2654" name="PrivateOwnerFactoriesFailClosedWithoutChangingTheirInputsOrLiveOwners" fullname="P12EMilitaryOwnerSnapshotTests.PrivateOwnerFactoriesFailClosedWithoutChangingTheirInputsOrLiveOwners" methodname="PrivateOwnerFactoriesFailClosedWithoutChangingTheirInputsOrLiveOwners" classname="P12EMilitaryOwnerSnapshotTests" runstate="Runnable" seed="1505869627" result="Passed" start-time="2026-10-08 19:37:37Z" end-time="2026-10-08 19:37:37Z" duration="0.002851" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2648" name="Snapshot_RetainsTypedPositionForTerminatedRegisteredForce" fullname="P12EMilitaryOwnerSnapshotTests.Snapshot_RetainsTypedPositionForTerminatedRegisteredForce" methodname="Snapshot_RetainsTypedPositionForTerminatedRegisteredForce" classname="P12EMilitaryOwnerSnapshotTests" runstate="Runnable" seed="647690311" result="Passed" start-time="2026-10-08 19:37:37Z" end-time="2026-10-08 19:37:37Z" duration="0.001456" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2653" name="StageRejectsMalformedCohortsSourceCustodyMirrorAndSpatialRows" fullname="P12EMilitaryOwnerSnapshotTests.StageRejectsMalformedCohortsSourceCustodyMirrorAndSpatialRows" methodname="StageRejectsMalformedCohortsSourceCustodyMirrorAndSpatialRows" classname="P12EMilitaryOwnerSnapshotTests" runstate="Runnable" seed="1270878680" result="Passed" start-time="2026-10-08 19:37:37Z" end-time="2026-10-08 19:37:37Z" duration="0.002370" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2652" name="StageRejectsMalformedHierarchyDuplicateOrMissingOwnerRowsAndInvalidPositions" fullname="P12EMilitaryOwnerSnapshotTests.StageRejectsMalformedHierarchyDuplicateOrMissingOwnerRowsAndInvalidPositions" methodname="StageRejectsMalformedHierarchyDuplicateOrMissingOwnerRowsAndInvalidPositions" classname="P12EMilitaryOwnerSnapshotTests" runstate="Runnable" seed="108843038" result="Passed" start-time="2026-10-08 19:37:37Z" end-time="2026-10-08 19:37:37Z" duration="0.002114" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2651" name="StageRejectsSchemaCardinalityTopologyAndSourceBoundRowsBeforeReturningOwners" fullname="P12EMilitaryOwnerSnapshotTests.StageRejectsSchemaCardinalityTopologyAndSourceBoundRowsBeforeReturningOwners" methodname="StageRejectsSchemaCardinalityTopologyAndSourceBoundRowsBeforeReturningOwners" classname="P12EMilitaryOwnerSnapshotTests" runstate="Runnable" seed="1722326443" result="Passed" start-time="2026-10-08 19:37:37Z" end-time="2026-10-08 19:37:37Z" duration="0.000786" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

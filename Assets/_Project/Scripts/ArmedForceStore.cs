@@ -27,6 +27,77 @@ public sealed class ArmedForceStore : IAuthoritativeMutationGuardBindable
         this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
     }
 
+    /// <summary>
+    /// Builds an unpublished ArmedForce owner from already-detached P12-E
+    /// values. This deliberately bypasses public mutation operations so the
+    /// saved revision is restored exactly and no domain consequences replay.
+    /// </summary>
+    internal static bool TryCreateFromP12EOwnerSnapshot(
+        PersonStore targetPersonStore,
+        IReadOnlyList<ArmedForceRecord> forceRecords,
+        IReadOnlyList<ContingentRecord> contingentRecords,
+        IReadOnlyList<ArmedForcePersonReference> relevantPersonRecords,
+        long ownerRevision,
+        out ArmedForceStore staged,
+        out string diagnostic)
+    {
+        staged = null;
+        diagnostic = "The detached ArmedForce owner values are invalid.";
+        if (targetPersonStore == null
+            || forceRecords == null
+            || contingentRecords == null
+            || relevantPersonRecords == null
+            || ownerRevision < 0L)
+            return false;
+
+        ArmedForceStore candidate = new ArmedForceStore(targetPersonStore);
+        foreach (ArmedForceRecord force in forceRecords)
+        {
+            if (force == null || force.Id == null
+                || candidate.forcesById.ContainsKey(force.Id.Value))
+            {
+                diagnostic = "Force rows must have unique stable ArmedForceIds.";
+                return false;
+            }
+            candidate.forcesById.Add(force.Id.Value, force);
+        }
+
+        foreach (ContingentRecord contingent in contingentRecords)
+        {
+            if (contingent == null || contingent.Id == null
+                || candidate.contingentsById.ContainsKey(contingent.Id.Value))
+            {
+                diagnostic = "Contingent rows must have unique stable ContingentIds.";
+                return false;
+            }
+            candidate.contingentsById.Add(contingent.Id.Value, contingent);
+        }
+
+        foreach (ArmedForcePersonReference reference in relevantPersonRecords)
+        {
+            if (reference == null || reference.Id == null
+                || candidate.relevantPersonsById.ContainsKey(reference.Id.Value))
+            {
+                diagnostic = "Relevant Person rows must have unique stable reference IDs.";
+                return false;
+            }
+            candidate.relevantPersonsById.Add(reference.Id.Value, reference);
+        }
+
+        candidate.revision = ownerRevision;
+        ArmedForceInvariantReport report = candidate.ValidateInvariants();
+        if (!report.IsValid)
+        {
+            diagnostic = "Staged ArmedForce owner invariants failed: "
+                + string.Join("; ", report.Violations);
+            return false;
+        }
+
+        staged = candidate;
+        diagnostic = string.Empty;
+        return true;
+    }
+
     public PersonStore PersonStore => personStore;
     public int Count => forcesById.Count;
     public int ContingentCount => contingentsById.Count;

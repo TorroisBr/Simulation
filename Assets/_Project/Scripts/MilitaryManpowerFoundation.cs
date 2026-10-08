@@ -387,6 +387,76 @@ public sealed class ContingentManpowerStateStore : IAuthoritativeMutationGuardBi
         }
     }
 
+    /// <summary>
+    /// Builds an unpublished selected-Daily-v1 manpower owner from detached
+    /// values. The profile intentionally admits no source provider here; the
+    /// exact original owner is never changed and no public operation is replayed.
+    /// </summary>
+    internal static bool TryCreateFromP12EOwnerSnapshot(
+        ArmedForceStore stagedArmedForceStore,
+        IReadOnlyList<ContingentManpowerState> stagedStates,
+        long ownerRevision,
+        out ContingentManpowerStateStore staged,
+        out string diagnostic)
+    {
+        staged = null;
+        diagnostic = "The detached manpower owner values are invalid.";
+        if (stagedArmedForceStore == null || stagedStates == null || ownerRevision < 0L)
+            return false;
+
+        ContingentManpowerStateStore candidate = new ContingentManpowerStateStore(
+            stagedArmedForceStore,
+            null,
+            false);
+        foreach (ContingentManpowerState state in stagedStates)
+        {
+            if (state == null || state.ContingentId == null || state.Revision < 0L
+                || candidate.states.ContainsKey(state.ContingentId.Value))
+            {
+                diagnostic = "Manpower rows must have unique stable ContingentIds and nonnegative revisions.";
+                return false;
+            }
+            if (state.SourceId != null)
+            {
+                diagnostic = "Selected Daily-v1 P12-E staging requires source-null manpower rows.";
+                return false;
+            }
+            candidate.states.Add(state.ContingentId.Value, state);
+        }
+
+        candidate.revision = ownerRevision;
+        ContingentManpowerInvariantReport beforeAttach = candidate.ValidateInvariants(false, false);
+        if (!beforeAttach.IsValid)
+        {
+            diagnostic = "Staged manpower owner invariants failed: "
+                + string.Join("; ", beforeAttach.Violations);
+            return false;
+        }
+
+        try
+        {
+            candidate.AttachToArmedForceStore();
+        }
+        catch (ArgumentException exception)
+        {
+            diagnostic = "Staged manpower owner could not attach to its exact ArmedForce authority: "
+                + exception.Message;
+            return false;
+        }
+
+        ContingentManpowerInvariantReport report = candidate.ValidateInvariants();
+        if (!report.IsValid)
+        {
+            diagnostic = "Staged manpower owner invariants failed: "
+                + string.Join("; ", report.Violations);
+            return false;
+        }
+
+        staged = candidate;
+        diagnostic = string.Empty;
+        return true;
+    }
+
     public bool TryGet(ContingentId id, out ContingentManpowerState state)
     {
         state = null;

@@ -6,6 +6,69 @@ COMPLETE/PROMOTED within its accepted identity, genesis-provenance, and
 deterministic-root continuation scope; P12-A remains `WAIT_DEPENDENCY`. P13
 remains `BLOCKED`.
 
+## Latest canonical promotion — P12-E ArmedForce/manpower/position owner snapshot (2026-10-08)
+
+After refreshed preflight, `codex/phase12/canonical` advanced from
+`ed3aad0bcf98fc1b709b6bc632452689448b8803` through the exact-tip reviewed
+P12-E candidate bundle on `codex/phase12/P12ECurrentBasePromotionIntegrationE161093`.
+The candidate is `codex/phase12/P12ECurrentBaseRevalidation` at
+`e161093a56a0308314895eebe7e89b251eea7092`; its tested code/test tip is
+`99302cffec8cda35945ed191bd3dba98beb7bd57`, implementation commit
+`d57120cc8e7876910caec6f2a134231a8a23bfee`, and tested/final `Assets` tree
+`811f8018c5722a6cf5a0bbf54ec04a9f73f77397`. P12 canonical was the candidate's
+clean fast-forward base. The two independent exact-tip review records are
+`b70894dae5cb13eeabbe55e8affeeab113985dd5` and
+`414cf855cf75de5930d58485582236323d028396`; both returned
+`VALIDATED_CANDIDATE` on the unchanged tree. The promotion bundle adds those
+review records and this State update without changing code.
+
+The bounded slice adds detached value export and private staged reconstruction
+for the accepted Daily-v1 `ArmedForceStore`, `ContingentManpowerStateStore`,
+and `ArmedForceSpatialStateStore` owner group. It consumes the existing five
+required P12-B owner sections and one completed-boundary token/vector; it adds
+no mutation wiring, epoch behavior, bootstrap/runtime integration, or new census
+provider. It preserves exact owner-local revisions, force/contingent/person
+references, manpower cohorts, and typed P8 positions. Existing owner
+invariants are validated before staged owners are returned.
+
+Exact-tree validation passed: P12-E focus 10/10, Continuation Protocol 24/24,
+P12-D receipt-owner 13/13, City root 17/17, bootstrap composition 26/26,
+ALL EditMode 2602/2602, official Smoke 5/5, and `git diff --check`. The
+manifest and XML/log hashes are in
+[`validation/P12ECurrentBaseRevalidation/VALIDATION.md`](validation/P12ECurrentBaseRevalidation/VALIDATION.md).
+The only `.meta` changes are the paired Unity metadata files for the new
+snapshot source and its Editor tests; no ProjectSettings or existing/unrelated
+metadata files changed.
+
+P12-E remains IN PROGRESS. This is one ArmedForce/manpower/position owner slice;
+it does not complete P12-E, establish full owner or shared-epoch coverage,
+prove global quiescence or capture eligibility, provide profile-wide export/
+hydration or P12-G publication, make P12-A/P13 ready, or close Phase 12.
+P12-D remains IN PROGRESS; its promoted City/NPC relation-order assembly is
+preserved, while whole-D graph integration, runtime/bootstrap publication, and
+remaining D owner coverage remain outstanding. The isolated NPC D/F snapshot
+work is still under implementation and is not part of this promotion.
+
+### Refreshed P12 dependency DAG
+
+- P12-B and P12-C remain COMPLETE/PROMOTED within their accepted bounded
+  contracts.
+- P12-D remains IN PROGRESS: promoted Genealogy, SpatialNetwork, Person,
+  ExplorableSite, City, receipt-owner witnesses, and City/NPC assembly; NPC
+  owner snapshot/private staging, whole-D graph integration, and runtime
+  publication remain outstanding.
+- P12-E remains IN PROGRESS: Battle and this ArmedForce/manpower/position owner
+  snapshot are promoted; other accepted core/daily-domain owner coverage and
+  integration remain outstanding.
+- P12-F waits for P12-C, P12-D, and P12-E.
+- P12-G waits for P12-B through P12-F and a validated live-profile inventory.
+- P12-A remains WAIT_DEPENDENCY pending complete included-owner export and
+  staged hydration, validated live inventory, and separate implementation
+  authorization. P13 remains BLOCKED on its explicit continuation prerequisites.
+
+Phase 12 remains open. This bounded promotion does not imply P12-A/P13
+readiness, profile-wide save/hydration, or Phase closure.
+
 ## Latest canonical promotion — P12-D City/NPC relation-order assembly (2026-10-08)
 
 After final preflight, `codex/phase12/canonical` was advanced from
