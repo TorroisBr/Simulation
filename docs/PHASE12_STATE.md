@@ -6,7 +6,7 @@ COMPLETE/PROMOTED within its accepted identity, genesis-provenance, and
 deterministic-root continuation scope; P12-A remains `WAIT_DEPENDENCY`. P13
 remains `BLOCKED`.
 
-## Current P12-D status — Genealogy owner snapshot promoted (2026-10-08)
+## Current P12-D status — Genealogy and SpatialNetwork owner snapshots promoted (2026-10-08)
 
 `codex/phase12/canonical` was fast-forwarded from
 `0e786db8e6ed5ed937ff62e3f63258d8b73fd93c` to promotion tip
@@ -31,17 +31,42 @@ by this owner slice. No runtime/bootstrap publication, whole-D graph
 validation, profile-wide export/hydration, P12-A readiness, P13 readiness, or
 Phase closure is claimed.
 
+The canonical branch was then fast-forwarded from
+`ad4b20c42a25c9fd453c98695a79ce59490bf4fe` to
+`f6f5ff2507200d72e5c4194eae60cbc21559e65c`. This promotes the isolated
+`SpatialNetworkRuntime` owner snapshot: code `39ad61d60907154c4af52ea1bf01bfe94322d90f`,
+validated `Assets` tree `1e00c94447bf202acf7517b14a5aed6043ae4eec`, exact-tip
+review PASS recorded at `de3ed27be5d03aa58f49397ed80a9875abf8c5c7`.
+Validation passed the focused census suite 11/11, ALL EditMode 2544/2544,
+official Smoke 5/5, and `git diff --check`. The validation manifest's source
+hashes were corrected against the committed Git blobs; that documentation-only
+correction did not change the validated `Assets` tree. See
+[`validation/P12DSpatialNetworkOwnerSnapshot/VALIDATION.md`](validation/P12DSpatialNetworkOwnerSnapshot/VALIDATION.md)
+and
+[`design/PHASE12_P12D_SPATIAL_NETWORK_OWNER_SNAPSHOT_IMPLEMENTATION_REVIEW.md`](design/PHASE12_P12D_SPATIAL_NETWORK_OWNER_SNAPSHOT_IMPLEMENTATION_REVIEW.md).
+
+This slice exports legacy location/route identity and ordered values with the
+owner's exact local revision, stages them against the existing C identity
+registry, and rebuilds the derived outgoing-route index. Parallel routes and
+stored durations remain distinct. It adds no `SimulationRuntime` or bootstrap
+integration, P12-B capture binding, whole-D validation, profile-wide
+export/hydration, P12-A readiness, P13 readiness, or Phase closure.
+
 ### Refreshed P12 dependency and owner DAG
 
 - **P12-B and P12-C:** remain COMPLETE/PROMOTED within their recorded bounded
   contracts; the current P12-D slice does not reopen them.
-- **P12-D:** IN PROGRESS. Genealogy local snapshot/staging is promoted.
-  `SpatialNetworkRuntime` is the next `READY_FOR_IMPLEMENTATION` isolated
-  owner slice under the reviewed D design. Person export/staging still needs
-  an isolated design/evidence boundary; Site must reconcile the D design's
-  populated round-trip case with Daily-v1's required-empty site section.
-  City/population and the D/E/F NPC adapter remain serialized shared-owner
-  work; whole-D cross-owner staging remains outstanding.
+- **P12-D:** IN PROGRESS. The Genealogy and SpatialNetwork local
+  snapshot/staging slices are promoted. Person has a reviewed isolated design
+  candidate (`0c602d37589c993ea9956f8b7f42e9d807479c08`, review PASS
+  `f17524609cd47e291e0f05123a1cdf7937b6f3a2`) and its isolated implementation
+  is in progress; neither is a Person promotion. For the accepted Daily-v1
+  profile, the P12-B site section is required-empty and bound to its exact
+  owner/token, so D must preserve that empty section and reject populated site
+  state. The generic D site owner model can support multiple sites only in a
+  future profile that explicitly admits them; this does not add P10-A to
+  Daily-v1. City/population and the D/E/F NPC adapter remain serialized
+  shared-owner work; whole-D cross-owner staging remains outstanding.
 - **P12-E:** design is reviewed, but no E owner slice is currently
   implementation-ready; owner-specific fields, writes/revisions, and staged
   reconstruction evidence remain outstanding.
@@ -54,8 +79,8 @@ Phase closure is claimed.
   authorization is recorded.
 - **P13:** remains `BLOCKED` on its explicit continuation prerequisites.
 
-Phase 12 remains open. This owner promotion does not establish complete P12-D,
-P12-A readiness, P13 readiness, or Phase closure.
+Phase 12 remains open. These owner promotions do not establish complete
+P12-D, P12-A readiness, P13 readiness, or Phase closure.
 
 ## Current canonical status — P12-C private root composition promoted (2026-10-08)
 
