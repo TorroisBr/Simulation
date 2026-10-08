@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 /// <summary>
 /// Detached P12-C continuation value for the selected P9-B genesis manifest.
@@ -228,6 +229,12 @@ public sealed class P12CP9GenesisManifestSnapshot
             return false;
         }
 
+        if (!HeaderRecordsMatchSnapshot())
+        {
+            diagnostic = "P9 profile identity, schema, seed source, or seed value differs from retained provenance.";
+            return false;
+        }
+
         foreach (string record in CanonicalProvenanceRecords)
         {
             if (record.StartsWith("p10-record|", StringComparison.Ordinal)
@@ -317,6 +324,12 @@ public sealed class P12CP9GenesisManifestSnapshot
             return false;
         }
 
+        if (!EffectiveConfigurationMatchesRecords())
+        {
+            diagnostic = "Effective simulation configuration differs from retained provenance records.";
+            return false;
+        }
+
         if (MonthLengths == null)
         {
             diagnostic = "Calendar month-length values are required (an empty list represents uniform months).";
@@ -333,6 +346,18 @@ public sealed class P12CP9GenesisManifestSnapshot
         if (!calendar.TryValidate(out diagnostic))
         {
             diagnostic = "Recorded calendar is invalid: " + diagnostic;
+            return false;
+        }
+
+        if (!CalendarMatchesRecords())
+        {
+            diagnostic = "Calendar dimensions or month lengths differ from retained provenance records.";
+            return false;
+        }
+
+        if (!AuthoredDefinitionIdsMatchRecords())
+        {
+            diagnostic = "Authored definition IDs differ from the IDs encoded by retained provenance records.";
             return false;
         }
 
@@ -481,6 +506,287 @@ public sealed class P12CP9GenesisManifestSnapshot
         for (int i = 0; i < values.Count; i++)
             if (string.Equals(values[i], expected, StringComparison.Ordinal)) count++;
         return count == 1;
+    }
+
+    private bool HeaderRecordsMatchSnapshot()
+    {
+        if (CanonicalProvenanceRecords.Count < 4) return false;
+        string expectedSeedMode = string.Equals(SeedSource, "authored-fixed", StringComparison.Ordinal)
+            ? "fixed-seed"
+            : string.Equals(SeedSource, "default-zero", StringComparison.Ordinal) ? "default-seed" : null;
+        return string.Equals(CanonicalProvenanceRecords[0], ContractIdentity, StringComparison.Ordinal)
+            && string.Equals(CanonicalProvenanceRecords[1], "schema=" + SchemaVersion.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            && expectedSeedMode != null
+            && string.Equals(CanonicalProvenanceRecords[2], expectedSeedMode, StringComparison.Ordinal)
+            && string.Equals(CanonicalProvenanceRecords[3], Seed.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    private bool EffectiveConfigurationMatchesRecords()
+    {
+        EffectivePopulationConfiguration population = EffectiveConfiguration.Population;
+        EffectiveEconomyConfiguration economy = EffectiveConfiguration.Economy;
+        EffectiveTravelConfiguration travel = EffectiveConfiguration.Travel;
+        EffectiveCrimeConfiguration crime = EffectiveConfiguration.Crime;
+        EffectiveGuardCrimeConfiguration guardCrime = EffectiveConfiguration.GuardCrime;
+        EffectiveMerchantTradeConfiguration merchant = EffectiveConfiguration.MerchantTrade;
+        EffectiveCommercialKnowledgeConfiguration knowledge = EffectiveConfiguration.CommercialKnowledge;
+        EffectiveNaturalMortalityConfiguration mortality = EffectiveConfiguration.NaturalMortality;
+        EffectiveAggregateDemographyConfiguration demography = EffectiveConfiguration.AggregateDemography;
+
+        return HasExactlyOne(CanonicalProvenanceRecords, EncodeTaggedRecord("effective.population",
+                population.RepresentationMode, population.DecisionScope, population.MaturityAgeYears))
+            && HasExactlyOne(CanonicalProvenanceRecords, EncodeTaggedRecord("effective.economy", economy.Enabled))
+            && HasExactlyOne(CanonicalProvenanceRecords, EncodeTaggedRecord("effective.travel",
+                travel.TravelCostPerDay.ToString("R", CultureInfo.InvariantCulture)))
+            && HasExactlyOne(CanonicalProvenanceRecords, EncodeTaggedRecord("effective.crime",
+                crime.Enabled, crime.AutonomousEnabled))
+            && HasExactlyOne(CanonicalProvenanceRecords, EncodeTaggedRecord("effective.guard-crime",
+                guardCrime.Enabled))
+            && HasExactlyOne(CanonicalProvenanceRecords, EncodeTaggedRecord("effective.merchant-trade",
+                merchant.Enabled, merchant.AllowAutonomousTradeRepositioning, merchant.MaxTradeAmount,
+                merchant.LocalWholesalePriceMultiplier.ToString("R", CultureInfo.InvariantCulture),
+                merchant.LocalReserveRatio.ToString("R", CultureInfo.InvariantCulture),
+                merchant.MaxUnprofitablePlanWaitDays))
+            && HasExactlyOne(CanonicalProvenanceRecords, EncodeTaggedRecord("effective.commercial-knowledge",
+                knowledge.FreshForDays, knowledge.MaxUsefulAgeDays,
+                knowledge.MaxSharedObservationsPerInteraction))
+            && HasExactlyOne(CanonicalProvenanceRecords, EncodeTaggedRecord("effective.natural-mortality",
+                mortality.Policy, mortality.AnnualProbability.ToString("R", CultureInfo.InvariantCulture)))
+            && HasExactlyOne(CanonicalProvenanceRecords, EncodeTaggedRecord("effective.aggregate-demography",
+                demography.Policy, demography.AnnualBirthRate.ToString("R", CultureInfo.InvariantCulture),
+                demography.AnnualDeathRate.ToString("R", CultureInfo.InvariantCulture)));
+    }
+
+    private bool CalendarMatchesRecords()
+    {
+        if (!HasExactlyOne(CanonicalProvenanceRecords, EncodeTaggedRecord("calendar",
+            CalendarMonthsPerYear, CalendarWeeksPerMonth, CalendarDaysPerWeek)))
+        {
+            return false;
+        }
+
+        List<string> expectedMonthRecords = new List<string>(MonthLengths.Count);
+        for (int i = 0; i < MonthLengths.Count; i++)
+            expectedMonthRecords.Add(EncodeTaggedRecord("calendar-month-length", i, MonthLengths[i]));
+        return HasExactOrderedRecords(CanonicalProvenanceRecords, "calendar-month-length|", expectedMonthRecords);
+    }
+
+    private bool AuthoredDefinitionIdsMatchRecords()
+    {
+        HashSet<string> expectedIds = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < CanonicalProvenanceRecords.Count; i++)
+        {
+            string record = CanonicalProvenanceRecords[i];
+            if (!TryParseTaggedRecord(record, out string kind, out List<string> values))
+            {
+                if (IsDefinitionRecordKind(kind)) return false;
+                continue;
+            }
+
+            if (kind == "city")
+            {
+                if (!AddDefinitionId(expectedIds, "city", values, 0)) return false;
+            }
+            else if (kind == "market")
+            {
+                if (!AddDefinitionId(expectedIds, "item", values, 1)) return false;
+            }
+            else if (kind == "production")
+            {
+                if (!AddDefinitionId(expectedIds, "item", values, 2)) return false;
+            }
+            else if (kind == "site")
+            {
+                if (!AddDefinitionId(expectedIds, "site", values, 0)) return false;
+            }
+            else if (kind == "authored-hex")
+            {
+                if (!AddDefinitionId(expectedIds, "hex", values, 0)
+                    || !AddDefinitionId(expectedIds, "terrain", values, 5)) return false;
+            }
+            else if (kind == "authored-location")
+            {
+                if (!AddDefinitionId(expectedIds, "location", values, 0)
+                    || !AddDefinitionId(expectedIds, "hex", values, 1)) return false;
+            }
+            else if (kind == "npc")
+            {
+                if (!AddDefinitionId(expectedIds, "npc", values, 0)
+                    || !AddDefinitionId(expectedIds, "job", values, 3)) return false;
+            }
+            else if (kind == "npc-capability")
+            {
+                if (!AddPackedDefinitionId(expectedIds, "capability-attribute", values, 1, 0)) return false;
+            }
+            else if (kind == "action")
+            {
+                if (!AddDefinitionId(expectedIds, "action", values, 0)) return false;
+            }
+            else if (kind == "action-status-weight")
+            {
+                if (!AddPackedDefinitionId(expectedIds, "status", values, 1, 0)) return false;
+            }
+            else if (kind == "status")
+            {
+                if (!AddDefinitionId(expectedIds, "status", values, 0)) return false;
+            }
+            else if (kind == "job")
+            {
+                if (!AddDefinitionId(expectedIds, "job", values, 0)
+                    || !AddDefinitionId(expectedIds, "action", values, 4)) return false;
+            }
+            else if (kind == "item")
+            {
+                if (!AddDefinitionId(expectedIds, "item", values, 0)) return false;
+            }
+            else if (kind == "item-capability-modifier")
+            {
+                if (!AddDefinitionId(expectedIds, "item", values, 0)
+                    || !AddPackedDefinitionId(expectedIds, "capability-attribute", values, 1, 0)) return false;
+            }
+            else if (kind == "trait")
+            {
+                if (!AddDefinitionId(expectedIds, "trait", values, 0)) return false;
+            }
+            else if (kind == "capability-attribute")
+            {
+                if (!AddDefinitionId(expectedIds, "capability-attribute", values, 0)) return false;
+            }
+            else if (kind.StartsWith("npc-default-action:", StringComparison.Ordinal))
+            {
+                if (!AddPackedDefinitionId(expectedIds, "action", values, 1, 0)) return false;
+            }
+            else if (kind.StartsWith("npc-default-status:", StringComparison.Ordinal))
+            {
+                if (!AddDefinitionId(expectedIds, "status", values, 1)) return false;
+            }
+            else if (kind.StartsWith("npc-trait:", StringComparison.Ordinal))
+            {
+                if (!AddDefinitionId(expectedIds, "trait", values, 1)) return false;
+            }
+            else if (kind.StartsWith("inventory:", StringComparison.Ordinal)
+                || kind.StartsWith("job-preference:", StringComparison.Ordinal))
+            {
+                if (!AddPackedDefinitionId(expectedIds, "item", values, 1, 0)) return false;
+            }
+            else if (IsActionStatusRecordKind(kind))
+            {
+                if (!AddPackedDefinitionId(expectedIds, "status", values, 1, 0)) return false;
+            }
+        }
+
+        List<string> orderedIds = new List<string>(expectedIds);
+        orderedIds.Sort(StringComparer.Ordinal);
+        if (orderedIds.Count != AuthoredDefinitionIds.Count) return false;
+        for (int i = 0; i < orderedIds.Count; i++)
+            if (!string.Equals(orderedIds[i], AuthoredDefinitionIds[i], StringComparison.Ordinal)) return false;
+        return true;
+    }
+
+    private static bool IsActionStatusRecordKind(string kind)
+    {
+        return kind.StartsWith("action-required-status:", StringComparison.Ordinal)
+            || kind.StartsWith("action-add-status:", StringComparison.Ordinal)
+            || kind.StartsWith("action-remove-status:", StringComparison.Ordinal)
+            || kind.StartsWith("action-target-add-status:", StringComparison.Ordinal)
+            || kind.StartsWith("action-target-remove-status:", StringComparison.Ordinal);
+    }
+
+    private static bool IsDefinitionRecordKind(string kind)
+    {
+        return kind == "city" || kind == "market" || kind == "production" || kind == "site"
+            || kind == "authored-hex" || kind == "authored-location" || kind == "npc"
+            || kind == "npc-capability" || kind == "action" || kind == "action-status-weight"
+            || kind == "status" || kind == "job" || kind == "item" || kind == "item-capability-modifier"
+            || kind == "trait" || kind == "capability-attribute"
+            || (kind != null && (kind.StartsWith("npc-default-action:", StringComparison.Ordinal)
+                || kind.StartsWith("npc-default-status:", StringComparison.Ordinal)
+                || kind.StartsWith("npc-trait:", StringComparison.Ordinal)
+                || kind.StartsWith("inventory:", StringComparison.Ordinal)
+                || kind.StartsWith("job-preference:", StringComparison.Ordinal)
+                || IsActionStatusRecordKind(kind)));
+    }
+
+    private static bool AddDefinitionId(HashSet<string> ids, string type, IReadOnlyList<string> values, int index)
+    {
+        if (index < 0 || index >= values.Count) return false;
+        if (values[index].Length > 0) ids.Add(type + "/" + values[index]);
+        return true;
+    }
+
+    private static bool AddPackedDefinitionId(
+        HashSet<string> ids,
+        string type,
+        IReadOnlyList<string> values,
+        int packedIndex,
+        int valueIndex)
+    {
+        if (packedIndex < 0 || packedIndex >= values.Count
+            || !TryParsePackedValues(values[packedIndex], out List<string> packedValues)
+            || valueIndex < 0 || valueIndex >= packedValues.Count) return false;
+        if (packedValues[valueIndex].Length > 0) ids.Add(type + "/" + packedValues[valueIndex]);
+        return true;
+    }
+
+    private static bool TryParseTaggedRecord(string record, out string kind, out List<string> values)
+    {
+        kind = null;
+        values = null;
+        int separator = record.IndexOf('|');
+        if (separator < 0) return false;
+        kind = record.Substring(0, separator);
+        values = new List<string>();
+        return TryParseLengthPrefixedValues(record, separator + 1, true, values);
+    }
+
+    private static bool TryParsePackedValues(string packed, out List<string> values)
+    {
+        values = new List<string>();
+        return TryParseLengthPrefixedValues(packed, 0, false, values);
+    }
+
+    private static bool TryParseLengthPrefixedValues(
+        string input,
+        int offset,
+        bool separated,
+        List<string> values)
+    {
+        if (offset >= input.Length) return false;
+        while (offset < input.Length)
+        {
+            int colon = input.IndexOf(':', offset);
+            if (colon <= offset
+                || !int.TryParse(input.Substring(offset, colon - offset), NumberStyles.None,
+                    CultureInfo.InvariantCulture, out int valueLength)
+                || valueLength < 0)
+            {
+                return false;
+            }
+
+            int valueStart = colon + 1;
+            if (valueLength > input.Length - valueStart) return false;
+            values.Add(input.Substring(valueStart, valueLength));
+            offset = valueStart + valueLength;
+            if (offset == input.Length) return true;
+            if (separated)
+            {
+                if (input[offset] != '|') return false;
+                offset++;
+                if (offset == input.Length) return false;
+            }
+        }
+        return values.Count > 0;
+    }
+
+    private static string EncodeTaggedRecord(string kind, params object[] values)
+    {
+        string record = kind;
+        for (int i = 0; i < values.Length; i++)
+        {
+            string value = Convert.ToString(values[i], CultureInfo.InvariantCulture) ?? string.Empty;
+            record += "|" + value.Length.ToString(CultureInfo.InvariantCulture) + ":" + value;
+        }
+        return record;
     }
 
     private static bool HasExactOrderedRecords(

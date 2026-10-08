@@ -165,6 +165,51 @@ public sealed class P12CP9GenesisManifestSnapshotTests
         AssertManifestMatchesSnapshot(source, snapshot);
     }
 
+    [Test]
+    public void RejectsValidCopiedFieldsThatDifferFromRetainedP9Records()
+    {
+        P12CP9GenesisManifestSnapshot snapshot = Capture(CreateP9BManifest());
+
+        EffectiveSimulationConfiguration changedTravel = new EffectiveSimulationConfiguration(
+            snapshot.EffectiveConfiguration.Population,
+            snapshot.EffectiveConfiguration.Economy,
+            new EffectiveTravelConfiguration(snapshot.EffectiveConfiguration.Travel.TravelCostPerDay + 1f),
+            snapshot.EffectiveConfiguration.Crime,
+            snapshot.EffectiveConfiguration.GuardCrime,
+            snapshot.EffectiveConfiguration.NaturalMortality,
+            snapshot.EffectiveConfiguration.AggregateDemography,
+            snapshot.EffectiveConfiguration.MerchantTrade,
+            snapshot.EffectiveConfiguration.CommercialKnowledge);
+        Assert.That(SimulationConfigurationValidator.Validate(changedTravel).IsValid, Is.True);
+        AssertRejected(CopySnapshot(snapshot, effectiveConfiguration: changedTravel,
+            replaceEffectiveConfiguration: true));
+
+        int changedDaysPerWeek = snapshot.CalendarDaysPerWeek + 1;
+        CalendarDefinition changedCalendar = new CalendarDefinition
+        {
+            monthsPerYear = snapshot.CalendarMonthsPerYear,
+            weeksPerMonth = snapshot.CalendarWeeksPerMonth,
+            daysPerWeek = changedDaysPerWeek,
+            monthLengths = new List<int>(snapshot.MonthLengths)
+        };
+        Assert.That(changedCalendar.TryValidate(out _), Is.True);
+        AssertRejected(CopySnapshot(snapshot, calendarDaysPerWeek: changedDaysPerWeek));
+
+        int changedSeed = snapshot.Seed == int.MaxValue ? int.MaxValue - 1 : snapshot.Seed + 1;
+        string changedSeedSource = snapshot.SeedSource == "default-zero" ? "authored-fixed" : snapshot.SeedSource;
+        AssertRejected(CopySnapshot(snapshot, seed: changedSeed, seedSource: changedSeedSource));
+
+        List<string> changedIds = new List<string>(snapshot.AuthoredDefinitionIds);
+        int hexIdIndex = changedIds.FindIndex(value => value.StartsWith("hex/", StringComparison.Ordinal));
+        Assert.That(hexIdIndex, Is.GreaterThanOrEqualTo(0), "P9-B must retain its authored hex ID.");
+        changedIds[hexIdIndex] = "hex/changed-but-well-formed";
+        changedIds.Sort(StringComparer.Ordinal);
+        Assert.That(changedIds.TrueForAll(value => !string.IsNullOrWhiteSpace(value)), Is.True);
+        Assert.That(new HashSet<string>(changedIds, StringComparer.Ordinal).Count, Is.EqualTo(changedIds.Count));
+        AssertRejected(CopySnapshot(snapshot, authoredDefinitionIds: changedIds,
+            replaceAuthoredDefinitionIds: true));
+    }
+
     private SimulationGenesisManifest CreateP9BManifest()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
