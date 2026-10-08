@@ -140,7 +140,10 @@ public static class SimulationGenesisPipeline
         return prepared.GeneratedTopology.ComposedProfileFingerprint;
     }
 
-    private static string ComputeFingerprint(IEnumerable<string> fields)
+    // Hashes only the supplied retained provenance records. Continuation staging
+    // uses this pure helper to verify historical records without resolving assets
+    // or re-running genesis.
+    internal static string ComputeFingerprint(IEnumerable<string> fields)
     {
         using (SHA256 sha = SHA256.Create())
         {
@@ -374,20 +377,7 @@ public static class SimulationGenesisPipeline
         fields.Add("first-simulated-boundary:day-1");
 
         canonicalRecords = fields.AsReadOnly();
-        using (SHA256 sha = SHA256.Create())
-        {
-            var bytes = new List<byte>();
-            foreach (string field in fields)
-            {
-                byte[] value = Encoding.UTF8.GetBytes(field ?? "");
-                bytes.Add((byte)((value.Length >> 24) & 0xff));
-                bytes.Add((byte)((value.Length >> 16) & 0xff));
-                bytes.Add((byte)((value.Length >> 8) & 0xff));
-                bytes.Add((byte)(value.Length & 0xff));
-                bytes.AddRange(value);
-            }
-            return BitConverter.ToString(sha.ComputeHash(bytes.ToArray())).Replace("-", "").ToLowerInvariant();
-        }
+        return ComputeFingerprint(fields);
     }
 
     private static void Add(List<string> fields, string kind, params object[] values)
@@ -813,6 +803,58 @@ public sealed class SimulationGenesisManifest
         }
         StageDependencyRecords = Array.AsReadOnly(dependencies.ToArray());
         FirstSimulatedBoundary = "advance-day:1";
+    }
+
+    // Direct-value restoration is intentionally separate from the config-derived
+    // constructor above. It never resolves Unity assets, computes genesis facts, or
+    // invokes the stage pipeline.
+    private SimulationGenesisManifest(P12CP9GenesisManifestSnapshot snapshot)
+    {
+        ContractIdentity = snapshot.ContractIdentity;
+        SchemaVersion = snapshot.SchemaVersion;
+        Fingerprint = snapshot.Fingerprint;
+        SelectedP9ProfileFingerprint = snapshot.SelectedP9ProfileFingerprint;
+        SelectedP9ContractIdentity = snapshot.SelectedP9ContractIdentity;
+        SelectedP9SchemaVersion = snapshot.SelectedP9SchemaVersion;
+        EffectiveConfiguration = P12CP9GenesisManifestSnapshot.CloneConfiguration(snapshot.EffectiveConfiguration);
+        CanonicalProvenanceRecords = CopySnapshotList(snapshot.CanonicalProvenanceRecords);
+        AuthoredDefinitionIds = CopySnapshotList(snapshot.AuthoredDefinitionIds);
+        OutputOwners = CopySnapshotList(snapshot.OutputOwners);
+        StageDependencyRecords = CopySnapshotList(snapshot.StageDependencyRecords);
+        CalendarMonthsPerYear = snapshot.CalendarMonthsPerYear;
+        CalendarWeeksPerMonth = snapshot.CalendarWeeksPerMonth;
+        CalendarDaysPerWeek = snapshot.CalendarDaysPerWeek;
+        MonthLengths = CopySnapshotList(snapshot.MonthLengths);
+        Seed = snapshot.Seed;
+        SeedSource = snapshot.SeedSource;
+        StageOrder = CopySnapshotList(snapshot.StageOrder);
+        FirstSimulatedBoundary = snapshot.FirstSimulatedBoundary;
+    }
+
+    internal static bool TryCreateFromSnapshot(
+        P12CP9GenesisManifestSnapshot snapshot,
+        out SimulationGenesisManifest manifest,
+        out string diagnostic)
+    {
+        manifest = null;
+        if (snapshot == null)
+        {
+            diagnostic = "P9-B continuation snapshot is required.";
+            return false;
+        }
+
+        if (!snapshot.TryValidate(out diagnostic)) return false;
+
+        // Keep the candidate local until every recorded value has been copied.
+        SimulationGenesisManifest candidate = new SimulationGenesisManifest(snapshot);
+        manifest = candidate;
+        diagnostic = null;
+        return true;
+    }
+
+    private static IReadOnlyList<T> CopySnapshotList<T>(IReadOnlyList<T> source)
+    {
+        return source == null ? null : Array.AsReadOnly(new List<T>(source).ToArray());
     }
 
     private static void AddId(HashSet<string> ids, string kind, ItemData value)
