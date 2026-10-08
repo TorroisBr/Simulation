@@ -111,25 +111,24 @@ internal sealed class P12DCityRootOwnerSnapshot
         PopulationReceipts = new ReadOnlyCollection<PopulationOperationReceiptSnapshot>(copiedReceipts);
     }
 
-    internal static bool TryCapture(
+    internal static bool TryCaptureForStaging(
         CityRuntime city,
         DailyCaptureEligibilityToken token,
         object sharedCaptureStamp,
         IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
-        out P12DCityRootOwnerSnapshot snapshot,
+        out StagingCaptureEnvelope captureEnvelope,
         out P12DCityRootOwnerSnapshotFailure failure)
     {
-        return TryCapture(
+        return StagingCaptureEnvelope.TryCapture(
             city,
             token,
             sharedCaptureStamp,
             sharedOwnerSectionVector,
-            out snapshot,
-            out _,
+            out captureEnvelope,
             out failure);
     }
 
-    internal static bool TryCapture(
+    private static bool TryCaptureCore(
         CityRuntime city,
         DailyCaptureEligibilityToken token,
         object sharedCaptureStamp,
@@ -319,29 +318,11 @@ internal sealed class P12DCityRootOwnerSnapshot
         return true;
     }
 
-    internal bool TryStage(
+    private bool TryStageCore(
         IReadOnlyList<CityData> admittedCityDefinitions,
         IReadOnlyList<ItemData> admittedItemDefinitions,
         IReadOnlyList<SpatialLocationRuntime> stagedLocations,
-        out CityRuntime city,
-        out P12DCityMembershipLinker membershipLinker,
-        out P12DCityRootOwnerSnapshotFailure failure)
-    {
-        return TryStage(
-            admittedCityDefinitions,
-            admittedItemDefinitions,
-            stagedLocations,
-            null,
-            out city,
-            out membershipLinker,
-            out failure);
-    }
-
-    internal bool TryStage(
-        IReadOnlyList<CityData> admittedCityDefinitions,
-        IReadOnlyList<ItemData> admittedItemDefinitions,
-        IReadOnlyList<SpatialLocationRuntime> stagedLocations,
-        P12DCityCaptureIdentityEvidence captureIdentityEvidence,
+        StagingCaptureEnvelope captureEnvelope,
         out CityRuntime city,
         out P12DCityMembershipLinker membershipLinker,
         out P12DCityRootOwnerSnapshotFailure failure)
@@ -457,7 +438,7 @@ internal sealed class P12DCityRootOwnerSnapshot
                 population,
                 ImportantNpcRevision,
                 ImportantNpcRuntimeIds,
-                captureIdentityEvidence,
+                captureEnvelope,
                 out city,
                 out membershipLinker))
         {
@@ -602,6 +583,72 @@ internal sealed class P12DCityRootOwnerSnapshot
         result = null;
         return false;
     }
+
+    /// <summary>
+    /// Unpairable transient capture result. The exact owner values and their
+    /// capture identity travel together until staging completes; callers cannot
+    /// substitute evidence from another City capture.
+    /// </summary>
+    internal sealed class StagingCaptureEnvelope
+    {
+        private readonly P12DCityRootOwnerSnapshot snapshot;
+        private readonly P12DCityCaptureIdentityEvidence captureIdentityEvidence;
+
+        private StagingCaptureEnvelope(
+            P12DCityRootOwnerSnapshot snapshot,
+            P12DCityCaptureIdentityEvidence captureIdentityEvidence)
+        {
+            this.snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
+            this.captureIdentityEvidence = captureIdentityEvidence
+                ?? throw new ArgumentNullException(nameof(captureIdentityEvidence));
+        }
+
+        internal static bool TryCapture(
+            CityRuntime city,
+            DailyCaptureEligibilityToken token,
+            object sharedCaptureStamp,
+            IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
+            out StagingCaptureEnvelope captureEnvelope,
+            out P12DCityRootOwnerSnapshotFailure failure)
+        {
+            captureEnvelope = null;
+            if (!P12DCityRootOwnerSnapshot.TryCaptureCore(
+                    city,
+                    token,
+                    sharedCaptureStamp,
+                    sharedOwnerSectionVector,
+                    out P12DCityRootOwnerSnapshot snapshot,
+                    out P12DCityCaptureIdentityEvidence captureIdentityEvidence,
+                    out failure))
+            {
+                return false;
+            }
+
+            captureEnvelope = new StagingCaptureEnvelope(snapshot, captureIdentityEvidence);
+            return true;
+        }
+
+        internal P12DCityRootOwnerSnapshot Snapshot => snapshot;
+
+        internal bool HasSameCaptureIdentity(P12DCityNpcProjectionCaptureEvidence other) =>
+            captureIdentityEvidence.HasSameCaptureIdentity(other);
+
+        internal bool TryStage(
+            IReadOnlyList<CityData> admittedCityDefinitions,
+            IReadOnlyList<ItemData> admittedItemDefinitions,
+            IReadOnlyList<SpatialLocationRuntime> stagedLocations,
+            out CityRuntime city,
+            out P12DCityMembershipLinker membershipLinker,
+            out P12DCityRootOwnerSnapshotFailure failure) =>
+            snapshot.TryStageCore(
+                admittedCityDefinitions,
+                admittedItemDefinitions,
+                stagedLocations,
+                this,
+                out city,
+                out membershipLinker,
+                out failure);
+    }
 }
 
 internal sealed class P12DCityMarketItemSnapshot
@@ -668,18 +715,18 @@ internal sealed class P12DCityMembershipLinker
         List<NpcRuntime> backingList,
         IReadOnlyList<string> expectedRuntimeIds,
         long expectedRevision,
-        P12DCityCaptureIdentityEvidence captureIdentityEvidence)
+        P12DCityRootOwnerSnapshot.StagingCaptureEnvelope captureEnvelope)
     {
         this.city = city ?? throw new ArgumentNullException(nameof(city));
         this.backingList = backingList ?? throw new ArgumentNullException(nameof(backingList));
         this.expectedRuntimeIds = new ReadOnlyCollection<string>(new List<string>(expectedRuntimeIds));
         this.expectedRevision = expectedRevision;
-        CaptureIdentityEvidence = captureIdentityEvidence;
+        CaptureEnvelope = captureEnvelope;
     }
 
     internal bool IsFilled => filled;
     internal CityRuntime StagedCity => city;
-    internal P12DCityCaptureIdentityEvidence CaptureIdentityEvidence { get; }
+    internal P12DCityRootOwnerSnapshot.StagingCaptureEnvelope CaptureEnvelope { get; }
     internal IReadOnlyList<string> PendingNpcRuntimeIds => expectedRuntimeIds;
 
     internal bool TryFillOnce(IReadOnlyList<NpcRuntime> orderedMembers)
@@ -1062,9 +1109,9 @@ internal static class P12DCityNpcRelationAssembler
         for (int i = 0; i < cityMembershipLinkers.Count; i++)
         {
             P12DCityMembershipLinker linker = cityMembershipLinkers[i];
-            if (linker?.CaptureIdentityEvidence == null
-                || !linker.CaptureIdentityEvidence.HasSameCaptureIdentity(dProjectionEvidence)
-                || !linker.CaptureIdentityEvidence.HasSameCaptureIdentity(fProjectionEvidence))
+            if (linker?.CaptureEnvelope == null
+                || !linker.CaptureEnvelope.HasSameCaptureIdentity(dProjectionEvidence)
+                || !linker.CaptureEnvelope.HasSameCaptureIdentity(fProjectionEvidence))
             {
                 return false;
             }

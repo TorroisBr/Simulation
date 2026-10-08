@@ -589,7 +589,7 @@ public class CityRuntime
         SettlementPopulationRuntime snapshotPopulation,
         long snapshotImportantNpcRevision,
         IReadOnlyList<string> orderedNpcRuntimeIds,
-        P12DCityCaptureIdentityEvidence captureIdentityEvidence,
+        P12DCityRootOwnerSnapshot.StagingCaptureEnvelope captureEnvelope,
         out CityRuntime city,
         out P12DCityMembershipLinker membershipLinker)
     {
@@ -663,7 +663,7 @@ public class CityRuntime
             staged.importantNpcs,
             orderedNpcRuntimeIds,
             snapshotImportantNpcRevision,
-            captureIdentityEvidence);
+            captureEnvelope);
         return true;
     }
 
