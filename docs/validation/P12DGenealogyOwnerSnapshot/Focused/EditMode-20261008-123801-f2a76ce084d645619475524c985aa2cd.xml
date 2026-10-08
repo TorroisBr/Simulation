@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="52" result="Passed" total="52" passed="52" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0,30825">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2540" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.308250" total="52" passed="52" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3773" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12de-current-revalidation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2540" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.297348" total="52" passed="52" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="60644" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="1907" name="GenealogyCensusTests" fullname="GenealogyCensusTests" classname="GenealogyCensusTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.175084" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="1914" name="OrdinaryAddAndRemoveRemainClosedAtSaturatedRevision" fullname="GenealogyCensusTests.OrdinaryAddAndRemoveRemainClosedAtSaturatedRevision" methodname="OrdinaryAddAndRemoveRemainClosedAtSaturatedRevision" classname="GenealogyCensusTests" runstate="Runnable" seed="1184244397" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.044183" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1913" name="RuntimeCloneWitnessUsesInstalledReplayBaselineAndLeavesSourceUnchanged" fullname="GenealogyCensusTests.RuntimeCloneWitnessUsesInstalledReplayBaselineAndLeavesSourceUnchanged" methodname="RuntimeCloneWitnessUsesInstalledReplayBaselineAndLeavesSourceUnchanged" classname="GenealogyCensusTests" runstate="Runnable" seed="276775599" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.001363" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1912" name="RuntimeWitnessTracksSuccessfulAddRemoveAndSameCardinalityReplacement" fullname="GenealogyCensusTests.RuntimeWitnessTracksSuccessfulAddRemoveAndSameCardinalityReplacement" methodname="RuntimeWitnessTracksSuccessfulAddRemoveAndSameCardinalityReplacement" classname="GenealogyCensusTests" runstate="Runnable" seed="1373138274" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.002289" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1908" name="SelectedBootstrapPublishesStableExactZeroInstalledOwnerWitness" fullname="GenealogyCensusTests.SelectedBootstrapPublishesStableExactZeroInstalledOwnerWitness" methodname="SelectedBootstrapPublishesStableExactZeroInstalledOwnerWitness" classname="GenealogyCensusTests" runstate="Runnable" seed="122066034" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.092749" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1909" name="SelectedDailyCensusRegistersGateOneOwnersAndTracksParentageOperation" fullname="GenealogyCensusTests.SelectedDailyCensusRegistersGateOneOwnersAndTracksParentageOperation" methodname="SelectedDailyCensusRegistersGateOneOwnersAndTracksParentageOperation" classname="GenealogyCensusTests" runstate="Runnable" seed="2101092226" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.014837" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1911" name="SelectedDailyParentageRejectsWhenMutationEpochCapacityIsExhausted" fullname="GenealogyCensusTests.SelectedDailyParentageRejectsWhenMutationEpochCapacityIsExhausted" methodname="SelectedDailyParentageRejectsWhenMutationEpochCapacityIsExhausted" classname="GenealogyCensusTests" runstate="Runnable" seed="849143908" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.004211" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1910" name="SelectedDailyParentageRejectsWrongThreadBeforeOwnerWrite" fullname="GenealogyCensusTests.SelectedDailyParentageRejectsWrongThreadBeforeOwnerWrite" methodname="SelectedDailyParentageRejectsWrongThreadBeforeOwnerWrite" classname="GenealogyCensusTests" runstate="Runnable" seed="1001739304" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.004866" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="1915" name="GenealogyFoundationTests" fullname="GenealogyFoundationTests" classname="GenealogyFoundationTests" runstate="Runnable" testcasecount="24" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.014194" total="24" passed="24" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="1924" name="DeepCycle_IsRejectedWithIterativeTraversalAndAtomicity" fullname="GenealogyFoundationTests.DeepCycle_IsRejectedWithIterativeTraversalAndAtomicity" methodname="DeepCycle_IsRejectedWithIterativeTraversalAndAtomicity" classname="GenealogyFoundationTests" runstate="Runnable" seed="396913796" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000359" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1925" name="DiamondQueries_ReturnUniqueDeterministicallyOrderedAncestorsAndDescendants" fullname="GenealogyFoundationTests.DiamondQueries_ReturnUniqueDeterministicallyOrderedAncestorsAndDescendants" methodname="DiamondQueries_ReturnUniqueDeterministicallyOrderedAncestorsAndDescendants" classname="GenealogyFoundationTests" runstate="Runnable" seed="1485352854" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.001155" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1923" name="DirectCycle_IsRejectedBeforeMutatingTheStore" fullname="GenealogyFoundationTests.DirectCycle_IsRejectedBeforeMutatingTheStore" methodname="DirectCycle_IsRejectedBeforeMutatingTheStore" classname="GenealogyFoundationTests" runstate="Runnable" seed="136489793" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000228" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1918" name="DirectParentage_IsQueryableInBothDirections" fullname="GenealogyFoundationTests.DirectParentage_IsQueryableInBothDirections" methodname="DirectParentage_IsQueryableInBothDirections" classname="GenealogyFoundationTests" runstate="Runnable" seed="1127613818" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000574" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1920" name="DuplicateParentage_IsRejectedAndOnlyOneEdgeRemains" fullname="GenealogyFoundationTests.DuplicateParentage_IsRejectedAndOnlyOneEdgeRemains" methodname="DuplicateParentage_IsRejectedAndOnlyOneEdgeRemains" classname="GenealogyFoundationTests" runstate="Runnable" seed="654021635" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000214" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1938" name="GenealogyCore_IsPureCSharpAndDoesNotReferenceRuntimeAdapters" fullname="GenealogyFoundationTests.GenealogyCore_IsPureCSharpAndDoesNotReferenceRuntimeAdapters" methodname="GenealogyCore_IsPureCSharpAndDoesNotReferenceRuntimeAdapters" classname="GenealogyFoundationTests" runstate="Runnable" seed="443046151" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.001876" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1917" name="GenealogyStore_RejectsInvalidEndpointsWithStructuredFailures" fullname="GenealogyFoundationTests.GenealogyStore_RejectsInvalidEndpointsWithStructuredFailures" methodname="GenealogyStore_RejectsInvalidEndpointsWithStructuredFailures" classname="GenealogyFoundationTests" runstate="Runnable" seed="1001380860" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000178" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1935" name="IndependentStores_WithSamePersonIdsDoNotContaminateEachOther" fullname="GenealogyFoundationTests.IndependentStores_WithSamePersonIdsDoNotContaminateEachOther" methodname="IndependentStores_WithSamePersonIdsDoNotContaminateEachOther" classname="GenealogyFoundationTests" runstate="Runnable" seed="801723260" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000195" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1936" name="LargeChain_SupportsTransitiveQueriesAndCycleDetectionWithoutRecursion" fullname="GenealogyFoundationTests.LargeChain_SupportsTransitiveQueriesAndCycleDetectionWithoutRecursion" methodname="LargeChain_SupportsTransitiveQueriesAndCycleDetectionWithoutRecursion" classname="GenealogyFoundationTests" runstate="Runnable" seed="759781043" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000881" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1922" name="MultipleChildren_AreAllowedWithoutAChildCountLimit" fullname="GenealogyFoundationTests.MultipleChildren_AreAllowedWithoutAChildCountLimit" methodname="MultipleChildren_AreAllowedWithoutAChildCountLimit" classname="GenealogyFoundationTests" runstate="Runnable" seed="939288698" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000158" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1921" name="MultipleParents_AreAllowedWithoutAParentCountLimit" fullname="GenealogyFoundationTests.MultipleParents_AreAllowedWithoutAParentCountLimit" methodname="MultipleParents_AreAllowedWithoutAParentCountLimit" classname="GenealogyFoundationTests" runstate="Runnable" seed="302253610" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000123" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1937" name="NullQueries_ReturnReadOnlyEmptyCollections" fullname="GenealogyFoundationTests.NullQueries_ReturnReadOnlyEmptyCollections" methodname="NullQueries_ReturnReadOnlyEmptyCollections" classname="GenealogyFoundationTests" runstate="Runnable" seed="1956226998" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000234" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1929" name="OwnerSnapshot_IsDetachedAndPreservesRevisionGapsAcrossReAdd" fullname="GenealogyFoundationTests.OwnerSnapshot_IsDetachedAndPreservesRevisionGapsAcrossReAdd" methodname="OwnerSnapshot_IsDetachedAndPreservesRevisionGapsAcrossReAdd" classname="GenealogyFoundationTests" runstate="Runnable" seed="1917847959" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.002596" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1931" name="OwnerSnapshot_RejectsMissingSchemaAndImpossibleRevision" fullname="GenealogyFoundationTests.OwnerSnapshot_RejectsMissingSchemaAndImpossibleRevision" methodname="OwnerSnapshot_RejectsMissingSchemaAndImpossibleRevision" classname="GenealogyFoundationTests" runstate="Runnable" seed="2051353162" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000366" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1932" name="OwnerSnapshot_RejectsNullDuplicateAndCyclicRowsWithoutChangingSource" fullname="GenealogyFoundationTests.OwnerSnapshot_RejectsNullDuplicateAndCyclicRowsWithoutChangingSource" methodname="OwnerSnapshot_RejectsNullDuplicateAndCyclicRowsWithoutChangingSource" classname="GenealogyFoundationTests" runstate="Runnable" seed="14431720" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000262" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1930" name="OwnerSnapshot_RestoresSaturatedRevisionWithoutReplayingWrites" fullname="GenealogyFoundationTests.OwnerSnapshot_RestoresSaturatedRevisionWithoutReplayingWrites" methodname="OwnerSnapshot_RestoresSaturatedRevisionWithoutReplayingWrites" classname="GenealogyFoundationTests" runstate="Runnable" seed="498366524" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000215" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1928" name="OwnerSnapshot_RoundTripsRequiredEmptyAndPopulatedDiamondGraphs" fullname="GenealogyFoundationTests.OwnerSnapshot_RoundTripsRequiredEmptyAndPopulatedDiamondGraphs" methodname="OwnerSnapshot_RoundTripsRequiredEmptyAndPopulatedDiamondGraphs" classname="GenealogyFoundationTests" runstate="Runnable" seed="913210298" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000356" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1939" name="ParentageRecord_PublicPropertiesAreImmutable" fullname="GenealogyFoundationTests.ParentageRecord_PublicPropertiesAreImmutable" methodname="ParentageRecord_PublicPropertiesAreImmutable" classname="GenealogyFoundationTests" runstate="Runnable" seed="1249055655" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000229" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1916" name="ParentageRecord_UsesPersonIdValueSemantics" fullname="GenealogyFoundationTests.ParentageRecord_UsesPersonIdValueSemantics" methodname="ParentageRecord_UsesPersonIdValueSemantics" classname="GenealogyFoundationTests" runstate="Runnable" seed="1796667407" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000294" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1927" name="Records_AreOrderedByParentThenChildAndReadOnly" fullname="GenealogyFoundationTests.Records_AreOrderedByParentThenChildAndReadOnly" methodname="Records_AreOrderedByParentThenChildAndReadOnly" classname="GenealogyFoundationTests" runstate="Runnable" seed="188170685" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000310" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1933" name="RemoveParentage_RemovesOnlyTheRequestedEdge" fullname="GenealogyFoundationTests.RemoveParentage_RemovesOnlyTheRequestedEdge" methodname="RemoveParentage_RemovesOnlyTheRequestedEdge" classname="GenealogyFoundationTests" runstate="Runnable" seed="153578029" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000206" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1934" name="RemovingAnEdgeBreaksTheTransitiveRelation" fullname="GenealogyFoundationTests.RemovingAnEdgeBreaksTheTransitiveRelation" methodname="RemovingAnEdgeBreaksTheTransitiveRelation" classname="GenealogyFoundationTests" runstate="Runnable" seed="278988778" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000155" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1919" name="SelfParent_IsRejectedWithoutChangingTheStore" fullname="GenealogyFoundationTests.SelfParent_IsRejectedWithoutChangingTheStore" methodname="SelfParent_IsRejectedWithoutChangingTheStore" classname="GenealogyFoundationTests" runstate="Runnable" seed="265136012" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000139" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1926" name="TransitiveOrdering_DoesNotDependOnInsertionOrder" fullname="GenealogyFoundationTests.TransitiveOrdering_DoesNotDependOnInsertionOrder" methodname="TransitiveOrdering_DoesNotDependOnInsertionOrder" classname="GenealogyFoundationTests" runstate="Runnable" seed="1233551676" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000376" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="1940" name="GenealogyWorldIntegrationTests" fullname="GenealogyWorldIntegrationTests" classname="GenealogyWorldIntegrationTests" runstate="Runnable" testcasecount="18" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.081950" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="1958" name="AggregateOnlyBirthDoesNotCreatePersonOrGenealogy" fullname="GenealogyWorldIntegrationTests.AggregateOnlyBirthDoesNotCreatePersonOrGenealogy" methodname="AggregateOnlyBirthDoesNotCreatePersonOrGenealogy" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="1681261683" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.001413" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1957" name="DiagnosticsValidatorDetectsMissingDuplicateSelfAndCycleRelations" fullname="GenealogyWorldIntegrationTests.DiagnosticsValidatorDetectsMissingDuplicateSelfAndCycleRelations" methodname="DiagnosticsValidatorDetectsMissingDuplicateSelfAndCycleRelations" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="21038681" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.024129" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1949" name="DuplicateOrNullParentInputFailsWithoutMutation" fullname="GenealogyWorldIntegrationTests.DuplicateOrNullParentInputFailsWithoutMutation" methodname="DuplicateOrNullParentInputFailsWithoutMutation" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="1050848670" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.001696" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1942" name="InjectedGenealogyWithMissingEndpointRejectsWorldConstruction" fullname="GenealogyWorldIntegrationTests.InjectedGenealogyWithMissingEndpointRejectsWorldConstruction" methodname="InjectedGenealogyWithMissingEndpointRejectsWorldConstruction" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="753077632" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000326" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1955" name="ParentageRemovalDoesNotRemovePersons" fullname="GenealogyWorldIntegrationTests.ParentageRemovalDoesNotRemovePersons" methodname="ParentageRemovalDoesNotRemovePersons" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="318245842" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000379" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1956" name="ParentAwareBirthAppearsInSnapshotCanonicalFormatterAndDiff" fullname="GenealogyWorldIntegrationTests.ParentAwareBirthAppearsInSnapshotCanonicalFormatterAndDiff" methodname="ParentAwareBirthAppearsInSnapshotCanonicalFormatterAndDiff" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="1858970960" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.047334" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1948" name="ParentAwareBirthSupportsThreeParentsAndCreatesNoNpc" fullname="GenealogyWorldIntegrationTests.ParentAwareBirthSupportsThreeParentsAndCreatesNoNpc" methodname="ParentAwareBirthSupportsThreeParentsAndCreatesNoNpc" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="622497432" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000848" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1947" name="ParentAwareProposalIsPureDeterministicAndSnapshotsInput" fullname="GenealogyWorldIntegrationTests.ParentAwareProposalIsPureDeterministicAndSnapshotsInput" methodname="ParentAwareProposalIsPureDeterministicAndSnapshotsInput" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="964616374" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000545" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1952" name="StaleParentAwareBirthLeavesNoPersonOrEdges" fullname="GenealogyWorldIntegrationTests.StaleParentAwareBirthLeavesNoPersonOrEdges" methodname="StaleParentAwareBirthLeavesNoPersonOrEdges" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="798533371" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000462" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1953" name="StalePopulationParentAwareBirthLeavesNoPersonOrEdges" fullname="GenealogyWorldIntegrationTests.StalePopulationParentAwareBirthLeavesNoPersonOrEdges" methodname="StalePopulationParentAwareBirthLeavesNoPersonOrEdges" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="1250659246" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000386" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1950" name="UnknownParentBirthFailsBeforePersonPopulationOrGenealogyMutation" fullname="GenealogyWorldIntegrationTests.UnknownParentBirthFailsBeforePersonPopulationOrGenealogyMutation" methodname="UnknownParentBirthFailsBeforePersonPopulationOrGenealogyMutation" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="1952927190" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000307" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1944" name="UnknownWorldParentAndChildAreRejectedWithoutStoreMutation" fullname="GenealogyWorldIntegrationTests.UnknownWorldParentAndChildAreRejectedWithoutStoreMutation" methodname="UnknownWorldParentAndChildAreRejectedWithoutStoreMutation" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="1448414962" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000269" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1945" name="WorldCycleIsRejectedAndExistingEdgesRemain" fullname="GenealogyWorldIntegrationTests.WorldCycleIsRejectedAndExistingEdgesRemain" methodname="WorldCycleIsRejectedAndExistingEdgesRemain" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="1038135598" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000288" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1954" name="WorldGenealogyDoesNotAliasInjectedStoreAfterConstruction" fullname="GenealogyWorldIntegrationTests.WorldGenealogyDoesNotAliasInjectedStoreAfterConstruction" methodname="WorldGenealogyDoesNotAliasInjectedStoreAfterConstruction" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="1803384838" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000370" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1941" name="WorldOwnsIndependentGenealogyAndExposesOnlyReadQueries" fullname="GenealogyWorldIntegrationTests.WorldOwnsIndependentGenealogyAndExposesOnlyReadQueries" methodname="WorldOwnsIndependentGenealogyAndExposesOnlyReadQueries" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="620413642" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000373" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1943" name="WorldParentageValidatesMembershipAndDelegatesGraphRules" fullname="GenealogyWorldIntegrationTests.WorldParentageValidatesMembershipAndDelegatesGraphRules" methodname="WorldParentageValidatesMembershipAndDelegatesGraphRules" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="940430829" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000329" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1946" name="WorldsWithEqualPersonIdsRemainIsolated" fullname="GenealogyWorldIntegrationTests.WorldsWithEqualPersonIdsRemainIsolated" methodname="WorldsWithEqualPersonIdsRemainIsolated" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="17174256" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000311" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1951" name="ZeroParentOverloadRemainsNamedBirthWithoutEdges" fullname="GenealogyWorldIntegrationTests.ZeroParentOverloadRemainsNamedBirthWithoutEdges" methodname="ZeroParentOverloadRemainsNamedBirthWithoutEdges" classname="GenealogyWorldIntegrationTests" runstate="Runnable" seed="1710340887" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000375" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="2809" name="PersonNamedBirthLifecycleTests" fullname="PersonNamedBirthLifecycleTests" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" testcasecount="15" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.002003" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2817" name="SaturatedGenealogyRollbackRemovesPartialParentageFromRejectedBirth" fullname="PersonNamedBirthLifecycleTests.SaturatedGenealogyRollbackRemovesPartialParentageFromRejectedBirth" methodname="SaturatedGenealogyRollbackRemovesPartialParentageFromRejectedBirth" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" seed="668236335" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.001104" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="3208" name="RuntimeAuthoritativeMutationGuardTests" fullname="RuntimeAuthoritativeMutationGuardTests" classname="RuntimeAuthoritativeMutationGuardTests" runstate="Runnable" testcasecount="18" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.001508" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3218" name="RuntimeOwnedGenealogyRejectsMutationWithoutRevisionChange" fullname="RuntimeAuthoritativeMutationGuardTests.RuntimeOwnedGenealogyRejectsMutationWithoutRevisionChange" methodname="RuntimeOwnedGenealogyRejectsMutationWithoutRevisionChange" classname="RuntimeAuthoritativeMutationGuardTests" runstate="Runnable" seed="11147564" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.000753" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="3600" name="SuccessionCandidateFoundationTests" fullname="SuccessionCandidateFoundationTests" classname="SuccessionCandidateFoundationTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.002477" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3603" name="CandidateSnapshotFingerprintChangesWhenGenealogyChanges" fullname="SuccessionCandidateFoundationTests.CandidateSnapshotFingerprintChangesWhenGenealogyChanges" methodname="CandidateSnapshotFingerprintChangesWhenGenealogyChanges" classname="SuccessionCandidateFoundationTests" runstate="Runnable" seed="1863426907" result="Passed" start-time="2026-10-08 12:38:10Z" end-time="2026-10-08 12:38:10Z" duration="0.002076" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

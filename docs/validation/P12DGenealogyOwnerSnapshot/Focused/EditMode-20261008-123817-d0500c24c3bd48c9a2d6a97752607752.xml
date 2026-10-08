@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="15" result="Passed" total="15" passed="15" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0,1847636">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2540" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.184764" total="15" passed="15" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3773" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12de-current-revalidation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2540" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.169183" total="15" passed="15" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="91084" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2809" name="PersonNamedBirthLifecycleTests" fullname="PersonNamedBirthLifecycleTests" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" testcasecount="15" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.151372" total="15" passed="15" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2821" name="AggregateOnlyBirthDoesNotCreatePerson" fullname="PersonNamedBirthLifecycleTests.AggregateOnlyBirthDoesNotCreatePerson" methodname="AggregateOnlyBirthDoesNotCreatePerson" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" seed="1600863624" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.014447" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2812" name="BirthAtLongAbsoluteDayAndAgeQueryRemainValid" fullname="PersonNamedBirthLifecycleTests.BirthAtLongAbsoluteDayAndAgeQueryRemainValid" methodname="BirthAtLongAbsoluteDayAndAgeQueryRemainValid" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" seed="1876435806" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.047640" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2823" name="BirthDiagnosticsExposePersonAndAggregateDelta" fullname="PersonNamedBirthLifecycleTests.BirthDiagnosticsExposePersonAndAggregateDelta" methodname="BirthDiagnosticsExposePersonAndAggregateDelta" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" seed="1768226827" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.054756" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2822" name="BirthThenMaterializationDoesNotDoubleCountOrChangePopulation" fullname="PersonNamedBirthLifecycleTests.BirthThenMaterializationDoesNotDoubleCountOrChangePopulation" methodname="BirthThenMaterializationDoesNotDoubleCountOrChangePopulation" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" seed="1389601007" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.010124" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2824" name="BirthTransitionFactsAreReadOnlyAndCannotBePubliclyConstructed" fullname="PersonNamedBirthLifecycleTests.BirthTransitionFactsAreReadOnlyAndCannotBePubliclyConstructed" methodname="BirthTransitionFactsAreReadOnlyAndCannotBePubliclyConstructed" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" seed="1564886213" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.000735" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2813" name="DuplicateBirthIsRejectedWithoutMutation" fullname="PersonNamedBirthLifecycleTests.DuplicateBirthIsRejectedWithoutMutation" methodname="DuplicateBirthIsRejectedWithoutMutation" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" seed="645944097" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.001492" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2814" name="ForeignSettlementIsRejectedAtomically" fullname="PersonNamedBirthLifecycleTests.ForeignSettlementIsRejectedAtomically" methodname="ForeignSettlementIsRejectedAtomically" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" seed="587057394" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.000451" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2820" name="InvalidRepresentedPopulationBlocksBirth" fullname="PersonNamedBirthLifecycleTests.InvalidRepresentedPopulationBlocksBirth" methodname="InvalidRepresentedPopulationBlocksBirth" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" seed="333989211" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.000575" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2811" name="NamedBirthCreatesPersonResidenceAndAggregateWithoutNpc" fullname="PersonNamedBirthLifecycleTests.NamedBirthCreatesPersonResidenceAndAggregateWithoutNpc" methodname="NamedBirthCreatesPersonResidenceAndAggregateWithoutNpc" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" seed="1860846252" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.000509" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2815" name="PopulationOverflowIsRejectedAtomically" fullname="PersonNamedBirthLifecycleTests.PopulationOverflowIsRejectedAtomically" methodname="PopulationOverflowIsRejectedAtomically" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" seed="1628319598" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.000342" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2810" name="ProposalIsPureAndCapturesWorldDayAndPopulationState" fullname="PersonNamedBirthLifecycleTests.ProposalIsPureAndCapturesWorldDayAndPopulationState" methodname="ProposalIsPureAndCapturesWorldDayAndPopulationState" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" seed="1256590234" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.000540" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2816" name="RevisionOverflowIsRejectedAtomically" fullname="PersonNamedBirthLifecycleTests.RevisionOverflowIsRejectedAtomically" methodname="RevisionOverflowIsRejectedAtomically" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" seed="1187218002" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.000442" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2817" name="SaturatedGenealogyRollbackRemovesPartialParentageFromRejectedBirth" fullname="PersonNamedBirthLifecycleTests.SaturatedGenealogyRollbackRemovesPartialParentageFromRejectedBirth" methodname="SaturatedGenealogyRollbackRemovesPartialParentageFromRejectedBirth" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" seed="123318344" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.004284" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2818" name="StaleDayProposalCannotApply" fullname="PersonNamedBirthLifecycleTests.StaleDayProposalCannotApply" methodname="StaleDayProposalCannotApply" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" seed="97870248" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.000771" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2819" name="StalePopulationProposalCannotApply" fullname="PersonNamedBirthLifecycleTests.StalePopulationProposalCannotApply" methodname="StalePopulationProposalCannotApply" classname="PersonNamedBirthLifecycleTests" runstate="Runnable" seed="1074531992" result="Passed" start-time="2026-10-08 12:38:27Z" end-time="2026-10-08 12:38:27Z" duration="0.000636" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
