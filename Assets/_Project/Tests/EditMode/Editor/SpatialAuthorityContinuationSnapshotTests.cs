@@ -64,7 +64,6 @@ public sealed class SpatialAuthorityContinuationSnapshotTests
         long sourceRevision = source.Revision;
         HexRecord sourceHex = source.Hexes[0];
         LocationRecord sourceLocation = source.Locations[0];
-        IList sourceLocationCollectionBeforeCapture = (IList)source.Locations;
 
         Assert.That(TryCapture(
             SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
@@ -114,7 +113,7 @@ public sealed class SpatialAuthorityContinuationSnapshotTests
         Assert.That(hexIdProperty, Is.Not.Null);
         Assert.That(hexIdProperty.CanWrite, Is.False);
 
-Assert.That(TryStage(snapshot, out SpatialAuthorityStore staged, out object stageFailure),
+        Assert.That(TryStage(snapshot, out SpatialAuthorityStore staged, out object stageFailure),
             Is.True, FailureMessage(stageFailure));
         Assert.That(stageFailure, Is.Not.Null);
         Assert.That(Read(stageFailure, "IsFailure"), Is.False);
