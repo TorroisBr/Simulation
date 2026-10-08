@@ -119,7 +119,27 @@ internal sealed class P12DCityRootOwnerSnapshot
         out P12DCityRootOwnerSnapshot snapshot,
         out P12DCityRootOwnerSnapshotFailure failure)
     {
+        return TryCapture(
+            city,
+            token,
+            sharedCaptureStamp,
+            sharedOwnerSectionVector,
+            out snapshot,
+            out _,
+            out failure);
+    }
+
+    internal static bool TryCapture(
+        CityRuntime city,
+        DailyCaptureEligibilityToken token,
+        object sharedCaptureStamp,
+        IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
+        out P12DCityRootOwnerSnapshot snapshot,
+        out P12DCityCaptureIdentityEvidence captureIdentityEvidence,
+        out P12DCityRootOwnerSnapshotFailure failure)
+    {
         snapshot = null;
+        captureIdentityEvidence = null;
         failure = P12DCityRootOwnerSnapshotFailure.InvalidCityOwner;
         if (city == null
             || string.IsNullOrWhiteSpace(city.RuntimeId)
@@ -291,6 +311,10 @@ internal sealed class P12DCityRootOwnerSnapshot
             population.Revision,
             populationReceiptRevision,
             populationReceipts);
+        captureIdentityEvidence = new P12DCityCaptureIdentityEvidence(
+            token,
+            sharedCaptureStamp,
+            sharedOwnerSectionVector);
         failure = P12DCityRootOwnerSnapshotFailure.None;
         return true;
     }
@@ -299,6 +323,25 @@ internal sealed class P12DCityRootOwnerSnapshot
         IReadOnlyList<CityData> admittedCityDefinitions,
         IReadOnlyList<ItemData> admittedItemDefinitions,
         IReadOnlyList<SpatialLocationRuntime> stagedLocations,
+        out CityRuntime city,
+        out P12DCityMembershipLinker membershipLinker,
+        out P12DCityRootOwnerSnapshotFailure failure)
+    {
+        return TryStage(
+            admittedCityDefinitions,
+            admittedItemDefinitions,
+            stagedLocations,
+            null,
+            out city,
+            out membershipLinker,
+            out failure);
+    }
+
+    internal bool TryStage(
+        IReadOnlyList<CityData> admittedCityDefinitions,
+        IReadOnlyList<ItemData> admittedItemDefinitions,
+        IReadOnlyList<SpatialLocationRuntime> stagedLocations,
+        P12DCityCaptureIdentityEvidence captureIdentityEvidence,
         out CityRuntime city,
         out P12DCityMembershipLinker membershipLinker,
         out P12DCityRootOwnerSnapshotFailure failure)
@@ -414,6 +457,7 @@ internal sealed class P12DCityRootOwnerSnapshot
                 population,
                 ImportantNpcRevision,
                 ImportantNpcRuntimeIds,
+                captureIdentityEvidence,
                 out city,
                 out membershipLinker))
         {
@@ -581,6 +625,32 @@ internal sealed class P12DCityMarketItemSnapshot
 }
 
 /// <summary>
+/// Transient identity evidence for a City snapshot capture. It is carried only
+/// by the unpublished relation linker and is never stored in a domain owner.
+/// </summary>
+internal sealed class P12DCityCaptureIdentityEvidence
+{
+    private readonly DailyCaptureEligibilityToken token;
+    private readonly object captureStamp;
+    private readonly IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionVector;
+
+    internal P12DCityCaptureIdentityEvidence(
+        DailyCaptureEligibilityToken token,
+        object captureStamp,
+        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionVector)
+    {
+        this.token = token ?? throw new ArgumentNullException(nameof(token));
+        this.captureStamp = captureStamp ?? throw new ArgumentNullException(nameof(captureStamp));
+        this.ownerSectionVector = ownerSectionVector ?? throw new ArgumentNullException(nameof(ownerSectionVector));
+        if (!ReferenceEquals(token.OwnerSections, ownerSectionVector))
+            throw new ArgumentException("City capture evidence must use its token's exact owner-section vector.", nameof(ownerSectionVector));
+    }
+
+    internal bool HasSameCaptureIdentity(P12DCityNpcProjectionCaptureEvidence other) =>
+        other != null && other.HasSameCaptureIdentity(token, captureStamp, ownerSectionVector);
+}
+
+/// <summary>
 /// Private one-shot relation linker returned with an unpublished staged City.
 /// It preserves the captured ordered IDs without replaying gameplay mutations.
 /// The shared D/E/F graph builder still owns cross-owner completeness checks.
@@ -597,16 +667,19 @@ internal sealed class P12DCityMembershipLinker
         CityRuntime city,
         List<NpcRuntime> backingList,
         IReadOnlyList<string> expectedRuntimeIds,
-        long expectedRevision)
+        long expectedRevision,
+        P12DCityCaptureIdentityEvidence captureIdentityEvidence)
     {
         this.city = city ?? throw new ArgumentNullException(nameof(city));
         this.backingList = backingList ?? throw new ArgumentNullException(nameof(backingList));
         this.expectedRuntimeIds = new ReadOnlyCollection<string>(new List<string>(expectedRuntimeIds));
         this.expectedRevision = expectedRevision;
+        CaptureIdentityEvidence = captureIdentityEvidence;
     }
 
     internal bool IsFilled => filled;
     internal CityRuntime StagedCity => city;
+    internal P12DCityCaptureIdentityEvidence CaptureIdentityEvidence { get; }
     internal IReadOnlyList<string> PendingNpcRuntimeIds => expectedRuntimeIds;
 
     internal bool TryFillOnce(IReadOnlyList<NpcRuntime> orderedMembers)
@@ -739,10 +812,7 @@ internal sealed class P12DCityNpcProjectionCaptureEvidence
     internal bool HasSameCaptureIdentity(P12DCityNpcProjectionCaptureEvidence other)
     {
         if (other == null
-            || !ReferenceEquals(token, other.token)
-            || !ReferenceEquals(captureStamp, other.captureStamp)
-            || !ReferenceEquals(ownerSectionVector, other.ownerSectionVector)
-            || !ReferenceEquals(token.OwnerSections, ownerSectionVector)
+            || !HasSameCaptureIdentity(other.token, other.captureStamp, other.ownerSectionVector)
             || sourceNpcRoster.Count != other.sourceNpcRoster.Count)
         {
             return false;
@@ -756,6 +826,19 @@ internal sealed class P12DCityNpcProjectionCaptureEvidence
 
         return true;
     }
+
+    internal bool HasSameCaptureIdentity(
+        DailyCaptureEligibilityToken otherToken,
+        object otherCaptureStamp,
+        IReadOnlyList<OwnerSectionCensusSnapshot> otherOwnerSectionVector) =>
+        otherToken != null
+        && otherCaptureStamp != null
+        && otherOwnerSectionVector != null
+        && ReferenceEquals(token, otherToken)
+        && ReferenceEquals(captureStamp, otherCaptureStamp)
+        && ReferenceEquals(ownerSectionVector, otherOwnerSectionVector)
+        && ReferenceEquals(token.OwnerSections, ownerSectionVector)
+        && ReferenceEquals(otherToken.OwnerSections, otherOwnerSectionVector);
 
     internal bool AreReceiptOwnersStillExactZero() =>
         HasExactZeroReceiptOwners(ownerSectionVector, sourceNpcRoster);
@@ -969,6 +1052,24 @@ internal static class P12DCityNpcRelationAssembler
             return false;
         }
 
+        failure = P12DCityNpcRelationAssemblyFailure.InvalidProjectionEvidence;
+        if (cityMembershipLinkers == null)
+            return false;
+
+        // Bind every staged City to the exact same boundary token, capture
+        // stamp and owner-section vector as both disjoint NPC projections.
+        // This runs before any private City membership list can be filled.
+        for (int i = 0; i < cityMembershipLinkers.Count; i++)
+        {
+            P12DCityMembershipLinker linker = cityMembershipLinkers[i];
+            if (linker?.CaptureIdentityEvidence == null
+                || !linker.CaptureIdentityEvidence.HasSameCaptureIdentity(dProjectionEvidence)
+                || !linker.CaptureIdentityEvidence.HasSameCaptureIdentity(fProjectionEvidence))
+            {
+                return false;
+            }
+        }
+
         failure = P12DCityNpcRelationAssemblyFailure.InvalidReceiptOwnerEvidence;
         if (!dProjectionEvidence.AreReceiptOwnersStillExactZero()
             || !fProjectionEvidence.AreReceiptOwnersStillExactZero())
@@ -977,9 +1078,6 @@ internal static class P12DCityNpcRelationAssembler
         }
 
         failure = P12DCityNpcRelationAssemblyFailure.InvalidCitySet;
-        if (cityMembershipLinkers == null)
-            return false;
-
         Dictionary<string, P12DCityMembershipLinker> linkersByCityId =
             new Dictionary<string, P12DCityMembershipLinker>(StringComparer.Ordinal);
         for (int i = 0; i < cityMembershipLinkers.Count; i++)

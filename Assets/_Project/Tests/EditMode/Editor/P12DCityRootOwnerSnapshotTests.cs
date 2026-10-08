@@ -348,11 +348,14 @@ public sealed class P12DCityRootOwnerSnapshotTests
 
         Assert.That(P12DCityRootOwnerSnapshot.TryCapture(
             sourceCity, token, captureStamp, token.OwnerSections,
-            out P12DCityRootOwnerSnapshot citySnapshot, out _), Is.True);
+            out P12DCityRootOwnerSnapshot citySnapshot,
+            out P12DCityCaptureIdentityEvidence cityCaptureIdentity,
+            out _), Is.True);
         Assert.That(citySnapshot.ImportantNpcRuntimeIds,
             Is.EqualTo(new[] { sourceNpcB.RuntimeId, sourceNpcA.RuntimeId }));
         Assert.That(citySnapshot.TryStage(
             new[] { sourceCity.CityData }, Array.Empty<ItemData>(), new[] { sourceCity.Location },
+            cityCaptureIdentity,
             out CityRuntime stagedCity, out P12DCityMembershipLinker linker, out _), Is.True);
 
         long stagedRevision = stagedCity.ImportantNpcRevision;
@@ -387,6 +390,79 @@ public sealed class P12DCityRootOwnerSnapshotTests
         Assert.That(stagedNpcA.Money, Is.Zero);
         Assert.That(stagedNpcB.Money, Is.Zero);
         Assert.That(sourceCity.ImportantNpcs, Is.EqualTo(new[] { sourceNpcB, sourceNpcA }));
+    }
+
+    [TestCase("token")]
+    [TestCase("stamp")]
+    [TestCase("vector")]
+    public void RelationAssemblyRejectsCityCaptureIdentityMismatchBeforeAnyMembershipFill(string mismatch)
+    {
+        CityRuntime sourceCity = SimulationTestFactory.CreateCity(
+            "city-root-city-identity-" + mismatch,
+            "city-root-city-identity-location-" + mismatch);
+        NpcRuntime sourceNpc = new NpcRuntime(
+            "city-root-city-identity-npc-" + mismatch,
+            SimulationTestFactory.CreateNpc("city-identity-" + mismatch), sourceCity, 0f);
+        NpcRuntime[] sourceRoster = { sourceNpc };
+        List<OwnerSectionCensusSnapshot> sections = CreateAssemblyOwnerSections(
+            new[] { sourceCity }, sourceRoster);
+        DailyCaptureEligibilityToken projectionToken = CreateToken(sourceCity, sections);
+        object projectionStamp = new object();
+        Assert.That(P12DCityNpcProjectionCaptureEvidence.TryCreate(
+            projectionToken, projectionStamp, projectionToken.OwnerSections, sourceRoster,
+            out P12DCityNpcProjectionCaptureEvidence dEvidence, out _), Is.True);
+        Assert.That(P12DCityNpcProjectionCaptureEvidence.TryCreate(
+            projectionToken, projectionStamp, projectionToken.OwnerSections, sourceRoster,
+            out P12DCityNpcProjectionCaptureEvidence fEvidence, out _), Is.True);
+
+        DailyCaptureEligibilityToken cityToken = projectionToken;
+        object cityStamp = projectionStamp;
+        IReadOnlyList<OwnerSectionCensusSnapshot> cityVector = projectionToken.OwnerSections;
+        if (mismatch == "token")
+        {
+            cityToken = CreateToken(sourceCity, sections);
+        }
+        else if (mismatch == "stamp")
+        {
+            cityStamp = new object();
+        }
+        else
+        {
+            List<OwnerSectionCensusSnapshot> copiedVector = new List<OwnerSectionCensusSnapshot>(sections);
+            cityToken = CreateToken(sourceCity, copiedVector);
+            cityVector = cityToken.OwnerSections;
+
+            Assert.That(P12DCityRootOwnerSnapshot.TryCapture(
+                sourceCity, projectionToken, projectionStamp, copiedVector,
+                out _, out _, out P12DCityRootOwnerSnapshotFailure vectorContextFailure), Is.False);
+            Assert.That(vectorContextFailure,
+                Is.EqualTo(P12DCityRootOwnerSnapshotFailure.InvalidCaptureContext),
+                "The token must reject a City vector other than its exact owner-section vector.");
+        }
+
+        Assert.That(P12DCityRootOwnerSnapshot.TryCapture(
+            sourceCity, cityToken, cityStamp, cityVector,
+            out P12DCityRootOwnerSnapshot citySnapshot,
+            out P12DCityCaptureIdentityEvidence cityCaptureIdentity,
+            out P12DCityRootOwnerSnapshotFailure captureFailure), Is.True, captureFailure.ToString());
+        Assert.That(cityCaptureIdentity.HasSameCaptureIdentity(dEvidence), Is.False);
+        Assert.That(citySnapshot.TryStage(
+            new[] { sourceCity.CityData }, Array.Empty<ItemData>(), new[] { sourceCity.Location },
+            cityCaptureIdentity,
+            out CityRuntime stagedCity, out P12DCityMembershipLinker linker, out _), Is.True);
+        Assert.That(NpcRuntime.TryCreateForStagedPresence(
+            sourceNpc.RuntimeId, sourceNpc.NpcData, stagedCity, stagedCity.Location,
+            out NpcRuntime stagedNpc), Is.True);
+
+        long initialRevision = stagedCity.ImportantNpcRevision;
+        Assert.That(P12DCityNpcRelationAssembler.TryFillMembershipsOnce(
+            dEvidence, fEvidence, new[] { linker }, new[] { stagedNpc },
+            out P12DCityNpcRelationAssemblyFailure assemblyFailure), Is.False);
+        Assert.That(assemblyFailure,
+            Is.EqualTo(P12DCityNpcRelationAssemblyFailure.InvalidProjectionEvidence));
+        Assert.That(stagedCity.ImportantNpcs, Is.Empty,
+            "A City captured at a different token, stamp, or owner vector must not be partially filled.");
+        Assert.That(stagedCity.ImportantNpcRevision, Is.EqualTo(initialRevision));
     }
 
     [Test]
@@ -737,18 +813,30 @@ public sealed class P12DCityRootOwnerSnapshotTests
         object captureStamp,
         out CityRuntime stagedCity)
     {
+        return CaptureAndStageCity(sourceCity, token, captureStamp, out stagedCity, out _);
+    }
+
+    private static P12DCityMembershipLinker CaptureAndStageCity(
+        CityRuntime sourceCity,
+        DailyCaptureEligibilityToken token,
+        object captureStamp,
+        out CityRuntime stagedCity,
+        out P12DCityCaptureIdentityEvidence captureIdentityEvidence)
+    {
         Assert.That(P12DCityRootOwnerSnapshot.TryCapture(
             sourceCity,
             token,
             captureStamp,
             token.OwnerSections,
             out P12DCityRootOwnerSnapshot snapshot,
+            out captureIdentityEvidence,
             out P12DCityRootOwnerSnapshotFailure captureFailure), Is.True, captureFailure.ToString());
         ItemData[] items = sourceCity.Market.Items.Select(row => row.Item).ToArray();
         Assert.That(snapshot.TryStage(
             new[] { sourceCity.CityData },
             items,
             new[] { sourceCity.Location },
+            captureIdentityEvidence,
             out stagedCity,
             out P12DCityMembershipLinker linker,
             out P12DCityRootOwnerSnapshotFailure stageFailure), Is.True, stageFailure.ToString());

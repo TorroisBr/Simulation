@@ -1,6 +1,6 @@
 # P12-D City/NPC assembly design revalidation
 
-**Review ID:** P12D-CITY-NPC-ASSEMBLY-DESIGN-REVALIDATION-1C7B906  
+**Review ID:** P12D-CITY-NPC-ASSEMBLY-DESIGN-REVALIDATION-1C7B906
 **Verdict:** PASS — the existing relation-order City/NPC assembly design is technically ready to enter bounded implementation, within the scope stated below. This is a design revalidation only. It validates no new code and does not complete P12-D.
 
 ## Exact bases
