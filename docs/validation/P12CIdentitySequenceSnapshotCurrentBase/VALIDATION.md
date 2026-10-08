@@ -31,16 +31,16 @@ closure.
 
 ## Exact source
 
-The following SHA-256 values identify the code and test files in the reviewed
-candidate:
+These SHA-256 values are computed from raw Git blob bytes at code commit `d9ce4502b6b1601660f2c44629d6e0f34c72036d` (`git show <code-tip>:<path>`).
+The validation worktree used `core.autocrlf=true` and retained mixed CRLF/LF line endings in three source files. For each listed file, `git hash-object --path=<path> <worktree-file>` resolves to the blob recorded in the candidate tree, so these hashes identify the exact committed source content.
 
 | File | SHA-256 |
 |---|---|
-| `Assets/_Project/Scripts/RuntimeIdentity.cs` | `D8BA01B114FC97551573E852DD5783CF80B4D5624EF4569C50780A6527D284A7` |
-| `Assets/_Project/Scripts/DecisionRecords.cs` | `F340BBDA4EFB463D0F585D1B51CAFBB2773D79C6758DD265BC3119735578975A` |
-| `Assets/_Project/Tests/EditMode/Editor/IdentitySequenceSnapshotTests.cs` | `CD1007350078F8223119A5046A31BE8E18EEC6004F008A0AA062CA901C60A1F1` |
-| `Assets/_Project/Tests/EditMode/Editor/IdentitySequenceSnapshotTests.cs.meta` | `D584020388BB4DDE814B78DE6D57AA13AC3C4D216F2A321A8C73A544E5A3E7B4` |
-| `Assets/_Project/Tests/EditMode/Editor/SimulationRecordSequenceP12InvalidationTests.cs` | `71ACEFF2A4EAA67FF8E4FF035FFE129E793B1F9EBFABA4526D8DB296E0648514` |
+| `Assets/_Project/Scripts/RuntimeIdentity.cs` | `D90AF83CDB163E9B4690C5ECA90EC6F662C48C87AC9237667E743E4C347A9AC6` |
+| `Assets/_Project/Scripts/DecisionRecords.cs` | `3F32E3A898943CA0C14BE06A1013A7A3EF95644D644D854F116B7C60835C77D0` |
+| `Assets/_Project/Tests/EditMode/Editor/IdentitySequenceSnapshotTests.cs` | `90712C2CFA4A525C47155DE727F6B6F51C322644D16CC4F76DD422F6F97144FA` |
+| `Assets/_Project/Tests/EditMode/Editor/IdentitySequenceSnapshotTests.cs.meta` | `28FD44D11D5D83DB2E4D292C81CBC25BEBC9C6EA71BF78A8415EB5626327A58F` |
+| `Assets/_Project/Tests/EditMode/Editor/SimulationRecordSequenceP12InvalidationTests.cs` | `DCB58B8B6BED11B0789ABE79492FA7BF73F9B9C250169D513E108D7253C19453` |
 
 ## Results
 
