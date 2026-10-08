@@ -6,7 +6,7 @@ COMPLETE/PROMOTED within its accepted identity, genesis-provenance, and
 deterministic-root continuation scope; P12-A remains `WAIT_DEPENDENCY`. P13
 remains `BLOCKED`.
 
-## Current P12-D status — Genealogy and SpatialNetwork promoted; Person owner candidate validated (2026-10-08)
+## Current P12-D status — Genealogy, SpatialNetwork and Person owner snapshots promoted (2026-10-08)
 
 `codex/phase12/canonical` was fast-forwarded from
 `0e786db8e6ed5ed937ff62e3f63258d8b73fd93c` to promotion tip
@@ -53,7 +53,7 @@ stored durations remain distinct. It adds no `SimulationRuntime` or bootstrap
 integration, P12-B capture binding, whole-D validation, profile-wide
 export/hydration, P12-A readiness, P13 readiness, or Phase closure.
 
-The isolated Person owner snapshot candidate is code
+The promoted Person owner snapshot implementation is code
 6c872c5ca6e997844d01c18bfee8909c16317455 with reviewed Assets tree
 b84164f70736c1d5c7643e107f06178798238ca0. Independent exact-tip review PASS
 is recorded at 77d0383b92a5368ff93a04fc254cf4c529480b11 and included in the
@@ -61,28 +61,31 @@ integration candidate. Focused Person tests passed 182/182; integrated ALL
 EditMode passed 2549/2549; official Smoke passed 5/5; git diff --check passed.
 Artifact hashes and the scope boundary are in
 [validation/P12DPersonSnapshotIntegration/VALIDATION.md](validation/P12DPersonSnapshotIntegration/VALIDATION.md).
+Following final preflight, codex/phase12/canonical was fast-forwarded from
+da2a73896bc405ae6f11c536a5fbe8d471b00c21 to promotion tip
+69882ed2ef9f15893a27897c04ba6242f9f86aa4. This promotes only the bounded
+local Person owner snapshot and private staging capability.
+
 ### Refreshed P12 dependency and owner DAG
 
 - **P12-B and P12-C:** remain COMPLETE/PROMOTED within their recorded bounded
   contracts; the current P12-D slice does not reopen them.
-- **P12-D:** IN PROGRESS. Genealogy and SpatialNetwork owner snapshots are
-  promoted. The isolated Person owner snapshot candidate is independently
-  reviewed and passed focused, ALL EditMode, and official Smoke validation on
-  the reviewed code/tree; canonical promotion is the next bounded integration
-  action. Its scope is the immutable local Person owner and private local
-  staging; NPC/City reciprocity and whole-D staging remain outstanding. For
-  Daily-v1, the P12-B site section is required-empty and bound to its exact
+- **P12-D:** IN PROGRESS. Genealogy, SpatialNetwork, and Person owner snapshots
+  are promoted. Person provides the immutable local owner and private local
+  staging only; NPC/City reciprocity and whole-D staging remain outstanding.
+  For Daily-v1, the P12-B site section is required-empty and bound to its exact
   owner/token; D must preserve that empty section and reject populated site
   state. Generic multi-site D ownership applies only to a future profile that
   explicitly admits it; this does not add P10-A to Daily-v1. City/population
   and the D/E/F NPC adapter remain serialized shared-owner work.
-- **P12-E:** the fresh current-content review is NEEDS_CHANGES at
-  76ec4f0de74a48e03d1d0125976cfcc816d18bb8 because §4 requires an empty
-  LocalTopologyStore although Daily-v1 does not compose that owner. The needed
-  correction is an explicit NOT_COMPOSED/provider-absence witness, distinct
-  from a composed empty owner. No E owner slice is implementation-ready;
-  owner-specific fields, writes/revisions, and staged reconstruction evidence
-  remain outstanding.
+- **P12-E:** Fresh exact-content review 76ec4f0de74a48e03d1d0125976cfcc816d18bb8
+  found the §4 LocalTopologyStore empty-versus-NOT_COMPOSED contradiction for
+  Daily-v1 (record: design/PHASE12_E_TECHNICAL_DESIGN_REVIEW_20261008.md).
+  Correction candidate 68ad4697117c72ba42718de0db8ab7307436c007 now requires the
+  typed NOT_COMPOSED/provider-absence witness, distinct from a composed empty
+  owner. Fresh independent review is pending. No E owner slice is
+  implementation-ready; owner fields, writes/revisions, and staged
+  reconstruction evidence remain outstanding.
 - **P12-F:** waits for P12-D and P12-E. Expedition remains in its accepted
   P12-F scope and is not advanced by this D slice.
 - **P12-G:** waits for P12-B through P12-F and a validated live-profile
