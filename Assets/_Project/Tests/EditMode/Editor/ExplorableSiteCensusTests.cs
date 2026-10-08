@@ -130,8 +130,8 @@ public sealed class ExplorableSiteCensusTests
     public void OwnerSnapshot_EmptyCaptureIsDetachedStableAndStagesAsExactZero()
     {
         ExplorableSiteStore owner = new ExplorableSiteStore();
-        ExplorableSiteOwnerSnapshot first = owner.CaptureOwnerSnapshot();
-        ExplorableSiteOwnerSnapshot second = owner.CaptureOwnerSnapshot();
+        ExplorableSiteOwnerSnapshot first = CaptureOwnerSnapshotOrFail(owner);
+        ExplorableSiteOwnerSnapshot second = CaptureOwnerSnapshotOrFail(owner);
 
         Assert.That(first.SchemaVersion, Is.EqualTo(ExplorableSiteOwnerSnapshot.CurrentSchemaVersion));
         Assert.That(first.Revision, Is.Zero);
@@ -167,8 +167,8 @@ public sealed class ExplorableSiteCensusTests
         Assert.That(owner.Add(first), Is.True);
         Assert.That(owner.Add(second), Is.True);
 
-        ExplorableSiteOwnerSnapshot snapshot = owner.CaptureOwnerSnapshot();
-        ExplorableSiteOwnerSnapshot repeated = owner.CaptureOwnerSnapshot();
+        ExplorableSiteOwnerSnapshot snapshot = CaptureOwnerSnapshotOrFail(owner);
+        ExplorableSiteOwnerSnapshot repeated = CaptureOwnerSnapshotOrFail(owner);
         Assert.That(snapshot.Revision, Is.EqualTo(2L));
         Assert.That(snapshot.Revision, Is.EqualTo(snapshot.Sites.Count));
         Assert.That(repeated.Revision, Is.EqualTo(snapshot.Revision));
@@ -244,6 +244,32 @@ public sealed class ExplorableSiteCensusTests
     }
 
     [Test]
+    public void OwnerSnapshotCapture_RejectsDuplicateSiteInstanceIdsWithoutChangingLiveOwner()
+    {
+        ExplorableSiteStore owner = new ExplorableSiteStore();
+        ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite("snapshot-duplicate-instance-definition");
+        SpatialLocationRuntime location = new SpatialLocationRuntime("snapshot-duplicate-instance-location");
+        ExplorableSiteRuntime first = new ExplorableSiteRuntime(
+            "snapshot-duplicate-instance-site-first", definition, location, "snapshot-duplicate-instance-id");
+        ExplorableSiteRuntime second = new ExplorableSiteRuntime(
+            "snapshot-duplicate-instance-site-second", definition, location, "snapshot-duplicate-instance-id");
+
+        Assert.That(owner.Add(first), Is.True, "The existing live Add behavior remains unchanged.");
+        Assert.That(owner.Add(second), Is.True, "The existing live Add behavior remains unchanged.");
+        Assert.That(owner.TryCaptureOwnerSnapshot(
+            out ExplorableSiteOwnerSnapshot snapshot,
+            out ExplorableSiteSnapshotFailure failure), Is.False);
+
+        Assert.That(snapshot, Is.Null);
+        Assert.That(failure.Code, Is.EqualTo(ExplorableSiteSnapshotFailureCode.DuplicateSiteIdentity));
+        Assert.That(owner.Count, Is.EqualTo(2));
+        Assert.That(owner.Revision, Is.EqualTo(2L));
+        Assert.That(owner.GetByRuntimeId(first.RuntimeId), Is.SameAs(first));
+        Assert.That(owner.GetByRuntimeId(second.RuntimeId), Is.SameAs(second));
+        Assert.That(owner.GetForLocationRuntimeId(location.RuntimeId), Is.EqualTo(new[] { first, second }));
+    }
+
+    [Test]
     public void OwnerSnapshot_IsDetachedFromLaterSiteMutationsAndExposesReadOnlyRows()
     {
         ExplorableSiteStore owner = new ExplorableSiteStore();
@@ -252,7 +278,7 @@ public sealed class ExplorableSiteCensusTests
         Assert.That(owner.Add(new ExplorableSiteRuntime(
             "snapshot-detached-first", definition, location, "snapshot-detached-instance-first")), Is.True);
 
-        ExplorableSiteOwnerSnapshot snapshot = owner.CaptureOwnerSnapshot();
+        ExplorableSiteOwnerSnapshot snapshot = CaptureOwnerSnapshotOrFail(owner);
         System.Collections.Generic.IList<ExplorableSiteOwnerSnapshotRecord> rows =
             snapshot.Sites as System.Collections.Generic.IList<ExplorableSiteOwnerSnapshotRecord>;
         Assert.That(rows, Is.Not.Null);
@@ -370,6 +396,17 @@ public sealed class ExplorableSiteCensusTests
         Assert.That(failure, Is.Not.Null);
         Assert.That(failure.Code, Is.Not.EqualTo(ExplorableSiteSnapshotFailureCode.None));
     }
+
+    private static ExplorableSiteOwnerSnapshot CaptureOwnerSnapshotOrFail(ExplorableSiteStore owner)
+    {
+        bool captured = owner.TryCaptureOwnerSnapshot(
+            out ExplorableSiteOwnerSnapshot snapshot,
+            out ExplorableSiteSnapshotFailure failure);
+        Assert.That(captured, Is.True, failure?.Message);
+        Assert.That(snapshot, Is.Not.Null);
+        return snapshot;
+    }
+
     private static ExplorableSiteRuntime CreateSite(string runtimeId, string locationRuntimeId)
     {
         return new ExplorableSiteRuntime(

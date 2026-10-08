@@ -134,11 +134,36 @@ public sealed class ExplorableSiteStore : IAuthoritativeMutationGuardBindable
     /// legacy location references, and exact local revision. The surrounding
     /// P12 composition supplies capture-boundary authority and graph checks.
     /// </summary>
-    internal ExplorableSiteOwnerSnapshot CaptureOwnerSnapshot()
+    internal bool TryCaptureOwnerSnapshot(
+        out ExplorableSiteOwnerSnapshot snapshot,
+        out ExplorableSiteSnapshotFailure failure)
     {
+        snapshot = null;
         List<ExplorableSiteOwnerSnapshotRecord> siteRecords = new List<ExplorableSiteOwnerSnapshotRecord>(sites.Count);
+        HashSet<string> siteRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> siteInstanceIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (ExplorableSiteRuntime site in sites)
         {
+            if (site == null
+                || string.IsNullOrWhiteSpace(site.RuntimeId)
+                || string.IsNullOrWhiteSpace(site.SiteInstanceId)
+                || string.IsNullOrWhiteSpace(site.DefinitionId)
+                || string.IsNullOrWhiteSpace(site.Location?.RuntimeId))
+            {
+                failure = ExplorableSiteSnapshotFailure.Create(
+                    ExplorableSiteSnapshotFailureCode.InvalidSiteIdentity,
+                    "The ExplorableSite owner contains a null row or empty identity/reference.");
+                return false;
+            }
+
+            if (!siteRuntimeIds.Add(site.RuntimeId) || !siteInstanceIds.Add(site.SiteInstanceId))
+            {
+                failure = ExplorableSiteSnapshotFailure.Create(
+                    ExplorableSiteSnapshotFailureCode.DuplicateSiteIdentity,
+                    "The ExplorableSite owner contains duplicate runtime or site-instance identities.");
+                return false;
+            }
+
             siteRecords.Add(new ExplorableSiteOwnerSnapshotRecord(
                 site.RuntimeId,
                 site.SiteInstanceId,
@@ -146,10 +171,12 @@ public sealed class ExplorableSiteStore : IAuthoritativeMutationGuardBindable
                 site.Location.RuntimeId));
         }
 
-        return new ExplorableSiteOwnerSnapshot(
+        snapshot = new ExplorableSiteOwnerSnapshot(
             ExplorableSiteOwnerSnapshot.CurrentSchemaVersion,
             revision,
             siteRecords);
+        failure = ExplorableSiteSnapshotFailure.None;
+        return true;
     }
 
     /// <summary>
