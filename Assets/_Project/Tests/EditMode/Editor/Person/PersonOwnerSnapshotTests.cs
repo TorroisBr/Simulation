@@ -10,6 +10,8 @@ public sealed class PersonOwnerSnapshotTests
         PersonStore source = new PersonStore();
         PersonStoreOwnerSnapshot snapshot = source.CaptureOwnerSnapshot();
 
+        Assert.That(snapshot.SchemaId, Is.EqualTo(PersonStoreOwnerSnapshot.CurrentSchemaId));
+        Assert.That(snapshot.SchemaId, Is.Not.EqualTo("p12d.person.membership"));
         Assert.That(snapshot.SchemaVersion, Is.EqualTo(PersonStoreOwnerSnapshot.CurrentSchemaVersion));
         Assert.That(snapshot.Revision, Is.Zero);
         Assert.That(snapshot.MembershipCount, Is.Zero);
@@ -71,6 +73,7 @@ public sealed class PersonOwnerSnapshotTests
             snapshot.Rows[0]
         };
         PersonStoreOwnerSnapshot copiedInput = new PersonStoreOwnerSnapshot(
+            PersonStoreOwnerSnapshot.CurrentSchemaId,
             PersonStoreOwnerSnapshot.CurrentSchemaVersion,
             1L,
             1,
@@ -223,6 +226,22 @@ public sealed class PersonOwnerSnapshotTests
 
         AssertRejected(source, sourceBefore, Snapshot(2, 0L, 0, 0, new PersonStoreOwnerSnapshotRow[0]),
             PersonStoreOwnerSnapshotFailureCode.UnsupportedSchema);
+        AssertRejected(source, sourceBefore, SnapshotWithSchema(
+            "unknown-p12d-person-store-schema",
+            PersonStoreOwnerSnapshot.CurrentSchemaVersion,
+            0L,
+            0,
+            0,
+            new PersonStoreOwnerSnapshotRow[0]),
+            PersonStoreOwnerSnapshotFailureCode.UnsupportedSchema);
+        AssertRejected(source, sourceBefore, SnapshotWithSchema(
+            null,
+            PersonStoreOwnerSnapshot.CurrentSchemaVersion,
+            0L,
+            0,
+            0,
+            new PersonStoreOwnerSnapshotRow[0]),
+            PersonStoreOwnerSnapshotFailureCode.UnsupportedSchema);
         AssertRejected(source, sourceBefore, Snapshot(1, 0L, 0, 0, null),
             PersonStoreOwnerSnapshotFailureCode.InvalidHeader);
         AssertRejected(source, sourceBefore, Snapshot(1, 0L, 1, 0, (PersonStoreOwnerSnapshotRow)null),
@@ -278,6 +297,24 @@ public sealed class PersonOwnerSnapshotTests
         params PersonStoreOwnerSnapshotRow[] rows)
     {
         return new PersonStoreOwnerSnapshot(
+            PersonStoreOwnerSnapshot.CurrentSchemaId,
+            schemaVersion,
+            revision,
+            membershipCount,
+            bindingCount,
+            rows);
+    }
+
+    private static PersonStoreOwnerSnapshot SnapshotWithSchema(
+        string schemaId,
+        int schemaVersion,
+        long revision,
+        int membershipCount,
+        int bindingCount,
+        params PersonStoreOwnerSnapshotRow[] rows)
+    {
+        return new PersonStoreOwnerSnapshot(
+            schemaId,
             schemaVersion,
             revision,
             membershipCount,
@@ -339,6 +376,7 @@ public sealed class PersonOwnerSnapshotTests
         PersonStoreOwnerSnapshot expected,
         PersonStoreOwnerSnapshot actual)
     {
+        Assert.That(actual.SchemaId, Is.EqualTo(expected.SchemaId));
         Assert.That(actual.SchemaVersion, Is.EqualTo(expected.SchemaVersion));
         Assert.That(actual.Revision, Is.EqualTo(expected.Revision));
         Assert.That(actual.MembershipCount, Is.EqualTo(expected.MembershipCount));

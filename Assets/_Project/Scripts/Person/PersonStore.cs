@@ -38,8 +38,10 @@ internal sealed class PersonStoreOwnerSnapshotRow
 /// </summary>
 internal sealed class PersonStoreOwnerSnapshot
 {
+    internal const string CurrentSchemaId = "p12d-person-store-owner";
     internal const int CurrentSchemaVersion = 1;
 
+    internal string SchemaId { get; }
     internal int SchemaVersion { get; }
     internal long Revision { get; }
     internal int MembershipCount { get; }
@@ -47,12 +49,14 @@ internal sealed class PersonStoreOwnerSnapshot
     internal IReadOnlyList<PersonStoreOwnerSnapshotRow> Rows { get; }
 
     internal PersonStoreOwnerSnapshot(
+        string schemaId,
         int schemaVersion,
         long revision,
         int membershipCount,
         int bindingCount,
         IEnumerable<PersonStoreOwnerSnapshotRow> rows)
     {
+        SchemaId = schemaId;
         SchemaVersion = schemaVersion;
         Revision = revision;
         MembershipCount = membershipCount;
@@ -160,6 +164,7 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
         }
 
         return new PersonStoreOwnerSnapshot(
+            PersonStoreOwnerSnapshot.CurrentSchemaId,
             PersonStoreOwnerSnapshot.CurrentSchemaVersion,
             revision,
             persons.Count,
@@ -184,7 +189,11 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
-        if (snapshot.SchemaVersion != PersonStoreOwnerSnapshot.CurrentSchemaVersion)
+        if (!string.Equals(
+                snapshot.SchemaId,
+                PersonStoreOwnerSnapshot.CurrentSchemaId,
+                StringComparison.Ordinal)
+            || snapshot.SchemaVersion != PersonStoreOwnerSnapshot.CurrentSchemaVersion)
         {
             failure = PersonStoreOwnerSnapshotFailureCode.UnsupportedSchema;
             return false;
