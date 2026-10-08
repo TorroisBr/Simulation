@@ -51,11 +51,13 @@ public sealed class P12DNpcReceiptOwnerCensusTests
             P12DNpcReceiptOwnerCensusProvider.CreateProviders(new[] { first, aliased }));
     }
 
-    [Test]
-    public void SelectedRuntimeVectorIncludesRequiredExactReceiptRowsAndSurfacesLiveInventory()
+    [TestCase("local")]
+    [TestCase("merchant")]
+    public void SelectedRuntimeVectorIncludesRequiredExactReceiptRowsAndEachReceiptMutationStalesToken(
+        string ownerKind)
     {
-        NpcRuntime first = CreateNpc("p12d-vector-a");
-        NpcRuntime second = CreateNpc("p12d-vector-b");
+        NpcRuntime first = CreateNpc("p12d-vector-a-" + ownerKind);
+        NpcRuntime second = CreateNpc("p12d-vector-b-" + ownerKind);
         SimulationRuntime runtime = CreateDailyRuntime(new[] { second, first });
 
         Assert.That(runtime.NpcReceiptOwnerCensusProviders.Count, Is.EqualTo(4));
@@ -105,9 +107,12 @@ public sealed class P12DNpcReceiptOwnerCensusTests
                 npc.ExistingMerchantTradeStateRuntime);
         }
 
-        NpcMerchantTradeStateRuntime merchantOwner = first.ExistingMerchantTradeStateRuntime;
-        CommitMerchantReceipt(first);
-        Assert.That(merchantOwner.TryReadP12ReceiptCensus(
+        if (ownerKind == "local")
+            CommitLocalObservationReceipt(first, establishPresence: false);
+        else
+            CommitMerchantReceipt(first);
+        object receiptOwner = GetReceiptOwner(first, ownerKind);
+        Assert.That(TryReadOwner(receiptOwner, ownerKind,
             out int populatedCount, out long populatedRevision), Is.True);
         Assert.That(populatedCount, Is.EqualTo(1));
         Assert.That(populatedRevision, Is.EqualTo(1L));
@@ -245,6 +250,47 @@ public sealed class P12DNpcReceiptOwnerCensusTests
         Assert.That(runtime.NpcReceiptOwnerCensusProviders.Count, Is.EqualTo(20));
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure afterRejectedAdd),
             Is.True, afterRejectedAdd.ToString());
+    }
+
+    [TestCase("local")]
+    [TestCase("merchant")]
+    public void CommittedRosterAddWithPopulatedReceiptFaultsWithoutPartialRowsOrEpochAdvance(
+        string ownerKind)
+    {
+        SimulationRuntime runtime = CreateIdentityBoundDailyRuntime(out _);
+        NpcRuntime added = CreateNpc("p12d-populated-roster-add-" + ownerKind);
+        if (ownerKind == "local")
+            CommitLocalObservationReceipt(added, establishPresence: false);
+        else
+            CommitMerchantReceipt(added);
+
+        object receiptOwner = GetReceiptOwner(added, ownerKind);
+        Assert.That(TryReadOwner(receiptOwner, ownerKind,
+            out int cardinality, out long revision), Is.True);
+        Assert.That(cardinality, Is.EqualTo(1));
+        Assert.That(revision, Is.EqualTo(1L));
+
+        ContinuationCensusProtocol protocol = ReadPrivateField<ContinuationCensusProtocol>(
+            runtime, "npcRosterCensusProtocol");
+        long startingEpoch = ReadPrivateField<long>(protocol, "mutationEpoch");
+        Assert.That(runtime.NpcReceiptOwnerCensusProviders.Count, Is.EqualTo(20));
+
+        Assert.That(runtime.TryRegisterNpc(added, out WorldNpcRegistryFailure addFailure),
+            Is.True, addFailure.ToString());
+        Assert.That(addFailure, Is.EqualTo(WorldNpcRegistryFailure.None));
+        Assert.That(runtime.NpcRuntimes, Does.Contain(added),
+            "the membership write commits before the census reconciliation observes the malformed new owner");
+
+        Assert.That(runtime.NpcReceiptOwnerCensusProviders.Count, Is.EqualTo(20),
+            "failed family reconciliation must not publish either new receipt row");
+        AssertNoProvider(runtime,
+            P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(added.RuntimeId));
+        AssertNoProvider(runtime,
+            P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(added.RuntimeId));
+        Assert.That(ReadPrivateField<long>(protocol, "mutationEpoch"), Is.EqualTo(startingEpoch),
+            "failed family reconciliation must not advance the shared epoch");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
     }
 
     private static void AssertWitness(
@@ -399,14 +445,17 @@ public sealed class P12DNpcReceiptOwnerCensusTests
     private static NpcRuntime CreateNpc(string runtimeId) =>
         new NpcRuntime(runtimeId, SimulationTestFactory.CreateNpc(runtimeId));
 
-    private static void CommitLocalObservationReceipt(NpcRuntime npc)
+    private static void CommitLocalObservationReceipt(NpcRuntime npc, bool establishPresence = true)
     {
-        ItemData item = SimulationTestFactory.CreateItem("p12d-local-receipt-item", 12f);
-        CityRuntime city = SimulationTestFactory.CreateCity(
-            "p12d-local-receipt-city",
-            "p12d-local-receipt-location",
-            new MarketItemConfig { item = item, initialAmount = 3, desiredAmount = 5 });
-        npc.SetCurrentPresence(city.Location, city);
+        if (establishPresence)
+        {
+            ItemData item = SimulationTestFactory.CreateItem("p12d-local-receipt-item", 12f);
+            CityRuntime city = SimulationTestFactory.CreateCity(
+                "p12d-local-receipt-city",
+                "p12d-local-receipt-location",
+                new MarketItemConfig { item = item, initialAmount = 3, desiredAmount = 5 });
+            npc.SetCurrentPresence(city.Location, city);
+        }
         NpcLocalKnowledgeDailyBoundaryStepProvider provider =
             new NpcLocalKnowledgeDailyBoundaryStepProvider(() => new[] { npc }, true);
         DailyBoundaryOperation operation = new DailyBoundaryOperation("p12d-world", "intraday", 1L);
