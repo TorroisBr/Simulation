@@ -42,6 +42,12 @@ public sealed class P12CP9GenesisManifestSnapshotTests
         Assert.That(HasRecordWithPrefixAndText(snapshot.CanonicalProvenanceRecords,
             "action-required-status:", "Status-Livre"), Is.True,
             "Daily-v1 Viajar has a required status recorded as a raw DefinitionId.");
+        Assert.That(snapshot.OutputOwners, Is.EqualTo(source.OutputOwners));
+        Assert.That(snapshot.OutputOwners, Does.Contain("SpatialAuthorityStore"));
+        Assert.That(snapshot.CanonicalProvenanceRecords, Is.EqualTo(source.CanonicalProvenanceRecords));
+        Assert.That(HasRecordWithPrefixAndText(snapshot.CanonicalProvenanceRecords,
+            "output-owner|", "SpatialAuthorityStore"), Is.False,
+            "P9 fingerprinted output-owner records omit SpatialAuthorityStore by contract.");
         AssertManifestMatchesSnapshot(source, snapshot);
         Assert.That(snapshot.CanonicalProvenanceRecords, Is.Not.SameAs(source.CanonicalProvenanceRecords));
         Assert.That(snapshot.AuthoredDefinitionIds, Is.Not.SameAs(source.AuthoredDefinitionIds));
