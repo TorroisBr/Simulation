@@ -1,0 +1,46 @@
+# P12-E ArmedForce/Manpower/Position Snapshot Design Review — R2
+
+**Review ID:** `P12E-ARMED-FORCE-MANPOWER-POSITION-DESIGN-R2`
+**Outcome:** `PASS` — exact bounded design review; no findings.
+**Readiness:** This exact three-owner snapshot/staging slice is technically ready to proceed through its authorized implementation workflow. This is not implementation authorization by itself, canonical promotion, overall P12-E completion, P12-A readiness, P13 readiness, or Phase 12 closure.
+
+## Exact content and bases
+
+- Candidate branch: `codex/phase12/P12EArmedForceManpowerPositionSnapshotDesign`.
+- Exact candidate tip: `3ba6516bf6bcf081445f9c2c7fea192423487851` (tree `132a179d10e3986af204595b21e7bd07099b3d1d`). Remote `ls-remote` returned this exact branch tip during review.
+- Candidate parent: `0c436c14c0cb5077b496b4b4f829722e7e9fb4ce`.
+- Design blob: `docs/design/PHASE12_P12E_ARMED_FORCE_MANPOWER_POSITION_SNAPSHOT_DESIGN.md` — `863c90329f1756bccd5135d255e8761891682843`.
+- Exact P12 canonical/base: `codex/phase12/canonical` at `04e7c3f49a7c9690ebc091fcfc50f05ef67009d6`; it is an ancestor of the candidate.
+- Exact architecture authority: `codex/architecture/world-identity-projection` at `47eff220c7ce00f6e7c759bdc2b76780bb46f628`.
+- Current P12-E umbrella design reviewed for this slice: `docs/design/PHASE12_E_TECHNICAL_DESIGN.md` blob `15aaee09d3295cff81a48e166b620c89f5156346`.
+- Candidate change since `0c436c1` is docs-only. The full P12-canonical-to-candidate name/status diff contains only the new design document; `Assets`, `Packages`, and `ProjectSettings` are unchanged. `git diff --check` passes. No Unity tests were run because this is a documentation-only technical-design review.
+
+## Scope and contract review
+
+The design is bounded to detached schema-v1 export and private staged reconstruction for the existing Daily-v1 `ArmedForceStore`, `ContingentManpowerStateStore`, and baseline `ArmedForceSpatialStateStore`. It assigns no new checkpoint identity, adds no census section or runtime/bootstrap wiring, and does not alter the completed-boundary/token contract. Its five existing census sections and exact section/cardinality/revision mapping match the current P12-B registration and owner providers.
+
+The value DTO boundaries preserve stable force, contingent, origin, Person-reference, and position identities; all retained owner fields; per-state and per-owner revisions; typed spatial-reference identity; and detached child values. Derived manpower totals/fingerprint and census counts remain derived/stamp data rather than duplicate persisted truth. The planned private factories restore values and revisions without replaying public operations or mutating the active runtime. The design preserves the existing ArmedForce/manpower amount mirror, source/cohort validation, exact Battle prepared-batch rollback, and spatial no-op/revision semantics.
+
+The capture and staging contracts are supported by the current implementation:
+
+- `SimulationRuntime.InitializeNpcRosterCensusProtocol` calls `TryRegisterP12EMilitaryOwnerSections` for an admitted runtime (`SimulationRuntime.cs:2045,2106`). The helper registers all three ArmedForce sections, manpower, positions, Conflict, War, and Battle as required owners (`P12RuntimeIdentitySpatialCensus.cs:284-342`); `TryRegisterP12FixedOwnerSection` verifies exact provider section/schema and owner identity before sealing the inventories.
+- `ContingentManpowerCensusProvider` witnesses the exact installed store object, `States.Count`, and owner revision (`P12EMilitaryOwnerCensusProviders.cs:4-18`). `OwnerSectionCensusSnapshot` retains that identity plus section/schema/cardinality/revision (`ContinuationCensusProtocol.cs:42-62`). `DailyCaptureEligibilityToken.OwnerSections` carries the token-bound vector (`SimulationRuntime.cs:42-77`); completed capture obtains the vector at `SimulationRuntime.cs:8214-8251`, and token comparison checks owner identity, cardinality, and revision (`SimulationRuntime.cs:8283-8324`). The existing `TryGetCompletedDailyCaptureToken` accessor is at `SimulationRuntime.cs:8357` and is already consumed by the promoted Battle owner snapshot adapter. The design therefore can bind directly to the exact token owner without adding a second P12-B mechanism or editing the runtime hotspot.
+- The source-absence proof is exact, not inferred from the asset or empty rows. `SettlementManpowerSourceRegistry.TryCreate` returns no registry for null/empty registrations and creates one only for nonempty registrations (`Military/ManpowerSourceConsequencePlanning.cs:354-421`). Runtime provider resolution includes the explicit `manpowerSourceProvider` or input store’s provider, then passes the resolved provider into the installed/clone store (`SimulationRuntime.cs:1074-1104,1227-1230`). The store retains that pointer in a `readonly` field and exposes only a getter (`MilitaryManpowerFoundation.cs:350,378`). Therefore the design’s capture check reads `SourceProvider` from the same owner object found by the token-bound `p12e.contingent-manpower.states` section; a nonnull property rejects. A source-bound row cannot pass with a null provider: the invariant reports unresolved bound sources (`MilitaryManpowerFoundation.cs:966-980`), and source resolution itself fails when no provider exists (`:1041-1048`). The same null-property requirement on the private target store and rejection of all source-bound rows are coherent with current source semantics.
+
+The dependency-ordered private factories and rejection limits are consistent with current authorities. Daily-v1 keeps P10 `LocalTopologyStore` `NOT_COMPOSED`, distinct from a composed-empty owner; current inventory and selected-profile tests verify this (`PHASE12_OWNER_COVERAGE_INVENTORY.md:337-343`; `SimulationBootstrapCompositionTests.cs:1668,1749`). P16-A admission rejects Daily-v1 state before admission (`SimulationRuntime.cs:873-902`; `P16AMilitaryMovementTests.cs:167`), and P17-A state remains composition-gated (`SimulationRuntime.cs:903-915`; `P17ARuntimeTests.cs:315`). The candidate preserves those rejection tests and does not serialize either extension.
+
+The design does not overclaim what the bounded slice delivers. It leaves the current P12-B direct-write/shared-epoch coverage boundary intact, and makes no P12-A, P12-G, whole-profile, P13, save-envelope, or phase-closure claim. P12 State at the exact base records B and C complete only within their stated bounded contracts, P12-D/E in progress, P12-A `WAIT_DEPENDENCY`, and P13 blocked. P12 Brief dependencies and owner split permit this E owner work after B/C and relevant D roots, with integration serialized at the ArmedForce/manpower/spatial hotspot.
+
+## R1 finding and current umbrella design
+
+The earlier R1 review (`76ec4f0de74a48e03d1d0125976cfcc816d18bb8`) was `NEEDS_CHANGES` for E1 because the earlier umbrella-design blob `2e172f17e61e264f1129a00714ae3afeff5bd365` demanded an instantiated empty `LocalTopologyStore`. The corrected umbrella blob `15aaee09d3295cff81a48e166b620c89f5156346` changes that contract: P10 LocalTopology is `NOT_COMPOSED`, requires a typed profile/provider-absence witness, forbids manufacturing an empty owner, and rejects injection or populated P10 state (`PHASE12_E_TECHNICAL_DESIGN.md:226-237`). This matches the live inventory and the narrow design. The broad table’s shorthand “explicitly excluded or empty” is read under this explicit per-owner rule; it does not reinstate the R1 requirement. This review confirms the correction for this slice, not readiness of all remaining P12-E owner families. The umbrella document’s recorded P12 base is older than this review’s `04e7c3f` base; its relevant LocalTopology rule and referenced current profile evidence were rechecked here.
+
+## Demonstrability classification
+
+The candidate now records `NOT_MEANINGFUL_FOR_THIS_CHECKPOINT`, consistent with the current architecture’s Execution Model classification requirement (`EXECUTION_MODEL.md`, “Demonstrability assessment for future checkpoints”). The rationale covers the absent standalone user behavior/application read surface, the smallest automated owner round-trip/rejection proof, Unity/EditMode coupling, and the fact that Lab execution/published profile support is a separate follow-up rather than a hidden prerequisite. It distinguishes human demonstration from automated correctness validation and does not expand this owner slice. The classification applies to this bounded design; it does not certify an umbrella or future P12-E slice without its own current-base assessment.
+
+## Review conclusion and retained limits
+
+No architecture or product decision remains unresolved for this bounded owner group. It is suitable to proceed to the separate implementation workflow, whose required validation remains focused ArmedForce/manpower/spatial/Battle/P16/P17 coverage, ALL EditMode, official Smoke 5/5, and `git diff --check` on the eventual code candidate.
+
+The scope remains strictly limited to the three named owner snapshots and private staging. No `SimulationRuntime`, bootstrap, census, shared-epoch, P10, P16/P17, Battle transaction, P12-D assembler, P12-G publication, P12-A, or architecture work is authorized by this review. P12-E remains open; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked; Phase 12 remains open.
