@@ -1,5 +1,21 @@
 # P12-B blocker resolution and dependency plan
 
+## Current disposition — bounded P12-B completion promoted (2026-10-08)
+
+P12-B is `COMPLETE/PROMOTED` on current `codex/phase12/canonical`. The bounded
+completion closes the accepted evidence-closure, runtime-wide owner-thread/
+quiescence, and successful completed-boundary token obligations. The exact-tip
+implementation review is
+[`PHASE12_P12B_BOUNDED_COMPLETION_IMPLEMENTATION_REVIEW_R2.md`](PHASE12_P12B_BOUNDED_COMPLETION_IMPLEMENTATION_REVIEW_R2.md),
+and the retained validation manifest is
+[`P12BBoundedCompletionGate2R3/VALIDATION.md`](../validation/P12BBoundedCompletionGate2R3/VALIDATION.md).
+
+The dated census and blocker tables below preserve their historical findings
+and intermediate statuses; their pre-completion “still missing” rows are not
+current P12-B blockers. Use [`PHASE12_STATE.md`](../PHASE12_STATE.md) and the
+bounded-completion review/validation for delivered status. No P12-B scope is
+reopened by later partial P12-C promotions.
+
 **Historical status snapshot — 2026-10-06, canonical baseline
 `b0ab1ae2d8dc9205e58c33a8a8c7658de27bbec1`; superseded by the P12-E refresh
 at the end of this document:** the selected P9-B-only Daily-v1

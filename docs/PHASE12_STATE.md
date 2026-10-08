@@ -1,11 +1,67 @@
 # Phase 12 State — Save & Deterministic Continuation
 
 **Status:** PHASE 12 IN PROGRESS — P12-B COMPLETE/PROMOTED within its bounded
-profile-admission and completed-boundary lifecycle contract; the P12-C
-identity/sequence snapshot slice is PROMOTED as partial P12-C work; P12-A
-remains `WAIT_DEPENDENCY`. P13 remains `BLOCKED`.
+profile-admission and completed-boundary lifecycle contract; P12-C has its
+identity/sequence and owner-continuation composition slices PROMOTED, while
+P12-C remains partial; P12-A remains `WAIT_DEPENDENCY`. P13 remains `BLOCKED`.
 
-## Current canonical status — P12-C identity and sequence snapshot slice promoted (2026-10-07)
+## Current canonical status — P12-C owner-continuation composition slice promoted (2026-10-08)
+
+After refreshing `origin/codex/phase12/canonical`, the branch was fast-forwarded
+from `82125b8e20ca997226ede0069bc875472cf90430` to the reviewed composition
+candidate `4fb2721dc4bee8fd3d7543260a74252f9687d7a1`. Its implementation code
+tip is `4001c2471df9088e2e51e7a1420bfa0e9b385b88`, full tree
+`dc54747a3c64ab9189c1425e0a6d92eba38f33b7`, and validated `Assets` subtree
+`52b91d11785c2adc32d09abb21deb2e61a820fc2`. The exact-tip independent review
+is `VALIDATED_CANDIDATE` at `058bbbd2757ec9b464081a7a3e5fdacf7f89ce22` on
+`codex/phase12/P12COwnerContinuationIntegrationReviewRecord-4fb2721`; the
+candidate and review record are published on their named remote branches.
+
+The promoted slice carries the accepted P8-A geography snapshot/private
+reconstruction, P9-B genesis-manifest provenance snapshot/reconstruction, and
+the selected deterministic-random provider root. The prior promoted P12-C
+identity/sequence snapshot remains in history. The P9 manifest's complete
+`OutputOwners` list and the producer's existing canonical provenance records
+remain separate and unchanged; this slice does not alter P9 fingerprint
+generation.
+
+Validation remains bound to code tree `dc54747a3c64ab9189c1425e0a6d92eba38f33b7`:
+focused suites passed (spatial snapshot 7/7, P9 manifest 3/3, random root 7/7,
+bootstrap composition 26/26), ALL EditMode `2484/2484`, official Smoke `5/5`,
+SimulationRuntime LongRun `7/7`, and `git diff --check`. Exact source, XML,
+and log hashes are in
+[`PHASE12_P12C_OWNER_CONTINUATION_COMPOSITION_EVIDENCE.md`](design/PHASE12_P12C_OWNER_CONTINUATION_COMPOSITION_EVIDENCE.md).
+
+P12-B is already `COMPLETE/PROMOTED` within its accepted contract. The current
+canonical code and State include the reviewed evidence closure, supported
+owner/ingress and committed-write reconciliation, runtime-wide owner-thread/
+quiescence, and the token issued only after a successful completed boundary;
+the exact review and validation are linked below. This P12-C promotion does
+not reopen or broaden P12-B.
+
+### Refreshed dependency DAG
+
+- **P12-B:** COMPLETE/PROMOTED within its bounded profile-admission and
+  completed-boundary lifecycle contract.
+- **P12-C:** IN PROGRESS; the identity/sequence slice and the P8-A/P9-B/
+  deterministic-root composition slice are promoted. This candidate is partial
+  P12-C work and does not itself satisfy the complete P12-C dependency edge.
+- **P12-D and P12-E:** remain blocked until P12-C is complete; do not infer
+  readiness from this partial promotion.
+- **P12-F:** waits on P12-C, P12-D, and P12-E. Expedition remains deferred to
+  its documented P12-F scope.
+- **P12-G:** waits on P12-B through P12-F and a validated live-profile
+  inventory.
+- **P12-A:** remains `WAIT_DEPENDENCY` until every included owner has exact
+  export and staged hydration, the live profile inventory is validated, and
+  its separate implementation authorization is recorded.
+- **P13:** remains `BLOCKED` on its documented continuation and recoverable
+  causal-history prerequisites.
+
+Phase 12 remains open. This promotion establishes no profile-wide
+export/hydration, P12-A readiness, P13 readiness, or Phase closure.
+
+## Previous canonical status — P12-C identity and sequence snapshot slice promoted (2026-10-07)
 
 `codex/phase12/canonical` was fast-forwarded from
 `f23fe5a1c70dce8cb32a4ca6aa088820b3ad7279` to reviewed candidate tip

@@ -1,7 +1,7 @@
 # P12-C Owner Continuation Composition Candidate Evidence
 
 **Checkpoint:** P12-C — identity, genesis provenance, and deterministic roots.
-**Status:** Implementation candidate; exact integrated-tip review is pending. No canonical promotion or Phase closure is recorded here.
+**Status:** Promoted to `codex/phase12/canonical` as partial P12-C work at reviewed candidate tip `4fb2721dc4bee8fd3d7543260a74252f9687d7a1`; exact-tip implementation review is recorded at `058bbbd2757ec9b464081a7a3e5fdacf7f89ce22`. P12-C remains in progress; Phase 12 remains open.
 **Canonical base:** `codex/phase12/canonical` at `82125b8e20ca997226ede0069bc875472cf90430`.
 **Validated implementation commit/tree:** `4001c2471df9088e2e51e7a1420bfa0e9b385b88` / `dc54747a3c64ab9189c1425e0a6d92eba38f33b7`.
 **Integration branch:** `codex/phase12/P12COwnerContinuationIntegration-20261007`.
@@ -48,7 +48,7 @@ The following SHA-256 hashes identify the exact files. Each run used the validat
 | Official Smoke | 5/5 | `EditMode-20261008-010906-9a7a6f6cbda144549cc0aaaf19498b94.xml` — `623C831456596DAF9AE1650AC018D0534D7549784BFE5E22698B152AD7E9E2F4` | `EditMode-20261008-010906-9a7a6f6cbda144549cc0aaaf19498b94.log` — `81E413F0C1017AA0BD11F64B969768BE52EE652284EAE3F99D11955DA8938A62` |
 | `SimulationRuntimeLongRunTests` | 7/7 | `EditMode-20261008-010930-a8bbc0470ebd44d0b2061eb5c2363987.xml` — `43580B42DD42BF201C5BE65351C320BB03996A79F324538356F05C2F7AC26B5A` | `EditMode-20261008-010930-a8bbc0470ebd44d0b2061eb5c2363987.log` — `423E1320D4F8E6CD6676AD90972778DD5E3AF444198DF23ECB088B88FEC97B9A` |
 
-`git diff --check origin/codex/phase12/canonical HEAD` passed on the validated implementation commit. The independent exact-tip review of the integrated candidate remains a required next step.
+`git diff --check origin/codex/phase12/canonical HEAD` passed on the validated implementation commit. The exact-tip independent implementation review passed for candidate tip `4fb2721dc4bee8fd3d7543260a74252f9687d7a1`; its record is on the named review branch above. The candidate's canonical promotion is recorded in `docs/PHASE12_STATE.md`. This composition remains a partial P12-C slice and does not complete P12-C or unlock P12-D/E.
 
 ## Workspace notes
 

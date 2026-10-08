@@ -1,5 +1,7 @@
 # P12-C Identity Snapshot Candidate — Canonical Revalidation
 
+> Historical revalidation for superseded candidate `531d835f01a9070df42d54291ffde32387fb4358`, based on the 2026-09-29 canonical state. It does not describe the current P12-C composition candidate or P12-B readiness. Current promoted status and dependency state are recorded in [`PHASE12_STATE.md`](PHASE12_STATE.md); current composition evidence is in [`PHASE12_P12C_OWNER_CONTINUATION_COMPOSITION_EVIDENCE.md`](design/PHASE12_P12C_OWNER_CONTINUATION_COMPOSITION_EVIDENCE.md).
+
 ## Status
 
 **PRESERVE; REVALIDATE AND REINTEGRATE BEFORE PROMOTION.** The candidate's
