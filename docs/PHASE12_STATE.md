@@ -8,8 +8,10 @@ remains `BLOCKED`.
 
 ## Current P12-D status — Genealogy owner snapshot promoted (2026-10-08)
 
-The bounded Genealogy owner slice is promoted on `codex/phase12/canonical` at
-code `2b3de7cd13e6f35d35d5dece56eefb64c1fd972a`, with validated `Assets`
+`codex/phase12/canonical` was fast-forwarded from
+`0e786db8e6ed5ed937ff62e3f63258d8b73fd93c` to promotion tip
+`66ea303f8a49f0784130c79400f07dc30f54a63d`. The bounded Genealogy owner
+implementation is code `2b3de7cd13e6f35d35d5dece56eefb64c1fd972a`, with validated `Assets`
 tree `127bc9dc10c0e69312ae98748f04becbe2d8ceda`. Its exact-tip
 implementation review is PASS at review commit
 `9d101c50b8c6d1c161d741bcd71dd158008820f0`; design review of the current D

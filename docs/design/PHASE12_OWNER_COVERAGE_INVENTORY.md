@@ -282,11 +282,12 @@ by the selected defaults; re-audit them if the profile/effective configuration
 changes. The code-bearing composition is promoted to P12 canonical at
 `36e3064`; the intervening change only refreshed the P18 State pointer.
 
-**Current-base correction (2026-10-08):** P12 canonical is
-`0e786db8e6ed5ed937ff62e3f63258d8b73fd93c`; its current State marks P12-B and
-P12-C complete within their bounded contracts and permits current-base D/E
-revalidation. Older readiness statements and the City D/E allocation in the
-baseline table below are historical. For current Daily-v1 owner assignment,
+**Current-base correction (2026-10-08):** P12 canonical advanced to
+`66ea303f8a49f0784130c79400f07dc30f54a63d`; its current State marks P12-B
+and P12-C complete within their bounded contracts, records the promoted
+Genealogy owner slice, and permits continued isolated D/E work. Older
+readiness statements and the City D/E allocation in the baseline table below
+are historical. For current Daily-v1 owner assignment,
 use the reviewed source crosswalk in `PHASE12_D_TECHNICAL_DESIGN.md` and
 `PHASE12_E_TECHNICAL_DESIGN.md`. This inventory remains evidence; it does not
 claim whole-phase export, hydration, or closure.
