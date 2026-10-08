@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 
 public sealed class PersistentConflictOwnerSnapshotTests
@@ -178,6 +179,13 @@ public sealed class PersistentConflictOwnerSnapshotTests
 
         AssertCaptureRejected(world.Conflicts, token, correct.ToArray(),
             PersistentConflictOwnerSnapshotFailureCode.InvalidCaptureContext);
+        SimulationRuntimeAdmissionContext unsupportedProfileContext =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        typeof(SimulationRuntimeAdmissionContext)
+            .GetField("<Profile>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(unsupportedProfileContext, SimulationRuntimeAdmissionProfile.None);
+        AssertCaptureRejected(world.Conflicts, CreateToken(correct, admissionContext: unsupportedProfileContext), correct,
+            PersistentConflictOwnerSnapshotFailureCode.UnsupportedProfile);
         AssertCaptureRejected(world.Conflicts, CreateToken(correct, completedCoreSequence: 0L), correct,
             PersistentConflictOwnerSnapshotFailureCode.UnsupportedProfile);
         IReadOnlyList<OwnerSectionCensusSnapshot> wrongRole = CreateOwnerSections(
@@ -229,6 +237,8 @@ public sealed class PersistentConflictOwnerSnapshotTests
             PersistentConflictOwnerSnapshotFailureCode.UnsupportedSchema);
         AssertStageRejected(new PersistentConflictOwnerSnapshot(valid.SchemaVersion, 1, -1L, valid.Records), targetForces,
             PersistentConflictOwnerSnapshotFailureCode.InvalidRevision);
+        AssertStageRejected(new PersistentConflictOwnerSnapshot(valid.SchemaVersion, -1, valid.Revision, valid.Records), targetForces,
+            PersistentConflictOwnerSnapshotFailureCode.InvalidCardinality);
         AssertStageRejected(new PersistentConflictOwnerSnapshot(valid.SchemaVersion, 2, valid.Revision, valid.Records), targetForces,
             PersistentConflictOwnerSnapshotFailureCode.InvalidCardinality);
 
@@ -347,11 +357,12 @@ public sealed class PersistentConflictOwnerSnapshotTests
 
     private static DailyCaptureEligibilityToken CreateToken(
         IReadOnlyList<OwnerSectionCensusSnapshot> sections,
-        long completedCoreSequence = 1L)
+        long completedCoreSequence = 1L,
+        SimulationRuntimeAdmissionContext admissionContext = null)
     {
         return new DailyCaptureEligibilityToken(
             new object(),
-            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            admissionContext ?? SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
             new EffectiveSimulationConfiguration(null, null, null, null, null),
             new SimulationCalendar(CalendarDefinition.CreateDefault()),
             SimulationRuntimeCompositionProfile.Standard,

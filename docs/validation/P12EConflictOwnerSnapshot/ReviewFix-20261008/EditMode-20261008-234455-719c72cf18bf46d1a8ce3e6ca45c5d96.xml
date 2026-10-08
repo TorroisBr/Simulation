@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="7" result="Passed" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 23:45:04Z" end-time="2026-10-08 23:45:04Z" duration="0,0652285">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2635" result="Passed" start-time="2026-10-08 23:45:04Z" end-time="2026-10-08 23:45:04Z" duration="0.065229" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3886" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12d-owner-package-review-d1fef9a/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2635" result="Passed" start-time="2026-10-08 23:45:04Z" end-time="2026-10-08 23:45:04Z" duration="0.051988" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="131988" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2844" name="PersistentConflictOwnerSnapshotTests" fullname="PersistentConflictOwnerSnapshotTests" classname="PersistentConflictOwnerSnapshotTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-08 23:45:04Z" end-time="2026-10-08 23:45:04Z" duration="0.037021" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2849" name="CaptureRejectsTokenAndRequiredWitnessMismatches" fullname="PersistentConflictOwnerSnapshotTests.CaptureRejectsTokenAndRequiredWitnessMismatches" methodname="CaptureRejectsTokenAndRequiredWitnessMismatches" classname="PersistentConflictOwnerSnapshotTests" runstate="Runnable" seed="570083282" result="Passed" start-time="2026-10-08 23:45:04Z" end-time="2026-10-08 23:45:04Z" duration="0.013600" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2845" name="EmptySnapshot_CapturesExactRequiredWitnessAndStagesExactZero" fullname="PersistentConflictOwnerSnapshotTests.EmptySnapshot_CapturesExactRequiredWitnessAndStagesExactZero" methodname="EmptySnapshot_CapturesExactRequiredWitnessAndStagesExactZero" classname="PersistentConflictOwnerSnapshotTests" runstate="Runnable" seed="615932752" result="Passed" start-time="2026-10-08 23:45:04Z" end-time="2026-10-08 23:45:04Z" duration="0.003166" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2848" name="FaultedMutationGuardRejectsAllThreeWritersWithoutChangingRows" fullname="PersistentConflictOwnerSnapshotTests.FaultedMutationGuardRejectsAllThreeWritersWithoutChangingRows" methodname="FaultedMutationGuardRejectsAllThreeWritersWithoutChangingRows" classname="PersistentConflictOwnerSnapshotTests" runstate="Runnable" seed="880223112" result="Passed" start-time="2026-10-08 23:45:04Z" end-time="2026-10-08 23:45:04Z" duration="0.002178" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2846" name="PopulatedSnapshot_RoundTripsDetachedRowsLifecycleBindingsAndExactRevision" fullname="PersistentConflictOwnerSnapshotTests.PopulatedSnapshot_RoundTripsDetachedRowsLifecycleBindingsAndExactRevision" methodname="PopulatedSnapshot_RoundTripsDetachedRowsLifecycleBindingsAndExactRevision" classname="PersistentConflictOwnerSnapshotTests" runstate="Runnable" seed="987186114" result="Passed" start-time="2026-10-08 23:45:04Z" end-time="2026-10-08 23:45:04Z" duration="0.004952" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2851" name="StagePreservesSaturatedRevisionAndWritesFailWithoutMutation" fullname="PersistentConflictOwnerSnapshotTests.StagePreservesSaturatedRevisionAndWritesFailWithoutMutation" methodname="StagePreservesSaturatedRevisionAndWritesFailWithoutMutation" classname="PersistentConflictOwnerSnapshotTests" runstate="Runnable" seed="2049552229" result="Passed" start-time="2026-10-08 23:45:04Z" end-time="2026-10-08 23:45:04Z" duration="0.000761" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2850" name="StageRejectsMalformedIdentityRelationshipsAndCardinalityWithoutReturningPartialOwner" fullname="PersistentConflictOwnerSnapshotTests.StageRejectsMalformedIdentityRelationshipsAndCardinalityWithoutReturningPartialOwner" methodname="StageRejectsMalformedIdentityRelationshipsAndCardinalityWithoutReturningPartialOwner" classname="PersistentConflictOwnerSnapshotTests" runstate="Runnable" seed="2104340774" result="Passed" start-time="2026-10-08 23:45:04Z" end-time="2026-10-08 23:45:04Z" duration="0.001132" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2847" name="SupportedWritersAdvanceOnceAndRejectedWritesPreserveOwnerValues" fullname="PersistentConflictOwnerSnapshotTests.SupportedWritersAdvanceOnceAndRejectedWritesPreserveOwnerValues" methodname="SupportedWritersAdvanceOnceAndRejectedWritesPreserveOwnerValues" classname="PersistentConflictOwnerSnapshotTests" runstate="Runnable" seed="769529435" result="Passed" start-time="2026-10-08 23:45:04Z" end-time="2026-10-08 23:45:04Z" duration="0.001612" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
