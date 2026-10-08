@@ -1,7 +1,7 @@
 # P12-E technical-design review — current canonical content
 
-**Review ID:** P12E-DESIGN-CURRENT-DA2A738-R1  
-**Outcome:** `NEEDS_CHANGES` — one exact-profile inconsistency blocks approval of the design. The remaining reviewed contract is aligned with current P12 dependencies, owner boundaries, and stated exclusions.  
+**Review ID:** P12E-DESIGN-CURRENT-DA2A738-R1
+**Outcome:** `NEEDS_CHANGES` — one exact-profile inconsistency blocks approval of the design. The remaining reviewed contract is aligned with current P12 dependencies, owner boundaries, and stated exclusions.
 **Readiness:** No P12-E owner slice is `READY_FOR_IMPLEMENTATION`. This review authorizes no implementation, canonical promotion, P12-A integration, or Phase closure.
 
 ## Exact content reviewed
