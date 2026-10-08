@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="7" result="Passed" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 02:20:17Z" end-time="2026-10-08 02:20:18Z" duration="0,2179182">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2535" result="Passed" start-time="2026-10-08 02:20:17Z" end-time="2026-10-08 02:20:18Z" duration="0.217918" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3768" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12c-root-coherence/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2535" result="Passed" start-time="2026-10-08 02:20:18Z" end-time="2026-10-08 02:20:18Z" duration="0.201189" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="107632" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3499" name="SpatialAuthorityContinuationSnapshotTests" fullname="SpatialAuthorityContinuationSnapshotTests" classname="SpatialAuthorityContinuationSnapshotTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-08 02:20:18Z" end-time="2026-10-08 02:20:18Z" duration="0.187057" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3501" name="CapturedSnapshotRemainsDetachedWhenItsSourceOwnerChanges" fullname="SpatialAuthorityContinuationSnapshotTests.CapturedSnapshotRemainsDetachedWhenItsSourceOwnerChanges" methodname="CapturedSnapshotRemainsDetachedWhenItsSourceOwnerChanges" classname="SpatialAuthorityContinuationSnapshotTests" runstate="Runnable" seed="383022365" result="Passed" start-time="2026-10-08 02:20:18Z" end-time="2026-10-08 02:20:18Z" duration="0.142766" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3506" name="CaptureRejectsCrossingsPassageBarriersAndLocalTopologyBindings" fullname="SpatialAuthorityContinuationSnapshotTests.CaptureRejectsCrossingsPassageBarriersAndLocalTopologyBindings" methodname="CaptureRejectsCrossingsPassageBarriersAndLocalTopologyBindings" classname="SpatialAuthorityContinuationSnapshotTests" runstate="Runnable" seed="1968247381" result="Passed" start-time="2026-10-08 02:20:18Z" end-time="2026-10-08 02:20:18Z" duration="0.010770" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3505" name="CaptureRejectsInvalidOwnerInvariantsWithoutChangingThatOwner" fullname="SpatialAuthorityContinuationSnapshotTests.CaptureRejectsInvalidOwnerInvariantsWithoutChangingThatOwner" methodname="CaptureRejectsInvalidOwnerInvariantsWithoutChangingThatOwner" classname="SpatialAuthorityContinuationSnapshotTests" runstate="Runnable" seed="1090520546" result="Passed" start-time="2026-10-08 02:20:18Z" end-time="2026-10-08 02:20:18Z" duration="0.003140" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3502" name="CaptureRejectsWrongAdmissionAndGenesisIdentitiesIndependently" fullname="SpatialAuthorityContinuationSnapshotTests.CaptureRejectsWrongAdmissionAndGenesisIdentitiesIndependently" methodname="CaptureRejectsWrongAdmissionAndGenesisIdentitiesIndependently" classname="SpatialAuthorityContinuationSnapshotTests" runstate="Runnable" seed="2068613019" result="Passed" start-time="2026-10-08 02:20:18Z" end-time="2026-10-08 02:20:18Z" duration="0.002484" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3500" name="SelectedDailyV1Geography_CapturesExactImmutableFactsAndStagesAnEquivalentPrivateOwner" fullname="SpatialAuthorityContinuationSnapshotTests.SelectedDailyV1Geography_CapturesExactImmutableFactsAndStagesAnEquivalentPrivateOwner" methodname="SelectedDailyV1Geography_CapturesExactImmutableFactsAndStagesAnEquivalentPrivateOwner" classname="SpatialAuthorityContinuationSnapshotTests" runstate="Runnable" seed="1888624671" result="Passed" start-time="2026-10-08 02:20:18Z" end-time="2026-10-08 02:20:18Z" duration="0.009213" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3504" name="StagingRejectsMalformedCardinalityIdentityAnchorConventionAndScaleFacts" fullname="SpatialAuthorityContinuationSnapshotTests.StagingRejectsMalformedCardinalityIdentityAnchorConventionAndScaleFacts" methodname="StagingRejectsMalformedCardinalityIdentityAnchorConventionAndScaleFacts" classname="SpatialAuthorityContinuationSnapshotTests" runstate="Runnable" seed="344298211" result="Passed" start-time="2026-10-08 02:20:18Z" end-time="2026-10-08 02:20:18Z" duration="0.005924" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3503" name="StagingRejectsWrongSchemaAdmissionAndGenesisIdentitiesIndependently" fullname="SpatialAuthorityContinuationSnapshotTests.StagingRejectsWrongSchemaAdmissionAndGenesisIdentitiesIndependently" methodname="StagingRejectsWrongSchemaAdmissionAndGenesisIdentitiesIndependently" classname="SpatialAuthorityContinuationSnapshotTests" runstate="Runnable" seed="1037373659" result="Passed" start-time="2026-10-08 02:20:18Z" end-time="2026-10-08 02:20:18Z" duration="0.003029" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

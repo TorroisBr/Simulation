@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="4" result="Passed" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 02:19:56Z" end-time="2026-10-08 02:19:56Z" duration="0,0489413">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2535" result="Passed" start-time="2026-10-08 02:19:56Z" end-time="2026-10-08 02:19:56Z" duration="0.048941" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3768" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12c-root-coherence/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2535" result="Passed" start-time="2026-10-08 02:19:56Z" end-time="2026-10-08 02:19:56Z" duration="0.039933" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="28860" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2055" name="IdentitySequenceSnapshotTests" fullname="IdentitySequenceSnapshotTests" classname="IdentitySequenceSnapshotTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-10-08 02:19:56Z" end-time="2026-10-08 02:19:56Z" duration="0.025437" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2057" name="RuntimeIdAllocatorSnapshot_IsDetachedAndImmutable" fullname="IdentitySequenceSnapshotTests.RuntimeIdAllocatorSnapshot_IsDetachedAndImmutable" methodname="RuntimeIdAllocatorSnapshot_IsDetachedAndImmutable" classname="IdentitySequenceSnapshotTests" runstate="Runnable" seed="292640081" result="Passed" start-time="2026-10-08 02:19:56Z" end-time="2026-10-08 02:19:56Z" duration="0.010231" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2058" name="RuntimeIdAllocatorSnapshot_RejectsMalformedFamilySetsAndCountersWithoutMutatingAnActiveOwner" fullname="IdentitySequenceSnapshotTests.RuntimeIdAllocatorSnapshot_RejectsMalformedFamilySetsAndCountersWithoutMutatingAnActiveOwner" methodname="RuntimeIdAllocatorSnapshot_RejectsMalformedFamilySetsAndCountersWithoutMutatingAnActiveOwner" classname="IdentitySequenceSnapshotTests" runstate="Runnable" seed="594472241" result="Passed" start-time="2026-10-08 02:19:56Z" end-time="2026-10-08 02:19:56Z" duration="0.003783" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2056" name="RuntimeIdAllocatorSnapshot_RestoresAllFourteenFamiliesAtExactNextValues" fullname="IdentitySequenceSnapshotTests.RuntimeIdAllocatorSnapshot_RestoresAllFourteenFamiliesAtExactNextValues" methodname="RuntimeIdAllocatorSnapshot_RestoresAllFourteenFamiliesAtExactNextValues" classname="IdentitySequenceSnapshotTests" runstate="Runnable" seed="1810982185" result="Passed" start-time="2026-10-08 02:19:56Z" end-time="2026-10-08 02:19:56Z" duration="0.001328" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2059" name="SimulationRecordSequenceSnapshot_RestoresExactNextValueAndRejectsInvalidValues" fullname="IdentitySequenceSnapshotTests.SimulationRecordSequenceSnapshot_RestoresExactNextValueAndRejectsInvalidValues" methodname="SimulationRecordSequenceSnapshot_RestoresExactNextValueAndRejectsInvalidValues" classname="IdentitySequenceSnapshotTests" runstate="Runnable" seed="1894114461" result="Passed" start-time="2026-10-08 02:19:56Z" end-time="2026-10-08 02:19:56Z" duration="0.000630" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

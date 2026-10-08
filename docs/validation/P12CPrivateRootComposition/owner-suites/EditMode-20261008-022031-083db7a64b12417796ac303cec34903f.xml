@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="7" result="Passed" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 02:20:40Z" end-time="2026-10-08 02:20:40Z" duration="0,082707">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2535" result="Passed" start-time="2026-10-08 02:20:40Z" end-time="2026-10-08 02:20:40Z" duration="0.082707" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3768" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12c-root-coherence/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2535" result="Passed" start-time="2026-10-08 02:20:40Z" end-time="2026-10-08 02:20:40Z" duration="0.069401" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="21036" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="1605" name="DeterministicRandomRootSnapshotTests" fullname="DeterministicRandomRootSnapshotTests" classname="DeterministicRandomRootSnapshotTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-08 02:20:40Z" end-time="2026-10-08 02:20:40Z" duration="0.022952" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="1606" name="CaptureSnapshotRecordsSupportedMetadataAndExactSeed" fullname="DeterministicRandomRootSnapshotTests.CaptureSnapshotRecordsSupportedMetadataAndExactSeed" methodname="CaptureSnapshotRecordsSupportedMetadataAndExactSeed" classname="DeterministicRandomRootSnapshotTests" runstate="Runnable" seed="1128321614" result="Passed" start-time="2026-10-08 02:20:40Z" end-time="2026-10-08 02:20:40Z" duration="0.009900" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1613" name="SnapshotIsDetachedImmutableAndCaptureOrStagingDoesNotAdvanceSource" fullname="DeterministicRandomRootSnapshotTests.SnapshotIsDetachedImmutableAndCaptureOrStagingDoesNotAdvanceSource" methodname="SnapshotIsDetachedImmutableAndCaptureOrStagingDoesNotAdvanceSource" classname="DeterministicRandomRootSnapshotTests" runstate="Runnable" seed="314007189" result="Passed" start-time="2026-10-08 02:20:40Z" end-time="2026-10-08 02:20:40Z" duration="0.001094" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="1611" name="StagedSourcePreservesEveryBoundarySeed" fullname="DeterministicRandomRootSnapshotTests.StagedSourcePreservesEveryBoundarySeed" classname="DeterministicRandomRootSnapshotTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-10-08 02:20:40Z" end-time="2026-10-08 02:20:40Z" duration="0.002055" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="1608" name="StagedSourcePreservesEveryBoundarySeed(int.MinValue)" fullname="DeterministicRandomRootSnapshotTests.StagedSourcePreservesEveryBoundarySeed(int.MinValue)" methodname="StagedSourcePreservesEveryBoundarySeed" classname="DeterministicRandomRootSnapshotTests" runstate="Runnable" seed="206013099" result="Passed" start-time="2026-10-08 02:20:40Z" end-time="2026-10-08 02:20:40Z" duration="0.000276" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="1609" name="StagedSourcePreservesEveryBoundarySeed(0)" fullname="DeterministicRandomRootSnapshotTests.StagedSourcePreservesEveryBoundarySeed(0)" methodname="StagedSourcePreservesEveryBoundarySeed" classname="DeterministicRandomRootSnapshotTests" runstate="Runnable" seed="1429587312" result="Passed" start-time="2026-10-08 02:20:40Z" end-time="2026-10-08 02:20:40Z" duration="0.000056" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="1610" name="StagedSourcePreservesEveryBoundarySeed(int.MaxValue)" fullname="DeterministicRandomRootSnapshotTests.StagedSourcePreservesEveryBoundarySeed(int.MaxValue)" methodname="StagedSourcePreservesEveryBoundarySeed" classname="DeterministicRandomRootSnapshotTests" runstate="Runnable" seed="1881756264" result="Passed" start-time="2026-10-08 02:20:40Z" end-time="2026-10-08 02:20:40Z" duration="0.000028" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="1607" name="StagedSourcePreservesSeedAndKeyedOutputs" fullname="DeterministicRandomRootSnapshotTests.StagedSourcePreservesSeedAndKeyedOutputs" methodname="StagedSourcePreservesSeedAndKeyedOutputs" classname="DeterministicRandomRootSnapshotTests" runstate="Runnable" seed="1622352841" result="Passed" start-time="2026-10-08 02:20:40Z" end-time="2026-10-08 02:20:40Z" duration="0.000518" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1612" name="UnsupportedMetadataFailsWithoutChangingActiveSource" fullname="DeterministicRandomRootSnapshotTests.UnsupportedMetadataFailsWithoutChangingActiveSource" methodname="UnsupportedMetadataFailsWithoutChangingActiveSource" classname="DeterministicRandomRootSnapshotTests" runstate="Runnable" seed="1933334927" result="Passed" start-time="2026-10-08 02:20:40Z" end-time="2026-10-08 02:20:40Z" duration="0.000521" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

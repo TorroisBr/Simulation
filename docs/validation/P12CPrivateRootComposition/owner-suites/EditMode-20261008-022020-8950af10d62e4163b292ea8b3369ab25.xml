@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="3" result="Passed" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 02:20:29Z" end-time="2026-10-08 02:20:29Z" duration="0,2137514">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2535" result="Passed" start-time="2026-10-08 02:20:29Z" end-time="2026-10-08 02:20:29Z" duration="0.213751" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3768" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12c-root-coherence/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2535" result="Passed" start-time="2026-10-08 02:20:29Z" end-time="2026-10-08 02:20:29Z" duration="0.200799" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="42804" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2502" name="P12CP9GenesisManifestSnapshotTests" fullname="P12CP9GenesisManifestSnapshotTests" classname="P12CP9GenesisManifestSnapshotTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-10-08 02:20:29Z" end-time="2026-10-08 02:20:29Z" duration="0.185320" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2503" name="CaptureDetachesTheCompleteP9BManifestAndStagesItWithoutLiveAssets" fullname="P12CP9GenesisManifestSnapshotTests.CaptureDetachesTheCompleteP9BManifestAndStagesItWithoutLiveAssets" methodname="CaptureDetachesTheCompleteP9BManifestAndStagesItWithoutLiveAssets" classname="P12CP9GenesisManifestSnapshotTests" runstate="Runnable" seed="1303303425" result="Passed" start-time="2026-10-08 02:20:29Z" end-time="2026-10-08 02:20:29Z" duration="0.155008" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2505" name="RejectsValidCopiedFieldsThatDifferFromRetainedP9Records" fullname="P12CP9GenesisManifestSnapshotTests.RejectsValidCopiedFieldsThatDifferFromRetainedP9Records" methodname="RejectsValidCopiedFieldsThatDifferFromRetainedP9Records" classname="P12CP9GenesisManifestSnapshotTests" runstate="Runnable" seed="1380719299" result="Passed" start-time="2026-10-08 02:20:29Z" end-time="2026-10-08 02:20:29Z" duration="0.009242" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2504" name="SnapshotCopiesMutableInputsAndRejectsIndependentProfileAndLineageMismatches" fullname="P12CP9GenesisManifestSnapshotTests.SnapshotCopiesMutableInputsAndRejectsIndependentProfileAndLineageMismatches" methodname="SnapshotCopiesMutableInputsAndRejectsIndependentProfileAndLineageMismatches" classname="P12CP9GenesisManifestSnapshotTests" runstate="Runnable" seed="1542048580" result="Passed" start-time="2026-10-08 02:20:29Z" end-time="2026-10-08 02:20:29Z" duration="0.009967" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
