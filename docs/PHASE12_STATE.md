@@ -6,6 +6,26 @@ COMPLETE/PROMOTED within its accepted identity, genesis-provenance, and
 deterministic-root continuation scope; P12-A remains `WAIT_DEPENDENCY`. P13
 remains `BLOCKED`.
 
+## P12-D accepted Daily-v1 owner package complete (2026-10-08)
+
+P12 canonical advanced from `a4ce0abcf261226f4b52fbacc8df9ef8f67a0de2` through the reviewed owner-package candidate and exact-tip review record to `329c75acc6f8b244912f9c2550c021859f9b2cc3`. The implementation candidate was `6c43f18e76e6d7c80307890c64a30e7c3e541da0`; its reviewed Git tree is `346dbe8a387753b4b5bfb7cc0a968d0e73bdcf50` and its `Assets` tree is `86df24ff56a945160da517b6f62325ba1f8af8dc`. Production code is `aaf727b0f32cedf93aa895aa93461ae6a6a2d9e9`; integrated coverage is `d1244b200305e494cfbc38d53e1418a1c8007110`. Independent exact-tip review PASS is recorded in [`design/PHASE12_D_OWNER_PACKAGE_ASSEMBLY_IMPLEMENTATION_REVIEW_6C43F18.md`](design/PHASE12_D_OWNER_PACKAGE_ASSEMBLY_IMPLEMENTATION_REVIEW_6C43F18.md) at canonical tip `329c75a`.
+
+The accepted Daily-v1 P12-D owner and relation graph is now assembled into one private staged package. It includes the selected City and nested market/account/stock/population facts, the merged NPC D/F projections, Person, Genealogy, legacy SpatialNetwork, the exact-empty ExplorableSite boundary, and the nested receipt-owner census. The coordinator binds snapshots to the same completed-boundary token, stamp, and exact owner-section vector; validates cross-owner identity, references, ordering, and reciprocal relations; and returns no partial package when staging fails. The package remains private and unpublished.
+
+The exact reviewed tree passed P12-D focused coverage 26/26, ALL EditMode 2628/2628, official Smoke 5/5, and `git diff --check`. Hashes and retained validation artifacts are recorded in [`validation/P12DOwnerPackageAssembly/VALIDATION.md`](validation/P12DOwnerPackageAssembly/VALIDATION.md). The current-base design review and architecture freshness revalidation remain recorded at `8a68a003601d9197e63fe4fe5fc567eab6a4b58e` and `c34e1de4c902f18665207865f483784ca1b3d9ce`.
+
+**P12-D is COMPLETE/PROMOTED within this accepted Daily-v1 owner-export and private staged-hydration boundary.** This does not deliver whole B–F graph composition, runtime/bootstrap publication, final guard binding, continuation parity, or P12-G atomic publication; those remain P12-G obligations. Daily-v1 still requires the selected ExplorableSite section to be exactly empty. Populated site export is outside this profile. Earlier State text saying that D package assembly, whole-D integration, or other accepted D owner coverage remains outstanding is superseded by this promotion record.
+
+### Refreshed P12 dependency DAG
+
+- P12-B and P12-C remain COMPLETE/PROMOTED within their accepted bounded contracts.
+- P12-D is COMPLETE/PROMOTED within the boundary above.
+- P12-E remains IN PROGRESS. The Battle and ArmedForce/manpower/position slices remain promoted. The existing Conflict owner-snapshot candidate was based on prior canonical `a4ce0ab`; its focused 7/7 result is exploratory evidence only. Recompose it on `329c75a`, revalidate current-base design and integrated code, then complete required validation and exact-tip review before promotion.
+- P12-F waits on P12-E; its P12-C and P12-D dependencies are satisfied.
+- P12-G waits on P12-B through P12-F and validated live-profile inventory.
+- P12-A remains WAIT_DEPENDENCY pending complete included-owner export/staged hydration, validated live inventory, and separate implementation authorization. P13 remains BLOCKED on its explicit continuation prerequisites. Phase 12 remains open.
+
+This update does not claim profile-wide export/hydration, capture eligibility beyond the accepted B boundary contract, P12-A/P13 readiness, or Phase 12 closure.
 ## P12-D NPC D/F root owner snapshot — bounded checkpoint promotion record (2026-10-08)
 
 The refreshed P12 canonical base for this candidate bundle is
