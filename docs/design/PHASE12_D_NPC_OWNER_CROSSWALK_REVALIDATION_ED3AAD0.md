@@ -2,8 +2,8 @@
 
 **Status:** Current-base design/evidence revalidation candidate; requires independent exact-tip document review. No NPC export/staging code is implemented by this record.
 
-**P12 canonical reviewed:** `ed3aad0bcf98fc1b709b6bc632452689448b8803`  
-**Architecture authority:** `47eff220c7ce00f6e7c759bdc2b76780bb46f628`  
+**P12 canonical reviewed:** `ed3aad0bcf98fc1b709b6bc632452689448b8803`
+**Architecture authority:** `47eff220c7ce00f6e7c759bdc2b76780bb46f628`
 **Repository:** `TorroisBr/Simulation`
 
 ## Decision
