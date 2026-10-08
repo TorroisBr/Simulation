@@ -7,7 +7,7 @@
 
 ## Exact revisions reviewed
 
-- Candidate branch: `codex/phase12/P12DCityProfileBoundaryCorrection`
+- Candidate branch at review start: `codex/phase12/P12DCityProfileBoundaryCorrection`
 - Candidate commit: `27d30d02f4a9ae4e873c395b6f34d2e804e953d8`
 - Candidate tree: `f6aa2df3ee5a64e40fdbe29d291b3f2ffd711ce8`
 - Candidate design blob: `f42ba665f1c777df1098681cbb24f2c926bf11b2`
@@ -18,7 +18,7 @@
 - Referenced City snapshot proposal: `837bcdafa736cc15ef7ecba0e6c20bddfaa1ff7f`.
 - Current P12 State records the P12-E typed LocalTopology correction review at `cdea870ef9eeb27603d021bac97ec56a81856617`, on review branch tip `d40e222affe67690287887195dfdc425798cd7e1`.
 
-Remote preflight confirmed P12 canonical remains at the stated base and the candidate branch remains at the reviewed candidate. The review branch was already present at the exact candidate tip; this record adds only a review document.
+At review start, remote preflight confirmed the candidate branch at the exact candidate commit and P12 canonical at the stated base. Final remote-ref verification found that the candidate branch no longer appeared as a remote ref; the reviewed commit remains the base of the separate review branch, preserving the exact reviewed content. The review branch adds only review documentation.
 
 ## Findings
 
