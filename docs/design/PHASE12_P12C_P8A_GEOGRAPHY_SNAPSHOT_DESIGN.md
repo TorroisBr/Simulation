@@ -20,16 +20,18 @@ The design owns only P8-A geography facts currently held by `SpatialAuthoritySto
 
 Schema version 1 carries:
 
-- the selected profile contract identity and owner snapshot schema version;
+- `P12AdmissionProfile`, the existing `SimulationRuntimeAdmissionProfile` value `UnityBootstrapDailyV1`, supplied by the P12 coordinator;
+- `P9ProfileContractIdentity` and `P9ProfileSchemaVersion`, separately set to `SimulationGenesisPipeline.GeographyProfileContractIdentity` (`unity-authored-bootstrap/authored-geography-v1`) and `2` from the admitted P9-B manifest;
+- the P8 owner snapshot schema version (`1`);
 - source owner revision;
 - coordinate convention version and canonical order;
 - the complete ordered Hex list: stable `HexId`, axial `q/r`, `TerrainDefinitionId`, and authored terrain revision token;
 - the complete ordered Location list: stable `LocationId` and its `AnchorHexId`;
 - scale context: resolved convention identity, source identity/version, exact decimal distance per neighbor step, and unit.
 
-DTO construction copies all lists and stores primitive/value data. No source collection or mutable owner object is retained. Records are ordered by the authority's existing stable ordering. Nulls, blank identities, invalid numeric values, and unrecognized schema/profile identity are rejected. Typed IDs are reconstructed from their exact recorded values; they are never reallocated or inferred.
+DTO construction copies all lists and stores primitive/value data. No source collection or mutable owner object is retained. Records are ordered by the authority's existing stable ordering. Capture/staging requires the P12 admission profile enum to be exactly `SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1`; it separately requires the P9 profile identity/schema above. The P12 coordinator supplies both from the admitted runtime and its P9-B manifest, and later aggregate composition cross-checks the saved P9 identity/schema against the separately staged manifest. Reject nulls, blank identities, invalid numeric values, and unsupported P8 snapshot schema. Typed IDs are reconstructed from their exact recorded values; they are never reallocated or inferred.
 
-For the current `UnityBootstrap-Daily-v1` section, capture requires exactly one geographic Hex, exactly one Location, a present valid scale context, and source owner revision `1`. This admits the single authored geography composition. A future supported P8 mutation that changes this owner revision requires a new reviewed schema/contract before a later revision may be accepted; the hydrator must not silently normalize the revision or claim to preserve it when the current owner API cannot set it.
+For the current P12 admission profile `UnityBootstrap-Daily-v1` (`SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1`) and P9-B genesis contract `unity-authored-bootstrap/authored-geography-v1` schema `2`, capture requires exactly one geographic Hex, exactly one Location, a present valid scale context, and source owner revision `1`. These are distinct recorded identities: the P12 coordinator validates the admission profile, this owner snapshot records both, and the aggregate coordinator verifies they agree with the P9 manifest snapshot. This admits the single authored geography composition. A future supported P8 mutation that changes this owner revision requires a new reviewed schema/contract before a later revision may be accepted; the hydrator must not silently normalize the revision or claim to preserve it when the current owner API cannot set it.
 
 ## Exact capture rules
 
@@ -49,7 +51,7 @@ The capture helper returns either a complete immutable snapshot or a typed failu
 
 ## Private staged reconstruction
 
-The hydrator validates snapshot schema and profile identity, exact cardinality, owner revision, typed IDs, coordinate/terrain/anchor relationships, decimal scale, and deterministic ordering before exposing a result. It then creates a new private `SpatialAuthorityStore`, constructs one `SpatialGeographyDefinition` from copied values, and calls the existing atomic `TryComposeGeography` on that empty owner.
+The hydrator validates owner snapshot schema `1`, exact P12 admission profile enum, exact P9 profile identity/schema `2`, exact cardinality, owner revision, typed IDs, coordinate/terrain/anchor relationships, decimal scale, and deterministic ordering before exposing a result. It does not equate the P12 runtime profile enum with the separate P9 genesis profile contract. It then creates a new private `SpatialAuthorityStore`, constructs one `SpatialGeographyDefinition` from copied values, and calls the existing atomic `TryComposeGeography` on that empty owner.
 
 The staged owner must pass `ValidateInvariants()`, have revision equal to the snapshot's recorded revision, and compare equal across every exported fact. The equality comparison includes IDs, `q/r`, terrain identity/revision, Location anchor, convention/order, full scale context, cardinality, and all required-empty collections. Any exception, validation failure, revision mismatch, or semantic mismatch discards the private staged owner and returns failure with no owner result. No runtime or public authority reference is published by this helper; the future P12-G/coordinator performs one publication only after whole-graph validation.
 
@@ -64,7 +66,7 @@ Required focused evidence:
 1. Capture the selected Daily-v1 profile and assert the exact authored facts listed above, cardinality, owner identity supplied by the caller, and source revision.
 2. Mutate/replace source lists or references after capture where a test fixture permits it and prove the snapshot remains an independent immutable copy.
 3. Reconstruct into a fresh private store and compare every fact, owner revision, and invariant; prove the source owner is unchanged.
-4. Reject wrong/unsupported schema and profile identity, wrong cardinality, missing/duplicate/blank IDs, malformed coordinates/terrain/anchor, invalid scale, wrong owner revision, invalid owner invariants, and every excluded nonempty crossing, passage, barrier, or local-topology binding fact.
+4. Reject wrong/unsupported owner snapshot schema, P12 admission profile enum, P9 contract identity, or P9 profile schema independently; also reject wrong cardinality, missing/duplicate/blank IDs, malformed coordinates/terrain/anchor, invalid scale, wrong owner revision, invalid owner invariants, and every excluded nonempty crossing, passage, barrier, or local-topology binding fact.
 5. For every rejection, assert no partial snapshot or staged owner escapes and the source owner remains unchanged.
 6. Retain existing `SpatialGeographyTests` and selected Daily-v1 bootstrap geography regressions.
 
