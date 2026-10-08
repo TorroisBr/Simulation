@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="11" result="Passed" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 13:03:27Z" end-time="2026-10-08 13:03:27Z" duration="0,0696041">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2544" result="Passed" start-time="2026-10-08 13:03:27Z" end-time="2026-10-08 13:03:27Z" duration="0.069604" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3777" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12d-spatialnetwork-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2544" result="Passed" start-time="2026-10-08 13:03:27Z" end-time="2026-10-08 13:03:27Z" duration="0.054418" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="66468" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3554" name="SpatialNetworkCensusTests" fullname="SpatialNetworkCensusTests" classname="SpatialNetworkCensusTests" runstate="Runnable" testcasecount="11" result="Passed" start-time="2026-10-08 13:03:27Z" end-time="2026-10-08 13:03:27Z" duration="0.040984" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3558" name="CrossTypeIdentityCollisionAndRegistrySaturationDoNotPartiallyRegister" fullname="SpatialNetworkCensusTests.CrossTypeIdentityCollisionAndRegistrySaturationDoNotPartiallyRegister" methodname="CrossTypeIdentityCollisionAndRegistrySaturationDoNotPartiallyRegister" classname="SpatialNetworkCensusTests" runstate="Runnable" seed="1325367558" result="Passed" start-time="2026-10-08 13:03:27Z" end-time="2026-10-08 13:03:27Z" duration="0.016396" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Duplicate RuntimeId 'shared-id' while registering Location; it is already registered as City.
+Cannot register Location runtime identity: census revision is exhausted.
+Location runtime resolution failed: RuntimeId 'saturated-location' is not registered.
+]]></output>
+        </test-case>
+        <test-case id="3563" name="OwnerSnapshot_IsDetachedReadOnlyAndRestoresExactRevisionGaps" fullname="SpatialNetworkCensusTests.OwnerSnapshot_IsDetachedReadOnlyAndRestoresExactRevisionGaps" methodname="OwnerSnapshot_IsDetachedReadOnlyAndRestoresExactRevisionGaps" classname="SpatialNetworkCensusTests" runstate="Runnable" seed="2081310127" result="Passed" start-time="2026-10-08 13:03:27Z" end-time="2026-10-08 13:03:27Z" duration="0.006471" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3564" name="OwnerSnapshot_RejectsMalformedAndImpossibleStateWithoutChangingActiveOwner" fullname="SpatialNetworkCensusTests.OwnerSnapshot_RejectsMalformedAndImpossibleStateWithoutChangingActiveOwner" methodname="OwnerSnapshot_RejectsMalformedAndImpossibleStateWithoutChangingActiveOwner" classname="SpatialNetworkCensusTests" runstate="Runnable" seed="1582517702" result="Passed" start-time="2026-10-08 13:03:27Z" end-time="2026-10-08 13:03:27Z" duration="0.001638" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3565" name="OwnerSnapshot_RejectsRegistryIdentityCollisionAndCapacityBeforeRegistration" fullname="SpatialNetworkCensusTests.OwnerSnapshot_RejectsRegistryIdentityCollisionAndCapacityBeforeRegistration" methodname="OwnerSnapshot_RejectsRegistryIdentityCollisionAndCapacityBeforeRegistration" classname="SpatialNetworkCensusTests" runstate="Runnable" seed="1225710674" result="Passed" start-time="2026-10-08 13:03:27Z" end-time="2026-10-08 13:03:27Z" duration="0.000728" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Location runtime resolution failed: RuntimeId 'fresh-location' is not registered.
+]]></output>
+        </test-case>
+        <test-case id="3562" name="OwnerSnapshot_RoundTripsEmptyAndPopulatedNetworkWithParallelRouteIdentityAndOrder" fullname="SpatialNetworkCensusTests.OwnerSnapshot_RoundTripsEmptyAndPopulatedNetworkWithParallelRouteIdentityAndOrder" methodname="OwnerSnapshot_RoundTripsEmptyAndPopulatedNetworkWithParallelRouteIdentityAndOrder" classname="SpatialNetworkCensusTests" runstate="Runnable" seed="715160367" result="Passed" start-time="2026-10-08 13:03:27Z" end-time="2026-10-08 13:03:27Z" duration="0.002042" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3555" name="ProvidersExposeFixedOwnerSectionsAndZeroWitnesses" fullname="SpatialNetworkCensusTests.ProvidersExposeFixedOwnerSectionsAndZeroWitnesses" methodname="ProvidersExposeFixedOwnerSectionsAndZeroWitnesses" classname="SpatialNetworkCensusTests" runstate="Runnable" seed="1328313791" result="Passed" start-time="2026-10-08 13:03:27Z" end-time="2026-10-08 13:03:27Z" duration="0.000431" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3557" name="RejectedRegistrationsLeaveSpatialOwnerWitnessesUnchanged" fullname="SpatialNetworkCensusTests.RejectedRegistrationsLeaveSpatialOwnerWitnessesUnchanged" methodname="RejectedRegistrationsLeaveSpatialOwnerWitnessesUnchanged" classname="SpatialNetworkCensusTests" runstate="Runnable" seed="2019993336" result="Passed" start-time="2026-10-08 13:03:27Z" end-time="2026-10-08 13:03:27Z" duration="0.001320" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Cannot register spatial location: runtime instance is null.
+Spatial location 'location-a' is already registered in this network.
+Cannot register spatial route: runtime instance is null.
+Cannot register spatial route 'route-unbound': origin and destination must both be registered locations.
+]]></output>
+        </test-case>
+        <test-case id="3559" name="RejectedRouteIdentityCollisionLeavesBothOwnersUnchanged" fullname="SpatialNetworkCensusTests.RejectedRouteIdentityCollisionLeavesBothOwnersUnchanged" methodname="RejectedRouteIdentityCollisionLeavesBothOwnersUnchanged" classname="SpatialNetworkCensusTests" runstate="Runnable" seed="1647238831" result="Passed" start-time="2026-10-08 13:03:27Z" end-time="2026-10-08 13:03:27Z" duration="0.000733" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Duplicate RuntimeId 'shared-route-id' while registering Route; it is already registered as City.
+]]></output>
+        </test-case>
+        <test-case id="3561" name="SpatialCollectionsAreDetachedReadOnlySnapshotsAndPreserveAdjacency" fullname="SpatialNetworkCensusTests.SpatialCollectionsAreDetachedReadOnlySnapshotsAndPreserveAdjacency" methodname="SpatialCollectionsAreDetachedReadOnlySnapshotsAndPreserveAdjacency" classname="SpatialNetworkCensusTests" runstate="Runnable" seed="1334908182" result="Passed" start-time="2026-10-08 13:03:27Z" end-time="2026-10-08 13:03:27Z" duration="0.000774" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3560" name="SpatialNetworkRevisionSaturationPreflightsIdentityRegistration" fullname="SpatialNetworkCensusTests.SpatialNetworkRevisionSaturationPreflightsIdentityRegistration" methodname="SpatialNetworkRevisionSaturationPreflightsIdentityRegistration" classname="SpatialNetworkCensusTests" runstate="Runnable" seed="1759505629" result="Passed" start-time="2026-10-08 13:03:27Z" end-time="2026-10-08 13:03:27Z" duration="0.000736" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Cannot register spatial location: spatial network census revision is exhausted.
+Location runtime resolution failed: RuntimeId 'saturated-location' is not registered.
+]]></output>
+        </test-case>
+        <test-case id="3556" name="SuccessfulLocationAndRouteRegistrationAdvanceSharedRevisionOnce" fullname="SpatialNetworkCensusTests.SuccessfulLocationAndRouteRegistrationAdvanceSharedRevisionOnce" methodname="SuccessfulLocationAndRouteRegistrationAdvanceSharedRevisionOnce" classname="SpatialNetworkCensusTests" runstate="Runnable" seed="2008973348" result="Passed" start-time="2026-10-08 13:03:27Z" end-time="2026-10-08 13:03:27Z" duration="0.000324" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
