@@ -4,6 +4,12 @@
 implementation authorization, a new checkpoint identity, P12-E completion,
 or P12-A readiness.
 
+**Revision after review:** addresses finding E1 in review record
+`docs/design/PHASE12_P12E_ARMED_FORCE_MANPOWER_POSITION_SNAPSHOT_DESIGN_REVIEW_CE0A9B9.md`
+at `f1cb3120bc490abb9331dd19648e5fb259504975` by using the exact installed
+owner's immutable `SourceProvider` property as a capture/staging precondition.
+This revision still requires fresh independent exact-content review.
+
 **P12 canonical base:** `04e7c3f49a7c9690ebc091fcfc50f05ef67009d6`.
 **Architecture authority:** `47eff220c7ce00f6e7c759bdc2b76780bb46f628`.
 **Applicable general P12-E design at this base:**
@@ -58,12 +64,32 @@ ephemeral P12-B token/vector:
 
 For each section, the owner object identity checked by the census is opaque and
 transient; never place a CLR reference, process-specific identity, completed
-token, revision vector, or invented epoch in the persisted DTO. Require exact
+token, owner-section vector, or invented epoch in the persisted DTO. Require exact
 section ID, schema, owner identity, cardinality, and local revision agreement
 with one capture stamp. Read each owner through its defensive sorted view once,
 copy the entire value set, and fail the private capture if the existing token
 or any recorded owner stamp does not match that same boundary. This design
 does not claim that local revisions prove atomicity or capture eligibility.
+
+These five existing sections are registered into the current P12-B protocol;
+they are not merely exposed by `SimulationBootstrapComposition`. In
+`SimulationRuntime.InitializeNpcRosterCensusProtocol`, a non-null
+`runtimeAdmissionContext` requires `TryRegisterP12EMilitaryOwnerSections`.
+That helper is implemented in `P12RuntimeIdentitySpatialCensus.cs` and
+registers the three ArmedForce sections plus manpower, positions, Conflict,
+War, and Battle as `Required`. Each is passed through
+`TryRegisterP12FixedOwnerSection`, which reads the provider and checks exact
+section ID, schema, owner object identity, nonnegative cardinality/revision,
+then registers the expected section and provider before both inventories are
+sealed. At completed-boundary capture,
+`SimulationRuntime.TryReadDailyCaptureEvidence` delegates to
+`ContinuationCensusProtocol.TryCaptureQuiescentOwnerSectionSnapshot`; the
+resulting owner-section snapshots and mutation epoch are stored in
+`DailyCaptureEligibilityToken` and compared during later token validation.
+Thus the five sections above are present in the existing token's section
+vector. This consumption does not claim complete invalidation: current P12-B
+direct write/epoch coverage remains incomplete, and this P12-E design adds no
+mutation notification or epoch behavior.
 
 Export a detached immutable schema-v1 graph containing:
 
@@ -179,29 +205,45 @@ The inventory distinguishes the selected profile's no-registration manpower
 source configuration from absent `LocalTopologyStore`; inspect the actual
 resolved provider rather than inferring it from the prose label "empty
 registry". In current code, `SettlementManpowerSourceRegistry.TryCreate`
-returns a null registry when registrations are null or empty, and
-`SimulationRuntime` then uses only an already supplied `manpowerSourceProvider`
-or the installed manpower owner's `SourceProvider` fallback. The ordinary
-selected Daily-v1 path supplies no registrations or prebuilt provider, so the
-resolved source provider is null; an injected provider is not silently part
-of the supported profile. The P12-B admission evidence must bind this exact
-no-registration/null-provider condition (or reject an unexpected provider)
-before claiming the source-empty state. Do not infer it from a missing
-manpower owner or day-zero empty cohort list. The snapshot code must not
-invent or serialize a provider object, provider implementation, or source
-capacity.
+returns a null registry when registrations are null or empty. A non-empty
+registration set returns a registry. `SimulationRuntime` resolves the provider
+as that registry or the supplied `manpowerSourceProvider` / input store's
+`SourceProvider`, then constructs or clones the installed
+`ContingentManpowerStateStore` with that exact resolved provider. The installed
+store retains it in a `readonly` field and exposes it through the getter-only
+`SourceProvider` property. Therefore, on the ordinary selected Daily-v1 path,
+an exact check that the P12-B census-bound installed manpower owner has
+`SourceProvider == null` proves that no registration-created registry,
+explicit injected provider, or input-store provider survived runtime
+composition. This property cannot change after construction. A non-null
+provider is rejected for this Daily-v1 slice.
 
-Any non-null `SourceId` must resolve against the exact admitted stable source
+Source evidence: `SettlementManpowerSourceRegistry.TryCreate` in
+`Assets/_Project/Scripts/Military/ManpowerSourceConsequencePlanning.cs`;
+provider resolution and installed-owner creation in
+`Assets/_Project/Scripts/SimulationRuntime.cs`;
+readonly field/getter in `Assets/_Project/Scripts/MilitaryManpowerFoundation.cs`;
+and exact owner identity/cardinality/revision provider in
+`Assets/_Project/Scripts/P12EMilitaryOwnerCensusProviders.cs`.
+
+At capture, read `SourceProvider` directly from the exact store object already
+bound by `p12e.contingent-manpower.states` to the same P12-B capture token.
+Require null before accepting the snapshot; at staging require the target
+Daily-v1 store's exact property is null before installing state. The census
+section remains unchanged: this is a direct immutable owner-property
+precondition, not a new P12-B census field, shared epoch, runtime mutation
+wire, or serialized provider value. Its proof is the source-level constructor
+chain above plus the exact installed owner identity supplied by the existing
+census/token; do not infer absence from the asset, registrations alone,
+missing manpower owner, or day-zero empty cohort list. Do not serialize a
+provider object, provider implementation, or source capacity.
+
+Any non-null `SourceId` must resolve against an exact admitted stable source
 authority and satisfy the current owner checks at staging. A source-bound
 state cannot be accepted merely because its source identifier is well formed.
-If the current profile inventory/token does not provide an exact witness for
-the registry and source facts, the populated source-binding case remains
-blocked and fails closed; this proposal does not add a census/epoch/provider
-section to fix that gap. Under the selected existing profile with no admitted
-source registration, require the exact documented empty-registry state and
-reject any source binding rather than fabricating a source or treating an
-unknown binding as empty. This is a data-evidence prerequisite, not a new
-gameplay rule.
+Under this selected Daily-v1 composition the installed source provider must be
+null, so any source-bound row rejects. A future profile that admits a provider
+requires its own accepted source-owner contract and is outside this slice.
 
 ## 5. Private construction and validation order
 
@@ -215,7 +257,8 @@ Capture and reconstruction preserve identity/ownership boundaries as follows:
 2. Validate the complete detached document before allocating candidates:
    required section presence; schema 1; nonnegative exact revisions and
    cardinalities; unique/non-empty IDs; valid enums and scalar ranges;
-   deterministic ordering; all row counts; source-registry manifest; P10
+   deterministic ordering; all row counts; null `SourceProvider` on the exact
+   census-bound owner; P10
    `NOT_COMPOSED`; and the P16/P17 rejection conditions above.
 3. Construct a private ArmedForce candidate from all force records first,
    without replaying `TryRegister`; after all records exist, validate hierarchy
@@ -223,11 +266,11 @@ Capture and reconstruction preserve identity/ownership boundaries as follows:
    only after force rows and staged Persons are available. Preserve exact
    ArmedForce owner revision and validate full owner invariants.
 4. Construct a private manpower candidate bound to that exact staged
-   ArmedForce candidate and the exact admitted source authority (or explicit
-   profile-validated empty source registry). Install all per-contingent state
+   ArmedForce candidate and require its immutable `SourceProvider` property is
+   null for this selected Daily-v1 slice. Install all per-contingent state
    rows and exact owner revision without invoking register/allocate/source
    operations. Validate one-to-one state coverage, cohort constraints,
-   source semantics, and every `Amount` mirror. The factory must be private,
+   source-null semantics, and every `Amount` mirror. The factory must be private,
    side-effect-free, and unable to publish or mutate the original owner.
 5. Construct the private baseline position owner bound to the same staged
    ArmedForce and staged spatial authority, with `LocalTopologyStore == null`.
@@ -265,6 +308,11 @@ tests and add focused owner snapshot/factory tests. It must prove:
 - one-to-one contingent/manpower state coverage and exact
   `Amount == LivingRosterAmount` mirrors; source binding resolution and
   fail-closed behavior when the exact admitted source authority is absent;
+- for the selected Daily-v1 runtime, the exact census-bound manpower owner's
+  `SourceProvider` is null at capture and on the private target owner; a
+  non-null injected/provider-registry path rejects before snapshot acceptance
+  or hydration. The property is getter-only over a readonly field and no
+  second P12-B section is introduced;
 - all effective direct/manpower/mirror write paths preserve their existing
   exact revision changes, no-op/failure behavior, checked overflow, and
   Battle prepared-commit rollback to exact prior rows and revisions;
@@ -322,7 +370,12 @@ gameplay, and any new participant/cardinality or military semantics.
 
 The design is implementation-ready only after an independent exact-content
 technical-design review confirms current sources and profile witnesses,
-including the selected empty source-registry evidence. That review does not
-itself promote code, close P12-E, establish complete owner coverage, satisfy
-P12-A, complete P12-B, or unblock P13. P12-A remains `WAIT_DEPENDENCY`; P13
-remains blocked. P12-B remains incomplete.
+including current P12-B registration of the five sections, the exact
+token-bound owner vector, and the direct immutable `SourceProvider == null`
+precondition. The E1 correction is not yet reviewed; additionally, the current
+general P12-E design blob recorded above has an earlier R1 `NEEDS_CHANGES`
+review against a stale blob, so its current applicability must be confirmed
+in fresh review. A design review does not itself promote code, close P12-E,
+establish complete owner coverage, satisfy P12-A, complete P12-B, or unblock
+P13. P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. P12-B remains
+incomplete.
