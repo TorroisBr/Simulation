@@ -1,6 +1,6 @@
 # P12-D NPC owner crosswalk current-base revalidation exact-tip review
 
-**Verdict:** VALIDATED_CANDIDATE  
+**Verdict:** VALIDATED_CANDIDATE<br>
 **Readiness disposition:** READY_FOR_IMPLEMENTATION for the bounded NPC D/F value snapshot, projection merge, and private staged reconstruction slice only, after this independent review. This does not promote code, complete P12-D, or authorize P12-A.
 
 ## Exact refs
