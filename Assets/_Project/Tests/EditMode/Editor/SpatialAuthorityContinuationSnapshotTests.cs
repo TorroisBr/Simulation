@@ -359,7 +359,9 @@ public sealed class SpatialAuthorityContinuationSnapshotTests
             .GetField("options", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(optionStateOwner.PassageAuthority);
         options.Clear();
-        AssertOwnerRejected(optionStateOwner, "ExcludedFactsPresent");
+        // Clearing the owning option leaves an orphaned private state entry, so
+        // the resulting owner is invalid rather than a valid excluded fact.
+        AssertOwnerRejected(optionStateOwner, "InvalidOwner");
 
         SpatialAuthorityStore barrierStateOwner = CreateTwoHexOwner();
         Assert.That(barrierStateOwner.PassageAuthority.TryRegisterBarrier(
@@ -374,7 +376,9 @@ public sealed class SpatialAuthorityContinuationSnapshotTests
             .GetField("barriers", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(barrierStateOwner.PassageAuthority);
         barriers.Clear();
-        AssertOwnerRejected(barrierStateOwner, "ExcludedFactsPresent");
+        // Clearing the owning barrier leaves an orphaned private state entry,
+        // which is rejected by the owner invariant.
+        AssertOwnerRejected(barrierStateOwner, "InvalidOwner");
     }
 
     private void AssertOwnerRejected(SpatialAuthorityStore owner, string expectedCode)
