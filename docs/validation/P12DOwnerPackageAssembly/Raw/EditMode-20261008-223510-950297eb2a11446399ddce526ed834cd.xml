@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="13" result="Passed" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 22:35:18Z" end-time="2026-10-08 22:35:19Z" duration="0,2187094">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2626" result="Passed" start-time="2026-10-08 22:35:18Z" end-time="2026-10-08 22:35:19Z" duration="0.218709" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3876" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12d-owner-package-a4ce/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2626" result="Passed" start-time="2026-10-08 22:35:18Z" end-time="2026-10-08 22:35:19Z" duration="0.202072" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="70968" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2627" name="P12DNpcReceiptOwnerCensusTests" fullname="P12DNpcReceiptOwnerCensusTests" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" testcasecount="13" result="Passed" start-time="2026-10-08 22:35:18Z" end-time="2026-10-08 22:35:19Z" duration="0.181077" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2640" name="CommittedRosterAddRemoveAndSameObjectReAddReconcileBothRowsOnce" fullname="P12DNpcReceiptOwnerCensusTests.CommittedRosterAddRemoveAndSameObjectReAddReconcileBothRowsOnce" methodname="CommittedRosterAddRemoveAndSameObjectReAddReconcileBothRowsOnce" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" seed="567652575" result="Passed" start-time="2026-10-08 22:35:18Z" end-time="2026-10-08 22:35:19Z" duration="0.123192" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="2643" name="CommittedRosterAddWithPopulatedReceiptFaultsWithoutPartialRowsOrEpochAdvance" fullname="P12DNpcReceiptOwnerCensusTests.CommittedRosterAddWithPopulatedReceiptFaultsWithoutPartialRowsOrEpochAdvance" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-08 22:35:19Z" end-time="2026-10-08 22:35:19Z" duration="0.020107" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2641" name="CommittedRosterAddWithPopulatedReceiptFaultsWithoutPartialRowsOrEpochAdvance(&quot;local&quot;)" fullname="P12DNpcReceiptOwnerCensusTests.CommittedRosterAddWithPopulatedReceiptFaultsWithoutPartialRowsOrEpochAdvance(&quot;local&quot;)" methodname="CommittedRosterAddWithPopulatedReceiptFaultsWithoutPartialRowsOrEpochAdvance" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" seed="975037988" result="Passed" start-time="2026-10-08 22:35:19Z" end-time="2026-10-08 22:35:19Z" duration="0.013015" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2642" name="CommittedRosterAddWithPopulatedReceiptFaultsWithoutPartialRowsOrEpochAdvance(&quot;merchant&quot;)" fullname="P12DNpcReceiptOwnerCensusTests.CommittedRosterAddWithPopulatedReceiptFaultsWithoutPartialRowsOrEpochAdvance(&quot;merchant&quot;)" methodname="CommittedRosterAddWithPopulatedReceiptFaultsWithoutPartialRowsOrEpochAdvance" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" seed="1832007034" result="Passed" start-time="2026-10-08 22:35:19Z" end-time="2026-10-08 22:35:19Z" duration="0.004824" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="2634" name="EveryProviderReadRejectsACommittedReceipt" fullname="P12DNpcReceiptOwnerCensusTests.EveryProviderReadRejectsACommittedReceipt" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-08 22:35:19Z" end-time="2026-10-08 22:35:19Z" duration="0.005111" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2632" name="EveryProviderReadRejectsACommittedReceipt(&quot;local&quot;)" fullname="P12DNpcReceiptOwnerCensusTests.EveryProviderReadRejectsACommittedReceipt(&quot;local&quot;)" methodname="EveryProviderReadRejectsACommittedReceipt" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" seed="1130693500" result="Passed" start-time="2026-10-08 22:35:19Z" end-time="2026-10-08 22:35:19Z" duration="0.004219" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2633" name="EveryProviderReadRejectsACommittedReceipt(&quot;merchant&quot;)" fullname="P12DNpcReceiptOwnerCensusTests.EveryProviderReadRejectsACommittedReceipt(&quot;merchant&quot;)" methodname="EveryProviderReadRejectsACommittedReceipt" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" seed="2014416009" result="Passed" start-time="2026-10-08 22:35:19Z" end-time="2026-10-08 22:35:19Z" duration="0.000213" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="2637" name="NonzeroRevisionWithEmptyLedgerIsNotAdmittedAndNullLedgerIsNeverInitialized" fullname="P12DNpcReceiptOwnerCensusTests.NonzeroRevisionWithEmptyLedgerIsNotAdmittedAndNullLedgerIsNeverInitialized" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-08 22:35:19Z" end-time="2026-10-08 22:35:19Z" duration="0.001406" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2635" name="NonzeroRevisionWithEmptyLedgerIsNotAdmittedAndNullLedgerIsNeverInitialized(&quot;local&quot;)" fullname="P12DNpcReceiptOwnerCensusTests.NonzeroRevisionWithEmptyLedgerIsNotAdmittedAndNullLedgerIsNeverInitialized(&quot;local&quot;)" methodname="NonzeroRevisionWithEmptyLedgerIsNotAdmittedAndNullLedgerIsNeverInitialized" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" seed="1037497978" result="Passed" start-time="2026-10-08 22:35:19Z" end-time="2026-10-08 22:35:19Z" duration="0.000755" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2636" name="NonzeroRevisionWithEmptyLedgerIsNotAdmittedAndNullLedgerIsNeverInitialized(&quot;merchant&quot;)" fullname="P12DNpcReceiptOwnerCensusTests.NonzeroRevisionWithEmptyLedgerIsNotAdmittedAndNullLedgerIsNeverInitialized(&quot;merchant&quot;)" methodname="NonzeroRevisionWithEmptyLedgerIsNotAdmittedAndNullLedgerIsNeverInitialized" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" seed="1260089257" result="Passed" start-time="2026-10-08 22:35:19Z" end-time="2026-10-08 22:35:19Z" duration="0.000193" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="2638" name="NullEmbeddedOwnerFailsSelectedAdmissionWithoutInvokingLazyAccessor" fullname="P12DNpcReceiptOwnerCensusTests.NullEmbeddedOwnerFailsSelectedAdmissionWithoutInvokingLazyAccessor" methodname="NullEmbeddedOwnerFailsSelectedAdmissionWithoutInvokingLazyAccessor" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" seed="1098934545" result="Passed" start-time="2026-10-08 22:35:19Z" end-time="2026-10-08 22:35:19Z" duration="0.000649" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2628" name="ProviderFamilyHasExactlyTwoRequiredReadyWitnessesPerNpcInStableOrder" fullname="P12DNpcReceiptOwnerCensusTests.ProviderFamilyHasExactlyTwoRequiredReadyWitnessesPerNpcInStableOrder" methodname="ProviderFamilyHasExactlyTwoRequiredReadyWitnessesPerNpcInStableOrder" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" seed="1346526453" result="Passed" start-time="2026-10-08 22:35:19Z" end-time="2026-10-08 22:35:19Z" duration="0.000947" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2639" name="ReplacedEmbeddedOwnerFaultsTheExistingCensusBoundary" fullname="P12DNpcReceiptOwnerCensusTests.ReplacedEmbeddedOwnerFaultsTheExistingCensusBoundary" methodname="ReplacedEmbeddedOwnerFaultsTheExistingCensusBoundary" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" seed="1363909" result="Passed" start-time="2026-10-08 22:35:19Z" end-time="2026-10-08 22:35:19Z" duration="0.000777" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2644" name="SaturatedEpochCommittedRosterAddFaultsWithoutPublishingReceiptMapsOrProviders" fullname="P12DNpcReceiptOwnerCensusTests.SaturatedEpochCommittedRosterAddFaultsWithoutPublishingReceiptMapsOrProviders" methodname="SaturatedEpochCommittedRosterAddFaultsWithoutPublishingReceiptMapsOrProviders" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" seed="596613660" result="Passed" start-time="2026-10-08 22:35:19Z" end-time="2026-10-08 22:35:19Z" duration="0.006840" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="2631" name="SelectedRuntimeVectorIncludesRequiredExactReceiptRowsAndEachReceiptMutationStalesToken" fullname="P12DNpcReceiptOwnerCensusTests.SelectedRuntimeVectorIncludesRequiredExactReceiptRowsAndEachReceiptMutationStalesToken" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-08 22:35:19Z" end-time="2026-10-08 22:35:19Z" duration="0.008405" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2629" name="SelectedRuntimeVectorIncludesRequiredExactReceiptRowsAndEachReceiptMutationStalesToken(&quot;local&quot;)" fullname="P12DNpcReceiptOwnerCensusTests.SelectedRuntimeVectorIncludesRequiredExactReceiptRowsAndEachReceiptMutationStalesToken(&quot;local&quot;)" methodname="SelectedRuntimeVectorIncludesRequiredExactReceiptRowsAndEachReceiptMutationStalesToken" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" seed="1268058529" result="Passed" start-time="2026-10-08 22:35:19Z" end-time="2026-10-08 22:35:19Z" duration="0.006595" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2630" name="SelectedRuntimeVectorIncludesRequiredExactReceiptRowsAndEachReceiptMutationStalesToken(&quot;merchant&quot;)" fullname="P12DNpcReceiptOwnerCensusTests.SelectedRuntimeVectorIncludesRequiredExactReceiptRowsAndEachReceiptMutationStalesToken(&quot;merchant&quot;)" methodname="SelectedRuntimeVectorIncludesRequiredExactReceiptRowsAndEachReceiptMutationStalesToken" classname="P12DNpcReceiptOwnerCensusTests" runstate="Runnable" seed="1938698260" result="Passed" start-time="2026-10-08 22:35:19Z" end-time="2026-10-08 22:35:19Z" duration="0.001257" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+          </test-case>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

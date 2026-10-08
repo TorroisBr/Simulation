@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="1" result="Failed(Child)" total="1" passed="0" failed="1" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 22:29:34Z" end-time="2026-10-08 22:29:35Z" duration="0,2563561">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2626" result="Failed" site="Child" start-time="2026-10-08 22:29:34Z" end-time="2026-10-08 22:29:35Z" duration="0.256356" total="1" passed="0" failed="1" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <failure>
+      <message><![CDATA[One or more child tests had errors]]></message>
+    </failure>
+    <test-suite type="Assembly" id="3876" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12d-owner-package-a4ce/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2626" result="Failed" site="Child" start-time="2026-10-08 22:29:35Z" end-time="2026-10-08 22:29:35Z" duration="0.195227" total="1" passed="0" failed="1" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="108456" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <failure>
+        <message><![CDATA[One or more child tests had errors]]></message>
+      </failure>
+      <test-suite type="TestFixture" id="2645" name="P12DNpcRootOwnerSnapshotTests" fullname="P12DNpcRootOwnerSnapshotTests" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" testcasecount="24" result="Failed" site="Child" start-time="2026-10-08 22:29:35Z" end-time="2026-10-08 22:29:35Z" duration="0.093340" total="1" passed="0" failed="1" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <failure>
+          <message><![CDATA[One or more child tests had errors]]></message>
+        </failure>
+        <test-case id="2647" name="DailyV1Package_PreflightsCityLocationReciprocityBeforeAnyMembershipFill" fullname="P12DNpcRootOwnerSnapshotTests.DailyV1Package_PreflightsCityLocationReciprocityBeforeAnyMembershipFill" methodname="DailyV1Package_PreflightsCityLocationReciprocityBeforeAnyMembershipFill" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="558507648" result="Failed" start-time="2026-10-08 22:29:35Z" end-time="2026-10-08 22:29:35Z" duration="0.083778" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <failure>
+            <message><![CDATA[  RuntimeFaulted
+  Expected: True
+  But was:  False
+]]></message>
+            <stack-trace><![CDATA[at P12DNpcRootOwnerSnapshotTests.CompleteDailyBoundary (SimulationRuntime runtime) [0x00010] in E:\GitHub\GeneralSimulation\MainSimulation\.worktrees\p12d-owner-package-a4ce\Assets\_Project\Tests\EditMode\Editor\P12DNpcRootOwnerSnapshotTests.cs:990
+at P12DNpcRootOwnerSnapshotTests.DailyV1Package_PreflightsCityLocationReciprocityBeforeAnyMembershipFill () [0x00097] in E:\GitHub\GeneralSimulation\MainSimulation\.worktrees\p12d-owner-package-a4ce\Assets\_Project\Tests\EditMode\Editor\P12DNpcRootOwnerSnapshotTests.cs:79
+]]></stack-trace>
+          </failure>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

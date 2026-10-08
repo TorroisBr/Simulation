@@ -1,17 +1,21 @@
 # P12-D — Current-base revalidation: private owner package and D-graph assembly
 
-**Classification:** bounded current-base technical-design addendum; submitted for independent exact-tip design review. It is not implementation authorization or a promotion record.
+**Classification:** bounded current-base technical-design addendum; independent exact-tip design review PASS is recorded at `8a68a003601d9197e63fe4fe5fc567eab6a4b58e`. The implementation candidate is separately recorded in `docs/validation/P12DOwnerPackageAssembly/VALIDATION.md`; this document makes no canonical-promotion or Phase-completion claim.
 
 ## Baseline and authority
 
 - P12 canonical base: `a4ce0abcf261226f4b52fbacc8df9ef8f67a0de2`.
-- Architecture baseline: commit `c285466c355103d3637ac165246591b72eb7bda0`; `docs/SIMULATION_ARCHITECTURE.md` blob `4a3c73c4428ba7bc43c28f617e243e4cd54078fa`.
+- Effective architecture baseline: commit `47eff22c7ce00f6e7c759bdc2b76780bb46f628`; `docs/SIMULATION_ARCHITECTURE.md` blob `25843842688239cdc3b80988b2e28dbaa16b4987`. This supersedes the earlier `c285466` / `4a3c73c` citation after the architecture freshness revalidation.
 - `docs/ROADMAP.md` blob: `f9bb445880948b5e493fbf7f5682c38a33d18589`.
 - P12 Brief blob: `31d9e1b4df41fc994f0a747274e35c4ef40b6e3a`.
 - P12 State blob: `700a1fad188049f23819c0beae23ea4e34e1ad1f`.
 - Accepted D design: [`PHASE12_D_TECHNICAL_DESIGN.md`](PHASE12_D_TECHNICAL_DESIGN.md), blob `a6f72aabc26057b46ec8896738c1006c016d880e`.
 - Current G design: [`PHASE12_G_TECHNICAL_DESIGN.md`](PHASE12_G_TECHNICAL_DESIGN.md), blob `f19b3a316627c4a0842a2b740c776e6f71f6d68e`.
 - Promoted NPC D/F owner snapshot Assets tree: `d7e95170c31947fb611a7461133b60ce75ad1e4d`.
+
+### Architecture freshness and §85A demonstrability
+
+The current architecture freshness review found no semantic conflict between this package boundary and the effective `47eff22` architecture. Per architecture §85A, human demonstration is `NOT_MEANINGFUL_FOR_THIS_CHECKPOINT`: the checkpoint creates only a private, unpublished reconstruction package and exposes no standalone world behavior for a human to observe. Automated tests are the appropriate evidence for value fidelity, identity/token binding, relation consistency, and failure atomicity. A later checkpoint that publishes usable runtime behavior or runs a meaningful scenario should assess demonstrability independently.
 
 This is an addendum to the accepted D design, not a replacement. It resolves only the next bounded current-base design boundary: assemble the already-promoted Daily-v1 D owners into one private D package and validate their cross-owner graph. Existing schemas, accepted product scope, and the single-owner capture model remain in force. It does not amend architecture, create another checkpoint identity, or authorize code changes.
 
@@ -92,8 +96,8 @@ The implementation should add the smallest D-only coordinator/package file and f
 
 Focused evidence must cover: successful one-package assembly; exact token/stamp/vector binding and stale-boundary rejection before output; Person-first staging with dormant/materialized/NPC-only cases; ordered City membership and preserved local revisions; D/F projection identity; City/NPC/current-location reciprocity and duplicate/dangling/cross-owner/orphan rejection; Person residence/materialization and Genealogy endpoint rejection; legacy route/root identity checks; exact-zero site owner and Daily-v1 LocalTopology absence; and failure atomicity/source immutability when any later relation fails. No action, travel, plan, charge, provider effect, or Knowledge write may run during reconstruction.
 
-At implementation time, retain inspectable focused XML/logs and source/tree hashes, then run the relevant promoted D-owner regressions, ALL EditMode, official Smoke, and `git diff --check` in the repository's serialized Unity validation slot. These are proposed obligations, not validation performed by this docs-only addendum.
+The implementation candidate's inspectable focused XML/logs, source/tree hashes, relevant promoted D-owner regressions, ALL EditMode, official Smoke, and `git diff --check` are recorded in [`../validation/P12DOwnerPackageAssembly/VALIDATION.md`](../validation/P12DOwnerPackageAssembly/VALIDATION.md). This evidence verifies the implementation candidate only; independent exact-tip code review and canonical promotion remain separate.
 
 ## Scope limits and decision
 
-This addendum claims only a current-base design boundary for private P12-D Daily-v1 package assembly and D-owned graph validation. It does not claim implementation readiness before independent exact-tip review. It does not complete P12-D, implement G publication, make P12-A or P13 ready, close Phase 12, add P10 LocalTopology or site rows, add P18 receipts, introduce new gameplay, or broaden the accepted profile. No unresolved product or canonical architecture decision is introduced; the two corrections above follow the promoted current APIs and accepted ownership contracts.
+This addendum records the reviewed current-base design boundary for private P12-D Daily-v1 package assembly and D-owned graph validation. The implementation has a separate candidate and exact-tree validation record; exact-tip code review remains outstanding. It does not complete P12-D, implement G publication, make P12-A or P13 ready, close Phase 12, add P10 LocalTopology or site rows, add P18 receipts, introduce new gameplay, or broaden the accepted profile. No unresolved product or canonical architecture decision is introduced; the corrections above follow the current architecture and promoted owner APIs.
