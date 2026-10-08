@@ -1,12 +1,18 @@
 # P12-D City Root Owner Snapshot — Exact-Tip Implementation Review
 
-**Result: PASS**  
-**Reviewed candidate:** `22f20b1ab0cf9ba4fc36155c645554c98bff9c6e`  
-**Implementation code commit:** `58c142329d034fbed18ece25ee017d0d69f4d62f`  
-**Base P12 canonical:** `aa1a40f2e6da53a1a7388601bd13052f1a535545`  
-**Reviewed Assets tree:** `e83151063141cb1395e1d53d30e850c6f81ed778`  
-**Design:** `docs/design/PHASE12_P12D_CITY_ROOT_SNAPSHOT_DESIGN.md` (blob `3ae6725227a166d8030a017c210d9a5459cab830`)  
-**Design review:** `docs/design/PHASE12_P12D_CITY_ROOT_SNAPSHOT_DESIGN_REVIEW_F30E6BA.md` (blob `ace865a3dd6a08cb97d9ada8f38664d7fa1a644a`)  
+**Result: PASS**
+
+**Reviewed candidate:** `22f20b1ab0cf9ba4fc36155c645554c98bff9c6e`
+
+**Implementation code commit:** `58c142329d034fbed18ece25ee017d0d69f4d62f`
+
+**Base P12 canonical:** `aa1a40f2e6da53a1a7388601bd13052f1a535545`
+
+**Reviewed Assets tree:** `e83151063141cb1395e1d53d30e850c6f81ed778`
+
+**Design:** `docs/design/PHASE12_P12D_CITY_ROOT_SNAPSHOT_DESIGN.md` (blob `3ae6725227a166d8030a017c210d9a5459cab830`)
+
+**Design review:** `docs/design/PHASE12_P12D_CITY_ROOT_SNAPSHOT_DESIGN_REVIEW_F30E6BA.md` (blob `ace865a3dd6a08cb97d9ada8f38664d7fa1a644a`)
 **Architecture baseline:** `47eff220c7ce00f6e7c759bdc2b76780bb46f628`
 
 ## Review scope and findings
