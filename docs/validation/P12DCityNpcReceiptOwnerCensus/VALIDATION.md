@@ -54,3 +54,7 @@ The earlier implementation-time constructor-order compile failure and stale 278-
 | `Assets/_Project/Tests/EditMode/Editor/PropertyEstateMutationEpochTests.cs` | `03D7899F1878A59CFDB3A05F61A79310FC9F22F582F70B62D035647AC73667DA` |
 
 `git diff --check` passed after the evidence was generated. Incidental Unity-generated ProjectSettings changes and unrelated `.meta` files remain outside this candidate.
+
+## Current-tip test follow-up — 2026-10-08
+
+The review-requested exact-tip test additions and their current-tip results are documented in [`VALIDATION-FOLLOWUP-95A5466.md`](VALIDATION-FOLLOWUP-95A5466.md). That follow-up validates the new receipt-owner cases on the updated candidate and preserves the original implementation validation above unchanged.
