@@ -8,7 +8,7 @@
 
 P12-B and P12-C are COMPLETE/PROMOTED within their bounded contracts. E consumes the P12-B completed-boundary/capture token and P12-C identity/genesis/random roots, including the same WorldId. It does not add a second capture lock, rerun genesis, mint identities, or introduce P13 history semantics. P12-D roots are needed for resolved references; an isolated E owner may use typed unresolved-reference evidence only where its reviewed owner adapter explicitly supports that order.
 
-Daily-v1 is the SampleScene-selected Simulation-DailyV1.asset. Simulation-GeneralTest.asset remains the separate P10-A Ruin/LocalTopology profile and must be rejected by Daily-v1 admission. The P12-D/E owner split follows the accepted capability decomposition: D owns exact City/market/item/account/custody/stock/balance roots and D-owned NPC/person/spatial facts; E owns only distinct core or official-provider state assigned to E. E never exports a second copy of a D-owned root field. A nested shared owner is captured once with one owner-issued snapshot identity/revision/token, split into disjoint sections, merged, and hydrated once.
+Daily-v1 is the SampleScene-selected Simulation-DailyV1.asset. Simulation-GeneralTest.asset remains the separate P10-A Ruin/LocalTopology profile and must be rejected by Daily-v1 admission. The P12-D/E owner split follows the accepted capability decomposition: D owns exact City/market/item/account/custody/stock/balance roots and D-owned NPC/person/spatial facts; E owns only distinct core or official-provider state assigned to E. E never exports a second copy of a D-owned root field. A nested shared owner is captured once under the exact P12-B completed-boundary token, with the corresponding owner-section identity/cardinality/revision vector, split into disjoint sections, merged, and hydrated once. Do not invent a synthetic whole-City or whole-NPC revision where current owners expose component revisions. The token and revision vector are transient capture evidence, not serialized continuation state.
 
 P17-A state is not in Daily-v1. Current P17-A composition adds optional strategic state to the existing PersistentWarStore, not a second War owner. The promoted P17-A Daily-profile rejection and its negative test are preserved. E includes the current P12-E War owner facts for this profile, while admission rejects any P17-A state; census count/revision is not serialization and must not be treated as evidence that P17 state is supported. This does not remove or weaken P17-A or establish future P17 persistence.
 
@@ -66,17 +66,23 @@ Names below are section roles. Implementation uses the actual owner types and
 record schemas in the validated composition; it must not create a parallel
 world-truth store or force unrelated authorities into a generic serializer.
 
-### 3.1 CityRuntime — shared D/E owner boundary
+### 3.1 CityRuntime — one owner; D-only fields in current Daily-v1
 
-CityRuntime and its nested market/economic objects are one concrete owner boundary across D and E. The accepted decomposition assigns City, market, market-item, account/custody, stock/balance, and population root facts to D. E may assign distinct official-provider state only after the current field crosswalk identifies the actual owner and proves the projections do not overlap. A field cannot be duplicated merely because both checkpoints consume it.
+CityRuntime and its nested market/economic objects remain one concrete owner boundary. The accepted decomposition assigns City, market, market-item, account/custody, stock/balance, and population root facts to D. The current Daily-v1 source crosswalk finds no separate E-owned CityRuntime fields: economy provider operations change D-owned stock, price, population, and account roots. `CityData` and item definitions are admitted content/configuration identities rather than mutable E owner state. `CityRuntime` daily continuation receipts are called by `P18DDailyBoundaryStepProviders` and belong to excluded P18 temporal composition; P14 finite-source state and `LastMaterialFlow` are also excluded from this profile. A newly discovered populated City field not covered by this map blocks implementation until the owner crosswalk and review are refreshed. A field cannot be duplicated merely because both checkpoints consume it.
 
-Capture the concrete owner once and issue one snapshot identity/revision/token covering every captured D and E field, including nested mutable state. D and E projections carry that same identity/revision/token and contain disjoint immutable values. Merge them into one private candidate, validate both section contracts, then reconstruct one CityRuntime and its nested owner graph. No independent City re-read, second snapshot revision, partial City constructor, or duplicate MarketRuntime hydrator is allowed.
+P12-D captures the concrete City owner once under the P12-B token and records the exact nested owner-section revision vector for the current profile's root values. P12-E emits no City section in this Daily-v1 profile. If a future supported profile demonstrates an E-owned retained field nested under CityRuntime, the same capture stamp and revision vector must bind disjoint D/E values, which merge into one private candidate and reconstruct one CityRuntime and nested owner graph. No independent City re-read, invented aggregate revision, partial City constructor, or duplicate MarketRuntime hydrator is allowed.
 
-If the current owner has no separable E-owned retained facts beyond D roots and admitted provider identity/configuration, E records no duplicate state for those fields. The provider is rebuilt only where the existing contract proves it is derived; otherwise the unclassified retained fact is a precise implementation blocker until the crosswalk resolves it.
+For current Daily-v1, any non-empty E City section is unsupported and must be rejected rather than treated as a second representation of D roots. Providers are rebuilt only where the existing contract proves they are derived; any unclassified retained fact is a precise implementation blocker until the crosswalk resolves it.
 ### 3.2 Official economy and merchant authorities
 
 Capture each actually composed economy/merchant owner by its own stable
-authority identity and revision. P12-D owns the exact market, custody, stock, balance, item, and City-root values assigned by the accepted decomposition. P12-E owns only distinct provider-owned retained facts established by the current field crosswalk. Shared nested values are captured from one CityRuntime owner snapshot and hydrated once.
+authority identity and revision. P12-D owns the exact market, custody, stock,
+balance, item, population, and City-root values assigned by the accepted
+decomposition. P12-E owns only distinct provider-owned retained facts
+established by the current field crosswalk. Current Daily-v1 has no separate
+E CityRuntime value section; provider operation results are captured through
+the D roots they mutate. Shared nested values are captured from one CityRuntime
+owner snapshot and hydrated once.
 `MerchantSystem` owns its own mutable causal state only if the exact code audit
 demonstrates such state; otherwise reconstruct its service from admitted
 configuration/provider identity and owner references. Do not serialize a
@@ -175,8 +181,11 @@ and prove the revision cannot be bypassed through a mutable list/object
 exposure. If a store lacks revisions, add an owner-controlled revision seam;
 do not infer it from event count, absolute day, diagnostics, or a hash alone.
 
-The P12-B capture token binds all E owner revisions and CityRuntime's shared
-D/E revision. Capture must be rejected while the runtime is in an active
+The P12-B capture token binds all included owner-section identities,
+cardinalities, schemas, revisions, and the mutation epoch. Current Daily-v1
+uses its exact City component revision vector; if a later profile admits an
+E-owned City field, it must use the same transient capture stamp/vector.
+Capture must be rejected while the runtime is in an active
 advance/operation scope or if an owner changes during snapshot. This section
 does not create a second lock, thread-safety promise, or capture lifecycle;
 P12-B owns eligibility and the promoted P18-D2 lease/handoff contract governs
@@ -236,17 +245,21 @@ serializes those sections nor silently treats them as empty.
    referenced City/NPC/Person and legacy spatial roots. These are prerequisites,
    not duplicated E sections.
 2. Each E owner exports its own detached immutable value snapshot with exact
-   owner identity/schema/revision. For `CityRuntime`, one owner capture yields
-   D and E semantic slices from the same snapshot/revision; no independent
-   re-read or second City hydrator is allowed.
+   owner identity/schema/revision. For current Daily-v1, D captures
+   `CityRuntime` and its nested factual roots once, and E emits no City fields.
+   Any future reviewed E City slice must come from that same capture stamp and
+   exact component revision vector;
+   no independent re-read or second City hydrator is allowed.
 3. Before allocating live candidates, validate section presence/absence,
    provider/config/content compatibility, schema, IDs, revisions, enum/range
    values, counter/sequence references, and local owner invariants. Reject
    unknown required sections and unsupported populated state.
 4. Build a new private staging graph in dependency order: admit configuration
    and provider identities; instantiate owner shells from C roots; restore D
-   factual roots; merge D/E City slices and build each CityRuntime once;
-   bind any distinct E-owned provider facts to the already staged D roots without recreating D-owned market/account/economic roots; then resolve only
+   factual roots and build each current Daily-v1 CityRuntime once from the D
+   projection; if a separately reviewed E City slice exists for a future
+   profile, merge it before construction. Bind distinct E-owned provider facts
+   to staged D roots without recreating D-owned market/account/economic roots; then resolve only
    E references to already-staged C/D roots. Return typed unresolved binding
    evidence for any relation to F. The concrete factory order must follow
    actual E-to-C/D owner dependencies and not merely this grouping order.
@@ -281,10 +294,12 @@ Owner suites and composition tests must cover at least:
   claim/recognition, faction/support, force/manpower/position,
   conflict/War/Battle, justice/crime, and economy state. Initial emptiness is
   not a substitute for populated fixtures.
-- Exact CityRuntime shared capture: D and E slices originate from one snapshot
-  revision, are disjoint, merge into one City hydrator, and reject mismatched
-  capture IDs/revisions, duplicate fields, missing slice, or a City/nested
-  market/account/population mutation between capture and validation.
+- Exact CityRuntime capture: current Daily-v1 exports only the D-owned City
+  roots and no E City slice. Reject an injected non-empty E City section or
+  duplicate D field. Any future reviewed D/E split must originate from one
+  snapshot revision, merge into one City hydrator, and reject mismatched
+  capture IDs/revisions or a City/nested market/account/population mutation
+  between capture and validation.
 - City economy parity with production, free consumption, price refresh, market
   trade and ordinary merchant effects: preserve exact stock, balance, custody,
   price, item definition, and causal owner state after identical later daily
@@ -336,13 +351,13 @@ implementation authorization.
 
 | Surface | Owner boundary | Risk / required evidence |
 |---|---|---|
-| `CityRuntime`, `MarketRuntime`, `MarketCounterpartyRuntime`, population-economy/account and nested item state | Shared D/E City owner; D and E emit disjoint sections from one revision; one merged hydrator. | **Shared hotspot:** cannot independently snapshot/hydrate in D and E. Prove one owner revision covers nested D/E changes and every mutation path. Plan one interface and exclusive implementation/handoff before integration. |
+| `CityRuntime`, `MarketRuntime`, `MarketCounterpartyRuntime`, population-economy/account and nested item state | One concrete City owner. Current Daily-v1 fields are all in D; E has no City value section. | **Shared hotspot:** D owns the current snapshot/export/hydrator. E provider operations may mutate D-owned facts but may not export them again. Any future distinct E field requires a reviewed one-snapshot split and exclusive integration handoff. |
 | `SimulationRuntime.cs`, `TesteSimulacao.cs`, effective composition and daily loop | P12-B/bootstrap owns admission evidence; E consumes the manifest and records E provider sections. | Runtime, bootstrap, and daily-loop hotspot; do not add a second capture lock or change order. Serialize edits with P18-D, P12-B, and D/E owner integration. |
 | Economy and merchant services/stores | Existing domain owners, including City-owned state and any proven MerchantSystem-owned causal state. | Inventory exact effects, revisions, custody references, service state, and split from F Knowledge/active plans. Do not mark service stateless without source audit. |
 | `JusticeSystem`, `CrimeSystem`, appraisal world-state, guard/crime action providers | Their actual factual owner or configured provider. | NPC consequences go to the sole D/F `NpcRuntime` projection. Separate truth from events, decision records and rebuildable appraisal projections. |
 | Institution/Office, property/estate, claims, faction/support/decision, force/manpower/position, Conflict/War/Battle stores | Each current store remains its authority. | Cross-links use typed IDs and D/C roots. Preserve recognition vs fact, relation ownership, terminal outcomes and exact cardinalities. Inventory any missing core store; no aggregate diagnostic substitutes. |
 | `PoliticalKnowledgeStore`, commercial sharing observations, all other Knowledge | P12-F. | Explicitly excluded from E despite some being listed as instantiated core runtime services. E may retain provider behavior only; no duplicate observation records. |
-| NpcRuntime fields written by E providers; active plans/commitments | One D/F NpcRuntime snapshot; active commitments in F. | No duplicate values/hydrators in E. Coordinate one shared NPC owner revision and merge sections before reconstruction. |
+| NpcRuntime fields written by E providers; active plans/commitments | One D/E/F NpcRuntime capture under the same P12-B token and component revision vector; active commitment payloads in F. | No duplicate values/hydrators in E. Coordinate one capture and merge disjoint sections before reconstruction; do not invent an aggregate NPC revision. |
 | P10 `LocalTopologyStore`, P8-B–E, P14-A, P18, P19, P20, P13 | Explicitly excluded or empty for this profile. | Any populated or unverified excluded state rejects profile admission. No later-phase feature implementation. |
 
 This design refresh does not claim an exhaustive current owner/provider inventory. Census witnesses, diagnostics, and initial asset counts do not establish exact values or hydration. For each E owner slice, record the effective provider identity, exact mutable fields and cross-owner links, owner revision or capture identity, all supported mutation paths, detached export shape, exact staged reconstruction, and rejection fixtures before implementation. If any fact is unowned or a public mutable path bypasses the proposed snapshot boundary, block that slice and name the path; do not broaden P12-E.
