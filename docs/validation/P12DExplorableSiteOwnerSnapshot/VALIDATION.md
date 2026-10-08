@@ -15,7 +15,12 @@ integration, P12-A readiness, P13 readiness, or Phase 12 closure.
   based on current P12 canonical `dbba3e9a227f66da0381e3e042e826518d63c240`.
   Integration changes only the P12-E design/State and the Site review document;
   the `Assets` tree remains exactly `71d917e5bd4090368f5be1536a6cbb2e789bed64`.
-  Independent current-base review is pending.
+- Independent current-base review: PASS, classified `BASE_DRIFT_ONLY`, review
+  branch `codex/phase12/P12DSiteCurrentBaseIntegrationReview`, record commit
+  `16dce50d34969391da99364c3414a0845af42187`. It confirms review `8290a9a`
+  remains included and validates compatibility with the promoted P12-E
+  `NOT_COMPOSED` correction. All validation below applies to that same
+  unchanged `Assets` tree.
 
 The implementation changes only the Site owner snapshot, `ExplorableSiteStore`,
 its `.meta`, and census tests. Capture rejects duplicate runtime/site-instance
