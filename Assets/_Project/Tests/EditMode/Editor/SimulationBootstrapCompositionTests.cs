@@ -137,6 +137,37 @@ public sealed class SimulationBootstrapCompositionTests
     }
 
     [Test]
+    public void UnityBootstrapDailyV1UsesBuiltInDeterministicRandomRootAndEffectiveSeed()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        int expectedEffectiveSeed = config.useFixedSimulationSeed ? config.simulationSeed : 0;
+        Assert.That(expectedEffectiveSeed, Is.Zero,
+            "The current selected Daily-v1 asset does not enable a fixed simulation seed.");
+
+        GameObject simulationObject = new GameObject("daily-v1-random-root-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+
+        simulation.Start();
+
+        Assert.That(simulation.Bootstrap, Is.Not.Null);
+        IAuthoritativeRandomSource randomSource =
+            ReadPrivateField<IAuthoritativeRandomSource>(simulation, "authoritativeRandomSource");
+        Assert.That(randomSource, Is.TypeOf<DeterministicRandomSource>());
+        DeterministicRandomSource deterministicSource = (DeterministicRandomSource)randomSource;
+        Assert.That(deterministicSource.Seed, Is.EqualTo(expectedEffectiveSeed));
+        Assert.That(
+            deterministicSource.CaptureSnapshot().Seed,
+            Is.EqualTo(expectedEffectiveSeed));
+    }
+
+    [Test]
     public void FailedPublishCallbackDiscardsIdentityAndPermanentlyLatchesBootstrap()
     {
         SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
