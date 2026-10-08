@@ -6,7 +6,7 @@ This review-requested test-only follow-up is based on candidate commit `50c92061
 
 The added test `SaturatedEpochCommittedRosterAddFaultsWithoutPublishingReceiptMapsOrProviders` commits an NPC membership addition inside the existing membership boundary, then exhausts the shared mutation epoch before outer reconciliation. It asserts reconciliation publishes no new receipt-family provider rows or receipt maps, leaves registered/expected section maps unchanged, keeps the epoch at `long.MaxValue`, faults census admission closed, and rejects a subsequent registration. No production source or contract behavior changed.
 
-The updated test file SHA-256 is `0e11b6751567d164bbaf8307c8579a6a3658f0088d3cab8b7876a369084465a6`.
+The test file used for validation, read from the worktree, has SHA-256 `0e11b6751567d164bbaf8307c8579a6a3658f0088d3cab8b7876a369084465a6`. At candidate tip `4947ec926b3a48427e9c07de5d722d45014cf1bf`, the committed Git blob has SHA-256 `bc09681aae9074e8d060e61394a66f10c8c2b1dbc550bbfb122295b289cbcf6e`. Raw comparison shows the blob differs from the validated worktree bytes by exactly one inserted CR byte at offset 21439, consistent with a line-ending/filter transformation. The worktree reports the test file clean; this is a byte-level correspondence note, not a later source edit. No tests were rerun for this documentation-only correction.
 
 ## Current-tip validation
 
