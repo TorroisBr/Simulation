@@ -1,11 +1,66 @@
 # Phase 12 State — Save & Deterministic Continuation
 
 **Status:** PHASE 12 IN PROGRESS — P12-B COMPLETE/PROMOTED within its bounded
-profile-admission and completed-boundary lifecycle contract; P12-C has its
-identity/sequence and owner-continuation composition slices PROMOTED, while
-P12-C remains partial; P12-A remains `WAIT_DEPENDENCY`. P13 remains `BLOCKED`.
+profile-admission and completed-boundary lifecycle contract; P12-C
+COMPLETE/PROMOTED within its accepted identity, genesis-provenance, and
+deterministic-root continuation scope; P12-A remains `WAIT_DEPENDENCY`. P13
+remains `BLOCKED`.
 
-## Current canonical status — P12-C owner-continuation composition slice promoted (2026-10-08)
+## Current canonical status — P12-C private root composition promoted (2026-10-08)
+
+After exact-tip review and validation, `codex/phase12/canonical` was
+fast-forwarded from `6886f5876c756a7abb86c541f6d783da885941d0` through
+candidate `27962a0ce64f74295704719d4258150c6e83e1d0`. The reviewed code
+implementation is `f32f5d895deedff176c09dbcc19ed622dd5226ce`, code tree
+`fdf3d684af1b471643a7f940e128a90ad7445a9c`. The promotion branch tip carries
+the unchanged reviewed code plus the exact-tip review, result XML, and durable
+raw-log archive. Independent implementation review is recorded in
+[`design/PHASE12_P12C_PRIVATE_ROOT_COMPOSITION_IMPLEMENTATION_REVIEW.md`](design/PHASE12_P12C_PRIVATE_ROOT_COMPOSITION_IMPLEMENTATION_REVIEW.md);
+source hashes and validation evidence are in
+[`validation/P12CPrivateRootComposition/VALIDATION.md`](validation/P12CPrivateRootComposition/VALIDATION.md).
+
+The private all-or-none Daily-v1 root now composes the promoted allocator and
+record-sequence snapshots, P8-A geography, P9-B manifest/provenance,
+deterministic-random root, and the already-published `WorldId`. Cross-owner
+checks retain the exact P8 facts and P9 provenance, validate the selected
+profile/schema and effective seed, and reject missing, malformed, duplicate,
+or contradictory reserved provenance tags. Validation on the unchanged code
+tree passed the new composition suite 51/51, seven affected owner/integration
+suites 67/67, ALL EditMode 2535/2535, official Smoke 5/5,
+`SimulationRuntimeLongRunTests` 7/7, and `git diff --check`.
+
+This completes P12-C's accepted private identity/genesis-provenance and
+deterministic-root composition capability. It adds no serialized save
+envelope, capture hook, active-runtime publication, P12-G whole-graph
+validation, copied-save branching, or P13 fork semantics. It does not make
+P12-A ready or close Phase 12.
+
+### Refreshed P12 dependency DAG
+
+- **P12-B:** COMPLETE/PROMOTED within the bounded profile-admission and
+  completed-boundary lifecycle contract. This P12-C promotion does not reopen
+  or broaden it.
+- **P12-C:** COMPLETE/PROMOTED within the accepted identity, genesis
+  provenance, and deterministic-root continuation scope.
+- **P12-D and P12-E:** their P12-B and P12-C capability dependencies are now
+  satisfied. Revalidate their accepted technical boundaries against current
+  canonical architecture, profile inventory, and owner code before assigning
+  implementation readiness; keep their shared runtime/bootstrap integration
+  serialized.
+- **P12-F:** waits on P12-C, P12-D, and P12-E. Expedition remains deferred to
+  its documented P12-F scope.
+- **P12-G:** waits on P12-B through P12-F and a validated live-profile
+  inventory.
+- **P12-A:** remains `WAIT_DEPENDENCY` until every included owner has exact
+  export and staged hydration, the live profile inventory is validated, and
+  its separate implementation authorization is recorded.
+- **P13:** remains `BLOCKED` on its documented continuation and recoverable
+  causal-history prerequisites.
+
+Phase 12 remains open. This promotion establishes no profile-wide
+export/hydration, P12-A readiness, P13 readiness, or Phase closure.
+
+## Previous canonical status — P12-C owner-continuation composition slice promoted (2026-10-08)
 
 After refreshing `origin/codex/phase12/canonical`, the branch was fast-forwarded
 from `82125b8e20ca997226ede0069bc875472cf90430` to the reviewed composition
