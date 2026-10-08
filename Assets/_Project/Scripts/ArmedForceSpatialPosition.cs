@@ -536,6 +536,18 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
     }
 
     public P16AMilitaryMovementProfile P16Profile => p16Profile;
+    internal bool HasP16ExtensionState
+    {
+        get
+        {
+            if (p16Profile != null) return true;
+            foreach (OperationalRecord record in recordsByForceId.Values)
+                if (record != null && (record.Supply != 0m || record.Receipt != null)) return true;
+            return false;
+        }
+    }
+    internal bool HasP17AProvenanceState => requiresP17AProvenance
+        || !string.IsNullOrWhiteSpace(trustedP17AAuthorityId);
     public decimal? P16CurrentQuantity
     {
         get
@@ -569,6 +581,80 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
             result.Sort((left, right) => StringComparer.Ordinal.Compare(left.StableKey, right.StableKey));
             return new ReadOnlyCollection<ArmedForceSpatialPosition>(result);
         }
+    }
+
+    /// <summary>
+    /// Builds an unpublished baseline position owner from detached Daily-v1
+    /// values. P10 topology and later P16/P17 extensions are not accepted.
+    /// </summary>
+    internal static bool TryCreateFromP12EOwnerSnapshot(
+        ArmedForceStore stagedArmedForceStore,
+        SpatialAuthorityStore stagedSpatialAuthorityStore,
+        LocalTopologyStore stagedLocalTopologyStore,
+        IReadOnlyList<ArmedForceSpatialPosition> stagedPositions,
+        long ownerRevision,
+        out ArmedForceSpatialStateStore staged,
+        out string diagnostic)
+    {
+        staged = null;
+        diagnostic = "The detached ArmedForce position values are invalid.";
+        if (stagedArmedForceStore == null
+            || stagedSpatialAuthorityStore == null
+            || stagedPositions == null
+            || ownerRevision < 0L)
+            return false;
+        if (stagedLocalTopologyStore != null)
+        {
+            diagnostic = "Daily-v1 LocalTopology remains NOT_COMPOSED.";
+            return false;
+        }
+
+        ArmedForceSpatialStateStore candidate = new ArmedForceSpatialStateStore(
+            stagedArmedForceStore,
+            stagedSpatialAuthorityStore,
+            null);
+        foreach (ArmedForceSpatialPosition position in stagedPositions)
+        {
+            if (position == null || position.ForceId == null || position.Position == null
+                || candidate.recordsByForceId.ContainsKey(position.ForceId.Value))
+            {
+                diagnostic = "Position rows require unique force identities and typed references.";
+                return false;
+            }
+            if (position.Position.Kind != SpatialReferenceKind.Hex
+                && position.Position.Kind != SpatialReferenceKind.Location
+                && position.Position.Kind != SpatialReferenceKind.Crossing)
+            {
+                diagnostic = "Daily-v1 baseline positions support only resolved Hex, Location, or Crossing references.";
+                return false;
+            }
+            if (!stagedArmedForceStore.TryGet(position.ForceId, out _))
+            {
+                diagnostic = "A position references a force absent from the staged ArmedForce owner.";
+                return false;
+            }
+            if (!candidate.TryResolvePosition(position.Position, out ArmedForceSpatialFailure spatialFailure))
+            {
+                diagnostic = "A position does not resolve against the staged P8 authority: " + spatialFailure + ".";
+                return false;
+            }
+            candidate.recordsByForceId.Add(
+                position.ForceId.Value,
+                new OperationalRecord(position.Position, 0m, null));
+        }
+
+        candidate.revision = ownerRevision;
+        ArmedForceSpatialInvariantReport report = candidate.ValidateInvariants();
+        if (!report.IsValid)
+        {
+            diagnostic = "Staged position owner invariants failed: "
+                + string.Join("; ", report.Violations);
+            return false;
+        }
+
+        staged = candidate;
+        diagnostic = string.Empty;
+        return true;
     }
 
     public bool TryGetPosition(ArmedForceId forceId, out SpatialReference position)
