@@ -1,51 +1,69 @@
 # Phase 12 State — Save & Deterministic Continuation
 
 **Status:** PHASE 12 IN PROGRESS — P12-B COMPLETE/PROMOTED within its bounded
-profile-admission and completed-boundary lifecycle contract; P12-A
-WAIT_DEPENDENCY. P13 remains BLOCKED.
+profile-admission and completed-boundary lifecycle contract; the P12-C
+identity/sequence snapshot slice is PROMOTED as partial P12-C work; P12-A
+remains `WAIT_DEPENDENCY`. P13 remains `BLOCKED`.
 
-## Current canonical status — P12-B bounded completion promoted (2026-10-07)
+## Current canonical status — P12-C identity and sequence snapshot slice promoted (2026-10-07)
 
 `codex/phase12/canonical` was fast-forwarded from
-`94551b08be8cc9347de35eae5051b8e578ea4c1e` to
-`0e9ed16823035d9449c96f9fc9fc8f95cf41616f`. The promoted code tip is
-`bb887989ac96c7bbf405bb9d9b3d9f904d4098b1`, with tree
-`c61aa4a0f63c244044bde97878c66a44444e42fb` and validated `Assets` subtree
-`3f3f0971129004635b9de3bfb5260ab3918d6233`. The exact-tip independent
+`f23fe5a1c70dce8cb32a4ca6aa088820b3ad7279` to reviewed candidate tip
+`9c0920731b2603986d7c7b4bc51a3eb030535b65`. The candidate's code tip is
+`d9ce4502b6b1601660f2c44629d6e0f34c72036d`, tree
+`5222c38f4c4e56313efa1a7caa7542e830d644ba`, with `Assets` tree
+`4e41a3dac9162f632f14daa9f9a978308e959371`. The exact-tip independent
 implementation review is PASS in
-[`PHASE12_P12B_BOUNDED_COMPLETION_IMPLEMENTATION_REVIEW_R2.md`](design/PHASE12_P12B_BOUNDED_COMPLETION_IMPLEMENTATION_REVIEW_R2.md);
-the corrected exact-source validation is recorded in
-[`P12BBoundedCompletionGate2R3/VALIDATION.md`](validation/P12BBoundedCompletionGate2R3/VALIDATION.md).
+[`PHASE12_P12C_IDENTITY_SEQUENCE_SNAPSHOT_IMPLEMENTATION_REVIEW.md`](design/PHASE12_P12C_IDENTITY_SEQUENCE_SNAPSHOT_IMPLEMENTATION_REVIEW.md);
+code and validation evidence are recorded in
+[`P12CIdentitySequenceSnapshotCurrentBase/VALIDATION.md`](validation/P12CIdentitySequenceSnapshotCurrentBase/VALIDATION.md).
 
-The bounded P12-B contract is complete: the selected Daily-v1 supported
-owner/ingress and committed-write evidence is reconciled; runtime-wide
-owner-thread/quiescence and exact owner-coherence are enforced at successful
-outer advance boundaries; and the ephemeral completed-boundary token is
-published only after the required successful boundary work. Failed, partial,
-faulted, or incoherent advances do not issue a new token. This completes P12-B
-within its accepted contract only; it does not deliver P12-A export/staged
-hydration or claim Phase 12 closure.
+P12-B remains complete within its accepted bounded contract. Its selected
+Daily-v1 supported owner/ingress and committed-write evidence is reconciled;
+runtime-wide owner-thread/quiescence and exact owner-coherence are enforced at
+successful outer advance boundaries; and an ephemeral completed-boundary token
+is published only after successful boundary work. Failed, partial, faulted, or
+incoherent advances do not issue a new token. The selected-profile census is
+`68 + 20*N + U + P`, or 278 at the authored baseline (`N=10`, `U=10`, `P=0`).
+The P12-B review and validation remain in
+[`PHASE12_P12B_BOUNDED_COMPLETION_IMPLEMENTATION_REVIEW_R2.md`](design/PHASE12_P12B_BOUNDED_COMPLETION_IMPLEMENTATION_REVIEW_R2.md)
+and [`P12BBoundedCompletionGate2R3/VALIDATION.md`](validation/P12BBoundedCompletionGate2R3/VALIDATION.md).
 
-Validation is exact-tree and retained: nine focused suites passed, ALL EditMode
-`2460/2460`, official Smoke `5/5`, SimulationRuntime LongRun `7/7`, and
-`git diff --check` passed. All XMLs report zero failed, skipped, or
-inconclusive tests; the validation manifest records source, XML, and archived
-log hashes. The selected Daily-v1 census is `68 + 20*N + U + P`, or 278 at
-the authored baseline (`N=10`, `U=10`, `P=0`).
+The promoted P12-C sub-slice adds immutable snapshots and strict private staged
+reconstruction for the fourteen existing `RuntimeIdAllocator` counters and the
+shared `SimulationRecordSequence`. It preserves exact values/gaps, rejects
+malformed snapshots without mutating live owners, gives reconstructed owners
+fresh census identities with local revision `next value - 1`, and leaves
+mutation hooks unbound until normal runtime composition binds them. Existing
+P12 mutation hooks, runtime rebinding, P11 ActorChoice behavior, and P18-D
+occurrence receipts remain intact.
+
+Exact-tree validation remains attached to code tip `d9ce450`: focused suites
+passed (IdentitySequenceSnapshot 4/4, RuntimeIdAllocatorCensus 3/3,
+SimulationRecordSequenceP12Invalidation 17/17, ActorChoiceCensus 9/9,
+ActorChoiceRuntime 11/11, P18DConsumerIntegration 10/10); ALL EditMode
+`2466/2466`; official Smoke `5/5`; SimulationRuntime LongRun `7/7`; and
+`git diff --check` passed. The manifest hashes raw committed Git blobs and
+records the Windows line-ending normalization used by the validation worktree.
+The independent reviewer verified all source, XML, and archived-log hashes
+against the exact candidate.
 
 ### Refreshed dependency DAG
 
-- **P12-B:** COMPLETE/PROMOTED within the bounded contract above.
-- **P12-C:** its P12-B prerequisite is now satisfied. Preserve candidate
-  `531d835f01a9070df42d54291ffde32387fb4358`, but classify it
-  `REINTEGRATE / REVALIDATE`: it was based on `8db8cfc`, predates the current
-  canonical code, and its old review does not establish current-base
-  compatibility. Recompose only the accepted additive identity snapshot
-  seams, preserve current P18-D/P11 decision-record behavior, and obtain fresh
-  exact-tip review and required validation before promotion. P12-C is the next
-  active checkpoint; it is not yet recorded as promoted or complete.
-- **P12-D and P12-E:** wait on P12-C as well as their already satisfied
-  P12-B edge.
+- **P12-B:** COMPLETE/PROMOTED within its accepted bounded contract.
+- **P12-C:** IN PROGRESS; the allocator/sequence snapshot sub-slice above is
+  promoted, but P12-C is not complete. Remaining accepted obligations include
+  P9-B genesis provenance, exact selected-profile P8-A geography facts, and
+  continuation-relevant deterministic-random roots. A read-only audit
+  identified exact P8-A geography snapshot/staged reconstruction as the
+  narrowest next bounded slice; it needs its own technical design review
+  before implementation. The selected Daily-v1 facts are the authored Hex
+  and terrain/revision, its anchored Location, coordinate convention/order,
+  and authored scale context. A separate RNG-root slice is
+  `READY_FOR_DESIGN`; the Daily-v1 path uses a stateless keyed provider and
+  does not require Conflict demo stream cursors.
+- **P12-D and P12-E:** remain blocked on completion of P12-C, in addition to
+  their satisfied P12-B edge.
 - **P12-F:** waits on P12-C, P12-D, and P12-E. Expedition remains deferred to
   its documented P12-F scope.
 - **P12-G:** waits on P12-B through P12-F and a validated live-profile
@@ -53,12 +71,12 @@ the authored baseline (`N=10`, `U=10`, `P=0`).
 - **P12-A:** remains `WAIT_DEPENDENCY` until every included owner has exact
   export and staged hydration, the live profile inventory is validated, and
   its separate implementation authorization is recorded.
-- **P13:** remains `BLOCKED` on its documented continuation and causal-history
-  prerequisites.
+- **P13:** remains `BLOCKED` on its documented continuation and recoverable
+  causal-history prerequisites.
 
-No export/hydration, P12-A readiness, P13 readiness, or formal Phase 12 closure
-is implied. The older P12-E snapshot below is retained as historical evidence.
-
+Phase 12 remains open. This promotion provides no profile-wide
+export/hydration, P12-A readiness, P13 readiness, or formal Phase 12 closure.
+The older P12-E snapshot below is retained as historical evidence.
 ## Historical canonical snapshot — P12-E military census registration (2026-10-06)
 
 The code-bearing P12-E promotion tip is cda5a55ff6e3d9c884c95eabd0d11f3f4f4ee004.
@@ -254,7 +272,7 @@ the multi-participant activity alignment remains `c285466c355103d3637ac165246591
 P12-B–P12-G capability decomposition in
 `docs/design/PHASE12_CAPABILITY_CHECKPOINT_DECOMPOSITION.md`.
 
-## Checkpoint status
+### Historical checkpoint status at the P12-E registration snapshot (2026-10-06)
 
 | Checkpoint | Status | Current evidence and limits |
 |---|---|---|
