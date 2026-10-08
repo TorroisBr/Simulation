@@ -54,3 +54,32 @@ All XML and matching raw Unity logs are included in [`P12EArmedForceManpowerPosi
 - The initial focused launch compiled before tests and exposed a missing `SpatialReference` validator overload. The overload was added before the final passing runs.
 - One intermediate focused run found a test setup error: the provider-null assertion supplied two different owner-vector instances. The test now reuses the exact token-bound vector; the final focused suite passes 7/7.
 - A comma-separated `-TestFilter` invocation returned zero tests and is excluded. Each regression fixture listed above was run separately.
+
+## Review-gap follow-up — exact updated candidate
+
+The independent exact-tip implementation review at `e4ff2a2610cd72e6a27fd55789172b8beb220567` requested additional snapshot boundary coverage without identifying a production-source defect. The follow-up adds tests only, within the accepted P12-E design: complete owner-field round trips including detached and terminated forces and all cohort dimensions; deep detachment after mutating source owners; malformed hierarchy/cardinality/identity/cohort/custody/mirror/spatial rejection with all staged outputs null; and failure/no-side-effect assertions at each private owner factory.
+
+- Previous pushed candidate: `7395ab58354bc859b33469c5af3f0b17a82e840b`.
+- Updated code/test candidate: `a6ecf55aa8f3aca6d51a1a3d332881383eac5b4a`.
+- Exact repository tree: `fa62a40c9698235f0c6bae1acbe0bc45ba1cf141`.
+- Exact `Assets` tree: `09ba6fe9c74c2f19f84b318944ce3e0bcc8119b6`.
+- Updated focused test blob: `3f88e6da4fddbc34fd3de12f760f8d78a79864d5`.
+- Production owner source files are unchanged from the prior candidate.
+- `git diff --check` passed after the test-only code commit.
+
+The validation below was run against the exact updated test/source content committed at `a6ecf55`. The complete EditMode run also covers the independent owner regression fixtures whose separate invocations were affected by a Unity runner `NoResultXml` operational failure.
+
+| Suite | Result | XML SHA-256 | Log SHA-256 |
+|---|---:|---|---|
+| `P12EMilitaryOwnerSnapshotTests` | 10/10 | `C5149A9A0289A8976638F9F1CCC42DC59E14AB6EF589E82E5C27633F8BD7C93C` | `B23B5DCFE7542814CD0AEA7F5E01E1E28BD1ABE4BC41CA34AC28FF6F5E901EFF` |
+| `ArmedForceFoundationTests` | 10/10 | `E1E55337050D01B22F2158613E344FCFB60B24C82A4228D9894863E2D051673A` | `18CEBF73C12ED24E07FD507ACB4DB59D0D7CD5BBE8F2EA79C95E337FD519DB4D` |
+| `ArmedForceSpatialPositionTests` | 12/12 | `ED78C85C2ECA4A0028778DCCFBFD7439B73D1A5CBA095D9B23BF3731F5200D8C` | `9D7CCAADE68F8A8767E797509B3F7A0FA44AF48C97656A4433010C00603062B7` |
+| `ArmedForceStoreCensusTests` | 1/1 | `711F2F816A296EC02C088D853BB7FE1304E8121FE546F959917AED9758AB1845` | `ED95B7AB08CFD06304F95E1412E61FCB53D8DD88F752CF32CD0D2C6C7C5B9B2D` |
+| `P16AMilitaryMovementTests` | 21/21 | `4FCFFA769E8C42A0674B9F9E91663277B9351A8B55407C1EA3996756CC26ED90` | `A6471124E039D40E68A4983CB1439320BAD80C1B8ABCB14005D15610626EFBBC` |
+| `P17ARuntimeTests` | 10/10 | `B6CBBD6CF1E9E962419FB79806E952EFDACD65F03239A69A60CF7FB3AF08DDFC` | `FAA7676B0D4006106205066F6CECE481461030470BF1B8FFD65F8C9CD748AE74` |
+| ALL EditMode | 2579/2579 | `E8A63DE186F38E1938257DBCCF3D453ADAF072B6A6CBA231C5B65CE1B5AA7511` | `12EC5F9AFB9525E48CA10F0FE7C3D046F7D7E973F2239236B0213C0C5BF9B86B` |
+| Official `Smoke` | 5/5 | `2BA9648197C3B4BA58FAB993AC8024B86B2C1F9A5C4C7056E4306633DEF44CF8` | `3F60B1A3C29346C86FEBBA5A91F3046347F9A39505AFB77FFF9CE28F57F64C17` |
+
+All successful XML/log pairs and the operational-attempt summary are included in [`P12E-review-gap-followup-20261008.zip`](P12E-review-gap-followup-20261008.zip), SHA-256 `AC3AF3F4F852880725B01E45225FCE95BD0446279BE227ECBB0134058EEF08C3`.
+
+Non-evidence attempts and the no-result filter list are recorded in the archive's `attempts/attempt-summary.txt`. The no-result filters were not counted as passes; ALL EditMode passed 2579/2579.
