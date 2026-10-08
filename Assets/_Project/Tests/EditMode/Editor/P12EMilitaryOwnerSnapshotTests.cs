@@ -471,6 +471,27 @@ public sealed class P12EMilitaryOwnerSnapshotTests
         P12EMilitaryOwnerSnapshot valid = CaptureOrFail(live);
         P12EManpowerStateSnapshotRecord state = valid.ManpowerStates[0];
 
+        P12EMilitaryContingentSnapshotRecord negativeAmount = new P12EMilitaryContingentSnapshotRecord(
+            valid.Contingents[0].ContingentIdValue,
+            valid.Contingents[0].ForceIdValue,
+            -1L,
+            valid.Contingents[0].OriginDomain,
+            valid.Contingents[0].OriginValue,
+            valid.Contingents[0].ServiceType,
+            valid.Contingents[0].Characteristics);
+        AssertStageRejected(Copy(valid, contingents: new[] { negativeAmount }),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidIdentity);
+        AssertStageRejected(Copy(valid, armedForceRevision: -1L),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidRevision);
+        AssertStageRejected(Copy(valid, manpowerRevision: -1L),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidRevision);
+        AssertStageRejected(Copy(valid, positionRevision: -1L),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidRevision);
+        AssertStageRejected(Copy(valid, manpowerStates: new[]
+        {
+            CopyManpower(state, revision: -1L)
+        }), P12EMilitaryOwnerSnapshotFailureCode.InvalidIdentity);
+
         AssertStageRejected(Copy(valid, manpowerStates: new[]
         {
             CopyManpower(state, cohorts: new[]
@@ -487,6 +508,15 @@ public sealed class P12EMilitaryOwnerSnapshotTests
                 new P12EManpowerCohortSnapshotRecord(
                     ManpowerInjuryState.Healthy, ManpowerCustodyState.Free, null,
                     ManpowerAvailabilityState.Available, 0L)
+            })
+        }), P12EMilitaryOwnerSnapshotFailureCode.InvalidRelation);
+        AssertStageRejected(Copy(valid, manpowerStates: new[]
+        {
+            CopyManpower(state, cohorts: new[]
+            {
+                new P12EManpowerCohortSnapshotRecord(
+                    ManpowerInjuryState.Healthy, ManpowerCustodyState.Free, null,
+                    ManpowerAvailabilityState.Available, -1L)
             })
         }), P12EMilitaryOwnerSnapshotFailureCode.InvalidRelation);
         AssertStageRejected(Copy(valid, manpowerStates: new[]
@@ -588,6 +618,18 @@ public sealed class P12EMilitaryOwnerSnapshotTests
         Assert.That(forceDiagnostic, Is.Not.Null.And.Not.Empty);
         Assert.That(targetPersons.Persons.Count, Is.EqualTo(personCountBefore));
 
+        Assert.That(ArmedForceStore.TryCreateFromP12EOwnerSnapshot(
+            targetPersons,
+            live.Forces.Forces,
+            live.Forces.Contingents,
+            live.Forces.RelevantPersons,
+            -1L,
+            out ArmedForceStore failedNegativeRevisionForce,
+            out string negativeForceDiagnostic), Is.False);
+        Assert.That(failedNegativeRevisionForce, Is.Null);
+        Assert.That(negativeForceDiagnostic, Is.Not.Null.And.Not.Empty);
+        Assert.That(targetPersons.Persons.Count, Is.EqualTo(personCountBefore));
+
         ArmedForceStore stagedForce = StageForceOwnerOrFail(live);
         long stagedForceRevisionBefore = stagedForce.Revision;
         ContingentManpowerState sourceBoundState = new ContingentManpowerState(
@@ -606,6 +648,53 @@ public sealed class P12EMilitaryOwnerSnapshotTests
         Assert.That(stagedForce.Revision, Is.EqualTo(stagedForceRevisionBefore));
         Assert.That(stagedForce.ValidateInvariants().IsValid, Is.True);
 
+        ContingentManpowerState negativeLocalRevisionState = new ContingentManpowerState(
+            new ContingentId("contingent-child"),
+            null,
+            stateBefore.Cohorts,
+            -1L);
+        Assert.That(ContingentManpowerStateStore.TryCreateFromP12EOwnerSnapshot(
+            stagedForce,
+            new[] { negativeLocalRevisionState },
+            snapshot.ManpowerRevision,
+            out ContingentManpowerStateStore failedNegativeStateRevisionManpower,
+            out string negativeStateRevisionDiagnostic), Is.False);
+        Assert.That(failedNegativeStateRevisionManpower, Is.Null);
+        Assert.That(negativeStateRevisionDiagnostic, Is.Not.Null.And.Not.Empty);
+
+        ContingentManpowerState negativeAmountManpowerState = new ContingentManpowerState(
+            new ContingentId("contingent-child"),
+            null,
+            new[]
+            {
+                new ContingentManpowerCohort(
+                    ManpowerInjuryState.Healthy,
+                    ManpowerCustodyState.Free,
+                    null,
+                    ManpowerAvailabilityState.Available,
+                    -1L)
+            },
+            stateBefore.Revision);
+        Assert.That(ContingentManpowerStateStore.TryCreateFromP12EOwnerSnapshot(
+            stagedForce,
+            new[] { negativeAmountManpowerState },
+            snapshot.ManpowerRevision,
+            out ContingentManpowerStateStore failedNegativeAmountManpower,
+            out string negativeManpowerAmountDiagnostic), Is.False);
+        Assert.That(failedNegativeAmountManpower, Is.Null);
+        Assert.That(negativeManpowerAmountDiagnostic, Is.Not.Null.And.Not.Empty);
+
+        Assert.That(ContingentManpowerStateStore.TryCreateFromP12EOwnerSnapshot(
+            stagedForce,
+            new[] { stateBefore },
+            -1L,
+            out ContingentManpowerStateStore failedNegativeOwnerRevisionManpower,
+            out string negativeManpowerRevisionDiagnostic), Is.False);
+        Assert.That(failedNegativeOwnerRevisionManpower, Is.Null);
+        Assert.That(negativeManpowerRevisionDiagnostic, Is.Not.Null.And.Not.Empty);
+        Assert.That(stagedForce.Revision, Is.EqualTo(stagedForceRevisionBefore));
+        Assert.That(stagedForce.ValidateInvariants().IsValid, Is.True);
+
         ArmedForceSpatialPosition unresolvedPosition = new ArmedForceSpatialPosition(
             new ArmedForceId("force-child"), SpatialReference.ForLocation(new LocationId("location-missing")));
         Assert.That(ArmedForceSpatialStateStore.TryCreateFromP12EOwnerSnapshot(
@@ -620,6 +709,23 @@ public sealed class P12EMilitaryOwnerSnapshotTests
         Assert.That(positionDiagnostic, Is.Not.Null.And.Not.Empty);
         Assert.That(stagedForce.Revision, Is.EqualTo(stagedForceRevisionBefore));
         Assert.That(stagedForce.ValidateInvariants().IsValid, Is.True);
+
+        int spatialHexCountBefore = live.Spatial.HexCount;
+        int spatialLocationCountBefore = live.Spatial.LocationCount;
+        Assert.That(ArmedForceSpatialStateStore.TryCreateFromP12EOwnerSnapshot(
+            stagedForce,
+            live.Spatial,
+            null,
+            live.Positions.Positions,
+            -1L,
+            out ArmedForceSpatialStateStore failedNegativePositionRevision,
+            out string negativePositionRevisionDiagnostic), Is.False);
+        Assert.That(failedNegativePositionRevision, Is.Null);
+        Assert.That(negativePositionRevisionDiagnostic, Is.Not.Null.And.Not.Empty);
+        Assert.That(stagedForce.Revision, Is.EqualTo(stagedForceRevisionBefore));
+        Assert.That(stagedForce.ValidateInvariants().IsValid, Is.True);
+        Assert.That(live.Spatial.HexCount, Is.EqualTo(spatialHexCountBefore));
+        Assert.That(live.Spatial.LocationCount, Is.EqualTo(spatialLocationCountBefore));
 
         Assert.That(live.Forces.Revision, Is.EqualTo(forceRevisionBefore));
         Assert.That(live.Manpower.Revision, Is.EqualTo(manpowerRevisionBefore));
@@ -662,6 +768,9 @@ public sealed class P12EMilitaryOwnerSnapshotTests
     private static P12EMilitaryOwnerSnapshot Copy(
         P12EMilitaryOwnerSnapshot source,
         int? schemaVersion = null,
+        long? armedForceRevision = null,
+        long? manpowerRevision = null,
+        long? positionRevision = null,
         int? forceCount = null,
         int? contingentCount = null,
         int? relevantPersonCount = null,
@@ -672,12 +781,16 @@ public sealed class P12EMilitaryOwnerSnapshotTests
         IEnumerable<P12EMilitaryRelevantPersonSnapshotRecord> relevantPersons = null,
         IEnumerable<P12EManpowerStateSnapshotRecord> manpowerStates = null,
         IEnumerable<P12EForcePositionSnapshotRecord> positions = null) =>
-        CreateCopy(source, schemaVersion, forceCount, contingentCount, relevantPersonCount,
-            manpowerStateCount, positionCount, forces, contingents, relevantPersons, manpowerStates, positions);
+        CreateCopy(source, schemaVersion, armedForceRevision, manpowerRevision, positionRevision,
+            forceCount, contingentCount, relevantPersonCount, manpowerStateCount, positionCount,
+            forces, contingents, relevantPersons, manpowerStates, positions);
 
     private static P12EMilitaryOwnerSnapshot CreateCopy(
         P12EMilitaryOwnerSnapshot source,
         int? schemaVersion,
+        long? armedForceRevision,
+        long? manpowerRevision,
+        long? positionRevision,
         int? forceCount,
         int? contingentCount,
         int? relevantPersonCount,
@@ -696,9 +809,9 @@ public sealed class P12EMilitaryOwnerSnapshotTests
         P12EForcePositionSnapshotRecord[] positionRows = (positions ?? source.Positions).ToArray();
         return new P12EMilitaryOwnerSnapshot(
             schemaVersion ?? source.SchemaVersion,
-            source.ArmedForceRevision,
-            source.ManpowerRevision,
-            source.PositionRevision,
+            armedForceRevision ?? source.ArmedForceRevision,
+            manpowerRevision ?? source.ManpowerRevision,
+            positionRevision ?? source.PositionRevision,
             forceCount ?? forceRows.Length,
             contingentCount ?? contingentRows.Length,
             relevantPersonCount ?? relevantRows.Length,
@@ -713,12 +826,13 @@ public sealed class P12EMilitaryOwnerSnapshotTests
 
     private static P12EManpowerStateSnapshotRecord CopyManpower(
         P12EManpowerStateSnapshotRecord source,
-        IEnumerable<P12EManpowerCohortSnapshotRecord> cohorts) =>
+        IEnumerable<P12EManpowerCohortSnapshotRecord> cohorts = null,
+        long? revision = null) =>
         new P12EManpowerStateSnapshotRecord(
             source.ContingentIdValue,
             source.SourceIdValue,
-            source.Revision,
-            cohorts);
+            revision ?? source.Revision,
+            cohorts ?? source.Cohorts);
 
     private static void AssertStageRejected(
         P12EMilitaryOwnerSnapshot snapshot,
