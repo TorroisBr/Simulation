@@ -6,6 +6,55 @@ COMPLETE/PROMOTED within its accepted identity, genesis-provenance, and
 deterministic-root continuation scope; P12-A remains `WAIT_DEPENDENCY`. P13
 remains `BLOCKED`.
 
+## Latest canonical promotion — P12-D City/NPC relation-order assembly (2026-10-08)
+
+After final preflight, `codex/phase12/canonical` was advanced from
+`1c7b906c172d9e47020996888db64bd2516b451a` through the reviewed candidate
+`483edb791f523d797e9b52e88eda00fc34eaa5ff`. Its implementation code commit
+is `5aceb2b7ce49ffe009489627731cd6689fe2d200`, reviewed code-commit tree
+`bdc866e9a87091d029909aaa3767c44d1120337f`, and reviewed `Assets` tree
+`e6c0776052dbfdd8a83ce51eb15fd15cf9d89b2c`. The candidate branch is
+`codex/phase12/P12DCityNpcAssemblyImplementation`.
+
+The exact-tip independent review is PASS at review commit
+`28a4f060c84ad568bb9f3d21faabb6581af2d0bb`, recorded in
+[`design/PHASE12_D_CITY_NPC_ASSEMBLY_IMPLEMENTATION_REVIEW_483EDB.md`](design/PHASE12_D_CITY_NPC_ASSEMBLY_IMPLEMENTATION_REVIEW_483EDB.md).
+The earlier review of candidate `92ad87f` and its superseding NEEDS_CHANGES
+addendum are retained in
+[`design/PHASE12_D_CITY_NPC_ASSEMBLY_IMPLEMENTATION_REVIEW_92AD87F.md`](design/PHASE12_D_CITY_NPC_ASSEMBLY_IMPLEMENTATION_REVIEW_92AD87F.md)
+and
+[`design/PHASE12_D_CITY_NPC_ASSEMBLY_IMPLEMENTATION_REVIEW_ADDENDUM_92AD87F.md`](design/PHASE12_D_CITY_NPC_ASSEMBLY_IMPLEMENTATION_REVIEW_ADDENDUM_92AD87F.md).
+The addendum supersedes that earlier PASS due to a separable snapshot/evidence
+pairing hole; the accepted candidate replaces it with a privately constructed
+capture envelope binding City values to their token, stamp, and owner-vector
+identity.
+
+Validation on the unchanged code tree passed the City assembly suite 17/17,
+receipt-owner suite 13/13, ALL EditMode 2592/2592, official Smoke 5/5, and
+cumulative `git diff --check`. Exact XML/log/source hashes are in
+[`validation/P12DCityNpcAssembly/VALIDATION-FOLLOWUP-CAPTURE-ENVELOPE-5ACEB2B.md`](validation/P12DCityNpcAssembly/VALIDATION-FOLLOWUP-CAPTURE-ENVELOPE-5ACEB2B.md).
+
+This bounded slice stages City/NPC presence and validates ordered reciprocal
+City/NPC/location relations before any membership fill. It preserves captured
+ordering and local revision, rejects mismatched City/D/F capture identity and
+exact-zero receipt-owner evidence gaps, and performs no gameplay mutation
+during staging. It does not implement runtime/bootstrap publication, broader
+P12-D owner coverage, profile-wide export/hydration, P12-A/P13 behavior, or
+Phase closure.
+
+P12-D remains IN PROGRESS. City/NPC staged assembly and its reciprocal
+relation validation are now promoted; runtime/bootstrap publication, whole-D
+graph integration, and remaining accepted D owner coverage remain outstanding.
+P12-E remains IN PROGRESS; its ArmedForceManpowerPosition snapshot candidate
+must be recomposed and revalidated on this new canonical base before
+integration. P12-F still waits for P12-C/D/E; P12-G waits for P12-B through
+P12-F plus validated live-profile inventory. P12-A remains WAIT_DEPENDENCY and
+P13 remains BLOCKED. Phase 12 remains open.
+
+This promotion does not imply P12-D completion, complete owner/shared-epoch
+coverage, capture eligibility, profile-wide export/hydration, P12-A/P13
+readiness, or Phase closure.
+
 ## Latest canonical promotion — P12-D exact-zero receipt-owner census (2026-10-08)
 
 After a final remote preflight, `codex/phase12/canonical` was advanced from
