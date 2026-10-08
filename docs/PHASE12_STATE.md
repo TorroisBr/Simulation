@@ -6,7 +6,74 @@ COMPLETE/PROMOTED within its accepted identity, genesis-provenance, and
 deterministic-root continuation scope; P12-A remains `WAIT_DEPENDENCY`. P13
 remains `BLOCKED`.
 
-## Latest bounded owner promotion — P12-E Battle snapshot (2026-10-08)
+## Latest canonical promotion — P12-D exact-zero receipt-owner census (2026-10-08)
+
+After a final remote preflight, `codex/phase12/canonical` was advanced from
+`04e7c3f49a7c9690ebc091fcfc50f05ef67009d6` through reviewed candidate
+`cc9f11471887c71f2a9c4834e1bcc1edeb3025fe`. Its reviewed code/test commit is
+`4947ec926b3a48427e9c07de5d722d45014cf1bf`, code/test tree
+`dd0cda707693237a56f5664b2eabc8aa6821b100`, and reviewed `Assets` tree
+`b239758a62c9c670f7400af2567515308e138a4f`. The independent exact-tip
+implementation review is PASS at
+`85acfead11d84a8940fe6da87ace6fab243ffc56`, recorded in
+[`design/PHASE12_D_CITY_NPC_RECEIPT_ZERO_WITNESS_IMPLEMENTATION_REVIEW_R3.md`](design/PHASE12_D_CITY_NPC_RECEIPT_ZERO_WITNESS_IMPLEMENTATION_REVIEW_R3.md).
+The accepted design and its independent review remain
+[`design/PHASE12_D_CITY_NPC_RECEIPT_ZERO_WITNESS_DESIGN.md`](design/PHASE12_D_CITY_NPC_RECEIPT_ZERO_WITNESS_DESIGN.md)
+and
+[`design/PHASE12_D_CITY_NPC_RECEIPT_ZERO_WITNESS_DESIGN_REVIEW.md`](design/PHASE12_D_CITY_NPC_RECEIPT_ZERO_WITNESS_DESIGN_REVIEW.md).
+
+Validation on that unchanged code tree passed the receipt-owner focused suite
+13/13, ALL EditMode 2582/2582, official Smoke 5/5, and `git diff --check`.
+The exact XML/log hashes and committed/worktree source-byte correspondence
+are recorded in
+[`validation/P12DCityNpcReceiptOwnerCensus/VALIDATION-FOLLOWUP-50C9206.md`](validation/P12DCityNpcReceiptOwnerCensus/VALIDATION-FOLLOWUP-50C9206.md).
+The source-hash correction changes documentation only; the reviewed `Assets`
+tree is unchanged.
+
+This slice adds the selected Daily-v1 exact-zero identity/cardinality/revision
+witnesses for the two excluded P18 receipt owners under each applicable NPC:
+LocalObservation and MerchantTradeState. It closes the prior evidence gap
+where absence from the census vector did not prove exact empty state. It adds
+no P18 receipt export or replay, no new P12-B operation or mutation semantics,
+and no broader owner/shared-epoch, capture-eligibility, export, or hydration
+claim.
+
+P12-D remains IN PROGRESS. The missing receipt-owner evidence is supplied, so
+the existing City/NPC assembly design may now be revalidated against this
+canonical tip. City/NPC shared assembly, exact merged-graph validation,
+runtime integration, and remaining accepted D owner coverage remain
+outstanding; this promotion does not complete P12-D.
+
+### Refreshed P12 checkpoint DAG
+
+- P12-B: COMPLETE/PROMOTED within its bounded Daily-v1 admission and
+  completed-boundary lifecycle contract.
+- P12-C: COMPLETE/PROMOTED within its accepted identity, genesis-provenance,
+  and deterministic-root continuation scope.
+- P12-D: IN PROGRESS. Genealogy, SpatialNetwork, Person, ExplorableSite,
+  isolated City, and the two exact-zero P18 receipt-owner census witnesses
+  are promoted. Revalidate the existing City/NPC assembly design; shared
+  assembly, merged-graph validation, runtime integration, and remaining D
+  owner coverage remain.
+- P12-E: IN PROGRESS. Battle owner snapshot is promoted. The bounded
+  ArmedForceManpowerPosition snapshot candidate is independently reviewed
+  and validated on its prior P12 base; it must be revalidated/recomposed after
+  this D promotion before integration.
+- P12-F: waits for P12-C, P12-D, and P12-E.
+- P12-G: waits for P12-B through P12-F plus a validated live-profile
+  inventory.
+- P12-A: remains WAIT_DEPENDENCY until all included owners have exact export
+  and staged hydration, live inventory is validated, and separate
+  implementation authorization is recorded.
+- P13: remains BLOCKED on its explicit continuation prerequisites.
+
+Phase 12 remains open. This promotion does not imply P12-D completion,
+P12-A/P13 readiness, profile-wide export/hydration, or Phase closure.
+
+This current record supersedes the readiness snapshot in the earlier
+P12-E Battle promotion section below; that section is retained as history.
+
+## Earlier bounded owner promotion — P12-E Battle snapshot (2026-10-08)
 
 After refreshing `origin/codex/phase12/canonical` at
 `ef0cafb5848cadcf0ac91a3e1af7ff3faaab1367`, the bounded Battle owner snapshot
