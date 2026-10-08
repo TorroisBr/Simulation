@@ -83,3 +83,23 @@ The validation below was run against the exact updated test/source content commi
 All successful XML/log pairs and the operational-attempt summary are included in [`P12E-review-gap-followup-20261008.zip`](P12E-review-gap-followup-20261008.zip), SHA-256 `AC3AF3F4F852880725B01E45225FCE95BD0446279BE227ECBB0134058EEF08C3`.
 
 Non-evidence attempts and the no-result filter list are recorded in the archive's `attempts/attempt-summary.txt`. The no-result filters were not counted as passes; ALL EditMode passed 2579/2579.
+
+## Negative amount/revision matrix follow-up
+
+The subsequent exact-tip review identified that §6's negative-value matrix still lacked direct negative amount and revision cases. This follow-up changes tests only; production owner source remains unchanged.
+
+- Updated code/test candidate: `90481acc0caae36385b3ec2e58d3a9b9b03316c0`.
+- Exact repository tree: `15dbe25fd6389a00cdd7ec9472ca9725702f7ab9`.
+- Exact `Assets` tree: `af1af0db0799431b796a53509a1e8fa130d5611c`.
+- Updated focused test blob: `8f96727b13af4173adf48bff22e819e9447c79cf`.
+- Added staged-document rejection cases for negative contingent amount, negative manpower cohort amount, each of the three negative owner revisions, and negative manpower-state revision. Each rejected stage returns no owners.
+- Added private factory failures for negative ArmedForce owner revision, negative manpower owner/state revision and amount, and negative position owner revision. Each returns no candidate and diagnostics; tests verify supplied/live revisions, invariants, or authority cardinalities remain unchanged.
+- `git diff --check` passed.
+
+| Suite | Result | XML SHA-256 | Log SHA-256 |
+|---|---:|---|---|
+| `P12EMilitaryOwnerSnapshotTests` | 10/10 | `21F1D39E541687925841C5A939486E40C1BDA0567871BE0E651059EA7E945971` | `C0007A4193C3FD321E43E7AE4FFC471EAEDBF7C1BC119F0F200530ACEB45F193` |
+| ALL EditMode | 2579/2579 | `70FE977837EF862532095BA708779095868D00A93503911140A2D969D25C8FC5` | `77DEA99A5D29E665C728EB429A7C1779A1F1A8742FD397A8DC20140F7A8315DC` |
+| Official `Smoke` | 5/5 | `90CCDEF0109FE4193F91263AC503C901A2CA63D5863C93C24AB71259E9C0E551` | `537761907788E7DA09C82B2A7DD5CD425A0B5A3BC447A1FCB1CB15FCB8873E2D` |
+
+The XML/log pairs and run summary are included in [`P12E-negative-values-followup-20261008.zip`](P12E-negative-values-followup-20261008.zip), SHA-256 `ADEB46B26B8A62CFD230DFEFD768298A29C304625A2AFC161E0FA6ECFDB36675`.
