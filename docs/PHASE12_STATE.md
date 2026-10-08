@@ -21,6 +21,14 @@ The reviewed implementation candidate, exact-tip review record, and this
 State entry form one bounded checkpoint promotion bundle. This State update
 does not change source code or the `Assets` tree.
 
+After final preflight, `codex/phase12/canonical` advanced by clean fast-forward
+from `5acc3fff94f74fcb718610825caadf645423d672` to the promoted bundle tip
+`4fc1e37246dc96da99638fe87f6e825e05d2dd2e`. The remote canonical ref was
+verified synchronized at that SHA. The reviewed code tip, Git tree, and exact
+`Assets` subtree above are unchanged; the retained exact-tip review and
+validation remain applicable, so this documentation-only State finalization
+does not rerun Unity.
+
 The bounded P12-D slice captures NPC D/F values once under the same completed
 Daily-v1 boundary token, stamp, and component revision vector; merges disjoint
 D/F projections; and privately stages exact owner values and typed references
