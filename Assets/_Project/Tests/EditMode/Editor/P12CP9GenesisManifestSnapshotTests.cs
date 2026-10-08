@@ -40,7 +40,7 @@ public sealed class P12CP9GenesisManifestSnapshotTests
         Assert.That(snapshot.SnapshotSchemaVersion, Is.EqualTo(P12CP9GenesisManifestSnapshot.CurrentSchemaVersion));
         Assert.That(snapshot.P12AdmissionProfile, Is.EqualTo(SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1));
         Assert.That(HasRecordWithPrefixAndText(snapshot.CanonicalProvenanceRecords,
-            "action-required-status:", "status/Status-Livre"), Is.True,
+            "action-required-status:", "Status-Livre"), Is.True,
             "Daily-v1 Viajar has a required status recorded as a raw DefinitionId.");
         AssertManifestMatchesSnapshot(source, snapshot);
         Assert.That(snapshot.CanonicalProvenanceRecords, Is.Not.SameAs(source.CanonicalProvenanceRecords));
