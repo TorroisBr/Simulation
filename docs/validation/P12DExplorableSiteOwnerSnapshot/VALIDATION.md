@@ -1,6 +1,6 @@
 # P12-D ExplorableSite owner snapshot validation
 
-**Status:** Candidate validation PASS. This isolated owner slice is not P12-D
+**Status:** Promoted isolated owner snapshot. This slice is not P12-D
 integration, P12-A readiness, P13 readiness, or Phase 12 closure.
 
 ## Candidate identity and review
@@ -25,8 +25,7 @@ integration, P12-A readiness, P13 readiness, or Phase 12 closure.
   unchanged, and the Site snapshot is compatible with the P12-E
   `NOT_COMPOSED` correction. The corrected City/NPC design was merged
   afterward at `9e0dcce1e0d348dba3853be67a2565a5f4826be1` with exact-content
-  review `c65499d3baa52a134016fce5a0cefee8f0e09c4e`. A final integration
-  revalidation is required for the assembled candidate; validation below
+  review `c65499d3baa52a134016fce5a0cefee8f0e09c4e`. Final integration revalidation passed as BASE_DRIFT_ONLY and is recorded at 366dc6cb2a605c6d1fc2b9c11518d6d2972488cc, reviewing candidate f005be6f9a46c35c1cc7c467914073bd264b4dec against P12 canonical dbba3e9a227f66da0381e3e042e826518d63c240; validation below
   remains bound to the same unchanged `Assets` tree.
 
 The implementation changes only the Site owner snapshot, `ExplorableSiteStore`,
@@ -38,7 +37,7 @@ cross-owner graph, or publication integration is included.
 
 ## Validation
 
-All results below are from the integrated candidate and exact
+Validation results below are from the integrated candidate and exact
 `Assets` tree `71d917e5bd4090368f5be1536a6cbb2e789bed64`. No failed, skipped, or
 inconclusive tests were reported. `git diff --check` against the current
 canonical base passed.

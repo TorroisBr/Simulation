@@ -67,17 +67,36 @@ da2a73896bc405ae6f11c536a5fbe8d471b00c21 to promotion tip
 local Person owner snapshot and private staging capability.
 
 Current design revalidation uses architecture canonical 47eff220c7ce00f6e7c759bdc2b76780bb46f628, including the intraday/extensibility and multi-participant activity alignment records. P12-B and P12-C remain complete within their accepted bounded contracts; the latest P12 dependency graph is recorded below. The numbered-phase execution order continues to follow documented edges rather than phase numbers.
+## Latest canonical promotion — P12-D ExplorableSite owner snapshot (2026-10-08)
+
+After refreshing P12 canonical at dbba3e9a227f66da0381e3e042e826518d63c240,
+the bounded Site owner snapshot was promoted by fast-forward to
+366dc6cb2a605c6d1fc2b9c11518d6d2972488cc. The promoted tip includes integration
+candidate f005be6f9a46c35c1cc7c467914073bd264b4dec and its exact-tip review
+record. Implementation code remains f4f0f5d6e54c87638ce00261fb4d0add0803c5ef
+with validated Assets tree 71d917e5bd4090368f5be1536a6cbb2e789bed64.
+The final integration review passed as BASE_DRIFT_ONLY; the earlier current-base
+review assessed a prior integration tip and is retained as historical evidence.
+
+The promotion adds only the isolated ExplorableSite owner snapshot/private staging
+factory and the selected Daily-v1 exact-empty proof. P12-D remains IN PROGRESS:
+it does not add B token/vector binding, whole-D graph validation, runtime
+publication, or City/NPC composition. P12-E has no implementation-ready
+export/hydration slice; P12-F still waits for D and E, and P12-G waits for B-F
+plus validated live-profile inventory. P12-A remains WAIT_DEPENDENCY, P13
+remains BLOCKED, and Phase 12 remains open.
 ### Refreshed P12 dependency and owner DAG
 
 - **P12-B and P12-C:** remain COMPLETE/PROMOTED within their recorded bounded
   contracts; the current P12-D slice does not reopen them.
 - **P12-D:** IN PROGRESS. Genealogy, SpatialNetwork, and Person local-owner
-  snapshots are promoted. The isolated Site implementation candidate is
-  `f4f0f5d6` with `Assets` tree
-  `71d917e5bd4090368f5be1536a6cbb2e789bed64`. Exact-tip implementation review
+  snapshots are promoted. The isolated Site implementation f4f0f5d6e54c87638ce00261fb4d0add0803c5ef is
+promoted at P12 canonical promotion tip 366dc6cb2a605c6d1fc2b9c11518d6d2972488cc.
+Its reviewed Assets tree is 71d917e5bd4090368f5be1536a6cbb2e789bed64. Exact-tip
+implementation review
   PASS is recorded at `8290a9a9`; current-base revalidation PASS
   (`BASE_DRIFT_ONLY`) is recorded at `16dce50d` against P12 canonical
-  `dbba3e9`. Site census 12/12, selected Daily-v1 exact-empty profile 1/1, ALL
+  `dbba3e9`. Final exact-tip integration review PASS is recorded at 366dc6cb2a605c6d1fc2b9c11518d6d2972488cc, reviewing candidate f005be6f9a46c35c1cc7c467914073bd264b4dec against dbba3e9; Site census 12/12, selected Daily-v1 exact-empty profile 1/1, ALL
   EditMode 2556/2556, official Smoke 5/5, and `git diff --check` pass; artifacts
   and hashes are in
   [`validation/P12DExplorableSiteOwnerSnapshot/VALIDATION.md`](validation/P12DExplorableSiteOwnerSnapshot/VALIDATION.md).
