@@ -1,6 +1,6 @@
 # P12-D technical design review — exact candidate 0735103
 
-**Review ID:** P12D-DESIGN-EXACT-TIP-0735103-R1  
+**Review ID:** P12D-DESIGN-EXACT-TIP-0735103-R1
 **Outcome:** `VALIDATED_CANDIDATE` — PASS for the P12-D technical design and the D/E/F owner-boundary context stated here. This is a design review only; it does not validate code, promote a capability, close P12-D, or make P12-A ready.
 
 ## Exact reviewed revision
