@@ -17,6 +17,21 @@ public sealed class NpcMerchantTradeStateRuntime
     private List<NpcMerchantTradeStateReceipt> ReceiptList =>
         receipts ?? (receipts = new List<NpcMerchantTradeStateReceipt>());
 
+    /// <summary>
+    /// Reads only the serialized receipt count and owner revision for the
+    /// selected P12-D exact-zero profile witness. This deliberately bypasses
+    /// ReceiptList so census cannot initialize or normalize missing state.
+    /// </summary>
+    internal bool TryReadP12ReceiptCensus(out int cardinality, out long ownerRevision)
+    {
+        cardinality = 0;
+        ownerRevision = 0L;
+        if (receipts == null || revision < 0L) return false;
+        cardinality = receipts.Count;
+        ownerRevision = revision;
+        return true;
+    }
+
     internal bool TryResolve(string operationIdentity, string descriptorFingerprint,
         out NpcMerchantTradeStateReceipt receipt)
     {

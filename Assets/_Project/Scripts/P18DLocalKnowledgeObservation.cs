@@ -180,6 +180,21 @@ public sealed class NpcLocalKnowledgeObservationRuntime
     private List<NpcLocalKnowledgeObservationReceipt> ReceiptList =>
         receipts ?? (receipts = new List<NpcLocalKnowledgeObservationReceipt>());
 
+    /// <summary>
+    /// Reads only the serialized receipt count and owner revision for the
+    /// selected P12-D exact-zero profile witness. This deliberately bypasses
+    /// ReceiptList so census cannot initialize or normalize missing state.
+    /// </summary>
+    internal bool TryReadP12ReceiptCensus(out int cardinality, out long ownerRevision)
+    {
+        cardinality = 0;
+        ownerRevision = 0L;
+        if (receipts == null || revision < 0L) return false;
+        cardinality = receipts.Count;
+        ownerRevision = revision;
+        return true;
+    }
+
     internal static string GetRevisionToken(NpcRuntime actor)
     {
         if (actor == null) return string.Empty;

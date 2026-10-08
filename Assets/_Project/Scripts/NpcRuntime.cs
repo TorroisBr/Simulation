@@ -138,6 +138,8 @@ public class NpcRuntime : ICapabilityConditionSource
     internal CommercialKnowledgeRuntime ExistingCommercialKnowledge => commercialKnowledge;
     internal NpcLocalKnowledgeObservationRuntime LocalKnowledgeObservationRuntime => localKnowledgeObservationRuntime ?? (localKnowledgeObservationRuntime = new NpcLocalKnowledgeObservationRuntime());
     internal NpcMerchantTradeStateRuntime MerchantTradeStateRuntime => merchantTradeStateRuntime ?? (merchantTradeStateRuntime = new NpcMerchantTradeStateRuntime());
+    internal NpcLocalKnowledgeObservationRuntime ExistingLocalKnowledgeObservationRuntime => localKnowledgeObservationRuntime;
+    internal NpcMerchantTradeStateRuntime ExistingMerchantTradeStateRuntime => merchantTradeStateRuntime;
     public ExplorableSiteKnowledgeRuntime ExplorableSiteKnowledge => explorableSiteKnowledge ?? (explorableSiteKnowledge = new ExplorableSiteKnowledgeRuntime(runtimeId));
     internal ExplorableSiteKnowledgeRuntime ExistingExplorableSiteKnowledge => explorableSiteKnowledge;
     public SpatialKnowledgeRuntime SpatialKnowledge => spatialKnowledge ?? (spatialKnowledge = new SpatialKnowledgeRuntime(runtimeId));

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="5" result="Passed" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 17:45:02Z" end-time="2026-10-08 17:45:02Z" duration="0,1138397">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2578" result="Passed" start-time="2026-10-08 17:45:02Z" end-time="2026-10-08 17:45:02Z" duration="0.113840" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3817" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12d-npc-receipt-witness-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2578" result="Passed" start-time="2026-10-08 17:45:02Z" end-time="2026-10-08 17:45:02Z" duration="0.102297" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="91996" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2422" name="NpcPlanCensusTests" fullname="NpcPlanCensusTests" classname="NpcPlanCensusTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-08 17:45:02Z" end-time="2026-10-08 17:45:02Z" duration="0.087753" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2427" name="BoundKnowledgeMutationsOnWrongThreadAreRejectedBeforeOwnerFactsChange" fullname="NpcPlanCensusTests.BoundKnowledgeMutationsOnWrongThreadAreRejectedBeforeOwnerFactsChange" methodname="BoundKnowledgeMutationsOnWrongThreadAreRejectedBeforeOwnerFactsChange" classname="NpcPlanCensusTests" runstate="Runnable" seed="75621498" result="Passed" start-time="2026-10-08 17:45:02Z" end-time="2026-10-08 17:45:02Z" duration="0.069905" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2426" name="BoundPlanMutationOnWrongThreadIsRejectedBeforeOwnerFactsChange" fullname="NpcPlanCensusTests.BoundPlanMutationOnWrongThreadIsRejectedBeforeOwnerFactsChange" methodname="BoundPlanMutationOnWrongThreadIsRejectedBeforeOwnerFactsChange" classname="NpcPlanCensusTests" runstate="Runnable" seed="633397669" result="Passed" start-time="2026-10-08 17:45:02Z" end-time="2026-10-08 17:45:02Z" duration="0.002169" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2425" name="PlanFamilyRejectsOneEmbeddedOwnerAliasedAcrossActors" fullname="NpcPlanCensusTests.PlanFamilyRejectsOneEmbeddedOwnerAliasedAcrossActors" methodname="PlanFamilyRejectsOneEmbeddedOwnerAliasedAcrossActors" classname="NpcPlanCensusTests" runstate="Runnable" seed="1776563202" result="Passed" start-time="2026-10-08 17:45:02Z" end-time="2026-10-08 17:45:02Z" duration="0.000910" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2424" name="PlanLocalRevisionsAdvanceOnlyForSuccessfulStateChangesAndRejectSaturation" fullname="NpcPlanCensusTests.PlanLocalRevisionsAdvanceOnlyForSuccessfulStateChangesAndRejectSaturation" methodname="PlanLocalRevisionsAdvanceOnlyForSuccessfulStateChangesAndRejectSaturation" classname="NpcPlanCensusTests" runstate="Runnable" seed="727643374" result="Passed" start-time="2026-10-08 17:45:02Z" end-time="2026-10-08 17:45:02Z" duration="0.004039" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2423" name="ProviderNamesExactEmbeddedPlanOwnersAsSingletonSections" fullname="NpcPlanCensusTests.ProviderNamesExactEmbeddedPlanOwnersAsSingletonSections" methodname="ProviderNamesExactEmbeddedPlanOwnersAsSingletonSections" classname="NpcPlanCensusTests" runstate="Runnable" seed="684318402" result="Passed" start-time="2026-10-08 17:45:02Z" end-time="2026-10-08 17:45:02Z" duration="0.000855" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

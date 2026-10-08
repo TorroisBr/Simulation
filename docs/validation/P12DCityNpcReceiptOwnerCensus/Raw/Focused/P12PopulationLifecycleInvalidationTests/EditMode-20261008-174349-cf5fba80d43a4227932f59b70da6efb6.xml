@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="20" result="Passed" total="20" passed="20" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0,3171737">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2578" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.317174" total="20" passed="20" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3817" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12d-npc-receipt-witness-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2578" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.299474" total="20" passed="20" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="25684" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2647" name="P12PopulationLifecycleInvalidationTests" fullname="P12PopulationLifecycleInvalidationTests" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" testcasecount="20" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.276994" total="20" passed="20" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2659" name="AutonomousDailyDecisionInstallsCurrentActionThroughP12OwnerBoundary" fullname="P12PopulationLifecycleInvalidationTests.AutonomousDailyDecisionInstallsCurrentActionThroughP12OwnerBoundary" methodname="AutonomousDailyDecisionInstallsCurrentActionThroughP12OwnerBoundary" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="1677028562" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.116333" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2658" name="CurrentActionCensusRejectsMismatchedSlotsAndAliasedMutableRuntimes" fullname="P12PopulationLifecycleInvalidationTests.CurrentActionCensusRejectsMismatchedSlotsAndAliasedMutableRuntimes" methodname="CurrentActionCensusRejectsMismatchedSlotsAndAliasedMutableRuntimes" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="339700548" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.002701" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2657" name="CurrentActionRosterRemovalAndReusedRuntimeIdDoNotRebindPriorOwner" fullname="P12PopulationLifecycleInvalidationTests.CurrentActionRosterRemovalAndReusedRuntimeIdDoNotRebindPriorOwner" methodname="CurrentActionRosterRemovalAndReusedRuntimeIdDoNotRebindPriorOwner" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="943304927" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.018653" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2656" name="CurrentActionSlotAndRuntimeWritesUseExactOwnerAndAdmittedBoundaries" fullname="P12PopulationLifecycleInvalidationTests.CurrentActionSlotAndRuntimeWritesUseExactOwnerAndAdmittedBoundaries" methodname="CurrentActionSlotAndRuntimeWritesUseExactOwnerAndAdmittedBoundaries" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="1693622548" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.005032" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2653" name="DirectPersonDeathClearsPopulatedAndPreservesEmptyCurrentActionOwners" fullname="P12PopulationLifecycleInvalidationTests.DirectPersonDeathClearsPopulatedAndPreservesEmptyCurrentActionOwners" methodname="DirectPersonDeathClearsPopulatedAndPreservesEmptyCurrentActionOwners" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="1171590629" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.009504" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2654" name="DirectPersonDeathRejectsSaturatedCurrentActionBeforeAnyLifecycleWrite" fullname="P12PopulationLifecycleInvalidationTests.DirectPersonDeathRejectsSaturatedCurrentActionBeforeAnyLifecycleWrite" methodname="DirectPersonDeathRejectsSaturatedCurrentActionBeforeAnyLifecycleWrite" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="385163497" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.002401" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2655" name="LegacyResidentDeathWithEmptyActionKeepsEmptyOwnerAndPublishesOneEpoch" fullname="P12PopulationLifecycleInvalidationTests.LegacyResidentDeathWithEmptyActionKeepsEmptyOwnerAndPublishesOneEpoch" methodname="LegacyResidentDeathWithEmptyActionKeepsEmptyOwnerAndPublishesOneEpoch" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="1219047068" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.007621" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2664" name="LivePersonBindAndMaterializeActorChoicesRespectP12CurrentActionOwner" fullname="P12PopulationLifecycleInvalidationTests.LivePersonBindAndMaterializeActorChoicesRespectP12CurrentActionOwner" methodname="LivePersonBindAndMaterializeActorChoicesRespectP12CurrentActionOwner" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="459201550" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.064711" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[p12-actor-choice-bound-merchant-definition display vendeu 5 p12-actor-choice-bound-item display ao mercado de definition-p12-actor-choice-bound-city display por 10 cada
+Lucro aproximado: 45
+]]></output>
+        </test-case>
+        <test-case id="2661" name="MaterializedResidentDeathReconcilesPersonAndNpcOwnersInOneEpoch" fullname="P12PopulationLifecycleInvalidationTests.MaterializedResidentDeathReconcilesPersonAndNpcOwnersInOneEpoch" methodname="MaterializedResidentDeathReconcilesPersonAndNpcOwnersInOneEpoch" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="893511012" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.003677" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2665" name="NamedBirthAndUnwrappedBoundOwnerWritesFailBeforeMutation" fullname="P12PopulationLifecycleInvalidationTests.NamedBirthAndUnwrappedBoundOwnerWritesFailBeforeMutation" methodname="NamedBirthAndUnwrappedBoundOwnerWritesFailBeforeMutation" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="1665512214" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.004615" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2649" name="P12BoundRuntimeRejectsUnwitnessedNpcInjuryWithoutMutation" fullname="P12PopulationLifecycleInvalidationTests.P12BoundRuntimeRejectsUnwitnessedNpcInjuryWithoutMutation" methodname="P12BoundRuntimeRejectsUnwitnessedNpcInjuryWithoutMutation" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="1360691634" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.001775" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2651" name="PairedResidenceMigrationRequiresRuntimeBoundaryAndAdvancesOneEpoch" fullname="P12PopulationLifecycleInvalidationTests.PairedResidenceMigrationRequiresRuntimeBoundaryAndAdvancesOneEpoch" methodname="PairedResidenceMigrationRequiresRuntimeBoundaryAndAdvancesOneEpoch" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="604499142" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.006912" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2667" name="PersonAndNpcLocalRevisionSaturationRejectsLifecycleWritesBeforeMutation" fullname="P12PopulationLifecycleInvalidationTests.PersonAndNpcLocalRevisionSaturationRejectsLifecycleWritesBeforeMutation" methodname="PersonAndNpcLocalRevisionSaturationRejectsLifecycleWritesBeforeMutation" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="1730210062" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.001960" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2663" name="PersonBackedResidentDeathRejectsSaturatedCurrentActionBeforeAnyLifecycleWrite" fullname="P12PopulationLifecycleInvalidationTests.PersonBackedResidentDeathRejectsSaturatedCurrentActionBeforeAnyLifecycleWrite" methodname="PersonBackedResidentDeathRejectsSaturatedCurrentActionBeforeAnyLifecycleWrite" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="813195196" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.002167" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2662" name="PersonBackedResidentDeathWithEmptyActionKeepsEmptyOwnerAndPublishesOneEpoch" fullname="P12PopulationLifecycleInvalidationTests.PersonBackedResidentDeathWithEmptyActionKeepsEmptyOwnerAndPublishesOneEpoch" methodname="PersonBackedResidentDeathWithEmptyActionKeepsEmptyOwnerAndPublishesOneEpoch" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="1357215633" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.001457" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2652" name="PersonResidenceBindingAndReceiptFreeDeathUseCompleteOneEpochBoundaries" fullname="P12PopulationLifecycleInvalidationTests.PersonResidenceBindingAndReceiptFreeDeathUseCompleteOneEpochBoundaries" methodname="PersonResidenceBindingAndReceiptFreeDeathUseCompleteOneEpochBoundaries" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="469476005" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.001985" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2666" name="PopulationOperationReservesEpochAndLocalRevisionBeforeItsFirstWrite" fullname="P12PopulationLifecycleInvalidationTests.PopulationOperationReservesEpochAndLocalRevisionBeforeItsFirstWrite" methodname="PopulationOperationReservesEpochAndLocalRevisionBeforeItsFirstWrite" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="1435198096" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.002007" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2648" name="PopulationProvidersUseExactCityOwnersAndRejectEnabledDailyWriters" fullname="P12PopulationLifecycleInvalidationTests.PopulationProvidersUseExactCityOwnersAndRejectEnabledDailyWriters" methodname="PopulationProvidersUseExactCityOwnersAndRejectEnabledDailyWriters" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="2069202717" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.001987" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2660" name="ResidentDeathClearsCurrentActionAndReservesItsRevisionBeforeMutation" fullname="P12PopulationLifecycleInvalidationTests.ResidentDeathClearsCurrentActionAndReservesItsRevisionBeforeMutation" methodname="ResidentDeathClearsCurrentActionAndReservesItsRevisionBeforeMutation" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="593240504" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.002403" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2650" name="SelectedDailyProfileTracksImmigrationEmigrationAndResidentDeathOnceEach" fullname="P12PopulationLifecycleInvalidationTests.SelectedDailyProfileTracksImmigrationEmigrationAndResidentDeathOnceEach" methodname="SelectedDailyProfileTracksImmigrationEmigrationAndResidentDeathOnceEach" classname="P12PopulationLifecycleInvalidationTests" runstate="Runnable" seed="342009816" result="Passed" start-time="2026-10-08 17:43:59Z" end-time="2026-10-08 17:43:59Z" duration="0.002080" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

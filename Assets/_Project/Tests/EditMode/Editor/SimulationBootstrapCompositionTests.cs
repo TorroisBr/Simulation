@@ -752,8 +752,8 @@ public sealed class SimulationBootstrapCompositionTests
         IDictionary expectedCensusSections = (IDictionary)typeof(ContinuationCensusProtocol)
             .GetField("expectedSections", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(censusProtocol);
-        Assert.That(expectedCensusSections.Count, Is.EqualTo(278),
-            "The selected ten-NPC/two-City Daily-v1 inventory includes the P8-A/B/C spatial witnesses, exact-zero P8-D witnesses, all eight composed P12-E military owner sections, and the three bounded Gate 1 fixed owners.");
+        Assert.That(expectedCensusSections.Count, Is.EqualTo(298),
+            "The selected ten-NPC/two-City Daily-v1 inventory includes exact-zero P18 receipt-owner rows, P8-A/B/C spatial witnesses, exact-zero P8-D witnesses, all eight composed P12-E military owner sections, and the three bounded Gate 1 fixed owners.");
         string[] identitySpatialSectionIds =
         {
             RuntimeIdentityRegistryCensusProvider.NpcsSectionId,
@@ -1905,6 +1905,24 @@ public sealed class SimulationBootstrapCompositionTests
                 travelPlan);
         }
 
+        IReadOnlyList<IOwnerSectionCensusProvider> receiptProviders =
+            runtime.NpcReceiptOwnerCensusProviders;
+        Assert.That(receiptProviders, Has.Count.EqualTo(roster.Length * 2));
+        Assert.That(runtime.HasSameP12DNpcReceiptOwnerCensusProviders(receiptProviders), Is.True);
+        foreach (NpcRuntime npc in roster)
+        {
+            AssertNpcReceiptWitness(
+                receiptProviders,
+                P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(npc.RuntimeId),
+                npc,
+                npc.ExistingLocalKnowledgeObservationRuntime);
+            AssertNpcReceiptWitness(
+                receiptProviders,
+                P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(npc.RuntimeId),
+                npc,
+                npc.ExistingMerchantTradeStateRuntime);
+        }
+
         OwnerSectionCensusWitness[] accountWitnesses = runtime.MoneyAccountCensusProviders
             .Select(provider => provider.GetCurrentCensus())
             .ToArray();
@@ -2099,8 +2117,28 @@ public sealed class SimulationBootstrapCompositionTests
 
         IDictionary expectedSections = ReadPrivateField<IDictionary>(protocol, "expectedSections");
         Assert.That(expectedSections.Count, Is.EqualTo(
-            68 + (20 * roster.Length) + unboundNpcCount + people.Length),
-            "The 68 fixed sections plus current dynamic owner-family formula must match the sealed Daily-v1 inventory.");
+            68 + (22 * roster.Length) + unboundNpcCount + people.Length),
+            "The 68 fixed sections plus 22 per-NPC dynamic sections, unbound residence rows, and Person rows must match the sealed Daily-v1 inventory.");
+    }
+
+    private static void AssertNpcReceiptWitness(
+        IReadOnlyList<IOwnerSectionCensusProvider> providers,
+        string sectionId,
+        NpcRuntime expectedNpc,
+        object expectedOwner)
+    {
+        OwnerSectionCensusWitness witness = providers
+            .Select(provider => provider.GetCurrentCensus())
+            .Single(candidate => candidate.SectionId == sectionId);
+        Assert.That(witness.SchemaVersion, Is.EqualTo(P12DNpcReceiptOwnerCensusProvider.SchemaVersion));
+        Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(expectedOwner));
+        Assert.That(witness.Cardinality, Is.Zero);
+        Assert.That(witness.Revision, Is.Zero);
+        P12DNpcReceiptOwnerCensusProvider.IReceiptOwnerSectionCensusProvider typed =
+            (P12DNpcReceiptOwnerCensusProvider.IReceiptOwnerSectionCensusProvider)
+                providers.Single(provider => provider.GetCurrentCensus().SectionId == sectionId);
+        Assert.That(typed.NpcOwner, Is.SameAs(expectedNpc));
+        Assert.That(typed.ReceiptOwner, Is.SameAs(expectedOwner));
     }
 
     private static void AssertNpcPlanWitness(

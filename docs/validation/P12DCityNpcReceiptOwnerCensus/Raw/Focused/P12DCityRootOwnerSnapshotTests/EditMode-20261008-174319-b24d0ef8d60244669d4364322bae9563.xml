@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="7" result="Passed" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 17:43:28Z" end-time="2026-10-08 17:43:28Z" duration="0,0687918">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2578" result="Passed" start-time="2026-10-08 17:43:28Z" end-time="2026-10-08 17:43:28Z" duration="0.068792" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3817" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12d-npc-receipt-witness-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2578" result="Passed" start-time="2026-10-08 17:43:28Z" end-time="2026-10-08 17:43:28Z" duration="0.055826" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="82772" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2607" name="P12DCityRootOwnerSnapshotTests" fullname="P12DCityRootOwnerSnapshotTests" classname="P12DCityRootOwnerSnapshotTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-08 17:43:28Z" end-time="2026-10-08 17:43:28Z" duration="0.041326" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2611" name="Capture_RejectsAccountBackedCityOwners" fullname="P12DCityRootOwnerSnapshotTests.Capture_RejectsAccountBackedCityOwners" methodname="Capture_RejectsAccountBackedCityOwners" classname="P12DCityRootOwnerSnapshotTests" runstate="Runnable" seed="1987021890" result="Passed" start-time="2026-10-08 17:43:28Z" end-time="2026-10-08 17:43:28Z" duration="0.015519" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2609" name="Capture_RejectsMissingDuplicateWrongOwnerCardinalityAndRevisionSections" fullname="P12DCityRootOwnerSnapshotTests.Capture_RejectsMissingDuplicateWrongOwnerCardinalityAndRevisionSections" methodname="Capture_RejectsMissingDuplicateWrongOwnerCardinalityAndRevisionSections" classname="P12DCityRootOwnerSnapshotTests" runstate="Runnable" seed="1239499635" result="Passed" start-time="2026-10-08 17:43:28Z" end-time="2026-10-08 17:43:28Z" duration="0.001095" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2612" name="Capture_RejectsP18ReceiptsAndP14MaterialFlowState" fullname="P12DCityRootOwnerSnapshotTests.Capture_RejectsP18ReceiptsAndP14MaterialFlowState" methodname="Capture_RejectsP18ReceiptsAndP14MaterialFlowState" classname="P12DCityRootOwnerSnapshotTests" runstate="Runnable" seed="1022045047" result="Passed" start-time="2026-10-08 17:43:28Z" end-time="2026-10-08 17:43:28Z" duration="0.000467" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2610" name="Capture_RequiresCompletedDailyBoundaryAndTheExactSharedSectionVector" fullname="P12DCityRootOwnerSnapshotTests.Capture_RequiresCompletedDailyBoundaryAndTheExactSharedSectionVector" methodname="Capture_RequiresCompletedDailyBoundaryAndTheExactSharedSectionVector" classname="P12DCityRootOwnerSnapshotTests" runstate="Runnable" seed="1556080013" result="Passed" start-time="2026-10-08 17:43:28Z" end-time="2026-10-08 17:43:28Z" duration="0.000270" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2608" name="CaptureAndStage_PreserveExactCityMarketPopulationAndOrderedMembers" fullname="P12DCityRootOwnerSnapshotTests.CaptureAndStage_PreserveExactCityMarketPopulationAndOrderedMembers" methodname="CaptureAndStage_PreserveExactCityMarketPopulationAndOrderedMembers" classname="P12DCityRootOwnerSnapshotTests" runstate="Runnable" seed="1154487843" result="Passed" start-time="2026-10-08 17:43:28Z" end-time="2026-10-08 17:43:28Z" duration="0.013321" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2614" name="CaptureAndStage_PreservePopulationReceiptsAfterRollbackPruning" fullname="P12DCityRootOwnerSnapshotTests.CaptureAndStage_PreservePopulationReceiptsAfterRollbackPruning" methodname="CaptureAndStage_PreservePopulationReceiptsAfterRollbackPruning" classname="P12DCityRootOwnerSnapshotTests" runstate="Runnable" seed="33156713" result="Passed" start-time="2026-10-08 17:43:28Z" end-time="2026-10-08 17:43:28Z" duration="0.000787" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2613" name="EmptyStagedMembershipLinker_FillsOnceWithoutAdvancingCityRevision" fullname="P12DCityRootOwnerSnapshotTests.EmptyStagedMembershipLinker_FillsOnceWithoutAdvancingCityRevision" methodname="EmptyStagedMembershipLinker_FillsOnceWithoutAdvancingCityRevision" classname="P12DCityRootOwnerSnapshotTests" runstate="Runnable" seed="763735442" result="Passed" start-time="2026-10-08 17:43:28Z" end-time="2026-10-08 17:43:28Z" duration="0.000291" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

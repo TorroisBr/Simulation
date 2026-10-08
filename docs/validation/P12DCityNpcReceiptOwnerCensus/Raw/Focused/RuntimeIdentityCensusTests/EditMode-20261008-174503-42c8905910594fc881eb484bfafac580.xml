@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="6" result="Passed" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 17:45:12Z" end-time="2026-10-08 17:45:12Z" duration="0,0656374">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2578" result="Passed" start-time="2026-10-08 17:45:12Z" end-time="2026-10-08 17:45:12Z" duration="0.065637" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3817" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12d-npc-receipt-witness-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2578" result="Passed" start-time="2026-10-08 17:45:12Z" end-time="2026-10-08 17:45:12Z" duration="0.051403" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="103088" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3303" name="RuntimeIdentityCensusTests" fullname="RuntimeIdentityCensusTests" classname="RuntimeIdentityCensusTests" runstate="Runnable" testcasecount="6" result="Passed" start-time="2026-10-08 17:45:12Z" end-time="2026-10-08 17:45:12Z" duration="0.036780" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3307" name="LocalTopologyBatchAdvancesOnceAndEmptyBatchDoesNotAdvance" fullname="RuntimeIdentityCensusTests.LocalTopologyBatchAdvancesOnceAndEmptyBatchDoesNotAdvance" methodname="LocalTopologyBatchAdvancesOnceAndEmptyBatchDoesNotAdvance" classname="RuntimeIdentityCensusTests" runstate="Runnable" seed="566699400" result="Passed" start-time="2026-10-08 17:45:12Z" end-time="2026-10-08 17:45:12Z" duration="0.016913" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3308" name="RejectedLocalTopologyBatchLeavesCountsAndRevisionUnchanged" fullname="RuntimeIdentityCensusTests.RejectedLocalTopologyBatchLeavesCountsAndRevisionUnchanged" methodname="RejectedLocalTopologyBatchLeavesCountsAndRevisionUnchanged" classname="RuntimeIdentityCensusTests" runstate="Runnable" seed="124117429" result="Passed" start-time="2026-10-08 17:45:12Z" end-time="2026-10-08 17:45:12Z" duration="0.000526" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3305" name="RejectedRegistrationsPreserveAllCountsAndRevision" fullname="RuntimeIdentityCensusTests.RejectedRegistrationsPreserveAllCountsAndRevision" methodname="RejectedRegistrationsPreserveAllCountsAndRevision" classname="RuntimeIdentityCensusTests" runstate="Runnable" seed="215137668" result="Passed" start-time="2026-10-08 17:45:12Z" end-time="2026-10-08 17:45:12Z" duration="0.006063" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Cannot register NPC runtime identity: runtime instance is null.
+Cannot register City runtime identity: runtime instance is null.
+Cannot register Location runtime identity: runtime instance is null.
+Cannot register Route runtime identity: runtime instance is null.
+Cannot register ExplorableSite runtime identity: runtime instance is null.
+Cannot register LocalPlace runtime identity: runtime instance is null.
+Cannot register LocalConnection runtime identity: runtime instance is null.
+Cannot register NotableItem runtime identity: runtime instance is null.
+Duplicate RuntimeId 'same-id' while registering NPC; it is already registered as NPC.
+Duplicate RuntimeId 'same-id' while registering City; it is already registered as NPC.
+]]></output>
+        </test-case>
+        <test-case id="3309" name="RevisionExhaustionRejectsSingleAndBatchWritesBeforeMutation" fullname="RuntimeIdentityCensusTests.RevisionExhaustionRejectsSingleAndBatchWritesBeforeMutation" methodname="RevisionExhaustionRejectsSingleAndBatchWritesBeforeMutation" classname="RuntimeIdentityCensusTests" runstate="Runnable" seed="2122580487" result="Passed" start-time="2026-10-08 17:45:12Z" end-time="2026-10-08 17:45:12Z" duration="0.000878" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Cannot register NPC runtime identity: census revision is exhausted.
+Cannot register local topology batch runtime identity: census revision is exhausted.
+]]></output>
+        </test-case>
+        <test-case id="3306" name="RuntimeIdentityConstructorsRejectBlankIdsBeforeRegistryRegistration" fullname="RuntimeIdentityCensusTests.RuntimeIdentityConstructorsRejectBlankIdsBeforeRegistryRegistration" methodname="RuntimeIdentityConstructorsRejectBlankIdsBeforeRegistryRegistration" classname="RuntimeIdentityCensusTests" runstate="Runnable" seed="847338806" result="Passed" start-time="2026-10-08 17:45:12Z" end-time="2026-10-08 17:45:12Z" duration="0.002083" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3304" name="TypedRegistrationsUpdateOnlyTheirOwnIndexAndSharedRevision" fullname="RuntimeIdentityCensusTests.TypedRegistrationsUpdateOnlyTheirOwnIndexAndSharedRevision" methodname="TypedRegistrationsUpdateOnlyTheirOwnIndexAndSharedRevision" classname="RuntimeIdentityCensusTests" runstate="Runnable" seed="214392280" result="Passed" start-time="2026-10-08 17:45:12Z" end-time="2026-10-08 17:45:12Z" duration="0.000991" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

@@ -200,6 +200,17 @@ public sealed class ContinuationCensusProtocol
         public NpcRuntime NpcOwner; public MoneyAccountRuntime MoneyAccountOwner; public OwnerSectionCensusWitness Witness;
     }
 
+    private sealed class NpcReceiptOwnerCandidate
+    {
+        public string SectionId;
+        public OwnerSectionContract Contract;
+        public IOwnerSectionCensusProvider Provider;
+        public NpcRuntime NpcOwner;
+        public object ReceiptOwner;
+        public P12DNpcReceiptOwnerCensusProvider.ReceiptOwnerKind Kind;
+        public OwnerSectionCensusWitness Witness;
+    }
+
     private Dictionary<string, OwnerSectionContract> expectedSections =
         new Dictionary<string, OwnerSectionContract>(StringComparer.Ordinal);
     private Dictionary<string, RegisteredSection> registeredSections =
@@ -233,6 +244,14 @@ public sealed class ContinuationCensusProtocol
     private Dictionary<string, NpcRuntime> npcPlanNpcOwnersBySection = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
     private IReadOnlyList<NpcRuntime> npcPlanRoster;
     private IReadOnlyList<IOwnerSectionCensusProvider> npcPlanFamilyProviders = Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
+    private HashSet<string> npcReceiptOwnerSectionIds = new HashSet<string>(StringComparer.Ordinal);
+    private Dictionary<string, NpcRuntime> npcReceiptOwnerNpcOwnersBySection =
+        new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+    private Dictionary<string, object> npcReceiptOwnersBySection =
+        new Dictionary<string, object>(StringComparer.Ordinal);
+    private IReadOnlyList<NpcRuntime> npcReceiptOwnerRoster;
+    private IReadOnlyList<IOwnerSectionCensusProvider> npcReceiptOwnerFamilyProviders =
+        Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
     private HashSet<string> lifecycleSectionIds = new HashSet<string>(StringComparer.Ordinal);
     private Dictionary<string, object> lifecycleOwnersBySection = new Dictionary<string, object>(StringComparer.Ordinal);
     private IReadOnlyList<IOwnerSectionCensusProvider> lifecycleFamilyProviders =
@@ -610,6 +629,65 @@ public sealed class ContinuationCensusProtocol
     }
 
     public IReadOnlyList<IOwnerSectionCensusProvider> NpcPlanFamilyProviders => npcPlanFamilyProviders;
+
+    /// <summary>
+    /// Registers the selected Daily-v1 exact-zero witnesses for the two
+    /// excluded P18 receipt owners on each current NPC.
+    /// </summary>
+    public bool RegisterNpcReceiptOwnerRosterFamily(
+        IReadOnlyList<NpcRuntime> roster,
+        out ContinuationCensusFailure failure)
+    {
+        if (IsFaulted()) { failure = ContinuationCensusFailure.ProtocolFaulted; return false; }
+        if (IsOwnerThreadBound()) { Fault(); failure = ContinuationCensusFailure.ProtocolFaulted; return false; }
+        if (roster == null || expectedSectionsSealed || providersSealed || npcReceiptOwnerRoster != null)
+        { failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
+        if (!TryBuildNpcReceiptOwnerFamily(roster,
+                out List<NpcReceiptOwnerCandidate> candidates, out failure))
+        { Fault(); return false; }
+
+        Dictionary<string, OwnerSectionContract> stagedExpected =
+            new Dictionary<string, OwnerSectionContract>(expectedSections, StringComparer.Ordinal);
+        Dictionary<string, RegisteredSection> stagedRegistered =
+            new Dictionary<string, RegisteredSection>(registeredSections, StringComparer.Ordinal);
+        HashSet<string> stagedIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, NpcRuntime> stagedNpcOwners =
+            new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        Dictionary<string, object> stagedReceiptOwners =
+            new Dictionary<string, object>(StringComparer.Ordinal);
+        IOwnerSectionCensusProvider[] stagedProviders =
+            new IOwnerSectionCensusProvider[candidates.Count];
+
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            NpcReceiptOwnerCandidate candidate = candidates[i];
+            if (!stagedIds.Add(candidate.SectionId)
+                || stagedExpected.ContainsKey(candidate.SectionId)
+                || stagedRegistered.ContainsKey(candidate.SectionId))
+            { Fault(); failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
+
+            stagedExpected.Add(candidate.SectionId, candidate.Contract);
+            RegisteredSection section = new RegisteredSection(candidate.Contract, candidate.Provider);
+            SetBaseline(section, candidate.Witness);
+            stagedRegistered.Add(candidate.SectionId, section);
+            stagedNpcOwners.Add(candidate.SectionId, candidate.NpcOwner);
+            stagedReceiptOwners.Add(candidate.SectionId, candidate.ReceiptOwner);
+            stagedProviders[i] = candidate.Provider;
+        }
+
+        expectedSections = stagedExpected;
+        registeredSections = stagedRegistered;
+        npcReceiptOwnerSectionIds = stagedIds;
+        npcReceiptOwnerNpcOwnersBySection = stagedNpcOwners;
+        npcReceiptOwnersBySection = stagedReceiptOwners;
+        npcReceiptOwnerRoster = roster;
+        npcReceiptOwnerFamilyProviders = Array.AsReadOnly(stagedProviders);
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    public IReadOnlyList<IOwnerSectionCensusProvider> NpcReceiptOwnerFamilyProviders =>
+        npcReceiptOwnerFamilyProviders;
 
     public bool RegisterLifecycleOwnerRosterFamily(
         IReadOnlyList<IOwnerSectionCensusProvider> providers,
@@ -1094,7 +1172,9 @@ public sealed class ContinuationCensusProtocol
             || (inventoryRoster != null && !TryValidateInventoryFamilyMatchesRoster(out failure))
             || (moneyAccountRoster != null && !TryValidateMoneyAccountFamilyMatchesRoster(out failure))
             || (npcKnowledgeRoster != null && !TryValidateNpcKnowledgeFamilyMatchesRoster(out failure))
-            || (npcPlanRoster != null && !TryValidateNpcPlanFamilyMatchesRoster(out failure)))
+            || (npcPlanRoster != null && !TryValidateNpcPlanFamilyMatchesRoster(out failure))
+            || (npcReceiptOwnerRoster != null
+                && !TryValidateNpcReceiptOwnerFamilyMatchesRoster(out failure)))
         {
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -1357,6 +1437,7 @@ public sealed class ContinuationCensusProtocol
                     || npcTravelStateSectionIds.Contains(sectionId)
                     || npcKnowledgeSectionIds.Contains(sectionId)
                     || npcPlanSectionIds.Contains(sectionId)
+                    || npcReceiptOwnerSectionIds.Contains(sectionId)
                     || !registeredSections.ContainsKey(sectionId)
                     || !changedIds.Add(sectionId))
                 {
@@ -1398,6 +1479,12 @@ public sealed class ContinuationCensusProtocol
         List<NpcPlanCandidate> npcPlanCandidates = new List<NpcPlanCandidate>();
         if (npcPlanRoster != null && !TryBuildNpcPlanFamily(npcPlanRoster, out npcPlanCandidates, out failure))
         { Fault(); return false; }
+        List<NpcReceiptOwnerCandidate> npcReceiptOwnerCandidates =
+            new List<NpcReceiptOwnerCandidate>();
+        if (npcReceiptOwnerRoster != null
+            && !TryBuildNpcReceiptOwnerFamily(
+                npcReceiptOwnerRoster, out npcReceiptOwnerCandidates, out failure))
+        { Fault(); return false; }
         if (!TryBuildLifecycleFamily(
                 currentLifecycleProviders,
                 out List<LifecycleOwnerCandidate> lifecycleCandidates,
@@ -1425,6 +1512,7 @@ public sealed class ContinuationCensusProtocol
                 || npcTravelStateSectionIds.Contains(pair.Key)
                 || npcKnowledgeSectionIds.Contains(pair.Key)
                 || npcPlanSectionIds.Contains(pair.Key)
+                || npcReceiptOwnerSectionIds.Contains(pair.Key)
                 || lifecycleSectionIds.Contains(pair.Key)) continue;
             if (!registeredSections.TryGetValue(pair.Key, out RegisteredSection current))
             {
@@ -1757,6 +1845,76 @@ public sealed class ContinuationCensusProtocol
         foreach (string oldId in npcPlanSectionIds)
             if (!stagedPlanIds.Contains(oldId)) plansChanged = true;
 
+        HashSet<string> stagedNpcReceiptOwnerIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, NpcRuntime> stagedNpcReceiptOwnerNpcOwners =
+            new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        Dictionary<string, object> stagedNpcReceiptOwners =
+            new Dictionary<string, object>(StringComparer.Ordinal);
+        IOwnerSectionCensusProvider[] stagedNpcReceiptOwnerProviders =
+            new IOwnerSectionCensusProvider[npcReceiptOwnerCandidates.Count];
+        bool npcReceiptOwnersChanged =
+            npcReceiptOwnerCandidates.Count != npcReceiptOwnerSectionIds.Count;
+        for (int i = 0; i < npcReceiptOwnerCandidates.Count; i++)
+        {
+            NpcReceiptOwnerCandidate candidate = npcReceiptOwnerCandidates[i];
+            if (!stagedNpcReceiptOwnerIds.Add(candidate.SectionId)
+                || stagedExpected.ContainsKey(candidate.SectionId))
+            {
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+
+            bool existed = registeredSections.TryGetValue(candidate.SectionId, out RegisteredSection prior);
+            bool sameNpc = existed
+                && npcReceiptOwnerNpcOwnersBySection.TryGetValue(
+                    candidate.SectionId, out NpcRuntime previousNpc)
+                && ReferenceEquals(previousNpc, candidate.NpcOwner);
+            bool sameReceiptOwner = existed
+                && npcReceiptOwnersBySection.TryGetValue(
+                    candidate.SectionId, out object previousReceiptOwner)
+                && ReferenceEquals(previousReceiptOwner, candidate.ReceiptOwner);
+            if (existed && (!sameNpc || !sameReceiptOwner
+                || !ReferenceEquals(prior.OwnerInstanceIdentity, candidate.ReceiptOwner)))
+            {
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+
+            if (sameNpc && sameReceiptOwner)
+            {
+                if (!TryReadAndValidate(
+                        prior,
+                        allowRevisionAdvance: false,
+                        out _,
+                        out failure))
+                {
+                    Fault();
+                    return false;
+                }
+                stagedRegistered.Add(candidate.SectionId, prior);
+                stagedExpected.Add(candidate.SectionId, prior.Contract);
+                stagedNpcReceiptOwnerProviders[i] = prior.Provider;
+            }
+            else
+            {
+                npcReceiptOwnersChanged = true;
+                RegisteredSection replacement =
+                    new RegisteredSection(candidate.Contract, candidate.Provider);
+                SetBaseline(replacement, candidate.Witness);
+                stagedRegistered.Add(candidate.SectionId, replacement);
+                stagedExpected.Add(candidate.SectionId, candidate.Contract);
+                stagedNpcReceiptOwnerProviders[i] = candidate.Provider;
+            }
+
+            if (!existed) npcReceiptOwnersChanged = true;
+            stagedNpcReceiptOwnerNpcOwners.Add(candidate.SectionId, candidate.NpcOwner);
+            stagedNpcReceiptOwners.Add(candidate.SectionId, candidate.ReceiptOwner);
+        }
+        foreach (string oldId in npcReceiptOwnerSectionIds)
+            if (!stagedNpcReceiptOwnerIds.Contains(oldId)) npcReceiptOwnersChanged = true;
+
         HashSet<string> stagedLifecycleIds = new HashSet<string>(StringComparer.Ordinal);
         Dictionary<string, object> stagedLifecycleOwners = new Dictionary<string, object>(StringComparer.Ordinal);
         IOwnerSectionCensusProvider[] stagedLifecycleProviders =
@@ -1847,7 +2005,8 @@ public sealed class ContinuationCensusProtocol
         }
 
         bool anySectionChanged = fixedSectionsChanged || familyChanged || travelStateChanged
-            || inventoryChanged || moneyAccountChanged || knowledgeChanged || plansChanged || lifecycleChanged;
+            || inventoryChanged || moneyAccountChanged || knowledgeChanged || plansChanged
+            || npcReceiptOwnersChanged || lifecycleChanged;
         if (anySectionChanged
             && mutationEpoch == long.MaxValue)
         {
@@ -1870,6 +2029,9 @@ public sealed class ContinuationCensusProtocol
         npcKnowledgeNpcOwnersBySection = stagedKnowledgeOwners;
         npcPlanSectionIds = stagedPlanIds;
         npcPlanNpcOwnersBySection = stagedPlanNpcOwners;
+        npcReceiptOwnerSectionIds = stagedNpcReceiptOwnerIds;
+        npcReceiptOwnerNpcOwnersBySection = stagedNpcReceiptOwnerNpcOwners;
+        npcReceiptOwnersBySection = stagedNpcReceiptOwners;
         lifecycleSectionIds = stagedLifecycleIds;
         lifecycleOwnersBySection = stagedLifecycleOwners;
         if (familyChanged)
@@ -1880,6 +2042,8 @@ public sealed class ContinuationCensusProtocol
         if (moneyAccountChanged) moneyAccountFamilyProviders = Array.AsReadOnly(stagedMoneyAccountProviders);
         if (knowledgeChanged) npcKnowledgeFamilyProviders = Array.AsReadOnly(stagedKnowledgeProviders);
         if (plansChanged) npcPlanFamilyProviders = Array.AsReadOnly(stagedPlanProviders);
+        if (npcReceiptOwnersChanged)
+            npcReceiptOwnerFamilyProviders = Array.AsReadOnly(stagedNpcReceiptOwnerProviders);
         if (lifecycleChanged)
             lifecycleFamilyProviders = Array.AsReadOnly(stagedLifecycleProviders);
         if (epochReservation != null)
@@ -2140,7 +2304,9 @@ public sealed class ContinuationCensusProtocol
             && (inventoryRoster == null || TryValidateInventoryFamilyMatchesRoster(out failure))
             && (moneyAccountRoster == null || TryValidateMoneyAccountFamilyMatchesRoster(out failure))
             && (npcKnowledgeRoster == null || TryValidateNpcKnowledgeFamilyMatchesRoster(out failure))
-            && (npcPlanRoster == null || TryValidateNpcPlanFamilyMatchesRoster(out failure));
+            && (npcPlanRoster == null || TryValidateNpcPlanFamilyMatchesRoster(out failure))
+            && (npcReceiptOwnerRoster == null
+                || TryValidateNpcReceiptOwnerFamilyMatchesRoster(out failure));
         if (!dynamicFamiliesMatch || registeredSections.Count != expectedSections.Count)
         {
             Fault();
@@ -2428,6 +2594,123 @@ public sealed class ContinuationCensusProtocol
         }
 
         if (candidates.Count != roster.Count) return false;
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    private static bool TryBuildNpcReceiptOwnerFamily(
+        IReadOnlyList<NpcRuntime> roster,
+        out List<NpcReceiptOwnerCandidate> candidates,
+        out ContinuationCensusFailure failure)
+    {
+        candidates = new List<NpcReceiptOwnerCandidate>();
+        failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+        if (roster == null) return false;
+
+        try
+        {
+            HashSet<string> sectionIds = new HashSet<string>(StringComparer.Ordinal);
+            IReadOnlyList<IOwnerSectionCensusProvider> providers =
+                P12DNpcReceiptOwnerCensusProvider.CreateProviders(roster);
+            for (int i = 0; i < providers.Count; i++)
+            {
+                if (!(providers[i] is P12DNpcReceiptOwnerCensusProvider.IReceiptOwnerSectionCensusProvider provider))
+                    return false;
+
+                OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+                string sectionId = provider.Kind == P12DNpcReceiptOwnerCensusProvider.ReceiptOwnerKind.LocalObservation
+                    ? P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(provider.RuntimeId)
+                    : provider.Kind == P12DNpcReceiptOwnerCensusProvider.ReceiptOwnerKind.MerchantTradeState
+                        ? P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(provider.RuntimeId)
+                        : null;
+                object expectedOwner = provider.Kind == P12DNpcReceiptOwnerCensusProvider.ReceiptOwnerKind.LocalObservation
+                    ? (object)provider.NpcOwner.ExistingLocalKnowledgeObservationRuntime
+                    : provider.Kind == P12DNpcReceiptOwnerCensusProvider.ReceiptOwnerKind.MerchantTradeState
+                        ? provider.NpcOwner.ExistingMerchantTradeStateRuntime
+                        : null;
+                if (string.IsNullOrWhiteSpace(sectionId)
+                    || provider.NpcOwner == null
+                    || provider.ReceiptOwner == null
+                    || !ReferenceEquals(provider.ReceiptOwner, expectedOwner)
+                    || !IsWitnessValidForContract(
+                        new OwnerSectionContract(
+                            sectionId,
+                            P12DNpcReceiptOwnerCensusProvider.SchemaVersion,
+                            OwnerSectionRole.Required),
+                        witness)
+                    || witness.Cardinality != 0
+                    || witness.Revision != 0L
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity, provider.ReceiptOwner)
+                    || !sectionIds.Add(sectionId))
+                {
+                    return false;
+                }
+
+                OwnerSectionContract contract = new OwnerSectionContract(
+                    sectionId,
+                    P12DNpcReceiptOwnerCensusProvider.SchemaVersion,
+                    OwnerSectionRole.Required);
+                candidates.Add(new NpcReceiptOwnerCandidate
+                {
+                    SectionId = sectionId,
+                    Contract = contract,
+                    Provider = providers[i],
+                    NpcOwner = provider.NpcOwner,
+                    ReceiptOwner = provider.ReceiptOwner,
+                    Kind = provider.Kind,
+                    Witness = witness
+                });
+            }
+
+            if (providers.Count != roster.Count * 2 || candidates.Count != providers.Count)
+                return false;
+        }
+        catch
+        {
+            return false;
+        }
+
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    private bool TryValidateNpcReceiptOwnerFamilyMatchesRoster(
+        out ContinuationCensusFailure failure)
+    {
+        if (!TryBuildNpcReceiptOwnerFamily(
+                npcReceiptOwnerRoster,
+                out List<NpcReceiptOwnerCandidate> candidates,
+                out failure))
+        {
+            return false;
+        }
+        if (candidates.Count != npcReceiptOwnerSectionIds.Count
+            || candidates.Count != npcReceiptOwnerRoster.Count * 2)
+        {
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        foreach (NpcReceiptOwnerCandidate candidate in candidates)
+        {
+            if (!npcReceiptOwnerSectionIds.Contains(candidate.SectionId)
+                || !registeredSections.TryGetValue(candidate.SectionId, out RegisteredSection section)
+                || !section.HasBaseline
+                || !npcReceiptOwnerNpcOwnersBySection.TryGetValue(candidate.SectionId, out NpcRuntime npcOwner)
+                || !ReferenceEquals(npcOwner, candidate.NpcOwner)
+                || !npcReceiptOwnersBySection.TryGetValue(candidate.SectionId, out object receiptOwner)
+                || !ReferenceEquals(receiptOwner, candidate.ReceiptOwner)
+                || !ReferenceEquals(section.OwnerInstanceIdentity, candidate.ReceiptOwner)
+                || !(section.Provider is P12DNpcReceiptOwnerCensusProvider.IReceiptOwnerSectionCensusProvider registeredProvider)
+                || registeredProvider.Kind != candidate.Kind
+                || !ReferenceEquals(registeredProvider.NpcOwner, candidate.NpcOwner)
+                || !ReferenceEquals(registeredProvider.ReceiptOwner, candidate.ReceiptOwner))
+            {
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+        }
+
         failure = ContinuationCensusFailure.None;
         return true;
     }

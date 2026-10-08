@@ -107,6 +107,14 @@ public sealed class SimulationBootstrapComposition
                 nameof(runtimeIdentityRegistry));
         }
         Runtime = runtime;
+        NpcReceiptOwnerCensusProviders = Runtime.NpcReceiptOwnerCensusProviders;
+        if (!runtime.HasSameP12DNpcReceiptOwnerCensusProviders(NpcReceiptOwnerCensusProviders))
+        {
+            runtime.FaultRuntimeAdmission();
+            throw new ArgumentException(
+                "The selected P12 runtime and bootstrap must expose the exact live two-per-NPC zero receipt-owner inventory.",
+                nameof(runtime));
+        }
         PersonStoreCensusProviders = PersonStoreCensusProvider.CreateProviders(Runtime.PersonStore);
         CityNpcPresenceCensusProviders = CityNpcPresenceCensusProvider.CreateProviders(
             Runtime.Cities,
@@ -177,6 +185,8 @@ public sealed class SimulationBootstrapComposition
     public IReadOnlyList<IOwnerSectionCensusProvider> PersonStoreCensusProviders { get; }
     /// <summary>Fixed passive witnesses for each City's NPC-presence projection.</summary>
     public IReadOnlyList<IOwnerSectionCensusProvider> CityNpcPresenceCensusProviders { get; }
+    /// <summary>Exact two-per-NPC zero witnesses for excluded P18 receipt owners.</summary>
+    public IReadOnlyList<IOwnerSectionCensusProvider> NpcReceiptOwnerCensusProviders { get; }
     /// <summary>Fixed passive witnesses for each installed City's Market stock rows.</summary>
     public IReadOnlyList<IOwnerSectionCensusProvider> CityMarketCensusProviders { get; }
     /// <summary>Passive witness for retained P11 actor-choice history.</summary>

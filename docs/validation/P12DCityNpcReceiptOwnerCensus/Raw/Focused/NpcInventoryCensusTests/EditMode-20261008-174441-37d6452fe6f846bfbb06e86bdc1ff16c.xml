@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="7" result="Passed" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 17:44:49Z" end-time="2026-10-08 17:44:49Z" duration="0,0957033">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2578" result="Passed" start-time="2026-10-08 17:44:49Z" end-time="2026-10-08 17:44:49Z" duration="0.095703" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3817" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12d-npc-receipt-witness-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2578" result="Passed" start-time="2026-10-08 17:44:49Z" end-time="2026-10-08 17:44:49Z" duration="0.081633" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="90596" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2371" name="NpcInventoryCensusTests" fullname="NpcInventoryCensusTests" classname="NpcInventoryCensusTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-08 17:44:49Z" end-time="2026-10-08 17:44:49Z" duration="0.067833" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2378" name="InventoryRevisionTracksSameRowValueChangesAndRowCardinalityChanges" fullname="NpcInventoryCensusTests.InventoryRevisionTracksSameRowValueChangesAndRowCardinalityChanges" methodname="InventoryRevisionTracksSameRowValueChangesAndRowCardinalityChanges" classname="NpcInventoryCensusTests" runstate="Runnable" seed="658898562" result="Passed" start-time="2026-10-08 17:44:49Z" end-time="2026-10-08 17:44:49Z" duration="0.012291" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2375" name="OwnerReplacementCrossingMembershipBoundaryFailsReconciliationWithoutPublishing" fullname="NpcInventoryCensusTests.OwnerReplacementCrossingMembershipBoundaryFailsReconciliationWithoutPublishing" methodname="OwnerReplacementCrossingMembershipBoundaryFailsReconciliationWithoutPublishing" classname="NpcInventoryCensusTests" runstate="Runnable" seed="491359359" result="Passed" start-time="2026-10-08 17:44:49Z" end-time="2026-10-08 17:44:49Z" duration="0.035383" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2372" name="ProvidersAreOrdinalPerNpcWitnessesAndDoNotMaterializeInventory" fullname="NpcInventoryCensusTests.ProvidersAreOrdinalPerNpcWitnessesAndDoNotMaterializeInventory" methodname="ProvidersAreOrdinalPerNpcWitnessesAndDoNotMaterializeInventory" classname="NpcInventoryCensusTests" runstate="Runnable" seed="239029824" result="Passed" start-time="2026-10-08 17:44:49Z" end-time="2026-10-08 17:44:49Z" duration="0.002519" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2377" name="RosteredEmigratedAndDeadNpcRetainsInventorySection" fullname="NpcInventoryCensusTests.RosteredEmigratedAndDeadNpcRetainsInventorySection" methodname="RosteredEmigratedAndDeadNpcRetainsInventorySection" classname="NpcInventoryCensusTests" runstate="Runnable" seed="1688885083" result="Passed" start-time="2026-10-08 17:44:49Z" end-time="2026-10-08 17:44:49Z" duration="0.004662" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2376" name="RosterInventoryReconciliationDoesNotMaskStaleCityProjection" fullname="NpcInventoryCensusTests.RosterInventoryReconciliationDoesNotMaskStaleCityProjection" methodname="RosterInventoryReconciliationDoesNotMaskStaleCityProjection" classname="NpcInventoryCensusTests" runstate="Runnable" seed="1630861304" result="Passed" start-time="2026-10-08 17:44:49Z" end-time="2026-10-08 17:44:49Z" duration="0.001861" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2373" name="RosterMembershipReconcilesInventoryWithOneEpochAndUnnotifiedWritesFailClosed" fullname="NpcInventoryCensusTests.RosterMembershipReconcilesInventoryWithOneEpochAndUnnotifiedWritesFailClosed" methodname="RosterMembershipReconcilesInventoryWithOneEpochAndUnnotifiedWritesFailClosed" classname="NpcInventoryCensusTests" runstate="Runnable" seed="932392221" result="Passed" start-time="2026-10-08 17:44:49Z" end-time="2026-10-08 17:44:49Z" duration="0.001821" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2374" name="UnregisterAndSameIdRegistrationPublishSeparateOwnerSections" fullname="NpcInventoryCensusTests.UnregisterAndSameIdRegistrationPublishSeparateOwnerSections" methodname="UnregisterAndSameIdRegistrationPublishSeparateOwnerSections" classname="NpcInventoryCensusTests" runstate="Runnable" seed="1741212091" result="Passed" start-time="2026-10-08 17:44:49Z" end-time="2026-10-08 17:44:49Z" duration="0.000432" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

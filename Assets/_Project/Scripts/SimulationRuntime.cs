@@ -640,6 +640,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         npcRosterCensusProtocol != null ? npcRosterCensusProtocol.InventoryFamilyProviders : Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
     public IReadOnlyList<IOwnerSectionCensusProvider> MoneyAccountCensusProviders =>
         npcRosterCensusProtocol != null ? npcRosterCensusProtocol.MoneyAccountFamilyProviders : Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
+    /// <summary>Latest reconciled exact-zero witnesses for excluded P18 NPC receipt owners.</summary>
+    public IReadOnlyList<IOwnerSectionCensusProvider> NpcReceiptOwnerCensusProviders =>
+        npcRosterCensusProtocol != null
+            ? npcRosterCensusProtocol.NpcReceiptOwnerFamilyProviders
+            : Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
     /// <summary>Latest reconciled passive per-NPC Knowledge witness snapshot.</summary>
     public IReadOnlyList<IOwnerSectionCensusProvider> NpcKnowledgeCensusProviders =>
         npcRosterCensusProtocol != null
@@ -2071,6 +2076,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             || !protocol.RegisterMoneyAccountRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.RegisterNpcKnowledgeRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.RegisterNpcPlanRosterFamily(npcRuntimeSnapshot, out _)
+            || (runtimeAdmissionContext != null
+                && !protocol.RegisterNpcReceiptOwnerRosterFamily(npcRuntimeSnapshot, out _))
             || (runtimeAdmissionContext != null
                 && !TryRegisterSimulationRecordSequenceCensusProvider(protocol))
             || (runtimeAdmissionContext != null && runtimeIdAllocator != null
@@ -4441,6 +4448,21 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
         return npcRosterCensusProtocol.TryReadMutationEpoch(out epoch, out failure);
+    }
+
+    internal bool HasSameP12DNpcReceiptOwnerCensusProviders(
+        IReadOnlyList<IOwnerSectionCensusProvider> otherProviders)
+    {
+        if (otherProviders == null) return false;
+        if (runtimeAdmissionContext == null) return otherProviders.Count == 0;
+        if (npcRosterCensusProtocol == null) return false;
+
+        IReadOnlyList<IOwnerSectionCensusProvider> installedProviders =
+            npcRosterCensusProtocol.NpcReceiptOwnerFamilyProviders;
+        return ReferenceEquals(installedProviders, otherProviders)
+            && P12DNpcReceiptOwnerCensusProvider.IsExactCoverage(
+                npcRuntimeSnapshot,
+                installedProviders);
     }
 
     internal bool HasSameSimulationRecordSequenceOwner(IOwnerSectionCensusProvider otherProvider)

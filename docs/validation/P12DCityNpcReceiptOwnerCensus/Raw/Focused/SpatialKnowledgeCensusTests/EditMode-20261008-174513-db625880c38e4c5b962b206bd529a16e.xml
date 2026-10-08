@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="16" result="Passed" total="16" passed="16" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0,110389">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2578" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.110389" total="16" passed="16" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3817" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12d-npc-receipt-witness-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2578" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.094478" total="16" passed="16" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="16176" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3577" name="SpatialKnowledgeCensusTests" fullname="SpatialKnowledgeCensusTests" classname="SpatialKnowledgeCensusTests" runstate="Runnable" testcasecount="16" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.079730" total="16" passed="16" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3586" name="AdoptionResidenceConflictIsRejectedBeforeStoreWriteAndKeepsPair" fullname="SpatialKnowledgeCensusTests.AdoptionResidenceConflictIsRejectedBeforeStoreWriteAndKeepsPair" methodname="AdoptionResidenceConflictIsRejectedBeforeStoreWriteAndKeepsPair" classname="SpatialKnowledgeCensusTests" runstate="Runnable" seed="1420791848" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.046405" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3585" name="AdoptionSuccessNotifiesBothPersonSectionsWithoutChangingSpatialFamily" fullname="SpatialKnowledgeCensusTests.AdoptionSuccessNotifiesBothPersonSectionsWithoutChangingSpatialFamily" methodname="AdoptionSuccessNotifiesBothPersonSectionsWithoutChangingSpatialFamily" classname="SpatialKnowledgeCensusTests" runstate="Runnable" seed="1721538538" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.005512" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3592" name="CrossThreadNestedMembershipEntryCannotJoinOrReconcileOwnerContext" fullname="SpatialKnowledgeCensusTests.CrossThreadNestedMembershipEntryCannotJoinOrReconcileOwnerContext" methodname="CrossThreadNestedMembershipEntryCannotJoinOrReconcileOwnerContext" classname="SpatialKnowledgeCensusTests" runstate="Runnable" seed="1997047858" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.001337" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3587" name="DeathAndEmigrationRetainRosterCensusPairUntilExplicitUnregistration" fullname="SpatialKnowledgeCensusTests.DeathAndEmigrationRetainRosterCensusPairUntilExplicitUnregistration" methodname="DeathAndEmigrationRetainRosterCensusPairUntilExplicitUnregistration" classname="SpatialKnowledgeCensusTests" runstate="Runnable" seed="1788475982" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.005185" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3581" name="DirectRosterTransactionsAddAndRemoveExactlyOnePairAndEpoch" fullname="SpatialKnowledgeCensusTests.DirectRosterTransactionsAddAndRemoveExactlyOnePairAndEpoch" methodname="DirectRosterTransactionsAddAndRemoveExactlyOnePairAndEpoch" classname="SpatialKnowledgeCensusTests" runstate="Runnable" seed="1995605646" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.001093" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3582" name="DynamicNpcMembershipKeepsOrdinalPairAdjacentProviderOrdering" fullname="SpatialKnowledgeCensusTests.DynamicNpcMembershipKeepsOrdinalPairAdjacentProviderOrdering" methodname="DynamicNpcMembershipKeepsOrdinalPairAdjacentProviderOrdering" classname="SpatialKnowledgeCensusTests" runstate="Runnable" seed="1096922347" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.000776" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3593" name="FailedCompensationHandlerFaultsRuntimeAndBlocksCensusAssessment" fullname="SpatialKnowledgeCensusTests.FailedCompensationHandlerFaultsRuntimeAndBlocksCensusAssessment" methodname="FailedCompensationHandlerFaultsRuntimeAndBlocksCensusAssessment" classname="SpatialKnowledgeCensusTests" runstate="Runnable" seed="1799539227" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.000330" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3579" name="KnowledgeViewsAreReadOnlyLiveViewsAndDiscoveryRemainsIdempotent" fullname="SpatialKnowledgeCensusTests.KnowledgeViewsAreReadOnlyLiveViewsAndDiscoveryRemainsIdempotent" methodname="KnowledgeViewsAreReadOnlyLiveViewsAndDiscoveryRemainsIdempotent" classname="SpatialKnowledgeCensusTests" runstate="Runnable" seed="449905835" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.003235" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3584" name="MaterializationPublishesBothPersonSectionsAndDynamicPairInOneEpoch" fullname="SpatialKnowledgeCensusTests.MaterializationPublishesBothPersonSectionsAndDynamicPairInOneEpoch" methodname="MaterializationPublishesBothPersonSectionsAndDynamicPairInOneEpoch" classname="SpatialKnowledgeCensusTests" runstate="Runnable" seed="1692835933" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.002480" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3583" name="NoOpAndRejectedRosterMutationsDoNotAdvanceEpoch" fullname="SpatialKnowledgeCensusTests.NoOpAndRejectedRosterMutationsDoNotAdvanceEpoch" methodname="NoOpAndRejectedRosterMutationsDoNotAdvanceEpoch" classname="SpatialKnowledgeCensusTests" runstate="Runnable" seed="1811244781" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.000726" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3578" name="ProvidersArePerNpcSortedAndShareOwnerRevisionAcrossSections" fullname="SpatialKnowledgeCensusTests.ProvidersArePerNpcSortedAndShareOwnerRevisionAcrossSections" methodname="ProvidersArePerNpcSortedAndShareOwnerRevisionAcrossSections" classname="SpatialKnowledgeCensusTests" runstate="Runnable" seed="1035508137" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.000574" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3588" name="ReusingRuntimeIdAfterExplicitRemovalSeedsNewExactOwner" fullname="SpatialKnowledgeCensusTests.ReusingRuntimeIdAfterExplicitRemovalSeedsNewExactOwner" methodname="ReusingRuntimeIdAfterExplicitRemovalSeedsNewExactOwner" classname="SpatialKnowledgeCensusTests" runstate="Runnable" seed="535315271" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.000552" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3580" name="SaturatedRevisionRejectsNewKnowledgeBeforeChangingCardinality" fullname="SpatialKnowledgeCensusTests.SaturatedRevisionRejectsNewKnowledgeBeforeChangingCardinality" methodname="SaturatedRevisionRejectsNewKnowledgeBeforeChangingCardinality" classname="SpatialKnowledgeCensusTests" runstate="Runnable" seed="435998320" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.000324" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3591" name="UnexpectedPersonStoreRevisionDriftInsideMembershipScopeFailsClosed" fullname="SpatialKnowledgeCensusTests.UnexpectedPersonStoreRevisionDriftInsideMembershipScopeFailsClosed" methodname="UnexpectedPersonStoreRevisionDriftInsideMembershipScopeFailsClosed" classname="SpatialKnowledgeCensusTests" runstate="Runnable" seed="504331206" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.000324" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3589" name="UnreconciledRosterChangeFailsClosedAndRetainsLastPublishedSnapshot" fullname="SpatialKnowledgeCensusTests.UnreconciledRosterChangeFailsClosedAndRetainsLastPublishedSnapshot" methodname="UnreconciledRosterChangeFailsClosedAndRetainsLastPublishedSnapshot" classname="SpatialKnowledgeCensusTests" runstate="Runnable" seed="150249752" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.000307" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3590" name="UntrackedPersonStoreWriterMakesPartialCensusFailClosed" fullname="SpatialKnowledgeCensusTests.UntrackedPersonStoreWriterMakesPartialCensusFailClosed" methodname="UntrackedPersonStoreWriterMakesPartialCensusFailClosed" classname="SpatialKnowledgeCensusTests" runstate="Runnable" seed="1453325177" result="Passed" start-time="2026-10-08 17:45:22Z" end-time="2026-10-08 17:45:22Z" duration="0.000235" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
