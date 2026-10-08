@@ -103,6 +103,29 @@ public sealed class PersonRuntime
         this.deathAbsoluteDay = deathAbsoluteDay;
     }
 
+    /// <summary>
+    /// Creates an unpublished exact-value owner row for staged continuation.
+    /// The caller validates local data first; runtime admission and mutation
+    /// callbacks are bound later by the enclosing unpublished graph composer.
+    /// </summary>
+    internal static PersonRuntime CreateForOwnerSnapshot(
+        PersonId personId,
+        long? birthAbsoluteDay,
+        long? deathAbsoluteDay,
+        string residenceSettlementRuntimeId,
+        string materializedNpcRuntimeId,
+        long lifeResidenceRevision)
+    {
+        PersonRuntime person = new PersonRuntime(
+            personId,
+            birthAbsoluteDay,
+            deathAbsoluteDay);
+        person.residenceSettlementRuntimeId = residenceSettlementRuntimeId;
+        person.materializedNpcRuntimeId = materializedNpcRuntimeId;
+        person.lifeResidenceRevision = lifeResidenceRevision;
+        return person;
+    }
+
     public bool IsDeadAt(long absoluteDay)
     {
         return absoluteDay >= 0L
