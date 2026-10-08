@@ -63,6 +63,50 @@ public class NpcActionRuntime
         this.expectedUnitPrice = Mathf.Max(0f, expectedUnitPrice);
     }
 
+    /// <summary>Creates an unpublished action payload without replaying its setters.</summary>
+    internal static bool TryCreateFromOwnerSnapshot(
+        NpcActionData action,
+        NpcRuntime targetNpc,
+        CityRuntime targetCity,
+        ItemData targetItem,
+        int amount,
+        float expectedUnitPrice,
+        float successChanceMultiplier,
+        NpcTravelReason travelReason,
+        float expectedNetValue,
+        string originDecisionId,
+        string stableOccurrenceKey,
+        CommercialDecisionEvidence commercialDecisionEvidence,
+        CommercialScoutingEvidence commercialScoutingEvidence,
+        out NpcActionRuntime staged)
+    {
+        staged = null;
+        if (action == null || amount < 0
+            || !IsFiniteNonNegative(expectedUnitPrice)
+            || !IsFiniteNonNegative(successChanceMultiplier)
+            || !Enum.IsDefined(typeof(NpcTravelReason), travelReason)
+            || float.IsNaN(expectedNetValue) || float.IsInfinity(expectedNetValue))
+            return false;
+        NpcActionRuntime candidate = new NpcActionRuntime(action);
+        candidate.targetNpc = targetNpc;
+        candidate.targetCity = targetCity;
+        candidate.targetItem = targetItem;
+        candidate.amount = amount;
+        candidate.expectedUnitPrice = expectedUnitPrice;
+        candidate.successChanceMultiplier = successChanceMultiplier;
+        candidate.travelReason = travelReason;
+        candidate.expectedNetValue = expectedNetValue;
+        candidate.originDecisionId = originDecisionId;
+        candidate.stableOccurrenceKey = stableOccurrenceKey;
+        candidate.commercialDecisionEvidence = commercialDecisionEvidence;
+        candidate.commercialScoutingEvidence = commercialScoutingEvidence;
+        staged = candidate;
+        return true;
+    }
+
+    private static bool IsFiniteNonNegative(float value) =>
+        value >= 0f && !float.IsNaN(value) && !float.IsInfinity(value);
+
     public void SetSuccessChanceMultiplier(float multiplier)
     {
         float normalized = Mathf.Max(0f, multiplier);
@@ -222,6 +266,36 @@ public class NpcTravelPlanRuntime
         originDecisionId = state.OriginDecisionId;
         revision++;
         NotifyP12MutationCommitted();
+        return true;
+    }
+
+    /// <summary>Creates an unpublished exact plan without replaying a plan mutation.</summary>
+    internal static bool TryCreateFromOwnerSnapshot(
+        SpatialLocationRuntime targetLocation,
+        CityRuntime targetCity,
+        NpcTravelReason reason,
+        float utility,
+        float expectedCost,
+        string originDecisionId,
+        long exactRevision,
+        out NpcTravelPlanRuntime staged)
+    {
+        staged = null;
+        if (exactRevision < 0L || !Enum.IsDefined(typeof(NpcTravelReason), reason)
+            || float.IsNaN(utility) || float.IsInfinity(utility) || utility < 0f
+            || float.IsNaN(expectedCost) || float.IsInfinity(expectedCost) || expectedCost < 0f
+            || (targetCity != null && !ReferenceEquals(targetCity.Location, targetLocation))
+            || (targetLocation == null && (targetCity != null || reason != NpcTravelReason.None)))
+            return false;
+        NpcTravelPlanRuntime candidate = new NpcTravelPlanRuntime();
+        candidate.targetLocation = targetLocation;
+        candidate.targetCity = targetCity;
+        candidate.reason = reason;
+        candidate.utility = utility;
+        candidate.expectedCost = expectedCost;
+        candidate.originDecisionId = originDecisionId;
+        candidate.revision = exactRevision;
+        staged = candidate;
         return true;
     }
 
@@ -418,6 +492,45 @@ public class MerchantTradePlanRuntime
         originDecisionId = state.OriginDecisionId;
         revision++;
         NotifyP12MutationCommitted();
+        return true;
+    }
+
+    /// <summary>Creates an unpublished exact plan without replaying trade-plan mutations.</summary>
+    internal static bool TryCreateFromOwnerSnapshot(
+        ItemData item,
+        CityRuntime originCity,
+        CityRuntime targetCity,
+        int plannedAmount,
+        int rawRemainingAmount,
+        float purchasePricePerItem,
+        int waitDaysAtDestination,
+        int pendingTravelDays,
+        string originDecisionId,
+        long exactRevision,
+        out MerchantTradePlanRuntime staged)
+    {
+        staged = null;
+        if (exactRevision < 0L || plannedAmount < 0 || rawRemainingAmount < 0
+            || waitDaysAtDestination < 0 || pendingTravelDays < 0
+            || float.IsNaN(purchasePricePerItem) || float.IsInfinity(purchasePricePerItem)
+            || purchasePricePerItem < 0f
+            || (item == null && (plannedAmount != 0 || rawRemainingAmount != 0
+                || originCity != null || targetCity != null))
+            || (item != null && string.IsNullOrWhiteSpace(item.DefinitionId))
+            || (targetCity != null && targetCity.Location == null))
+            return false;
+        MerchantTradePlanRuntime candidate = new MerchantTradePlanRuntime();
+        candidate.item = item;
+        candidate.originCity = originCity;
+        candidate.targetCity = targetCity;
+        candidate.plannedAmount = plannedAmount;
+        candidate.remainingAmount = rawRemainingAmount;
+        candidate.purchasePricePerItem = purchasePricePerItem;
+        candidate.waitDaysAtDestination = waitDaysAtDestination;
+        candidate.pendingTravelDays = pendingTravelDays;
+        candidate.originDecisionId = originDecisionId;
+        candidate.revision = exactRevision;
+        staged = candidate;
         return true;
     }
 

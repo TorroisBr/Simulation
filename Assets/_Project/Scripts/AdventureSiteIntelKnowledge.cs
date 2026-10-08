@@ -262,6 +262,45 @@ public sealed class AdventureSiteIntelKnowledgeRuntime
         this.ownerRuntimeId = ownerRuntimeId;
     }
 
+    /// <summary>Builds an unpublished owner from copied exact values without replaying observations.</summary>
+    internal static bool TryCreateFromOwnerSnapshot(
+        string ownerRuntimeId,
+        IReadOnlyList<AdventureOppositionObservation> opposition,
+        IReadOnlyList<AdventureNotableItemObservation> notableItems,
+        IReadOnlyList<AdventureCommonResourceObservation> resources,
+        IReadOnlyList<AdventureAccessObservation> access,
+        long exactRevision,
+        out AdventureSiteIntelKnowledgeRuntime staged)
+    {
+        staged = null;
+        if (string.IsNullOrWhiteSpace(ownerRuntimeId) || opposition == null || notableItems == null
+            || resources == null || access == null || exactRevision < 0L)
+            return false;
+        AdventureSiteIntelKnowledgeRuntime candidate = new AdventureSiteIntelKnowledgeRuntime(ownerRuntimeId);
+        if (!CopyUnique(opposition, candidate.oppositionObservations)
+            || !CopyUnique(notableItems, candidate.notableItemObservations)
+            || !CopyUnique(resources, candidate.commonResourceObservations)
+            || !CopyUnique(access, candidate.accessObservations))
+            return false;
+        candidate.revision = exactRevision;
+        staged = candidate;
+        return true;
+    }
+
+    private static bool CopyUnique<T>(IReadOnlyList<T> source, List<T> destination)
+        where T : AdventureSiteIntelObservation
+    {
+        for (int i = 0; i < source.Count; i++)
+        {
+            T value = source[i];
+            if (value == null) return false;
+            for (int j = 0; j < destination.Count; j++)
+                if (destination[j].HasSameIdentity(value)) return false;
+            destination.Add(value);
+        }
+        return true;
+    }
+
     public bool RecordObservation(AdventureOppositionObservation observation)
     {
         return Record(oppositionObservations, observation);

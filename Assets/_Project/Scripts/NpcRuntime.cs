@@ -78,6 +78,7 @@ public class NpcRuntime : ICapabilityConditionSource
         ? personRuntime.ResidenceSettlementRuntimeId
         : residenceSettlementRuntimeId;
     internal PersonRuntime BoundPersonRuntime => personRuntime;
+    internal IReadOnlyList<NpcStatusData> ExistingCurrentStatus => currentStatus;
     public IReadOnlyList<NpcStatusData> CurrentStatus
     {
         get
@@ -402,6 +403,83 @@ public class NpcRuntime : ICapabilityConditionSource
     internal void ClearPersonRuntime()
     {
         personRuntime = null;
+    }
+
+    /// <summary>
+    /// Installs validated exact owner values on a fresh unpublished NPC. This
+    /// deliberately bypasses gameplay writers and does not advance revisions.
+    /// </summary>
+    internal bool TryInstallP12OwnerSnapshot(P12DNpcStagedOwnerState state)
+    {
+        if (state == null || p12LifecycleMutationAdmission != null
+            || p12TravelStateMutationAdmission != null || p12CrimeJusticeMutationAdmission != null
+            || state.NpcData == null
+            || !string.Equals(state.NpcData.DefinitionId, state.NpcDefinitionId, StringComparison.Ordinal)
+            || state.CurrentStatus == null || state.Inventory == null || state.MoneyAccount == null
+            || state.MerchantTradePlan == null || state.TravelPlan == null
+            || state.CommercialKnowledge == null || state.SpatialKnowledge == null
+            || state.ExplorableSiteKnowledge == null || state.LocalTopologyKnowledge == null
+            || state.AdventureSiteIntelKnowledge == null
+            || state.LifeStateRevision < 0L || state.ResidenceRevision < 0L
+            || state.CrimeJusticeRevision < 0L || state.CurrentActionRevision < 0L
+            || state.TravelStateRevision < 0L || state.HiddenDaysRemaining < 0
+            || !Enum.IsDefined(typeof(NpcLifeState), state.LifeState)
+            || !NpcInjuryRules.IsValid(state.InjurySeverity)
+            || (state.CurrentCity != null && !ReferenceEquals(state.CurrentCity.Location, state.CurrentLocation))
+            || (state.DestinationCity != null && !ReferenceEquals(state.DestinationCity.Location, state.DestinationLocation))
+            || (state.CurrentActionRuntime != null
+                && (state.CurrentActionRuntime.Action == null
+                    || !string.Equals(state.CurrentActionRuntime.Action.DefinitionId,
+                        state.CurrentActionDefinitionId, StringComparison.Ordinal)
+                    || !state.CurrentActionRuntime.TryBindP12Owner(this)))
+            || (state.CurrentActionRuntime == null && state.CurrentActionDefinitionId != null)
+            || !string.Equals(state.SpatialKnowledge.OwnerRuntimeId, runtimeId, StringComparison.Ordinal)
+            || !string.Equals(state.ExplorableSiteKnowledge.OwnerRuntimeId, runtimeId, StringComparison.Ordinal)
+            || !string.Equals(state.LocalTopologyKnowledge.OwnerRuntimeId, runtimeId, StringComparison.Ordinal)
+            || !string.Equals(state.AdventureSiteIntelKnowledge.OwnerRuntimeId, runtimeId, StringComparison.Ordinal))
+            return false;
+
+        PersonId stagedPersonId = null;
+        if (state.PersonIdValue != null && !PersonId.TryCreate(state.PersonIdValue, out stagedPersonId))
+            return false;
+        if ((stagedPersonId == null) != (state.PersonRuntime == null)
+            || (state.PersonRuntime != null && state.PersonRuntime.PersonId != stagedPersonId))
+            return false;
+
+        personIdentity = stagedPersonId;
+        personIdValue = stagedPersonId?.Value;
+        personRuntime = state.PersonRuntime;
+        residenceSettlementRuntimeId = state.ResidenceSettlementRuntimeId;
+        lifeState = state.LifeState;
+        injurySeverity = state.InjurySeverity;
+        currentStatus = new List<NpcStatusData>(state.CurrentStatus);
+        currentStatusView = null;
+        currentAction = state.CurrentActionRuntime?.Action;
+        currentActionRuntime = state.CurrentActionRuntime;
+        inventory = state.Inventory;
+        moneyAccount = state.MoneyAccount;
+        destinationLocation = state.DestinationLocation;
+        destinationCity = state.DestinationCity;
+        travelDaysRemaining = state.TravelDaysRemaining;
+        travelDaysTotal = state.TravelDaysTotal;
+        travelRouteRuntimeId = state.TravelRouteRuntimeId;
+        travelStartedToday = state.TravelStartedToday;
+        travelOriginDecisionId = state.TravelOriginDecisionId;
+        activeTravelPartyId = state.ActiveTravelPartyId;
+        hiddenDaysRemaining = state.HiddenDaysRemaining;
+        merchantTradePlan = state.MerchantTradePlan;
+        travelPlan = state.TravelPlan;
+        commercialKnowledge = state.CommercialKnowledge;
+        spatialKnowledge = state.SpatialKnowledge;
+        explorableSiteKnowledge = state.ExplorableSiteKnowledge;
+        localTopologyKnowledge = state.LocalTopologyKnowledge;
+        adventureSiteIntelKnowledge = state.AdventureSiteIntelKnowledge;
+        lifeStateRevision = state.LifeStateRevision;
+        residenceRevision = state.ResidenceRevision;
+        p12CrimeJusticeRevision = state.CrimeJusticeRevision;
+        currentActionRevision = state.CurrentActionRevision;
+        travelStateRevision = state.TravelStateRevision;
+        return true;
     }
 
     public void SetCurrentAction(NpcActionData action)

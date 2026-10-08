@@ -37,6 +37,32 @@ public sealed class SpatialKnowledgeRuntime
         this.ownerRuntimeId = ownerRuntimeId;
     }
 
+    /// <summary>Creates an unpublished exact owner without replaying discoveries.</summary>
+    internal static bool TryCreateFromOwnerSnapshot(
+        string ownerRuntimeId,
+        IReadOnlyList<string> locationIds,
+        IReadOnlyList<string> routeIds,
+        long exactRevision,
+        out SpatialKnowledgeRuntime staged)
+    {
+        staged = null;
+        if (string.IsNullOrWhiteSpace(ownerRuntimeId) || locationIds == null
+            || routeIds == null || exactRevision < 0L)
+            return false;
+        HashSet<string> locations = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> routes = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string id in locationIds)
+            if (string.IsNullOrWhiteSpace(id) || !locations.Add(id)) return false;
+        foreach (string id in routeIds)
+            if (string.IsNullOrWhiteSpace(id) || !routes.Add(id)) return false;
+        SpatialKnowledgeRuntime candidate = new SpatialKnowledgeRuntime(ownerRuntimeId);
+        candidate.knownLocationRuntimeIds = new List<string>(locationIds);
+        candidate.knownRouteRuntimeIds = new List<string>(routeIds);
+        candidate.revision = exactRevision;
+        staged = candidate;
+        return true;
+    }
+
     public bool KnowsLocation(string locationRuntimeId)
     {
         return ContainsId(KnownLocations, locationRuntimeId);

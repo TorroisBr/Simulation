@@ -37,6 +37,20 @@ public sealed class MoneyAccountRuntime
         revision = expectedRevision + revisionIncrements;
     }
 
+    /// <summary>Creates an unpublished exact owner without a debit or credit.</summary>
+    internal static bool TryCreateFromOwnerSnapshot(
+        float exactBalance,
+        long exactRevision,
+        out MoneyAccountRuntime staged)
+    {
+        staged = null;
+        if (exactRevision < 0L || !IsValidNonNegativeFiniteAmount(exactBalance)) return false;
+        MoneyAccountRuntime candidate = new MoneyAccountRuntime(exactBalance);
+        candidate.revision = exactRevision;
+        staged = candidate;
+        return true;
+    }
+
     public MoneyAccountRuntime()
         : this(0f)
     {

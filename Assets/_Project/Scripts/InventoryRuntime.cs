@@ -106,6 +106,31 @@ public class InventoryRuntime
         return GetAmount(item) >= amount;
     }
 
+    /// <summary>Creates an unpublished owner from exact rows without replaying inventory writes.</summary>
+    internal static bool TryCreateFromOwnerSnapshot(
+        IReadOnlyList<InventoryItemRuntime> rows,
+        long ownerRevision,
+        out InventoryRuntime staged)
+    {
+        staged = null;
+        if (rows == null || ownerRevision < 0L) return false;
+        InventoryRuntime candidate = new InventoryRuntime();
+        HashSet<ItemData> uniqueItems = new HashSet<ItemData>();
+        foreach (InventoryItemRuntime row in rows)
+        {
+            if (row == null || row.Item == null || string.IsNullOrWhiteSpace(row.Item.DefinitionId)
+                || row.Amount < 0 || float.IsNaN(row.AverageUnitCost)
+                || float.IsInfinity(row.AverageUnitCost) || row.AverageUnitCost < 0f
+                || !uniqueItems.Add(row.Item))
+                return false;
+            candidate.items.Add(new InventoryItemRuntime(row.Item, row.Amount, row.AverageUnitCost));
+        }
+        candidate.revision = ownerRevision;
+        candidate.readOnlyItems = candidate.items.AsReadOnly();
+        staged = candidate;
+        return true;
+    }
+
     public bool CanAddItem(ItemData item, int amount, float unitCost = 0f)
     {
         if (item == null

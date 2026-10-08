@@ -87,6 +87,32 @@ public sealed class ExplorableSiteKnowledgeRuntime
         readOnlyObservations = observations.AsReadOnly();
     }
 
+    /// <summary>Builds an unpublished owner from copied exact values without replaying observations.</summary>
+    internal static bool TryCreateFromOwnerSnapshot(
+        string ownerRuntimeId,
+        IReadOnlyList<ExplorableSiteKnowledgeObservation> exactObservations,
+        long exactRevision,
+        out ExplorableSiteKnowledgeRuntime staged)
+    {
+        staged = null;
+        if (string.IsNullOrWhiteSpace(ownerRuntimeId) || exactObservations == null || exactRevision < 0L)
+            return false;
+        List<ExplorableSiteKnowledgeObservation> copy = new List<ExplorableSiteKnowledgeObservation>(exactObservations.Count);
+        HashSet<string> uniqueSites = new HashSet<string>(StringComparer.Ordinal);
+        foreach (ExplorableSiteKnowledgeObservation observation in exactObservations)
+        {
+            if (observation == null || !uniqueSites.Add(observation.SiteRuntimeId)) return false;
+            copy.Add(new ExplorableSiteKnowledgeObservation(
+                observation.SiteRuntimeId, observation.LocationRuntimeId, observation.ObservedDay,
+                observation.ReceivedDay, observation.Source));
+        }
+        ExplorableSiteKnowledgeRuntime candidate = new ExplorableSiteKnowledgeRuntime(ownerRuntimeId);
+        candidate.observations.AddRange(copy);
+        candidate.revision = exactRevision;
+        staged = candidate;
+        return true;
+    }
+
     public bool KnowsSite(string siteRuntimeId)
     {
         return TryGetObservation(siteRuntimeId, out _);

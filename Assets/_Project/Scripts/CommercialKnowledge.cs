@@ -435,6 +435,60 @@ public sealed class CommercialKnowledgeRuntime
     private List<CommercialMarketObservation> ObservationList => observations ?? (observations = new List<CommercialMarketObservation>());
     private List<CommercialLiquidityObservation> LiquidityObservationList => liquidityObservations ?? (liquidityObservations = new List<CommercialLiquidityObservation>());
 
+    /// <summary>Copies the exact owner lists for a detached snapshot, rejecting absent backing state.</summary>
+    internal bool TryCopyOwnerSnapshot(
+        out IReadOnlyList<CommercialMarketObservation> markets,
+        out IReadOnlyList<CommercialLiquidityObservation> liquidity,
+        out IReadOnlyList<CommercialKnowledgeShareReceipt> receipts)
+    {
+        markets = null;
+        liquidity = null;
+        receipts = null;
+        if (observations == null || liquidityObservations == null || shareReceipts == null) return false;
+        markets = new List<CommercialMarketObservation>(observations).AsReadOnly();
+        liquidity = new List<CommercialLiquidityObservation>(liquidityObservations).AsReadOnly();
+        receipts = new List<CommercialKnowledgeShareReceipt>(shareReceipts).AsReadOnly();
+        return true;
+    }
+
+    /// <summary>Builds an unpublished exact owner without replaying observations or sharing batches.</summary>
+    internal static bool TryCreateFromOwnerSnapshot(
+        IReadOnlyList<CommercialMarketObservation> markets,
+        IReadOnlyList<CommercialLiquidityObservation> liquidity,
+        IReadOnlyList<CommercialKnowledgeShareReceipt> receipts,
+        long exactRevision,
+        out CommercialKnowledgeRuntime staged)
+    {
+        staged = null;
+        if (markets == null || liquidity == null || receipts == null || exactRevision < 0L) return false;
+        CommercialKnowledgeRuntime candidate = new CommercialKnowledgeRuntime();
+        HashSet<string> marketKeys = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> liquidityKeys = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> receiptIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (CommercialMarketObservation row in markets)
+        {
+            if (row == null || row.ItemDefinition == null
+                || !string.Equals(row.ItemDefinition.DefinitionId, row.ItemDefinitionId, StringComparison.Ordinal)
+                || !marketKeys.Add(SpatialStableKey.Encode(row.LocationRuntimeId, row.ItemDefinitionId)))
+                return false;
+            candidate.observations.Add(row);
+        }
+        foreach (CommercialLiquidityObservation row in liquidity)
+        {
+            if (row == null || !liquidityKeys.Add(row.LocationRuntimeId)) return false;
+            candidate.liquidityObservations.Add(row);
+        }
+        foreach (CommercialKnowledgeShareReceipt row in receipts)
+        {
+            if (row == null || string.IsNullOrWhiteSpace(row.OperationIdentity)
+                || !receiptIds.Add(row.OperationIdentity)) return false;
+            candidate.shareReceipts.Add(row);
+        }
+        candidate.revision = exactRevision;
+        staged = candidate;
+        return true;
+    }
+
     public bool RecordObservation(CommercialMarketObservation observation)
     {
         if (observation == null)
