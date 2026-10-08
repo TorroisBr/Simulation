@@ -196,6 +196,167 @@ public sealed class GenealogyFoundationTests
     }
 
     [Test]
+    public void OwnerSnapshot_RoundTripsRequiredEmptyAndPopulatedDiamondGraphs()
+    {
+        GenealogyStore empty = new GenealogyStore();
+        GenealogyOwnerSnapshot emptySnapshot = empty.CaptureOwnerSnapshot();
+        Assert.That(emptySnapshot.SchemaVersion, Is.EqualTo(GenealogyOwnerSnapshot.CurrentSchemaVersion));
+        Assert.That(emptySnapshot.Revision, Is.EqualTo(0));
+        Assert.That(emptySnapshot.Records, Is.Empty);
+        Assert.That(GenealogyStore.TryCreateFromOwnerSnapshot(
+            emptySnapshot,
+            out GenealogyStore restoredEmpty,
+            out GenealogyFailure emptyFailure), Is.True);
+        Assert.That(emptyFailure.Code, Is.EqualTo(GenealogyFailureCode.None));
+        Assert.That(restoredEmpty.Count, Is.EqualTo(0));
+        Assert.That(restoredEmpty.Revision, Is.EqualTo(0));
+
+        GenealogyStore populated = new GenealogyStore();
+        Add(populated, "root", "branch-b");
+        Add(populated, "branch-b", "leaf");
+        Add(populated, "root", "branch-a");
+        Add(populated, "branch-a", "leaf");
+        GenealogyOwnerSnapshot snapshot = populated.CaptureOwnerSnapshot();
+
+        Assert.That(GenealogyStore.TryCreateFromOwnerSnapshot(
+            snapshot,
+            out GenealogyStore restored,
+            out GenealogyFailure failure), Is.True);
+        Assert.That(failure.Code, Is.EqualTo(GenealogyFailureCode.None));
+        Assert.That(restored.Records, Is.EqualTo(populated.Records));
+        Assert.That(restored.Revision, Is.EqualTo(populated.Revision));
+        AssertIds(restored.GetAncestors(new PersonId("leaf")), "branch-a", "branch-b", "root");
+        AssertIds(restored.GetDescendants(new PersonId("root")), "branch-a", "branch-b", "leaf");
+    }
+
+    [Test]
+    public void OwnerSnapshot_IsDetachedAndPreservesRevisionGapsAcrossReAdd()
+    {
+        GenealogyStore source = new GenealogyStore();
+        PersonId parent = new PersonId("parent");
+        PersonId child = new PersonId("child");
+        Assert.That(source.TryAddParentage(parent, child, out _), Is.True);
+        long firstRevision = source.Revision;
+        Assert.That(source.TryRemoveParentage(parent, child, out _), Is.True);
+        Assert.That(source.TryAddParentage(parent, child, out _), Is.True);
+        Assert.That(source.Count, Is.EqualTo(1));
+        Assert.That(source.Revision, Is.EqualTo(firstRevision + 2));
+
+        GenealogyOwnerSnapshot snapshot = source.CaptureOwnerSnapshot();
+        IList<ParentageRecord> snapshotRows = snapshot.Records as IList<ParentageRecord>;
+        Assert.That(snapshotRows, Is.Not.Null);
+        Assert.That(snapshotRows.IsReadOnly, Is.True);
+        Assert.Throws<NotSupportedException>(() => snapshotRows.Add(
+            new ParentageRecord(new PersonId("another-parent"), new PersonId("another-child"))));
+
+        Assert.That(source.TryAddParentage(
+            new PersonId("another-parent"),
+            new PersonId("another-child"),
+            out _), Is.True);
+        Assert.That(snapshot.Records, Has.Count.EqualTo(1));
+        Assert.That(snapshot.Revision, Is.EqualTo(firstRevision + 2));
+
+        Assert.That(GenealogyStore.TryCreateFromOwnerSnapshot(
+            snapshot,
+            out GenealogyStore restored,
+            out GenealogyFailure failure), Is.True);
+        Assert.That(failure.Code, Is.EqualTo(GenealogyFailureCode.None));
+        Assert.That(restored.Revision, Is.EqualTo(snapshot.Revision));
+        Assert.That(restored.Count, Is.EqualTo(snapshot.Records.Count));
+        Assert.That(restored.TryAddParentage(
+            new PersonId("next-parent"),
+            new PersonId("next-child"),
+            out _), Is.True);
+        Assert.That(restored.Revision, Is.EqualTo(snapshot.Revision + 1));
+    }
+
+    [Test]
+    public void OwnerSnapshot_RestoresSaturatedRevisionWithoutReplayingWrites()
+    {
+        GenealogyOwnerSnapshot snapshot = new GenealogyOwnerSnapshot(
+            GenealogyOwnerSnapshot.CurrentSchemaVersion,
+            long.MaxValue,
+            new[] { new ParentageRecord(new PersonId("parent"), new PersonId("child")) });
+
+        Assert.That(GenealogyStore.TryCreateFromOwnerSnapshot(
+            snapshot,
+            out GenealogyStore restored,
+            out GenealogyFailure failure), Is.True);
+        Assert.That(failure.Code, Is.EqualTo(GenealogyFailureCode.None));
+        Assert.That(restored.Revision, Is.EqualTo(long.MaxValue));
+        Assert.That(restored.ContainsParentage(new PersonId("parent"), new PersonId("child")), Is.True);
+        Assert.That(restored.TryAddParentage(
+            new PersonId("other-parent"),
+            new PersonId("other-child"),
+            out GenealogyFailure overflow), Is.False);
+        Assert.That(overflow.Code, Is.EqualTo(GenealogyFailureCode.RevisionOverflow));
+        Assert.That(restored.Revision, Is.EqualTo(long.MaxValue));
+        Assert.That(restored.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void OwnerSnapshot_RejectsMissingSchemaAndImpossibleRevision()
+    {
+        Assert.That(GenealogyStore.TryCreateFromOwnerSnapshot(
+            null,
+            out GenealogyStore missing,
+            out GenealogyFailure missingFailure), Is.False);
+        Assert.That(missing, Is.Null);
+        Assert.That(missingFailure.Code, Is.EqualTo(GenealogyFailureCode.InvalidSnapshot));
+
+        AssertInvalidOwnerSnapshot(
+            new GenealogyOwnerSnapshot(2, 0, Array.Empty<ParentageRecord>()),
+            GenealogyFailureCode.UnsupportedSnapshotSchema);
+        AssertInvalidOwnerSnapshot(
+            new GenealogyOwnerSnapshot(GenealogyOwnerSnapshot.CurrentSchemaVersion, -1, Array.Empty<ParentageRecord>()),
+            GenealogyFailureCode.InvalidSnapshot);
+        AssertInvalidOwnerSnapshot(
+            new GenealogyOwnerSnapshot(GenealogyOwnerSnapshot.CurrentSchemaVersion, 0, null),
+            GenealogyFailureCode.InvalidSnapshot);
+        AssertInvalidOwnerSnapshot(
+            new GenealogyOwnerSnapshot(
+                GenealogyOwnerSnapshot.CurrentSchemaVersion,
+                0,
+                new[] { new ParentageRecord(new PersonId("parent"), new PersonId("child")) }),
+            GenealogyFailureCode.InvalidSnapshot);
+    }
+
+    [Test]
+    public void OwnerSnapshot_RejectsNullDuplicateAndCyclicRowsWithoutChangingSource()
+    {
+        GenealogyStore source = new GenealogyStore();
+        Add(source, "stable-parent", "stable-child");
+        long sourceRevision = source.Revision;
+        IReadOnlyList<ParentageRecord> sourceRows = source.Records;
+
+        AssertInvalidOwnerSnapshot(
+            new GenealogyOwnerSnapshot(
+                GenealogyOwnerSnapshot.CurrentSchemaVersion,
+                1,
+                new ParentageRecord[] { null }),
+            GenealogyFailureCode.InvalidParentageRecord);
+
+        ParentageRecord edge = new ParentageRecord(new PersonId("a"), new PersonId("b"));
+        AssertInvalidOwnerSnapshot(
+            new GenealogyOwnerSnapshot(GenealogyOwnerSnapshot.CurrentSchemaVersion, 2, new[] { edge, edge }),
+            GenealogyFailureCode.DuplicateParentage);
+        AssertInvalidOwnerSnapshot(
+            new GenealogyOwnerSnapshot(
+                GenealogyOwnerSnapshot.CurrentSchemaVersion,
+                2,
+                new[]
+                {
+                    edge,
+                    new ParentageRecord(new PersonId("b"), new PersonId("a"))
+                }),
+            GenealogyFailureCode.WouldCreateCycle);
+
+        Assert.That(source.Revision, Is.EqualTo(sourceRevision));
+        Assert.That(source.Records, Is.EqualTo(sourceRows));
+        Assert.That(source.ContainsParentage(new PersonId("stable-parent"), new PersonId("stable-child")), Is.True);
+    }
+
+    [Test]
     public void RemoveParentage_RemovesOnlyTheRequestedEdge()
     {
         GenealogyStore store = new GenealogyStore();
@@ -310,6 +471,18 @@ public sealed class GenealogyFoundationTests
     {
         Assert.That(store.TryAddParentage(new PersonId(parent), new PersonId(child), out GenealogyFailure failure), Is.True);
         Assert.That(failure.Code, Is.EqualTo(GenealogyFailureCode.None));
+    }
+
+    private static void AssertInvalidOwnerSnapshot(
+        GenealogyOwnerSnapshot snapshot,
+        GenealogyFailureCode expectedFailure)
+    {
+        Assert.That(GenealogyStore.TryCreateFromOwnerSnapshot(
+            snapshot,
+            out GenealogyStore staged,
+            out GenealogyFailure failure), Is.False);
+        Assert.That(staged, Is.Null);
+        Assert.That(failure.Code, Is.EqualTo(expectedFailure));
     }
 
     private static void AssertIds(IReadOnlyList<PersonId> actual, params string[] expected)

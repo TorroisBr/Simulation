@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 public enum GenealogyFailureCode
 {
@@ -11,7 +13,78 @@ public enum GenealogyFailureCode
     WouldCreateCycle,
     ParentageNotFound,
     RuntimeFaulted,
-    RevisionOverflow
+    RevisionOverflow,
+    InvalidSnapshot,
+    UnsupportedSnapshotSchema
+}
+
+/// <summary>
+/// Immutable owner-local export for the P12-D Genealogy section. It carries no
+/// runtime identity or capture-token authority; those are checked by the
+/// surrounding profile capture and merged graph stages.
+/// </summary>
+internal sealed class GenealogyOwnerSnapshot
+{
+    internal const int CurrentSchemaVersion = 1;
+
+    internal int SchemaVersion { get; }
+    internal long Revision { get; }
+    internal IReadOnlyList<ParentageRecord> Records { get; }
+
+    internal GenealogyOwnerSnapshot(
+        int schemaVersion,
+        long revision,
+        IEnumerable<ParentageRecord> records)
+    {
+        SchemaVersion = schemaVersion;
+        Revision = revision;
+        if (records == null)
+        {
+            Records = null;
+            return;
+        }
+
+        List<ParentageRecord> copy = new List<ParentageRecord>();
+        bool canSort = true;
+        foreach (ParentageRecord record in records)
+        {
+            if (record == null)
+            {
+                copy.Add(null);
+                canSort = false;
+                continue;
+            }
+
+            if (record.ParentId == null || record.ChildId == null
+                || record.ParentId == record.ChildId)
+            {
+                // Retain malformed internal input so the staged factory can
+                // reject it as data instead of throwing during snapshot copy.
+                copy.Add(record);
+                canSort = false;
+                continue;
+            }
+
+            copy.Add(new ParentageRecord(
+                new PersonId(record.ParentId.Value),
+                new PersonId(record.ChildId.Value)));
+        }
+
+        if (canSort)
+        {
+            copy.Sort(CompareRecords);
+        }
+
+        Records = new ReadOnlyCollection<ParentageRecord>(copy);
+    }
+
+    private static int CompareRecords(ParentageRecord left, ParentageRecord right)
+    {
+        int parentComparison = string.CompareOrdinal(left.ParentId.Value, right.ParentId.Value);
+        return parentComparison != 0
+            ? parentComparison
+            : string.CompareOrdinal(left.ChildId.Value, right.ChildId.Value);
+    }
 }
 
 /// <summary>

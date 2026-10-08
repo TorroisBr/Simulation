@@ -32,6 +32,122 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
         }
     }
 
+    /// <summary>
+    /// Captures this owner's exact schema-v1 edge set and local revision in one
+    /// owner operation. The caller must hold the P12-B completed-boundary
+    /// capture authority; this method does not create or validate that token.
+    /// </summary>
+    internal GenealogyOwnerSnapshot CaptureOwnerSnapshot()
+    {
+        List<ParentageRecord> snapshot = new List<ParentageRecord>(records);
+        snapshot.Sort(CompareRecords);
+        return new GenealogyOwnerSnapshot(
+            GenealogyOwnerSnapshot.CurrentSchemaVersion,
+            revision,
+            snapshot);
+    }
+
+    /// <summary>
+    /// Builds an unpublished exact-value owner from a validated local snapshot.
+    /// Cross-owner endpoint membership is intentionally checked by the later
+    /// merged D graph validator after related person records are staged.
+    /// </summary>
+    internal static bool TryCreateFromOwnerSnapshot(
+        GenealogyOwnerSnapshot snapshot,
+        out GenealogyStore stagedStore,
+        out GenealogyFailure failure)
+    {
+        stagedStore = null;
+        if (snapshot == null)
+        {
+            failure = GenealogyFailure.Create(
+                GenealogyFailureCode.InvalidSnapshot,
+                "A genealogy owner snapshot is required.");
+            return false;
+        }
+
+        if (snapshot.SchemaVersion != GenealogyOwnerSnapshot.CurrentSchemaVersion)
+        {
+            failure = GenealogyFailure.Create(
+                GenealogyFailureCode.UnsupportedSnapshotSchema,
+                "The genealogy owner snapshot schema is not supported.");
+            return false;
+        }
+
+        if (snapshot.Revision < 0 || snapshot.Records == null
+            || snapshot.Revision < snapshot.Records.Count)
+        {
+            failure = GenealogyFailure.Create(
+                GenealogyFailureCode.InvalidSnapshot,
+                "The genealogy snapshot revision or edge collection is invalid.");
+            return false;
+        }
+
+        GenealogyStore staged = new GenealogyStore();
+        foreach (ParentageRecord record in snapshot.Records)
+        {
+            if (record == null)
+            {
+                failure = GenealogyFailure.Create(
+                    GenealogyFailureCode.InvalidParentageRecord,
+                    "The genealogy snapshot contains a null parentage record.");
+                return false;
+            }
+
+            if (record.ParentId == null)
+            {
+                failure = GenealogyFailure.Create(
+                    GenealogyFailureCode.InvalidParent,
+                    "The genealogy snapshot contains a null parent PersonId.");
+                return false;
+            }
+
+            if (record.ChildId == null)
+            {
+                failure = GenealogyFailure.Create(
+                    GenealogyFailureCode.InvalidChild,
+                    "The genealogy snapshot contains a null child PersonId.");
+                return false;
+            }
+
+            if (record.ParentId == record.ChildId)
+            {
+                failure = GenealogyFailure.Create(
+                    GenealogyFailureCode.SelfParent,
+                    "The genealogy snapshot contains a self-parent edge.");
+                return false;
+            }
+
+            if (staged.records.Contains(record))
+            {
+                failure = GenealogyFailure.Create(
+                    GenealogyFailureCode.DuplicateParentage,
+                    "The genealogy snapshot contains a duplicate parentage edge.");
+                return false;
+            }
+
+            if (staged.CanReach(record.ChildId, record.ParentId))
+            {
+                failure = GenealogyFailure.Create(
+                    GenealogyFailureCode.WouldCreateCycle,
+                    "The genealogy snapshot contains a cyclic parentage graph.");
+                return false;
+            }
+
+            staged.records.Add(record);
+            AddAdjacency(staged.childrenByParent, record.ParentId, record.ChildId);
+            AddAdjacency(staged.parentsByChild, record.ChildId, record.ParentId);
+        }
+
+        // Replaying ordinary mutations would change the exact owner revision
+        // and cannot represent a saturated revision. Restore after local graph
+        // construction, before the staged owner can be published.
+        staged.revision = snapshot.Revision;
+        stagedStore = staged;
+        failure = GenealogyFailure.None;
+        return true;
+    }
+
     public bool TryAddParentage(
         PersonId parent,
         PersonId child,

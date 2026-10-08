@@ -1,5 +1,16 @@
 # Phase 12 — Technical Design Proposal: Daily Continuation
 
+> **Current-profile correction (2026-10-08):** This umbrella proposal predates
+> the accepted live-profile separation. `SampleScene` now selects
+> `Simulation-DailyV1.asset` for `UnityBootstrap-Daily-v1`;
+> `Simulation-GeneralTest.asset` is the separate P10-A Ruin/LocalTopology
+> proving profile and is excluded from the current P12 profile. References
+> below that identify GeneralTest as the selected Daily-v1 asset/configuration
+> or its profile identity are historical. Use the current P12 Brief, State,
+> and `PHASE12_D_TECHNICAL_DESIGN.md` / `PHASE12_E_TECHNICAL_DESIGN.md` for
+> current owner/profile boundaries. This correction does not add P10 state to
+> P12-A or establish P12-A readiness.
+
 **Status:** Technical design for the user-accepted scope of checkpoint `P12-A — UnityBootstrap Daily Continuation v1`, based on the bounded `UnityBootstrap-Daily-v1` profile. The profile covers the SampleScene-selected `Simulation-GeneralTest.asset` through the validated `TesteSimulacao.InitializeSimulation` bootstrap, exact compatible build/runtime and current-host numeric profile, and completed-day capture boundaries. The selected asset enables P9-B authored geography. P9 canonical closure is `82396ae7ffaf407fda278928da456b06dc5394d`; P9-B code integration is `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), with promotion State/status record `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`. P9-A-only configurations are incompatible with this profile and require separate profile identity/admission if retained. Scope acceptance does not authorize implementation or establish Phase State delivery, owner export/hydration, or save/load. Independent full-design/current-base review passed at `9fde12a`; the later current-base refresh review passed at `d1a8414` for the refreshed P9/P10/P20/alignment references and their consistency with the bounded profile. That scoped refresh review is not a new full-design review, and neither review demonstrates owner export/hydration coverage.
 **Historical independent technical design review:** PASS at content commit
 `8577ba589a0f9b40738fcf8738eee9589563d7b8`. The later lifecycle seam must
