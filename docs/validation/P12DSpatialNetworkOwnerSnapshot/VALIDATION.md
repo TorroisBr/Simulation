@@ -53,9 +53,10 @@ Hashes are SHA-256. Compressed log hashes identify the committed `.gz`; `raw log
 
 ## Source hashes
 
-These identify the validated worktree source bytes at code commit `39ad61d`.
+These identify the committed Git blob bytes at code commit `39ad61d` (independent
+of checkout line-ending conversion).
 
 | Source | SHA-256 |
 |---|---|
-| `Assets/_Project/Scripts/SpatialRuntime.cs` | `DBDB15B7D66726CA5AE5D833556FAED9001E255B4AA1CA5BADD6FAFCCA8051A4` |
-| `Assets/_Project/Tests/EditMode/Editor/SpatialNetworkCensusTests.cs` | `41EE9CC51CAA0B9756F4FBC1846BB51FC50EC1FE7849E94B2F03F15733993E82` |
+| `Assets/_Project/Scripts/SpatialRuntime.cs` | `9459F51C909F66763C7A0AF8D6AB56C5371F3250DAA89137015E3D081CDCE575` |
+| `Assets/_Project/Tests/EditMode/Editor/SpatialNetworkCensusTests.cs` | `FB71399DE08BADE2437091FD4AF6744350B0372B140562C71A8040491420917F` |
