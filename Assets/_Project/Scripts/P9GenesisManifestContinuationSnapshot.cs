@@ -437,9 +437,15 @@ public sealed class P12CP9GenesisManifestSnapshot
 
     private static string[] ExpectedCanonicalOutputOwners()
     {
-        string[] records = new string[ExpectedOutputOwners.Length];
-        for (int i = 0; i < ExpectedOutputOwners.Length; i++)
-            records[i] = "output-owner|" + ExpectedOutputOwners[i].Length + ":" + ExpectedOutputOwners[i];
+        string[] canonicalOwners =
+        {
+            "CityRuntime", "MarketCounterpartyRuntime", "PopulationEconomyRuntime", "CityProductionInputs",
+            "SpatialNetworkRuntime", "ExplorableSiteStore", "NpcRuntime", "InventoryRuntime", "InitialKnowledge",
+            "JusticeSystem", "ScheduledDirectiveStore", "SimulationRuntime"
+        };
+        string[] records = new string[canonicalOwners.Length];
+        for (int i = 0; i < canonicalOwners.Length; i++)
+            records[i] = "output-owner|" + canonicalOwners[i].Length + ":" + canonicalOwners[i];
         return records;
     }
 
