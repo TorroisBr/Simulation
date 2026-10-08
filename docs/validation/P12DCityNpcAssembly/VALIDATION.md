@@ -44,6 +44,11 @@ The SHA-256 column is the source byte hash from the validated worktree. Git blob
 Unity also left unrelated `ProjectSettings/EditorBuildSettings.asset`, `ProjectSettings/ShaderGraphSettings.asset`, and untracked ArmedForce/P17 `.meta` files in this worktree. They were not staged or included in the candidate.
 
 
-## Current-tip review correction
+## First review correction (superseded by capture envelope)
 
-The corrected City-to-D/F capture identity binding was validated on implementation commit `4d93a4aa38ed66712c7c8b0951a61e0303d6c7af` (Assets tree `60ba6768fd1d9c01bfe365fc29ffca4eed1e9a6c`): focused City assembly 16/16, receipt-owner 13/13, ALL EditMode 2591/2591, official Smoke 5/5, and cumulative `git diff --check` PASS. Exact source, XML, and log hashes are recorded in [VALIDATION-FOLLOWUP-CITY-IDENTITY-4D93A4A.md](VALIDATION-FOLLOWUP-CITY-IDENTITY-4D93A4A.md). This follow-up preserves the earlier candidate's evidence and does not imply P12-D or P12-B completion.
+The initial City-to-D/F capture identity binding was validated on implementation commit `4d93a4aa38ed66712c7c8b0951a61e0303d6c7af` (Assets tree `60ba6768fd1d9c01bfe365fc29ffca4eed1e9a6c`): focused City assembly 16/16, receipt-owner 13/13, ALL EditMode 2591/2591, official Smoke 5/5, and cumulative `git diff --check` PASS. Exact source, XML, and log hashes are recorded in [VALIDATION-FOLLOWUP-CITY-IDENTITY-4D93A4A.md](VALIDATION-FOLLOWUP-CITY-IDENTITY-4D93A4A.md). This follow-up preserves the earlier candidate's evidence and does not imply P12-D or P12-B completion.
+
+
+## Swapped-pair review addendum follow-up
+
+Review addendum `d36d63a91f5440527a35d1bea724ef89ac4b1623` identified that City snapshot values and capture identity could be passed separately. Candidate `5aceb2b7ce49ffe009489627731cd6689fe2d200` replaces that path with an unpairable capture envelope and passes 17/17 City assembly, 13/13 receipt-owner, ALL EditMode 2592/2592, official Smoke 5/5, and cumulative `git diff --check`. Exact hashes and evidence are recorded in [VALIDATION-FOLLOWUP-CAPTURE-ENVELOPE-5ACEB2B.md](VALIDATION-FOLLOWUP-CAPTURE-ENVELOPE-5ACEB2B.md). This remains a bounded P12-D slice and does not close P12-D or P12-B.
