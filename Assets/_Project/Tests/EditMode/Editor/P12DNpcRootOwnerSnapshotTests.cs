@@ -121,6 +121,145 @@ public sealed class P12DNpcRootOwnerSnapshotTests
     }
 
     [Test]
+    public void DailyV1Package_StagesDormantMaterializedPeopleAndGenealogyTogether()
+    {
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "p12d-owner-package-people-city", "p12d-owner-package-people-location");
+        CityRuntime destination = SimulationTestFactory.CreateCity(
+            "p12d-owner-package-people-destination", "p12d-owner-package-people-destination-location");
+        NpcRuntime npc = new NpcRuntime(
+            "p12d-owner-package-people-npc",
+            SimulationTestFactory.CreateNpc("p12d-owner-package-people-npc-definition"), city, 0f);
+
+        PersonRuntime dormantParent = new PersonRuntime(
+            new PersonId("p12d-owner-package-dormant-parent"), 0L);
+        PersonRuntime materializedChild = new PersonRuntime(
+            new PersonId("p12d-owner-package-materialized-child"), 10L);
+        Assert.That(dormantParent.TrySetResidenceSettlementRuntimeId(city.RuntimeId), Is.True);
+        Assert.That(materializedChild.TrySetResidenceSettlementRuntimeId(city.RuntimeId), Is.True);
+
+        PersonStore sourcePersons = new PersonStore();
+        Assert.That(sourcePersons.TryRegister(dormantParent, out _), Is.True);
+        Assert.That(sourcePersons.TryRegister(materializedChild, out _), Is.True);
+        Assert.That(sourcePersons.TryBindMaterializedNpc(
+            materializedChild.PersonId, npc.RuntimeId, out _), Is.True);
+        Assert.That(npc.TryAssignPersonId(materializedChild.PersonId), Is.True);
+        Assert.That(npc.TryBindPersonRuntime(materializedChild), Is.True);
+
+        GenealogyStore sourceGenealogy = new GenealogyStore();
+        long sourcePersonRevision = sourcePersons.Revision;
+        long sourceGenealogyRevision = sourceGenealogy.Revision;
+        long sourceCityRevision = city.ImportantNpcRevision;
+        DailyFixture fixture = CreateDailyFixture(
+            city, npc, destination, personStore: sourcePersons, genealogyStore: sourceGenealogy);
+        Assert.That(fixture.Runtime.TryAddParentage(
+            dormantParent.PersonId, materializedChild.PersonId,
+            out PersonGenealogyFailure genealogyFailure), Is.True, genealogyFailure.ToString());
+        long runtimeGenealogyRevision = fixture.Runtime.GenealogyStoreForWorldBoundary.Revision;
+        DailyCaptureEligibilityToken token = CompleteDailyBoundary(fixture.Runtime);
+
+        Assert.That(TryStageDailyPackage(
+            fixture, token, new RuntimeIdentityRegistry(),
+            out P12DDailyV1OwnerPackage package,
+            out P12DDailyV1OwnerPackageFailure failure), Is.True, failure.ToString());
+
+        Assert.That(package, Is.Not.Null);
+        Assert.That(package.Persons.Persons.Count, Is.EqualTo(2));
+        Assert.That(package.Persons.Revision, Is.EqualTo(sourcePersonRevision));
+        Assert.That(package.Persons.TryGet(dormantParent.PersonId, out PersonRuntime stagedDormant), Is.True);
+        Assert.That(stagedDormant, Is.Not.SameAs(dormantParent));
+        Assert.That(stagedDormant.IsMaterialized, Is.False);
+        Assert.That(stagedDormant.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(package.Persons.TryGet(materializedChild.PersonId, out PersonRuntime stagedChild), Is.True);
+        Assert.That(stagedChild, Is.Not.SameAs(materializedChild));
+        Assert.That(stagedChild.IsMaterialized, Is.True);
+        Assert.That(stagedChild.MaterializedNpcRuntimeId, Is.EqualTo(npc.RuntimeId));
+        Assert.That(stagedChild.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(package.Persons.TryGetByMaterializedNpcRuntimeId(
+            npc.RuntimeId, out PersonRuntime indexedChild), Is.True);
+        Assert.That(indexedChild, Is.SameAs(stagedChild));
+
+        NpcRuntime stagedNpc = package.Npcs.Single(value => value.RuntimeId == npc.RuntimeId);
+        Assert.That(stagedNpc.PersonId, Is.EqualTo(materializedChild.PersonId));
+        Assert.That(stagedNpc.BoundPersonRuntime, Is.SameAs(stagedChild));
+        Assert.That(stagedNpc.BoundPersonRuntime, Is.Not.SameAs(materializedChild));
+        Assert.That(package.Genealogy.Revision, Is.EqualTo(runtimeGenealogyRevision));
+        Assert.That(package.Genealogy.Records, Has.Count.EqualTo(1));
+        Assert.That(package.Genealogy.Records.Single().ParentId, Is.EqualTo(dormantParent.PersonId));
+        Assert.That(package.Genealogy.Records.Single().ChildId, Is.EqualTo(materializedChild.PersonId));
+
+        Assert.That(sourcePersons.Revision, Is.EqualTo(sourcePersonRevision));
+        Assert.That(sourceGenealogy.Revision, Is.EqualTo(sourceGenealogyRevision));
+        Assert.That(fixture.Runtime.GenealogyStoreForWorldBoundary.Revision,
+            Is.EqualTo(runtimeGenealogyRevision));
+        Assert.That(fixture.Runtime.GenealogyRecords, Has.Count.EqualTo(1));
+        Assert.That(city.ImportantNpcRevision, Is.EqualTo(sourceCityRevision));
+        Assert.That(city.ImportantNpcs.Single(), Is.SameAs(npc));
+        Assert.That(npc.BoundPersonRuntime, Is.SameAs(materializedChild));
+    }
+
+    [Test]
+    public void DailyV1Package_LateDanglingPersonResidenceReturnsNoPackageAndPreservesSources()
+    {
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "p12d-owner-package-late-failure-city", "p12d-owner-package-late-failure-location");
+        CityRuntime destination = SimulationTestFactory.CreateCity(
+            "p12d-owner-package-late-failure-destination",
+            "p12d-owner-package-late-failure-destination-location");
+        NpcRuntime npc = new NpcRuntime(
+            "p12d-owner-package-late-failure-npc",
+            SimulationTestFactory.CreateNpc("p12d-owner-package-late-failure-npc-definition"), city, 0f);
+        PersonRuntime danglingResident = new PersonRuntime(
+            new PersonId("p12d-owner-package-dangling-resident"), 0L);
+        Assert.That(danglingResident.TrySetResidenceSettlementRuntimeId("p12d-owner-package-absent-city"), Is.True);
+        PersonStore sourcePersons = new PersonStore();
+        Assert.That(sourcePersons.TryRegister(danglingResident, out _), Is.True);
+        GenealogyStore sourceGenealogy = new GenealogyStore();
+
+        DailyFixture fixture = CreateDailyFixture(
+            city, npc, destination, personStore: sourcePersons, genealogyStore: sourceGenealogy);
+        DailyCaptureEligibilityToken token = CompleteDailyBoundary(fixture.Runtime);
+        long personRevision = sourcePersons.Revision;
+        long genealogyRevision = sourceGenealogy.Revision;
+        long cityRevision = city.ImportantNpcRevision;
+        long identityRevision = fixture.Identities.CensusRevision;
+        long spatialRevision = fixture.SpatialNetwork.Revision;
+        GenealogyStore runtimeGenealogy = fixture.Runtime.GenealogyStoreForWorldBoundary;
+        long runtimeGenealogyRevision = runtimeGenealogy.Revision;
+        SpatialLocationRuntime sourceLocation = npc.CurrentLocation;
+        CityRuntime sourceCity = npc.CurrentCity;
+        IReadOnlyList<NpcRuntime> sourceMembers = city.ImportantNpcs.ToArray();
+        RuntimeIdentityRegistry stagedIdentities = new RuntimeIdentityRegistry();
+
+        Assert.That(TryStageDailyPackage(
+            fixture, token, stagedIdentities,
+            out P12DDailyV1OwnerPackage package,
+            out P12DDailyV1OwnerPackageFailure failure), Is.False);
+
+        Assert.That(package, Is.Null);
+        Assert.That(failure, Is.EqualTo(P12DDailyV1OwnerPackageFailure.InvalidRelation));
+        Assert.That(sourcePersons.Revision, Is.EqualTo(personRevision));
+        Assert.That(sourcePersons.Persons, Has.Count.EqualTo(1));
+        Assert.That(sourcePersons.TryGet(danglingResident.PersonId, out PersonRuntime sourceResident), Is.True);
+        Assert.That(sourceResident, Is.SameAs(danglingResident));
+        Assert.That(sourceResident.ResidenceSettlementRuntimeId, Is.EqualTo("p12d-owner-package-absent-city"));
+        Assert.That(sourceGenealogy.Revision, Is.EqualTo(genealogyRevision));
+        Assert.That(sourceGenealogy.Records, Is.Empty);
+        Assert.That(city.ImportantNpcRevision, Is.EqualTo(cityRevision));
+        Assert.That(city.ImportantNpcs, Is.EqualTo(sourceMembers));
+        Assert.That(city.ImportantNpcs.Single(), Is.SameAs(npc));
+        Assert.That(npc.CurrentCity, Is.SameAs(sourceCity));
+        Assert.That(npc.CurrentLocation, Is.SameAs(sourceLocation));
+        Assert.That(fixture.Identities.CensusRevision, Is.EqualTo(identityRevision));
+        Assert.That(fixture.Identities.TryGetNpc(npc.RuntimeId, out NpcRuntime registeredNpc), Is.True);
+        Assert.That(registeredNpc, Is.SameAs(npc));
+        Assert.That(fixture.SpatialNetwork.Revision, Is.EqualTo(spatialRevision));
+        Assert.That(fixture.Runtime.PersonStore, Is.SameAs(sourcePersons));
+        Assert.That(fixture.Runtime.GenealogyStoreForWorldBoundary, Is.SameAs(runtimeGenealogy));
+        Assert.That(runtimeGenealogy.Revision, Is.EqualTo(runtimeGenealogyRevision));
+    }
+
+    [Test]
     public void CaptureAndStage_PreserveNpcDAndFValuesWithoutReplayingWrites()
     {
         ItemData item = SimulationTestFactory.CreateItem("p12d-npc-snapshot-item", 12f);
@@ -912,7 +1051,8 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         NpcRuntime targetNpc,
         CityRuntime destinationCity = null,
         PersonStore personStore = null,
-        ExplorableSiteStore siteStore = null)
+        ExplorableSiteStore siteStore = null,
+        GenealogyStore genealogyStore = null)
     {
         CityRuntime[] cities =
         {
@@ -950,6 +1090,7 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             explorableSiteStore: siteStore,
             spatialAuthorityStore: CreateSpatialAuthority(),
             personStore: personStore,
+            genealogyStore: genealogyStore,
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
             runtimeIdentityRegistry: identities,
             spatialNetworkRuntime: network,
