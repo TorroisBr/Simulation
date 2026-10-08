@@ -6,6 +6,63 @@ COMPLETE/PROMOTED within its accepted identity, genesis-provenance, and
 deterministic-root continuation scope; P12-A remains `WAIT_DEPENDENCY`. P13
 remains `BLOCKED`.
 
+## Latest canonical promotion — P12-D City root owner snapshot (2026-10-08)
+
+After refreshing P12 canonical at aa1a40f2e6da53a1a7388601bd13052f1a535545, the
+bounded City owner snapshot was promoted through reviewed candidate
+22f20b1ab0cf9ba4fc36155c645554c98bff9c6e and exact-tip review record
+14afa99c802305d75761e589c47e7997276c80c0. The implementation commit is
+58c142329d034fbed18ece25ee017d0d69f4d62f; its reviewed Assets tree is
+e83151063141cb1395e1d53d30e850c6f81ed778. The durable implementation review is
+[PHASE12_P12D_CITY_ROOT_SNAPSHOT_IMPLEMENTATION_REVIEW_22F20B1.md](design/PHASE12_P12D_CITY_ROOT_SNAPSHOT_IMPLEMENTATION_REVIEW_22F20B1.md);
+source and validation hashes are in
+[P12DCityRootOwnerSnapshot/VALIDATION.md](validation/P12DCityRootOwnerSnapshot/VALIDATION.md).
+
+Validation passed the focused City snapshot suite 7/7, ALL EditMode 2563/2563,
+official Smoke 5/5, and git diff --check. Review verified all five committed
+source-blob hashes and retained result/log artifact hashes. The only post-code
+candidate change corrected three source hashes in documentation; no executable
+tree changed after validation.
+
+This slice provides detached capture and private exact-value staging for the
+selected City root, Market rows, Market counterparty, PopulationEconomy, and
+SettlementPopulation, including ordered City membership, stored market prices,
+local revisions, and retained population operation receipts. Capture consumes
+the exact Daily-v1 completed-boundary token, shared stamp, and four matching
+City owner sections. It admits only Open/Free account-free City economy and
+rejects P18 City daily receipts or P14 material-flow state.
+
+P12-D remains IN PROGRESS. This promotion does not add NPC serialization,
+shared City/NPC graph construction, runtime/bootstrap integration, whole-D
+cross-owner validation, P12-G publication, profile-wide export/hydration,
+P12-A readiness, P13 readiness, or Phase closure. City/NPC construction and
+relation assembly remain a serialized integration hotspot.
+
+### Refreshed P12 checkpoint DAG
+
+- P12-B: COMPLETE/PROMOTED within its bounded profile-admission and completed-
+  boundary lifecycle contract.
+- P12-C: COMPLETE/PROMOTED within its accepted identity, genesis-provenance,
+  and deterministic-root continuation scope.
+- P12-D: IN PROGRESS. Genealogy, SpatialNetwork, Person, ExplorableSite, and
+  now the isolated City root owner snapshots are promoted. Shared City/NPC
+  assembly, exact cross-owner graph validation, runtime integration, and
+  remaining accepted D owner coverage are outstanding.
+- P12-E: no owner export/staged-hydration slice is currently
+  READY_FOR_IMPLEMENTATION. Existing passive census witnesses do not provide
+  exact detached export or private staged reconstruction. Re-evaluate after
+  owner-specific design and current-source evidence.
+- P12-F: waits for P12-C, P12-D, and P12-E.
+- P12-G: waits for P12-B through P12-F plus validated live-profile inventory.
+- P12-A: remains WAIT_DEPENDENCY until every included owner has exact export
+  and staged hydration, the live profile inventory is validated, and its
+  separate implementation authorization is recorded.
+- P13: remains BLOCKED on its explicit continuation and recoverable-history
+  prerequisites.
+
+Phase 12 remains open. No complete P12-D/E export coverage, P12-A readiness,
+P13 readiness, or Phase closure is implied.
+
 ## Current P12-D status — Genealogy, SpatialNetwork and Person owner snapshots promoted (2026-10-08)
 
 `codex/phase12/canonical` was fast-forwarded from
