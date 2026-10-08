@@ -66,26 +66,32 @@ da2a73896bc405ae6f11c536a5fbe8d471b00c21 to promotion tip
 69882ed2ef9f15893a27897c04ba6242f9f86aa4. This promotes only the bounded
 local Person owner snapshot and private staging capability.
 
+Current design revalidation uses architecture canonical 47eff220c7ce00f6e7c759bdc2b76780bb46f628, including the intraday/extensibility and multi-participant activity alignment records. P12-B and P12-C remain complete within their accepted bounded contracts; the latest P12 dependency graph is recorded below. The numbered-phase execution order continues to follow documented edges rather than phase numbers.
 ### Refreshed P12 dependency and owner DAG
 
 - **P12-B and P12-C:** remain COMPLETE/PROMOTED within their recorded bounded
   contracts; the current P12-D slice does not reopen them.
-- **P12-D:** IN PROGRESS. Genealogy, SpatialNetwork, and Person owner snapshots
-  are promoted. Person provides the immutable local owner and private local
-  staging only; NPC/City reciprocity and whole-D staging remain outstanding.
-  For Daily-v1, the P12-B site section is required-empty and bound to its exact
-  owner/token; D must preserve that empty section and reject populated site
-  state. Generic multi-site D ownership applies only to a future profile that
-  explicitly admits it; this does not add P10-A to Daily-v1. City/population
-  and the D/E/F NPC adapter remain serialized shared-owner work.
-- **P12-E:** Fresh exact-content review 76ec4f0de74a48e03d1d0125976cfcc816d18bb8
-  found the §4 LocalTopologyStore empty-versus-NOT_COMPOSED contradiction for
-  Daily-v1 (record: design/PHASE12_E_TECHNICAL_DESIGN_REVIEW_20261008.md).
-  Correction candidate 68ad4697117c72ba42718de0db8ab7307436c007 now requires the
-  typed NOT_COMPOSED/provider-absence witness, distinct from a composed empty
-  owner. Fresh independent review is pending. No E owner slice is
-  implementation-ready; owner fields, writes/revisions, and staged
-  reconstruction evidence remain outstanding.
+- **P12-D:** IN PROGRESS. Genealogy, SpatialNetwork, and Person local-owner
+  snapshots are promoted. The Site owner candidate at cf9fb050 is not promoted:
+  exact-tip review found that AddCore can admit duplicate SiteInstanceId values
+  which staging rejects, and asked for a selected Daily-v1 exact-empty census
+  assertion. The implementation is resolving both findings; fresh exact-tip
+  review and integrated ALL EditMode/official Smoke gates remain outstanding.
+  The City/NPC reference-order design correction at 4d1b7d32 and its referenced
+  City proposal at 837bcdaf await independent exact-content review. No City
+  implementation is in progress. Daily-v1 Site remains required-empty and
+  bound to the exact P12-B owner/token; P10-A remains a separate proving
+  profile. City/population and the D/E/F NPC adapter remain serialized shared
+  owner work; whole-D staging remains outstanding.
+- **P12-E:** The LocalTopology NOT_COMPOSED correction passed exact-content
+  design review at cdea870ef9eeb27603d021bac97ec56a81856617 (durable review
+  branch tip d40e222affe67690287887195dfdc425798cd7e1). Current-base
+  revalidation against P12 63cb5e7 and architecture 47eff220 is PASS and
+  classifies the Person promotion as BASE_DRIFT_ONLY. The corrected design
+  requires typed provider absence for Daily-v1 and keeps P10 separate. No E
+  owner slice is READY_FOR_IMPLEMENTATION: complete owner fields, writes and
+  revisions, detached export, and staged reconstruction evidence remain
+  outstanding.
 - **P12-F:** waits for P12-D and P12-E. Expedition remains in its accepted
   P12-F scope and is not advanced by this D slice.
 - **P12-G:** waits for P12-B through P12-F and a validated live-profile

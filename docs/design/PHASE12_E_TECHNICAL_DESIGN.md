@@ -2,7 +2,9 @@
 
 **Status:** Current-base technical-design candidate for the accepted P12-E capability boundary. It defines exact owner exports and private staged hydration for core and configured official daily-domain authorities. It is not a delivered capability, P12-A profile integration, or Phase 12 closure.
 
-**Current bases:** P12 canonical 0e786db8e6ed5ed937ff62e3f63258d8b73fd93c; architecture canonical 47eff220c7ce00f6e7c759bdc2b76780bb46f628. The architecture documents reviewed are docs/SIMULATION_ARCHITECTURE.md, docs/EXECUTION_MODEL.md, and docs/ROADMAP.md at that architecture tip. The intraday/extensibility and multi-participant alignment records are blobs a231a2a014bf58be5ce382c48a55f3654df89a61 and 4ed6fcc60b348461e3201d4f3d480c21a3154ec3. The accepted P12 Brief, decomposition, selected profile, and P12 owner code are read from current canonical evidence.
+**Current bases:** P12 canonical `da2a73896bc405ae6f11c536a5fbe8d471b00c21`; architecture canonical `47eff220c7ce00f6e7c759bdc2b76780bb46f628`. The architecture documents reviewed are docs/SIMULATION_ARCHITECTURE.md, docs/EXECUTION_MODEL.md, and docs/ROADMAP.md at that architecture tip. The intraday/extensibility and multi-participant alignment records are blobs a231a2a014bf58be5ce382c48a55f3654df89a61 and 4ed6fcc60b348461e3201d4f3d480c21a3154ec3. The accepted P12 Brief, decomposition, selected profile, and P12 owner code are read from current canonical evidence.
+
+**Review correction:** Addresses finding E1 in <code>P12E-DESIGN-CURRENT-DA2A738-R1</code>, recorded at <code>76ec4f0de74a48e03d1d0125976cfcc816d18bb8</code>. This correction remains subject to a fresh independent exact-content review.
 
 ## Current canonical revalidation
 
@@ -217,11 +219,22 @@ provider that is disabled has a typed explicit-absent/disabled witness bound
 to effective configuration; if it appears at runtime or owns populated state,
 profile admission rejects. No default state may conceal missing causal data.
 
-Explicitly excluded state that must remain empty for this profile includes:
+Explicitly excluded state and explicit absence that must be witnessed for this profile include:
 
 - canonical P8-B through P8-E authorities (P8-A geography belongs to C);
-- P10 Ruin/LocalTopology state, including the instantiated
-  `LocalTopologyStore` which must be witnessed empty;
+- P10 Ruin/LocalTopology state. In the selected `UnityBootstrap-Daily-v1`
+  composition, `LocalTopologyStore` is `NOT_COMPOSED`. The admission manifest
+  must carry the typed not-composed/provider-absence witness for that owner,
+  bound to the exact effective profile and provider inventory and identifying
+  the reason and absent provider identity. Do not require an empty
+  `LocalTopologyStore` section or instantiate a store to satisfy this witness.
+  This absence is distinct from a composed-empty owner, which requires its
+  exact owner identity/schema/revision and explicit empty fact set. Reject
+  admission if a `LocalTopologyStore` instance is unexpectedly composed or
+  injected, the manifest/profile/provider inventory does not match, or
+  populated P10 Ruin/LocalTopology state is present. This matches the current
+  selected-profile [owner inventory](PHASE12_OWNER_COVERAGE_INVENTORY.md),
+  which records `LocalTopologyStore` as `NOT_COMPOSED`;
 - P14-A material-flow state. Ordinary City production, population consumption,
   market stock, and merchant economy remain included under their current
   owners;
