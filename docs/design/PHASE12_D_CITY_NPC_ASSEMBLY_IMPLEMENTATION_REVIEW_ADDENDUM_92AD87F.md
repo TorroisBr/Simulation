@@ -1,7 +1,7 @@
 # P12-D City/NPC assembly review addendum — superseding verdict
 
-**Review ID:** P12D-CITY-NPC-ASSEMBLY-IMPLEMENTATION-REVIEW-ADDENDUM-92AD87F  
-**Verdict:** NEEDS_CHANGES  
+**Review ID:** P12D-CITY-NPC-ASSEMBLY-IMPLEMENTATION-REVIEW-ADDENDUM-92AD87F<br>
+**Verdict:** NEEDS_CHANGES<br>
 **Supersedes:** `docs/design/PHASE12_D_CITY_NPC_ASSEMBLY_IMPLEMENTATION_REVIEW_92AD87F.md` at review-branch commit `d1771afad18041b34dafde434a547765afce7b6e`.
 
 The candidate reviewed remains `92ad87f2a9fffa1f4fb7e1f7d996af48ddfad50e`, code `4d93a4aa38ed66712c7c8b0951a61e0303d6c7af`, against base `1c7b906c172d9e47020996888db64bd2516b451a`.
