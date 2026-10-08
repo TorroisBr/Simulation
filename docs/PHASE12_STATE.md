@@ -6,6 +6,55 @@ COMPLETE/PROMOTED within its accepted identity, genesis-provenance, and
 deterministic-root continuation scope; P12-A remains `WAIT_DEPENDENCY`. P13
 remains `BLOCKED`.
 
+## Current P12-D status — Genealogy owner snapshot promoted (2026-10-08)
+
+The bounded Genealogy owner slice is promoted on `codex/phase12/canonical` at
+code `2b3de7cd13e6f35d35d5dece56eefb64c1fd972a`, with validated `Assets`
+tree `127bc9dc10c0e69312ae98748f04becbe2d8ceda`. Its exact-tip
+implementation review is PASS at review commit
+`9d101c50b8c6d1c161d741bcd71dd158008820f0`; design review of the current D
+contract is PASS at `b9a0fd1b5941f0b7615a72acec39fd22e6c9ee0e`. Focused
+Genealogy tests passed 24/24, all Genealogy tests 52/52, birth lifecycle
+15/15, ALL EditMode 2540/2540, official Smoke 5/5, and `git diff --check`.
+Exact source and validation artifact hashes are in
+[`validation/P12DGenealogyOwnerSnapshot/VALIDATION.md`](validation/P12DGenealogyOwnerSnapshot/VALIDATION.md).
+
+The slice adds detached immutable schema-v1 parentage records and an
+unpublished staged `GenealogyStore` factory that preserves the exact local
+revision and rebuilds local graph indexes. It validates local edge shape,
+uniqueness, self-edges, cycles, and revision bounds. The outer D graph must
+still bind capture to the P12-B completed-boundary token/revision vector and
+validate both endpoints against staged `PersonStore`; neither is implemented
+by this owner slice. No runtime/bootstrap publication, whole-D graph
+validation, profile-wide export/hydration, P12-A readiness, P13 readiness, or
+Phase closure is claimed.
+
+### Refreshed P12 dependency and owner DAG
+
+- **P12-B and P12-C:** remain COMPLETE/PROMOTED within their recorded bounded
+  contracts; the current P12-D slice does not reopen them.
+- **P12-D:** IN PROGRESS. Genealogy local snapshot/staging is promoted.
+  `SpatialNetworkRuntime` is the next `READY_FOR_IMPLEMENTATION` isolated
+  owner slice under the reviewed D design. Person export/staging still needs
+  an isolated design/evidence boundary; Site must reconcile the D design's
+  populated round-trip case with Daily-v1's required-empty site section.
+  City/population and the D/E/F NPC adapter remain serialized shared-owner
+  work; whole-D cross-owner staging remains outstanding.
+- **P12-E:** design is reviewed, but no E owner slice is currently
+  implementation-ready; owner-specific fields, writes/revisions, and staged
+  reconstruction evidence remain outstanding.
+- **P12-F:** waits for P12-D and P12-E. Expedition remains in its accepted
+  P12-F scope and is not advanced by this D slice.
+- **P12-G:** waits for P12-B through P12-F and a validated live-profile
+  inventory.
+- **P12-A:** remains `WAIT_DEPENDENCY` until every included owner has exact
+  export/staged hydration, the live inventory is validated, and its separate
+  authorization is recorded.
+- **P13:** remains `BLOCKED` on its explicit continuation prerequisites.
+
+Phase 12 remains open. This owner promotion does not establish complete P12-D,
+P12-A readiness, P13 readiness, or Phase closure.
+
 ## Current canonical status — P12-C private root composition promoted (2026-10-08)
 
 After exact-tip review and validation, `codex/phase12/canonical` was
