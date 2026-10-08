@@ -6,7 +6,7 @@ COMPLETE/PROMOTED within its accepted identity, genesis-provenance, and
 deterministic-root continuation scope; P12-A remains `WAIT_DEPENDENCY`. P13
 remains `BLOCKED`.
 
-## Current P12-D status — Genealogy and SpatialNetwork owner snapshots promoted (2026-10-08)
+## Current P12-D status — Genealogy and SpatialNetwork promoted; Person owner candidate validated (2026-10-08)
 
 `codex/phase12/canonical` was fast-forwarded from
 `0e786db8e6ed5ed937ff62e3f63258d8b73fd93c` to promotion tip
@@ -53,24 +53,36 @@ stored durations remain distinct. It adds no `SimulationRuntime` or bootstrap
 integration, P12-B capture binding, whole-D validation, profile-wide
 export/hydration, P12-A readiness, P13 readiness, or Phase closure.
 
+The isolated Person owner snapshot candidate is code
+6c872c5ca6e997844d01c18bfee8909c16317455 with reviewed Assets tree
+b84164f70736c1d5c7643e107f06178798238ca0. Independent exact-tip review PASS
+is recorded at 77d0383b92a5368ff93a04fc254cf4c529480b11 and included in the
+integration candidate. Focused Person tests passed 182/182; integrated ALL
+EditMode passed 2549/2549; official Smoke passed 5/5; git diff --check passed.
+Artifact hashes and the scope boundary are in
+[validation/P12DPersonSnapshotIntegration/VALIDATION.md](validation/P12DPersonSnapshotIntegration/VALIDATION.md).
 ### Refreshed P12 dependency and owner DAG
 
 - **P12-B and P12-C:** remain COMPLETE/PROMOTED within their recorded bounded
   contracts; the current P12-D slice does not reopen them.
-- **P12-D:** IN PROGRESS. The Genealogy and SpatialNetwork local
-  snapshot/staging slices are promoted. Person has a reviewed isolated design
-  candidate (`0c602d37589c993ea9956f8b7f42e9d807479c08`, review PASS
-  `f17524609cd47e291e0f05123a1cdf7937b6f3a2`) and its isolated implementation
-  is in progress; neither is a Person promotion. For the accepted Daily-v1
-  profile, the P12-B site section is required-empty and bound to its exact
-  owner/token, so D must preserve that empty section and reject populated site
-  state. The generic D site owner model can support multiple sites only in a
-  future profile that explicitly admits them; this does not add P10-A to
-  Daily-v1. City/population and the D/E/F NPC adapter remain serialized
-  shared-owner work; whole-D cross-owner staging remains outstanding.
-- **P12-E:** design is reviewed, but no E owner slice is currently
-  implementation-ready; owner-specific fields, writes/revisions, and staged
-  reconstruction evidence remain outstanding.
+- **P12-D:** IN PROGRESS. Genealogy and SpatialNetwork owner snapshots are
+  promoted. The isolated Person owner snapshot candidate is independently
+  reviewed and passed focused, ALL EditMode, and official Smoke validation on
+  the reviewed code/tree; canonical promotion is the next bounded integration
+  action. Its scope is the immutable local Person owner and private local
+  staging; NPC/City reciprocity and whole-D staging remain outstanding. For
+  Daily-v1, the P12-B site section is required-empty and bound to its exact
+  owner/token; D must preserve that empty section and reject populated site
+  state. Generic multi-site D ownership applies only to a future profile that
+  explicitly admits it; this does not add P10-A to Daily-v1. City/population
+  and the D/E/F NPC adapter remain serialized shared-owner work.
+- **P12-E:** the fresh current-content review is NEEDS_CHANGES at
+  76ec4f0de74a48e03d1d0125976cfcc816d18bb8 because §4 requires an empty
+  LocalTopologyStore although Daily-v1 does not compose that owner. The needed
+  correction is an explicit NOT_COMPOSED/provider-absence witness, distinct
+  from a composed empty owner. No E owner slice is implementation-ready;
+  owner-specific fields, writes/revisions, and staged reconstruction evidence
+  remain outstanding.
 - **P12-F:** waits for P12-D and P12-E. Expedition remains in its accepted
   P12-F scope and is not advanced by this D slice.
 - **P12-G:** waits for P12-B through P12-F and a validated live-profile
