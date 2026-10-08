@@ -6,6 +6,74 @@ COMPLETE/PROMOTED within its accepted identity, genesis-provenance, and
 deterministic-root continuation scope; P12-A remains `WAIT_DEPENDENCY`. P13
 remains `BLOCKED`.
 
+## Latest bounded owner promotion — P12-E Battle snapshot (2026-10-08)
+
+After refreshing `origin/codex/phase12/canonical` at
+`ef0cafb5848cadcf0ac91a3e1af7ff3faaab1367`, the bounded Battle owner snapshot
+was integrated from candidate branch `codex/phase12/P12EBattleOwnerSnapshotImplementation`.
+Its code-bearing commit is `2f78244c5a4dc96d3ac45e87335b341912b81947`, based
+directly on that canonical tip, with reviewed `Assets` tree
+`7a92f17b81dea315ef9cf4330421749a41f08767`. The integration candidate before
+this State refresh was `111fb37` (docs and validation records after the code
+commit do not change its `Assets` tree).
+
+The bounded technical design is
+[`design/PHASE12_P12E_BATTLE_OWNER_SNAPSHOT_DESIGN.md`](design/PHASE12_P12E_BATTLE_OWNER_SNAPSHOT_DESIGN.md),
+with independent design review PASS in
+[`design/PHASE12_P12E_BATTLE_OWNER_SNAPSHOT_DESIGN_REVIEW_9B1B1A.md`](design/PHASE12_P12E_BATTLE_OWNER_SNAPSHOT_DESIGN_REVIEW_9B1B1A.md).
+Independent exact-tip implementation review PASS, with no findings, is recorded
+in
+[`design/PHASE12_P12E_BATTLE_OWNER_SNAPSHOT_IMPLEMENTATION_REVIEW.md`](design/PHASE12_P12E_BATTLE_OWNER_SNAPSHOT_IMPLEMENTATION_REVIEW.md).
+Validation on the unchanged code tree passed the five focused suites 52/52,
+ALL EditMode 2569/2569, official Smoke 5/5, and `git diff --check`; exact XML,
+compressed/raw log hashes, and source blob IDs are in
+[`validation/P12EBattleOwnerSnapshot/VALIDATION.md`](validation/P12EBattleOwnerSnapshot/VALIDATION.md).
+
+This slice adds detached schema-v1 export and private staged reconstruction
+for the existing `PersistentBattleStore` in the accepted Daily-v1 profile. It
+consumes the exact successful P12-B token/vector and `p12e.battles` owner
+witness; it reconstructs Battle rows against staged Force, Conflict, War, and
+spatial parents, preserves the exact local revision, and rejects LocalTopology
+because it remains `NOT_COMPOSED` in Daily-v1. It does not add runtime/bootstrap
+publication or P12-G graph publication.
+
+### Refreshed P12-D/E readiness and owner DAG
+
+- P12-B remains COMPLETE/PROMOTED within its bounded admission and
+  completed-boundary lifecycle contract. This slice does not broaden or reopen
+  it.
+- P12-C remains COMPLETE/PROMOTED within its accepted identity,
+  genesis-provenance, and deterministic-root continuation scope. No further
+  P12-C obligation is missing inside that accepted checkpoint. This does not
+  deliver a save envelope, active-runtime publication, P12-G validation,
+  copied-save branching, P13 history, or fork semantics.
+- P12-D remains IN PROGRESS. Genealogy, SpatialNetwork, Person, ExplorableSite,
+  and isolated City root snapshots remain promoted. City/NPC shared assembly,
+  exact merged-graph validation, runtime integration, and remaining D owner
+  coverage remain outstanding. The current-source crosswalk and exact-tip
+  review are recorded in
+  [`design/PHASE12_D_CITY_NPC_CURRENT_BASE_FIELD_CROSSWALK.md`](design/PHASE12_D_CITY_NPC_CURRENT_BASE_FIELD_CROSSWALK.md)
+  and
+  [`design/PHASE12_D_CITY_NPC_CURRENT_BASE_FIELD_CROSSWALK_REVIEW_3B1C850.md`](design/PHASE12_D_CITY_NPC_CURRENT_BASE_FIELD_CROSSWALK_REVIEW_3B1C850.md).
+  It identifies two nested P18 receipt owners without a P12 owner-section
+  identity/cardinality/revision witness. Their absence from the census vector
+  is not proof of exact empty state; City/NPC implementation stays blocked
+  until that evidence is supplied under the accepted profile boundary.
+- P12-E is IN PROGRESS. The Battle owner snapshot/private staging capability is
+  promoted as one owner slice. Other selected core and daily-domain authorities
+  still need owner-specific field/writer/revision coverage, detached export,
+  private staged reconstruction, and cross-owner checks; this promotion does
+  not complete P12-E.
+- P12-F remains dependent on P12-C, P12-D, and P12-E.
+- P12-G remains dependent on P12-B through P12-F plus a validated live-profile
+  inventory.
+- P12-A remains WAIT_DEPENDENCY until all included owners have exact export
+  and staged hydration, live inventory is validated, and separate
+  implementation authorization is recorded. P13 remains BLOCKED on its
+  explicit continuation prerequisites. Phase 12 remains open.
+
+No complete P12-D/E export coverage, P12-A readiness, P13 readiness, or Phase
+closure is implied.
 ## Latest canonical promotion — P12-D City root owner snapshot (2026-10-08)
 
 After refreshing P12 canonical at aa1a40f2e6da53a1a7388601bd13052f1a535545, the

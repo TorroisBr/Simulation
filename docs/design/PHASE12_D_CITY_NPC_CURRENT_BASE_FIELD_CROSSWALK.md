@@ -1,6 +1,6 @@
 # P12-D City/NPC current-base field and writer crosswalk
 
-**Status:** Documentation-only evidence proposal for independent review. This is not an implementation-ready declaration or authorization.
+**Status:** Documentation-only current-source evidence; exact-tip independent review PASS. Implementation readiness remains withheld.
 
 **Exact bases:** P12 canonical `ef0cafb5848cadcf0ac91a3e1af7ff3faaab1367`; architecture `47eff220c7ce00f6e7c759bdc2b76780bb46f628`. The corrected relation/profile design is `9e0dcce1e0d348dba3853be67a2565a5f4826be1`, previously reviewed PASS at `c65499d` against P12 base `dbba3e9a227f66da0381e3e042e826518d63c240` and the same architecture tip.
 

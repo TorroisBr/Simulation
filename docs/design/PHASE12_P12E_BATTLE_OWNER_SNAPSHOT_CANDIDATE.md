@@ -1,12 +1,12 @@
 # P12-E Battle Owner Snapshot — Candidate Record
 
-**Status:** implementation validated; independent exact-tip review PASS. Awaiting current-base integration preflight and canonical promotion.
+**Status:** implementation validated; independent exact-tip review PASS; current-base promotion preflight PASS.
 
 **Base:** `codex/phase12/canonical` at `ef0cafb5848cadcf0ac91a3e1af7ff3faaab1367`.
 
 **Code commit:** `2f78244c5a4dc96d3ac45e87335b341912b81947`; validated `Assets` tree `7a92f17b81dea315ef9cf4330421749a41f08767`.
 
-**Candidate branch:** `codex/phase12/P12EBattleOwnerSnapshotImplementation`, currently published at `37335ab492cb8ffd78df8dea64067bb722d30ae9` with validation evidence. The code-bearing commit remains the exact reviewed tip above; subsequent candidate commits are documentation and test-artifact records only.
+**Candidate branch:** `codex/phase12/P12EBattleOwnerSnapshotImplementation`. The code-bearing commit remains the exact reviewed tip above; later commits carry validation artifacts, design/review, and candidate records only.
 
 **Design:** `9b1b1a5603056c57d89cd048b434993aeb927397`; design review PASS `4b008f818469070a4b12e8a7b1c599ffe3015ef1`.
 
