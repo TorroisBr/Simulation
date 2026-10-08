@@ -99,6 +99,62 @@ public class CityRuntime
     public LocalDailyMaterialFlowResult LastMaterialFlow => lastMaterialFlow;
     public FiniteProductionSourceStore FiniteProductionSources => finiteProductionSources;
 
+    internal bool TryGetInstalledSnapshotOwners(
+        out SettlementPopulationRuntime installedPopulation,
+        out MarketRuntime installedMarket,
+        out MarketCounterpartyRuntime installedCounterparty,
+        out PopulationEconomyRuntime installedPopulationEconomy,
+        out SpatialLocationRuntime installedLocation)
+    {
+        installedPopulation = population;
+        installedMarket = market;
+        installedCounterparty = marketCounterparty;
+        installedPopulationEconomy = populationEconomy;
+        installedLocation = location;
+        return installedPopulation != null
+            && installedMarket != null
+            && installedCounterparty != null
+            && installedPopulationEconomy != null
+            && installedLocation != null;
+    }
+
+    internal bool TryCopyOwnerSnapshotMembership(
+        out IReadOnlyList<string> npcRuntimeIds,
+        out long membershipRevision)
+    {
+        npcRuntimeIds = null;
+        membershipRevision = importantNpcRevision;
+        if (importantNpcs == null || importantNpcRevision < 0L || location == null)
+        {
+            return false;
+        }
+
+        List<string> copiedIds = new List<string>(importantNpcs.Count);
+        HashSet<string> uniqueIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (NpcRuntime npc in importantNpcs)
+        {
+            if (npc == null
+                || string.IsNullOrWhiteSpace(npc.RuntimeId)
+                || !uniqueIds.Add(npc.RuntimeId)
+                || !ReferenceEquals(npc.CurrentCity, this)
+                || !ReferenceEquals(npc.CurrentLocation, location))
+            {
+                return false;
+            }
+
+            copiedIds.Add(npc.RuntimeId);
+        }
+
+        npcRuntimeIds = new ReadOnlyCollection<string>(copiedIds);
+        return true;
+    }
+
+    internal void GetDailyEconomyReceiptExclusionProof(out int receiptCount, out long receiptRevision)
+    {
+        receiptCount = dailyEconomyReceipts != null ? dailyEconomyReceipts.Count : 0;
+        receiptRevision = dailyEconomyReceiptRevision;
+    }
+
     internal void ValidateLocalDailyMaterialFlowAnchor(LegacySpatialAnchorBindingStore bindings, SpatialAuthorityStore spatial)
     {
         if (!HasLocalDailyMaterialFlow) return;
@@ -518,6 +574,96 @@ public class CityRuntime
     private string GetDailyEconomyStepId(CityDailyEconomyStepKind kind) => "city-economy-" + kind.ToString().ToLowerInvariant() + ":" + RuntimeId;
     private CityDailyEconomyStepKind GetDailyEconomyStepKind(string id) => id != null && id.StartsWith("city-economy-production:", StringComparison.Ordinal) ? CityDailyEconomyStepKind.Production : id != null && id.StartsWith("city-economy-consumption:", StringComparison.Ordinal) ? CityDailyEconomyStepKind.Consumption : CityDailyEconomyStepKind.PriceRefresh;
     private static MarketItemRuntime FindPreparedItem(PreparedMarketState state, ItemData item) => state.Items.Find(x => x != null && x.Item == item);
+
+    private CityRuntime()
+    {
+    }
+
+    internal static bool TryCreateFromOwnerSnapshot(
+        string snapshotRuntimeId,
+        CityData snapshotCityData,
+        SpatialLocationRuntime snapshotLocation,
+        MarketCounterpartyRuntime snapshotCounterparty,
+        MarketRuntime snapshotMarket,
+        PopulationEconomyRuntime snapshotPopulationEconomy,
+        SettlementPopulationRuntime snapshotPopulation,
+        long snapshotImportantNpcRevision,
+        IReadOnlyList<string> orderedNpcRuntimeIds,
+        out CityRuntime city,
+        out P12DCityMembershipLinker membershipLinker)
+    {
+        city = null;
+        membershipLinker = null;
+        if (string.IsNullOrWhiteSpace(snapshotRuntimeId)
+            || snapshotCityData == null
+            || string.IsNullOrWhiteSpace(snapshotCityData.DefinitionId)
+            || snapshotLocation == null
+            || string.IsNullOrWhiteSpace(snapshotLocation.RuntimeId)
+            || snapshotCounterparty == null
+            || snapshotCounterparty.LiquidityMode != MarketLiquidityMode.Open
+            || snapshotCounterparty.MoneyAccount != null
+            || !string.Equals(snapshotCounterparty.CounterpartyRuntimeId, snapshotRuntimeId, StringComparison.Ordinal)
+            || snapshotMarket == null
+            || !ReferenceEquals(snapshotMarket.InstalledCounterparty, snapshotCounterparty)
+            || snapshotPopulationEconomy == null
+            || !string.Equals(snapshotPopulationEconomy.CityRuntimeId, snapshotRuntimeId, StringComparison.Ordinal)
+            || snapshotPopulationEconomy.PaymentMode != ConsumptionPaymentMode.Free
+            || snapshotPopulationEconomy.MoneyAccount != null
+            || !string.Equals(
+                snapshotPopulationEconomy.PopulationEconomicRuntimeId,
+                "population-" + snapshotRuntimeId,
+                StringComparison.Ordinal)
+            || snapshotPopulation == null
+            || !string.Equals(snapshotPopulation.SettlementRuntimeId, snapshotRuntimeId, StringComparison.Ordinal)
+            || snapshotImportantNpcRevision < 0L
+            || orderedNpcRuntimeIds == null)
+        {
+            return false;
+        }
+
+        HashSet<string> uniqueNpcRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < orderedNpcRuntimeIds.Count; i++)
+        {
+            string npcRuntimeId = orderedNpcRuntimeIds[i];
+            if (string.IsNullOrWhiteSpace(npcRuntimeId) || !uniqueNpcRuntimeIds.Add(npcRuntimeId))
+            {
+                return false;
+            }
+        }
+
+        CityRuntime staged = new CityRuntime
+        {
+            runtimeId = snapshotRuntimeId,
+            cityData = snapshotCityData,
+            location = snapshotLocation,
+            marketCounterparty = snapshotCounterparty,
+            market = snapshotMarket,
+            populationEconomy = snapshotPopulationEconomy,
+            population = snapshotPopulation,
+            importantNpcs = new List<NpcRuntime>(orderedNpcRuntimeIds.Count),
+            importantNpcRevision = snapshotImportantNpcRevision,
+            dailyEconomyReceipts = new Dictionary<string, CityDailyEconomyReceipt>(StringComparer.Ordinal),
+            dailyEconomyReceiptRevision = 0L,
+            lastMaterialFlow = null,
+            finiteProductionSources = null
+        };
+        staged.readOnlyImportantNpcs = staged.importantNpcs.AsReadOnly();
+
+        if (staged.HasLocalDailyMaterialFlow
+            || staged.FiniteProductionSources != null
+            || staged.LastMaterialFlow != null)
+        {
+            return false;
+        }
+
+        city = staged;
+        membershipLinker = new P12DCityMembershipLinker(
+            staged,
+            staged.importantNpcs,
+            orderedNpcRuntimeIds,
+            snapshotImportantNpcRevision);
+        return true;
+    }
 
     public CityRuntime(
         string runtimeId,

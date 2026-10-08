@@ -24,6 +24,37 @@ public class MarketItemRuntime
         UpdatePrice();
     }
 
+    private MarketItemRuntime(ItemData item, int amount, int desiredAmount, float currentPrice)
+    {
+        this.item = item;
+        this.amount = amount;
+        this.desiredAmount = desiredAmount;
+        this.currentPrice = currentPrice;
+    }
+
+    internal static bool TryCreateFromOwnerSnapshot(
+        ItemData item,
+        int amount,
+        int desiredAmount,
+        float currentPrice,
+        out MarketItemRuntime snapshotRow)
+    {
+        snapshotRow = null;
+        if (item == null
+            || string.IsNullOrWhiteSpace(item.DefinitionId)
+            || amount < 0
+            || desiredAmount <= 0
+            || currentPrice <= 0f
+            || float.IsNaN(currentPrice)
+            || float.IsInfinity(currentPrice))
+        {
+            return false;
+        }
+
+        snapshotRow = new MarketItemRuntime(item, amount, desiredAmount, currentPrice);
+        return true;
+    }
+
     internal MarketItemRuntime(MarketItemRuntime source)
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
@@ -92,6 +123,7 @@ public class MarketRuntime
     public IReadOnlyList<MarketItemRuntime> Items => readOnlyItems ?? (readOnlyItems = (items ?? (items = new List<MarketItemRuntime>())).AsReadOnly());
     public long Revision => revision;
     public MarketCounterpartyRuntime Counterparty => counterparty ?? (counterparty = MarketCounterpartyRuntime.CreateOpen());
+    internal MarketCounterpartyRuntime InstalledCounterparty => counterparty;
     public string StockOwnerRuntimeId => Counterparty.CounterpartyRuntimeId;
 
     public MarketRuntime()
@@ -124,6 +156,46 @@ public class MarketRuntime
 
             EnsureItems().Add(new MarketItemRuntime(config.item, config.initialAmount, config.desiredAmount));
         }
+    }
+
+    internal static bool TryCreateFromOwnerSnapshot(
+        IReadOnlyList<MarketItemRuntime> snapshotRows,
+        long snapshotRevision,
+        MarketCounterpartyRuntime snapshotCounterparty,
+        out MarketRuntime market)
+    {
+        market = null;
+        if (snapshotRows == null || snapshotRevision < 0L || snapshotCounterparty == null)
+        {
+            return false;
+        }
+
+        List<MarketItemRuntime> copiedRows = new List<MarketItemRuntime>(snapshotRows.Count);
+        for (int i = 0; i < snapshotRows.Count; i++)
+        {
+            MarketItemRuntime row = snapshotRows[i];
+            if (row == null
+                || row.Item == null
+                || string.IsNullOrWhiteSpace(row.Item.DefinitionId)
+                || row.Amount < 0
+                || row.DesiredAmount <= 0
+                || row.CurrentPrice <= 0f
+                || float.IsNaN(row.CurrentPrice)
+                || float.IsInfinity(row.CurrentPrice))
+            {
+                return false;
+            }
+
+            copiedRows.Add(new MarketItemRuntime(row));
+        }
+
+        MarketRuntime staged = new MarketRuntime();
+        staged.items = copiedRows;
+        staged.readOnlyItems = copiedRows.AsReadOnly();
+        staged.counterparty = snapshotCounterparty;
+        staged.revision = snapshotRevision;
+        market = staged;
+        return true;
     }
 
     public MarketItemRuntime GetItem(ItemData item)

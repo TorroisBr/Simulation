@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 /// <summary>
 /// Mutable aggregate population state owned by a future settlement runtime.
@@ -94,6 +95,143 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
             cardinality = operationReceipts.Count;
             receiptRevision = operationReceiptRevision;
         }
+    }
+
+    internal bool TryCaptureOperationReceiptSnapshot(
+        out IReadOnlyList<PopulationOperationReceiptSnapshot> receipts,
+        out long receiptRevision)
+    {
+        receipts = null;
+        lock (operationReceiptGate)
+        {
+            receiptRevision = operationReceiptRevision;
+            if (operationReceipts == null || operationReceiptRevision < 0L)
+            {
+                return false;
+            }
+
+            List<string> identities = new List<string>(operationReceipts.Keys);
+            identities.Sort(StringComparer.Ordinal);
+            List<PopulationOperationReceiptSnapshot> copiedReceipts =
+                new List<PopulationOperationReceiptSnapshot>(identities.Count);
+            foreach (string identity in identities)
+            {
+                if (string.IsNullOrWhiteSpace(identity)
+                    || !operationReceipts.TryGetValue(identity, out PopulationOperationReceipt receipt)
+                    || receipt == null
+                    || string.IsNullOrWhiteSpace(receipt.Fingerprint)
+                    || receipt.Transition == null)
+                {
+                    return false;
+                }
+
+                copiedReceipts.Add(new PopulationOperationReceiptSnapshot(
+                    identity,
+                    receipt.Fingerprint,
+                    receipt.Transition));
+            }
+
+            receipts = new ReadOnlyCollection<PopulationOperationReceiptSnapshot>(copiedReceipts);
+            return true;
+        }
+    }
+
+    internal static bool TryCreateFromOwnerSnapshot(
+        string snapshotSettlementRuntimeId,
+        int snapshotPopulation,
+        long snapshotRevision,
+        IReadOnlyList<PopulationOperationReceiptSnapshot> snapshotReceipts,
+        long snapshotReceiptRevision,
+        out SettlementPopulationRuntime population)
+    {
+        population = null;
+        if (string.IsNullOrWhiteSpace(snapshotSettlementRuntimeId)
+            || snapshotPopulation < 0
+            || snapshotRevision < 0L
+            || snapshotReceipts == null
+            || snapshotReceiptRevision < 0L
+            || snapshotReceiptRevision < snapshotReceipts.Count)
+        {
+            return false;
+        }
+
+        SettlementPopulationRuntime staged = new SettlementPopulationRuntime(
+            snapshotSettlementRuntimeId,
+            snapshotPopulation)
+        {
+            revision = snapshotRevision,
+            operationReceiptRevision = snapshotReceiptRevision,
+            operationReceipts = new Dictionary<string, PopulationOperationReceipt>(StringComparer.Ordinal)
+        };
+
+        foreach (PopulationOperationReceiptSnapshot snapshotReceipt in snapshotReceipts)
+        {
+            if (snapshotReceipt == null
+                || string.IsNullOrWhiteSpace(snapshotReceipt.Identity)
+                || string.IsNullOrWhiteSpace(snapshotReceipt.Fingerprint)
+                || snapshotReceipt.Transition == null
+                || !IsValidSnapshotTransition(
+                    snapshotSettlementRuntimeId,
+                    snapshotRevision,
+                    snapshotReceipt.Transition)
+                || staged.operationReceipts.ContainsKey(snapshotReceipt.Identity))
+            {
+                return false;
+            }
+
+            staged.operationReceipts.Add(
+                snapshotReceipt.Identity,
+                new PopulationOperationReceipt(
+                    snapshotReceipt.Fingerprint,
+                    CopyTransitionValue(snapshotReceipt.Transition)));
+        }
+
+        population = staged;
+        return true;
+    }
+
+    internal static SettlementPopulationTransition CopyTransitionValue(
+        SettlementPopulationTransition transition)
+    {
+        if (transition == null) return null;
+        return new SettlementPopulationTransition(
+            transition.SettlementRuntimeId,
+            transition.ExpectedRevision,
+            transition.PopulationBefore,
+            new PopulationChangeSet(
+                transition.Births,
+                transition.Deaths,
+                transition.Immigrations,
+                transition.Emigrations),
+            transition.NetChange,
+            transition.PopulationAfter);
+    }
+
+    private static bool IsValidSnapshotTransition(
+        string settlementRuntimeId,
+        long ownerRevision,
+        SettlementPopulationTransition transition)
+    {
+        if (transition == null
+            || !string.Equals(transition.SettlementRuntimeId, settlementRuntimeId, StringComparison.Ordinal)
+            || transition.ExpectedRevision < 0L
+            || transition.ExpectedRevision >= ownerRevision
+            || transition.PopulationBefore < 0
+            || transition.PopulationAfter < 0
+            || transition.Births < 0
+            || transition.Deaths < 0
+            || transition.Immigrations < 0
+            || transition.Emigrations < 0)
+        {
+            return false;
+        }
+
+        long expectedNetChange = (long)transition.Births
+            + transition.Immigrations
+            - transition.Deaths
+            - transition.Emigrations;
+        return transition.NetChange == expectedNetChange
+            && (long)transition.PopulationBefore + expectedNetChange == transition.PopulationAfter;
     }
 
     public SettlementPopulationRuntime(string settlementRuntimeId, int currentPopulation)
@@ -439,6 +577,24 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
             Fingerprint = fingerprint;
             Transition = transition;
         }
+    }
+}
+
+/// <summary>Detached immutable value for one retained population operation receipt.</summary>
+internal sealed class PopulationOperationReceiptSnapshot
+{
+    internal string Identity { get; }
+    internal string Fingerprint { get; }
+    internal SettlementPopulationTransition Transition { get; }
+
+    internal PopulationOperationReceiptSnapshot(
+        string identity,
+        string fingerprint,
+        SettlementPopulationTransition transition)
+    {
+        Identity = identity;
+        Fingerprint = fingerprint;
+        Transition = SettlementPopulationRuntime.CopyTransitionValue(transition);
     }
 }
 
