@@ -1,6 +1,6 @@
 # P12-D City/NPC assembly implementation exact-tip review
 
-**Review ID:** P12D-CITY-NPC-ASSEMBLY-IMPLEMENTATION-REVIEW-92AD87F  
+**Review ID:** P12D-CITY-NPC-ASSEMBLY-IMPLEMENTATION-REVIEW-92AD87F<br>
 **Verdict:** VALIDATED_CANDIDATE
 
 ## Exact refs
