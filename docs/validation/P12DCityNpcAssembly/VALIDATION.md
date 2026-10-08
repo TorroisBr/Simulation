@@ -42,3 +42,8 @@ The SHA-256 column is the source byte hash from the validated worktree. Git blob
 | `Assets/_Project/Tests/EditMode/Editor/P12DCityRootOwnerSnapshotTests.cs` | `EFBA306F1627268C4729B27DE6DB1513FFA1560452B2EF2AD227A5F1006FBCA7` | `286d21506406538c2cea07ffe61342a0cd57429c` |
 
 Unity also left unrelated `ProjectSettings/EditorBuildSettings.asset`, `ProjectSettings/ShaderGraphSettings.asset`, and untracked ArmedForce/P17 `.meta` files in this worktree. They were not staged or included in the candidate.
+
+
+## Current-tip review correction
+
+The corrected City-to-D/F capture identity binding was validated on implementation commit `4d93a4aa38ed66712c7c8b0951a61e0303d6c7af` (Assets tree `60ba6768fd1d9c01bfe365fc29ffca4eed1e9a6c`): focused City assembly 16/16, receipt-owner 13/13, ALL EditMode 2591/2591, official Smoke 5/5, and cumulative `git diff --check` PASS. Exact source, XML, and log hashes are recorded in [VALIDATION-FOLLOWUP-CITY-IDENTITY-4D93A4A.md](VALIDATION-FOLLOWUP-CITY-IDENTITY-4D93A4A.md). This follow-up preserves the earlier candidate's evidence and does not imply P12-D or P12-B completion.
