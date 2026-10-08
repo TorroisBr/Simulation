@@ -17,20 +17,20 @@ This composition carries the three accepted P12-C owner slices:
 
 This candidate does not implement the P12 envelope, complete profile owner census/export/hydration, capture eligibility, global quiescence, or P12-A. P12-C remains partial until its other accepted identity roots and composition gates are complete. P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. P12-B's existing bounded completion is unchanged.
 
-## Source and test blob IDs
+## Source and test blob hashes
 
-These are Git blob IDs from validated implementation tree `dc54747a3c64ab9189c1425e0a6d92eba38f33b7`:
+These identify the exact raw file contents in validated implementation tree `dc54747a3c64ab9189c1425e0a6d92eba38f33b7`. `Git blob` is the repository's 40-character object ID; `Raw SHA-256` is SHA-256 over the blob bytes returned by `git cat-file blob` (without Git's object header):
 
-| File | Git blob |
-|---|---|
-| `Assets/_Project/Scripts/DeterministicRandom.cs` | `337af6064d470c7e4418ef6f6c3a2cad35f5e232` |
-| `Assets/_Project/Scripts/P9GenesisManifestContinuationSnapshot.cs` | `05adc7fb3a843a77303de55861609f0bc828375b` |
-| `Assets/_Project/Scripts/SimulationGenesisPipeline.cs` | `7c225bc066da5f2a8ad838cd1633920b384de917` |
-| `Assets/_Project/Scripts/SpatialAuthorityContinuationSnapshot.cs` | `568a7a36f87d781a51bb29b1307a54411ed824c1` |
-| `Assets/_Project/Tests/EditMode/Editor/DeterministicRandomRootSnapshotTests.cs` | `f7f9140700c20a3000da2056669f4f712e3d3dd9` |
-| `Assets/_Project/Tests/EditMode/Editor/P12CP9GenesisManifestSnapshotTests.cs` | `a75eb8c084bab73ccb498821846a0aa1ebc4d9e0` |
-| `Assets/_Project/Tests/EditMode/Editor/SimulationBootstrapCompositionTests.cs` | `4e11a58562edb0dcda8f5fe070dc3e8dcbabf1ad` |
-| `Assets/_Project/Tests/EditMode/Editor/SpatialAuthorityContinuationSnapshotTests.cs` | `ec8196dcc513074d5ab8b4e895a974c4a757c03f` |
+| File | Git blob | Raw SHA-256 |
+|---|---|---|
+| `Assets/_Project/Scripts/DeterministicRandom.cs` | `337af6064d470c7e4418ef6f6c3a2cad35f5e232` | `0b7eaeaf35b647fe08c3f7fb8adaed20b448ef06e51b509004dca931f903f5d5` |
+| `Assets/_Project/Scripts/P9GenesisManifestContinuationSnapshot.cs` | `05adc7fb3a843a77303de55861609f0bc828375b` | `6331c4f8d490610c986fef7ae92c908fa4014ed7293dc9b5eca5d3db38ec212c` |
+| `Assets/_Project/Scripts/SimulationGenesisPipeline.cs` | `7c225bc066da5f2a8ad838cd1633920b384de917` | `ce6b84870d4c2a8519892bac08024c91774c6599b852e5d96efac9f96ae0d6c8` |
+| `Assets/_Project/Scripts/SpatialAuthorityContinuationSnapshot.cs` | `568a7a36f87d781a51bb29b1307a54411ed824c1` | `5454d48509797d2b8e135e62e8e8d07ecf7ede473368f526baa2ef209d42e83f` |
+| `Assets/_Project/Tests/EditMode/Editor/DeterministicRandomRootSnapshotTests.cs` | `f7f9140700c20a3000da2056669f4f712e3d3dd9` | `0c22246eb190244a93de2b66672da319b6be14d4eef10b5bcffdb237460702e8` |
+| `Assets/_Project/Tests/EditMode/Editor/P12CP9GenesisManifestSnapshotTests.cs` | `a75eb8c084bab73ccb498821846a0aa1ebc4d9e0` | `e945cac50d153e74905cf854656f3c18053e3710eee145d79aeccf9de07a780b` |
+| `Assets/_Project/Tests/EditMode/Editor/SimulationBootstrapCompositionTests.cs` | `4e11a58562edb0dcda8f5fe070dc3e8dcbabf1ad` | `807163db7bacb3e6539b0d9323a5a791391ad1343826eb82391ec55551de352a` |
+| `Assets/_Project/Tests/EditMode/Editor/SpatialAuthorityContinuationSnapshotTests.cs` | `ec8196dcc513074d5ab8b4e895a974c4a757c03f` | `4048ee6200b0eaac1a929353956bf91349dfb460cf966a712c237345247bcc98` |
 
 ## Validation
 
