@@ -903,6 +903,75 @@ public sealed class PersistentBattleStore : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    internal static bool TryCreateFromOwnerSnapshot(
+        PersistentBattleOwnerSnapshot snapshot,
+        ArmedForceStore targetArmedForceStore,
+        PersistentConflictStore targetConflictStore,
+        PersistentWarStore targetWarStore,
+        SpatialAuthorityStore targetSpatialAuthorityStore,
+        LocalTopologyStore targetLocalTopologyStore,
+        out PersistentBattleStore stagedStore,
+        out PersistentBattleOwnerSnapshotFailure failure)
+    {
+        stagedStore = null;
+        failure = PersistentBattleOwnerSnapshotFailure.Create(
+            PersistentBattleOwnerSnapshotFailureCode.InvalidSnapshot,
+            "A Battle owner snapshot and all staged parent authorities are required.");
+        if (snapshot == null
+            || targetArmedForceStore == null
+            || targetConflictStore == null
+            || targetWarStore == null
+            || targetSpatialAuthorityStore == null)
+            return false;
+        if (targetLocalTopologyStore != null)
+        {
+            failure = PersistentBattleOwnerSnapshotFailure.Create(
+                PersistentBattleOwnerSnapshotFailureCode.LocalTopologyComposed,
+                "Daily-v1 staged Battle owners require LocalTopologyStore to remain NOT_COMPOSED.");
+            return false;
+        }
+
+        if (!snapshot.TryBuildRecords(
+                targetArmedForceStore,
+                targetConflictStore,
+                targetWarStore,
+                targetSpatialAuthorityStore,
+                targetLocalTopologyStore,
+                out IReadOnlyList<PersistentBattleRecord> stagedRecords,
+                out failure))
+            return false;
+
+        PersistentBattleStore candidate = new PersistentBattleStore(
+            targetArmedForceStore,
+            targetConflictStore,
+            targetWarStore,
+            targetSpatialAuthorityStore,
+            null);
+        foreach (PersistentBattleRecord record in stagedRecords)
+        {
+            if (candidate.recordsById.ContainsKey(record.Id.Value))
+            {
+                failure = PersistentBattleOwnerSnapshotFailure.Create(
+                    PersistentBattleOwnerSnapshotFailureCode.DuplicateBattleIdentity,
+                    "The Battle owner snapshot contains a duplicate BattleId.");
+                return false;
+            }
+            candidate.recordsById.Add(record.Id.Value, record);
+        }
+        candidate.revision = snapshot.Revision;
+        if (candidate.recordsById.Count != snapshot.RecordCount || !candidate.ValidateInvariants().IsValid)
+        {
+            failure = PersistentBattleOwnerSnapshotFailure.Create(
+                PersistentBattleOwnerSnapshotFailureCode.StageFailed,
+                "The privately staged Battle owner failed its existing invariant validation.");
+            return false;
+        }
+
+        stagedStore = candidate;
+        failure = PersistentBattleOwnerSnapshotFailure.None;
+        return true;
+    }
+
     internal PersistentBattleStore Clone(
         ArmedForceStore targetArmedForceStore,
         PersistentConflictStore targetConflictStore,

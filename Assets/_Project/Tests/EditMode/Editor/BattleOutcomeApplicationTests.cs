@@ -322,6 +322,8 @@ public sealed class BattleOutcomeApplicationTests
         Fixture fixture = CreateFixture(MultiSourceSeeds(), DeathRule(1L));
         PersistentBattleCensusProvider battleCensusProvider = new PersistentBattleCensusProvider(fixture.World.BattleStore);
         OwnerSectionCensusWitness battleCensusBefore = battleCensusProvider.GetCurrentCensus();
+        Assert.That(fixture.World.BattleStore.TryGet(fixture.BattleId, out PersistentBattleRecord battleBefore), Is.True);
+        int battleCountBefore = fixture.World.BattleStore.Count;
         string before = WorldStateCanonicalWriter.Write(Capture(fixture));
         RevisionCapture revisions = CaptureRevisions(fixture);
         SetPersistentBattleFailure(fixture, "ThrowAfterTerminalWriteForTests");
@@ -336,7 +338,10 @@ public sealed class BattleOutcomeApplicationTests
         Assert.That(battleCensusAfter.Cardinality, Is.EqualTo(battleCensusBefore.Cardinality));
         Assert.That(battleCensusAfter.Revision, Is.EqualTo(battleCensusBefore.Revision),
             "A failed terminal transaction restores the Battle census to its exact prior local revision.");
+        Assert.That(fixture.World.BattleStore.Count, Is.EqualTo(battleCountBefore));
         Assert.That(fixture.World.BattleStore.TryGet(fixture.BattleId, out PersistentBattleRecord battle), Is.True);
+        Assert.That(battle, Is.SameAs(battleBefore),
+            "The original immutable Battle row is restored after a failed post-assignment transaction.");
         Assert.That(battle.LifecycleState, Is.EqualTo(BattleLifecycleState.Active));
         Assert.That(battle.TerminalOutcome, Is.Null);
     }
