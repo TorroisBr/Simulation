@@ -58,18 +58,78 @@ public sealed class P12EMilitaryOwnerSnapshotTests
         P12EMilitaryOwnerSnapshot snapshot = CaptureOrFail(live);
 
         Assert.That(snapshot.Forces.Select(row => row.ForceIdValue), Is.EqualTo(new[] { "force-child", "force-root" }));
+        P12EMilitaryForceSnapshotRecord capturedChild = snapshot.Forces[0];
+        Assert.That(capturedChild.DisplayName, Is.EqualTo("Child Force"));
+        Assert.That(capturedChild.CreatedAbsoluteDay, Is.EqualTo(1L));
+        Assert.That(capturedChild.ParentForceIdValue, Is.EqualTo("force-root"));
+        Assert.That(capturedChild.OperationalLocationReference, Is.Null);
+        Assert.That(capturedChild.CommanderPersonIdValue, Is.Null);
+        Assert.That(capturedChild.LifecycleState, Is.EqualTo(ArmedForceLifecycleState.Active));
+        Assert.That(capturedChild.TerminatedAbsoluteDay, Is.Null);
+        Assert.That(capturedChild.IsDetached, Is.True);
+        P12EMilitaryForceSnapshotRecord capturedRoot = snapshot.Forces[1];
+        Assert.That(capturedRoot.DisplayName, Is.EqualTo("Root Force"));
+        Assert.That(capturedRoot.CreatedAbsoluteDay, Is.EqualTo(0L));
+        Assert.That(capturedRoot.ParentForceIdValue, Is.Null);
+        Assert.That(capturedRoot.OperationalLocationReference, Is.EqualTo("legacy opaque location"));
+        Assert.That(capturedRoot.CommanderPersonIdValue, Is.EqualTo("person-commander"));
+        Assert.That(capturedRoot.LifecycleState, Is.EqualTo(ArmedForceLifecycleState.Active));
+        Assert.That(capturedRoot.TerminatedAbsoluteDay, Is.Null);
+        Assert.That(capturedRoot.IsDetached, Is.False);
         Assert.That(snapshot.ArmedForceRevision, Is.EqualTo(live.Forces.Revision));
         Assert.That(snapshot.Contingents.Count, Is.EqualTo(1));
+        Assert.That(snapshot.Contingents[0].ContingentIdValue, Is.EqualTo("contingent-child"));
+        Assert.That(snapshot.Contingents[0].ForceIdValue, Is.EqualTo("force-child"));
+        Assert.That(snapshot.Contingents[0].Amount, Is.EqualTo(12L));
+        Assert.That(snapshot.Contingents[0].OriginDomain, Is.EqualTo("content-domain"));
+        Assert.That(snapshot.Contingents[0].OriginValue, Is.EqualTo("origin-value"));
+        Assert.That(snapshot.Contingents[0].ServiceType, Is.EqualTo("open-ended-service"));
         Assert.That(snapshot.Contingents[0].Characteristics.Select(row => row.Key), Is.EqualTo(new[] { "branch", "kind" }));
+        Assert.That(snapshot.Contingents[0].Characteristics.Select(row => row.Value), Is.EqualTo(new[] { "field", "regular" }));
         Assert.That(snapshot.RelevantPersons.Count, Is.EqualTo(1));
+        Assert.That(snapshot.RelevantPersons[0].ForceIdValue, Is.EqualTo("force-root"));
+        Assert.That(snapshot.RelevantPersons[0].PersonIdValue, Is.EqualTo("person-officer"));
+        Assert.That(snapshot.RelevantPersons[0].RoleKey, Is.EqualTo("officer"));
+        Assert.That(snapshot.RelevantPersons[0].ReferenceIdValue, Is.Not.Null.And.Not.Empty);
+        Assert.That(snapshot.ManpowerStates[0].ContingentIdValue, Is.EqualTo("contingent-child"));
+        Assert.That(snapshot.ManpowerStates[0].SourceIdValue, Is.Null);
         Assert.That(snapshot.ManpowerStates[0].Revision, Is.EqualTo(1L));
         Assert.That(snapshot.ManpowerRevision, Is.EqualTo(1L));
-        Assert.That(snapshot.ManpowerStates[0].Cohorts.Select(row => row.Amount), Is.EqualTo(new[] { 5L, 7L }));
+        Assert.That(snapshot.ManpowerStates[0].Cohorts.Select(row => row.InjuryState), Is.EqualTo(new[]
+        {
+            ManpowerInjuryState.Healthy, ManpowerInjuryState.Healthy, ManpowerInjuryState.Wounded
+        }));
+        Assert.That(snapshot.ManpowerStates[0].Cohorts.Select(row => row.CustodyState), Is.EqualTo(new[]
+        {
+            ManpowerCustodyState.Free, ManpowerCustodyState.Captured, ManpowerCustodyState.Free
+        }));
+        Assert.That(snapshot.ManpowerStates[0].Cohorts.Select(row => row.CustodianForceIdValue), Is.EqualTo(new[]
+        {
+            null, "force-root", null
+        }));
+        Assert.That(snapshot.ManpowerStates[0].Cohorts.Select(row => row.AvailabilityState), Is.EqualTo(new[]
+        {
+            ManpowerAvailabilityState.Available,
+            ManpowerAvailabilityState.Unavailable,
+            ManpowerAvailabilityState.Unavailable
+        }));
+        Assert.That(snapshot.ManpowerStates[0].Cohorts.Select(row => row.Amount), Is.EqualTo(new[] { 3L, 2L, 7L }));
         Assert.That(snapshot.PositionCount, Is.EqualTo(1));
         Assert.That(snapshot.PositionRevision, Is.EqualTo(1L));
+        Assert.That(snapshot.Positions[0].ForceIdValue, Is.EqualTo("force-child"));
         Assert.That(snapshot.Positions[0].Reference.Kind, Is.EqualTo(SpatialReferenceKind.Location));
+        Assert.That(snapshot.Positions[0].Reference.HexIdValue, Is.Null);
         Assert.That(snapshot.Positions[0].Reference.LocationIdValue, Is.EqualTo("snapshot-location"));
+        Assert.That(snapshot.Positions[0].Reference.CrossingIdValue, Is.Null);
+        Assert.That(snapshot.Positions[0].Reference.TopologyOwnerKind, Is.Null);
+        Assert.That(snapshot.Positions[0].Reference.TopologyOwnerRuntimeId, Is.Null);
+        Assert.That(snapshot.Positions[0].Reference.SubLocationRuntimeId, Is.Null);
 
+        Assert.That(live.Forces.TryAssignCommander(new ArmedForceId("force-root"), new PersonId("person-officer"),
+            out ArmedForceFoundationFailure commanderFailure), Is.True, commanderFailure.ToString());
+        Assert.That(live.Positions.TrySetPosition(new ArmedForceId("force-child"),
+            SpatialReference.ForHex(new HexId("snapshot-hex")), out ArmedForceSpatialFailure positionFailure),
+            Is.True, positionFailure.ToString());
         Assert.That(live.Manpower.TryRedistribute(
             new ContingentId("contingent-child"),
             new[] { new ContingentManpowerCohort(
@@ -80,11 +140,18 @@ public sealed class P12EMilitaryOwnerSnapshotTests
                 12L) },
             1L,
             out ContingentManpowerFailure redistributionFailure), Is.True, redistributionFailure.ToString());
-        Assert.That(snapshot.ManpowerStates[0].Cohorts.Select(row => row.Amount), Is.EqualTo(new[] { 5L, 7L }));
+        Assert.That(snapshot.Forces[1].CommanderPersonIdValue, Is.EqualTo("person-commander"));
+        Assert.That(snapshot.Positions[0].Reference.Kind, Is.EqualTo(SpatialReferenceKind.Location));
+        Assert.That(snapshot.Positions[0].Reference.LocationIdValue, Is.EqualTo("snapshot-location"));
+        Assert.That(snapshot.ManpowerStates[0].Cohorts.Select(row => row.Amount), Is.EqualTo(new[] { 3L, 2L, 7L }));
         Assert.Throws<NotSupportedException>(() =>
             ((IList<P12EMilitaryForceSnapshotRecord>)snapshot.Forces).Clear());
         Assert.Throws<NotSupportedException>(() =>
             ((IList<P12EMilitaryCharacteristicSnapshot>)snapshot.Contingents[0].Characteristics).Clear());
+        Assert.Throws<NotSupportedException>(() =>
+            ((IList<P12EManpowerCohortSnapshotRecord>)snapshot.ManpowerStates[0].Cohorts).Clear());
+        Assert.Throws<NotSupportedException>(() =>
+            ((IList<P12EForcePositionSnapshotRecord>)snapshot.Positions).Clear());
 
         PersonStore stagedPersons = CreatePersons();
         SpatialAuthorityStore stagedSpatial = CreateSpatial();
@@ -98,27 +165,68 @@ public sealed class P12EMilitaryOwnerSnapshotTests
         Assert.That(stagedPositions.Revision, Is.EqualTo(snapshot.PositionRevision));
         Assert.That(stagedForce.TryGet(new ArmedForceId("force-root"), out ArmedForceRecord root), Is.True);
         Assert.That(root.DisplayName, Is.EqualTo("Root Force"));
+        Assert.That(root.CreatedAbsoluteDay, Is.EqualTo(capturedRoot.CreatedAbsoluteDay));
+        Assert.That(root.ParentForceId, Is.Null);
         Assert.That(root.OperationalLocationReference, Is.EqualTo("legacy opaque location"));
         Assert.That(root.CommanderPersonId.Value, Is.EqualTo("person-commander"));
+        Assert.That(root.LifecycleState, Is.EqualTo(ArmedForceLifecycleState.Active));
+        Assert.That(root.TerminatedAbsoluteDay, Is.Null);
+        Assert.That(root.IsDetached, Is.False);
         Assert.That(stagedForce.TryGet(new ArmedForceId("force-child"), out ArmedForceRecord child), Is.True);
+        Assert.That(child.DisplayName, Is.EqualTo("Child Force"));
+        Assert.That(child.CreatedAbsoluteDay, Is.EqualTo(1L));
         Assert.That(child.ParentForceId.Value, Is.EqualTo("force-root"));
+        Assert.That(child.OperationalLocationReference, Is.Null);
+        Assert.That(child.CommanderPersonId, Is.Null);
+        Assert.That(child.LifecycleState, Is.EqualTo(ArmedForceLifecycleState.Active));
+        Assert.That(child.TerminatedAbsoluteDay, Is.Null);
+        Assert.That(child.IsDetached, Is.True);
         Assert.That(stagedForce.TryGetContingent(new ContingentId("contingent-child"), out ContingentRecord contingent), Is.True);
+        Assert.That(contingent.Id.Value, Is.EqualTo("contingent-child"));
+        Assert.That(contingent.ForceId.Value, Is.EqualTo("force-child"));
         Assert.That(contingent.Amount, Is.EqualTo(12L));
         Assert.That(contingent.Origin.Domain, Is.EqualTo("content-domain"));
         Assert.That(contingent.Origin.Value, Is.EqualTo("origin-value"));
         Assert.That(contingent.ServiceType, Is.EqualTo("open-ended-service"));
         Assert.That(contingent.Characteristics.Select(row => row.Key), Is.EqualTo(new[] { "branch", "kind" }));
+        Assert.That(contingent.Characteristics.Select(row => row.Value), Is.EqualTo(new[] { "field", "regular" }));
         Assert.That(stagedForce.RelevantPersons[0].Id.Value, Is.EqualTo(snapshot.RelevantPersons[0].ReferenceIdValue));
+        Assert.That(stagedForce.RelevantPersons[0].ForceId.Value, Is.EqualTo("force-root"));
+        Assert.That(stagedForce.RelevantPersons[0].PersonId.Value, Is.EqualTo("person-officer"));
         Assert.That(stagedForce.RelevantPersons[0].RoleKey, Is.EqualTo("officer"));
         Assert.That(stagedManpower.TryGet(new ContingentId("contingent-child"), out ContingentManpowerState state), Is.True);
+        Assert.That(state.ContingentId.Value, Is.EqualTo("contingent-child"));
         Assert.That(state.SourceId, Is.Null);
         Assert.That(state.Revision, Is.EqualTo(1L));
         Assert.That(state.LivingRosterAmount, Is.EqualTo(12L));
-        Assert.That(state.AvailableAmount, Is.EqualTo(5L));
-        Assert.That(state.Cohorts.Select(row => row.Amount), Is.EqualTo(new[] { 5L, 7L }));
+        Assert.That(state.AvailableAmount, Is.EqualTo(3L));
+        Assert.That(state.Cohorts.Select(row => row.InjuryState), Is.EqualTo(new[]
+        {
+            ManpowerInjuryState.Healthy, ManpowerInjuryState.Healthy, ManpowerInjuryState.Wounded
+        }));
+        Assert.That(state.Cohorts.Select(row => row.CustodyState), Is.EqualTo(new[]
+        {
+            ManpowerCustodyState.Free, ManpowerCustodyState.Captured, ManpowerCustodyState.Free
+        }));
+        Assert.That(state.Cohorts.Select(row => row.CustodianForceId?.Value), Is.EqualTo(new[]
+        {
+            null, "force-root", null
+        }));
+        Assert.That(state.Cohorts.Select(row => row.AvailabilityState), Is.EqualTo(new[]
+        {
+            ManpowerAvailabilityState.Available,
+            ManpowerAvailabilityState.Unavailable,
+            ManpowerAvailabilityState.Unavailable
+        }));
+        Assert.That(state.Cohorts.Select(row => row.Amount), Is.EqualTo(new[] { 3L, 2L, 7L }));
         Assert.That(stagedPositions.TryGetPosition(new ArmedForceId("force-child"), out SpatialReference position), Is.True);
         Assert.That(position.Kind, Is.EqualTo(SpatialReferenceKind.Location));
         Assert.That(position.LocationId.Value, Is.EqualTo("snapshot-location"));
+        Assert.That(position.HexId, Is.Null);
+        Assert.That(position.CrossingId, Is.Null);
+        Assert.That(position.TopologyOwnerKind, Is.Null);
+        Assert.That(position.TopologyOwnerRuntimeId, Is.Null);
+        Assert.That(position.SubLocationRuntimeId, Is.Null);
         Assert.That(stagedForce.ValidateInvariants().IsValid, Is.True);
         Assert.That(stagedManpower.ValidateInvariants().IsValid, Is.True);
         Assert.That(stagedPositions.ValidateInvariants().IsValid, Is.True);
@@ -151,7 +259,14 @@ public sealed class P12EMilitaryOwnerSnapshotTests
             out ArmedForceSpatialStateStore stagedPositions,
             out P12EMilitaryOwnerSnapshotFailure failure), Is.True, failure.Message);
         Assert.That(stagedForce.TryGet(formerForceId, out ArmedForceRecord formerForce), Is.True);
+        Assert.That(formerForce.DisplayName, Is.EqualTo("Former Force"));
+        Assert.That(formerForce.CreatedAbsoluteDay, Is.EqualTo(0L));
+        Assert.That(formerForce.ParentForceId, Is.Null);
+        Assert.That(formerForce.OperationalLocationReference, Is.Null);
+        Assert.That(formerForce.CommanderPersonId, Is.Null);
         Assert.That(formerForce.LifecycleState, Is.EqualTo(ArmedForceLifecycleState.Terminated));
+        Assert.That(formerForce.TerminatedAbsoluteDay, Is.EqualTo(3L));
+        Assert.That(formerForce.IsDetached, Is.False);
         Assert.That(stagedPositions.TryGetPosition(formerForceId, out SpatialReference restoredPosition), Is.True);
         Assert.That(restoredPosition.LocationId.Value, Is.EqualTo("snapshot-location"));
         Assert.That(stagedForce.ValidateInvariants().IsValid, Is.True);
@@ -284,6 +399,244 @@ public sealed class P12EMilitaryOwnerSnapshotTests
     }
 
     [Test]
+    public void StageRejectsMalformedHierarchyDuplicateOrMissingOwnerRowsAndInvalidPositions()
+    {
+        MilitaryWorld live = CreateWorld(populated: true);
+        P12EMilitaryOwnerSnapshot valid = CaptureOrFail(live);
+        P12EMilitaryForceSnapshotRecord child = valid.Forces[0];
+        P12EMilitaryForceSnapshotRecord root = valid.Forces[1];
+
+        AssertStageRejected(Copy(valid, forces: valid.Forces.Concat(new[] { child })),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidIdentity);
+
+        P12EMilitaryForceSnapshotRecord missingParent = new P12EMilitaryForceSnapshotRecord(
+            child.ForceIdValue, child.DisplayName, child.CreatedAbsoluteDay, "force-missing",
+            child.OperationalLocationReference, child.CommanderPersonIdValue, child.LifecycleState,
+            child.TerminatedAbsoluteDay, child.IsDetached);
+        AssertStageRejected(Copy(valid, forces: new[] { missingParent, root }),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidRelation);
+
+        P12EMilitaryForceSnapshotRecord childCycle = new P12EMilitaryForceSnapshotRecord(
+            child.ForceIdValue, child.DisplayName, child.CreatedAbsoluteDay, root.ForceIdValue,
+            child.OperationalLocationReference, child.CommanderPersonIdValue, child.LifecycleState,
+            child.TerminatedAbsoluteDay, child.IsDetached);
+        P12EMilitaryForceSnapshotRecord rootCycle = new P12EMilitaryForceSnapshotRecord(
+            root.ForceIdValue, root.DisplayName, root.CreatedAbsoluteDay, child.ForceIdValue,
+            root.OperationalLocationReference, root.CommanderPersonIdValue, root.LifecycleState,
+            root.TerminatedAbsoluteDay, root.IsDetached);
+        AssertStageRejected(Copy(valid, forces: new[] { childCycle, rootCycle }),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidRelation);
+
+        AssertStageRejected(Copy(valid, contingents: valid.Contingents.Concat(new[] { valid.Contingents[0] })),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidIdentity);
+        P12EMilitaryContingentSnapshotRecord missingForceContingent = new P12EMilitaryContingentSnapshotRecord(
+            valid.Contingents[0].ContingentIdValue, "force-missing", valid.Contingents[0].Amount,
+            valid.Contingents[0].OriginDomain, valid.Contingents[0].OriginValue,
+            valid.Contingents[0].ServiceType, valid.Contingents[0].Characteristics);
+        AssertStageRejected(Copy(valid, contingents: new[] { missingForceContingent }),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidRelation);
+
+        AssertStageRejected(Copy(valid, relevantPersons: valid.RelevantPersons.Concat(new[] { valid.RelevantPersons[0] })),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidIdentity);
+        AssertStageRejected(Copy(valid, manpowerStates: Array.Empty<P12EManpowerStateSnapshotRecord>()),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidRelation);
+        AssertStageRejected(Copy(valid, manpowerStates: valid.ManpowerStates.Concat(new[] { valid.ManpowerStates[0] })),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidIdentity);
+
+        P12EMilitaryForceSnapshotRecord invalidLifecycle = new P12EMilitaryForceSnapshotRecord(
+            child.ForceIdValue, child.DisplayName, child.CreatedAbsoluteDay, child.ParentForceIdValue,
+            child.OperationalLocationReference, child.CommanderPersonIdValue,
+            (ArmedForceLifecycleState)999, child.TerminatedAbsoluteDay, child.IsDetached);
+        AssertStageRejected(Copy(valid, forces: new[] { invalidLifecycle, root }),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidIdentity);
+
+        AssertStageRejected(Copy(valid, positions: valid.Positions.Concat(new[] { valid.Positions[0] })),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidSpatialReference);
+        P12EForcePositionSnapshotRecord unregisteredForcePosition = new P12EForcePositionSnapshotRecord(
+            "force-missing", valid.Positions[0].Reference);
+        AssertStageRejected(Copy(valid, positions: new[] { unregisteredForcePosition }),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidSpatialReference);
+        P12EForcePositionSnapshotRecord unresolvedPosition = new P12EForcePositionSnapshotRecord(
+            valid.Positions[0].ForceIdValue,
+            new P12ESpatialReferenceSnapshot(SpatialReferenceKind.Location,
+                null, "location-missing", null, null, null, null));
+        AssertStageRejected(Copy(valid, positions: new[] { unresolvedPosition }),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidSpatialReference);
+    }
+
+    [Test]
+    public void StageRejectsMalformedCohortsSourceCustodyMirrorAndSpatialRows()
+    {
+        MilitaryWorld live = CreateWorld(populated: true);
+        P12EMilitaryOwnerSnapshot valid = CaptureOrFail(live);
+        P12EManpowerStateSnapshotRecord state = valid.ManpowerStates[0];
+
+        AssertStageRejected(Copy(valid, manpowerStates: new[]
+        {
+            CopyManpower(state, cohorts: new[]
+            {
+                new P12EManpowerCohortSnapshotRecord(
+                    (ManpowerInjuryState)999, ManpowerCustodyState.Free, null,
+                    ManpowerAvailabilityState.Available, 12L)
+            })
+        }), P12EMilitaryOwnerSnapshotFailureCode.InvalidRelation);
+        AssertStageRejected(Copy(valid, manpowerStates: new[]
+        {
+            CopyManpower(state, cohorts: new[]
+            {
+                new P12EManpowerCohortSnapshotRecord(
+                    ManpowerInjuryState.Healthy, ManpowerCustodyState.Free, null,
+                    ManpowerAvailabilityState.Available, 0L)
+            })
+        }), P12EMilitaryOwnerSnapshotFailureCode.InvalidRelation);
+        AssertStageRejected(Copy(valid, manpowerStates: new[]
+        {
+            CopyManpower(state, cohorts: new[]
+            {
+                new P12EManpowerCohortSnapshotRecord(
+                    ManpowerInjuryState.Healthy, ManpowerCustodyState.Free, null,
+                    ManpowerAvailabilityState.Available, long.MaxValue),
+                new P12EManpowerCohortSnapshotRecord(
+                    ManpowerInjuryState.Wounded, ManpowerCustodyState.Free, null,
+                    ManpowerAvailabilityState.Available, 1L)
+            })
+        }), P12EMilitaryOwnerSnapshotFailureCode.InvalidRelation);
+        P12EManpowerCohortSnapshotRecord sameTuple = new P12EManpowerCohortSnapshotRecord(
+            ManpowerInjuryState.Healthy, ManpowerCustodyState.Free, null,
+            ManpowerAvailabilityState.Available, 3L);
+        AssertStageRejected(Copy(valid, manpowerStates: new[]
+        {
+            CopyManpower(state, cohorts: new[] { sameTuple, sameTuple })
+        }), P12EMilitaryOwnerSnapshotFailureCode.InvalidSnapshot);
+        AssertStageRejected(Copy(valid, manpowerStates: new[]
+        {
+            CopyManpower(state, cohorts: new[]
+            {
+                new P12EManpowerCohortSnapshotRecord(
+                    ManpowerInjuryState.Wounded, ManpowerCustodyState.Free, null,
+                    ManpowerAvailabilityState.Unavailable, 7L),
+                new P12EManpowerCohortSnapshotRecord(
+                    ManpowerInjuryState.Healthy, ManpowerCustodyState.Free, null,
+                    ManpowerAvailabilityState.Available, 5L)
+            })
+        }), P12EMilitaryOwnerSnapshotFailureCode.InvalidSnapshot);
+
+        AssertStageRejected(Copy(valid, manpowerStates: new[]
+        {
+            CopyManpower(state, cohorts: new[]
+            {
+                new P12EManpowerCohortSnapshotRecord(
+                    ManpowerInjuryState.Healthy, ManpowerCustodyState.Captured, null,
+                    ManpowerAvailabilityState.Unavailable, 12L)
+            })
+        }), P12EMilitaryOwnerSnapshotFailureCode.InvalidRelation);
+        AssertStageRejected(Copy(valid, manpowerStates: new[]
+        {
+            CopyManpower(state, cohorts: new[]
+            {
+                new P12EManpowerCohortSnapshotRecord(
+                    ManpowerInjuryState.Healthy, ManpowerCustodyState.Captured, "force-missing",
+                    ManpowerAvailabilityState.Unavailable, 12L)
+            })
+        }), P12EMilitaryOwnerSnapshotFailureCode.InvalidRelation);
+        AssertStageRejected(Copy(valid,
+            contingents: new[]
+            {
+                new P12EMilitaryContingentSnapshotRecord(
+                    valid.Contingents[0].ContingentIdValue,
+                    valid.Contingents[0].ForceIdValue,
+                    valid.Contingents[0].Amount - 1L,
+                    valid.Contingents[0].OriginDomain,
+                    valid.Contingents[0].OriginValue,
+                    valid.Contingents[0].ServiceType,
+                    valid.Contingents[0].Characteristics)
+            }), P12EMilitaryOwnerSnapshotFailureCode.InvalidRelation);
+
+        P12EForcePositionSnapshotRecord malformedReference = new P12EForcePositionSnapshotRecord(
+            valid.Positions[0].ForceIdValue,
+            new P12ESpatialReferenceSnapshot(SpatialReferenceKind.Location,
+                "also-present", "snapshot-location", null, null, null, null));
+        AssertStageRejected(Copy(valid, positions: new[] { malformedReference }),
+            P12EMilitaryOwnerSnapshotFailureCode.InvalidSpatialReference);
+    }
+
+    [Test]
+    public void PrivateOwnerFactoriesFailClosedWithoutChangingTheirInputsOrLiveOwners()
+    {
+        MilitaryWorld live = CreateWorld(populated: true);
+        P12EMilitaryOwnerSnapshot snapshot = CaptureOrFail(live);
+        long forceRevisionBefore = live.Forces.Revision;
+        long manpowerRevisionBefore = live.Manpower.Revision;
+        long positionRevisionBefore = live.Positions.Revision;
+        ArmedForceRecord rootBefore = GetForceOrFail(live.Forces, "force-root");
+        ArmedForceRecord childBefore = GetForceOrFail(live.Forces, "force-child");
+        ContingentRecord contingentBefore = GetContingentOrFail(live.Forces, "contingent-child");
+        ContingentManpowerState stateBefore = GetManpowerStateOrFail(live.Manpower, "contingent-child");
+        SpatialReference positionBefore = GetPositionOrFail(live.Positions, "force-child");
+
+        PersonStore targetPersons = CreatePersons();
+        int personCountBefore = targetPersons.Persons.Count;
+        Assert.That(ArmedForceStore.TryCreateFromP12EOwnerSnapshot(
+            targetPersons,
+            new[] { live.Forces.Forces[0], live.Forces.Forces[0] },
+            live.Forces.Contingents,
+            live.Forces.RelevantPersons,
+            live.Forces.Revision,
+            out ArmedForceStore failedForce,
+            out string forceDiagnostic), Is.False);
+        Assert.That(failedForce, Is.Null);
+        Assert.That(forceDiagnostic, Is.Not.Null.And.Not.Empty);
+        Assert.That(targetPersons.Persons.Count, Is.EqualTo(personCountBefore));
+
+        ArmedForceStore stagedForce = StageForceOwnerOrFail(live);
+        long stagedForceRevisionBefore = stagedForce.Revision;
+        ContingentManpowerState sourceBoundState = new ContingentManpowerState(
+            new ContingentId("contingent-child"),
+            new ManpowerSourceId("unsupported-source"),
+            stateBefore.Cohorts,
+            stateBefore.Revision);
+        Assert.That(ContingentManpowerStateStore.TryCreateFromP12EOwnerSnapshot(
+            stagedForce,
+            new[] { sourceBoundState },
+            snapshot.ManpowerRevision,
+            out ContingentManpowerStateStore failedManpower,
+            out string manpowerDiagnostic), Is.False);
+        Assert.That(failedManpower, Is.Null);
+        Assert.That(manpowerDiagnostic, Is.Not.Null.And.Not.Empty);
+        Assert.That(stagedForce.Revision, Is.EqualTo(stagedForceRevisionBefore));
+        Assert.That(stagedForce.ValidateInvariants().IsValid, Is.True);
+
+        ArmedForceSpatialPosition unresolvedPosition = new ArmedForceSpatialPosition(
+            new ArmedForceId("force-child"), SpatialReference.ForLocation(new LocationId("location-missing")));
+        Assert.That(ArmedForceSpatialStateStore.TryCreateFromP12EOwnerSnapshot(
+            stagedForce,
+            live.Spatial,
+            null,
+            new[] { unresolvedPosition },
+            snapshot.PositionRevision,
+            out ArmedForceSpatialStateStore failedPositions,
+            out string positionDiagnostic), Is.False);
+        Assert.That(failedPositions, Is.Null);
+        Assert.That(positionDiagnostic, Is.Not.Null.And.Not.Empty);
+        Assert.That(stagedForce.Revision, Is.EqualTo(stagedForceRevisionBefore));
+        Assert.That(stagedForce.ValidateInvariants().IsValid, Is.True);
+
+        Assert.That(live.Forces.Revision, Is.EqualTo(forceRevisionBefore));
+        Assert.That(live.Manpower.Revision, Is.EqualTo(manpowerRevisionBefore));
+        Assert.That(live.Positions.Revision, Is.EqualTo(positionRevisionBefore));
+        Assert.That(GetForceOrFail(live.Forces, "force-root"), Is.EqualTo(rootBefore));
+        Assert.That(GetForceOrFail(live.Forces, "force-child"), Is.EqualTo(childBefore));
+        Assert.That(GetContingentOrFail(live.Forces, "contingent-child"), Is.EqualTo(contingentBefore));
+        ContingentManpowerState stateAfter = GetManpowerStateOrFail(live.Manpower, "contingent-child");
+        Assert.That(stateAfter.Revision, Is.EqualTo(stateBefore.Revision));
+        Assert.That(stateAfter.SourceId, Is.EqualTo(stateBefore.SourceId));
+        Assert.That(stateAfter.Cohorts.Select(CohortKey), Is.EqualTo(stateBefore.Cohorts.Select(CohortKey)));
+        SpatialReference positionAfter = GetPositionOrFail(live.Positions, "force-child");
+        Assert.That(positionAfter.Kind, Is.EqualTo(positionBefore.Kind));
+        Assert.That(positionAfter.LocationId, Is.EqualTo(positionBefore.LocationId));
+    }
+
+    [Test]
     public void CaptureRequiresTheExactFiveRequiredTokenBoundOwnerStamps()
     {
         MilitaryWorld world = CreateWorld(populated: false);
@@ -309,24 +662,121 @@ public sealed class P12EMilitaryOwnerSnapshotTests
     private static P12EMilitaryOwnerSnapshot Copy(
         P12EMilitaryOwnerSnapshot source,
         int? schemaVersion = null,
+        int? forceCount = null,
+        int? contingentCount = null,
+        int? relevantPersonCount = null,
+        int? manpowerStateCount = null,
         int? positionCount = null,
+        IEnumerable<P12EMilitaryForceSnapshotRecord> forces = null,
+        IEnumerable<P12EMilitaryContingentSnapshotRecord> contingents = null,
+        IEnumerable<P12EMilitaryRelevantPersonSnapshotRecord> relevantPersons = null,
         IEnumerable<P12EManpowerStateSnapshotRecord> manpowerStates = null,
         IEnumerable<P12EForcePositionSnapshotRecord> positions = null) =>
-        new P12EMilitaryOwnerSnapshot(
+        CreateCopy(source, schemaVersion, forceCount, contingentCount, relevantPersonCount,
+            manpowerStateCount, positionCount, forces, contingents, relevantPersons, manpowerStates, positions);
+
+    private static P12EMilitaryOwnerSnapshot CreateCopy(
+        P12EMilitaryOwnerSnapshot source,
+        int? schemaVersion,
+        int? forceCount,
+        int? contingentCount,
+        int? relevantPersonCount,
+        int? manpowerStateCount,
+        int? positionCount,
+        IEnumerable<P12EMilitaryForceSnapshotRecord> forces,
+        IEnumerable<P12EMilitaryContingentSnapshotRecord> contingents,
+        IEnumerable<P12EMilitaryRelevantPersonSnapshotRecord> relevantPersons,
+        IEnumerable<P12EManpowerStateSnapshotRecord> manpowerStates,
+        IEnumerable<P12EForcePositionSnapshotRecord> positions)
+    {
+        P12EMilitaryForceSnapshotRecord[] forceRows = (forces ?? source.Forces).ToArray();
+        P12EMilitaryContingentSnapshotRecord[] contingentRows = (contingents ?? source.Contingents).ToArray();
+        P12EMilitaryRelevantPersonSnapshotRecord[] relevantRows = (relevantPersons ?? source.RelevantPersons).ToArray();
+        P12EManpowerStateSnapshotRecord[] manpowerRows = (manpowerStates ?? source.ManpowerStates).ToArray();
+        P12EForcePositionSnapshotRecord[] positionRows = (positions ?? source.Positions).ToArray();
+        return new P12EMilitaryOwnerSnapshot(
             schemaVersion ?? source.SchemaVersion,
             source.ArmedForceRevision,
             source.ManpowerRevision,
             source.PositionRevision,
-            source.ForceCount,
-            source.ContingentCount,
-            source.RelevantPersonCount,
-            manpowerStates?.Count() ?? source.ManpowerStateCount,
-            positionCount ?? source.PositionCount,
-            source.Forces,
-            source.Contingents,
-            source.RelevantPersons,
-            manpowerStates ?? source.ManpowerStates,
-            positions ?? source.Positions);
+            forceCount ?? forceRows.Length,
+            contingentCount ?? contingentRows.Length,
+            relevantPersonCount ?? relevantRows.Length,
+            manpowerStateCount ?? manpowerRows.Length,
+            positionCount ?? positionRows.Length,
+            forceRows,
+            contingentRows,
+            relevantRows,
+            manpowerRows,
+            positionRows);
+    }
+
+    private static P12EManpowerStateSnapshotRecord CopyManpower(
+        P12EManpowerStateSnapshotRecord source,
+        IEnumerable<P12EManpowerCohortSnapshotRecord> cohorts) =>
+        new P12EManpowerStateSnapshotRecord(
+            source.ContingentIdValue,
+            source.SourceIdValue,
+            source.Revision,
+            cohorts);
+
+    private static void AssertStageRejected(
+        P12EMilitaryOwnerSnapshot snapshot,
+        P12EMilitaryOwnerSnapshotFailureCode expectedCode)
+    {
+        bool success = snapshot.TryStage(
+            CreatePersons(),
+            CreateSpatial(),
+            null,
+            out ArmedForceStore stagedForce,
+            out ContingentManpowerStateStore stagedManpower,
+            out ArmedForceSpatialStateStore stagedPositions,
+            out P12EMilitaryOwnerSnapshotFailure failure);
+        Assert.That(success, Is.False);
+        Assert.That(stagedForce, Is.Null);
+        Assert.That(stagedManpower, Is.Null);
+        Assert.That(stagedPositions, Is.Null);
+        Assert.That(failure.Code, Is.EqualTo(expectedCode), failure.Message);
+        Assert.That(failure.Message, Is.Not.Null.And.Not.Empty);
+    }
+
+    private static ArmedForceStore StageForceOwnerOrFail(MilitaryWorld source)
+    {
+        Assert.That(ArmedForceStore.TryCreateFromP12EOwnerSnapshot(
+            CreatePersons(), source.Forces.Forces, source.Forces.Contingents,
+            source.Forces.RelevantPersons, source.Forces.Revision,
+            out ArmedForceStore staged, out string diagnostic), Is.True, diagnostic);
+        return staged;
+    }
+
+    private static ArmedForceRecord GetForceOrFail(ArmedForceStore store, string id)
+    {
+        Assert.That(store.TryGet(new ArmedForceId(id), out ArmedForceRecord value), Is.True);
+        return value;
+    }
+
+    private static ContingentRecord GetContingentOrFail(ArmedForceStore store, string id)
+    {
+        Assert.That(store.TryGetContingent(new ContingentId(id), out ContingentRecord value), Is.True);
+        return value;
+    }
+
+    private static ContingentManpowerState GetManpowerStateOrFail(ContingentManpowerStateStore store, string id)
+    {
+        Assert.That(store.TryGet(new ContingentId(id), out ContingentManpowerState value), Is.True);
+        return value;
+    }
+
+    private static SpatialReference GetPositionOrFail(ArmedForceSpatialStateStore store, string forceId)
+    {
+        Assert.That(store.TryGetPosition(new ArmedForceId(forceId), out SpatialReference value), Is.True);
+        return value;
+    }
+
+    private static string CohortKey(ContingentManpowerCohort cohort) =>
+        ((int)cohort.InjuryState) + ":" + ((int)cohort.CustodyState) + ":"
+        + (cohort.CustodianForceId?.Value ?? string.Empty) + ":"
+        + ((int)cohort.AvailabilityState) + ":" + cohort.Amount;
 
     private static P12EMilitaryOwnerSnapshot CaptureOrFail(MilitaryWorld world)
     {
@@ -412,17 +862,23 @@ public sealed class P12EMilitaryOwnerSnapshotTests
                 new[]
                 {
                     new ContingentManpowerCohort(
-                        ManpowerInjuryState.Wounded,
-                        ManpowerCustodyState.Free,
-                        null,
-                        ManpowerAvailabilityState.Unavailable,
-                        7L),
-                    new ContingentManpowerCohort(
                         ManpowerInjuryState.Healthy,
                         ManpowerCustodyState.Free,
                         null,
                         ManpowerAvailabilityState.Available,
-                        5L)
+                        3L),
+                    new ContingentManpowerCohort(
+                        ManpowerInjuryState.Healthy,
+                        ManpowerCustodyState.Captured,
+                        new ArmedForceId("force-root"),
+                        ManpowerAvailabilityState.Unavailable,
+                        2L),
+                    new ContingentManpowerCohort(
+                        ManpowerInjuryState.Wounded,
+                        ManpowerCustodyState.Free,
+                        null,
+                        ManpowerAvailabilityState.Unavailable,
+                        7L)
                 },
                 0L,
                 out ContingentManpowerFailure failure), Is.True, failure.ToString());
@@ -434,6 +890,9 @@ public sealed class P12EMilitaryOwnerSnapshotTests
                 new ArmedForceId("force-child"),
                 SpatialReference.ForLocation(new LocationId("snapshot-location")),
                 out ArmedForceSpatialFailure positionFailure), Is.True, positionFailure.ToString());
+        if (populated)
+            Assert.That(forces.TryDetach(new ArmedForceId("force-child"),
+                out ArmedForceFoundationFailure detachFailure), Is.True, detachFailure.ToString());
         return new MilitaryWorld(persons, forces, manpower, positions, spatial);
     }
 
