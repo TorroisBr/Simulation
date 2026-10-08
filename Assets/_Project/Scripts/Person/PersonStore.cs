@@ -1,5 +1,107 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+
+/// <summary>
+/// Immutable owner-local value for one PersonStore row. It deliberately stores
+/// the exact ID string and no live PersonRuntime or NPC reference.
+/// </summary>
+internal sealed class PersonStoreOwnerSnapshotRow
+{
+    internal string PersonIdValue { get; }
+    internal long? BirthAbsoluteDay { get; }
+    internal long? DeathAbsoluteDay { get; }
+    internal string ResidenceSettlementRuntimeId { get; }
+    internal string MaterializedNpcRuntimeId { get; }
+    internal long LifeResidenceRevision { get; }
+
+    internal PersonStoreOwnerSnapshotRow(
+        string personIdValue,
+        long? birthAbsoluteDay,
+        long? deathAbsoluteDay,
+        string residenceSettlementRuntimeId,
+        string materializedNpcRuntimeId,
+        long lifeResidenceRevision)
+    {
+        PersonIdValue = personIdValue;
+        BirthAbsoluteDay = birthAbsoluteDay;
+        DeathAbsoluteDay = deathAbsoluteDay;
+        ResidenceSettlementRuntimeId = residenceSettlementRuntimeId;
+        MaterializedNpcRuntimeId = materializedNpcRuntimeId;
+        LifeResidenceRevision = lifeResidenceRevision;
+    }
+}
+
+/// <summary>
+/// Detached schema-versioned values owned by PersonStore and its registered
+/// PersonRuntime rows. This value carries no capture-token authority.
+/// </summary>
+internal sealed class PersonStoreOwnerSnapshot
+{
+    internal const string CurrentSchemaId = "p12d-person-store-owner";
+    internal const int CurrentSchemaVersion = 1;
+
+    internal string SchemaId { get; }
+    internal int SchemaVersion { get; }
+    internal long Revision { get; }
+    internal int MembershipCount { get; }
+    internal int BindingCount { get; }
+    internal IReadOnlyList<PersonStoreOwnerSnapshotRow> Rows { get; }
+
+    internal PersonStoreOwnerSnapshot(
+        string schemaId,
+        int schemaVersion,
+        long revision,
+        int membershipCount,
+        int bindingCount,
+        IEnumerable<PersonStoreOwnerSnapshotRow> rows)
+    {
+        SchemaId = schemaId;
+        SchemaVersion = schemaVersion;
+        Revision = revision;
+        MembershipCount = membershipCount;
+        BindingCount = bindingCount;
+        if (rows == null)
+        {
+            Rows = null;
+            return;
+        }
+
+        List<PersonStoreOwnerSnapshotRow> copy = new List<PersonStoreOwnerSnapshotRow>();
+        foreach (PersonStoreOwnerSnapshotRow row in rows)
+        {
+            copy.Add(row == null
+                ? null
+                : new PersonStoreOwnerSnapshotRow(
+                    row.PersonIdValue,
+                    row.BirthAbsoluteDay,
+                    row.DeathAbsoluteDay,
+                    row.ResidenceSettlementRuntimeId,
+                    row.MaterializedNpcRuntimeId,
+                    row.LifeResidenceRevision));
+        }
+
+        Rows = new ReadOnlyCollection<PersonStoreOwnerSnapshotRow>(copy);
+    }
+}
+
+internal enum PersonStoreOwnerSnapshotFailureCode
+{
+    None = 0,
+    MissingSnapshot,
+    UnsupportedSchema,
+    InvalidHeader,
+    InvalidCardinality,
+    ImpossibleRevision,
+    NullPersonRow,
+    InvalidPersonId,
+    DuplicatePersonId,
+    InvalidDates,
+    InvalidResidence,
+    InvalidMaterializedNpcId,
+    DuplicateMaterializedNpcId,
+    InvalidPersonRevision
+}
 
 public enum PersonStoreFailure
 {
@@ -38,6 +140,174 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
     public PersonStore()
     {
         personSnapshot = persons.AsReadOnly();
+    }
+
+    /// <summary>
+    /// Copies this owner's exact values and insertion order. The caller must
+    /// hold the P12-B completed-boundary capture authority; this local method
+    /// neither creates nor validates that token or its owner-section vector.
+    /// </summary>
+    internal PersonStoreOwnerSnapshot CaptureOwnerSnapshot()
+    {
+        List<PersonStoreOwnerSnapshotRow> rows = new List<PersonStoreOwnerSnapshotRow>(persons.Count);
+        foreach (PersonRuntime person in persons)
+        {
+            rows.Add(person == null
+                ? null
+                : new PersonStoreOwnerSnapshotRow(
+                    person.PersonId != null ? person.PersonId.Value : null,
+                    person.BirthAbsoluteDay,
+                    person.DeathAbsoluteDay,
+                    person.ResidenceSettlementRuntimeId,
+                    person.MaterializedNpcRuntimeId,
+                    person.LifeResidenceRevision));
+        }
+
+        return new PersonStoreOwnerSnapshot(
+            PersonStoreOwnerSnapshot.CurrentSchemaId,
+            PersonStoreOwnerSnapshot.CurrentSchemaVersion,
+            revision,
+            persons.Count,
+            MaterializedBindingCount,
+            rows);
+    }
+
+    /// <summary>
+    /// Builds a complete private owner from locally validated exact values.
+    /// No gameplay mutation is replayed and cross-owner Person/NPC/City/day
+    /// checks remain with the later merged D graph validator.
+    /// </summary>
+    internal static bool TryCreateFromOwnerSnapshot(
+        PersonStoreOwnerSnapshot snapshot,
+        out PersonStore stagedStore,
+        out PersonStoreOwnerSnapshotFailureCode failure)
+    {
+        stagedStore = null;
+        if (snapshot == null)
+        {
+            failure = PersonStoreOwnerSnapshotFailureCode.MissingSnapshot;
+            return false;
+        }
+
+        if (!string.Equals(
+                snapshot.SchemaId,
+                PersonStoreOwnerSnapshot.CurrentSchemaId,
+                StringComparison.Ordinal)
+            || snapshot.SchemaVersion != PersonStoreOwnerSnapshot.CurrentSchemaVersion)
+        {
+            failure = PersonStoreOwnerSnapshotFailureCode.UnsupportedSchema;
+            return false;
+        }
+
+        if (snapshot.Revision < 0L || snapshot.Rows == null)
+        {
+            failure = PersonStoreOwnerSnapshotFailureCode.InvalidHeader;
+            return false;
+        }
+
+        if (snapshot.MembershipCount != snapshot.Rows.Count
+            || snapshot.BindingCount < 0
+            || snapshot.BindingCount > snapshot.MembershipCount)
+        {
+            failure = PersonStoreOwnerSnapshotFailureCode.InvalidCardinality;
+            return false;
+        }
+
+        long minimumRevision = (long)snapshot.MembershipCount
+            + (long)snapshot.BindingCount
+            - 1L;
+        if (snapshot.Revision < minimumRevision)
+        {
+            failure = PersonStoreOwnerSnapshotFailureCode.ImpossibleRevision;
+            return false;
+        }
+
+        PersonStore staged = new PersonStore();
+        foreach (PersonStoreOwnerSnapshotRow row in snapshot.Rows)
+        {
+            if (row == null)
+            {
+                failure = PersonStoreOwnerSnapshotFailureCode.NullPersonRow;
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(row.PersonIdValue))
+            {
+                failure = PersonStoreOwnerSnapshotFailureCode.InvalidPersonId;
+                return false;
+            }
+
+            if (row.LifeResidenceRevision < 0L)
+            {
+                failure = PersonStoreOwnerSnapshotFailureCode.InvalidPersonRevision;
+                return false;
+            }
+
+            if ((row.BirthAbsoluteDay.HasValue && row.BirthAbsoluteDay.Value < 0L)
+                || (row.DeathAbsoluteDay.HasValue && row.DeathAbsoluteDay.Value < 0L)
+                || (row.BirthAbsoluteDay.HasValue
+                    && row.DeathAbsoluteDay.HasValue
+                    && row.DeathAbsoluteDay.Value < row.BirthAbsoluteDay.Value))
+            {
+                failure = PersonStoreOwnerSnapshotFailureCode.InvalidDates;
+                return false;
+            }
+
+            if (row.ResidenceSettlementRuntimeId != null
+                && string.IsNullOrWhiteSpace(row.ResidenceSettlementRuntimeId))
+            {
+                failure = PersonStoreOwnerSnapshotFailureCode.InvalidResidence;
+                return false;
+            }
+
+            if (row.MaterializedNpcRuntimeId != null
+                && string.IsNullOrWhiteSpace(row.MaterializedNpcRuntimeId))
+            {
+                failure = PersonStoreOwnerSnapshotFailureCode.InvalidMaterializedNpcId;
+                return false;
+            }
+
+            PersonId personId = new PersonId(row.PersonIdValue);
+            if (staged.personsById.ContainsKey(personId))
+            {
+                failure = PersonStoreOwnerSnapshotFailureCode.DuplicatePersonId;
+                return false;
+            }
+
+            if (row.MaterializedNpcRuntimeId != null
+                && staged.personsByNpcRuntimeId.ContainsKey(row.MaterializedNpcRuntimeId))
+            {
+                failure = PersonStoreOwnerSnapshotFailureCode.DuplicateMaterializedNpcId;
+                return false;
+            }
+
+            PersonRuntime person = PersonRuntime.CreateForOwnerSnapshot(
+                personId,
+                row.BirthAbsoluteDay,
+                row.DeathAbsoluteDay,
+                row.ResidenceSettlementRuntimeId,
+                row.MaterializedNpcRuntimeId,
+                row.LifeResidenceRevision);
+            staged.persons.Add(person);
+            staged.personsById.Add(personId, person);
+            if (row.MaterializedNpcRuntimeId != null)
+            {
+                staged.personsByNpcRuntimeId.Add(row.MaterializedNpcRuntimeId, person);
+            }
+        }
+
+        if (staged.MaterializedBindingCount != snapshot.BindingCount)
+        {
+            failure = PersonStoreOwnerSnapshotFailureCode.InvalidCardinality;
+            return false;
+        }
+
+        // Restore after the derived indexes are rebuilt so no owner write is
+        // replayed and saturated/gapped revisions remain exact.
+        staged.revision = snapshot.Revision;
+        stagedStore = staged;
+        failure = PersonStoreOwnerSnapshotFailureCode.None;
+        return true;
     }
 
     public bool TryRegister(PersonRuntime person, out PersonStoreFailure failure)
