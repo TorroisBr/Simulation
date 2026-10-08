@@ -344,13 +344,22 @@ internal sealed class P12CSpatialAuthoritySnapshot
             staged = candidate;
             return true;
         }
-        catch (Exception exception) when (exception is ArgumentException || exception is InvalidOperationException || exception is OverflowException)
+        catch (Exception exception) when (IsRecoverableReconstructionException(exception))
         {
             return Fail(
                 P12CSpatialAuthoritySnapshotFailureCode.StageCompositionFailed,
                 "Private P8-A geography reconstruction rejected malformed values: " + exception.Message,
                 out failure);
         }
+    }
+
+    private static bool IsRecoverableReconstructionException(Exception exception)
+    {
+        return exception != null
+            && !(exception is OutOfMemoryException)
+            && !(exception is StackOverflowException)
+            && !(exception is AccessViolationException)
+            && !(exception is System.Threading.ThreadAbortException);
     }
 
     private static bool HasExcludedFacts(SpatialAuthorityStore source)

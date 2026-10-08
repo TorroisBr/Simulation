@@ -64,6 +64,7 @@ public sealed class SpatialAuthorityContinuationSnapshotTests
         long sourceRevision = source.Revision;
         HexRecord sourceHex = source.Hexes[0];
         LocationRecord sourceLocation = source.Locations[0];
+        IList sourceLocationCollectionBeforeCapture = (IList)source.Locations;
 
         Assert.That(TryCapture(
             SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
@@ -113,7 +114,7 @@ public sealed class SpatialAuthorityContinuationSnapshotTests
         Assert.That(hexIdProperty, Is.Not.Null);
         Assert.That(hexIdProperty.CanWrite, Is.False);
 
-        Assert.That(TryStage(snapshot, out SpatialAuthorityStore staged, out object stageFailure),
+Assert.That(TryStage(snapshot, out SpatialAuthorityStore staged, out object stageFailure),
             Is.True, FailureMessage(stageFailure));
         Assert.That(stageFailure, Is.Not.Null);
         Assert.That(Read(stageFailure, "IsFailure"), Is.False);
@@ -122,7 +123,7 @@ public sealed class SpatialAuthorityContinuationSnapshotTests
         Assert.That(staged.ValidateInvariants().IsValid, Is.True);
         Assert.That(staged.Revision, Is.EqualTo(sourceRevision));
         Assert.That(staged.HexCount, Is.EqualTo(source.HexCount));
-        Assert.That(staged.LocationCount, Is.EqualTo(source.LocationCount));
+        Assert.That(staged.LocationCount, Is.EqualTo(1));
         Assert.That(staged.CrossingCount, Is.EqualTo(0));
         Assert.That(staged.LocalTopologyBindingCount, Is.EqualTo(0));
         Assert.That(staged.PassageAuthority.Options, Is.Empty);
@@ -140,8 +141,49 @@ public sealed class SpatialAuthorityContinuationSnapshotTests
         Assert.That(staged.ScaleContext, Is.EqualTo(source.ScaleContext));
 
         Assert.That(source.Revision, Is.EqualTo(sourceRevision));
-        Assert.That(source.Hexes[0], Is.SameAs(sourceHex));
+        Assert.That(source.LocationCount, Is.EqualTo(1));
         Assert.That(source.Locations[0], Is.SameAs(sourceLocation));
+        Assert.That(locations.Count, Is.EqualTo(1));
+        Assert.That(source.Hexes[0], Is.SameAs(sourceHex));
+    }
+
+    [Test]
+    public void CapturedSnapshotRemainsDetachedWhenItsSourceOwnerChanges()
+    {
+        SpatialAuthorityStore mutableOwner = CreateDailyV1Owner();
+        IList originalLocationView = (IList)mutableOwner.Locations;
+        Assert.That(TryCapture(
+            SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
+            P9GeographyIdentity,
+            P9GeographySchemaVersion,
+            mutableOwner,
+            out object snapshot,
+            out object captureFailure), Is.True, FailureMessage(captureFailure));
+
+        IList snapshotLocations = (IList)Read(snapshot, "Locations");
+        Assert.That(snapshotLocations.Count, Is.EqualTo(1));
+        Assert.That(mutableOwner.TryRegisterLocation(
+            new LocationRecord(new LocationId("location/z-after-capture"), new HexId("hex/sample-origin")),
+            out SpatialAuthorityFailure mutationFailure), Is.True, mutationFailure.ToString());
+        IList updatedLocationView = (IList)mutableOwner.Locations;
+
+        Assert.That(mutableOwner.ValidateInvariants().IsValid, Is.True);
+        Assert.That(mutableOwner.Revision, Is.EqualTo(2L));
+        Assert.That(mutableOwner.LocationCount, Is.EqualTo(2));
+        Assert.That(originalLocationView.Count, Is.EqualTo(1));
+        Assert.That(updatedLocationView.Count, Is.EqualTo(2));
+        Assert.That(updatedLocationView, Is.Not.SameAs(originalLocationView));
+        Assert.That(snapshotLocations.Count, Is.EqualTo(1));
+        Assert.That(Read(snapshotLocations[0], "Id"), Is.EqualTo("location/sample-origin"));
+
+        Assert.That(TryStage(snapshot, out SpatialAuthorityStore staged, out object stageFailure),
+            Is.True, FailureMessage(stageFailure));
+        Assert.That(staged, Is.Not.Null);
+        Assert.That(staged.Revision, Is.EqualTo(1L));
+        Assert.That(staged.LocationCount, Is.EqualTo(1));
+        Assert.That(staged.Locations[0].Id.Value, Is.EqualTo("location/sample-origin"));
+        Assert.That(mutableOwner.Revision, Is.EqualTo(2L));
+        Assert.That(mutableOwner.LocationCount, Is.EqualTo(2));
     }
 
     [Test]
@@ -350,6 +392,32 @@ public sealed class SpatialAuthorityContinuationSnapshotTests
         Assert.That(owner.Revision, Is.EqualTo(revision));
         Assert.That(owner.HexCount, Is.EqualTo(hexCount));
         Assert.That(owner.LocationCount, Is.EqualTo(locationCount));
+    }
+
+    private static SpatialAuthorityStore CreateDailyV1Owner()
+    {
+        var owner = new SpatialAuthorityStore();
+        var scale = new SpatialWorldScaleContext(
+            "world-scale/Simulation-DailyV1/v1",
+            "profile/Simulation-DailyV1",
+            "1",
+            1m,
+            "km");
+        var geography = new SpatialGeographyDefinition(
+            scale,
+            new[]
+            {
+                new HexRecord(
+                    new HexId("hex/sample-origin"),
+                    new HexCoordinate(0, 0),
+                    new TerrainReference(new TerrainDefinitionId("terrain/sample-plains"), "sample-world-v1"))
+            },
+            new[]
+            {
+                new LocationRecord(new LocationId("location/sample-origin"), new HexId("hex/sample-origin"))
+            });
+        Assert.That(owner.TryComposeGeography(geography, out SpatialAuthorityFailure failure), Is.True, failure.ToString());
+        return owner;
     }
 
     private static SpatialAuthorityStore CreateTwoHexOwner()
