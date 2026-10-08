@@ -15,8 +15,9 @@ implementation is code `2b3de7cd13e6f35d35d5dece56eefb64c1fd972a`, with validate
 tree `127bc9dc10c0e69312ae98748f04becbe2d8ceda`. Its exact-tip
 implementation review is PASS at review commit
 `9d101c50b8c6d1c161d741bcd71dd158008820f0`; design review of the current D
-contract is PASS at `b9a0fd1b5941f0b7615a72acec39fd22e6c9ee0e`. Focused
-Genealogy tests passed 24/24, all Genealogy tests 52/52, birth lifecycle
+contract is PASS at `b9a0fd1b5941f0b7615a72acec39fd22e6c9ee0e`, recorded in
+[`design/PHASE12_D_TECHNICAL_DESIGN_REVIEW_0735103.md`](design/PHASE12_D_TECHNICAL_DESIGN_REVIEW_0735103.md).
+Focused Genealogy tests passed 24/24, all Genealogy tests 52/52, birth lifecycle
 15/15, ALL EditMode 2540/2540, official Smoke 5/5, and `git diff --check`.
 Exact source and validation artifact hashes are in
 [`validation/P12DGenealogyOwnerSnapshot/VALIDATION.md`](validation/P12DGenealogyOwnerSnapshot/VALIDATION.md).
