@@ -1,3 +1,21 @@
+## P12-G selected-profile inventory evidence promotion — 2026-10-09
+
+P12 canonical advanced by clean fast-forward from 02009f9063dd252bd4b177fd6aef1e74dcd947f5 to 05942670d52c03ea3e7bd6d13f86468549a53071. The promoted Assets tree is 1b90b4f77586f69c04330b564a32e0a9475808d4. The independent exact-tip review is recorded in design/PHASE12_G_TRAVELPARTY_ALLOCATOR_IDENTITY_REVIEW_C65F251.md.
+
+The bounded test-evidence change asserts that the bootstrap-exposed P12-C TravelParty allocator-counter provider and the runtime-registered provider identify the same exact owner instance. The earlier current-inventory evidence in this candidate also reconciles the independent 299-section manifest with protocol expected/registered sets, selected roster and Person-materialization transitions, and identified non-vector objects. Exact validation results and artifact hashes are in validation/P12GCurrentCanonicalInventory/VALIDATION.md: focused 26/26, ALL EditMode 2732/2732, official Smoke 5/5, and git diff --check PASS.
+
+This promotion adds selected-profile inventory evidence only. It does not establish the complete per-section supported-writer/operation/epoch/publication crosswalk, exhaustive evolved or conditional-owner coverage, fresh target-owner validation, restored-boundary admission, single-session publication, whole-graph continuation parity, or P12-G implementation readiness.
+
+### Refreshed P12 dependency status
+
+- P12-B through P12-F remain promoted within their recorded bounded scopes. P12-C is complete within its accepted typed identity, P9-B provenance, deterministic-root, and P8-A continuation scope.
+- P12-G remains WAIT_DEPENDENCY. Its next evidence gate is a current source-linked reconciliation joining the 299 expected section/provider identities and revision/cardinality sources to the current 24-operation matrix, successful commits or explicit no-supported-writer dispositions, publication consumers, and B-F payload or target-zero consumers. The older 275-row owner ledger and 23-operation wording must be reconciled against the current records.
+- P12-G also retains target-owner exact-zero obligations for P8-C/D, global receipt caches, per-NPC P18 receipts, Crime/Justice sentinels, and the target ActorChoice temporal provider; reviewed source APIs exist, but no G assembler performs these checks.
+- P12-G restored-boundary admission and the TesteSimulacao single active-session publication boundary remain unimplemented. Whole-graph rejection, failure atomicity, no-replay, and continuation-parity validation remain later implementation obligations.
+- P12-A remains WAIT_DEPENDENCY pending complete included-owner export/private hydration, validated live inventory, and separate implementation authorization. P13 remains BLOCKED. Phase 12 remains OPEN.
+
+Unrelated ProjectSettings edits and the three untracked .meta files in the working tree were not staged or changed.
+
 ## Current P12 canonical checkpoint state — 2026-10-09
 
 P12 canonical advanced by clean fast-forward from `0619a33cd4287d89bad80fbe546763aff8f2a75b` to the bounded P12-F owner-package candidate `c4977af1c6566bd5987b3fbdb64bbc7389245d3f`. The candidate was independently reviewed against the exact implementation tree and its validation evidence; this State update records the promotion and refreshed dependencies.
