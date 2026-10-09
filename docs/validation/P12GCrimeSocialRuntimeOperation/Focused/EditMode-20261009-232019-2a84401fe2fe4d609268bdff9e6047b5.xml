@@ -1,0 +1,511 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="75" result="Passed" total="75" passed="75" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0,3643946">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2738" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.364395" total="75" passed="75" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="4003" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12g-current-canonical-inventory/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2738" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.347563" total="75" passed="75" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="24088" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3620" name="SimulationRuntimeAdmissionTests" fullname="SimulationRuntimeAdmissionTests" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="75" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.326825" total="75" passed="75" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3700" name="BootstrapScopesValidationThroughPublicationAndRevokesFailedPublication" fullname="SimulationRuntimeAdmissionTests.BootstrapScopesValidationThroughPublicationAndRevokesFailedPublication" methodname="BootstrapScopesValidationThroughPublicationAndRevokesFailedPublication" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="116145883" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.159701" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3636" name="CompletedDailyTokenBindsOwnerRevisionAndMutationEpochWitnesses" fullname="SimulationRuntimeAdmissionTests.CompletedDailyTokenBindsOwnerRevisionAndMutationEpochWitnesses" methodname="CompletedDailyTokenBindsOwnerRevisionAndMutationEpochWitnesses" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="858188663" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.004962" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3635" name="CompletedDailyTokenIsNotPublishedAfterOperationScopeDisposalFault" fullname="SimulationRuntimeAdmissionTests.CompletedDailyTokenIsNotPublishedAfterOperationScopeDisposalFault" methodname="CompletedDailyTokenIsNotPublishedAfterOperationScopeDisposalFault" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1232535905" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.006374" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3628" name="CompletedDailyTokenIsUnavailableDuringCallbacksAndBatchPublishesOnlyOnceAtReturn" fullname="SimulationRuntimeAdmissionTests.CompletedDailyTokenIsUnavailableDuringCallbacksAndBatchPublishesOnlyOnceAtReturn" methodname="CompletedDailyTokenIsUnavailableDuringCallbacksAndBatchPublishesOnlyOnceAtReturn" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="924869829" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.004421" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3637" name="CompletedDailyTokenIsUnavailableInsideEveryRegisteredOperationScope" fullname="SimulationRuntimeAdmissionTests.CompletedDailyTokenIsUnavailableInsideEveryRegisteredOperationScope" methodname="CompletedDailyTokenIsUnavailableInsideEveryRegisteredOperationScope" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="657967323" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.042989" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="3634" name="CompletedDailyTokenRejectsFinalCensusMismatchAfterCompletedBatchCores" fullname="SimulationRuntimeAdmissionTests.CompletedDailyTokenRejectsFinalCensusMismatchAfterCompletedBatchCores" methodname="CompletedDailyTokenRejectsFinalCensusMismatchAfterCompletedBatchCores" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="16716940" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001865" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3622" name="CompletedDailyTokenRequiresSuccessfulPositiveAdvanceAndNoOpsPreserveIt" fullname="SimulationRuntimeAdmissionTests.CompletedDailyTokenRequiresSuccessfulPositiveAdvanceAndNoOpsPreserveIt" methodname="CompletedDailyTokenRequiresSuccessfulPositiveAdvanceAndNoOpsPreserveIt" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="426298059" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001137" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3633" name="DailyCapturePartialBatchAtAbsoluteDayOverflowPublishesNoToken" fullname="SimulationRuntimeAdmissionTests.DailyCapturePartialBatchAtAbsoluteDayOverflowPublishesNoToken" methodname="DailyCapturePartialBatchAtAbsoluteDayOverflowPublishesNoToken" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="985131107" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000347" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3632" name="DailyCaptureTokenSurvivesCleanAbsoluteDayOverflowPreflight" fullname="SimulationRuntimeAdmissionTests.DailyCaptureTokenSurvivesCleanAbsoluteDayOverflowPreflight" methodname="DailyCaptureTokenSurvivesCleanAbsoluteDayOverflowPreflight" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="260703801" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000455" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3664" name="DailyKnowledgeWritersRefreshOwnerBaselinesBeforeMerchantRosterCall" fullname="SimulationRuntimeAdmissionTests.DailyKnowledgeWritersRefreshOwnerBaselinesBeforeMerchantRosterCall" methodname="DailyKnowledgeWritersRefreshOwnerBaselinesBeforeMerchantRosterCall" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1587655164" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.004318" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3638" name="DailyProfileAdmissionAcceptsExactInitialSpatialIdentityAndLegacyNetworkCardinalities" fullname="SimulationRuntimeAdmissionTests.DailyProfileAdmissionAcceptsExactInitialSpatialIdentityAndLegacyNetworkCardinalities" methodname="DailyProfileAdmissionAcceptsExactInitialSpatialIdentityAndLegacyNetworkCardinalities" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1731740919" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.002625" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3640" name="DailyProfileAdmissionRejectsExtraRequiredP8AHex" fullname="SimulationRuntimeAdmissionTests.DailyProfileAdmissionRejectsExtraRequiredP8AHex" methodname="DailyProfileAdmissionRejectsExtraRequiredP8AHex" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1760390822" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.002608" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3645" name="DailyProfileAdmissionRejectsWrongRequiredLegacySpatialNetworkRouteCardinality" fullname="SimulationRuntimeAdmissionTests.DailyProfileAdmissionRejectsWrongRequiredLegacySpatialNetworkRouteCardinality" methodname="DailyProfileAdmissionRejectsWrongRequiredLegacySpatialNetworkRouteCardinality" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1505431439" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000948" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="3643" name="DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality" fullname="SimulationRuntimeAdmissionTests.DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.003130" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="3641" name="DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality(0)" fullname="SimulationRuntimeAdmissionTests.DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality(0)" methodname="DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="278336422" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000457" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3642" name="DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality(9)" fullname="SimulationRuntimeAdmissionTests.DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality(9)" methodname="DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="613526735" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000863" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="3644" name="DailyProfileAdmissionRejectsZeroForRequiredLegacySpatialNetworkSection" fullname="SimulationRuntimeAdmissionTests.DailyProfileAdmissionRejectsZeroForRequiredLegacySpatialNetworkSection" methodname="DailyProfileAdmissionRejectsZeroForRequiredLegacySpatialNetworkSection" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1060932445" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000979" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3639" name="DailyProfileAdmissionRejectsZeroForRequiredP8AGeography" fullname="SimulationRuntimeAdmissionTests.DailyProfileAdmissionRejectsZeroForRequiredP8AGeography" methodname="DailyProfileAdmissionRejectsZeroForRequiredP8AGeography" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="920301442" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001117" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="3691" name="DailyProfileFaultsAdmissionAfterInterruptedAdvance" fullname="SimulationRuntimeAdmissionTests.DailyProfileFaultsAdmissionAfterInterruptedAdvance" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.002015" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="3689" name="DailyProfileFaultsAdmissionAfterInterruptedAdvance(False)" fullname="SimulationRuntimeAdmissionTests.DailyProfileFaultsAdmissionAfterInterruptedAdvance(False)" methodname="DailyProfileFaultsAdmissionAfterInterruptedAdvance" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="840113318" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001130" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3690" name="DailyProfileFaultsAdmissionAfterInterruptedAdvance(True)" fullname="SimulationRuntimeAdmissionTests.DailyProfileFaultsAdmissionAfterInterruptedAdvance(True)" methodname="DailyProfileFaultsAdmissionAfterInterruptedAdvance" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="41027318" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000401" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="3692" name="DailyProfileRejectsMismatchedConstructionThreadAndP18Composition" fullname="SimulationRuntimeAdmissionTests.DailyProfileRejectsMismatchedConstructionThreadAndP18Composition" methodname="DailyProfileRejectsMismatchedConstructionThreadAndP18Composition" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1109172298" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001004" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3687" name="DailyProfileRejectsWrongThreadWithoutAdvancingAndFaultsPartialProtocol" fullname="SimulationRuntimeAdmissionTests.DailyProfileRejectsWrongThreadWithoutAdvancingAndFaultsPartialProtocol" methodname="DailyProfileRejectsWrongThreadWithoutAdvancingAndFaultsPartialProtocol" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1813186" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000641" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3621" name="DailyProfileScopesAdvancesAndRoutesOwnedClockThroughRuntime" fullname="SimulationRuntimeAdmissionTests.DailyProfileScopesAdvancesAndRoutesOwnedClockThroughRuntime" methodname="DailyProfileScopesAdvancesAndRoutesOwnedClockThroughRuntime" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="397095459" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001451" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3665" name="DirectPlanOwnerCommitsOutsideMerchantOperationRefreshTheirBaselinesImmediately" fullname="SimulationRuntimeAdmissionTests.DirectPlanOwnerCommitsOutsideMerchantOperationRefreshTheirBaselinesImmediately" methodname="DirectPlanOwnerCommitsOutsideMerchantOperationRefreshTheirBaselinesImmediately" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="583923729" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000874" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="3657" name="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001956" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="3653" name="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(&quot;decision&quot;,&quot;revision&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(&quot;decision&quot;,&quot;revision&quot;)" methodname="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1721960855" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000609" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3654" name="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(&quot;economy&quot;,&quot;revision&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(&quot;economy&quot;,&quot;revision&quot;)" methodname="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1015849495" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000193" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3655" name="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(&quot;decision&quot;,&quot;cardinality&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(&quot;decision&quot;,&quot;cardinality&quot;)" methodname="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1476750364" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000349" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3656" name="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(&quot;economy&quot;,&quot;cardinality&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(&quot;economy&quot;,&quot;cardinality&quot;)" methodname="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1986263018" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000250" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="3663" name="ExactZeroReceiptRegistrationRejectsMalformedProviders" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptRegistrationRejectsMalformedProviders" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001625" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="3658" name="ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;wrong-section&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;wrong-section&quot;)" methodname="ExactZeroReceiptRegistrationRejectsMalformedProviders" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="481640103" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000893" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3659" name="ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;wrong-schema&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;wrong-schema&quot;)" methodname="ExactZeroReceiptRegistrationRejectsMalformedProviders" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1507217317" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000078" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3660" name="ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;unstable-owner&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;unstable-owner&quot;)" methodname="ExactZeroReceiptRegistrationRejectsMalformedProviders" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1066974024" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000068" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3661" name="ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;populated&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;populated&quot;)" methodname="ExactZeroReceiptRegistrationRejectsMalformedProviders" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="2051996409" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000065" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3662" name="ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;missing-witness&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;missing-witness&quot;)" methodname="ExactZeroReceiptRegistrationRejectsMalformedProviders" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1321878163" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000061" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="3699" name="FiniteSourceProfileRejectsAdditionalCityBeforeConstruction" fullname="SimulationRuntimeAdmissionTests.FiniteSourceProfileRejectsAdditionalCityBeforeConstruction" methodname="FiniteSourceProfileRejectsAdditionalCityBeforeConstruction" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="181767008" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.002956" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3696" name="FiniteSourceProfileRunsOutsideP12Daily" fullname="SimulationRuntimeAdmissionTests.FiniteSourceProfileRunsOutsideP12Daily" methodname="FiniteSourceProfileRunsOutsideP12Daily" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="2028139450" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.004996" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3697" name="FiniteSourceProfileWithP10AIsDeferredBeforeIdentityOrOwnerConstruction" fullname="SimulationRuntimeAdmissionTests.FiniteSourceProfileWithP10AIsDeferredBeforeIdentityOrOwnerConstruction" methodname="FiniteSourceProfileWithP10AIsDeferredBeforeIdentityOrOwnerConstruction" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="60832707" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000879" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3698" name="FiniteSourceProfileWithP10BIsDeferredBeforeIdentityOrOwnerConstruction" fullname="SimulationRuntimeAdmissionTests.FiniteSourceProfileWithP10BIsDeferredBeforeIdentityOrOwnerConstruction" methodname="FiniteSourceProfileWithP10BIsDeferredBeforeIdentityOrOwnerConstruction" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1367110826" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000304" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3646" name="FixedOwnerAdmissionRejectsPopulatedExplicitlyEmptyP8BAndP8CSections" fullname="SimulationRuntimeAdmissionTests.FixedOwnerAdmissionRejectsPopulatedExplicitlyEmptyP8BAndP8CSections" methodname="FixedOwnerAdmissionRejectsPopulatedExplicitlyEmptyP8BAndP8CSections" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1294560147" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.005620" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="3649" name="FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing" fullname="SimulationRuntimeAdmissionTests.FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001215" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="3647" name="FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing(False,True)" fullname="SimulationRuntimeAdmissionTests.FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing(False,True)" methodname="FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1175122527" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000466" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3648" name="FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing(True,False)" fullname="SimulationRuntimeAdmissionTests.FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing(True,False)" methodname="FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="62759819" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000137" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="3652" name="FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated" fullname="SimulationRuntimeAdmissionTests.FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000838" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="3650" name="FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated(&quot;decision&quot;)" fullname="SimulationRuntimeAdmissionTests.FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated(&quot;decision&quot;)" methodname="FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1334704838" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000395" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3651" name="FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated(&quot;economy&quot;)" fullname="SimulationRuntimeAdmissionTests.FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated(&quot;economy&quot;)" methodname="FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1640599635" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000151" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="3666" name="MerchantOperationBatchesChangedOwnerSectionsOnceAndHoldsScopeThroughCommit" fullname="SimulationRuntimeAdmissionTests.MerchantOperationBatchesChangedOwnerSectionsOnceAndHoldsScopeThroughCommit" methodname="MerchantOperationBatchesChangedOwnerSectionsOnceAndHoldsScopeThroughCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1006802516" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001715" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3680" name="P12DailyChangedPriceRefresh_ReportsMarketCommitInsideAdvance" fullname="SimulationRuntimeAdmissionTests.P12DailyChangedPriceRefresh_ReportsMarketCommitInsideAdvance" methodname="P12DailyChangedPriceRefresh_ReportsMarketCommitInsideAdvance" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1684796091" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001552" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[p12-daily-price-refresh-city display atualizou os precos do mercado.
+]]></output>
+        </test-case>
+        <test-case id="3679" name="P12DailyFreeConsumption_ReportsMarketCommitInsideAdvance" fullname="SimulationRuntimeAdmissionTests.P12DailyFreeConsumption_ReportsMarketCommitInsideAdvance" methodname="P12DailyFreeConsumption_ReportsMarketCommitInsideAdvance" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1203078150" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001116" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[p12-daily-free-consumption-city display consumiu 1 p12-daily-free-consumption display
+p12-daily-free-consumption-city display atualizou os precos do mercado.
+]]></output>
+        </test-case>
+        <test-case id="3678" name="P12DailyMarketProduction_ReportsMarketCommitInsideAdvance" fullname="SimulationRuntimeAdmissionTests.P12DailyMarketProduction_ReportsMarketCommitInsideAdvance" methodname="P12DailyMarketProduction_ReportsMarketCommitInsideAdvance" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="316925078" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001170" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[p12-daily-market-production-city-data display produziu 2 p12-daily-market-production display
+p12-daily-market-production-city-data display atualizou os precos do mercado.
+]]></output>
+        </test-case>
+        <test-case id="3677" name="P12MarketDirectMutation_UpdatesLiveMarketWitnessAndSkipsNoOps" fullname="SimulationRuntimeAdmissionTests.P12MarketDirectMutation_UpdatesLiveMarketWitnessAndSkipsNoOps" methodname="P12MarketDirectMutation_UpdatesLiveMarketWitnessAndSkipsNoOps" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="393816549" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000831" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3674" name="P12MarketPurchase_ExhaustedMarketRevisionRejectsBeforeAnyOwnerCommit" fullname="SimulationRuntimeAdmissionTests.P12MarketPurchase_ExhaustedMarketRevisionRejectsBeforeAnyOwnerCommit" methodname="P12MarketPurchase_ExhaustedMarketRevisionRejectsBeforeAnyOwnerCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="25915324" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001122" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3675" name="P12MarketPurchase_StaleMarketRevisionRejectsBeforeAnyOwnerCommit" fullname="SimulationRuntimeAdmissionTests.P12MarketPurchase_StaleMarketRevisionRejectsBeforeAnyOwnerCommit" methodname="P12MarketPurchase_StaleMarketRevisionRejectsBeforeAnyOwnerCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="38592861" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000648" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3676" name="P12MarketPurchase_WrongThreadRejectsBeforeAnyOwnerCommit" fullname="SimulationRuntimeAdmissionTests.P12MarketPurchase_WrongThreadRejectsBeforeAnyOwnerCommit" methodname="P12MarketPurchase_WrongThreadRejectsBeforeAnyOwnerCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="770802606" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001249" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3673" name="P12MarketSale_ExhaustedMarketRevisionRejectsBeforeAnyOwnerCommit" fullname="SimulationRuntimeAdmissionTests.P12MarketSale_ExhaustedMarketRevisionRejectsBeforeAnyOwnerCommit" methodname="P12MarketSale_ExhaustedMarketRevisionRejectsBeforeAnyOwnerCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1586121350" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001619" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3672" name="P12MarketSale_ReportsAccountCommitAndSuccessfulCompensationWhenInventoryCannotCommit" fullname="SimulationRuntimeAdmissionTests.P12MarketSale_ReportsAccountCommitAndSuccessfulCompensationWhenInventoryCannotCommit" methodname="P12MarketSale_ReportsAccountCommitAndSuccessfulCompensationWhenInventoryCannotCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="342602893" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000986" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3671" name="P12MarketWrappers_UseSharedServiceAndNotifyEveryCommittedOwner" fullname="SimulationRuntimeAdmissionTests.P12MarketWrappers_UseSharedServiceAndNotifyEveryCommittedOwner" methodname="P12MarketWrappers_UseSharedServiceAndNotifyEveryCommittedOwner" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1862774307" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000944" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3669" name="P12MoneyTransfer_CompensationCommitsSourceRevisionWithinOneOperation" fullname="SimulationRuntimeAdmissionTests.P12MoneyTransfer_CompensationCommitsSourceRevisionWithinOneOperation" methodname="P12MoneyTransfer_CompensationCommitsSourceRevisionWithinOneOperation" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1098754572" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001954" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3670" name="P12MoneyTransfer_RejectsStaleOrReplacedOwnersAndWrongThreadBeforeWrites" fullname="SimulationRuntimeAdmissionTests.P12MoneyTransfer_RejectsStaleOrReplacedOwnersAndWrongThreadBeforeWrites" methodname="P12MoneyTransfer_RejectsStaleOrReplacedOwnersAndWrongThreadBeforeWrites" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1157272786" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.002355" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3668" name="P12MoneyTransfer_ScopesExactAccountCommitsAndKeepsZeroValueAsNoOp" fullname="SimulationRuntimeAdmissionTests.P12MoneyTransfer_ScopesExactAccountCommitsAndKeepsZeroValueAsNoOp" methodname="P12MoneyTransfer_ScopesExactAccountCommitsAndKeepsZeroValueAsNoOp" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="735230913" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001764" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3667" name="P12NpcTrade_NotifiesEachCommittedAccountAndInventoryOwner" fullname="SimulationRuntimeAdmissionTests.P12NpcTrade_NotifiesEachCommittedAccountAndInventoryOwner" methodname="P12NpcTrade_NotifiesEachCommittedAccountAndInventoryOwner" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1754739462" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.002052" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3683" name="P12NpcTrade_PreexistingUnnotifiedOwnerDriftRejectsBeforeAnyTradeCommit" fullname="SimulationRuntimeAdmissionTests.P12NpcTrade_PreexistingUnnotifiedOwnerDriftRejectsBeforeAnyTradeCommit" methodname="P12NpcTrade_PreexistingUnnotifiedOwnerDriftRejectsBeforeAnyTradeCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="593632582" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001502" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3682" name="P12NpcTrade_ReportsBothSuccessfulAccountCompensationsWhenSellerInventoryCannotCommit" fullname="SimulationRuntimeAdmissionTests.P12NpcTrade_ReportsBothSuccessfulAccountCompensationsWhenSellerInventoryCannotCommit" methodname="P12NpcTrade_ReportsBothSuccessfulAccountCompensationsWhenSellerInventoryCannotCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1841458099" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001388" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3681" name="P12NpcTrade_ReportsBuyerDebitAndSuccessfulCompensationWhenSellerCreditCannotCommit" fullname="SimulationRuntimeAdmissionTests.P12NpcTrade_ReportsBuyerDebitAndSuccessfulCompensationWhenSellerCreditCannotCommit" methodname="P12NpcTrade_ReportsBuyerDebitAndSuccessfulCompensationWhenSellerCreditCannotCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1554995874" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000954" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3686" name="P12NpcTrade_SaturationAfterFirstCommitPreservesCommittedLeafAndFaultsProtocol" fullname="SimulationRuntimeAdmissionTests.P12NpcTrade_SaturationAfterFirstCommitPreservesCommittedLeafAndFaultsProtocol" methodname="P12NpcTrade_SaturationAfterFirstCommitPreservesCommittedLeafAndFaultsProtocol" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1842130964" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000847" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3684" name="P12NpcTrade_UnregisteredParticipantIsRejectedBeforeAnyOwnerCommit" fullname="SimulationRuntimeAdmissionTests.P12NpcTrade_UnregisteredParticipantIsRejectedBeforeAnyOwnerCommit" methodname="P12NpcTrade_UnregisteredParticipantIsRejectedBeforeAnyOwnerCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="745061302" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000709" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3685" name="P12NpcTrade_WrongThreadAdmissionRejectsBeforeAnyOwnerCommit" fullname="SimulationRuntimeAdmissionTests.P12NpcTrade_WrongThreadAdmissionRejectsBeforeAnyOwnerCommit" methodname="P12NpcTrade_WrongThreadAdmissionRejectsBeforeAnyOwnerCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="12884567" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001548" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3695" name="P14AExogenousMaterialFlowRunsInItsSingleCityProvingProfile" fullname="SimulationRuntimeAdmissionTests.P14AExogenousMaterialFlowRunsInItsSingleCityProvingProfile" methodname="P14AExogenousMaterialFlowRunsInItsSingleCityProvingProfile" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="705287237" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001331" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3629" name="PartialBatchExceptionKeepsOnlyNormallyCompletedCoreSequenceAndIssuesNoToken" fullname="SimulationRuntimeAdmissionTests.PartialBatchExceptionKeepsOnlyNormallyCompletedCoreSequenceAndIssuesNoToken" methodname="PartialBatchExceptionKeepsOnlyNormallyCompletedCoreSequenceAndIssuesNoToken" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1501398249" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000812" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3623" name="RestoredDailyBoundaryAdmissionIssuesFreshTokenAndResumesSequence" fullname="SimulationRuntimeAdmissionTests.RestoredDailyBoundaryAdmissionIssuesFreshTokenAndResumesSequence" methodname="RestoredDailyBoundaryAdmissionIssuesFreshTokenAndResumesSequence" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1593822381" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001134" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3626" name="RestoredDailyBoundaryAdmissionRejectsActiveOperationAndWrongThreadWithoutMutation" fullname="SimulationRuntimeAdmissionTests.RestoredDailyBoundaryAdmissionRejectsActiveOperationAndWrongThreadWithoutMutation" methodname="RestoredDailyBoundaryAdmissionRejectsActiveOperationAndWrongThreadWithoutMutation" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="591076529" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000932" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3625" name="RestoredDailyBoundaryAdmissionRejectsAlreadyPublishedOrAdvancedCandidateWithoutReplacement" fullname="SimulationRuntimeAdmissionTests.RestoredDailyBoundaryAdmissionRejectsAlreadyPublishedOrAdvancedCandidateWithoutReplacement" methodname="RestoredDailyBoundaryAdmissionRejectsAlreadyPublishedOrAdvancedCandidateWithoutReplacement" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="405274744" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000605" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3627" name="RestoredDailyBoundaryAdmissionRejectsNonDailyProfile" fullname="SimulationRuntimeAdmissionTests.RestoredDailyBoundaryAdmissionRejectsNonDailyProfile" methodname="RestoredDailyBoundaryAdmissionRejectsNonDailyProfile" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1225158108" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000335" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3624" name="RestoredDailyBoundaryAdmissionRejectsWrongIdentityDayAndSequenceWithoutPartialPublication" fullname="SimulationRuntimeAdmissionTests.RestoredDailyBoundaryAdmissionRejectsWrongIdentityDayAndSequenceWithoutPartialPublication" methodname="RestoredDailyBoundaryAdmissionRejectsWrongIdentityDayAndSequenceWithoutPartialPublication" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="876771263" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000918" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3688" name="RuntimeOwnedClockApisRejectWrongThreadWithoutAdvancing" fullname="SimulationRuntimeAdmissionTests.RuntimeOwnedClockApisRejectWrongThreadWithoutAdvancing" methodname="RuntimeOwnedClockApisRejectWrongThreadWithoutAdvancing" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1891586681" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001053" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3701" name="StartCapturesAndPassesTheSelectedProfileOwnerThread" fullname="SimulationRuntimeAdmissionTests.StartCapturesAndPassesTheSelectedProfileOwnerThread" methodname="StartCapturesAndPassesTheSelectedProfileOwnerThread" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1474814849" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.003527" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3630" name="SupportedSameDayRosterMutationInvalidatesTokenAndTokensCannotCrossRuntimes" fullname="SimulationRuntimeAdmissionTests.SupportedSameDayRosterMutationInvalidatesTokenAndTokensCannotCrossRuntimes" methodname="SupportedSameDayRosterMutationInvalidatesTokenAndTokensCannotCrossRuntimes" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1071458009" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.004675" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3694" name="UnityBootstrapDailyRejectsExogenousMaterialFlowBeforeIdentityOrOwnerConstruction" fullname="SimulationRuntimeAdmissionTests.UnityBootstrapDailyRejectsExogenousMaterialFlowBeforeIdentityOrOwnerConstruction" methodname="UnityBootstrapDailyRejectsExogenousMaterialFlowBeforeIdentityOrOwnerConstruction" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="565209045" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000935" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3693" name="UnityBootstrapDailyRejectsFiniteSourceBeforeIdentityOrOwnerConstruction" fullname="SimulationRuntimeAdmissionTests.UnityBootstrapDailyRejectsFiniteSourceBeforeIdentityOrOwnerConstruction" methodname="UnityBootstrapDailyRejectsFiniteSourceBeforeIdentityOrOwnerConstruction" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="668132578" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.000692" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3631" name="WrongThreadTokenValidationFaultsAdmissionAndSequenceOverflowRejectsBeforeClockWrite" fullname="SimulationRuntimeAdmissionTests.WrongThreadTokenValidationFaultsAdmissionAndSequenceOverflowRejectsBeforeClockWrite" methodname="WrongThreadTokenValidationFaultsAdmissionAndSequenceOverflowRejectsBeforeClockWrite" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1171565833" result="Passed" start-time="2026-10-09 23:20:30Z" end-time="2026-10-09 23:20:30Z" duration="0.001249" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
