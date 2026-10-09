@@ -25,6 +25,7 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
     internal PersonStore PersonStore => personStore;
     internal object CensusOwnerIdentity => censusOwnerIdentity;
     internal long CensusRevision => censusRevision;
+    internal long NextInputSequence => nextInputSequence;
 
     internal int P11InputCount
     {
@@ -621,6 +622,87 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         }
 
         return copy;
+    }
+
+    /// <summary>Creates an unpublished Daily-v1 candidate from detached terminal P11 values.</summary>
+    internal static bool TryCreateP12FStaged(
+        PersonStore targetPersonStore,
+        IReadOnlyList<ActorChoiceInput> sourceInputs,
+        long restoredNextInputSequence,
+        long restoredCensusRevision,
+        out ActorChoiceStore stagedStore,
+        out string diagnostic)
+    {
+        stagedStore = null;
+        diagnostic = null;
+        if (targetPersonStore == null || sourceInputs == null
+            || restoredNextInputSequence <= 0L || restoredCensusRevision < 0L)
+        {
+            diagnostic = "P12-F ActorChoice staging inputs are incomplete.";
+            return false;
+        }
+
+        ActorChoiceStore candidate = new ActorChoiceStore(targetPersonStore)
+        {
+            nextInputSequence = restoredNextInputSequence,
+            censusRevision = restoredCensusRevision
+        };
+        long priorSequence = 0L;
+        foreach (ActorChoiceInput source in sourceInputs)
+        {
+            if (source == null || source.InputId == null || source.PersonId == null
+                || source.TemporalCapture != null || source.TemporalDispositions.Count != 0
+                || source.Status == ActorChoiceInputStatus.Pending
+                || source.Status == ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt
+                || !Enum.IsDefined(typeof(ActorChoiceInputStatus), source.Status)
+                || source.InputSequence <= priorSequence
+                || source.Dispositions == null)
+            {
+                diagnostic = "P12-F ActorChoice staging rejects malformed, nonterminal, or temporal input history.";
+                return false;
+            }
+            if (!targetPersonStore.TryGet(source.PersonId, out _))
+            {
+                diagnostic = "P12-F ActorChoice PersonId does not bind to the exact staged PersonStore.";
+                return false;
+            }
+            foreach (ActorChoiceDisposition disposition in source.Dispositions)
+            {
+                if (disposition == null || disposition.Kind == ActorChoiceDispositionKind.Deferred)
+                {
+                    diagnostic = "P12-F ActorChoice staging rejects deferred or malformed lifecycle history.";
+                    return false;
+                }
+            }
+
+            ActorChoiceInput detached = source.Copy();
+            if (candidate.indexByInputId.ContainsKey(detached.InputId.Value)
+                || candidate.worldCommandIds.Contains(detached.WorldCommandId))
+            {
+                diagnostic = "P12-F ActorChoice input or command identity is duplicated.";
+                return false;
+            }
+            candidate.indexByInputId.Add(detached.InputId.Value, candidate.inputs.Count);
+            candidate.worldCommandIds.Add(detached.WorldCommandId);
+            candidate.inputs.Add(detached);
+            priorSequence = detached.InputSequence;
+        }
+
+        if (restoredNextInputSequence <= priorSequence)
+        {
+            diagnostic = "P12-F ActorChoice next sequence does not follow the retained terminal history.";
+            return false;
+        }
+        ActorChoiceInvariantReport report = candidate.ValidateInvariants();
+        if (!report.IsValid)
+        {
+            diagnostic = "P12-F ActorChoice staged history violates store invariants: "
+                + string.Join(" ", report.Issues);
+            return false;
+        }
+
+        stagedStore = candidate;
+        return true;
     }
 
     private bool CanBeginTransition(

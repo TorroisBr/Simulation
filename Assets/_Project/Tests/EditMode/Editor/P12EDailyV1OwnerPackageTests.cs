@@ -31,6 +31,7 @@ public sealed class P12EDailyV1OwnerPackageTests
             out P12EDailyV1OwnerPackageFailure failure), Is.True, failure.ToString());
 
         Assert.That(package, Is.Not.Null);
+        Assert.That(package.StagingAttempt, Is.SameAs(context.StagingAttempt));
         Assert.That(package.WorldId.Value, Is.EqualTo(token.WorldId.Value));
         Assert.That(package.Institutions, Is.Not.Null);
         Assert.That(package.Offices, Is.Not.Null);

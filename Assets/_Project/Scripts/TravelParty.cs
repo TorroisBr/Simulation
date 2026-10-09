@@ -144,6 +144,22 @@ public sealed class TravelPartyRuntime
         completed = true;
     }
 
+    internal static TravelPartyRuntime CreateActiveFromOwnerSnapshot(
+        string travelPartyId,
+        string originLocationRuntimeId,
+        string destinationLocationRuntimeId,
+        string routeRuntimeId,
+        IEnumerable<string> travelerRuntimeIds,
+        IEnumerable<string> escortRuntimeIds,
+        int travelDaysTotal,
+        string originDecisionId,
+        IEnumerable<TravelPartyMemberCost> memberCosts)
+    {
+        return new TravelPartyRuntime(
+            travelPartyId, originLocationRuntimeId, destinationLocationRuntimeId, routeRuntimeId,
+            travelerRuntimeIds, escortRuntimeIds, travelDaysTotal, originDecisionId, memberCosts);
+    }
+
     private static IReadOnlyList<string> CaptureIds(IEnumerable<string> source, string parameterName)
     {
         List<string> snapshot = new List<string>();
@@ -359,6 +375,69 @@ public sealed class TravelPartyStore : IAuthoritativeMutationGuardBindable
     {
         System.Threading.Monitor.Enter(mutationSync);
         return new MutationWindow(mutationSync);
+    }
+
+    internal IDisposable EnterReadWindow()
+    {
+        System.Threading.Monitor.Enter(mutationSync);
+        return new MutationWindow(mutationSync);
+    }
+
+    internal bool ValidateCensus(out int count, out long currentRevision)
+    {
+        count = 0;
+        currentRevision = revision;
+        if (revision < 0 || activeParties.Count != partiesById.Count) return false;
+        HashSet<string> ids = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> members = new HashSet<string>(StringComparer.Ordinal);
+        foreach (TravelPartyRuntime party in activeParties)
+        {
+            if (party == null || !party.IsActive || string.IsNullOrWhiteSpace(party.TravelPartyId)
+                || !ids.Add(party.TravelPartyId)
+                || !partiesById.TryGetValue(party.TravelPartyId, out TravelPartyRuntime indexed)
+                || !ReferenceEquals(indexed, party)) return false;
+            foreach (string memberId in party.MemberRuntimeIds)
+                if (string.IsNullOrWhiteSpace(memberId) || !members.Add(memberId)) return false;
+        }
+        foreach (KeyValuePair<string, TravelPartyRuntime> pair in partiesById)
+            if (pair.Value == null || !ids.Contains(pair.Key)
+                || !string.Equals(pair.Key, pair.Value.TravelPartyId, StringComparison.Ordinal)) return false;
+        count = activeParties.Count;
+        return true;
+    }
+
+    internal static bool TryCreateFromOwnerSnapshot(
+        P12FTravelPartyOwnerSnapshot snapshot,
+        out TravelPartyStore stagedStore)
+    {
+        stagedStore = null;
+        if (snapshot == null || snapshot.SchemaVersion != P12FTravelPartyOwnerSnapshot.CurrentSchemaVersion
+            || snapshot.Revision < 0 || snapshot.Parties == null || snapshot.Revision < snapshot.Parties.Count)
+            return false;
+
+        TravelPartyStore staged = new TravelPartyStore();
+        HashSet<string> memberIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (P12FTravelPartyOwnerSnapshotRecord record in snapshot.Parties)
+        {
+            if (record == null) return false;
+            TravelPartyRuntime party;
+            try
+            {
+                party = TravelPartyRuntime.CreateActiveFromOwnerSnapshot(
+                    record.TravelPartyId, record.OriginLocationRuntimeId,
+                    record.DestinationLocationRuntimeId, record.RouteRuntimeId,
+                    record.TravelerRuntimeIds, record.EscortRuntimeIds,
+                    record.TravelDaysTotal, record.OriginDecisionId, record.MemberCosts);
+            }
+            catch (ArgumentException) { return false; }
+            if (staged.Add(party) == false) return false;
+            foreach (string memberId in party.MemberRuntimeIds)
+                if (!memberIds.Add(memberId)) return false;
+        }
+
+        staged.revision = snapshot.Revision;
+        stagedStore = staged;
+        return true;
     }
 
     internal bool CanCommitMutations(int count)

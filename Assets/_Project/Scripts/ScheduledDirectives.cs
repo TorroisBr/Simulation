@@ -115,6 +115,24 @@ public sealed class ScheduledDirective : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    internal bool RestoreP12FState(ScheduledDirectiveState restoredState, long restoredDay, string restoredReason)
+    {
+        if (!Enum.IsDefined(typeof(ScheduledDirectiveState), restoredState)) return false;
+        if (restoredState == ScheduledDirectiveState.Pending)
+        {
+            if (restoredDay != -1L || restoredReason != null) return false;
+        }
+        else if (restoredDay < 0L || restoredReason == null)
+        {
+            return false;
+        }
+
+        state = restoredState;
+        processedDay = restoredDay;
+        resultReason = restoredReason;
+        return true;
+    }
+
     internal bool CanBindOwner(ScheduledDirectiveStore owner) => owner != null && (ownerStore == null || ReferenceEquals(ownerStore, owner));
 
     internal bool TryBindOwner(ScheduledDirectiveStore owner)
@@ -302,6 +320,89 @@ public sealed class ScheduledDirectiveStore : IAuthoritativeMutationGuardBindabl
                 directives.Count,
                 revision);
         }
+    }
+
+    internal bool TryCaptureP12FState(out IReadOnlyList<ScheduledDirective> rows, out long capturedRevision)
+    {
+        lock (ownerMonitor)
+        {
+            List<ScheduledDirective> copies = new List<ScheduledDirective>(directives.Count);
+            foreach (ScheduledDirective source in directives)
+            {
+                if (source == null)
+                {
+                    rows = null;
+                    capturedRevision = revision;
+                    return false;
+                }
+
+                ScheduledDirective copy;
+                try
+                {
+                    copy = new ScheduledDirective(source.DirectiveId, source.AbsoluteDay, source.Mode,
+                        source.Operation, source.ActorRuntimeId, source.Action);
+                }
+                catch (ArgumentException)
+                {
+                    rows = null;
+                    capturedRevision = revision;
+                    return false;
+                }
+
+                if (!copy.RestoreP12FState(source.State, source.ProcessedDay, source.ResultReason))
+                {
+                    rows = null;
+                    capturedRevision = revision;
+                    return false;
+                }
+                copies.Add(copy);
+            }
+
+            rows = copies.AsReadOnly();
+            capturedRevision = revision;
+            return rows.Count == directives.Count && capturedRevision >= 0L;
+        }
+    }
+
+    internal static bool TryCreateP12FStaged(
+        SimulationTime stagedTime,
+        IReadOnlyList<ScheduledDirective> detachedRows,
+        long exactRevision,
+        out ScheduledDirectiveStore staged)
+    {
+        staged = null;
+        if (stagedTime == null || detachedRows == null || exactRevision < detachedRows.Count || exactRevision < 0L)
+            return false;
+
+        ScheduledDirectiveStore candidate = new ScheduledDirectiveStore(stagedTime);
+        foreach (ScheduledDirective source in detachedRows)
+        {
+            if (source == null || candidate.directivesById.ContainsKey(source.DirectiveId)) return false;
+            ScheduledDirective copy;
+            try
+            {
+                copy = new ScheduledDirective(
+                    source.DirectiveId,
+                    source.AbsoluteDay,
+                    source.Mode,
+                    source.Operation,
+                    source.ActorRuntimeId,
+                    source.Action);
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+
+            if (!copy.RestoreP12FState(source.State, source.ProcessedDay, source.ResultReason)
+                || !copy.TryBindOwner(candidate)) return false;
+            candidate.directivesById.Add(copy.DirectiveId, copy);
+            candidate.directives.Add(copy);
+        }
+
+        candidate.revision = exactRevision;
+        staged = candidate;
+        return true;
     }
 
     public List<ScheduledDirective> GetPendingForDay(long absoluteDay)

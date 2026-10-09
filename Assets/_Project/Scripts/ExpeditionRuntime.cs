@@ -109,6 +109,27 @@ public sealed class ExpeditionObjectiveRuntime
         return new ExpeditionObjectiveRuntime(ExpeditionObjectiveType.Eliminate, targetOppositionRuntimeId: oppositionRuntimeId);
     }
 
+    internal static ExpeditionObjectiveRuntime CreateFromOwnerSnapshot(
+        ExpeditionObjectiveType type,
+        string targetItemDefinitionId,
+        string targetNotableItemRuntimeId,
+        string targetOppositionRuntimeId,
+        int requiredProgress,
+        int progress,
+        bool completed,
+        bool allowContinueAfterCompletion)
+    {
+        if (progress < 0 || progress > requiredProgress || (completed && progress != requiredProgress)
+            || (!completed && progress == requiredProgress))
+            throw new ArgumentException("Expedition objective progress and completion must represent an existing valid state.");
+        ExpeditionObjectiveRuntime value = new ExpeditionObjectiveRuntime(
+            type, targetItemDefinitionId, targetOppositionRuntimeId, requiredProgress,
+            allowContinueAfterCompletion, targetNotableItemRuntimeId);
+        value.progress = progress;
+        value.completed = completed;
+        return value;
+    }
+
     internal void AddProgress(int progressDelta)
     {
         if (progressDelta <= 0 || completed == true)
@@ -195,6 +216,25 @@ public sealed class ExpeditionRuntime
     internal OwnerSnapshot CaptureOwnerSnapshot() => new OwnerSnapshot(this);
     internal void TryCompleteCore() { state = ExpeditionState.Completed; }
     private bool Mutate(Func<bool> mutation) => attachedStore == null ? mutation() : attachedStore.TryMutate(this, mutation);
+
+    internal static ExpeditionRuntime CreateFromOwnerSnapshot(P12FExpeditionOwnerSnapshotRecord record)
+    {
+        if (record == null || record.VisitedLocalPlaceRuntimeIds == null
+            || record.ObservedLocalConnectionRuntimeIds == null) return null;
+        ExpeditionObjectiveRuntime objective = ExpeditionObjectiveRuntime.CreateFromOwnerSnapshot(
+            record.ObjectiveType, record.TargetItemDefinitionId, record.TargetNotableItemRuntimeId,
+            record.TargetOppositionRuntimeId, record.RequiredProgress, record.Progress,
+            record.ObjectiveCompleted, record.AllowContinueAfterCompletion);
+        ExpeditionRuntime value = new ExpeditionRuntime(
+            record.ExpeditionId, record.TargetSiteRuntimeId, record.OriginLocationRuntimeId,
+            record.TargetLocationRuntimeId, record.OutboundRouteRuntimeId, record.TravelPartyId,
+            record.OriginDecisionId, record.MemberRuntimeIds, record.PerformerRuntimeIds,
+            record.SupportRuntimeIds, record.State, objective);
+        value.currentLocalPlaceRuntimeId = record.CurrentLocalPlaceRuntimeId;
+        value.visitedLocalPlaceRuntimeIds.AddRange(record.VisitedLocalPlaceRuntimeIds);
+        value.observedLocalConnectionRuntimeIds.AddRange(record.ObservedLocalConnectionRuntimeIds);
+        return value;
+    }
 
     public string ExpeditionId => expeditionId;
     public string TargetSiteRuntimeId => targetSiteRuntimeId;

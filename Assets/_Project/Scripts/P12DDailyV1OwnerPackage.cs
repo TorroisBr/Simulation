@@ -29,6 +29,7 @@ internal sealed class P12DDailyV1OwnerPackage
     internal SpatialNetworkRuntime SpatialNetwork { get; }
     internal IReadOnlyList<CityRuntime> Cities { get; }
     internal IReadOnlyList<NpcRuntime> Npcs { get; }
+    internal IReadOnlyList<P12DNpcFRow> NpcFRows { get; }
     internal PersonStore Persons { get; }
     internal GenealogyStore Genealogy { get; }
     internal ExplorableSiteStore EmptyExplorableSites { get; }
@@ -40,6 +41,7 @@ internal sealed class P12DDailyV1OwnerPackage
         SpatialNetworkRuntime spatialNetwork,
         IReadOnlyList<CityRuntime> cities,
         IReadOnlyList<NpcRuntime> npcs,
+        IReadOnlyList<P12DNpcFRow> npcFRows,
         PersonStore persons,
         GenealogyStore genealogy,
         ExplorableSiteStore emptyExplorableSites)
@@ -50,6 +52,7 @@ internal sealed class P12DDailyV1OwnerPackage
         SpatialNetwork = spatialNetwork;
         Cities = new ReadOnlyCollection<CityRuntime>(new List<CityRuntime>(cities));
         Npcs = new ReadOnlyCollection<NpcRuntime>(new List<NpcRuntime>(npcs));
+        NpcFRows = new ReadOnlyCollection<P12DNpcFRow>(new List<P12DNpcFRow>(npcFRows));
         Persons = persons;
         Genealogy = genealogy;
         EmptyExplorableSites = emptyExplorableSites;
@@ -282,7 +285,8 @@ internal sealed class P12DDailyV1OwnerPackage
         package = new P12DDailyV1OwnerPackage(
             stagingAttempt,
             stagedWorldId, stagedRuntimeIdentities, stagedSpatialNetwork,
-            stagedCities, stagedNpcRoster, stagedPersons, stagedGenealogy, stagedSites);
+            stagedCities, stagedNpcRoster, fProjection.Rows,
+            stagedPersons, stagedGenealogy, stagedSites);
         failure = P12DDailyV1OwnerPackageFailure.None;
         return true;
     }

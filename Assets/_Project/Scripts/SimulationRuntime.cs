@@ -778,6 +778,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     public int PoliticalKnowledgeHolderCount => politicalKnowledgeStore.Count;
     public long PoliticalKnowledgeRevision => politicalKnowledgeStore.Revision;
     public IReadOnlyList<PoliticalKnowledgeRuntime> PoliticalKnowledgeRuntimes => politicalKnowledgeStore.Runtimes;
+    internal PoliticalKnowledgeStore PoliticalKnowledgeStoreForWorldBoundary => politicalKnowledgeStore;
     public long PoliticalWorldRevision
     {
         get
@@ -2094,6 +2095,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             || (runtimeAdmissionContext != null
                 && !TryRegisterTravelPartyCensusProvider(protocol))
             || (runtimeAdmissionContext != null
+                && !TryRegisterExpeditionCensusProvider(protocol))
+            || (runtimeAdmissionContext != null
                 && !TryRegisterCityNpcPresenceCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterCityMarketCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterInstitutionOfficeCensusProviders(protocol))
@@ -2975,6 +2978,43 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             }
 
             travelPartyCensusProvider = provider;
+            return true;
+        }
+        catch
+        {
+            protocol.FaultClosed();
+            return false;
+        }
+    }
+
+    private bool TryRegisterExpeditionCensusProvider(ContinuationCensusProtocol protocol)
+    {
+        if (protocol == null) return false;
+        if (expeditionSystem == null) return true;
+        try
+        {
+            ExpeditionStore store = expeditionSystem.Store;
+            ExpeditionCensusProvider provider = new ExpeditionCensusProvider(store);
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            if (witness == null
+                || !string.Equals(witness.SectionId, ExpeditionCensusProvider.SectionId, StringComparison.Ordinal)
+                || witness.SchemaVersion != ExpeditionCensusProvider.SchemaVersion
+                || !ReferenceEquals(witness.OwnerInstanceIdentity, store)
+                || !protocol.RegisterExpectedSection(
+                    new OwnerSectionContract(
+                        ExpeditionCensusProvider.SectionId,
+                        ExpeditionCensusProvider.SchemaVersion,
+                        OwnerSectionRole.Required),
+                    out _)
+                || !protocol.RegisterCensusProvider(
+                    ExpeditionCensusProvider.SectionId,
+                    provider,
+                    out _))
+            {
+                protocol.FaultClosed();
+                return false;
+            }
+
             return true;
         }
         catch

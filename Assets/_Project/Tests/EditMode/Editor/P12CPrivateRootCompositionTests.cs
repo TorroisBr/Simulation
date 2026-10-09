@@ -19,6 +19,7 @@ public sealed class P12CPrivateRootCompositionTests
     private DeterministicRandomRootSnapshot randomRootSnapshot;
     private object worldIdentitySnapshot;
     private SimulationRuntime sourceRuntime;
+    private SimulationBootstrapComposition sourceBootstrap;
     private DailyCaptureEligibilityToken captureToken;
     private static DailyCaptureStagingAttempt stagingAttempt;
     private WorldId sourceWorldIdentity;
@@ -45,6 +46,7 @@ public sealed class P12CPrivateRootCompositionTests
         simulation.Start();
 
         Assert.That(simulation.Bootstrap, Is.Not.Null);
+        sourceBootstrap = simulation.Bootstrap;
         sourceRuntime = simulation.Runtime;
         Assert.That(sourceRuntime, Is.Not.Null);
         Assert.That(sourceRuntime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
@@ -137,6 +139,31 @@ public sealed class P12CPrivateRootCompositionTests
         Assert.That(((DeterministicRandomSource)Read(staged, "DeterministicRandom")).NextUnit("p12c-root-proof", 9L),
             Is.EqualTo(new DeterministicRandomSource(manifestSnapshot.Seed).NextUnit("p12c-root-proof", 9L)));
         Assert.That(((SpatialAuthorityStore)Read(staged, "SpatialAuthority")).Revision, Is.EqualTo(1L));
+    }
+
+    [Test]
+    public void P12FOwnerPackageCapturesAndStagesAllCurrentOwnersOnTheSamePrivateAttempt()
+    {
+        Assert.That(sourceBootstrap, Is.Not.Null);
+        Assert.That(P12FDailyV1OwnerCapture.TryCapture(
+            sourceRuntime, sourceBootstrap, captureToken, captureToken.OwnerSections,
+            out P12FDailyV1OwnerCapture capturedF,
+            out P12FDailyV1OwnerPackageFailure captureFailure), Is.True, captureFailure.ToString());
+        Assert.That(capturedF, Is.Not.Null);
+        Assert.That(capturedF.TravelPartyIds, Is.Empty);
+        Assert.That(captureToken.OwnerSections, Has.Some.Matches<OwnerSectionCensusSnapshot>(section =>
+            section.SectionId == ExpeditionCensusProvider.SectionId
+            && section.Role == OwnerSectionRole.Required
+            && ReferenceEquals(section.OwnerInstanceIdentity, sourceBootstrap.Expeditions)));
+        Assert.That(FindOwnerSection(captureToken.OwnerSections,
+            PoliticalKnowledgeStoreCensusProvider.SectionId).OwnerInstanceIdentity,
+            Is.SameAs(sourceRuntime.PoliticalKnowledgeStoreForWorldBoundary));
+        Assert.That(FindOwnerSection(captureToken.OwnerSections,
+            ScheduledDirectiveCensusProvider.SectionId).OwnerInstanceIdentity,
+            Is.SameAs(sourceBootstrap.ScheduledDirectives));
+        Assert.That(FindOwnerSection(captureToken.OwnerSections,
+            TravelPartyCensusProvider.SectionId).OwnerInstanceIdentity,
+            Is.SameAs(sourceBootstrap.TravelParties));
     }
 
     [TestCase("hex-id")]
@@ -961,6 +988,21 @@ public sealed class P12CPrivateRootCompositionTests
             record += "|" + value.Length.ToString(CultureInfo.InvariantCulture) + ":" + value;
         }
         return record;
+    }
+
+    private static OwnerSectionCensusSnapshot FindOwnerSection(
+        IReadOnlyList<OwnerSectionCensusSnapshot> sections, string sectionId)
+    {
+        OwnerSectionCensusSnapshot found = null;
+        foreach (OwnerSectionCensusSnapshot section in sections)
+        {
+            if (section == null || !string.Equals(section.SectionId, sectionId, StringComparison.Ordinal))
+                continue;
+            Assert.That(found, Is.Null, "Duplicate owner-section entry: " + sectionId);
+            found = section;
+        }
+        Assert.That(found, Is.Not.Null, "Missing owner-section entry: " + sectionId);
+        return found;
     }
 
     private static object Read(object instance, string propertyName)

@@ -330,6 +330,41 @@ public sealed class PoliticalKnowledgeStore : IAuthoritativeMutationGuardBindabl
         return clone;
     }
 
+    /// <summary>Privately reconstructs detached owner values without exposing a partial restore.</summary>
+    internal static bool TryCreateP12FStaged(
+        PersonStore personStore,
+        InstitutionStore institutionStore,
+        PoliticalClaimStore politicalClaimStore,
+        FactionStore factionStore,
+        OfficeStore officeStore,
+        PropertyOwnershipStore propertyOwnershipStore,
+        IReadOnlyList<PoliticalKnowledgeRuntime> detachedRuntimes,
+        long exactRevision,
+        long stagedAbsoluteDay,
+        out PoliticalKnowledgeStore staged)
+    {
+        staged = null;
+        if (personStore == null || institutionStore == null || politicalClaimStore == null
+            || factionStore == null || officeStore == null || propertyOwnershipStore == null
+            || detachedRuntimes == null || exactRevision < 0L || stagedAbsoluteDay < 0L)
+            return false;
+
+        PoliticalKnowledgeStore candidate = new PoliticalKnowledgeStore(
+            personStore, institutionStore, politicalClaimStore, factionStore, officeStore, propertyOwnershipStore);
+        foreach (PoliticalKnowledgeRuntime source in detachedRuntimes)
+        {
+            if (source == null || !candidate.TryRegister(source, stagedAbsoluteDay, out _))
+                return false;
+        }
+
+        if (candidate.Count != detachedRuntimes.Count || exactRevision < candidate.Count)
+            return false;
+
+        candidate.Revision = exactRevision;
+        staged = candidate;
+        return true;
+    }
+
     private bool TryGetOwned(
         PoliticalKnowledgeHolder holder,
         out PoliticalKnowledgeRuntime runtime)

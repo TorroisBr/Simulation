@@ -81,6 +81,7 @@ internal sealed class P12EUnresolvedPoliticalKnowledgeBinding
 /// </summary>
 internal sealed class P12EDailyV1OwnerPackage
 {
+    internal DailyCaptureStagingAttempt StagingAttempt { get; }
     internal WorldId WorldId { get; }
     internal InstitutionStore Institutions { get; }
     internal OfficeStore Offices { get; }
@@ -101,6 +102,7 @@ internal sealed class P12EDailyV1OwnerPackage
     internal IReadOnlyList<P12EUnresolvedPoliticalKnowledgeBinding> UnresolvedPoliticalKnowledgeBindings { get; }
 
     private P12EDailyV1OwnerPackage(
+        DailyCaptureStagingAttempt stagingAttempt,
         WorldId worldId,
         InstitutionStore institutions,
         OfficeStore offices,
@@ -120,6 +122,7 @@ internal sealed class P12EDailyV1OwnerPackage
         CrimeSocialAppraisalWorldState crimeSocialAppraisal,
         IReadOnlyList<P12EUnresolvedPoliticalKnowledgeBinding> unresolvedBindings)
     {
+        StagingAttempt = stagingAttempt ?? throw new ArgumentNullException(nameof(stagingAttempt));
         WorldId = worldId;
         Institutions = institutions;
         Offices = offices;
@@ -321,6 +324,7 @@ internal sealed class P12EDailyV1OwnerPackage
             }
 
             package = new P12EDailyV1OwnerPackage(
+                context.StagingAttempt,
                 stagedC.WorldIdentity,
                 stagedInstitutions, stagedOffices,
                 stagedPropertyOwnership, stagedEstates, stagedFactions,

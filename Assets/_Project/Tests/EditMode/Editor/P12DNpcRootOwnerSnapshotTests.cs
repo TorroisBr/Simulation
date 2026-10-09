@@ -39,6 +39,8 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         Assert.That(package.WorldId, Is.SameAs(token.WorldId));
         Assert.That(package.Cities, Has.Count.EqualTo(fixture.Cities.Length));
         Assert.That(package.Npcs, Has.Count.EqualTo(fixture.Npcs.Length));
+        Assert.That(package.NpcFRows, Has.Count.EqualTo(fixture.Npcs.Length));
+        Assert.That(package.NpcFRows.Single(value => value.RuntimeId == npc.RuntimeId), Is.Not.SameAs(npc));
         Assert.That(package.Cities[0], Is.Not.SameAs(fixture.Cities[0]));
         Assert.That(package.Npcs.Single(value => value.RuntimeId == npc.RuntimeId), Is.Not.SameAs(npc));
         Assert.That(package.Cities[0].ImportantNpcRevision, Is.EqualTo(sourceMembershipRevision));

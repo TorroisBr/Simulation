@@ -175,6 +175,63 @@ public sealed class ExpeditionStore
     }
 
     internal IDisposable EnterReadWindow() { Monitor.Enter(sync); return new Window(sync); }
+
+    internal bool TryCaptureOwnerSnapshot(out P12FExpeditionOwnerSnapshot snapshot)
+    {
+        snapshot = null;
+        using (EnterReadWindow())
+        {
+            if (!ValidateCensus(out int count, out long currentRevision)) return false;
+            List<P12FExpeditionOwnerSnapshotRecord> records = new List<P12FExpeditionOwnerSnapshotRecord>(count);
+            foreach (ExpeditionRuntime expedition in activeExpeditions)
+            {
+                ExpeditionObjectiveRuntime objective = expedition.Objective;
+                if (objective == null || expedition.MemberRuntimeIds == null
+                    || expedition.PerformerRuntimeIds == null || expedition.SupportRuntimeIds == null
+                    || expedition.VisitedLocalPlaceRuntimeIds == null
+                    || expedition.ObservedLocalConnectionRuntimeIds == null)
+                    return false;
+                records.Add(new P12FExpeditionOwnerSnapshotRecord(
+                    expedition.ExpeditionId, expedition.TargetSiteRuntimeId,
+                    expedition.OriginLocationRuntimeId, expedition.TargetLocationRuntimeId,
+                    expedition.OutboundRouteRuntimeId, expedition.TravelPartyId,
+                    expedition.OriginDecisionId, expedition.MemberRuntimeIds,
+                    expedition.PerformerRuntimeIds, expedition.SupportRuntimeIds,
+                    expedition.State, expedition.CurrentLocalPlaceRuntimeId,
+                    expedition.VisitedLocalPlaceRuntimeIds, expedition.ObservedLocalConnectionRuntimeIds,
+                    objective.ObjectiveType, objective.TargetItemDefinitionId,
+                    objective.TargetNotableItemRuntimeId, objective.TargetOppositionRuntimeId,
+                    objective.RequiredProgress, objective.Progress, objective.IsCompleted,
+                    objective.AllowContinueAfterCompletion));
+            }
+            if (records.Count != count || !ValidateCensus(out int afterCount, out long afterRevision)
+                || afterCount != count || afterRevision != currentRevision) return false;
+            snapshot = new P12FExpeditionOwnerSnapshot(
+                P12FExpeditionOwnerSnapshot.CurrentSchemaVersion, currentRevision, records);
+            return true;
+        }
+    }
+
+    internal static bool TryCreateFromOwnerSnapshot(
+        P12FExpeditionOwnerSnapshot snapshot,
+        out ExpeditionStore stagedStore)
+    {
+        stagedStore = null;
+        if (snapshot == null || snapshot.SchemaVersion != P12FExpeditionOwnerSnapshot.CurrentSchemaVersion
+            || snapshot.Revision < 0 || snapshot.Expeditions == null
+            || snapshot.Revision < snapshot.Expeditions.Count) return false;
+        ExpeditionStore staged = new ExpeditionStore();
+        foreach (P12FExpeditionOwnerSnapshotRecord record in snapshot.Expeditions)
+        {
+            ExpeditionRuntime value;
+            try { value = ExpeditionRuntime.CreateFromOwnerSnapshot(record); }
+            catch (ArgumentException) { return false; }
+            if (value == null || !staged.Add(value)) return false;
+        }
+        lock (staged.sync) staged.revision = snapshot.Revision;
+        stagedStore = staged;
+        return true;
+    }
     internal bool ValidateCensus(out int count, out long currentRevision)
     {
         lock (sync)

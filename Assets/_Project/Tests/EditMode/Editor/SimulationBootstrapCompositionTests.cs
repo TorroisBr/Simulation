@@ -752,8 +752,11 @@ public sealed class SimulationBootstrapCompositionTests
         IDictionary expectedCensusSections = (IDictionary)typeof(ContinuationCensusProtocol)
             .GetField("expectedSections", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(censusProtocol);
-        Assert.That(expectedCensusSections.Count, Is.EqualTo(298),
-            "The selected ten-NPC/two-City Daily-v1 inventory includes exact-zero P18 receipt-owner rows, P8-A/B/C spatial witnesses, exact-zero P8-D witnesses, all eight composed P12-E military owner sections, and the three bounded Gate 1 fixed owners.");
+        Assert.That(expectedCensusSections.Count, Is.EqualTo(299),
+            "The selected ten-NPC/two-City Daily-v1 inventory includes exact-zero P18 receipt-owner rows, P8-A/B/C spatial witnesses, exact-zero P8-D witnesses, all eight composed P12-E military owner sections, the three bounded Gate 1 fixed owners, and the active Expedition owner.");
+        Assert.That(expectedCensusSections.Contains(ExpeditionCensusProvider.SectionId), Is.True);
+        Assert.That(((OwnerSectionContract)expectedCensusSections[ExpeditionCensusProvider.SectionId]).Role,
+            Is.EqualTo(OwnerSectionRole.Required));
         string[] identitySpatialSectionIds =
         {
             RuntimeIdentityRegistryCensusProvider.NpcsSectionId,
@@ -800,6 +803,14 @@ public sealed class SimulationBootstrapCompositionTests
         IDictionary registeredSections = (IDictionary)typeof(ContinuationCensusProtocol)
             .GetField("registeredSections", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(censusProtocol);
+        AssertRegisteredOwnerProvider(
+            registeredSections,
+            ExpeditionCensusProvider.SectionId,
+            ExpeditionCensusProvider.SchemaVersion,
+            OwnerSectionRole.Required,
+            simulation.Bootstrap.Expeditions,
+            expectedCardinality: 0,
+            expectedRevision: simulation.Bootstrap.Expeditions.Revision);
         AssertRegisteredP8DExactZeroProvider(
             registeredSections,
             SpatialRouteObservationCensusProvider.SectionId,
@@ -2117,8 +2128,8 @@ public sealed class SimulationBootstrapCompositionTests
 
         IDictionary expectedSections = ReadPrivateField<IDictionary>(protocol, "expectedSections");
         Assert.That(expectedSections.Count, Is.EqualTo(
-            68 + (22 * roster.Length) + unboundNpcCount + people.Length),
-            "The 68 fixed sections plus 22 per-NPC dynamic sections, unbound residence rows, and Person rows must match the sealed Daily-v1 inventory.");
+            69 + (22 * roster.Length) + unboundNpcCount + people.Length),
+            "The 69 fixed sections, including the P12-F Expedition owner, plus 22 per-NPC dynamic sections, unbound residence rows, and Person rows must match the sealed Daily-v1 inventory.");
     }
 
     private static void AssertNpcReceiptWitness(
