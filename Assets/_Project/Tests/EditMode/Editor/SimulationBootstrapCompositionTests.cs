@@ -803,6 +803,11 @@ public sealed class SimulationBootstrapCompositionTests
         IDictionary registeredSections = (IDictionary)typeof(ContinuationCensusProtocol)
             .GetField("registeredSections", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(censusProtocol);
+        AssertSelectedDailyV1SectionInventory(runtime, expectedCensusSections, registeredSections);
+        AssertSelectedDailyV1NonVectorOwnerDisposition(
+            simulation.Bootstrap,
+            expectedCensusSections,
+            registeredSections);
         AssertRegisteredOwnerProvider(
             registeredSections,
             ExpeditionCensusProvider.SectionId,
@@ -1883,6 +1888,10 @@ public sealed class SimulationBootstrapCompositionTests
         ContinuationCensusProtocol protocol = ReadPrivateField<ContinuationCensusProtocol>(
             runtime,
             "npcRosterCensusProtocol");
+        AssertSelectedDailyV1SectionInventory(
+            runtime,
+            ReadPrivateField<IDictionary>(protocol, "expectedSections"),
+            ReadPrivateField<IDictionary>(protocol, "registeredSections"));
 
         IReadOnlyList<IOwnerSectionCensusProvider> travelStateProviders =
             protocol.NpcTravelStateFamilyProviders;
@@ -2130,6 +2139,336 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(expectedSections.Count, Is.EqualTo(
             69 + (22 * roster.Length) + unboundNpcCount + people.Length),
             "The 69 fixed sections, including the P12-F Expedition owner, plus 22 per-NPC dynamic sections, unbound residence rows, and Person rows must match the sealed Daily-v1 inventory.");
+    }
+
+    private static void AssertSelectedDailyV1SectionInventory(
+        SimulationRuntime runtime,
+        IDictionary actualExpectedSections,
+        IDictionary actualRegisteredSections)
+    {
+        Dictionary<string, OwnerSectionRole> expected = BuildSelectedDailyV1SectionInventory(runtime);
+        string[] expectedIds = expected.Keys.OrderBy(id => id, System.StringComparer.Ordinal).ToArray();
+        string[] protocolExpectedIds = actualExpectedSections.Keys.Cast<string>()
+            .OrderBy(id => id, System.StringComparer.Ordinal)
+            .ToArray();
+        string[] registeredIds = actualRegisteredSections.Keys.Cast<string>()
+            .OrderBy(id => id, System.StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.That(actualExpectedSections.Count, Is.EqualTo(expected.Count),
+            "The independent Daily-v1 manifest and protocol expected-row count must agree.");
+        Assert.That(actualRegisteredSections.Count, Is.EqualTo(expected.Count),
+            "Every expected Daily-v1 row must have exactly one live provider registration.");
+        Assert.That(protocolExpectedIds, Is.EqualTo(expectedIds),
+            DescribeSectionSetDifference("protocol expected", expectedIds, protocolExpectedIds));
+        Assert.That(registeredIds, Is.EqualTo(expectedIds),
+            DescribeSectionSetDifference("registered", expectedIds, registeredIds));
+
+        foreach (string sectionId in expectedIds)
+        {
+            OwnerSectionRole expectedRole = expected[sectionId];
+            OwnerSectionContract expectedContract =
+                (OwnerSectionContract)actualExpectedSections[sectionId];
+            object registered = actualRegisteredSections[sectionId];
+            OwnerSectionContract registeredContract =
+                ReadPrivateField<OwnerSectionContract>(registered, "Contract");
+            IOwnerSectionCensusProvider provider =
+                ReadPrivateField<IOwnerSectionCensusProvider>(registered, "Provider");
+
+            Assert.That(expectedContract.SectionId, Is.EqualTo(sectionId), sectionId);
+            Assert.That(expectedContract.SchemaVersion, Is.EqualTo(1), sectionId);
+            Assert.That(expectedContract.Role, Is.EqualTo(expectedRole), sectionId);
+            Assert.That(registeredContract.SectionId, Is.EqualTo(sectionId), sectionId);
+            Assert.That(registeredContract.SchemaVersion, Is.EqualTo(expectedContract.SchemaVersion), sectionId);
+            Assert.That(registeredContract.Role, Is.EqualTo(expectedRole), sectionId);
+
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            Assert.That(witness.SectionId, Is.EqualTo(sectionId), sectionId);
+            Assert.That(witness.SchemaVersion, Is.EqualTo(expectedContract.SchemaVersion), sectionId);
+            Assert.That(witness.OwnerInstanceIdentity, Is.Not.Null, sectionId);
+            Assert.That(witness.Cardinality, Is.GreaterThanOrEqualTo(0), sectionId);
+            Assert.That(witness.Revision, Is.GreaterThanOrEqualTo(0L), sectionId);
+            if (expectedRole == OwnerSectionRole.ExplicitlyEmpty)
+            {
+                Assert.That(witness.Cardinality, Is.Zero,
+                    sectionId + " is explicitly empty; Required rows may have zero cardinality.");
+            }
+
+            OwnerSectionCensusWitness repeated = provider.GetCurrentCensus();
+            Assert.That(repeated.OwnerInstanceIdentity, Is.SameAs(witness.OwnerInstanceIdentity), sectionId);
+            Assert.That(repeated.Cardinality, Is.EqualTo(witness.Cardinality), sectionId);
+            Assert.That(repeated.Revision, Is.EqualTo(witness.Revision), sectionId);
+        }
+    }
+
+    private static Dictionary<string, OwnerSectionRole> BuildSelectedDailyV1SectionInventory(
+        SimulationRuntime runtime)
+    {
+        var expected = new Dictionary<string, OwnerSectionRole>(System.StringComparer.Ordinal);
+        AddExpectedDailyV1SectionIds(expected, OwnerSectionRole.Required,
+            "p12d.person.membership",
+            "p12d.person.materialization-binding",
+            "p12c.runtime-identities.npcs",
+            "p12c.runtime-identities.cities",
+            "p12c.runtime-identities.locations",
+            "p12c.runtime-identities.routes",
+            "p12d.legacy-spatial-network.locations",
+            "p12d.legacy-spatial-network.routes",
+            "p8a.hexes",
+            "p8a.locations",
+            "p8a.scale-context",
+            "p12c.runtime-id-allocator.events",
+            "p12c.runtime-id-allocator.decisions",
+            "p12c.runtime-id-allocator.travel-parties",
+            "p12c.simulation-record-sequence",
+            "p12d.genealogy.parentage",
+            "p12f.political-knowledge.holders",
+            "p12f.political-decisions.records",
+            "p12.crime-social-appraisal.outcomes",
+            "p12.crime-social-appraisal.knowledge",
+            "p12.crime-social-appraisal.reactions",
+            "p12b.justice-records",
+            "p12b.crime-p18-receipts",
+            "p12b.justice-p18-receipts",
+            "p12e.armed-force.forces",
+            "p12e.armed-force.contingents",
+            "p12e.armed-force.relevant-person-references",
+            "p12e.contingent-manpower.states",
+            "p12e.armed-force-spatial.positions",
+            "p12e.conflicts",
+            "p12e.wars",
+            "p12e.battles",
+            "p12e.institution.records",
+            "p12e.office.records",
+            "p12e.office.incumbencies",
+            "p12e.office.tenures",
+            "p12e.faction.records",
+            "p12e.faction.affiliations",
+            "p12e.political-claim.records",
+            "p12e.political-claim.recognitions",
+            "p12e.political-support.relations",
+            "p12e.property.ownership",
+            "p12e.property.transfer-history",
+            "p12e.estate.records",
+            "p12f.actor-choice-inputs",
+            "p12f.scheduled-directives",
+            "p12f.travel-parties",
+            "p12f.expeditions");
+        AddExpectedDailyV1SectionIds(expected, OwnerSectionRole.ExplicitlyEmpty,
+            "p12c.runtime-identities.explorable-sites",
+            "p12c.runtime-identities.local-places",
+            "p12c.runtime-identities.local-connections",
+            "p12c.runtime-identities.notable-items",
+            "p12d.explorable-sites",
+            "p8b.passage-option-barrier-state",
+            "p8b.crossings",
+            "p8c.city-site-location-bindings",
+            "p8c.person-positions",
+            "p8d.spatial-route-observations",
+            "p8d.person-route-plan-history",
+            "p12f.npc-decision-occurrence-receipts",
+            "p12e.economy-keyed-sale-receipts");
+
+        string[] npcPrefixes =
+        {
+            "p12f.explorable-site-knowledge/",
+            "p12f.local-topology-knowledge.places/",
+            "p12f.local-topology-knowledge.connections/",
+            "p12f.adventure-intel.opposition/",
+            "p12f.adventure-intel.notable-items/",
+            "p12f.adventure-intel.common-resources/",
+            "p12f.adventure-intel.access/",
+            "p12f.commercial-knowledge.markets/",
+            "p12f.commercial-knowledge.liquidity/",
+            "p12f.commercial-knowledge.share-receipts/",
+            "p12f.spatial-knowledge.locations/",
+            "p12f.spatial-knowledge.routes/",
+            "p12f.npc-travel-state/",
+            "p12f.inventory/",
+            "p12e.npc-money-account/",
+            "p12b.merchant-trade-plan/",
+            "p12b.npc-travel-plan/",
+            "p12d.npc-local-observation-receipts/",
+            "p12d.npc-merchant-trade-state-receipts/",
+            "p12b.npc-status-crime-state/",
+            "p12b.npc-current-action/",
+            "p12b.npc-life-state/"
+        };
+        NpcRuntime[] npcs = runtime.NpcRuntimes
+            .OrderBy(npc => npc.RuntimeId, System.StringComparer.Ordinal)
+            .ToArray();
+        foreach (NpcRuntime npc in npcs)
+        {
+            foreach (string prefix in npcPrefixes)
+                AddExpectedDailyV1SectionId(expected, prefix + npc.RuntimeId, OwnerSectionRole.Required);
+            if (!IsNpcBoundToRegisteredPerson(runtime, npc))
+                AddExpectedDailyV1SectionId(
+                    expected,
+                    "p12b.npc-residence/" + npc.RuntimeId,
+                    OwnerSectionRole.Required);
+        }
+
+        foreach (PersonRuntime person in runtime.PersonStore.Persons
+            .OrderBy(candidate => candidate.PersonId.Value, System.StringComparer.Ordinal))
+        {
+            string personId = person.PersonId.Value;
+            string encodedId = personId.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + ":" + personId;
+            AddExpectedDailyV1SectionId(
+                expected,
+                "p12b.person-life-residence/" + encodedId,
+                OwnerSectionRole.Required);
+        }
+
+        foreach (CityRuntime city in runtime.Cities
+            .OrderBy(candidate => candidate.RuntimeId, System.StringComparer.Ordinal))
+        {
+            string encodedId = city.RuntimeId.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + ":" + city.RuntimeId;
+            AddExpectedDailyV1SectionIds(expected, OwnerSectionRole.Required,
+                "p12b.city.important-npcs/" + city.RuntimeId,
+                "p12e.city-market-stock-rows/" + encodedId,
+                "p12d.city-population.aggregate/" + encodedId,
+                "p12d.city-population.operation-receipts/" + encodedId);
+        }
+
+        int npcCount = npcs.Length;
+        int cityCount = runtime.Cities.Count;
+        int personCount = runtime.PersonStore.Persons.Count;
+        int personBoundNpcCount = npcs.Count(npc => IsNpcBoundToRegisteredPerson(runtime, npc));
+        Assert.That(expected.Count, Is.EqualTo(
+            61 + (22 * npcCount) + (npcCount - personBoundNpcCount) + personCount + (4 * cityCount)),
+            "The independent manifest must follow the documented fixed/NPC/Person/City cardinality equation.");
+        return expected;
+    }
+
+    private static bool IsNpcBoundToRegisteredPerson(SimulationRuntime runtime, NpcRuntime npc)
+    {
+        return npc.PersonId != null
+            && runtime.PersonStore.TryGet(npc.PersonId, out PersonRuntime person)
+            && System.Object.ReferenceEquals(ReadNonPublicProperty(npc, "BoundPersonRuntime"), person);
+    }
+
+    private static void AddExpectedDailyV1SectionIds(
+        IDictionary<string, OwnerSectionRole> expected,
+        OwnerSectionRole role,
+        params string[] sectionIds)
+    {
+        foreach (string sectionId in sectionIds)
+            AddExpectedDailyV1SectionId(expected, sectionId, role);
+    }
+
+    private static void AddExpectedDailyV1SectionId(
+        IDictionary<string, OwnerSectionRole> expected,
+        string sectionId,
+        OwnerSectionRole role)
+    {
+        Assert.That(expected.ContainsKey(sectionId), Is.False,
+            "The independent Daily-v1 manifest must not contain duplicate IDs: " + sectionId);
+        expected.Add(sectionId, role);
+    }
+
+    private static string DescribeSectionSetDifference(
+        string actualName,
+        IEnumerable<string> expectedIds,
+        IEnumerable<string> actualIds)
+    {
+        string[] expected = expectedIds.ToArray();
+        string[] actual = actualIds.ToArray();
+        string[] missing = expected.Except(actual, System.StringComparer.Ordinal)
+            .OrderBy(id => id, System.StringComparer.Ordinal)
+            .ToArray();
+        string[] unexpected = actual.Except(expected, System.StringComparer.Ordinal)
+            .OrderBy(id => id, System.StringComparer.Ordinal)
+            .ToArray();
+        return actualName + " Daily-v1 census IDs differ from the independent manifest. Missing: ["
+            + string.Join(", ", missing) + "]; unexpected: [" + string.Join(", ", unexpected) + "].";
+    }
+
+    private static void AssertSelectedDailyV1NonVectorOwnerDisposition(
+        SimulationBootstrapComposition bootstrap,
+        IDictionary expectedSections,
+        IDictionary registeredSections)
+    {
+        ActorChoiceTemporalCensusProvider temporalProvider =
+            bootstrap.ActorChoiceTemporalCensusProvider as ActorChoiceTemporalCensusProvider;
+        Assert.That(temporalProvider, Is.Not.Null,
+            "The temporal ActorChoice provider is composed, but its section is outside the Daily-v1 vector and is not an empty row.");
+        OwnerSectionCensusWitness temporalWitness = temporalProvider.GetCurrentCensus();
+        Assert.That(temporalWitness.SectionId, Is.EqualTo("p12f.actor-choice-temporal-inputs"));
+        Assert.That(expectedSections.Contains(temporalWitness.SectionId), Is.False);
+        Assert.That(registeredSections.Contains(temporalWitness.SectionId), Is.False);
+        Assert.That(
+            temporalWitness.OwnerInstanceIdentity,
+            Is.SameAs(bootstrap.ActorChoiceInputCensusProvider.GetCurrentCensus().OwnerInstanceIdentity),
+            "The unregistered temporal provider must describe the same exact ActorChoice owner identity as the registered P11 provider.");
+        Assert.That(temporalWitness.Cardinality, Is.Zero,
+            "This live provider reading is evidence only; P12-F capture must enforce exact zero before staged-domain allocation.");
+
+        Assert.That(bootstrap.Runtime.LocalTopologyStore, Is.Null,
+            "P10 LocalTopology is not composed by the selected Daily-v1 profile; absence is not an empty owner row.");
+        Assert.That(bootstrap.DomainEventStore, Is.Not.Null,
+            "DomainEventStore is composed as an omitted noncausal read model; its rows need not be empty.");
+        Assert.That(bootstrap.History, Is.Not.Null,
+            "HistoryStore is a derived/subset read model and is not a serialized owner section.");
+        Assert.That(bootstrap.Decisions, Is.Not.Null,
+            "NpcDecisionStore is an omitted noncausal read model; its rows need not be empty.");
+        Assert.That(bootstrap.NpcChronicles, Is.Not.Null,
+            "NpcChronicle is derived and is not a serialized owner section.");
+        Assert.That(bootstrap.WorldId, Is.Not.Null);
+        Assert.That(bootstrap.Manifest, Is.Not.Null,
+            "WorldId and P9 genesis manifest/provenance are continuation roots captured by P12-C, without standalone vector rows.");
+
+        string[] allocatorProviderIds = bootstrap.RuntimeIdAllocatorCensusProviders
+            .Select(provider => provider.GetCurrentCensus().SectionId)
+            .OrderBy(sectionId => sectionId, System.StringComparer.Ordinal)
+            .ToArray();
+        string[] expectedAllocatorProviderIds =
+        {
+            "p12c.runtime-id-allocator.npcs",
+            "p12c.runtime-id-allocator.cities",
+            "p12c.runtime-id-allocator.locations",
+            "p12c.runtime-id-allocator.routes",
+            "p12c.runtime-id-allocator.events",
+            "p12c.runtime-id-allocator.directives",
+            "p12c.runtime-id-allocator.decisions",
+            "p12c.runtime-id-allocator.travel-parties",
+            "p12c.runtime-id-allocator.organizations",
+            "p12c.runtime-id-allocator.explorable-sites",
+            "p12c.runtime-id-allocator.expeditions",
+            "p12c.runtime-id-allocator.local-places",
+            "p12c.runtime-id-allocator.local-connections",
+            "p12c.runtime-id-allocator.notable-items"
+        };
+        Assert.That(allocatorProviderIds, Is.EqualTo(expectedAllocatorProviderIds
+            .OrderBy(sectionId => sectionId, System.StringComparer.Ordinal)
+            .ToArray()));
+        string[] allocatorVectorIds =
+        {
+            "p12c.runtime-id-allocator.events",
+            "p12c.runtime-id-allocator.decisions",
+            "p12c.runtime-id-allocator.travel-parties"
+        };
+        OwnerSectionCensusWitness allocatorOwner =
+            bootstrap.RuntimeIdAllocatorCensusProviders[0].GetCurrentCensus();
+        foreach (IOwnerSectionCensusProvider allocatorProvider in bootstrap.RuntimeIdAllocatorCensusProviders)
+        {
+            OwnerSectionCensusWitness witness = allocatorProvider.GetCurrentCensus();
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(allocatorOwner.OwnerInstanceIdentity));
+            bool hasVectorSection = allocatorVectorIds.Contains(witness.SectionId);
+            Assert.That(expectedSections.Contains(witness.SectionId), Is.EqualTo(hasVectorSection),
+                "Only event, decision, and travel-party counter IDs have standalone vector rows; the other allocator counters are P12-C root state, not empty owners.");
+            Assert.That(registeredSections.Contains(witness.SectionId), Is.EqualTo(hasVectorSection));
+        }
+
+        object[] registeredOwners = registeredSections.Keys.Cast<string>()
+            .Select(sectionId => ReadPrivateField<IOwnerSectionCensusProvider>(
+                registeredSections[sectionId], "Provider").GetCurrentCensus().OwnerInstanceIdentity)
+            .ToArray();
+        Assert.That(registeredOwners.Any(owner => System.Object.ReferenceEquals(owner, bootstrap.DomainEventStore)), Is.False);
+        Assert.That(registeredOwners.Any(owner => System.Object.ReferenceEquals(owner, bootstrap.History)), Is.False);
+        Assert.That(registeredOwners.Any(owner => System.Object.ReferenceEquals(owner, bootstrap.Decisions)), Is.False);
+        Assert.That(registeredOwners.Any(owner => System.Object.ReferenceEquals(owner, bootstrap.NpcChronicles)), Is.False);
     }
 
     private static void AssertNpcReceiptWitness(
@@ -2658,7 +2997,9 @@ public sealed class SimulationBootstrapCompositionTests
     private static T ReadPrivateField<T>(object target, string fieldName) where T : class
     {
         Assert.That(target, Is.Not.Null, "Expected an owner before reading " + fieldName + ".");
-        FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        FieldInfo field = target.GetType().GetField(
+            fieldName,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         Assert.That(field, Is.Not.Null, "Expected field " + fieldName + " on " + target.GetType().Name + ".");
         T value = field.GetValue(target) as T;
         Assert.That(value, Is.Not.Null, "Expected existing owner field " + fieldName + ".");
