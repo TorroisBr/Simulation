@@ -27,9 +27,9 @@ Unity Editor: `6000.3.9f1`. Each result XML reports `Passed`, zero failures, zer
 The XML and `.log.gz` artifacts are stored in the `Focused`, `AllEditMode`, and `OfficialSmoke` subdirectories. Commands used:
 
 ```powershell
-.\Tools\UnityValidation\Invoke-UnityValidation.ps1 -ProjectPath . -Mode EditMode -TestFilter SimulationBootstrapCompositionTests
-.\Tools\UnityValidation\Invoke-UnityValidation.ps1 -ProjectPath . -Mode EditMode -All
-.\Tools\UnityValidation\Invoke-UnityValidation.ps1 -ProjectPath . -Mode EditMode -TestFilter Smoke
+.\Tools\UnityValidation\Invoke-UnityValidation.ps1 -ProjectPath . -Mode EditMode -TestFilter SimulationBootstrapCompositionTests -ResultsDirectory docs/validation/P12GCurrentCanonicalInventory/Focused
+.\Tools\UnityValidation\Invoke-UnityValidation.ps1 -ProjectPath . -Mode EditMode -All -ResultsDirectory docs/validation/P12GCurrentCanonicalInventory/AllEditMode
+.\Tools\UnityValidation\Invoke-UnityValidation.ps1 -ProjectPath . -Mode EditMode -TestFilter Smoke -ResultsDirectory docs/validation/P12GCurrentCanonicalInventory/OfficialSmoke
 git diff --check
 ```
 
