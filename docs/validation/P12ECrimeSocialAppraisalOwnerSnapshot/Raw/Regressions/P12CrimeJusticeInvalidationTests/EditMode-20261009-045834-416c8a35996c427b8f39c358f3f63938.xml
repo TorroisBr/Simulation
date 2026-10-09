@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="12" result="Passed" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 04:58:42Z" end-time="2026-10-09 04:58:42Z" duration="0,1526193">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2700" result="Passed" start-time="2026-10-09 04:58:42Z" end-time="2026-10-09 04:58:42Z" duration="0.152619" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3959" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-political-decision-state/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2700" result="Passed" start-time="2026-10-09 04:58:42Z" end-time="2026-10-09 04:58:42Z" duration="0.141363" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="137024" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2594" name="P12CrimeJusticeInvalidationTests" fullname="P12CrimeJusticeInvalidationTests" classname="P12CrimeJusticeInvalidationTests" runstate="Runnable" testcasecount="12" result="Passed" start-time="2026-10-09 04:58:42Z" end-time="2026-10-09 04:58:42Z" duration="0.126470" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2603" name="DailyCrimeHiddenExpiryCommitsOneNpcSectionAndPreservesCensus" fullname="P12CrimeJusticeInvalidationTests.DailyCrimeHiddenExpiryCommitsOneNpcSectionAndPreservesCensus" methodname="DailyCrimeHiddenExpiryCommitsOneNpcSectionAndPreservesCensus" classname="P12CrimeJusticeInvalidationTests" runstate="Runnable" seed="1766661626" result="Passed" start-time="2026-10-09 04:58:42Z" end-time="2026-10-09 04:58:42Z" duration="0.072198" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[definition-p12-cj-daily-city display atualizou os precos do mercado.
+definition-p12-cj-daily-npc display nao esta mais escondido.
+definition-p12-cj-daily-city display atualizou os precos do mercado.
+]]></output>
+        </test-case>
+        <test-case id="2604" name="JusticeWitnessCountsExactRowsRejectsAliasesAndTracksDailyMutableRowCommits" fullname="P12CrimeJusticeInvalidationTests.JusticeWitnessCountsExactRowsRejectsAliasesAndTracksDailyMutableRowCommits" methodname="JusticeWitnessCountsExactRowsRejectsAliasesAndTracksDailyMutableRowCommits" classname="P12CrimeJusticeInvalidationTests" runstate="Runnable" seed="534548038" result="Passed" start-time="2026-10-09 04:58:42Z" end-time="2026-10-09 04:58:42Z" duration="0.010305" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[definition-p12-cj-justice-target display agora possui mandado em definition-p12-cj-justice-city display. Recompensa: 12. Pena: 4 dias.
+definition-p12-cj-justice-target display agora possui mandado em definition-p12-cj-justice-city display. Recompensa: 15. Pena: 5 dias.
+definition-p12-cj-justice-guard display prendeu definition-p12-cj-justice-target display em definition-p12-cj-justice-city display. Pena restante: 5 dias.
+definition-p12-cj-justice-city display atualizou os precos do mercado.
+]]></output>
+        </test-case>
+        <test-case id="2595" name="NpcStatusWitnessKeepsOneOwnerAndTracksVariableOrderedRowsAndHiddenState" fullname="P12CrimeJusticeInvalidationTests.NpcStatusWitnessKeepsOneOwnerAndTracksVariableOrderedRowsAndHiddenState" methodname="NpcStatusWitnessKeepsOneOwnerAndTracksVariableOrderedRowsAndHiddenState" classname="P12CrimeJusticeInvalidationTests" runstate="Runnable" seed="316173601" result="Passed" start-time="2026-10-09 04:58:42Z" end-time="2026-10-09 04:58:42Z" duration="0.001927" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2605" name="P12BindsReturnedJusticeRowAliasesAndRejectsUnsupportedDirectMutation" fullname="P12CrimeJusticeInvalidationTests.P12BindsReturnedJusticeRowAliasesAndRejectsUnsupportedDirectMutation" methodname="P12BindsReturnedJusticeRowAliasesAndRejectsUnsupportedDirectMutation" classname="P12CrimeJusticeInvalidationTests" runstate="Runnable" seed="381613017" result="Passed" start-time="2026-10-09 04:58:42Z" end-time="2026-10-09 04:58:42Z" duration="0.001865" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[definition-p12-cj-alias-target display agora possui mandado em definition-p12-cj-alias-city display. Recompensa: 12. Pena: 4 dias.
+definition-p12-cj-alias-guard display prendeu definition-p12-cj-alias-target display em definition-p12-cj-alias-city display. Pena restante: 4 dias.
+]]></output>
+        </test-case>
+        <test-case id="2597" name="P12BoundDirectNpcStatusWriteRejectsBeforeChangingRowsOrRevision" fullname="P12CrimeJusticeInvalidationTests.P12BoundDirectNpcStatusWriteRejectsBeforeChangingRowsOrRevision" methodname="P12BoundDirectNpcStatusWriteRejectsBeforeChangingRowsOrRevision" classname="P12CrimeJusticeInvalidationTests" runstate="Runnable" seed="1628482482" result="Passed" start-time="2026-10-09 04:58:42Z" end-time="2026-10-09 04:58:42Z" duration="0.000910" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2599" name="P12CrimeHideProviderAndSuccessStatusChangesUseSeparateImmediateOwnerNotifications" fullname="P12CrimeJusticeInvalidationTests.P12CrimeHideProviderAndSuccessStatusChangesUseSeparateImmediateOwnerNotifications" methodname="P12CrimeHideProviderAndSuccessStatusChangesUseSeparateImmediateOwnerNotifications" classname="P12CrimeJusticeInvalidationTests" runstate="Runnable" seed="1533789850" result="Passed" start-time="2026-10-09 04:58:42Z" end-time="2026-10-09 04:58:42Z" duration="0.005800" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[definition-p12-cj-hide-actor display agora possui mandado em definition-p12-cj-hide-city display. Recompensa: 10. Pena: 2 dias.
+definition-p12-cj-hide-actor display esta escondido.
+]]></output>
+        </test-case>
+        <test-case id="2606" name="P12DailyProfileKeepsCrimeAndJusticeP18ReceiptOwnersExplicitlyEmpty" fullname="P12CrimeJusticeInvalidationTests.P12DailyProfileKeepsCrimeAndJusticeP18ReceiptOwnersExplicitlyEmpty" methodname="P12DailyProfileKeepsCrimeAndJusticeP18ReceiptOwnersExplicitlyEmpty" classname="P12CrimeJusticeInvalidationTests" runstate="Runnable" seed="1411832740" result="Passed" start-time="2026-10-09 04:58:42Z" end-time="2026-10-09 04:58:42Z" duration="0.005929" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2600" name="P12FailedEscapeActionNotifiesTheJusticeOwnerBeforeReturningFailure" fullname="P12CrimeJusticeInvalidationTests.P12FailedEscapeActionNotifiesTheJusticeOwnerBeforeReturningFailure" methodname="P12FailedEscapeActionNotifiesTheJusticeOwnerBeforeReturningFailure" classname="P12CrimeJusticeInvalidationTests" runstate="Runnable" seed="367323284" result="Passed" start-time="2026-10-09 04:58:42Z" end-time="2026-10-09 04:58:42Z" duration="0.003520" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[definition-p12-cj-failed-escape-target display agora possui mandado em definition-p12-cj-failed-escape-city display. Recompensa: 12. Pena: 4 dias.
+definition-p12-cj-failed-escape-guard display prendeu definition-p12-cj-failed-escape-target display em definition-p12-cj-failed-escape-city display. Pena restante: 4 dias.
+definition-p12-cj-failed-escape-target display tentou fugir da prisao e falhou. Pena aumentou em 2 dias. Vigilancia aumentou.
+]]></output>
+        </test-case>
+        <test-case id="2602" name="P12ForcedEscapeDirectiveScopesJusticeAndStatusWritesBeforeDirectiveSucceeds" fullname="P12CrimeJusticeInvalidationTests.P12ForcedEscapeDirectiveScopesJusticeAndStatusWritesBeforeDirectiveSucceeds" methodname="P12ForcedEscapeDirectiveScopesJusticeAndStatusWritesBeforeDirectiveSucceeds" classname="P12CrimeJusticeInvalidationTests" runstate="Runnable" seed="691144399" result="Passed" start-time="2026-10-09 04:58:42Z" end-time="2026-10-09 04:58:42Z" duration="0.005816" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[definition-p12-cj-forced-escape-actor display agora possui mandado em definition-p12-cj-forced-escape-city display. Recompensa: 12. Pena: 4 dias.
+definition-p12-cj-forced-escape-guard display prendeu definition-p12-cj-forced-escape-actor display em definition-p12-cj-forced-escape-city display. Pena restante: 4 dias.
+definition-p12-cj-forced-escape-city display atualizou os precos do mercado.
+definition-p12-cj-forced-escape-actor display fugiu da prisao em definition-p12-cj-forced-escape-city display. Recompensa atual: 37.
+]]></output>
+        </test-case>
+        <test-case id="2601" name="P12GuardArrestActionNotifiesJusticeAndTargetStatusOwners" fullname="P12CrimeJusticeInvalidationTests.P12GuardArrestActionNotifiesJusticeAndTargetStatusOwners" methodname="P12GuardArrestActionNotifiesJusticeAndTargetStatusOwners" classname="P12CrimeJusticeInvalidationTests" runstate="Runnable" seed="1315365349" result="Passed" start-time="2026-10-09 04:58:42Z" end-time="2026-10-09 04:58:42Z" duration="0.002919" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[definition-p12-cj-guard-arrest-target display agora possui mandado em definition-p12-cj-guard-arrest-city display. Recompensa: 12. Pena: 4 dias.
+p12-cj-guard-arrest-guard-definition display prendeu definition-p12-cj-guard-arrest-target display em definition-p12-cj-guard-arrest-city display. Pena restante: 4 dias.
+]]></output>
+        </test-case>
+        <test-case id="2596" name="P12RosterReconciliationFollowsNpcStatusOwnerReplacementWithTheSameRuntimeId" fullname="P12CrimeJusticeInvalidationTests.P12RosterReconciliationFollowsNpcStatusOwnerReplacementWithTheSameRuntimeId" methodname="P12RosterReconciliationFollowsNpcStatusOwnerReplacementWithTheSameRuntimeId" classname="P12CrimeJusticeInvalidationTests" runstate="Runnable" seed="991697188" result="Passed" start-time="2026-10-09 04:58:42Z" end-time="2026-10-09 04:58:42Z" duration="0.004963" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2598" name="P12SuccessfulActionNotifiesActorAndTargetStatusLeavesImmediatelyAndNoOpsStayQuiet" fullname="P12CrimeJusticeInvalidationTests.P12SuccessfulActionNotifiesActorAndTargetStatusLeavesImmediatelyAndNoOpsStayQuiet" methodname="P12SuccessfulActionNotifiesActorAndTargetStatusLeavesImmediatelyAndNoOpsStayQuiet" classname="P12CrimeJusticeInvalidationTests" runstate="Runnable" seed="394699822" result="Passed" start-time="2026-10-09 04:58:42Z" end-time="2026-10-09 04:58:42Z" duration="0.001237" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

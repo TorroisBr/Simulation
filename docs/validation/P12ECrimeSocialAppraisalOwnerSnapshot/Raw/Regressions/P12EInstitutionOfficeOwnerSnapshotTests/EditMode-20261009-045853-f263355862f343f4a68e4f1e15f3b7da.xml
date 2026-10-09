@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="11" result="Passed" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 04:59:01Z" end-time="2026-10-09 04:59:01Z" duration="0,2805042">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2700" result="Passed" start-time="2026-10-09 04:59:01Z" end-time="2026-10-09 04:59:01Z" duration="0.280504" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3959" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-political-decision-state/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2700" result="Passed" start-time="2026-10-09 04:59:01Z" end-time="2026-10-09 04:59:01Z" duration="0.266533" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="165592" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2110" name="P12EInstitutionOfficeOwnerSnapshotTests" fullname="P12EInstitutionOfficeOwnerSnapshotTests" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" testcasecount="11" result="Passed" start-time="2026-10-09 04:59:01Z" end-time="2026-10-09 04:59:01Z" duration="0.251854" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2120" name="AssignmentAndVacancyCaptureExactCardinalityAndSingleRevisionChanges" fullname="P12EInstitutionOfficeOwnerSnapshotTests.AssignmentAndVacancyCaptureExactCardinalityAndSingleRevisionChanges" methodname="AssignmentAndVacancyCaptureExactCardinalityAndSingleRevisionChanges" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="1221158360" result="Passed" start-time="2026-10-09 04:59:01Z" end-time="2026-10-09 04:59:01Z" duration="0.179904" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+        </test-case>
+        <test-case id="2113" name="Capture_IsDetachedAndRepeatedCaptureIsDeterministic" fullname="P12EInstitutionOfficeOwnerSnapshotTests.Capture_IsDetachedAndRepeatedCaptureIsDeterministic" methodname="Capture_IsDetachedAndRepeatedCaptureIsDeterministic" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="1528753580" result="Passed" start-time="2026-10-09 04:59:01Z" end-time="2026-10-09 04:59:01Z" duration="0.010737" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2119" name="CaptureRejectsAStaleTokenAfterOwnerMutation" fullname="P12EInstitutionOfficeOwnerSnapshotTests.CaptureRejectsAStaleTokenAfterOwnerMutation" methodname="CaptureRejectsAStaleTokenAfterOwnerMutation" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="969286973" result="Passed" start-time="2026-10-09 04:59:01Z" end-time="2026-10-09 04:59:01Z" duration="0.008817" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2121" name="CaptureRejectsDuplicateWrongOwnerCardinalityRevisionSchemaAndRoleWitnesses" fullname="P12EInstitutionOfficeOwnerSnapshotTests.CaptureRejectsDuplicateWrongOwnerCardinalityRevisionSchemaAndRoleWitnesses" methodname="CaptureRejectsDuplicateWrongOwnerCardinalityRevisionSchemaAndRoleWitnesses" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="666218391" result="Passed" start-time="2026-10-09 04:59:01Z" end-time="2026-10-09 04:59:01Z" duration="0.009756" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2118" name="CaptureRejectsRuntimeWithoutCompletedBoundary" fullname="P12EInstitutionOfficeOwnerSnapshotTests.CaptureRejectsRuntimeWithoutCompletedBoundary" methodname="CaptureRejectsRuntimeWithoutCompletedBoundary" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="954593153" result="Passed" start-time="2026-10-09 04:59:01Z" end-time="2026-10-09 04:59:01Z" duration="0.003139" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2111" name="EmptyRequiredOwners_CaptureAndStageExactZeroWithBoundPairAndRevisions" fullname="P12EInstitutionOfficeOwnerSnapshotTests.EmptyRequiredOwners_CaptureAndStageExactZeroWithBoundPairAndRevisions" methodname="EmptyRequiredOwners_CaptureAndStageExactZeroWithBoundPairAndRevisions" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="80890990" result="Passed" start-time="2026-10-09 04:59:01Z" end-time="2026-10-09 04:59:01Z" duration="0.012965" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2112" name="PopulatedCapture_PreservesRepeatedEqualClosedTenuresAndOpenIncumbencyExactly" fullname="P12EInstitutionOfficeOwnerSnapshotTests.PopulatedCapture_PreservesRepeatedEqualClosedTenuresAndOpenIncumbencyExactly" methodname="PopulatedCapture_PreservesRepeatedEqualClosedTenuresAndOpenIncumbencyExactly" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="1378861960" result="Passed" start-time="2026-10-09 04:59:01Z" end-time="2026-10-09 04:59:01Z" duration="0.015170" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2114" name="StageRejectsDuplicateOrDanglingRowsWithoutReturningEitherOwner" fullname="P12EInstitutionOfficeOwnerSnapshotTests.StageRejectsDuplicateOrDanglingRowsWithoutReturningEitherOwner" methodname="StageRejectsDuplicateOrDanglingRowsWithoutReturningEitherOwner" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="1838161547" result="Passed" start-time="2026-10-09 04:59:01Z" end-time="2026-10-09 04:59:01Z" duration="0.000800" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2117" name="StageRejectsMissingOrMultipleOpenRowsInvalidDatesAndMalformedHeaders" fullname="P12EInstitutionOfficeOwnerSnapshotTests.StageRejectsMissingOrMultipleOpenRowsInvalidDatesAndMalformedHeaders" methodname="StageRejectsMissingOrMultipleOpenRowsInvalidDatesAndMalformedHeaders" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="731930427" result="Passed" start-time="2026-10-09 04:59:01Z" end-time="2026-10-09 04:59:01Z" duration="0.000537" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2115" name="StageRejectsMissingPersonAndInconsistentOpenTenureWithoutPartialOwners" fullname="P12EInstitutionOfficeOwnerSnapshotTests.StageRejectsMissingPersonAndInconsistentOpenTenureWithoutPartialOwners" methodname="StageRejectsMissingPersonAndInconsistentOpenTenureWithoutPartialOwners" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="530892058" result="Passed" start-time="2026-10-09 04:59:01Z" end-time="2026-10-09 04:59:01Z" duration="0.000249" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2116" name="StageRejectsUnsupportedClosedReasonAndRetainsEqualClosedOccurrences" fullname="P12EInstitutionOfficeOwnerSnapshotTests.StageRejectsUnsupportedClosedReasonAndRetainsEqualClosedOccurrences" methodname="StageRejectsUnsupportedClosedReasonAndRetainsEqualClosedOccurrences" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="286449984" result="Passed" start-time="2026-10-09 04:59:01Z" end-time="2026-10-09 04:59:01Z" duration="0.000364" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

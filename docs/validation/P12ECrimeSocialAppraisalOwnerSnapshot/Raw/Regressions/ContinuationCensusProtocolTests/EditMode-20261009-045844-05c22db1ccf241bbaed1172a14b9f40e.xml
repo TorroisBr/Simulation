@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="24" result="Passed" total="24" passed="24" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0,0653851">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2700" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.065385" total="24" passed="24" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3959" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-political-decision-state/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2700" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.059181" total="24" passed="24" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="165580" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="1469" name="ContinuationCensusProtocolTests" fullname="ContinuationCensusProtocolTests" classname="ContinuationCensusProtocolTests" runstate="Runnable" testcasecount="24" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.045049" total="24" passed="24" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="1491" name="CompensatedPersonStoreWriteNotifiesBothSectionsOnceWithoutFamilyDelta" fullname="ContinuationCensusProtocolTests.CompensatedPersonStoreWriteNotifiesBothSectionsOnceWithoutFamilyDelta" methodname="CompensatedPersonStoreWriteNotifiesBothSectionsOnceWithoutFamilyDelta" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="188014786" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.021866" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1482" name="DuplicateAndUnexpectedSectionRegistrationsFaultProtocol" fullname="ContinuationCensusProtocolTests.DuplicateAndUnexpectedSectionRegistrationsFaultProtocol" methodname="DuplicateAndUnexpectedSectionRegistrationsFaultProtocol" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="538297045" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.001166" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1492" name="DuplicateNpcInReconciliationFailsBeforePublishingAnyFamilyOrEpoch" fullname="ContinuationCensusProtocolTests.DuplicateNpcInReconciliationFailsBeforePublishingAnyFamilyOrEpoch" methodname="DuplicateNpcInReconciliationFailsBeforePublishingAnyFamilyOrEpoch" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="1578394317" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000456" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1490" name="DynamicNpcFamilyAssessmentReturnsBusyWithoutEnumeratingActiveRoster" fullname="ContinuationCensusProtocolTests.DynamicNpcFamilyAssessmentReturnsBusyWithoutEnumeratingActiveRoster" methodname="DynamicNpcFamilyAssessmentReturnsBusyWithoutEnumeratingActiveRoster" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="1315696433" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000308" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1471" name="EmptyProtocolDefaultsToOwnerCoverageIncomplete" fullname="ContinuationCensusProtocolTests.EmptyProtocolDefaultsToOwnerCoverageIncomplete" methodname="EmptyProtocolDefaultsToOwnerCoverageIncomplete" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="1407810647" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000189" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1479" name="ExcludedOwnerMustStillSupplyAnExactZeroWitness" fullname="ContinuationCensusProtocolTests.ExcludedOwnerMustStillSupplyAnExactZeroWitness" methodname="ExcludedOwnerMustStillSupplyAnExactZeroWitness" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="902775834" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000274" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1478" name="ExplicitlyEmptyOwnerRejectsPopulatedSection" fullname="ContinuationCensusProtocolTests.ExplicitlyEmptyOwnerRejectsPopulatedSection" methodname="ExplicitlyEmptyOwnerRejectsPopulatedSection" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="1208433795" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.002560" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1476" name="InvalidLaterOwnerFaultsBatchWithoutPublishingEpoch" fullname="ContinuationCensusProtocolTests.InvalidLaterOwnerFaultsBatchWithoutPublishingEpoch" methodname="InvalidLaterOwnerFaultsBatchWithoutPublishingEpoch" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="1775398846" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.001044" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1493" name="MissedRosterReconciliationFailsClosedOnAssessment" fullname="ContinuationCensusProtocolTests.MissedRosterReconciliationFailsClosedOnAssessment" methodname="MissedRosterReconciliationFailsClosedOnAssessment" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="1738458414" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000297" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1472" name="MissingProviderAfterInventorySealRemainsIncomplete" fullname="ContinuationCensusProtocolTests.MissingProviderAfterInventorySealRemainsIncomplete" methodname="MissingProviderAfterInventorySealRemainsIncomplete" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="1455679824" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000193" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1474" name="NotifiedOwnerCommitAdvancesEpochAndRebaselinesOwnerRevision" fullname="ContinuationCensusProtocolTests.NotifiedOwnerCommitAdvancesEpochAndRebaselinesOwnerRevision" methodname="NotifiedOwnerCommitAdvancesEpochAndRebaselinesOwnerRevision" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="862066496" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000247" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1487" name="OffThreadOperationEntryFaultsWithoutClaimingQuiescence" fullname="ContinuationCensusProtocolTests.OffThreadOperationEntryFaultsWithoutClaimingQuiescence" methodname="OffThreadOperationEntryFaultsWithoutClaimingQuiescence" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="350256610" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.001056" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1488" name="OffThreadScopeDisposalLeavesProtocolFaultedAndCountedActive" fullname="ContinuationCensusProtocolTests.OffThreadScopeDisposalLeavesProtocolFaultedAndCountedActive" methodname="OffThreadScopeDisposalLeavesProtocolFaultedAndCountedActive" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="666835764" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000681" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1475" name="OneOuterCommitRefreshesEveryChangedOwnerAndAdvancesEpochOnce" fullname="ContinuationCensusProtocolTests.OneOuterCommitRefreshesEveryChangedOwnerAndAdvancesEpochOnce" methodname="OneOuterCommitRefreshesEveryChangedOwnerAndAdvancesEpochOnce" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="821073764" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000337" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1480" name="OwnerCensusCannotBeAssessedWhileRegisteredOperationIsActive" fullname="ContinuationCensusProtocolTests.OwnerCensusCannotBeAssessedWhileRegisteredOperationIsActive" methodname="OwnerCensusCannotBeAssessedWhileRegisteredOperationIsActive" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="1512502879" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000261" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1477" name="OwnerRevisionRollbackIsRejectedAfterAValidNotifiedChange" fullname="ContinuationCensusProtocolTests.OwnerRevisionRollbackIsRejectedAfterAValidNotifiedChange" methodname="OwnerRevisionRollbackIsRejectedAfterAValidNotifiedChange" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="2119413920" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000301" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1470" name="OwnerSectionAssessmentRequiresSealedRequirementsAndLiveProvider" fullname="ContinuationCensusProtocolTests.OwnerSectionAssessmentRequiresSealedRequirementsAndLiveProvider" methodname="OwnerSectionAssessmentRequiresSealedRequirementsAndLiveProvider" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="1892337" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000309" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1489" name="OwnerThreadBindingIsOneShotAndSetupCannotChangeAfterBinding" fullname="ContinuationCensusProtocolTests.OwnerThreadBindingIsOneShotAndSetupCannotChangeAfterBinding" methodname="OwnerThreadBindingIsOneShotAndSetupCannotChangeAfterBinding" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="730702437" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000164" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1485" name="PendingMutationEpochReservationPreventsQuiescenceAndSnapshot" fullname="ContinuationCensusProtocolTests.PendingMutationEpochReservationPreventsQuiescenceAndSnapshot" methodname="PendingMutationEpochReservationPreventsQuiescenceAndSnapshot" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="448199364" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.002129" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1484" name="QuiescentSnapshotCopiesCurrentOwnersInOrdinalSectionOrder" fullname="ContinuationCensusProtocolTests.QuiescentSnapshotCopiesCurrentOwnersInOrdinalSectionOrder" methodname="QuiescentSnapshotCopiesCurrentOwnersInOrdinalSectionOrder" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="1815664249" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000541" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1483" name="RegisteredNestedOperationsAreCountedUntilEveryScopeCloses" fullname="ContinuationCensusProtocolTests.RegisteredNestedOperationsAreCountedUntilEveryScopeCloses" methodname="RegisteredNestedOperationsAreCountedUntilEveryScopeCloses" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="1204454991" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000319" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1481" name="SchemaOrOwnerInstanceMismatchFailsClosed" fullname="ContinuationCensusProtocolTests.SchemaOrOwnerInstanceMismatchFailsClosed" methodname="SchemaOrOwnerInstanceMismatchFailsClosed" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="113265451" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000320" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1473" name="UnnotifiedOwnerRevisionChangeFaultsBeforeCoverageCanBeAccepted" fullname="ContinuationCensusProtocolTests.UnnotifiedOwnerRevisionChangeFaultsBeforeCoverageCanBeAccepted" methodname="UnnotifiedOwnerRevisionChangeFaultsBeforeCoverageCanBeAccepted" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="1815606977" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000301" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1486" name="UnregisteredOperationCannotEnterAfterInventorySeal" fullname="ContinuationCensusProtocolTests.UnregisteredOperationCannotEnterAfterInventorySeal" methodname="UnregisteredOperationCannotEnterAfterInventorySeal" classname="ContinuationCensusProtocolTests" runstate="Runnable" seed="1124414941" result="Passed" start-time="2026-10-09 04:58:52Z" end-time="2026-10-09 04:58:52Z" duration="0.000191" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

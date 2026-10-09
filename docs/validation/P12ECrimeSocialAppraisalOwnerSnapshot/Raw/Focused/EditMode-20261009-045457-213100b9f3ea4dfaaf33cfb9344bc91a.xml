@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="4" result="Passed" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 04:56:32Z" end-time="2026-10-09 04:56:32Z" duration="0,3817652">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2698" result="Passed" start-time="2026-10-09 04:56:32Z" end-time="2026-10-09 04:56:32Z" duration="0.381765" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3957" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-political-decision-state/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2698" result="Passed" start-time="2026-10-09 04:56:32Z" end-time="2026-10-09 04:56:32Z" duration="0.346436" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="163716" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2689" name="P12ECrimeSocialAppraisalOwnerSnapshotTests" fullname="P12ECrimeSocialAppraisalOwnerSnapshotTests" classname="P12ECrimeSocialAppraisalOwnerSnapshotTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-10-09 04:56:32Z" end-time="2026-10-09 04:56:32Z" duration="0.234749" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2692" name="CaptureRequiresTheOriginalVectorAndRejectsAWriteAfterTheToken" fullname="P12ECrimeSocialAppraisalOwnerSnapshotTests.CaptureRequiresTheOriginalVectorAndRejectsAWriteAfterTheToken" methodname="CaptureRequiresTheOriginalVectorAndRejectsAWriteAfterTheToken" classname="P12ECrimeSocialAppraisalOwnerSnapshotTests" runstate="Runnable" seed="734733219" result="Passed" start-time="2026-10-09 04:56:32Z" end-time="2026-10-09 04:56:32Z" duration="0.177481" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2690" name="EmptyCaptureStagesAllThreeExactOwnersAgainstTheSuppliedRoots" fullname="P12ECrimeSocialAppraisalOwnerSnapshotTests.EmptyCaptureStagesAllThreeExactOwnersAgainstTheSuppliedRoots" methodname="EmptyCaptureStagesAllThreeExactOwnersAgainstTheSuppliedRoots" classname="P12ECrimeSocialAppraisalOwnerSnapshotTests" runstate="Runnable" seed="970573410" result="Passed" start-time="2026-10-09 04:56:32Z" end-time="2026-10-09 04:56:32Z" duration="0.020020" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2691" name="PopulatedCapturePreservesAllOwnerValuesRevisionsAndReactionHistory" fullname="P12ECrimeSocialAppraisalOwnerSnapshotTests.PopulatedCapturePreservesAllOwnerValuesRevisionsAndReactionHistory" methodname="PopulatedCapturePreservesAllOwnerValuesRevisionsAndReactionHistory" classname="P12ECrimeSocialAppraisalOwnerSnapshotTests" runstate="Runnable" seed="1930748279" result="Passed" start-time="2026-10-09 04:56:32Z" end-time="2026-10-09 04:56:32Z" duration="0.025612" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2693" name="StagingRejectsDanglingTargetsAndSupersessionWithoutChangingRoots" fullname="P12ECrimeSocialAppraisalOwnerSnapshotTests.StagingRejectsDanglingTargetsAndSupersessionWithoutChangingRoots" methodname="StagingRejectsDanglingTargetsAndSupersessionWithoutChangingRoots" classname="P12ECrimeSocialAppraisalOwnerSnapshotTests" runstate="Runnable" seed="1423527988" result="Passed" start-time="2026-10-09 04:56:32Z" end-time="2026-10-09 04:56:32Z" duration="0.000799" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
