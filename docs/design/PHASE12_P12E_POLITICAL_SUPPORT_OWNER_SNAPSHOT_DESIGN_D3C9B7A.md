@@ -37,7 +37,7 @@ Each row preserves exactly:
 
 `IsActive` is derived from `EndedAbsoluteDay == null`; it is not an independent field. Do not serialize `activeByPair`, `OwnerToken`, mutation guards, transitions, proposal objects, or derived indexes. Do not allocate/recompute relation IDs or revisions during capture or hydration.
 
-The enclosing snapshot also retains CapturedAbsoluteDay = token.AbsoluteDay as completed-boundary metadata. This is not an owner row or a new census section. TryCapture copies it from the exact P12-B token; no later clock read may replace it.
+The enclosing snapshot also retains `CapturedAbsoluteDay = token.AbsoluteDay` as completed-boundary metadata. This is not an owner row or a new census section. `TryCapture` copies it from the exact P12-B token; no later clock read may replace it.
 
 Capture emits rows in the exact existing `PoliticalSupportStore.CompareRecords` order: source kind, source ID ordinal, target kind, target ID ordinal, disposition, start day, then relation ID ordinal. Preserve ended rows and history order as returned by the owner. A later re-add is a separate row with a new caller-provided relation ID; an existing ID is never reusable. Multiple ended rows for a pair are valid, while at most one row for that typed pair may be active regardless of disposition.
 
@@ -67,7 +67,7 @@ Validate the detached section before constructing any candidate:
 
 The source/target pair must use the store's existing length-prefixed typed `PairKey` semantics, so values containing separators cannot alias. Preserve exact typed distinctions even when two IDs have the same text. Rebuild `activeByPair` from active rows using the existing owner logic; it remains derived state.
 
-TryStage invokes validation using the snapshot''s retained CapturedAbsoluteDay; it does not accept or consult a current runtime day. The staged validator rejects any row outside that captured boundary even if the runtime later advances.
+`TryStage` invokes validation using the snapshot's retained `CapturedAbsoluteDay`; it does not accept or consult a current runtime day. The staged validator rejects any row outside that captured boundary even if the runtime later advances.
 
 Add one private unpublished factory in `PoliticalSupportStore`, analogous to the existing P12-E factories in `PoliticalClaimStore` and `FactionStore`. It receives the exact staged Person/Faction/PoliticalClaim roots, validated relation rows, and captured revision, constructs a fresh private candidate, preserves the revision exactly, and rebuilds the derived active-pair index. It must not bind/publish the candidate into a live runtime. Any failure returns `false` and a null staged owner; the three staged roots and current runtime remain unchanged.
 
