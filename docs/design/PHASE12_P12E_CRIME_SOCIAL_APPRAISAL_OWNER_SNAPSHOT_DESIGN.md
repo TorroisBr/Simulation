@@ -1,6 +1,6 @@
 # P12-E CrimeSocialAppraisal Owner Snapshot Design
 
-**Status:** Current-base owner-specific technical design candidate; implementation has not started.
+**Status:** Reviewed current-base owner-specific technical design; implementation candidate 58a25ed8 is submitted separately, with code-review and promotion recorded as independent evidence.
 
 **Checkpoint:** P12-E — Profile-selected core and official daily-domain owners.
 **P12 canonical base:** `codex/phase12/canonical` at `29f719f428e29cc452ffa8435c0d601c2bed4787`.
