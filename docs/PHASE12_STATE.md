@@ -1,3 +1,13 @@
+## P12-G owner/operation/publication reconciliation — promoted 2026-10-09
+
+`codex/phase12/canonical` advanced by clean fast-forward from `564553f92737ddd9d190bc16ac84c4894e35913a` to `f799f4e2db8266be30e2f675b760d0b9911da42f`. The promotion contains the source-linked [Daily-v1 owner/operation/publication reconciliation](design/PHASE12_G_DAILY_V1_OWNER_OPERATION_PUBLICATION_RECONCILIATION_564553F.md) and its independent [exact-tip review record](design/PHASE12_G_DAILY_V1_OWNER_OPERATION_PUBLICATION_RECONCILIATION_REVIEW_10C1302.md). The reviewed ledger content is commit `10c130259bd48b9ff2fa57609188a1c6fa9911d8`, blob `305acd56f32873932b56b1f063288ccef68d974a`. Independent exact-tip review PASS; the full diff is documentation-only, `Assets` is unchanged, and `git diff --check` passes. Unity tests were not applicable to this documentation-only reconciliation.
+
+The refreshed manifest arithmetic is `61 + 22N + (N-M) + P + 4C`, yielding 299 rows for the accepted authored fixture. The previous 275/278 row counts and 20-per-NPC equation are historical; the old 23-operation statement is superseded by the current 24-ID matrix, whose stale 278-row closing sentence is explicitly identified. The new ledger maps current owner families and supported operations to C–F consumers, records non-vector composed objects and publication aliases, and reconciles Expedition using the later reviewed supported-ingress record.
+
+This evidence does **not** certify an exhaustive live graph or make P12-G implementation-ready. Remaining P12-G gates are: complete live owner/cardinality coverage across supported transitions; exact Crime/Social and any supported direct-path operation/epoch mapping; current-tip B–F interface revalidation; fresh target checks for P8-C/D, global receipt caches, per-NPC P18 receipts, Crime/Justice sentinels, and ActorChoice temporal state; fresh restored-boundary admission; the single active-session publication root; and whole-graph rejection, failure atomicity, no-replay, and continuation parity.
+
+P12-B through P12-F remain promoted within their recorded scopes. P12-G remains `WAIT_DEPENDENCY`; P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`. The separate P12-A implementation authorization is unchanged. The user's unrelated ProjectSettings edits and untracked `.meta` files remain unstaged and untouched.
+
 ## P12-G selected-profile inventory evidence promotion — 2026-10-09
 
 P12 canonical advanced by clean fast-forward from 02009f9063dd252bd4b177fd6aef1e74dcd947f5 to 05942670d52c03ea3e7bd6d13f86468549a53071. The promoted Assets tree is 1b90b4f77586f69c04330b564a32e0a9475808d4. The independent exact-tip review is recorded in design/PHASE12_G_TRAVELPARTY_ALLOCATOR_IDENTITY_REVIEW_C65F251.md.
