@@ -6,7 +6,53 @@ COMPLETE/PROMOTED within its accepted identity, genesis-provenance, and
 deterministic-root continuation scope; P12-A remains `WAIT_DEPENDENCY`. P13
 remains `BLOCKED`.
 
-## Latest canonical promotion — P12-E Institution/Office owner snapshots (2026-10-08)
+## Latest canonical promotion — P12-E War owner snapshot (2026-10-08)
+
+After refreshing P12 canonical at `710874b06b3045bb75acb28feeb063d63a83c31e`,
+the bounded current-base War candidate `codex/phase12/P12EWarOwnerSnapshotIntegration`
+was promoted at `8222476cf63ba4126b1a1c00370618a28629bdb7`. Its code commit
+`ba2f8af44c91cc49cb424b959cbc4c88ab440c8e` is a direct child of the prior
+canonical. The exact reviewed Git tree is
+`cc5f95f8099391e587d24c360184f7fc65fecbea`; its validated combined `Assets`
+tree is `d844aa0f09587b91b5582bc91aff2974a0059c57`.
+
+Independent exact-tip current-base integration review PASS is durably recorded
+at `8dc4105caff22af08085eb65d4c4cddf7ce4cb5c` on
+`codex/review/phase12/P12EWarOwnerSnapshotIntegrationReview8222476` in
+[`design/PHASE12_P12E_WAR_OWNER_SNAPSHOT_INTEGRATION_REVIEW_8222476.md`](design/PHASE12_P12E_WAR_OWNER_SNAPSHOT_INTEGRATION_REVIEW_8222476.md).
+The review confirms all five War implementation/test/metadata blobs match the
+previously reviewed code and finds no Institution/Office overlap. Current-base
+validation passed War 5/5, Conflict/War 9/9, Battle 6/6, ArmedForce 10/10,
+P17 10/10, Institution/Office 11/11, ALL EditMode 2651/2651, official Smoke
+5/5, and `git diff --check`. Validation artifacts and hashes are recorded in
+[`validation/P12EWarOwnerSnapshotIntegration-20261009.md`](validation/P12EWarOwnerSnapshotIntegration-20261009.md).
+
+The bounded War owner snapshot preserves exact ArmedForce-to-Conflict staged
+references, optional Conflict resolution, local War revision restoration,
+private all-or-nothing staging, and rejection of P17-A War data in Daily-v1.
+It adds no runtime/bootstrap integration or mutation/epoch wiring and does not
+claim complete P12-E coverage, global quiescence, capture eligibility, P12-A
+or P13 readiness, whole-profile export/hydration, P12-G publication, or Phase
+12 closure.
+
+### Refreshed P12 dependency DAG
+
+- P12-B and P12-C remain COMPLETE/PROMOTED within their accepted bounded
+  contracts; P12-D remains COMPLETE/PROMOTED within its Daily-v1 owner-package
+  boundary.
+- P12-E remains IN PROGRESS. Conflict, Battle, ArmedForce/manpower/position,
+  Institution/Office, and War owner snapshots are promoted. Property/Estate
+  remains a separate implementation track and is being corrected and
+  re-integrated on this canonical base.
+- P12-F waits on P12-E. P12-G waits on P12-B through P12-F plus validated
+  live-profile inventory.
+- P12-A remains WAIT_DEPENDENCY until all included owners have exact
+  export/staged hydration, the live profile inventory is validated, and its
+  separate implementation authorization is recorded. P13 remains BLOCKED.
+- Phase 12 remains open. This owner slice does not imply profile-wide
+  export/hydration or Phase closure.
+
+## Previous canonical promotion — P12-E Institution/Office owner snapshots (2026-10-08)
 
 After refreshing P12 canonical at `77135b3e0ca8df83c6852f2c234ff9098a833468`,
 the bounded Institution/Office candidate was promoted through implementation
