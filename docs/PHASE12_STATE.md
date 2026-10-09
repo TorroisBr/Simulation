@@ -3634,3 +3634,39 @@ This completes P12-E only within its accepted selected-profile owner-set export/
 - P12-F's documented dependency on P12-C/D/E is now satisfied. Its existing technical design remains a proposal and requires current-base owner-inventory and shared-`NpcRuntime` seam revalidation plus independent design review before implementation. This promotion does not claim P12-F readiness or implementation.
 - P12-G remains WAIT_DEPENDENCY on P12-B through P12-F and the validated live-profile inventory. P12-A remains WAIT_DEPENDENCY on complete included-owner exports/hydration, validated live inventory, and its separate implementation authorization. P13 remains BLOCKED on its supported continuation/recoverable-causal-history requirements.
 - No other numbered-phase dependency edge changes. No closed Phase is reopened.
+## P12-G fixed receipt-owner identity witness promotion — 2026-10-09
+
+P12 canonical was fast-forwarded from
+`fa5607e3a138365a0ed814cda193edfd4aaab55d` to
+`629078f26addd62621801984aff519aa5ec7ce21`. The test-only code candidate is
+`0f5735a09bc094c32bac0f2e316e154afbd1ada3`, with reviewed `Assets` tree
+`d88661ee88554716364855659e4f634b323519eb`. Independent exact-tip review
+passed; its durable record is
+[`PHASE12_G_FIXED_RECEIPT_OWNER_IDENTITY_REVIEW_0F5735A.md`](design/PHASE12_G_FIXED_RECEIPT_OWNER_IDENTITY_REVIEW_0F5735A.md).
+The validation manifest and exact XML/compressed-log hashes are in
+[`P12GFixedReceiptOwnerIdentity/VALIDATION.md`](validation/P12GFixedReceiptOwnerIdentity/VALIDATION.md).
+
+The selected Daily-v1 composition test now compares the NPC-decision
+occurrence-receipt census identity to the exact `NpcDecisionRecorder` installed
+in `SimulationRuntime`, and the keyed-sale receipt identity to its exact
+installed `EconomyTransactionService`. Existing zero cardinality/revision and
+repeat-read identity checks remain. Focused composition tests passed 26/26,
+ALL EditMode passed 2733/2733, official Smoke passed 5/5, and
+`git diff --check` passed. This is source-owner identity evidence only; it
+does not prove that a future G assembler constructs or validates target receipt
+owners.
+
+The refreshed numbered-phase DAG remains unchanged: P12-B through P12-F are
+promoted within their recorded scopes; P12-G remains `WAIT_DEPENDENCY` on
+complete live owner/cardinality and operation/epoch coverage, integrated
+target-owner checks, restored-boundary admission, one active-session
+publication owner/swap, and whole-graph rejection/failure-atomicity/no-replay/
+continuation-parity evidence. P12-A remains `WAIT_DEPENDENCY`; P13 remains
+`BLOCKED`; Phase 12 remains `OPEN`. No capture, export, hydration, or downstream
+readiness is implied. The next bounded work is current-base revalidation of the
+already reviewed `TryAdmitRestoredDailyBoundary` contract in the P12-G design;
+it must issue fresh candidate-bound in-memory admission from preserved boundary
+scalars and must not transfer the source token, advance time, or increment the
+successful gameplay-advance sequence.
+
+## P12-G staged-package target-owner witnesses — reviewed 2026-10-09
