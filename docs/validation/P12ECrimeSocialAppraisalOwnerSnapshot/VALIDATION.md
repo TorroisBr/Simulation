@@ -47,4 +47,3 @@ The six owner snapshot tests cover empty and populated capture; same-runtime bou
 ## Evidence interpretation
 
 The candidate is an owner snapshot/staging capability. The retained tests do not establish runtime composition, global mutation epochs, P12-A capture eligibility, complete P12-E coverage, export/hydration of the broader profile, or Phase 12 completion.
-
