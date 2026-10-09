@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="11" result="Passed" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 00:36:20Z" end-time="2026-10-09 00:36:20Z" duration="0,0650543">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2662" result="Passed" start-time="2026-10-09 00:36:20Z" end-time="2026-10-09 00:36:20Z" duration="0.065054" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3916" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-property-estate-integration/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2662" result="Passed" start-time="2026-10-09 00:36:20Z" end-time="2026-10-09 00:36:20Z" duration="0.051306" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="136356" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3314" name="PropertyEstateOwnerSnapshotTests" fullname="PropertyEstateOwnerSnapshotTests" classname="PropertyEstateOwnerSnapshotTests" runstate="Runnable" testcasecount="11" result="Passed" start-time="2026-10-09 00:36:20Z" end-time="2026-10-09 00:36:20Z" duration="0.033976" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3317" name="CaptureRejectsMismatchedOrMissingRequiredOwnerVectorSection" fullname="PropertyEstateOwnerSnapshotTests.CaptureRejectsMismatchedOrMissingRequiredOwnerVectorSection" methodname="CaptureRejectsMismatchedOrMissingRequiredOwnerVectorSection" classname="PropertyEstateOwnerSnapshotTests" runstate="Runnable" seed="571719129" result="Passed" start-time="2026-10-09 00:36:20Z" end-time="2026-10-09 00:36:20Z" duration="0.012679" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3325" name="CaptureRejectsOwnerIdentityAndSectionStampMismatches" fullname="PropertyEstateOwnerSnapshotTests.CaptureRejectsOwnerIdentityAndSectionStampMismatches" methodname="CaptureRejectsOwnerIdentityAndSectionStampMismatches" classname="PropertyEstateOwnerSnapshotTests" runstate="Runnable" seed="905776789" result="Passed" start-time="2026-10-09 00:36:20Z" end-time="2026-10-09 00:36:20Z" duration="0.000403" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3315" name="EmptyPair_CapturesAndStagesThreeExplicitZeroSections" fullname="PropertyEstateOwnerSnapshotTests.EmptyPair_CapturesAndStagesThreeExplicitZeroSections" methodname="EmptyPair_CapturesAndStagesThreeExplicitZeroSections" classname="PropertyEstateOwnerSnapshotTests" runstate="Runnable" seed="1323407367" result="Passed" start-time="2026-10-09 00:36:20Z" end-time="2026-10-09 00:36:20Z" duration="0.004176" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3316" name="PopulatedPair_PreservesDetachedOwnershipFullHistoryEstateRowsAndExactRevisions" fullname="PropertyEstateOwnerSnapshotTests.PopulatedPair_PreservesDetachedOwnershipFullHistoryEstateRowsAndExactRevisions" methodname="PopulatedPair_PreservesDetachedOwnershipFullHistoryEstateRowsAndExactRevisions" classname="PropertyEstateOwnerSnapshotTests" runstate="Runnable" seed="1428613523" result="Passed" start-time="2026-10-09 00:36:20Z" end-time="2026-10-09 00:36:20Z" duration="0.004896" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3323" name="StageRejectsDanglingOwnerPersonHistoryReferencesAndMissingDeathFacts" fullname="PropertyEstateOwnerSnapshotTests.StageRejectsDanglingOwnerPersonHistoryReferencesAndMissingDeathFacts" methodname="StageRejectsDanglingOwnerPersonHistoryReferencesAndMissingDeathFacts" classname="PropertyEstateOwnerSnapshotTests" runstate="Runnable" seed="1526829387" result="Passed" start-time="2026-10-09 00:36:20Z" end-time="2026-10-09 00:36:20Z" duration="0.001399" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3318" name="StageRejectsDuplicateDeceasedPersonBeforeReturningEitherOwner" fullname="PropertyEstateOwnerSnapshotTests.StageRejectsDuplicateDeceasedPersonBeforeReturningEitherOwner" methodname="StageRejectsDuplicateDeceasedPersonBeforeReturningEitherOwner" classname="PropertyEstateOwnerSnapshotTests" runstate="Runnable" seed="1651705042" result="Passed" start-time="2026-10-09 00:36:20Z" end-time="2026-10-09 00:36:20Z" duration="0.000158" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3319" name="StageRejectsMissingTypedReferencesAndFutureHistoryWithoutPartialPair" fullname="PropertyEstateOwnerSnapshotTests.StageRejectsMissingTypedReferencesAndFutureHistoryWithoutPartialPair" methodname="StageRejectsMissingTypedReferencesAndFutureHistoryWithoutPartialPair" classname="PropertyEstateOwnerSnapshotTests" runstate="Runnable" seed="725199867" result="Passed" start-time="2026-10-09 00:36:20Z" end-time="2026-10-09 00:36:20Z" duration="0.000305" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3321" name="StageRejectsNullMalformedAndDuplicateRowsBeforeReturningEitherOwner" fullname="PropertyEstateOwnerSnapshotTests.StageRejectsNullMalformedAndDuplicateRowsBeforeReturningEitherOwner" methodname="StageRejectsNullMalformedAndDuplicateRowsBeforeReturningEitherOwner" classname="PropertyEstateOwnerSnapshotTests" runstate="Runnable" seed="1087090745" result="Passed" start-time="2026-10-09 00:36:20Z" end-time="2026-10-09 00:36:20Z" duration="0.000500" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3320" name="StageRejectsRevisionCardinalityAndUnorderedHistory" fullname="PropertyEstateOwnerSnapshotTests.StageRejectsRevisionCardinalityAndUnorderedHistory" methodname="StageRejectsRevisionCardinalityAndUnorderedHistory" classname="PropertyEstateOwnerSnapshotTests" runstate="Runnable" seed="1628101572" result="Passed" start-time="2026-10-09 00:36:20Z" end-time="2026-10-09 00:36:20Z" duration="0.000246" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3324" name="StageRejectsTransferAndEstateDaysOutsideSavedTimelineOrBeforeDeath" fullname="PropertyEstateOwnerSnapshotTests.StageRejectsTransferAndEstateDaysOutsideSavedTimelineOrBeforeDeath" methodname="StageRejectsTransferAndEstateDaysOutsideSavedTimelineOrBeforeDeath" classname="PropertyEstateOwnerSnapshotTests" runstate="Runnable" seed="1835692465" result="Passed" start-time="2026-10-09 00:36:20Z" end-time="2026-10-09 00:36:20Z" duration="0.000393" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3322" name="StageRejectsUnsupportedSchemaAndMalformedCountsOrRevisionsAtomically" fullname="PropertyEstateOwnerSnapshotTests.StageRejectsUnsupportedSchemaAndMalformedCountsOrRevisionsAtomically" methodname="StageRejectsUnsupportedSchemaAndMalformedCountsOrRevisionsAtomically" classname="PropertyEstateOwnerSnapshotTests" runstate="Runnable" seed="1037797119" result="Passed" start-time="2026-10-09 00:36:20Z" end-time="2026-10-09 00:36:20Z" duration="0.000303" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

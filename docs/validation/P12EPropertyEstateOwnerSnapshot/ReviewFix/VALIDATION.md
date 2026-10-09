@@ -4,12 +4,12 @@
 
 ## Exact source
 
-- Current P12 canonical base: `710874b06b3045bb75acb28feeb063d63a83c31e`.
-- Candidate integration: this branch is based on current canonical, then replays implementation candidate `codex/phase12/P12EPropertyEstateOwnerSnapshotIntegration` at `62bfd8884e2c87271485f49a5d4b87d9369eddd5` and the additive review fix.
-- Exact Assets tree validated: `ad22eea285bd3aedb45885f66b0ea625d3509a62`.
+- Current P12 canonical base: `0709eec1244f791e81b1d05f669bb4a577a9fdb6`.
+- Candidate replays implementation `codex/phase12/P12EPropertyEstateOwnerSnapshotIntegration` at `62bfd8884e2c87271485f49a5d4b87d9369eddd5` and adds the reviewed fixes on this current base.
+- Exact Assets tree validated: `4ee9e00f3aaec28225fdebd2a38d8db78b2061e6`.
 - Accepted design: `codex/phase12/P12EPropertyEstateSnapshotDesign` at `224eaff53fa5bdddbe4a67aa6a8559aea5499c21`.
 - Independent design review: `codex/review/phase12/P12EPropertyEstateOwnerSnapshotDesign224EAFF` at `b53b3021cd106b108f1913178f426473ca4050db`.
-- Prior independent implementation review: `codex/review/phase12/P12EPropertyEstateOwnerSnapshotIntegration62BFD88` at `578e7248a4c1c16c07405eec8abe25b5e887a47f` (`NEEDS_CHANGES`).
+- Prior independent implementation review: `codex/review/phase12/P12EPropertyEstateOwnerSnapshotIntegration62BFD88` at `578e7248a4c1c16c07405eec8abe25b5e887a47f` (`NEEDS_CHANGES`); this candidate addresses its listed findings.
 - Unity: `6000.3.9f1`; validation used `Tools/UnityValidation/Invoke-UnityValidation.ps1`.
 
 ## Changes covered
@@ -28,7 +28,7 @@ The malformed transfer-history rows are validated before ordering, so two null r
 | SuccessionIntegrationTests | 21/21 PASS |
 | PropertyEstateMutationEpochTests | 5/5 PASS |
 | PersonOwnerSnapshotTests | 5/5 PASS |
-| ALL EditMode | 2657/2657 PASS |
+| ALL EditMode | 2662/2662 PASS |
 | Official `-TestFilter Smoke` | 5/5 PASS |
 | `git diff --check` | PASS |
 

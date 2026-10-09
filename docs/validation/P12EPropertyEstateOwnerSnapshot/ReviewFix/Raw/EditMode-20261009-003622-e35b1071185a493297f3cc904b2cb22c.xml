@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="2" result="Passed" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 00:36:30Z" end-time="2026-10-09 00:36:30Z" duration="0,1248908">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2662" result="Passed" start-time="2026-10-09 00:36:30Z" end-time="2026-10-09 00:36:30Z" duration="0.124891" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3916" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-property-estate-integration/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2662" result="Passed" start-time="2026-10-09 00:36:30Z" end-time="2026-10-09 00:36:30Z" duration="0.103557" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="143444" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3326" name="PropertyOwnershipCensusTests" fullname="PropertyOwnershipCensusTests" classname="PropertyOwnershipCensusTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-09 00:36:30Z" end-time="2026-10-09 00:36:30Z" duration="0.081884" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3328" name="RuntimeClonePreservesPopulatedOwnershipHistoryAndRevisionWithoutChangingSource" fullname="PropertyOwnershipCensusTests.RuntimeClonePreservesPopulatedOwnershipHistoryAndRevisionWithoutChangingSource" methodname="RuntimeClonePreservesPopulatedOwnershipHistoryAndRevisionWithoutChangingSource" classname="PropertyOwnershipCensusTests" runstate="Runnable" seed="2097388879" result="Passed" start-time="2026-10-09 00:36:30Z" end-time="2026-10-09 00:36:30Z" duration="0.064639" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3327" name="RuntimeWitnessTracksRegistrationTransferAndRejectedOperations" fullname="PropertyOwnershipCensusTests.RuntimeWitnessTracksRegistrationTransferAndRejectedOperations" methodname="RuntimeWitnessTracksRegistrationTransferAndRejectedOperations" classname="PropertyOwnershipCensusTests" runstate="Runnable" seed="1769169034" result="Passed" start-time="2026-10-09 00:36:30Z" end-time="2026-10-09 00:36:30Z" duration="0.003457" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
