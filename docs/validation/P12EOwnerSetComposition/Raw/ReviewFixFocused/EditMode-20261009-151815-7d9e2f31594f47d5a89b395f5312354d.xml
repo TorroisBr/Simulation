@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="6" result="Passed" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 15:18:25Z" end-time="2026-10-09 15:18:26Z" duration="0,4027867">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2715" result="Passed" start-time="2026-10-09 15:18:25Z" end-time="2026-10-09 15:18:26Z" duration="0.402787" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3976" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-current-canonical-design-review/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2715" result="Passed" start-time="2026-10-09 15:18:26Z" end-time="2026-10-09 15:18:26Z" duration="0.387878" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="117616" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2696" name="P12EDailyV1OwnerPackageTests" fullname="P12EDailyV1OwnerPackageTests" classname="P12EDailyV1OwnerPackageTests" runstate="Runnable" testcasecount="6" result="Passed" start-time="2026-10-09 15:18:26Z" end-time="2026-10-09 15:18:26Z" duration="0.370043" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2697" name="TryCaptureAndStage_ComposesAcceptedEmptyOwnerSetWithoutPublishingOrMutatingInputs" fullname="P12EDailyV1OwnerPackageTests.TryCaptureAndStage_ComposesAcceptedEmptyOwnerSetWithoutPublishingOrMutatingInputs" methodname="TryCaptureAndStage_ComposesAcceptedEmptyOwnerSetWithoutPublishingOrMutatingInputs" classname="P12EDailyV1OwnerPackageTests" runstate="Runnable" seed="1632791506" result="Passed" start-time="2026-10-09 15:18:26Z" end-time="2026-10-09 15:18:26Z" duration="0.224925" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2701" name="TryCaptureAndStage_ComposesPopulatedOfficeClaimSupportRelationsThroughExactStagedParents" fullname="P12EDailyV1OwnerPackageTests.TryCaptureAndStage_ComposesPopulatedOfficeClaimSupportRelationsThroughExactStagedParents" methodname="TryCaptureAndStage_ComposesPopulatedOfficeClaimSupportRelationsThroughExactStagedParents" classname="P12EDailyV1OwnerPackageTests" runstate="Runnable" seed="1837706924" result="Passed" start-time="2026-10-09 15:18:26Z" end-time="2026-10-09 15:18:26Z" duration="0.045193" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2698" name="TryCaptureAndStage_RejectsDifferentTokenVectorAndWrongStagedDayWithoutPackage" fullname="P12EDailyV1OwnerPackageTests.TryCaptureAndStage_RejectsDifferentTokenVectorAndWrongStagedDayWithoutPackage" methodname="TryCaptureAndStage_RejectsDifferentTokenVectorAndWrongStagedDayWithoutPackage" classname="P12EDailyV1OwnerPackageTests" runstate="Runnable" seed="1323325858" result="Passed" start-time="2026-10-09 15:18:26Z" end-time="2026-10-09 15:18:26Z" duration="0.037181" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2700" name="TryCaptureAndStage_RejectsSameWorldRootsFromDifferentAttemptsAndTokens" fullname="P12EDailyV1OwnerPackageTests.TryCaptureAndStage_RejectsSameWorldRootsFromDifferentAttemptsAndTokens" methodname="TryCaptureAndStage_RejectsSameWorldRootsFromDifferentAttemptsAndTokens" classname="P12EDailyV1OwnerPackageTests" runstate="Runnable" seed="765390958" result="Passed" start-time="2026-10-09 15:18:26Z" end-time="2026-10-09 15:18:26Z" duration="0.035779" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2699" name="TryCaptureAndStage_RejectsTokenAfterSourceMutationAndReturnsNoPackage" fullname="P12EDailyV1OwnerPackageTests.TryCaptureAndStage_RejectsTokenAfterSourceMutationAndReturnsNoPackage" methodname="TryCaptureAndStage_RejectsTokenAfterSourceMutationAndReturnsNoPackage" classname="P12EDailyV1OwnerPackageTests" runstate="Runnable" seed="382406486" result="Passed" start-time="2026-10-09 15:18:26Z" end-time="2026-10-09 15:18:26Z" duration="0.014883" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2702" name="UnresolvedBinding_CopiesTypedDecisionIdentityOrderedKnowledgeReferencesAndRevisions" fullname="P12EDailyV1OwnerPackageTests.UnresolvedBinding_CopiesTypedDecisionIdentityOrderedKnowledgeReferencesAndRevisions" methodname="UnresolvedBinding_CopiesTypedDecisionIdentityOrderedKnowledgeReferencesAndRevisions" classname="P12EDailyV1OwnerPackageTests" runstate="Runnable" seed="217679814" result="Passed" start-time="2026-10-09 15:18:26Z" end-time="2026-10-09 15:18:26Z" duration="0.001010" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

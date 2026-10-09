@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="33" result="Passed" total="33" passed="33" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0,3392998">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2715" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.339300" total="33" passed="33" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3976" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-current-canonical-design-review/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2715" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.317297" total="33" passed="33" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="121124" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2905" name="PersistentBattleCensusTests" fullname="PersistentBattleCensusTests" classname="PersistentBattleCensusTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.029864" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2906" name="WitnessTracksBattleRowsAndRevisionWithoutCountingLifecycleAsRows" fullname="PersistentBattleCensusTests.WitnessTracksBattleRowsAndRevisionWithoutCountingLifecycleAsRows" methodname="WitnessTracksBattleRowsAndRevisionWithoutCountingLifecycleAsRows" classname="PersistentBattleCensusTests" runstate="Runnable" seed="1409612146" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.018220" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="2907" name="PersistentBattleOwnerSnapshotTests" fullname="PersistentBattleOwnerSnapshotTests" classname="PersistentBattleOwnerSnapshotTests" runstate="Runnable" testcasecount="6" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.030786" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2911" name="CaptureRejectsWrongProfileStaleVectorDuplicateWitnessAndComposedLocalTopology" fullname="PersistentBattleOwnerSnapshotTests.CaptureRejectsWrongProfileStaleVectorDuplicateWitnessAndComposedLocalTopology" methodname="CaptureRejectsWrongProfileStaleVectorDuplicateWitnessAndComposedLocalTopology" classname="PersistentBattleOwnerSnapshotTests" runstate="Runnable" seed="1449420451" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.008469" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2908" name="EmptyOwnerSnapshot_CapturesExactSectionAndStagesAsExactZero" fullname="PersistentBattleOwnerSnapshotTests.EmptyOwnerSnapshot_CapturesExactSectionAndStagesAsExactZero" methodname="EmptyOwnerSnapshot_CapturesExactSectionAndStagesAsExactZero" classname="PersistentBattleOwnerSnapshotTests" runstate="Runnable" seed="1410051821" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.003262" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2909" name="OwnerSnapshot_RoundTripsPendingActiveAndResolvedRowsWithoutReplayingConsequences" fullname="PersistentBattleOwnerSnapshotTests.OwnerSnapshot_RoundTripsPendingActiveAndResolvedRowsWithoutReplayingConsequences" methodname="OwnerSnapshot_RoundTripsPendingActiveAndResolvedRowsWithoutReplayingConsequences" classname="PersistentBattleOwnerSnapshotTests" runstate="Runnable" seed="3653744" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.012181" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2910" name="SnapshotIsDetachedFromLaterSourceWritesAndCollectionsAreReadOnly" fullname="PersistentBattleOwnerSnapshotTests.SnapshotIsDetachedFromLaterSourceWritesAndCollectionsAreReadOnly" methodname="SnapshotIsDetachedFromLaterSourceWritesAndCollectionsAreReadOnly" classname="PersistentBattleOwnerSnapshotTests" runstate="Runnable" seed="97295564" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.002872" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2913" name="SnapshotPreservesSaturatedRevisionWithoutReplayingWrites" fullname="PersistentBattleOwnerSnapshotTests.SnapshotPreservesSaturatedRevisionWithoutReplayingWrites" methodname="SnapshotPreservesSaturatedRevisionWithoutReplayingWrites" classname="PersistentBattleOwnerSnapshotTests" runstate="Runnable" seed="93415891" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.000515" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2912" name="StageRejectsMalformedRowsReferencesAndUnsupportedDailyTopologyWithoutChangingParents" fullname="PersistentBattleOwnerSnapshotTests.StageRejectsMalformedRowsReferencesAndUnsupportedDailyTopologyWithoutChangingParents" methodname="StageRejectsMalformedRowsReferencesAndUnsupportedDailyTopologyWithoutChangingParents" classname="PersistentBattleOwnerSnapshotTests" runstate="Runnable" seed="1825052885" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.001819" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="2914" name="PersistentConflictCensusTests" fullname="PersistentConflictCensusTests" classname="PersistentConflictCensusTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.002393" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2915" name="WitnessTracksConflictMutationsAndRejectedOperations" fullname="PersistentConflictCensusTests.WitnessTracksConflictMutationsAndRejectedOperations" methodname="WitnessTracksConflictMutationsAndRejectedOperations" classname="PersistentConflictCensusTests" runstate="Runnable" seed="1921639455" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.001695" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="2916" name="PersistentConflictOwnerSnapshotTests" fullname="PersistentConflictOwnerSnapshotTests" classname="PersistentConflictOwnerSnapshotTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.015047" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2921" name="CaptureRejectsTokenAndRequiredWitnessMismatches" fullname="PersistentConflictOwnerSnapshotTests.CaptureRejectsTokenAndRequiredWitnessMismatches" methodname="CaptureRejectsTokenAndRequiredWitnessMismatches" classname="PersistentConflictOwnerSnapshotTests" runstate="Runnable" seed="542616937" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.001954" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2917" name="EmptySnapshot_CapturesExactRequiredWitnessAndStagesExactZero" fullname="PersistentConflictOwnerSnapshotTests.EmptySnapshot_CapturesExactRequiredWitnessAndStagesExactZero" methodname="EmptySnapshot_CapturesExactRequiredWitnessAndStagesExactZero" classname="PersistentConflictOwnerSnapshotTests" runstate="Runnable" seed="973973576" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.001582" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2920" name="FaultedMutationGuardRejectsAllThreeWritersWithoutChangingRows" fullname="PersistentConflictOwnerSnapshotTests.FaultedMutationGuardRejectsAllThreeWritersWithoutChangingRows" methodname="FaultedMutationGuardRejectsAllThreeWritersWithoutChangingRows" classname="PersistentConflictOwnerSnapshotTests" runstate="Runnable" seed="1163207422" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.000816" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2918" name="PopulatedSnapshot_RoundTripsDetachedRowsLifecycleBindingsAndExactRevision" fullname="PersistentConflictOwnerSnapshotTests.PopulatedSnapshot_RoundTripsDetachedRowsLifecycleBindingsAndExactRevision" methodname="PopulatedSnapshot_RoundTripsDetachedRowsLifecycleBindingsAndExactRevision" classname="PersistentConflictOwnerSnapshotTests" runstate="Runnable" seed="1979373259" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.005575" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2923" name="StagePreservesSaturatedRevisionAndWritesFailWithoutMutation" fullname="PersistentConflictOwnerSnapshotTests.StagePreservesSaturatedRevisionAndWritesFailWithoutMutation" methodname="StagePreservesSaturatedRevisionAndWritesFailWithoutMutation" classname="PersistentConflictOwnerSnapshotTests" runstate="Runnable" seed="1195093310" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.000719" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2922" name="StageRejectsMalformedIdentityRelationshipsAndCardinalityWithoutReturningPartialOwner" fullname="PersistentConflictOwnerSnapshotTests.StageRejectsMalformedIdentityRelationshipsAndCardinalityWithoutReturningPartialOwner" methodname="StageRejectsMalformedIdentityRelationshipsAndCardinalityWithoutReturningPartialOwner" classname="PersistentConflictOwnerSnapshotTests" runstate="Runnable" seed="978842593" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.001362" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2919" name="SupportedWritersAdvanceOnceAndRejectedWritesPreserveOwnerValues" fullname="PersistentConflictOwnerSnapshotTests.SupportedWritersAdvanceOnceAndRejectedWritesPreserveOwnerValues" methodname="SupportedWritersAdvanceOnceAndRejectedWritesPreserveOwnerValues" classname="PersistentConflictOwnerSnapshotTests" runstate="Runnable" seed="664289425" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.001963" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="2924" name="PersistentConflictWarBattleStateTests" fullname="PersistentConflictWarBattleStateTests" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" testcasecount="9" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.136410" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2927" name="ConflictStore_RequiresTwoValidSidesAndExplicitArmedForceBindings" fullname="PersistentConflictWarBattleStateTests.ConflictStore_RequiresTwoValidSidesAndExplicitArmedForceBindings" methodname="ConflictStore_RequiresTwoValidSidesAndExplicitArmedForceBindings" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="1564220126" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.000484" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2933" name="Diagnostics_ReportsPersistentCrossReferenceAndLifecycleViolations" fullname="PersistentConflictWarBattleStateTests.Diagnostics_ReportsPersistentCrossReferenceAndLifecycleViolations" methodname="Diagnostics_ReportsPersistentCrossReferenceAndLifecycleViolations" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="1116274807" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.029471" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2930" name="Lifecycle_UsesAtomicRevisionAndKeepsEndedReferencesQueryable" fullname="PersistentConflictWarBattleStateTests.Lifecycle_UsesAtomicRevisionAndKeepsEndedReferencesQueryable" methodname="Lifecycle_UsesAtomicRevisionAndKeepsEndedReferencesQueryable" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="150484602" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.000392" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2925" name="P17A_WarOwnerConfigurationFreezesBindingsAndCommitsOnlyReasonedConcession" fullname="PersistentConflictWarBattleStateTests.P17A_WarOwnerConfigurationFreezesBindingsAndCommitsOnlyReasonedConcession" methodname="P17A_WarOwnerConfigurationFreezesBindingsAndCommitsOnlyReasonedConcession" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="804159778" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.009805" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2928" name="ParticipantBindings_AreDomainOwnedAndDoNotPropagateThroughArmedForceHierarchy" fullname="PersistentConflictWarBattleStateTests.ParticipantBindings_AreDomainOwnedAndDoNotPropagateThroughArmedForceHierarchy" methodname="ParticipantBindings_AreDomainOwnedAndDoNotPropagateThroughArmedForceHierarchy" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="327386971" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.001433" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2931" name="SimulationRuntime_ComposesIndependentWorldBoundStoresWithoutAdvanceDayProcessing" fullname="PersistentConflictWarBattleStateTests.SimulationRuntime_ComposesIndependentWorldBoundStoresWithoutAdvanceDayProcessing" methodname="SimulationRuntime_ComposesIndependentWorldBoundStoresWithoutAdvanceDayProcessing" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="757893982" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.035100" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2932" name="SnapshotCanonicalAndDiff_AreIndependentOfPersistentStoreInsertionOrder" fullname="PersistentConflictWarBattleStateTests.SnapshotCanonicalAndDiff_AreIndependentOfPersistentStoreInsertionOrder" methodname="SnapshotCanonicalAndDiff_AreIndependentOfPersistentStoreInsertionOrder" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="434073900" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.057024" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2926" name="TypedIdentities_AreStableDistinctAndLookupDoesNotReuseIds" fullname="PersistentConflictWarBattleStateTests.TypedIdentities_AreStableDistinctAndLookupDoesNotReuseIds" methodname="TypedIdentities_AreStableDistinctAndLookupDoesNotReuseIds" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="1029944058" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.000658" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2929" name="WarAndBattle_KeepSeparateSideModelsAndValidateOptionalReferences" fullname="PersistentConflictWarBattleStateTests.WarAndBattle_KeepSeparateSideModelsAndValidateOptionalReferences" methodname="WarAndBattle_KeepSeparateSideModelsAndValidateOptionalReferences" classname="PersistentConflictWarBattleStateTests" runstate="Runnable" seed="966694524" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.000515" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="2934" name="PersistentWarCensusTests" fullname="PersistentWarCensusTests" classname="PersistentWarCensusTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.002009" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2935" name="WitnessTracksWarMutationsOptionalConflictAndRejectedOperations" fullname="PersistentWarCensusTests.WitnessTracksWarMutationsOptionalConflictAndRejectedOperations" methodname="WitnessTracksWarMutationsOptionalConflictAndRejectedOperations" classname="PersistentWarCensusTests" runstate="Runnable" seed="174697071" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.001347" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="2936" name="PersistentWarOwnerSnapshotTests" fullname="PersistentWarOwnerSnapshotTests" classname="PersistentWarOwnerSnapshotTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.013441" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2941" name="CaptureRejectsConfiguredP17WarInsteadOfOmittingItsExtension" fullname="PersistentWarOwnerSnapshotTests.CaptureRejectsConfiguredP17WarInsteadOfOmittingItsExtension" methodname="CaptureRejectsConfiguredP17WarInsteadOfOmittingItsExtension" classname="PersistentWarOwnerSnapshotTests" runstate="Runnable" seed="1229171869" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.004929" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2937" name="EmptyCaptureUsesExactDailyOwnerWitnessAndStagesAsExactZero" fullname="PersistentWarOwnerSnapshotTests.EmptyCaptureUsesExactDailyOwnerWitnessAndStagesAsExactZero" methodname="EmptyCaptureUsesExactDailyOwnerWitnessAndStagesAsExactZero" classname="PersistentWarOwnerSnapshotTests" runstate="Runnable" seed="830281012" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.002036" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2939" name="InvalidSchemaCardinalityParentAndReferenceAreRejectedWithoutReturningStore" fullname="PersistentWarOwnerSnapshotTests.InvalidSchemaCardinalityParentAndReferenceAreRejectedWithoutReturningStore" methodname="InvalidSchemaCardinalityParentAndReferenceAreRejectedWithoutReturningStore" classname="PersistentWarOwnerSnapshotTests" runstate="Runnable" seed="437569800" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.002644" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2938" name="PopulatedSnapshotPreservesLifecycleRelationsRevisionAndExactParentIdentity" fullname="PersistentWarOwnerSnapshotTests.PopulatedSnapshotPreservesLifecycleRelationsRevisionAndExactParentIdentity" methodname="PopulatedSnapshotPreservesLifecycleRelationsRevisionAndExactParentIdentity" classname="PersistentWarOwnerSnapshotTests" runstate="Runnable" seed="1750736804" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.002459" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2940" name="StagingPreservesRevisionWithoutReplayingWritesIncludingSaturation" fullname="PersistentWarOwnerSnapshotTests.StagingPreservesRevisionWithoutReplayingWritesIncludingSaturation" methodname="StagingPreservesRevisionWithoutReplayingWritesIncludingSaturation" classname="PersistentWarOwnerSnapshotTests" runstate="Runnable" seed="445057562" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.000336" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="3059" name="PlaceContentFoundationTests" fullname="PlaceContentFoundationTests" classname="PlaceContentFoundationTests" runstate="Runnable" testcasecount="25" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.006554" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3060" name="AbstractSiteCanHoldPersistentContentWithoutTopology" fullname="PlaceContentFoundationTests.AbstractSiteCanHoldPersistentContentWithoutTopology" methodname="AbstractSiteCanHoldPersistentContentWithoutTopology" classname="PlaceContentFoundationTests" runstate="Runnable" seed="682869967" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.005066" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="3301" name="ResidencyMembershipTests" fullname="ResidencyMembershipTests" classname="ResidencyMembershipTests" runstate="Runnable" testcasecount="24" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.001508" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3324" name="DerivedCountsDoNotNeedPersistentMutableCounters" fullname="ResidencyMembershipTests.DerivedCountsDoNotNeedPersistentMutableCounters" methodname="DerivedCountsDoNotNeedPersistentMutableCounters" classname="ResidencyMembershipTests" runstate="Runnable" seed="595253218" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.000284" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="3865" name="WorldObserverReadModelTests" fullname="WorldObserverReadModelTests" classname="WorldObserverReadModelTests" runstate="Runnable" testcasecount="28" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.018073" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3881" name="SelectedPlaceShowsPersistentContentSummary" fullname="WorldObserverReadModelTests.SelectedPlaceShowsPersistentContentSummary" methodname="SelectedPlaceShowsPersistentContentSummary" classname="WorldObserverReadModelTests" runstate="Runnable" seed="1114023266" result="Passed" start-time="2026-10-09 15:18:59Z" end-time="2026-10-09 15:18:59Z" duration="0.016535" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
