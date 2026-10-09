@@ -260,6 +260,42 @@ public sealed class TheftOutcomeStore : ITheftOutcomeSink, IAuthoritativeMutatio
         return true;
     }
 
+    internal bool TryRestoreFromP12EOwnerSnapshot(
+        IReadOnlyList<TheftOutcome> rows,
+        long restoredRevision)
+    {
+        if (rows == null || restoredRevision < 0L || outcomesById.Count != 0
+            || p12CensusRevision != 0L || p12MutationBoundary != null)
+        {
+            return false;
+        }
+
+        Dictionary<string, TheftOutcome> restored = new Dictionary<string, TheftOutcome>(StringComparer.Ordinal);
+        foreach (TheftOutcome outcome in rows)
+        {
+            if (outcome?.OutcomeId == null || outcome.PerpetratorPersonId == null
+                || outcome.VictimPersonId == null || string.IsNullOrWhiteSpace(outcome.OccurrenceKey)
+                || outcome.LossAmount <= 0 || outcome.OccurredAbsoluteDay < 0L
+                || outcome.OccurredAbsoluteDay > simulationTime.AbsoluteDay
+                || !personStore.TryGet(outcome.PerpetratorPersonId, out _)
+                || !personStore.TryGet(outcome.VictimPersonId, out _)
+                || !TheftOutcomeId.Create(outcome.PerpetratorPersonId, outcome.VictimPersonId,
+                    outcome.OccurredAbsoluteDay, outcome.OccurrenceKey).Equals(outcome.OutcomeId)
+                || restored.ContainsKey(outcome.OutcomeId.Value))
+            {
+                return false;
+            }
+
+            restored.Add(outcome.OutcomeId.Value, outcome);
+        }
+
+        if (restored.Count != rows.Count) return false;
+        foreach (KeyValuePair<string, TheftOutcome> item in restored)
+            outcomesById.Add(item.Key, item.Value);
+        p12CensusRevision = restoredRevision;
+        return true;
+    }
+
     private bool CanCommitP12Mutation() => p12MutationBoundary == null
         || p12MutationBoundary.CanCommit(this);
 
@@ -481,6 +517,7 @@ public sealed class CrimeKnowledgeStore : IAuthoritativeMutationGuardBindable
     public PersonStore PersonStore => personStore;
     public TheftOutcomeStore OutcomeStore => outcomeStore;
     public SimulationTime SimulationTime => simulationTime;
+    internal InstitutionStore InstitutionStoreForWorldBoundary => institutionStore;
     public int Count => currentByKey.Count;
     public long P12CensusRevision => p12CensusRevision;
 
@@ -703,6 +740,53 @@ public sealed class CrimeKnowledgeStore : IAuthoritativeMutationGuardBindable
         if (boundary == null) return false;
         if (p12MutationBoundary != null) return ReferenceEquals(p12MutationBoundary, boundary);
         p12MutationBoundary = boundary;
+        return true;
+    }
+
+    internal bool TryRestoreFromP12EOwnerSnapshot(
+        IReadOnlyList<CrimeKnowledgeObservation> rows,
+        long restoredRevision)
+    {
+        if (rows == null || restoredRevision < 0L || currentByKey.Count != 0
+            || p12CensusRevision != 0L || p12MutationBoundary != null)
+        {
+            return false;
+        }
+
+        Dictionary<string, CrimeKnowledgeObservation> restored =
+            new Dictionary<string, CrimeKnowledgeObservation>(StringComparer.Ordinal);
+        foreach (CrimeKnowledgeObservation observation in rows)
+        {
+            if (observation == null || observation.EvaluatorPersonId == null || observation.OutcomeId == null
+                || observation.PerceivedPerpetrator == null || observation.CognitiveBasis == null
+                || !Enum.IsDefined(typeof(CrimeKnowledgeRole), observation.Role)
+                || !Enum.IsDefined(typeof(SocialCognitiveBasisKind), observation.CognitiveBasis.Kind)
+                || (observation.CognitiveBasis.SourcePersonId != null
+                    && observation.CognitiveBasis.SourceInstitutionId != null))
+            {
+                return false;
+            }
+
+            string key = Key(observation.EvaluatorPersonId, observation.OutcomeId);
+            if (restored.ContainsKey(key)
+                || !CanRecordAgainstOutcome(observation,
+                    outcomeStore.TryGet(observation.OutcomeId, out TheftOutcome outcome) ? outcome : null,
+                    out _)
+                || (observation.CognitiveBasis.SourcePersonId != null
+                    && !personStore.TryGet(observation.CognitiveBasis.SourcePersonId, out _))
+                || (observation.CognitiveBasis.SourceInstitutionId != null
+                    && !institutionStore.TryGet(observation.CognitiveBasis.SourceInstitutionId, out _)))
+            {
+                return false;
+            }
+
+            restored.Add(key, observation);
+        }
+
+        if (restored.Count != rows.Count) return false;
+        foreach (KeyValuePair<string, CrimeKnowledgeObservation> item in restored)
+            currentByKey.Add(item.Key, item.Value);
+        p12CensusRevision = restoredRevision;
         return true;
     }
 

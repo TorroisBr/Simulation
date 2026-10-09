@@ -669,6 +669,44 @@ public sealed class SocialReactionStore : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    internal bool TryRestoreFromP12EOwnerSnapshot(
+        IReadOnlyList<SocialReaction> orderedRows,
+        long restoredRevision)
+    {
+        if (orderedRows == null || restoredRevision < 0L || reactionsById.Count != 0
+            || p12CensusRevision != 0L || p12MutationBoundary != null
+            || personStore == null || simulationTime == null)
+        {
+            return false;
+        }
+
+        SocialReactionStore candidate = new SocialReactionStore(personStore, simulationTime);
+        foreach (SocialReaction reaction in orderedRows)
+        {
+            if (reaction == null || reaction.ReactionId == null || reaction.EvaluatorPersonId == null
+                || reaction.Source == null || reaction.Target == null || reaction.PerceivedAttribution == null
+                || reaction.CognitiveBasis == null
+                || !Enum.IsDefined(typeof(SocialReactionValence), reaction.Valence)
+                || !Enum.IsDefined(typeof(SocialReactionSalience), reaction.Salience)
+                || !SocialReactionId.Create(reaction.EvaluatorPersonId, reaction.Source, reaction.Target,
+                    reaction.PerceivedAttribution, reaction.CognitiveBasis, reaction.Valence,
+                    reaction.Salience, reaction.CreatedAbsoluteDay, reaction.SupersedesReactionId)
+                    .Equals(reaction.ReactionId)
+                || !candidate.CanRecord(reaction, out _))
+            {
+                return false;
+            }
+
+            candidate.reactionsById.Add(reaction.ReactionId.Value, reaction);
+        }
+
+        if (candidate.reactionsById.Count != orderedRows.Count) return false;
+        foreach (KeyValuePair<string, SocialReaction> item in candidate.reactionsById)
+            reactionsById.Add(item.Key, item.Value);
+        p12CensusRevision = restoredRevision;
+        return true;
+    }
+
     private bool CanCommitP12Mutation() => p12MutationBoundary == null
         || p12MutationBoundary.CanCommit(this);
 
