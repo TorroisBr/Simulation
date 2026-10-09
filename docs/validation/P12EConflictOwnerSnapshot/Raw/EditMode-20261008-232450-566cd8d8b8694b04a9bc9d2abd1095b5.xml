@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="1" result="Passed" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 23:24:59Z" end-time="2026-10-08 23:24:59Z" duration="0,0473761">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2635" result="Passed" start-time="2026-10-08 23:24:59Z" end-time="2026-10-08 23:24:59Z" duration="0.047376" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3886" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12d-owner-package-review-d1fef9a/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2635" result="Passed" start-time="2026-10-08 23:24:59Z" end-time="2026-10-08 23:24:59Z" duration="0.035009" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="121892" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2862" name="PersistentWarCensusTests" fullname="PersistentWarCensusTests" classname="PersistentWarCensusTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-10-08 23:24:59Z" end-time="2026-10-08 23:24:59Z" duration="0.021409" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2863" name="WitnessTracksWarMutationsOptionalConflictAndRejectedOperations" fullname="PersistentWarCensusTests.WitnessTracksWarMutationsOptionalConflictAndRejectedOperations" methodname="WitnessTracksWarMutationsOptionalConflictAndRejectedOperations" classname="PersistentWarCensusTests" runstate="Runnable" seed="1752498856" result="Passed" start-time="2026-10-08 23:24:59Z" end-time="2026-10-08 23:24:59Z" duration="0.014053" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
