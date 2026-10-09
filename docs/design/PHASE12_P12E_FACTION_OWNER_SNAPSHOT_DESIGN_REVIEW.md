@@ -25,5 +25,3 @@ The source at the reviewed base forms active-pair keys as `FactionId.Value + U+0
 ## Findings and evidence boundary
 
 No blocking design findings. The alias fixture above is a specific implementation-validation obligation implied by the contract. No Unity or implementation tests were run because this review is documentation-only. The candidate diff passes `git diff --check`; its diff contains no executable files. This review does not approve implementation beyond the accepted P12-E capability work, promote any checkpoint, establish P12-A readiness, or claim complete E owner coverage or P12-G publication.
-
-
