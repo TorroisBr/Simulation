@@ -26,6 +26,51 @@ public sealed class PropertyOwnershipStore : IAuthoritativeMutationGuardBindable
         this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
     }
 
+    internal static bool TryCreateFromOwnerSnapshot(
+        PersonStore stagedPersonStore,
+        IReadOnlyList<PropertyOwnershipRecord> ownershipRecords,
+        IReadOnlyList<PropertyOwnershipTransferHistoryRecord> transferHistoryRecords,
+        long savedRevision,
+        out PropertyOwnershipStore store)
+    {
+        store = null;
+        if (stagedPersonStore == null
+            || ownershipRecords == null
+            || transferHistoryRecords == null
+            || savedRevision < 0L
+            || savedRevision != (long)ownershipRecords.Count + transferHistoryRecords.Count)
+            return false;
+
+        PropertyOwnershipStore candidate = new PropertyOwnershipStore(stagedPersonStore);
+        foreach (PropertyOwnershipRecord record in ownershipRecords)
+        {
+            if (record == null
+                || record.PropertyId == null
+                || record.OwnerPersonId == null
+                || !stagedPersonStore.TryGet(record.OwnerPersonId, out _)
+                || candidate.recordsByPropertyId.ContainsKey(record.PropertyId.Value))
+                return false;
+            candidate.recordsByPropertyId.Add(record.PropertyId.Value, record);
+        }
+
+        foreach (PropertyOwnershipTransferHistoryRecord history in transferHistoryRecords)
+        {
+            if (history == null
+                || history.PropertyId == null
+                || history.PreviousOwnerPersonId == null
+                || history.NewOwnerPersonId == null
+                || !candidate.recordsByPropertyId.ContainsKey(history.PropertyId.Value)
+                || !stagedPersonStore.TryGet(history.PreviousOwnerPersonId, out _)
+                || !stagedPersonStore.TryGet(history.NewOwnerPersonId, out _))
+                return false;
+            candidate.transferHistory.Add(history);
+        }
+
+        candidate.revision = savedRevision;
+        store = candidate;
+        return true;
+    }
+
     internal PersonStore PersonStoreForWorldBoundary => personStore;
 
     public int Count => recordsByPropertyId.Count;

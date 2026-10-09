@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="9" result="Passed" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 00:11:52Z" end-time="2026-10-09 00:11:52Z" duration="0,0504872">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2641" result="Passed" start-time="2026-10-09 00:11:52Z" end-time="2026-10-09 00:11:52Z" duration="0.050487" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3893" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-property-estate-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2641" result="Passed" start-time="2026-10-09 00:11:52Z" end-time="2026-10-09 00:11:52Z" duration="0.042829" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="138528" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3286" name="EstatePropertyFoundationTests" fullname="EstatePropertyFoundationTests" classname="EstatePropertyFoundationTests" runstate="Runnable" testcasecount="9" result="Passed" start-time="2026-10-09 00:11:52Z" end-time="2026-10-09 00:11:52Z" duration="0.028408" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3294" name="CoreContractsExposeOnlyImmutablePublicProperties" fullname="EstatePropertyFoundationTests.CoreContractsExposeOnlyImmutablePublicProperties" methodname="CoreContractsExposeOnlyImmutablePublicProperties" classname="EstatePropertyFoundationTests" runstate="Runnable" seed="770572429" result="Passed" start-time="2026-10-09 00:11:52Z" end-time="2026-10-09 00:11:52Z" duration="0.006209" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3295" name="CoreFilesAreUnityFreeAndDoNotReferenceExecutionRuntimeAdapters" fullname="EstatePropertyFoundationTests.CoreFilesAreUnityFreeAndDoNotReferenceExecutionRuntimeAdapters" methodname="CoreFilesAreUnityFreeAndDoNotReferenceExecutionRuntimeAdapters" classname="EstatePropertyFoundationTests" runstate="Runnable" seed="1661133339" result="Passed" start-time="2026-10-09 00:11:52Z" end-time="2026-10-09 00:11:52Z" duration="0.002849" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3290" name="DeadPersonCanRetainPropertyOwnershipWithoutMaterializedExecutionState" fullname="EstatePropertyFoundationTests.DeadPersonCanRetainPropertyOwnershipWithoutMaterializedExecutionState" methodname="DeadPersonCanRetainPropertyOwnershipWithoutMaterializedExecutionState" classname="EstatePropertyFoundationTests" runstate="Runnable" seed="2127534478" result="Passed" start-time="2026-10-09 00:11:52Z" end-time="2026-10-09 00:11:52Z" duration="0.004186" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3292" name="EstateOpeningRejectsBeforeDeathAndDuplicatePersonWithoutMutation" fullname="EstatePropertyFoundationTests.EstateOpeningRejectsBeforeDeathAndDuplicatePersonWithoutMutation" methodname="EstateOpeningRejectsBeforeDeathAndDuplicatePersonWithoutMutation" classname="EstatePropertyFoundationTests" runstate="Runnable" seed="1338395536" result="Passed" start-time="2026-10-09 00:11:52Z" end-time="2026-10-09 00:11:52Z" duration="0.001909" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3293" name="EstateOpeningTransitionRejectsStaleStoreAndCrossWorldPersonAtomically" fullname="EstatePropertyFoundationTests.EstateOpeningTransitionRejectsStaleStoreAndCrossWorldPersonAtomically" methodname="EstateOpeningTransitionRejectsStaleStoreAndCrossWorldPersonAtomically" classname="EstatePropertyFoundationTests" runstate="Runnable" seed="1179865694" result="Passed" start-time="2026-10-09 00:11:52Z" end-time="2026-10-09 00:11:52Z" duration="0.000441" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3287" name="IdsUseOrdinalValueSemanticsAndRejectInvalidValues" fullname="EstatePropertyFoundationTests.IdsUseOrdinalValueSemanticsAndRejectInvalidValues" methodname="IdsUseOrdinalValueSemanticsAndRejectInvalidValues" classname="EstatePropertyFoundationTests" runstate="Runnable" seed="357475654" result="Passed" start-time="2026-10-09 00:11:52Z" end-time="2026-10-09 00:11:52Z" duration="0.001930" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3291" name="PersonDeathDoesNotCreateEstateAndOpeningRequiresExplicitDeadPersonCommand" fullname="EstatePropertyFoundationTests.PersonDeathDoesNotCreateEstateAndOpeningRequiresExplicitDeadPersonCommand" methodname="PersonDeathDoesNotCreateEstateAndOpeningRequiresExplicitDeadPersonCommand" classname="EstatePropertyFoundationTests" runstate="Runnable" seed="447544852" result="Passed" start-time="2026-10-09 00:11:52Z" end-time="2026-10-09 00:11:52Z" duration="0.000476" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3289" name="PropertyOwnership_DuplicateRegistrationFailsAtomicallyAndStoresAreIsolated" fullname="EstatePropertyFoundationTests.PropertyOwnership_DuplicateRegistrationFailsAtomicallyAndStoresAreIsolated" methodname="PropertyOwnership_DuplicateRegistrationFailsAtomicallyAndStoresAreIsolated" classname="EstatePropertyFoundationTests" runstate="Runnable" seed="667687002" result="Passed" start-time="2026-10-09 00:11:52Z" end-time="2026-10-09 00:11:52Z" duration="0.000396" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3288" name="PropertyOwnership_IsIndependentOfExecutionRuntimeAndDeterministic" fullname="EstatePropertyFoundationTests.PropertyOwnership_IsIndependentOfExecutionRuntimeAndDeterministic" methodname="PropertyOwnership_IsIndependentOfExecutionRuntimeAndDeterministic" classname="EstatePropertyFoundationTests" runstate="Runnable" seed="220752025" result="Passed" start-time="2026-10-09 00:11:52Z" end-time="2026-10-09 00:11:52Z" duration="0.001227" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
