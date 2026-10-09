@@ -1342,11 +1342,14 @@ rejects capture when that count is nonzero and rejects temporal captures or
 dispositions during staging. `ActorChoiceTemporalInputOwner` is installed only
 when `InitializeP18DIntradayProfile` receives an intraday profile. This
 supports the accepted Daily-v1 exclusion and proves F's export/staging path
-fails closed; it does not prove exact zero at the pre-allocation G admission
-boundary. G must cover the composed provider as an exact-zero excluded-owner
-witness in the validated live inventory, or establish from the selected live
-composition that the temporal owner is absent. Keep it outside the 299
-serializable sections unless a separately reviewed profile contract admits it.
+fails closed. Its source capture matches the required P11 owner identity and
+revision, then checks `TemporalInputCount` before constructing the detached F
+snapshot. It can therefore supply the exact-zero proof for G if G invokes that
+F source capture before allocating staged domain objects. The current G
+composition has not demonstrated that order, so the remaining gap is
+integration/order evidence rather than a missing census value or a reason to
+add a B API. Keep the temporal section outside the 299 serializable sections
+unless a separately reviewed profile contract admits it.
 
 The current profile-selection and day-zero evidence is retained in
 docs/validation/P12DailyProfileSeparation/VALIDATION.md; P12-F package

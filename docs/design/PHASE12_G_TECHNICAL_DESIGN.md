@@ -122,10 +122,13 @@ vector is not evidence of an empty owner.
 The per-NPC ActorChoice temporal census provider exists, but its temporal input
 section is not registered in the current expected vector. The P12-F
 actor-choice input section remains a separate Required section. Do not infer
-that the unregistered section is empty or excluded. P12-G's live inventory must
-either read this provider as an exact-zero excluded-owner witness before any
-domain-object allocation, or prove from the selected live composition that the
-temporal owner is not composed. Keep it outside the 299 serializable sections
+that the unregistered section is empty or excluded. The promoted P12-F source
+capture already reads the same `ActorChoiceStore`: it matches the required P11
+owner identity/revision witness and rejects `TemporalInputCount != 0`. G can
+reuse that exact-zero exclusion proof without adding a serializable section or
+a new B census API, provided it invokes F source capture before allocating any
+staged domain objects. The current G composition does not yet demonstrate that
+ordering. Keep the temporal section outside the 299 serializable sections
 unless a separately reviewed profile contract admits it.
 
 Provider/content identity is a compatibility input, not a security boundary.
