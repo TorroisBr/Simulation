@@ -1150,3 +1150,16 @@ validation are recorded in [`P12DailyP14Admission/VALIDATION.md`](../validation/
 Promoted test-only code extends `SelectedDailyV1NpcMembershipCommitsIdentityAndKeepsItAfterUnregister` to inspect live owner-family providers at the initial 10-NPC roster, after adding one NPC, after unregistering it, and after rejecting a distinct owner with the unregistered ID, then re-registering the original owner. For each live roster it compares the complete provider-family count with the roster, then checks stable section IDs, exact owner identity, cardinality and local revision for per-NPC MoneyAccount, Inventory, two SpatialKnowledge sections and ten Knowledge sections. This preserves the distinction between registry identity retention and the current live owner set.
 
 The exact selected-profile admission and owner/cardinality revalidation, temporal test, ALL EditMode, and Smoke results are recorded in [`P12DailyTemporalCensus/VALIDATION.md`](../validation/P12DailyTemporalCensus/VALIDATION.md). This witness does not prove every one of the 275 sections across evolved states or every successful writer/epoch path. It adds no runtime operation, mutation callback, shared-epoch behavior, quiescence, capture eligibility, export or hydration. P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. Independent exact-tip review is recorded in [`PHASE12_P12B_DAILY_TEMPORAL_CENSUS_REVIEW.md`](PHASE12_P12B_DAILY_TEMPORAL_CENSUS_REVIEW.md).
+
+### P12-E current-base effective-provider source crosswalk — 2026-10-09
+
+The selected `UnityBootstrap-Daily-v1` configuration, normal `TesteSimulacao`
+composition, conditional Merchant/Crime/Guard provider graph, D/E/F owner
+assignments, and explicit P18-only receipt-cache dispositions are reconciled
+against P12 canonical `a2e8b696054089378748354703dd2e0f50245769` in
+[`PHASE12_E_EFFECTIVE_PROVIDER_OWNER_CROSSWALK_A2E8B69.md`](PHASE12_E_EFFECTIVE_PROVIDER_OWNER_CROSSWALK_A2E8B69.md).
+The audit found no additional populated E value owner supported for immediate
+snapshot implementation. It is source-level evidence, not a runtime provider
+manifest or proof that all E owners have exact exports and private staged
+hydrators. P12-E remains in progress; P12-F/G, P12-A, and P13 retain their
+recorded blockers.
