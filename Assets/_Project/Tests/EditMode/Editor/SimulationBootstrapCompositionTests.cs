@@ -2486,6 +2486,18 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(registeredSections.Contains(witness.SectionId), Is.EqualTo(hasVectorSection));
         }
 
+        const string travelPartyCounterSectionId = "p12c.runtime-id-allocator.travel-parties";
+        IOwnerSectionCensusProvider bootstrapTravelPartyCounterProvider =
+            bootstrap.RuntimeIdAllocatorCensusProviders.Single(provider =>
+                provider.GetCurrentCensus().SectionId == travelPartyCounterSectionId);
+        IOwnerSectionCensusProvider runtimeTravelPartyCounterProvider =
+            ReadPrivateField<IOwnerSectionCensusProvider>(
+                registeredSections[travelPartyCounterSectionId], "Provider");
+        Assert.That(
+            bootstrapTravelPartyCounterProvider.GetCurrentCensus().OwnerInstanceIdentity,
+            Is.SameAs(runtimeTravelPartyCounterProvider.GetCurrentCensus().OwnerInstanceIdentity),
+            "The bootstrap's exposed TravelParty allocator-counter witness must be the exact owner registered by the runtime.");
+
         object[] registeredOwners = registeredSections.Keys.Cast<string>()
             .Select(sectionId => ReadPrivateField<IOwnerSectionCensusProvider>(
                 registeredSections[sectionId], "Provider").GetCurrentCensus().OwnerInstanceIdentity)
