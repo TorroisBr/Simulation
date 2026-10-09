@@ -1,3 +1,18 @@
+## Latest canonical promotion — P12-E PoliticalSupport owner snapshot (2026-10-09)
+
+P12 canonical was refreshed at `4fb8af28780e492c75010ed87bbe21ae6c3b816d`. The bounded candidate `codex/phase12/P12EPoliticalSupportOwnerSnapshotImplementation` was independently reviewed and promoted by clean fast-forward through candidate tip `70df06acac19b6c909e5148cc57a64c0847d1e18`; this State update records the resulting canonical promotion. Its implementation and focused-test commit is `9da6c882c035870ca0d67612288e1b1d76ccf56e`, code tree `768db39ebf3720c93d86250cefd370922df61e77`, and Assets tree `45f959b73528924a296bba6a9404a7878b7f6013`. Candidate tip `728bd9c43b0c606c7eb454c6398e8674b2b52249` retains validation after the code commit; the exact-tip independent review is recorded in [`design/PHASE12_P12E_POLITICAL_SUPPORT_OWNER_SNAPSHOT_IMPLEMENTATION_REVIEW_9DA6C88.md`](design/PHASE12_P12E_POLITICAL_SUPPORT_OWNER_SNAPSHOT_IMPLEMENTATION_REVIEW_9DA6C88.md).
+
+Validation on the exact Assets tree passed five focused suites (39/39), ALL EditMode (2689/2689), official Smoke (5/5), and `git diff --check`. Exact XML/log hashes and results are recorded in [`validation/P12EPoliticalSupportOwnerSnapshot/VALIDATION.md`](validation/P12EPoliticalSupportOwnerSnapshot/VALIDATION.md), `runs.csv`, and `SHA256SUMS.txt`.
+
+This adds detached schema-v1 export and private staged reconstruction for the existing PoliticalSupport owner. It preserves the exact completed Daily-v1 token and Required owner-section identity/cardinality/revision witness, all active and ended typed relation facts, captured-day bounds, deterministic ordering, local revision, typed references, and the derived active-pair index. No runtime/bootstrap composition, P12-B census or mutation wiring, `PoliticalWorldRevision` snapshot, shared persistence coordinator, P12-G publication, P12-A/P13 readiness, global quiescence, complete P12-E coverage, or Phase 12 closure is added or claimed.
+
+### Refreshed P12 dependency DAG
+
+- P12-B and P12-C remain COMPLETE/PROMOTED within their bounded contracts; P12-D remains COMPLETE/PROMOTED within its Daily-v1 owner-package boundary.
+- P12-E remains IN PROGRESS. Conflict, Battle, ArmedForce/manpower/position, Institution/Office, War, Property/Estate, PoliticalClaim/recognition, Faction/affiliation, and PoliticalSupport owner snapshots are promoted. Other composed E authorities remain incomplete under the accepted owner inventory and require their own bounded current-base work.
+- P12-F waits on P12-E. P12-G waits on P12-B through P12-F and validated live-profile inventory.
+- P12-A remains WAIT_DEPENDENCY until every included owner has exact export and staged hydration, the live profile inventory is validated, and its separate implementation authorization is recorded. P13 remains BLOCKED.
+- Phase 12 remains open. This checkpoint does not imply profile-wide export/hydration, global quiescence, or P12-A/P13 readiness.
 ## Latest canonical promotion — P12-E PoliticalClaim and Faction owner snapshots (2026-10-09)
 
 P12 canonical was refreshed at `a768f2d9eca161f5cff059a782737412f43b2861`.
