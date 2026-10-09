@@ -1,0 +1,389 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="53" result="Passed" total="53" passed="53" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0,6083492">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2732" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.608349" total="53" passed="53" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3997" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12g-current-canonical-inventory/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2732" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.593770" total="53" passed="53" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="164596" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2530" name="P12CPrivateRootCompositionTests" fullname="P12CPrivateRootCompositionTests" classname="P12CPrivateRootCompositionTests" runstate="Runnable" testcasecount="53" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.576401" total="53" passed="53" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        <test-case id="2531" name="CoherentDailyV1OwnerSnapshotsStageTogetherWithoutLiveBootstrapOrAssetAccess" fullname="P12CPrivateRootCompositionTests.CoherentDailyV1OwnerSnapshotsStageTogetherWithoutLiveBootstrapOrAssetAccess" methodname="CoherentDailyV1OwnerSnapshotsStageTogetherWithoutLiveBootstrapOrAssetAccess" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1915983224" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.014849" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2532" name="P12FOwnerPackageCapturesAndStagesAllCurrentOwnersOnTheSamePrivateAttempt" fullname="P12CPrivateRootCompositionTests.P12FOwnerPackageCapturesAndStagesAllCurrentOwnersOnTheSamePrivateAttempt" methodname="P12FOwnerPackageCapturesAndStagesAllCurrentOwnersOnTheSamePrivateAttempt" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1377173709" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.008047" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2533" name="P12FOwnerPackageCapturesBeforeRootStagingAndStagesAggregateAgainstTheSameAttempt" fullname="P12CPrivateRootCompositionTests.P12FOwnerPackageCapturesBeforeRootStagingAndStagesAggregateAgainstTheSameAttempt" methodname="P12FOwnerPackageCapturesBeforeRootStagingAndStagesAggregateAgainstTheSameAttempt" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1468541210" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.091348" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2595" name="P8AndP9SourcesRemainUnchangedAfterAcceptedAndRejectedStaging" fullname="P12CPrivateRootCompositionTests.P8AndP9SourcesRemainUnchangedAfterAcceptedAndRejectedStaging" methodname="P8AndP9SourcesRemainUnchangedAfterAcceptedAndRejectedStaging" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1949044837" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.005385" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="2553" name="RejectsAContradictoryDuplicateP9GeographyRecordEvenWhenOneCopyMatchesP8" fullname="P12CPrivateRootCompositionTests.RejectsAContradictoryDuplicateP9GeographyRecordEvenWhenOneCopyMatchesP8" classname="P12CPrivateRootCompositionTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.034943" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2550" name="RejectsAContradictoryDuplicateP9GeographyRecordEvenWhenOneCopyMatchesP8(&quot;authored-hex&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsAContradictoryDuplicateP9GeographyRecordEvenWhenOneCopyMatchesP8(&quot;authored-hex&quot;)" methodname="RejectsAContradictoryDuplicateP9GeographyRecordEvenWhenOneCopyMatchesP8" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="2081012189" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.019309" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2551" name="RejectsAContradictoryDuplicateP9GeographyRecordEvenWhenOneCopyMatchesP8(&quot;authored-location&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsAContradictoryDuplicateP9GeographyRecordEvenWhenOneCopyMatchesP8(&quot;authored-location&quot;)" methodname="RejectsAContradictoryDuplicateP9GeographyRecordEvenWhenOneCopyMatchesP8" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="355705229" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.005411" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2552" name="RejectsAContradictoryDuplicateP9GeographyRecordEvenWhenOneCopyMatchesP8(&quot;authored-scale&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsAContradictoryDuplicateP9GeographyRecordEvenWhenOneCopyMatchesP8(&quot;authored-scale&quot;)" methodname="RejectsAContradictoryDuplicateP9GeographyRecordEvenWhenOneCopyMatchesP8" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1565362406" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.007853" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="2563" name="RejectsAdmissionAndP8P9ContractMismatches" fullname="P12CPrivateRootCompositionTests.RejectsAdmissionAndP8P9ContractMismatches" classname="P12CPrivateRootCompositionTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.019434" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2559" name="RejectsAdmissionAndP8P9ContractMismatches(&quot;spatial-profile&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsAdmissionAndP8P9ContractMismatches(&quot;spatial-profile&quot;)" methodname="RejectsAdmissionAndP8P9ContractMismatches" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="823341028" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.005328" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2560" name="RejectsAdmissionAndP8P9ContractMismatches(&quot;manifest-profile&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsAdmissionAndP8P9ContractMismatches(&quot;manifest-profile&quot;)" methodname="RejectsAdmissionAndP8P9ContractMismatches" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1408852495" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.003213" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2561" name="RejectsAdmissionAndP8P9ContractMismatches(&quot;p9-contract&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsAdmissionAndP8P9ContractMismatches(&quot;p9-contract&quot;)" methodname="RejectsAdmissionAndP8P9ContractMismatches" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="280808992" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.005412" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2562" name="RejectsAdmissionAndP8P9ContractMismatches(&quot;p9-schema&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsAdmissionAndP8P9ContractMismatches(&quot;p9-schema&quot;)" methodname="RejectsAdmissionAndP8P9ContractMismatches" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1182987384" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.004073" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="2557" name="RejectsBareMalformedReservedP9GeographyTags" fullname="P12CPrivateRootCompositionTests.RejectsBareMalformedReservedP9GeographyTags" classname="P12CPrivateRootCompositionTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.020492" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2554" name="RejectsBareMalformedReservedP9GeographyTags(&quot;authored-hex&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsBareMalformedReservedP9GeographyTags(&quot;authored-hex&quot;)" methodname="RejectsBareMalformedReservedP9GeographyTags" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="744871702" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.006431" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2555" name="RejectsBareMalformedReservedP9GeographyTags(&quot;authored-location&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsBareMalformedReservedP9GeographyTags(&quot;authored-location&quot;)" methodname="RejectsBareMalformedReservedP9GeographyTags" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="406864218" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.006172" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2556" name="RejectsBareMalformedReservedP9GeographyTags(&quot;authored-scale&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsBareMalformedReservedP9GeographyTags(&quot;authored-scale&quot;)" methodname="RejectsBareMalformedReservedP9GeographyTags" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="2051479364" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.006965" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="2545" name="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance" fullname="P12CPrivateRootCompositionTests.RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance" classname="P12CPrivateRootCompositionTests" runstate="Runnable" testcasecount="11" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.061166" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2534" name="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;hex-id&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;hex-id&quot;)" methodname="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="144541309" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.005738" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2535" name="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;hex-q&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;hex-q&quot;)" methodname="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="955504563" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.005728" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2536" name="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;hex-r&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;hex-r&quot;)" methodname="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1162654277" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.005162" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2537" name="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;terrain-id&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;terrain-id&quot;)" methodname="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="54947592" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.004709" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2538" name="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;terrain-revision&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;terrain-revision&quot;)" methodname="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1927007665" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.005686" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2539" name="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;location-id&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;location-id&quot;)" methodname="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1935032713" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.006074" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2540" name="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;scale-convention&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;scale-convention&quot;)" methodname="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="499876004" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.005494" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2541" name="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;scale-source&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;scale-source&quot;)" methodname="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="655634659" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.005219" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2542" name="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;scale-version&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;scale-version&quot;)" methodname="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1530215014" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.004602" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2543" name="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;scale-distance&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;scale-distance&quot;)" methodname="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="670258283" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.005230" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2544" name="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;scale-unit&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance(&quot;scale-unit&quot;)" methodname="RejectsIndividuallyValidP8FactsThatDisagreeWithP9Provenance" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="556026956" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.004299" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="2584" name="RejectsMalformedAllocatorRootAsPartOfTheWholeComposition" fullname="P12CPrivateRootCompositionTests.RejectsMalformedAllocatorRootAsPartOfTheWholeComposition" classname="P12CPrivateRootCompositionTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.022042" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2579" name="RejectsMalformedAllocatorRootAsPartOfTheWholeComposition(&quot;unsupported-schema&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsMalformedAllocatorRootAsPartOfTheWholeComposition(&quot;unsupported-schema&quot;)" methodname="RejectsMalformedAllocatorRootAsPartOfTheWholeComposition" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="2127588348" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.004662" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2580" name="RejectsMalformedAllocatorRootAsPartOfTheWholeComposition(&quot;duplicate-family&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsMalformedAllocatorRootAsPartOfTheWholeComposition(&quot;duplicate-family&quot;)" methodname="RejectsMalformedAllocatorRootAsPartOfTheWholeComposition" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1781286510" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.003682" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2581" name="RejectsMalformedAllocatorRootAsPartOfTheWholeComposition(&quot;missing-family&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsMalformedAllocatorRootAsPartOfTheWholeComposition(&quot;missing-family&quot;)" methodname="RejectsMalformedAllocatorRootAsPartOfTheWholeComposition" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1828611293" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.003666" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2582" name="RejectsMalformedAllocatorRootAsPartOfTheWholeComposition(&quot;invalid-next&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsMalformedAllocatorRootAsPartOfTheWholeComposition(&quot;invalid-next&quot;)" methodname="RejectsMalformedAllocatorRootAsPartOfTheWholeComposition" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="524947880" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.003900" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2583" name="RejectsMalformedAllocatorRootAsPartOfTheWholeComposition(&quot;exhausted-next&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsMalformedAllocatorRootAsPartOfTheWholeComposition(&quot;exhausted-next&quot;)" methodname="RejectsMalformedAllocatorRootAsPartOfTheWholeComposition" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1035524759" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.004326" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="2588" name="RejectsMalformedRecordSequenceRootAsPartOfTheWholeComposition" fullname="P12CPrivateRootCompositionTests.RejectsMalformedRecordSequenceRootAsPartOfTheWholeComposition" classname="P12CPrivateRootCompositionTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.013172" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2585" name="RejectsMalformedRecordSequenceRootAsPartOfTheWholeComposition(&quot;unsupported-schema&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsMalformedRecordSequenceRootAsPartOfTheWholeComposition(&quot;unsupported-schema&quot;)" methodname="RejectsMalformedRecordSequenceRootAsPartOfTheWholeComposition" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="727287062" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.004044" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2586" name="RejectsMalformedRecordSequenceRootAsPartOfTheWholeComposition(&quot;invalid-next&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsMalformedRecordSequenceRootAsPartOfTheWholeComposition(&quot;invalid-next&quot;)" methodname="RejectsMalformedRecordSequenceRootAsPartOfTheWholeComposition" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1297272637" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.004329" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2587" name="RejectsMalformedRecordSequenceRootAsPartOfTheWholeComposition(&quot;exhausted-next&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsMalformedRecordSequenceRootAsPartOfTheWholeComposition(&quot;exhausted-next&quot;)" methodname="RejectsMalformedRecordSequenceRootAsPartOfTheWholeComposition" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="463620745" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.003570" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="2591" name="RejectsMalformedSpatialCardinalityOrAnchorAsPartOfTheWholeComposition" fullname="P12CPrivateRootCompositionTests.RejectsMalformedSpatialCardinalityOrAnchorAsPartOfTheWholeComposition" classname="P12CPrivateRootCompositionTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.008909" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2589" name="RejectsMalformedSpatialCardinalityOrAnchorAsPartOfTheWholeComposition(&quot;multiple-hexes&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsMalformedSpatialCardinalityOrAnchorAsPartOfTheWholeComposition(&quot;multiple-hexes&quot;)" methodname="RejectsMalformedSpatialCardinalityOrAnchorAsPartOfTheWholeComposition" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1837971848" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.004160" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2590" name="RejectsMalformedSpatialCardinalityOrAnchorAsPartOfTheWholeComposition(&quot;wrong-anchor&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsMalformedSpatialCardinalityOrAnchorAsPartOfTheWholeComposition(&quot;wrong-anchor&quot;)" methodname="RejectsMalformedSpatialCardinalityOrAnchorAsPartOfTheWholeComposition" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1925778692" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.003900" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="2578" name="RejectsMalformedWorldIdentitySnapshotsWithoutReturningPartialRoots" fullname="P12CPrivateRootCompositionTests.RejectsMalformedWorldIdentitySnapshotsWithoutReturningPartialRoots" classname="P12CPrivateRootCompositionTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.010537" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2574" name="RejectsMalformedWorldIdentitySnapshotsWithoutReturningPartialRoots(&quot;unsupported-contract&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsMalformedWorldIdentitySnapshotsWithoutReturningPartialRoots(&quot;unsupported-contract&quot;)" methodname="RejectsMalformedWorldIdentitySnapshotsWithoutReturningPartialRoots" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="657836840" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.002830" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2575" name="RejectsMalformedWorldIdentitySnapshotsWithoutReturningPartialRoots(&quot;unsupported-schema&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsMalformedWorldIdentitySnapshotsWithoutReturningPartialRoots(&quot;unsupported-schema&quot;)" methodname="RejectsMalformedWorldIdentitySnapshotsWithoutReturningPartialRoots" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="160316116" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.002246" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2576" name="RejectsMalformedWorldIdentitySnapshotsWithoutReturningPartialRoots(&quot;uppercase-value&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsMalformedWorldIdentitySnapshotsWithoutReturningPartialRoots(&quot;uppercase-value&quot;)" methodname="RejectsMalformedWorldIdentitySnapshotsWithoutReturningPartialRoots" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1353931268" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.002357" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2577" name="RejectsMalformedWorldIdentitySnapshotsWithoutReturningPartialRoots(&quot;empty-value&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsMalformedWorldIdentitySnapshotsWithoutReturningPartialRoots(&quot;empty-value&quot;)" methodname="RejectsMalformedWorldIdentitySnapshotsWithoutReturningPartialRoots" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1295938173" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.001846" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="2566" name="RejectsMissingOrDuplicateP9SpatialOutputOwnerReference" fullname="P12CPrivateRootCompositionTests.RejectsMissingOrDuplicateP9SpatialOutputOwnerReference" classname="P12CPrivateRootCompositionTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.007009" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2564" name="RejectsMissingOrDuplicateP9SpatialOutputOwnerReference(&quot;missing&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsMissingOrDuplicateP9SpatialOutputOwnerReference(&quot;missing&quot;)" methodname="RejectsMissingOrDuplicateP9SpatialOutputOwnerReference" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="788256860" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.003187" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2565" name="RejectsMissingOrDuplicateP9SpatialOutputOwnerReference(&quot;duplicate&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsMissingOrDuplicateP9SpatialOutputOwnerReference(&quot;duplicate&quot;)" methodname="RejectsMissingOrDuplicateP9SpatialOutputOwnerReference" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1193165991" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.002846" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="2573" name="RejectsNullOwnerSnapshotsWithoutReturningPartialRoots" fullname="P12CPrivateRootCompositionTests.RejectsNullOwnerSnapshotsWithoutReturningPartialRoots" classname="P12CPrivateRootCompositionTests" runstate="Runnable" testcasecount="6" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.022022" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2567" name="RejectsNullOwnerSnapshotsWithoutReturningPartialRoots(&quot;allocator&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsNullOwnerSnapshotsWithoutReturningPartialRoots(&quot;allocator&quot;)" methodname="RejectsNullOwnerSnapshotsWithoutReturningPartialRoots" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="501192903" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.003976" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2568" name="RejectsNullOwnerSnapshotsWithoutReturningPartialRoots(&quot;sequence&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsNullOwnerSnapshotsWithoutReturningPartialRoots(&quot;sequence&quot;)" methodname="RejectsNullOwnerSnapshotsWithoutReturningPartialRoots" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="2003722863" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.003406" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2569" name="RejectsNullOwnerSnapshotsWithoutReturningPartialRoots(&quot;spatial&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsNullOwnerSnapshotsWithoutReturningPartialRoots(&quot;spatial&quot;)" methodname="RejectsNullOwnerSnapshotsWithoutReturningPartialRoots" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="662122052" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.003165" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2570" name="RejectsNullOwnerSnapshotsWithoutReturningPartialRoots(&quot;manifest&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsNullOwnerSnapshotsWithoutReturningPartialRoots(&quot;manifest&quot;)" methodname="RejectsNullOwnerSnapshotsWithoutReturningPartialRoots" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1656109687" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.002839" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2571" name="RejectsNullOwnerSnapshotsWithoutReturningPartialRoots(&quot;random&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsNullOwnerSnapshotsWithoutReturningPartialRoots(&quot;random&quot;)" methodname="RejectsNullOwnerSnapshotsWithoutReturningPartialRoots" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1833146640" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.004412" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2572" name="RejectsNullOwnerSnapshotsWithoutReturningPartialRoots(&quot;world-identity&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsNullOwnerSnapshotsWithoutReturningPartialRoots(&quot;world-identity&quot;)" methodname="RejectsNullOwnerSnapshotsWithoutReturningPartialRoots" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="986323536" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.002368" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="2594" name="RejectsP9FingerprintOrLineageCorruptionAsPartOfTheWholeComposition" fullname="P12CPrivateRootCompositionTests.RejectsP9FingerprintOrLineageCorruptionAsPartOfTheWholeComposition" classname="P12CPrivateRootCompositionTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.007253" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2592" name="RejectsP9FingerprintOrLineageCorruptionAsPartOfTheWholeComposition(&quot;fingerprint&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsP9FingerprintOrLineageCorruptionAsPartOfTheWholeComposition(&quot;fingerprint&quot;)" methodname="RejectsP9FingerprintOrLineageCorruptionAsPartOfTheWholeComposition" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="2074854235" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.003025" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2593" name="RejectsP9FingerprintOrLineageCorruptionAsPartOfTheWholeComposition(&quot;lineage&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsP9FingerprintOrLineageCorruptionAsPartOfTheWholeComposition(&quot;lineage&quot;)" methodname="RejectsP9FingerprintOrLineageCorruptionAsPartOfTheWholeComposition" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1391889177" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.003386" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="2549" name="RejectsP9GeographyProvenanceThatDisagreesWithTheValidP8Owner" fullname="P12CPrivateRootCompositionTests.RejectsP9GeographyProvenanceThatDisagreesWithTheValidP8Owner" classname="P12CPrivateRootCompositionTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.024358" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2546" name="RejectsP9GeographyProvenanceThatDisagreesWithTheValidP8Owner(&quot;coordinate-convention&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsP9GeographyProvenanceThatDisagreesWithTheValidP8Owner(&quot;coordinate-convention&quot;)" methodname="RejectsP9GeographyProvenanceThatDisagreesWithTheValidP8Owner" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1737396848" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.007974" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2547" name="RejectsP9GeographyProvenanceThatDisagreesWithTheValidP8Owner(&quot;coordinate-order&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsP9GeographyProvenanceThatDisagreesWithTheValidP8Owner(&quot;coordinate-order&quot;)" methodname="RejectsP9GeographyProvenanceThatDisagreesWithTheValidP8Owner" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="316689426" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.007754" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2548" name="RejectsP9GeographyProvenanceThatDisagreesWithTheValidP8Owner(&quot;p9-location-anchor&quot;)" fullname="P12CPrivateRootCompositionTests.RejectsP9GeographyProvenanceThatDisagreesWithTheValidP8Owner(&quot;p9-location-anchor&quot;)" methodname="RejectsP9GeographyProvenanceThatDisagreesWithTheValidP8Owner" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="565393814" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.007244" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="2558" name="RejectsRandomSeedMismatchAndMalformedIdentityOrSequenceRootsWithoutReturningAPartialBundle" fullname="P12CPrivateRootCompositionTests.RejectsRandomSeedMismatchAndMalformedIdentityOrSequenceRootsWithoutReturningAPartialBundle" methodname="RejectsRandomSeedMismatchAndMalformedIdentityOrSequenceRootsWithoutReturningAPartialBundle" classname="P12CPrivateRootCompositionTests" runstate="Runnable" seed="1924054937" result="Passed" start-time="2026-10-09 18:11:53Z" end-time="2026-10-09 18:11:53Z" duration="0.017601" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
