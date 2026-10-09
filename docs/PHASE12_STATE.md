@@ -6,6 +6,50 @@ COMPLETE/PROMOTED within its accepted identity, genesis-provenance, and
 deterministic-root continuation scope; P12-A remains `WAIT_DEPENDENCY`. P13
 remains `BLOCKED`.
 
+## Latest canonical promotion — P12-E Institution/Office owner snapshots (2026-10-08)
+
+After refreshing P12 canonical at `77135b3e0ca8df83c6852f2c234ff9098a833468`,
+the bounded Institution/Office candidate was promoted through implementation
+tip `4ae340ad1bea69d53d0635ba3eeb8a71b4f268a7` and its exact-tip review record
+`1cbb69aec73f6c287db87a22918140264192d206`. The reviewed `Assets` tree is
+`e1e1000774d57c49d98b8ac23f5d1c0319cc45ab`; the promotion preserves that tree.
+Independent review returned `VALIDATED_CANDIDATE` with no blocking findings.
+
+The slice adds detached schema-v1 capture and private staged reconstruction
+for the four Required Daily-v1 Institution/Office owner sections. Capture
+binds to the exact installed owners and token/component vector, preserves
+owner revisions and repeated equal closed-tenure occurrences in mutation
+order, and validates typed references and open/closed tenure consistency
+before returning the private staged pair. It does not publish runtime state.
+
+Exact-tree validation passed: focused 11/11, selected regressions 89/89, ALL
+EditMode 2646/2646, official Smoke 5/5, and `git diff --check`. Durable XML,
+logs, and hashes are recorded with the candidate integration evidence.
+
+This promotes only the bounded Institution/Office owner snapshot capability.
+P12-E remains in progress pending the other accepted effective-profile owner
+snapshots and their integration. It adds no runtime/bootstrap integration,
+operation or epoch wiring, global quiescence, profile-wide capture eligibility,
+P12-G publication, or Phase closure. P12-B and P12-C remain complete within
+their recorded bounded contracts; P12-D remains complete within its accepted
+Daily-v1 private owner-package boundary. P12-A remains `WAIT_DEPENDENCY`; P13
+remains `BLOCKED`.
+
+### Refreshed P12 dependency DAG
+
+- P12-B and P12-C remain COMPLETE/PROMOTED; P12-D remains COMPLETE/PROMOTED
+  within its accepted Daily-v1 private owner-package boundary.
+- P12-E remains IN PROGRESS. Conflict and Institution/Office owner snapshots
+  are promoted; Property/Estate and War owner snapshot work remain separate
+  tracks, with their own current-base validation and review gates.
+- P12-F waits on P12-E; P12-G waits on P12-B through P12-F and a validated
+  live-profile inventory.
+- P12-A remains WAIT_DEPENDENCY until all included owners have exact
+  export/staged hydration, the live profile inventory is validated, and its
+  separate implementation authorization is recorded. P13 remains BLOCKED.
+- Phase 12 remains open; no profile-wide export/hydration or Phase closure is
+  implied by this owner slice.
+
 ## P12-D accepted Daily-v1 owner package complete (2026-10-08)
 
 P12 canonical advanced from `a4ce0abcf261226f4b52fbacc8df9ef8f67a0de2` through the reviewed owner-package candidate and exact-tip review record to `329c75acc6f8b244912f9c2550c021859f9b2cc3`. The implementation candidate was `6c43f18e76e6d7c80307890c64a30e7c3e541da0`; its reviewed Git tree is `346dbe8a387753b4b5bfb7cc0a968d0e73bdcf50` and its `Assets` tree is `86df24ff56a945160da517b6f62325ba1f8af8dc`. Production code is `aaf727b0f32cedf93aa895aa93461ae6a6a2d9e9`; integrated coverage is `d1244b200305e494cfbc38d53e1418a1c8007110`. Independent exact-tip review PASS is recorded in [`design/PHASE12_D_OWNER_PACKAGE_ASSEMBLY_IMPLEMENTATION_REVIEW_6C43F18.md`](design/PHASE12_D_OWNER_PACKAGE_ASSEMBLY_IMPLEMENTATION_REVIEW_6C43F18.md) at canonical tip `329c75a`.
@@ -16,7 +60,7 @@ The exact reviewed tree passed P12-D focused coverage 26/26, ALL EditMode 2628/2
 
 **P12-D is COMPLETE/PROMOTED within this accepted Daily-v1 owner-export and private staged-hydration boundary.** This does not deliver whole B–F graph composition, runtime/bootstrap publication, final guard binding, continuation parity, or P12-G atomic publication; those remain P12-G obligations. Daily-v1 still requires the selected ExplorableSite section to be exactly empty. Populated site export is outside this profile. Earlier State text saying that D package assembly, whole-D integration, or other accepted D owner coverage remains outstanding is superseded by this promotion record.
 
-## Latest canonical promotion — P12-E Conflict owner snapshot (2026-10-08)
+## Previous canonical promotion — P12-E Conflict owner snapshot (2026-10-08)
 
 After refreshed preflight, `codex/phase12/canonical` advanced by clean
 fast-forward from `f5d99cb7008023d14a0ed16ea2149a7d7c18def1` to
@@ -46,7 +90,7 @@ and decompressed raw-log hashes are in
 The final preflight verified the clean fast-forward base, unchanged tested
 `Assets` tree, exact review, and canonical synchronization.
 
-### Refreshed P12 dependency DAG
+### P12 dependency DAG after the Conflict promotion
 
 - P12-B and P12-C remain COMPLETE/PROMOTED within their accepted bounded
   contracts; P12-D remains COMPLETE/PROMOTED within its accepted Daily-v1
