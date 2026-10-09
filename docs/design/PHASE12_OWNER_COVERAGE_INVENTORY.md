@@ -1334,6 +1334,20 @@ temporal-inputs section is not registered in the expected Daily-v1 vector. Its
 absence from the vector is not a zero or Excluded witness. The fixed
 p12f.actor-choice-inputs section remains Required.
 
+The source audit narrows this gap without closing it. `SimulationBootstrapComposition`
+constructs and exposes both the P11 and temporal providers, but the current
+runtime census path registers `ActorChoiceP11CensusProvider` only. The temporal
+provider reads `ActorChoiceStore.TemporalInputCount`. `P12FActorChoiceSnapshot`
+rejects capture when that count is nonzero and rejects temporal captures or
+dispositions during staging. `ActorChoiceTemporalInputOwner` is installed only
+when `InitializeP18DIntradayProfile` receives an intraday profile. This
+supports the accepted Daily-v1 exclusion and proves F's export/staging path
+fails closed; it does not prove exact zero at the pre-allocation G admission
+boundary. G must cover the composed provider as an exact-zero excluded-owner
+witness in the validated live inventory, or establish from the selected live
+composition that the temporal owner is absent. Keep it outside the 299
+serializable sections unless a separately reviewed profile contract admits it.
+
 The current profile-selection and day-zero evidence is retained in
 docs/validation/P12DailyProfileSeparation/VALIDATION.md; P12-F package
 validation is retained in

@@ -122,7 +122,11 @@ vector is not evidence of an empty owner.
 The per-NPC ActorChoice temporal census provider exists, but its temporal input
 section is not registered in the current expected vector. The P12-F
 actor-choice input section remains a separate Required section. Do not infer
-that the unregistered section is empty or excluded.
+that the unregistered section is empty or excluded. P12-G's live inventory must
+either read this provider as an exact-zero excluded-owner witness before any
+domain-object allocation, or prove from the selected live composition that the
+temporal owner is not composed. Keep it outside the 299 serializable sections
+unless a separately reviewed profile contract admits it.
 
 Provider/content identity is a compatibility input, not a security boundary.
 The profile may reject incompatible schema, provider, content, or effective
