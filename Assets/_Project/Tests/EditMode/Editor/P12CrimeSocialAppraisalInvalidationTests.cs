@@ -17,6 +17,8 @@ public sealed class P12CrimeSocialAppraisalInvalidationTests
         private readonly Func<SimulationRuntime> runtimeProvider;
 
         public readonly List<int> TheftOutcomeCommitActiveOperationCounts = new List<int>();
+        public readonly List<bool> TheftOutcomeCompositeEpochReadsSucceeded = new List<bool>();
+        public readonly List<long> TheftOutcomeCompositeEpochDeltas = new List<long>();
 
         public DailyOperationProbeTheftOutcomeSink(
             ITheftOutcomeSink inner,
@@ -31,11 +33,23 @@ public sealed class P12CrimeSocialAppraisalInvalidationTests
         public bool TryAcceptTheftOutcome(TheftOutcome outcome)
         {
             SimulationRuntime runtime = runtimeProvider();
+            ContinuationCensusProtocol protocol = runtime == null ? null : GetProtocol(runtime);
             int activeOperationCount = -1;
-            bool read = runtime != null
-                && GetProtocol(runtime).TryReadActiveOperationCount(out activeOperationCount, out _);
-            TheftOutcomeCommitActiveOperationCounts.Add(read ? activeOperationCount : -1);
-            return inner.TryAcceptTheftOutcome(outcome);
+            bool operationRead = protocol != null
+                && protocol.TryReadActiveOperationCount(out activeOperationCount, out _);
+            TheftOutcomeCommitActiveOperationCounts.Add(operationRead ? activeOperationCount : -1);
+
+            long epochBefore = 0L;
+            bool epochBeforeRead = protocol != null
+                && protocol.TryReadMutationEpoch(out epochBefore, out _);
+            bool accepted = inner.TryAcceptTheftOutcome(outcome);
+            long epochAfter = 0L;
+            bool epochAfterRead = protocol != null
+                && protocol.TryReadMutationEpoch(out epochAfter, out _);
+            bool epochReadsSucceeded = epochBeforeRead && epochAfterRead;
+            TheftOutcomeCompositeEpochReadsSucceeded.Add(epochReadsSucceeded);
+            TheftOutcomeCompositeEpochDeltas.Add(epochReadsSucceeded ? epochAfter - epochBefore : -1L);
+            return accepted;
         }
     }
 
@@ -184,6 +198,9 @@ public sealed class P12CrimeSocialAppraisalInvalidationTests
             Assert.That(world.SocialReactions.P12CensusRevision, Is.EqualTo(1L));
             Assert.That(probe.TheftOutcomeCommitActiveOperationCounts, Is.EqualTo(new[] { 1 }),
                 "Crime/Social commit runs while the selected Daily-v1 runtime.advance-day operation is active.");
+            Assert.That(probe.TheftOutcomeCompositeEpochReadsSucceeded, Is.EqualTo(new[] { true }));
+            Assert.That(probe.TheftOutcomeCompositeEpochDeltas, Is.EqualTo(new[] { 1L }),
+                "The complete Crime/Social composite commits as one shared mutation epoch inside runtime.advance-day.");
 
             Assert.That(protocol.TryReadActiveOperationCount(out int activeOperationCount, out ContinuationCensusFailure operationFailure),
                 Is.True, operationFailure.ToString());
