@@ -59,7 +59,9 @@ git diff --check a73fdff^ a73fdff
 
 The first scratch focused run exposed an incorrect test assumption about the
 ActorChoice witness owner identity; the test was corrected to compare the
-store's canonical census identity. Only the corrected focused result and the
-full suites above are candidate validation evidence. Unrelated ProjectSettings
+store's canonical census identity. Its retained pair
+`Focused/EditMode-20261009-223954-8544179f2a12445d8026602e6ff24a89.xml` and
+`.log.gz` is diagnostic only. Only the corrected focused result and the full
+suites above are candidate validation evidence. Unrelated ProjectSettings
 edits, existing untracked `.meta` files, and earlier diagnostics remain
 unstaged and untouched.
