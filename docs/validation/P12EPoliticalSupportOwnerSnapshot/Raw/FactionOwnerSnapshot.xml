@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<test-run id="2" testcasecount="12" result="Passed" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 03:41:14Z" end-time="2026-10-09 03:41:14Z" duration="0,2382829">
-  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2688" result="Passed" start-time="2026-10-09 03:41:14Z" end-time="2026-10-09 03:41:14Z" duration="0.238283" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
+<test-run id="2" testcasecount="12" result="Passed" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 03:49:24Z" end-time="2026-10-09 03:49:24Z" duration="0,3095232">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2689" result="Passed" start-time="2026-10-09 03:49:24Z" end-time="2026-10-09 03:49:24Z" duration="0.309523" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
     <properties>
       <property name="platform" value="EditMode" />
     </properties>
-    <test-suite type="Assembly" id="3945" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-faction-owner-snapshot-a768f2d/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2688" result="Passed" start-time="2026-10-09 03:41:14Z" end-time="2026-10-09 03:41:14Z" duration="0.225088" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <test-suite type="Assembly" id="3946" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-faction-owner-snapshot-a768f2d/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2689" result="Passed" start-time="2026-10-09 03:49:24Z" end-time="2026-10-09 03:49:24Z" duration="0.294495" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
       <properties>
-        <property name="_PID" value="152012" />
+        <property name="_PID" value="156988" />
         <property name="_APPDOMAIN" value="Unity Child Domain" />
         <property name="platform" value="EditMode" />
         <property name="EditorOnly" value="True" />
       </properties>
-      <test-suite type="TestFixture" id="2689" name="P12EFactionOwnerSnapshotTests" fullname="P12EFactionOwnerSnapshotTests" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" testcasecount="12" result="Passed" start-time="2026-10-09 03:41:14Z" end-time="2026-10-09 03:41:14Z" duration="0.209217" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <test-suite type="TestFixture" id="2689" name="P12EFactionOwnerSnapshotTests" fullname="P12EFactionOwnerSnapshotTests" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" testcasecount="12" result="Passed" start-time="2026-10-09 03:49:24Z" end-time="2026-10-09 03:49:24Z" duration="0.277088" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
         <properties />
-        <test-case id="2695" name="ActiveIndexIsRebuiltAndDuplicateActiveTypedPairRejectsStage" fullname="P12EFactionOwnerSnapshotTests.ActiveIndexIsRebuiltAndDuplicateActiveTypedPairRejectsStage" methodname="ActiveIndexIsRebuiltAndDuplicateActiveTypedPairRejectsStage" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="408544440" result="Passed" start-time="2026-10-09 03:41:14Z" end-time="2026-10-09 03:41:14Z" duration="0.016395" asserts="0">
+        <test-case id="2695" name="ActiveIndexIsRebuiltAndDuplicateActiveTypedPairRejectsStage" fullname="P12EFactionOwnerSnapshotTests.ActiveIndexIsRebuiltAndDuplicateActiveTypedPairRejectsStage" methodname="ActiveIndexIsRebuiltAndDuplicateActiveTypedPairRejectsStage" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="141842929" result="Passed" start-time="2026-10-09 03:49:24Z" end-time="2026-10-09 03:49:24Z" duration="0.016727" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="2699" name="CaptureUsesExactCompletedBoundaryOwnerVectorAndRejectsStaleOrMismatchedEvidence" fullname="P12EFactionOwnerSnapshotTests.CaptureUsesExactCompletedBoundaryOwnerVectorAndRejectsStaleOrMismatchedEvidence" methodname="CaptureUsesExactCompletedBoundaryOwnerVectorAndRejectsStaleOrMismatchedEvidence" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="969273475" result="Passed" start-time="2026-10-09 03:41:14Z" end-time="2026-10-09 03:41:14Z" duration="0.171676" asserts="0">
+        <test-case id="2699" name="CaptureUsesExactCompletedBoundaryOwnerVectorAndRejectsStaleOrMismatchedEvidence" fullname="P12EFactionOwnerSnapshotTests.CaptureUsesExactCompletedBoundaryOwnerVectorAndRejectsStaleOrMismatchedEvidence" methodname="CaptureUsesExactCompletedBoundaryOwnerVectorAndRejectsStaleOrMismatchedEvidence" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1876132927" result="Passed" start-time="2026-10-09 03:49:24Z" end-time="2026-10-09 03:49:24Z" duration="0.227680" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
@@ -39,61 +39,61 @@ Maria descansou.
 Pedro passeou pela cidade.
 ]]></output>
         </test-case>
-        <test-case id="2700" name="DelimiterInsideOneTypedIdentityRoundTripsExactly" fullname="P12EFactionOwnerSnapshotTests.DelimiterInsideOneTypedIdentityRoundTripsExactly" methodname="DelimiterInsideOneTypedIdentityRoundTripsExactly" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1339896455" result="Passed" start-time="2026-10-09 03:41:14Z" end-time="2026-10-09 03:41:14Z" duration="0.000462" asserts="0">
+        <test-case id="2700" name="DelimiterInsideOneTypedIdentityRoundTripsExactly" fullname="P12EFactionOwnerSnapshotTests.DelimiterInsideOneTypedIdentityRoundTripsExactly" methodname="DelimiterInsideOneTypedIdentityRoundTripsExactly" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="725788319" result="Passed" start-time="2026-10-09 03:49:24Z" end-time="2026-10-09 03:49:24Z" duration="0.000637" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="2701" name="DistinctActiveTypedPairsWithSameLegacyKeyRejectWholeStage" fullname="P12EFactionOwnerSnapshotTests.DistinctActiveTypedPairsWithSameLegacyKeyRejectWholeStage" methodname="DistinctActiveTypedPairsWithSameLegacyKeyRejectWholeStage" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1986836185" result="Passed" start-time="2026-10-09 03:41:14Z" end-time="2026-10-09 03:41:14Z" duration="0.000277" asserts="0">
+        <test-case id="2701" name="DistinctActiveTypedPairsWithSameLegacyKeyRejectWholeStage" fullname="P12EFactionOwnerSnapshotTests.DistinctActiveTypedPairsWithSameLegacyKeyRejectWholeStage" methodname="DistinctActiveTypedPairsWithSameLegacyKeyRejectWholeStage" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="355652353" result="Passed" start-time="2026-10-09 03:49:24Z" end-time="2026-10-09 03:49:24Z" duration="0.000968" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="2690" name="EmptySectionsPreserveRequiredIdsAndSharedRevisionThroughStage" fullname="P12EFactionOwnerSnapshotTests.EmptySectionsPreserveRequiredIdsAndSharedRevisionThroughStage" methodname="EmptySectionsPreserveRequiredIdsAndSharedRevisionThroughStage" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="2030387410" result="Passed" start-time="2026-10-09 03:41:14Z" end-time="2026-10-09 03:41:14Z" duration="0.000410" asserts="0">
+        <test-case id="2690" name="EmptySectionsPreserveRequiredIdsAndSharedRevisionThroughStage" fullname="P12EFactionOwnerSnapshotTests.EmptySectionsPreserveRequiredIdsAndSharedRevisionThroughStage" methodname="EmptySectionsPreserveRequiredIdsAndSharedRevisionThroughStage" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1769709092" result="Passed" start-time="2026-10-09 03:49:24Z" end-time="2026-10-09 03:49:24Z" duration="0.000772" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="2692" name="LeaveAndRejoinHistoryRestoresNextSequenceDerivedIdAndLeaveNoRejoinStillRejects" fullname="P12EFactionOwnerSnapshotTests.LeaveAndRejoinHistoryRestoresNextSequenceDerivedIdAndLeaveNoRejoinStillRejects" methodname="LeaveAndRejoinHistoryRestoresNextSequenceDerivedIdAndLeaveNoRejoinStillRejects" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1947190527" result="Passed" start-time="2026-10-09 03:41:14Z" end-time="2026-10-09 03:41:14Z" duration="0.003142" asserts="0">
+        <test-case id="2692" name="LeaveAndRejoinHistoryRestoresNextSequenceDerivedIdAndLeaveNoRejoinStillRejects" fullname="P12EFactionOwnerSnapshotTests.LeaveAndRejoinHistoryRestoresNextSequenceDerivedIdAndLeaveNoRejoinStillRejects" methodname="LeaveAndRejoinHistoryRestoresNextSequenceDerivedIdAndLeaveNoRejoinStillRejects" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1423237060" result="Passed" start-time="2026-10-09 03:49:24Z" end-time="2026-10-09 03:49:24Z" duration="0.004673" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="2698" name="MetadataCountsDuplicatesNullRowsAndLateFailureRejectWholeCandidate" fullname="P12EFactionOwnerSnapshotTests.MetadataCountsDuplicatesNullRowsAndLateFailureRejectWholeCandidate" methodname="MetadataCountsDuplicatesNullRowsAndLateFailureRejectWholeCandidate" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="245894409" result="Passed" start-time="2026-10-09 03:41:14Z" end-time="2026-10-09 03:41:14Z" duration="0.002369" asserts="0">
+        <test-case id="2698" name="MetadataCountsDuplicatesNullRowsAndLateFailureRejectWholeCandidate" fullname="P12EFactionOwnerSnapshotTests.MetadataCountsDuplicatesNullRowsAndLateFailureRejectWholeCandidate" methodname="MetadataCountsDuplicatesNullRowsAndLateFailureRejectWholeCandidate" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="225876166" result="Passed" start-time="2026-10-09 03:49:24Z" end-time="2026-10-09 03:49:24Z" duration="0.004560" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="2693" name="RestoresExactRevisionAfterTerminalWritesAndMaxRevisionRejectsNextMutationWithoutChange" fullname="P12EFactionOwnerSnapshotTests.RestoresExactRevisionAfterTerminalWritesAndMaxRevisionRejectsNextMutationWithoutChange" methodname="RestoresExactRevisionAfterTerminalWritesAndMaxRevisionRejectsNextMutationWithoutChange" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="273067219" result="Passed" start-time="2026-10-09 03:41:14Z" end-time="2026-10-09 03:41:14Z" duration="0.000429" asserts="0">
+        <test-case id="2693" name="RestoresExactRevisionAfterTerminalWritesAndMaxRevisionRejectsNextMutationWithoutChange" fullname="P12EFactionOwnerSnapshotTests.RestoresExactRevisionAfterTerminalWritesAndMaxRevisionRejectsNextMutationWithoutChange" methodname="RestoresExactRevisionAfterTerminalWritesAndMaxRevisionRejectsNextMutationWithoutChange" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1306598404" result="Passed" start-time="2026-10-09 03:49:24Z" end-time="2026-10-09 03:49:24Z" duration="0.000911" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="2691" name="RoundTripPreservesEveryFactionFieldAndCurrentAndTerminalTenures" fullname="P12EFactionOwnerSnapshotTests.RoundTripPreservesEveryFactionFieldAndCurrentAndTerminalTenures" methodname="RoundTripPreservesEveryFactionFieldAndCurrentAndTerminalTenures" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1643246798" result="Passed" start-time="2026-10-09 03:41:14Z" end-time="2026-10-09 03:41:14Z" duration="0.001486" asserts="0">
+        <test-case id="2691" name="RoundTripPreservesEveryFactionFieldAndCurrentAndTerminalTenures" fullname="P12EFactionOwnerSnapshotTests.RoundTripPreservesEveryFactionFieldAndCurrentAndTerminalTenures" methodname="RoundTripPreservesEveryFactionFieldAndCurrentAndTerminalTenures" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1744231333" result="Passed" start-time="2026-10-09 03:49:24Z" end-time="2026-10-09 03:49:24Z" duration="0.003816" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="2694" name="SourceInsertionOrderAndRepeatedStageProduceDeterministicSectionOrderAndValues" fullname="P12EFactionOwnerSnapshotTests.SourceInsertionOrderAndRepeatedStageProduceDeterministicSectionOrderAndValues" methodname="SourceInsertionOrderAndRepeatedStageProduceDeterministicSectionOrderAndValues" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="2107550570" result="Passed" start-time="2026-10-09 03:41:14Z" end-time="2026-10-09 03:41:14Z" duration="0.001368" asserts="0">
+        <test-case id="2694" name="SourceInsertionOrderAndRepeatedStageProduceDeterministicSectionOrderAndValues" fullname="P12EFactionOwnerSnapshotTests.SourceInsertionOrderAndRepeatedStageProduceDeterministicSectionOrderAndValues" methodname="SourceInsertionOrderAndRepeatedStageProduceDeterministicSectionOrderAndValues" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1957015660" result="Passed" start-time="2026-10-09 03:49:24Z" end-time="2026-10-09 03:49:24Z" duration="0.003032" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="2697" name="StagingRejectsInvalidPolicyAndEndEnumsButKeepsNullableTerminalReason" fullname="P12EFactionOwnerSnapshotTests.StagingRejectsInvalidPolicyAndEndEnumsButKeepsNullableTerminalReason" methodname="StagingRejectsInvalidPolicyAndEndEnumsButKeepsNullableTerminalReason" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1285153697" result="Passed" start-time="2026-10-09 03:41:14Z" end-time="2026-10-09 03:41:14Z" duration="0.000272" asserts="0">
+        <test-case id="2697" name="StagingRejectsInvalidPolicyAndEndEnumsButKeepsNullableTerminalReason" fullname="P12EFactionOwnerSnapshotTests.StagingRejectsInvalidPolicyAndEndEnumsButKeepsNullableTerminalReason" methodname="StagingRejectsInvalidPolicyAndEndEnumsButKeepsNullableTerminalReason" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="570729428" result="Passed" start-time="2026-10-09 03:49:24Z" end-time="2026-10-09 03:49:24Z" duration="0.000447" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="2696" name="StagingRejectsMissingRootsAndInvalidDatesOrTypedIdentities" fullname="P12EFactionOwnerSnapshotTests.StagingRejectsMissingRootsAndInvalidDatesOrTypedIdentities" methodname="StagingRejectsMissingRootsAndInvalidDatesOrTypedIdentities" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="191740783" result="Passed" start-time="2026-10-09 03:41:14Z" end-time="2026-10-09 03:41:14Z" duration="0.000385" asserts="0">
+        <test-case id="2696" name="StagingRejectsMissingRootsAndInvalidDatesOrTypedIdentities" fullname="P12EFactionOwnerSnapshotTests.StagingRejectsMissingRootsAndInvalidDatesOrTypedIdentities" methodname="StagingRejectsMissingRootsAndInvalidDatesOrTypedIdentities" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="80448967" result="Passed" start-time="2026-10-09 03:49:24Z" end-time="2026-10-09 03:49:24Z" duration="0.000618" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
