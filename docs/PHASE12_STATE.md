@@ -1,3 +1,58 @@
+## Latest canonical promotion — P12-E PoliticalClaim and Faction owner snapshots (2026-10-08)
+
+P12 canonical was refreshed at `a768f2d9eca161f5cff059a782737412f43b2861`.
+The bounded candidate combines PoliticalClaim/recognition and Faction/affiliation
+owner snapshots. Its implementation commit is
+`1e2d81b7e18d7290ef3adf90cb44160bf3aba1a5`; the exact reviewed `Assets` tree
+is `803ace9ead6ca5e6cbd3ca95b4574e5d03a8393f`. Candidate tip
+`62cb4eedcc990a6f57e59d2c6916f9d334871d33` adds only durable validation
+evidence after the code commit. Independent exact-tip implementation review
+PASS is recorded at `b0bc51a06afaae9785f100e881128d0807e19252` on
+`codex/review/phase12/P12EOwnerSnapshotsIntegratedReview1E2D81B`, in
+[`design/PHASE12_P12E_OWNER_SNAPSHOTS_IMPLEMENTATION_REVIEW_1E2D81B.md`](design/PHASE12_P12E_OWNER_SNAPSHOTS_IMPLEMENTATION_REVIEW_1E2D81B.md).
+The review binds to the unchanged code commit/tree and checked the docs-only
+validation follow-up. The owner designs and prior review evidence remain in
+[`design/PHASE12_P12E_POLITICAL_CLAIM_OWNER_SNAPSHOT_DESIGN_0709EEC.md`](design/PHASE12_P12E_POLITICAL_CLAIM_OWNER_SNAPSHOT_DESIGN_0709EEC.md),
+[`design/PHASE12_P12E_POLITICAL_CLAIM_OWNER_SNAPSHOT_DESIGN_REVIEW_94CE311.md`](design/PHASE12_P12E_POLITICAL_CLAIM_OWNER_SNAPSHOT_DESIGN_REVIEW_94CE311.md),
+[`design/PHASE12_P12E_FACTION_OWNER_SNAPSHOT_DESIGN_A768F2D.md`](design/PHASE12_P12E_FACTION_OWNER_SNAPSHOT_DESIGN_A768F2D.md),
+and [`design/PHASE12_P12E_FACTION_OWNER_SNAPSHOT_DESIGN_REVIEW.md`](design/PHASE12_P12E_FACTION_OWNER_SNAPSHOT_DESIGN_REVIEW.md).
+
+Exact-tree validation passed 14 focused suites (183/183), ALL EditMode
+(2683/2683), official Smoke (5/5), and `git diff --check`. Durable results
+and hashes are recorded in
+[`validation/P12EOwnerSnapshotsIntegration/VALIDATION.md`](validation/P12EOwnerSnapshotsIntegration/VALIDATION.md),
+[`validation/P12EOwnerSnapshotsIntegration/runs.csv`](validation/P12EOwnerSnapshotsIntegration/runs.csv),
+and [`validation/P12EOwnerSnapshotsIntegration/SHA256SUMS.txt`](validation/P12EOwnerSnapshotsIntegration/SHA256SUMS.txt).
+All 49 committed XML/compressed-log artifact hashes were rechecked. The
+preflight-confirmed 657 existing `.meta` files and 26 `ProjectSettings` files
+remain byte-identical; three Unity-generated untracked `.meta` files remain
+unmodified and uncommitted.
+
+This promotes detached schema-v1 export and private staged reconstruction for
+the selected Daily-v1 PoliticalClaim/recognition and Faction/affiliation
+owners. Exact identity, local revisions, typed references, order/history, and
+all-or-nothing private staging are preserved. It adds no runtime/bootstrap
+composition, mutation/epoch wiring, global quiescence, profile-wide capture
+eligibility, P12-G publication, or Phase 12 closure. P12-E remains IN PROGRESS.
+
+### Refreshed P12 dependency DAG
+
+- P12-B and P12-C remain COMPLETE/PROMOTED within their accepted bounded
+  contracts; P12-D remains COMPLETE/PROMOTED within its Daily-v1 owner-package
+  boundary.
+- P12-E remains IN PROGRESS. Conflict, Battle, ArmedForce/manpower/position,
+  Institution/Office, War, Property/Estate, PoliticalClaim/recognition, and
+  Faction/affiliation owner snapshots are promoted. PoliticalSupport remains
+  an accepted but incomplete P12-E owner; its bounded snapshot design and
+  independent review are the next owner-specific work. Other configured E
+  authorities remain incomplete as recorded in the live owner inventory.
+- P12-F waits on P12-E. P12-G waits on P12-B through P12-F and validated
+  live-profile inventory.
+- P12-A remains WAIT_DEPENDENCY until all included owners have exact export
+  and staged hydration, the live profile inventory is validated, and its
+  separate implementation authorization is recorded. P13 remains BLOCKED.
+- Phase 12 remains open. This promotion does not imply profile-wide
+  export/hydration, global quiescence, or P12-A/P13 readiness.
 # Phase 12 State — Save & Deterministic Continuation
 
 **Status:** PHASE 12 IN PROGRESS — P12-B COMPLETE/PROMOTED within its bounded
