@@ -542,7 +542,7 @@ mutation-invalidation, and prerequisite checkpoint deliveries remain
 outstanding. P12-A remains `WAIT_DEPENDENCY`.
 
 
-## Current dependency refresh — 2026-10-09
+## Prior dependency refresh — 2026-10-09 (baseline 02009f9; superseded by current-base refresh below)
 
 The current P12 canonical ref observed for this refresh is
 02009f9063dd252bd4b177fd6aef1e74dcd947f5. Its Assets tree is
