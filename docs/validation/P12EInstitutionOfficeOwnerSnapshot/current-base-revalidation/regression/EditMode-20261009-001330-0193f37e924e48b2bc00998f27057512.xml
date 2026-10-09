@@ -1,0 +1,684 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="89" result="Passed" total="89" passed="89" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:40Z" duration="0,4975277">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2646" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:40Z" duration="0.497528" total="89" passed="89" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3898" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-institution-office-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2646" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:40Z" duration="0.478619" total="89" passed="89" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="137580" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2067" name="IdentitySequenceSnapshotTests" fullname="IdentitySequenceSnapshotTests" classname="IdentitySequenceSnapshotTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.023616" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2069" name="RuntimeIdAllocatorSnapshot_IsDetachedAndImmutable" fullname="IdentitySequenceSnapshotTests.RuntimeIdAllocatorSnapshot_IsDetachedAndImmutable" methodname="RuntimeIdAllocatorSnapshot_IsDetachedAndImmutable" classname="IdentitySequenceSnapshotTests" runstate="Runnable" seed="1314910050" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.009382" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2070" name="RuntimeIdAllocatorSnapshot_RejectsMalformedFamilySetsAndCountersWithoutMutatingAnActiveOwner" fullname="IdentitySequenceSnapshotTests.RuntimeIdAllocatorSnapshot_RejectsMalformedFamilySetsAndCountersWithoutMutatingAnActiveOwner" methodname="RuntimeIdAllocatorSnapshot_RejectsMalformedFamilySetsAndCountersWithoutMutatingAnActiveOwner" classname="IdentitySequenceSnapshotTests" runstate="Runnable" seed="1518430555" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.003736" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2068" name="RuntimeIdAllocatorSnapshot_RestoresAllFourteenFamiliesAtExactNextValues" fullname="IdentitySequenceSnapshotTests.RuntimeIdAllocatorSnapshot_RestoresAllFourteenFamiliesAtExactNextValues" methodname="RuntimeIdAllocatorSnapshot_RestoresAllFourteenFamiliesAtExactNextValues" classname="IdentitySequenceSnapshotTests" runstate="Runnable" seed="1090974987" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.001541" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2071" name="SimulationRecordSequenceSnapshot_RestoresExactNextValueAndRejectsInvalidValues" fullname="IdentitySequenceSnapshotTests.SimulationRecordSequenceSnapshot_RestoresExactNextValueAndRejectsInvalidValues" methodname="SimulationRecordSequenceSnapshot_RestoresExactNextValueAndRejectsInvalidValues" classname="IdentitySequenceSnapshotTests" runstate="Runnable" seed="1566913349" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000613" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="2072" name="InstitutionalVacancyRecognitionTests" fullname="InstitutionalVacancyRecognitionTests" classname="InstitutionalVacancyRecognitionTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.034556" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2076" name="ApplyingStaleRecognitionDoesNotVacateReplacementIncumbent" fullname="InstitutionalVacancyRecognitionTests.ApplyingStaleRecognitionDoesNotVacateReplacementIncumbent" methodname="ApplyingStaleRecognitionDoesNotVacateReplacementIncumbent" classname="InstitutionalVacancyRecognitionTests" runstate="Runnable" seed="1045774768" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.002903" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2074" name="FactualDeathRecognitionRequiresCurrentPersonDeathTruth" fullname="InstitutionalVacancyRecognitionTests.FactualDeathRecognitionRequiresCurrentPersonDeathTruth" methodname="FactualDeathRecognitionRequiresCurrentPersonDeathTruth" classname="InstitutionalVacancyRecognitionTests" runstate="Runnable" seed="982246077" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.026726" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2075" name="LegacyVacancyClosesTenureEvenWithoutAnExplicitEndDay" fullname="InstitutionalVacancyRecognitionTests.LegacyVacancyClosesTenureEvenWithoutAnExplicitEndDay" methodname="LegacyVacancyClosesTenureEvenWithoutAnExplicitEndDay" classname="InstitutionalVacancyRecognitionTests" runstate="Runnable" seed="218576485" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.001338" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2073" name="OfficeStore_PreservesClosedTenureAfterExplicitVacancyRecognition" fullname="InstitutionalVacancyRecognitionTests.OfficeStore_PreservesClosedTenureAfterExplicitVacancyRecognition" methodname="OfficeStore_PreservesClosedTenureAfterExplicitVacancyRecognition" classname="InstitutionalVacancyRecognitionTests" runstate="Runnable" seed="1114893718" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000450" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2079" name="RepeatedVacancyRecognitionDoesNotThrowAndPreservesHistory" fullname="InstitutionalVacancyRecognitionTests.RepeatedVacancyRecognitionDoesNotThrowAndPreservesHistory" methodname="RepeatedVacancyRecognitionDoesNotThrowAndPreservesHistory" classname="InstitutionalVacancyRecognitionTests" runstate="Runnable" seed="2034480953" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000368" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2077" name="SamePersonAndStartDayStillRejectsStaleRecognitionByIncumbencyIdentity" fullname="InstitutionalVacancyRecognitionTests.SamePersonAndStartDayStillRejectsStaleRecognitionByIncumbencyIdentity" methodname="SamePersonAndStartDayStillRejectsStaleRecognitionByIncumbencyIdentity" classname="InstitutionalVacancyRecognitionTests" runstate="Runnable" seed="25931050" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000192" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2078" name="SimulationRuntimeClonesTenureHistoryAndOwnsExplicitRecognition" fullname="InstitutionalVacancyRecognitionTests.SimulationRuntimeClonesTenureHistoryAndOwnsExplicitRecognition" methodname="SimulationRuntimeClonesTenureHistoryAndOwnsExplicitRecognition" classname="InstitutionalVacancyRecognitionTests" runstate="Runnable" seed="2000732916" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.001492" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="2080" name="InstitutionFoundationTests" fullname="InstitutionFoundationTests" classname="InstitutionFoundationTests" runstate="Runnable" testcasecount="17" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.011767" total="17" passed="17" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2097" name="CoreContractsExposeReadOnlyPropertiesWithoutPublicSetters" fullname="InstitutionFoundationTests.CoreContractsExposeReadOnlyPropertiesWithoutPublicSetters" methodname="CoreContractsExposeReadOnlyPropertiesWithoutPublicSetters" classname="InstitutionFoundationTests" runstate="Runnable" seed="378544050" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000366" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2096" name="CoreInstitutionFilesAreUnityFreeAndDoNotReferenceRuntimeAdapters" fullname="InstitutionFoundationTests.CoreInstitutionFilesAreUnityFreeAndDoNotReferenceRuntimeAdapters" methodname="CoreInstitutionFilesAreUnityFreeAndDoNotReferenceRuntimeAdapters" classname="InstitutionFoundationTests" runstate="Runnable" seed="1063271974" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.001671" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2081" name="InstitutionId_UsesOrdinalValueSemanticsAndRejectsInvalidValues" fullname="InstitutionFoundationTests.InstitutionId_UsesOrdinalValueSemanticsAndRejectsInvalidValues" methodname="InstitutionId_UsesOrdinalValueSemanticsAndRejectsInvalidValues" classname="InstitutionFoundationTests" runstate="Runnable" seed="1107363204" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000702" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2084" name="InstitutionStore_DuplicateRegistrationDoesNotReplaceExistingRecord" fullname="InstitutionFoundationTests.InstitutionStore_DuplicateRegistrationDoesNotReplaceExistingRecord" methodname="InstitutionStore_DuplicateRegistrationDoesNotReplaceExistingRecord" classname="InstitutionFoundationTests" runstate="Runnable" seed="976697254" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000135" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2083" name="InstitutionStore_RegistersOnceAndEnumeratesReadOnlyInStableOrder" fullname="InstitutionFoundationTests.InstitutionStore_RegistersOnceAndEnumeratesReadOnlyInStableOrder" methodname="InstitutionStore_RegistersOnceAndEnumeratesReadOnlyInStableOrder" classname="InstitutionFoundationTests" runstate="Runnable" seed="354901467" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000544" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2086" name="NewOffice_IsVacantWithoutFakePersonIdentity" fullname="InstitutionFoundationTests.NewOffice_IsVacantWithoutFakePersonIdentity" methodname="NewOffice_IsVacantWithoutFakePersonIdentity" classname="InstitutionFoundationTests" runstate="Runnable" seed="1062527125" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000640" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2082" name="OfficeId_UsesOrdinalValueSemanticsAndRejectsInvalidValues" fullname="InstitutionFoundationTests.OfficeId_UsesOrdinalValueSemanticsAndRejectsInvalidValues" methodname="OfficeId_UsesOrdinalValueSemanticsAndRejectsInvalidValues" classname="InstitutionFoundationTests" runstate="Runnable" seed="657426480" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000219" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2093" name="OfficeQueriesSupportMultipleInstitutionsAndVacancies" fullname="InstitutionFoundationTests.OfficeQueriesSupportMultipleInstitutionsAndVacancies" methodname="OfficeQueriesSupportMultipleInstitutionsAndVacancies" classname="InstitutionFoundationTests" runstate="Runnable" seed="590722496" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000554" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2091" name="OfficeStore_AlreadyVacantIsAnExplicitExpectedFailure" fullname="InstitutionFoundationTests.OfficeStore_AlreadyVacantIsAnExplicitExpectedFailure" methodname="OfficeStore_AlreadyVacantIsAnExplicitExpectedFailure" classname="InstitutionFoundationTests" runstate="Runnable" seed="1525908011" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000152" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2087" name="OfficeStore_AssignsPersonWithOptionalStartDay" fullname="InstitutionFoundationTests.OfficeStore_AssignsPersonWithOptionalStartDay" methodname="OfficeStore_AssignsPersonWithOptionalStartDay" classname="InstitutionFoundationTests" runstate="Runnable" seed="527654066" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000183" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2089" name="OfficeStore_DoubleAssignmentFailsAtomicallyAndPreservesFirstIncumbent" fullname="InstitutionFoundationTests.OfficeStore_DoubleAssignmentFailsAtomicallyAndPreservesFirstIncumbent" methodname="OfficeStore_DoubleAssignmentFailsAtomicallyAndPreservesFirstIncumbent" classname="InstitutionFoundationTests" runstate="Runnable" seed="659551115" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000185" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2085" name="OfficeStore_RejectsMissingInstitutionAndDuplicateOffice" fullname="InstitutionFoundationTests.OfficeStore_RejectsMissingInstitutionAndDuplicateOffice" methodname="OfficeStore_RejectsMissingInstitutionAndDuplicateOffice" classname="InstitutionFoundationTests" runstate="Runnable" seed="805643450" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000247" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2088" name="OfficeStore_RejectsNegativeStartDayAndNullIncumbentWithoutMutation" fullname="InstitutionFoundationTests.OfficeStore_RejectsNegativeStartDayAndNullIncumbentWithoutMutation" methodname="OfficeStore_RejectsNegativeStartDayAndNullIncumbentWithoutMutation" classname="InstitutionFoundationTests" runstate="Runnable" seed="430274717" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000172" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2090" name="OfficeStore_VacatesWithoutRemovingOfficeOrInstitution" fullname="InstitutionFoundationTests.OfficeStore_VacatesWithoutRemovingOfficeOrInstitution" methodname="OfficeStore_VacatesWithoutRemovingOfficeOrInstitution" classname="InstitutionFoundationTests" runstate="Runnable" seed="2025455956" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000197" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2092" name="OnePersonMayHoldMultipleOfficesAndQueriesAreDeterministic" fullname="InstitutionFoundationTests.OnePersonMayHoldMultipleOfficesAndQueriesAreDeterministic" methodname="OnePersonMayHoldMultipleOfficesAndQueriesAreDeterministic" classname="InstitutionFoundationTests" runstate="Runnable" seed="1914837231" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000413" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2095" name="QueryingAndReadOnlySnapshotsDoNotMutateStoreState" fullname="InstitutionFoundationTests.QueryingAndReadOnlySnapshotsDoNotMutateStoreState" methodname="QueryingAndReadOnlySnapshotsDoNotMutateStoreState" classname="InstitutionFoundationTests" runstate="Runnable" seed="387392075" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000449" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2094" name="SeparateStoresWithSameIdsRemainWorldIsolated" fullname="InstitutionFoundationTests.SeparateStoresWithSameIdsRemainWorldIsolated" methodname="SeparateStoresWithSameIdsRemainWorldIsolated" classname="InstitutionFoundationTests" runstate="Runnable" seed="361672622" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000150" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="2098" name="InstitutionOfficeCensusTests" fullname="InstitutionOfficeCensusTests" classname="InstitutionOfficeCensusTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.115952" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2102" name="PopulatedRuntimeClonePublishesInstalledOwnersAndPreservesSource" fullname="InstitutionOfficeCensusTests.PopulatedRuntimeClonePublishesInstalledOwnersAndPreservesSource" methodname="PopulatedRuntimeClonePublishesInstalledOwnersAndPreservesSource" classname="InstitutionOfficeCensusTests" runstate="Runnable" seed="2133483685" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.003529" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2099" name="RuntimeWitnessTracksInstitutionOfficeAndIncumbencyCommits" fullname="InstitutionOfficeCensusTests.RuntimeWitnessTracksInstitutionOfficeAndIncumbencyCommits" methodname="RuntimeWitnessTracksInstitutionOfficeAndIncumbencyCommits" classname="InstitutionOfficeCensusTests" runstate="Runnable" seed="82073060" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.075319" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2100" name="SelectedDailyV1InstitutionOfficeCommitsAdvanceOneSharedEpoch" fullname="InstitutionOfficeCensusTests.SelectedDailyV1InstitutionOfficeCommitsAdvanceOneSharedEpoch" methodname="SelectedDailyV1InstitutionOfficeCommitsAdvanceOneSharedEpoch" classname="InstitutionOfficeCensusTests" runstate="Runnable" seed="1020999711" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.030224" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2101" name="SelectedDailyV1OffOwnerThreadVacancyApplyIsRejectedBeforeStoreMutation" fullname="InstitutionOfficeCensusTests.SelectedDailyV1OffOwnerThreadVacancyApplyIsRejectedBeforeStoreMutation" methodname="SelectedDailyV1OffOwnerThreadVacancyApplyIsRejectedBeforeStoreMutation" classname="InstitutionOfficeCensusTests" runstate="Runnable" seed="510853344" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.005744" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="2110" name="P12EInstitutionOfficeOwnerSnapshotTests" fullname="P12EInstitutionOfficeOwnerSnapshotTests" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" testcasecount="11" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.135207" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2120" name="AssignmentAndVacancyCaptureExactCardinalityAndSingleRevisionChanges" fullname="P12EInstitutionOfficeOwnerSnapshotTests.AssignmentAndVacancyCaptureExactCardinalityAndSingleRevisionChanges" methodname="AssignmentAndVacancyCaptureExactCardinalityAndSingleRevisionChanges" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="1268944093" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.076069" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+        </test-case>
+        <test-case id="2113" name="Capture_IsDetachedAndRepeatedCaptureIsDeterministic" fullname="P12EInstitutionOfficeOwnerSnapshotTests.Capture_IsDetachedAndRepeatedCaptureIsDeterministic" methodname="Capture_IsDetachedAndRepeatedCaptureIsDeterministic" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="1474084441" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.010782" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2119" name="CaptureRejectsAStaleTokenAfterOwnerMutation" fullname="P12EInstitutionOfficeOwnerSnapshotTests.CaptureRejectsAStaleTokenAfterOwnerMutation" methodname="CaptureRejectsAStaleTokenAfterOwnerMutation" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="1000987172" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.008021" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2121" name="CaptureRejectsDuplicateWrongOwnerCardinalityRevisionSchemaAndRoleWitnesses" fullname="P12EInstitutionOfficeOwnerSnapshotTests.CaptureRejectsDuplicateWrongOwnerCardinalityRevisionSchemaAndRoleWitnesses" methodname="CaptureRejectsDuplicateWrongOwnerCardinalityRevisionSchemaAndRoleWitnesses" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="1505863291" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.009406" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2118" name="CaptureRejectsRuntimeWithoutCompletedBoundary" fullname="P12EInstitutionOfficeOwnerSnapshotTests.CaptureRejectsRuntimeWithoutCompletedBoundary" methodname="CaptureRejectsRuntimeWithoutCompletedBoundary" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="778645784" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.002787" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2111" name="EmptyRequiredOwners_CaptureAndStageExactZeroWithBoundPairAndRevisions" fullname="P12EInstitutionOfficeOwnerSnapshotTests.EmptyRequiredOwners_CaptureAndStageExactZeroWithBoundPairAndRevisions" methodname="EmptyRequiredOwners_CaptureAndStageExactZeroWithBoundPairAndRevisions" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="153735180" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.009881" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2112" name="PopulatedCapture_PreservesRepeatedEqualClosedTenuresAndOpenIncumbencyExactly" fullname="P12EInstitutionOfficeOwnerSnapshotTests.PopulatedCapture_PreservesRepeatedEqualClosedTenuresAndOpenIncumbencyExactly" methodname="PopulatedCapture_PreservesRepeatedEqualClosedTenuresAndOpenIncumbencyExactly" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="947333099" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.011432" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2114" name="StageRejectsDuplicateOrDanglingRowsWithoutReturningEitherOwner" fullname="P12EInstitutionOfficeOwnerSnapshotTests.StageRejectsDuplicateOrDanglingRowsWithoutReturningEitherOwner" methodname="StageRejectsDuplicateOrDanglingRowsWithoutReturningEitherOwner" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="1707813547" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000767" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2117" name="StageRejectsMissingOrMultipleOpenRowsInvalidDatesAndMalformedHeaders" fullname="P12EInstitutionOfficeOwnerSnapshotTests.StageRejectsMissingOrMultipleOpenRowsInvalidDatesAndMalformedHeaders" methodname="StageRejectsMissingOrMultipleOpenRowsInvalidDatesAndMalformedHeaders" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="2141149729" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000459" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2115" name="StageRejectsMissingPersonAndInconsistentOpenTenureWithoutPartialOwners" fullname="P12EInstitutionOfficeOwnerSnapshotTests.StageRejectsMissingPersonAndInconsistentOpenTenureWithoutPartialOwners" methodname="StageRejectsMissingPersonAndInconsistentOpenTenureWithoutPartialOwners" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="631362699" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000244" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2116" name="StageRejectsUnsupportedClosedReasonAndRetainsEqualClosedOccurrences" fullname="P12EInstitutionOfficeOwnerSnapshotTests.StageRejectsUnsupportedClosedReasonAndRetainsEqualClosedOccurrences" methodname="StageRejectsUnsupportedClosedReasonAndRetainsEqualClosedOccurrences" classname="P12EInstitutionOfficeOwnerSnapshotTests" runstate="Runnable" seed="178542515" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000394" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="2706" name="P12PoliticalClaimCensusTests" fullname="P12PoliticalClaimCensusTests" classname="P12PoliticalClaimCensusTests" runstate="Runnable" testcasecount="6" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.009125" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2711" name="DailyProfileRejectsPoliticalClaimCommitAgainstStaleSectionBaselineBeforeMutation" fullname="P12PoliticalClaimCensusTests.DailyProfileRejectsPoliticalClaimCommitAgainstStaleSectionBaselineBeforeMutation" methodname="DailyProfileRejectsPoliticalClaimCommitAgainstStaleSectionBaselineBeforeMutation" classname="P12PoliticalClaimCensusTests" runstate="Runnable" seed="464987559" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.002832" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2712" name="DailyProfileRejectsPoliticalClaimCommitAtLocalRevisionOverflowWithoutEpochAdvance" fullname="P12PoliticalClaimCensusTests.DailyProfileRejectsPoliticalClaimCommitAtLocalRevisionOverflowWithoutEpochAdvance" methodname="DailyProfileRejectsPoliticalClaimCommitAtLocalRevisionOverflowWithoutEpochAdvance" classname="P12PoliticalClaimCensusTests" runstate="Runnable" seed="978269275" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000802" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2709" name="DailyProfileRejectsPoliticalClaimCommitOffOwnerThreadBeforeMutation" fullname="P12PoliticalClaimCensusTests.DailyProfileRejectsPoliticalClaimCommitOffOwnerThreadBeforeMutation" methodname="DailyProfileRejectsPoliticalClaimCommitOffOwnerThreadBeforeMutation" classname="P12PoliticalClaimCensusTests" runstate="Runnable" seed="1757518699" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000901" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2710" name="DailyProfileRejectsPoliticalClaimCommitWhenSharedEpochIsExhausted" fullname="P12PoliticalClaimCensusTests.DailyProfileRejectsPoliticalClaimCommitWhenSharedEpochIsExhausted" methodname="DailyProfileRejectsPoliticalClaimCommitWhenSharedEpochIsExhausted" classname="P12PoliticalClaimCensusTests" runstate="Runnable" seed="1409001527" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000380" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2708" name="DailyProfileTracksSuccessfulFacadeCommitsAndLeavesRejectedCommitsUnchanged" fullname="P12PoliticalClaimCensusTests.DailyProfileTracksSuccessfulFacadeCommitsAndLeavesRejectedCommitsUnchanged" methodname="DailyProfileTracksSuccessfulFacadeCommitsAndLeavesRejectedCommitsUnchanged" classname="P12PoliticalClaimCensusTests" runstate="Runnable" seed="1347636066" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.002664" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2707" name="ProvidersExposeSeparateCardinalitiesForOneExactOwnerAndSharedRevision" fullname="P12PoliticalClaimCensusTests.ProvidersExposeSeparateCardinalitiesForOneExactOwnerAndSharedRevision" methodname="ProvidersExposeSeparateCardinalitiesForOneExactOwnerAndSharedRevision" classname="P12PoliticalClaimCensusTests" runstate="Runnable" seed="1650248658" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000335" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="2956" name="PersonOwnerSnapshotTests" fullname="PersonOwnerSnapshotTests" classname="PersonOwnerSnapshotTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.006875" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2959" name="CaptureTracksRegistrationBindingCompensationAndPersonLocalCommitsExactly" fullname="PersonOwnerSnapshotTests.CaptureTracksRegistrationBindingCompensationAndPersonLocalCommitsExactly" methodname="CaptureTracksRegistrationBindingCompensationAndPersonLocalCommitsExactly" classname="PersonOwnerSnapshotTests" runstate="Runnable" seed="1974538755" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.001902" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2957" name="EmptyOwnerRoundTripsAndRemainsDistinctFromMissingSnapshot" fullname="PersonOwnerSnapshotTests.EmptyOwnerRoundTripsAndRemainsDistinctFromMissingSnapshot" methodname="EmptyOwnerRoundTripsAndRemainsDistinctFromMissingSnapshot" classname="PersonOwnerSnapshotTests" runstate="Runnable" seed="604795950" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000870" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2958" name="PopulatedOwnerPreservesExactValuesOrderAndDetachedIndexes" fullname="PersonOwnerSnapshotTests.PopulatedOwnerPreservesExactValuesOrderAndDetachedIndexes" methodname="PopulatedOwnerPreservesExactValuesOrderAndDetachedIndexes" classname="PersonOwnerSnapshotTests" runstate="Runnable" seed="826228640" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.001201" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2961" name="RejectsMalformedLocalValuesWithoutPublishingOrChangingSource" fullname="PersonOwnerSnapshotTests.RejectsMalformedLocalValuesWithoutPublishingOrChangingSource" methodname="RejectsMalformedLocalValuesWithoutPublishingOrChangingSource" classname="PersonOwnerSnapshotTests" runstate="Runnable" seed="2101626175" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.001108" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2960" name="StagingRestoresGappedAndSaturatedRevisionsWithoutReplay" fullname="PersonOwnerSnapshotTests.StagingRestoresGappedAndSaturatedRevisionsWithoutReplay" methodname="StagingRestoresGappedAndSaturatedRevisionsWithoutReplay" classname="PersonOwnerSnapshotTests" runstate="Runnable" seed="1788478140" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.001059" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="2975" name="PersonStoreCensusTests" fullname="PersonStoreCensusTests" classname="PersonStoreCensusTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.006922" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2982" name="CensusOverflowFailuresAppendWithoutRenumberingExistingValues" fullname="PersonStoreCensusTests.CensusOverflowFailuresAppendWithoutRenumberingExistingValues" methodname="CensusOverflowFailuresAppendWithoutRenumberingExistingValues" classname="PersonStoreCensusTests" runstate="Runnable" seed="1130942833" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000223" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2980" name="ForwardWritesFailClosedAtReservedHeadroomAndOverflowMapsThroughMaterialization" fullname="PersonStoreCensusTests.ForwardWritesFailClosedAtReservedHeadroomAndOverflowMapsThroughMaterialization" methodname="ForwardWritesFailClosedAtReservedHeadroomAndOverflowMapsThroughMaterialization" classname="PersonStoreCensusTests" runstate="Runnable" seed="2006531701" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.001678" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2981" name="ImmediateCompensationUsesReservedRevisionAndSaturatedRollbackRejectsBeforeMutation" fullname="PersonStoreCensusTests.ImmediateCompensationUsesReservedRevisionAndSaturatedRollbackRejectsBeforeMutation" methodname="ImmediateCompensationUsesReservedRevisionAndSaturatedRollbackRejectsBeforeMutation" classname="PersonStoreCensusTests" runstate="Runnable" seed="2037145949" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000645" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2979" name="MutationGuardRejectionsLeavePersonWitnessUnchanged" fullname="PersonStoreCensusTests.MutationGuardRejectionsLeavePersonWitnessUnchanged" methodname="MutationGuardRejectionsLeavePersonWitnessUnchanged" classname="PersonStoreCensusTests" runstate="Runnable" seed="1368468457" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000478" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2977" name="RegistryAndBindingWritesAdvanceSharedRevisionAndCompensationsRemainRevisioned" fullname="PersonStoreCensusTests.RegistryAndBindingWritesAdvanceSharedRevisionAndCompensationsRemainRevisioned" methodname="RegistryAndBindingWritesAdvanceSharedRevisionAndCompensationsRemainRevisioned" classname="PersonStoreCensusTests" runstate="Runnable" seed="1776435929" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000484" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2978" name="RuntimeFailureAndPersonFactsOutsideStructuralScopeDoNotChangeWitness" fullname="PersonStoreCensusTests.RuntimeFailureAndPersonFactsOutsideStructuralScopeDoNotChangeWitness" methodname="RuntimeFailureAndPersonFactsOutsideStructuralScopeDoNotChangeWitness" classname="PersonStoreCensusTests" runstate="Runnable" seed="416585494" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000435" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2976" name="SelectedBootstrapPublishesStableExactZeroInstalledPersonWitnesses" fullname="PersonStoreCensusTests.SelectedBootstrapPublishesStableExactZeroInstalledPersonWitnesses" methodname="SelectedBootstrapPublishesStableExactZeroInstalledPersonWitnesses" classname="PersonStoreCensusTests" runstate="Runnable" seed="33165500" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.002048" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="3019" name="PoliticalClaimFoundationTests" fullname="PoliticalClaimFoundationTests" classname="PoliticalClaimFoundationTests" runstate="Runnable" testcasecount="13" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.065953" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3030" name="ClaimKnowledgeKeepsInstitutionRecognitionPerspectivesSeparate" fullname="PoliticalClaimFoundationTests.ClaimKnowledgeKeepsInstitutionRecognitionPerspectivesSeparate" methodname="ClaimKnowledgeKeepsInstitutionRecognitionPerspectivesSeparate" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="130242617" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.002171" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3021" name="ClaimStoreKeepsClaimsSeparateFromUnderlyingOfficeTruth" fullname="PoliticalClaimFoundationTests.ClaimStoreKeepsClaimsSeparateFromUnderlyingOfficeTruth" methodname="ClaimStoreKeepsClaimsSeparateFromUnderlyingOfficeTruth" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="423310134" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000987" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3020" name="ClaimTargetFactoriesPreserveTypedTargetIdentity" fullname="PoliticalClaimFoundationTests.ClaimTargetFactoriesPreserveTypedTargetIdentity" methodname="ClaimTargetFactoriesPreserveTypedTargetIdentity" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="1577848777" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000285" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3031" name="DiagnosticsRejectPoliticalClaimTargetOutsideCapturedWorldCatalog" fullname="PoliticalClaimFoundationTests.DiagnosticsRejectPoliticalClaimTargetOutsideCapturedWorldCatalog" methodname="DiagnosticsRejectPoliticalClaimTargetOutsideCapturedWorldCatalog" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="905150624" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.020453" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3028" name="OneClaimCanHaveIndependentInstitutionScopedRecognitionRelations" fullname="PoliticalClaimFoundationTests.OneClaimCanHaveIndependentInstitutionScopedRecognitionRelations" methodname="OneClaimCanHaveIndependentInstitutionScopedRecognitionRelations" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="55640659" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.001133" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3032" name="PoliticalClaimsParticipateInDeterministicDiagnostics" fullname="PoliticalClaimFoundationTests.PoliticalClaimsParticipateInDeterministicDiagnostics" methodname="PoliticalClaimsParticipateInDeterministicDiagnostics" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="1868563123" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.035833" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3029" name="RecognitionCanWithdrawAndRestoreOneInstitutionWithoutTouchingAnother" fullname="PoliticalClaimFoundationTests.RecognitionCanWithdrawAndRestoreOneInstitutionWithoutTouchingAnother" methodname="RecognitionCanWithdrawAndRestoreOneInstitutionWithoutTouchingAnother" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="448474278" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000834" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3025" name="RecognitionIsExplicitInstitutionalStateAndStaleTransitionsAreRejected" fullname="PoliticalClaimFoundationTests.RecognitionIsExplicitInstitutionalStateAndStaleTransitionsAreRejected" methodname="RecognitionIsExplicitInstitutionalStateAndStaleTransitionsAreRejected" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="826747957" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.001044" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3026" name="RecognitionProposalBecomesStaleWhenWorldDayAdvances" fullname="PoliticalClaimFoundationTests.RecognitionProposalBecomesStaleWhenWorldDayAdvances" methodname="RecognitionProposalBecomesStaleWhenWorldDayAdvances" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="405687392" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000362" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3027" name="ResolutionDoesNotRewriteClaimRecognitionOrUnderlyingTruth" fullname="PoliticalClaimFoundationTests.ResolutionDoesNotRewriteClaimRecognitionOrUnderlyingTruth" methodname="ResolutionDoesNotRewriteClaimRecognitionOrUnderlyingTruth" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="1091888237" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000454" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3024" name="WorldClonesPoliticalClaimsAndDoesNotExposeMutableStoreAuthority" fullname="PoliticalClaimFoundationTests.WorldClonesPoliticalClaimsAndDoesNotExposeMutableStoreAuthority" methodname="WorldClonesPoliticalClaimsAndDoesNotExposeMutableStoreAuthority" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="247892706" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000407" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3022" name="WorldRejectsClaimantAndTargetOutsideItsWorld" fullname="PoliticalClaimFoundationTests.WorldRejectsClaimantAndTargetOutsideItsWorld" methodname="WorldRejectsClaimantAndTargetOutsideItsWorld" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="1447062945" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000287" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3023" name="WorldRejectsTerminalClaimResolvedInTheFuture" fullname="PoliticalClaimFoundationTests.WorldRejectsTerminalClaimResolvedInTheFuture" methodname="WorldRejectsTerminalClaimResolvedInTheFuture" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="1796219290" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000239" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="3063" name="PoliticalSuccessionIntegrationTests" fullname="PoliticalSuccessionIntegrationTests" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" testcasecount="13" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:40Z" duration="0.022580" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3076" name="AuthoritativeKnowledgeRevisionAndOfficeBindingRejectStaleOrWrongTargets" fullname="PoliticalSuccessionIntegrationTests.AuthoritativeKnowledgeRevisionAndOfficeBindingRejectStaleOrWrongTargets" methodname="AuthoritativeKnowledgeRevisionAndOfficeBindingRejectStaleOrWrongTargets" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="2029933142" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.006504" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3069" name="ComposingPoliticalWorldPreservesCapturedRevisionAndAcceptsFreshDecision" fullname="PoliticalSuccessionIntegrationTests.ComposingPoliticalWorldPreservesCapturedRevisionAndAcceptsFreshDecision" methodname="ComposingPoliticalWorldPreservesCapturedRevisionAndAcceptsFreshDecision" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="771310402" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000477" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3066" name="DecisionRegistrationRejectsARecordBoundToAnotherWorld" fullname="PoliticalSuccessionIntegrationTests.DecisionRegistrationRejectsARecordBoundToAnotherWorld" methodname="DecisionRegistrationRejectsARecordBoundToAnotherWorld" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1449182405" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000410" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3065" name="DecisionRegistrationRequiresCurrentKnowledgeHolderAndRejectsFutureDay" fullname="PoliticalSuccessionIntegrationTests.DecisionRegistrationRequiresCurrentKnowledgeHolderAndRejectsFutureDay" methodname="DecisionRegistrationRequiresCurrentKnowledgeHolderAndRejectsFutureDay" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="323632554" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000371" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3067" name="FailedDuplicateRegistrationDoesNotBindTheCallerDecisionRecord" fullname="PoliticalSuccessionIntegrationTests.FailedDuplicateRegistrationDoesNotBindTheCallerDecisionRecord" methodname="FailedDuplicateRegistrationDoesNotBindTheCallerDecisionRecord" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="151155069" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000355" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3071" name="FailedWorldCompositionDoesNotBindCallerDecisionStore" fullname="PoliticalSuccessionIntegrationTests.FailedWorldCompositionDoesNotBindCallerDecisionStore" methodname="FailedWorldCompositionDoesNotBindCallerDecisionStore" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="569085773" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000826" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3070" name="ImportedPoliticalDecisionHistoryRequiresExplicitRevisionAndWorldPersonStore" fullname="PoliticalSuccessionIntegrationTests.ImportedPoliticalDecisionHistoryRequiresExplicitRevisionAndWorldPersonStore" methodname="ImportedPoliticalDecisionHistoryRequiresExplicitRevisionAndWorldPersonStore" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1977926770" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000821" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3068" name="PoliticalDecisionCloneDoesNotShareMutableHistoryAndAdvanceDayDoesNotExecutePolitics" fullname="PoliticalSuccessionIntegrationTests.PoliticalDecisionCloneDoesNotShareMutableHistoryAndAdvanceDayDoesNotExecutePolitics" methodname="PoliticalDecisionCloneDoesNotShareMutableHistoryAndAdvanceDayDoesNotExecutePolitics" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="300105776" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:39Z" duration="0.000591" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3073" name="PoliticalDecisionHistoryParticipatesInCanonicalDiagnosticsAndDiffs" fullname="PoliticalSuccessionIntegrationTests.PoliticalDecisionHistoryParticipatesInCanonicalDiagnosticsAndDiffs" methodname="PoliticalDecisionHistoryParticipatesInCanonicalDiagnosticsAndDiffs" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="460271436" result="Passed" start-time="2026-10-09 00:13:39Z" end-time="2026-10-09 00:13:40Z" duration="0.003414" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3074" name="PoliticalKnowledgeDiagnosticsRejectOfficeInstitutionMismatch" fullname="PoliticalSuccessionIntegrationTests.PoliticalKnowledgeDiagnosticsRejectOfficeInstitutionMismatch" methodname="PoliticalKnowledgeDiagnosticsRejectOfficeInstitutionMismatch" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="285403544" result="Passed" start-time="2026-10-09 00:13:40Z" end-time="2026-10-09 00:13:40Z" duration="0.001793" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3072" name="PoliticalSelectionUsesCandidateFingerprintAndRevalidatesDeadCandidate" fullname="PoliticalSuccessionIntegrationTests.PoliticalSelectionUsesCandidateFingerprintAndRevalidatesDeadCandidate" methodname="PoliticalSelectionUsesCandidateFingerprintAndRevalidatesDeadCandidate" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1617108910" result="Passed" start-time="2026-10-09 00:13:40Z" end-time="2026-10-09 00:13:40Z" duration="0.003655" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3064" name="RuntimeComposesDecisionHistoryReadOnlyAndAppliesOnlyThroughOfficeSuccession" fullname="PoliticalSuccessionIntegrationTests.RuntimeComposesDecisionHistoryReadOnlyAndAppliesOnlyThroughOfficeSuccession" methodname="RuntimeComposesDecisionHistoryReadOnlyAndAppliesOnlyThroughOfficeSuccession" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1100961954" result="Passed" start-time="2026-10-09 00:13:40Z" end-time="2026-10-09 00:13:40Z" duration="0.001394" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3075" name="StaleDecisionAndWrongDecisionInputsCannotExecuteOfficeSuccession" fullname="PoliticalSuccessionIntegrationTests.StaleDecisionAndWrongDecisionInputsCannotExecuteOfficeSuccession" methodname="StaleDecisionAndWrongDecisionInputsCannotExecuteOfficeSuccession" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1720547359" result="Passed" start-time="2026-10-09 00:13:40Z" end-time="2026-10-09 00:13:40Z" duration="0.000449" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="3308" name="PropertyOwnershipCensusTests" fullname="PropertyOwnershipCensusTests" classname="PropertyOwnershipCensusTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-09 00:13:40Z" end-time="2026-10-09 00:13:40Z" duration="0.004029" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3310" name="RuntimeClonePreservesPopulatedOwnershipHistoryAndRevisionWithoutChangingSource" fullname="PropertyOwnershipCensusTests.RuntimeClonePreservesPopulatedOwnershipHistoryAndRevisionWithoutChangingSource" methodname="RuntimeClonePreservesPopulatedOwnershipHistoryAndRevisionWithoutChangingSource" classname="PropertyOwnershipCensusTests" runstate="Runnable" seed="90533067" result="Passed" start-time="2026-10-09 00:13:40Z" end-time="2026-10-09 00:13:40Z" duration="0.002237" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3309" name="RuntimeWitnessTracksRegistrationTransferAndRejectedOperations" fullname="PropertyOwnershipCensusTests.RuntimeWitnessTracksRegistrationTransferAndRejectedOperations" methodname="RuntimeWitnessTracksRegistrationTransferAndRejectedOperations" classname="PropertyOwnershipCensusTests" runstate="Runnable" seed="554974187" result="Passed" start-time="2026-10-09 00:13:40Z" end-time="2026-10-09 00:13:40Z" duration="0.001214" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
