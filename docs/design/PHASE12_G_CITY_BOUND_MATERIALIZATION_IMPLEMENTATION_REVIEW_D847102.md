@@ -1,11 +1,17 @@
 # P12-G City-bound Person materialization reconciliation review
 
-**Result:** `VALIDATED_CANDIDATE`  
-**Candidate branch:** `codex/phase12/P12GCurrentCanonicalInventoryRefresh`  
-**Exact reviewed candidate:** `d847102c5b3dfc28e3880d1ca1f2a96608ba2127`  
-**Implementation commit:** `11653ebd3947220a39d785c0c0641837e5cfadbe`  
-**Base / current P12 canonical at review:** `93fd6ab7f39de572fafbfb1fa160f342935839e5`  
-**Architecture:** `47eff220c7ce00f6e7c759bdc2b76780bb46f628`  
+**Result:** `VALIDATED_CANDIDATE`
+
+**Candidate branch:** `codex/phase12/P12GCurrentCanonicalInventoryRefresh`
+
+**Exact reviewed candidate:** `d847102c5b3dfc28e3880d1ca1f2a96608ba2127`
+
+**Implementation commit:** `11653ebd3947220a39d785c0c0641837e5cfadbe`
+
+**Base / current P12 canonical at review:** `93fd6ab7f39de572fafbfb1fa160f342935839e5`
+
+**Architecture:** `47eff220c7ce00f6e7c759bdc2b76780bb46f628`
+
 **Reviewed Assets tree:** `032e65318ea510c1009f89c8b0431a4c6aea46c0`
 
 An independent exact-tip review passed on the pushed candidate. The candidate is a clean additive descendant of current P12 canonical. The implementation marks the exact City presence section after successful Person materialization with a non-null `startingCity`, inside the existing `runtime.npc-membership` scope. This accounts for the City projection committed after `TryRegisterNpc` has registered an NPC whose `CurrentCity` is still null. The membership reconciliation then validates Person membership/binding, dynamic NPC owner families, and affected City presence together under its reserved mutation epoch.
