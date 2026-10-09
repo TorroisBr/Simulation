@@ -1,7 +1,7 @@
 # P12-G current Crime/Social ingress and epoch crosswalk
 
-**Baseline:** P12 canonical `97bcc5c66fba0b03ef1242807fe8d9dc51a6dc10`  
-**Production source tree:** `Assets` tree `1b90b4f77586f69c04330b564a32e0a9475808d4`; `_Project/Scripts` matches the source-audit baseline at `02009f9063dd252bd4b177fd6aef1e74dcd947f5`.  
+**Baseline:** P12 canonical `97bcc5c66fba0b03ef1242807fe8d9dc51a6dc10`
+**Production source tree:** `Assets` tree `1b90b4f77586f69c04330b564a32e0a9475808d4`; `_Project/Scripts` matches the source-audit baseline at `02009f9063dd252bd4b177fd6aef1e74dcd947f5`.
 **Scope:** Source-level reconciliation for the explicit Crime/Social row in the P12-G Daily-v1 owner/operation/publication audit. No code, test, operation-ID, or gameplay change.
 
 ## Normal selected Daily-v1 theft ingress
