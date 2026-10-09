@@ -430,6 +430,10 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
             new[] { Wanted(0, "target", null, "city", 1f, 1, false) },
             new[] { Sentence(1, "target", null, "city", 0, 1, 0, false) }, 0L),
             P12EJusticeSnapshotFailureCode.InvalidIdentity);
+        AssertStageRejected(Snapshot(
+            new[] { Wanted(0, "target", null, "city", 1f, 1, false) },
+            new[] { Sentence(0, "target", null, "city", 1, 1, 0, false) }, 0L),
+            P12EJusticeSnapshotFailureCode.InvalidIdentity);
 
         P12EJusticeWantedSnapshotRow repeated = Wanted(0, "target", null, "city", 1f, 1, false);
         AssertStageRejected(Snapshot(
