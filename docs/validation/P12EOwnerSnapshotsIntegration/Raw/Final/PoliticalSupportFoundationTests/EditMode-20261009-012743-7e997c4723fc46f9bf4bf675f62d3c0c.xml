@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="6" result="Passed" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 01:27:52Z" end-time="2026-10-09 01:27:52Z" duration="0,0630604">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2683" result="Passed" start-time="2026-10-09 01:27:52Z" end-time="2026-10-09 01:27:52Z" duration="0.063060" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3939" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-faction-owner-snapshot-a768f2d/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2683" result="Passed" start-time="2026-10-09 01:27:52Z" end-time="2026-10-09 01:27:52Z" duration="0.048190" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="153160" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3106" name="PoliticalSupportFoundationTests" fullname="PoliticalSupportFoundationTests" classname="PoliticalSupportFoundationTests" runstate="Runnable" testcasecount="6" result="Passed" start-time="2026-10-09 01:27:52Z" end-time="2026-10-09 01:27:52Z" duration="0.031403" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3112" name="AddTransitionsValidateDayRevisionEndpointsAndCommitAtomically" fullname="PoliticalSupportFoundationTests.AddTransitionsValidateDayRevisionEndpointsAndCommitAtomically" methodname="AddTransitionsValidateDayRevisionEndpointsAndCommitAtomically" classname="PoliticalSupportFoundationTests" runstate="Runnable" seed="1928309670" result="Passed" start-time="2026-10-09 01:27:52Z" end-time="2026-10-09 01:27:52Z" duration="0.014292" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3111" name="DuplicateInvalidAndCrossStoreOperationsFailWithoutAliasing" fullname="PoliticalSupportFoundationTests.DuplicateInvalidAndCrossStoreOperationsFailWithoutAliasing" methodname="DuplicateInvalidAndCrossStoreOperationsFailWithoutAliasing" classname="PoliticalSupportFoundationTests" runstate="Runnable" seed="1981223156" result="Passed" start-time="2026-10-09 01:27:52Z" end-time="2026-10-09 01:27:52Z" duration="0.003603" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3109" name="EndingAndReAddingRetainsImmutableRelationHistory" fullname="PoliticalSupportFoundationTests.EndingAndReAddingRetainsImmutableRelationHistory" methodname="EndingAndReAddingRetainsImmutableRelationHistory" classname="PoliticalSupportFoundationTests" runstate="Runnable" seed="187310600" result="Passed" start-time="2026-10-09 01:27:52Z" end-time="2026-10-09 01:27:52Z" duration="0.001510" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3107" name="SourcesAndTargetsUseTypedStableIdentity" fullname="PoliticalSupportFoundationTests.SourcesAndTargetsUseTypedStableIdentity" methodname="SourcesAndTargetsUseTypedStableIdentity" classname="PoliticalSupportFoundationTests" runstate="Runnable" seed="476380654" result="Passed" start-time="2026-10-09 01:27:52Z" end-time="2026-10-09 01:27:52Z" duration="0.001095" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3110" name="StaleEndTransitionsAreRejectedAndQueriesAreDeterministicallySorted" fullname="PoliticalSupportFoundationTests.StaleEndTransitionsAreRejectedAndQueriesAreDeterministicallySorted" methodname="StaleEndTransitionsAreRejectedAndQueriesAreDeterministicallySorted" classname="PoliticalSupportFoundationTests" runstate="Runnable" seed="568295766" result="Passed" start-time="2026-10-09 01:27:52Z" end-time="2026-10-09 01:27:52Z" duration="0.000655" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3108" name="SupportAndOppositionAreExplicitAndOnlyOneCanBeActiveForAPair" fullname="PoliticalSupportFoundationTests.SupportAndOppositionAreExplicitAndOnlyOneCanBeActiveForAPair" methodname="SupportAndOppositionAreExplicitAndOnlyOneCanBeActiveForAPair" classname="PoliticalSupportFoundationTests" runstate="Runnable" seed="2020650888" result="Passed" start-time="2026-10-09 01:27:52Z" end-time="2026-10-09 01:27:52Z" duration="0.000420" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

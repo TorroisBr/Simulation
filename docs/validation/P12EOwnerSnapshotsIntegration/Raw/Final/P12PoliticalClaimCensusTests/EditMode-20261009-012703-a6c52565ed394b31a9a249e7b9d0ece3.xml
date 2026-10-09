@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="6" result="Passed" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 01:27:12Z" end-time="2026-10-09 01:27:12Z" duration="0,1347026">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2683" result="Passed" start-time="2026-10-09 01:27:12Z" end-time="2026-10-09 01:27:12Z" duration="0.134703" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3939" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-faction-owner-snapshot-a768f2d/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2683" result="Passed" start-time="2026-10-09 01:27:12Z" end-time="2026-10-09 01:27:12Z" duration="0.122444" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="152568" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2729" name="P12PoliticalClaimCensusTests" fullname="P12PoliticalClaimCensusTests" classname="P12PoliticalClaimCensusTests" runstate="Runnable" testcasecount="6" result="Passed" start-time="2026-10-09 01:27:12Z" end-time="2026-10-09 01:27:12Z" duration="0.104334" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2734" name="DailyProfileRejectsPoliticalClaimCommitAgainstStaleSectionBaselineBeforeMutation" fullname="P12PoliticalClaimCensusTests.DailyProfileRejectsPoliticalClaimCommitAgainstStaleSectionBaselineBeforeMutation" methodname="DailyProfileRejectsPoliticalClaimCommitAgainstStaleSectionBaselineBeforeMutation" classname="P12PoliticalClaimCensusTests" runstate="Runnable" seed="1056450841" result="Passed" start-time="2026-10-09 01:27:12Z" end-time="2026-10-09 01:27:12Z" duration="0.058226" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2735" name="DailyProfileRejectsPoliticalClaimCommitAtLocalRevisionOverflowWithoutEpochAdvance" fullname="P12PoliticalClaimCensusTests.DailyProfileRejectsPoliticalClaimCommitAtLocalRevisionOverflowWithoutEpochAdvance" methodname="DailyProfileRejectsPoliticalClaimCommitAtLocalRevisionOverflowWithoutEpochAdvance" classname="P12PoliticalClaimCensusTests" runstate="Runnable" seed="1566741761" result="Passed" start-time="2026-10-09 01:27:12Z" end-time="2026-10-09 01:27:12Z" duration="0.001141" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2732" name="DailyProfileRejectsPoliticalClaimCommitOffOwnerThreadBeforeMutation" fullname="P12PoliticalClaimCensusTests.DailyProfileRejectsPoliticalClaimCommitOffOwnerThreadBeforeMutation" methodname="DailyProfileRejectsPoliticalClaimCommitOffOwnerThreadBeforeMutation" classname="P12PoliticalClaimCensusTests" runstate="Runnable" seed="1008908117" result="Passed" start-time="2026-10-09 01:27:12Z" end-time="2026-10-09 01:27:12Z" duration="0.030145" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2733" name="DailyProfileRejectsPoliticalClaimCommitWhenSharedEpochIsExhausted" fullname="P12PoliticalClaimCensusTests.DailyProfileRejectsPoliticalClaimCommitWhenSharedEpochIsExhausted" methodname="DailyProfileRejectsPoliticalClaimCommitWhenSharedEpochIsExhausted" classname="P12PoliticalClaimCensusTests" runstate="Runnable" seed="1767043676" result="Passed" start-time="2026-10-09 01:27:12Z" end-time="2026-10-09 01:27:12Z" duration="0.000840" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2731" name="DailyProfileTracksSuccessfulFacadeCommitsAndLeavesRejectedCommitsUnchanged" fullname="P12PoliticalClaimCensusTests.DailyProfileTracksSuccessfulFacadeCommitsAndLeavesRejectedCommitsUnchanged" methodname="DailyProfileTracksSuccessfulFacadeCommitsAndLeavesRejectedCommitsUnchanged" classname="P12PoliticalClaimCensusTests" runstate="Runnable" seed="40086444" result="Passed" start-time="2026-10-09 01:27:12Z" end-time="2026-10-09 01:27:12Z" duration="0.003269" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2730" name="ProvidersExposeSeparateCardinalitiesForOneExactOwnerAndSharedRevision" fullname="P12PoliticalClaimCensusTests.ProvidersExposeSeparateCardinalitiesForOneExactOwnerAndSharedRevision" methodname="ProvidersExposeSeparateCardinalitiesForOneExactOwnerAndSharedRevision" classname="P12PoliticalClaimCensusTests" runstate="Runnable" seed="621079299" result="Passed" start-time="2026-10-09 01:27:12Z" end-time="2026-10-09 01:27:12Z" duration="0.001588" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

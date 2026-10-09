@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="9" result="Failed(Child)" total="9" passed="8" failed="1" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 01:25:15Z" end-time="2026-10-09 01:25:15Z" duration="0,3153069">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2683" result="Failed" site="Child" start-time="2026-10-09 01:25:15Z" end-time="2026-10-09 01:25:15Z" duration="0.315307" total="9" passed="8" failed="1" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <failure>
+      <message><![CDATA[One or more child tests had errors]]></message>
+    </failure>
+    <test-suite type="Assembly" id="3939" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-faction-owner-snapshot-a768f2d/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2683" result="Failed" site="Child" start-time="2026-10-09 01:25:15Z" end-time="2026-10-09 01:25:15Z" duration="0.302490" total="9" passed="8" failed="1" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="149116" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <failure>
+        <message><![CDATA[One or more child tests had errors]]></message>
+      </failure>
+      <test-suite type="TestFixture" id="2713" name="P12EPoliticalClaimOwnerSnapshotTests" fullname="P12EPoliticalClaimOwnerSnapshotTests" classname="P12EPoliticalClaimOwnerSnapshotTests" runstate="Runnable" testcasecount="9" result="Failed" site="Child" start-time="2026-10-09 01:25:15Z" end-time="2026-10-09 01:25:15Z" duration="0.285619" total="9" passed="8" failed="1" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <failure>
+          <message><![CDATA[One or more child tests had errors]]></message>
+        </failure>
+        <test-case id="2720" name="CaptureExportIsFieldCompleteSortedAndIndependentOfWriterInsertionOrder" fullname="P12EPoliticalClaimOwnerSnapshotTests.CaptureExportIsFieldCompleteSortedAndIndependentOfWriterInsertionOrder" methodname="CaptureExportIsFieldCompleteSortedAndIndependentOfWriterInsertionOrder" classname="P12EPoliticalClaimOwnerSnapshotTests" runstate="Runnable" seed="1718812683" result="Failed" start-time="2026-10-09 01:25:15Z" end-time="2026-10-09 01:25:15Z" duration="0.227247" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <failure>
+            <message><![CDATA[  Expected string length 606 but was 613. Strings differ at index 448.
+  Expected: "....person13:institution-a1:11:010:recognized1:11:010:recogni..."
+  But was:  "....person13:institution-a1:11:017:other institution1:11:017:..."
+  --------------------------------------------^
+]]></message>
+            <stack-trace><![CDATA[at P12EPoliticalClaimOwnerSnapshotTests.CaptureExportIsFieldCompleteSortedAndIndependentOfWriterInsertionOrder () [0x000b0] in E:\GitHub\GeneralSimulation\MainSimulation\.worktrees\p12e-faction-owner-snapshot-a768f2d\Assets\_Project\Tests\EditMode\Editor\P12EPoliticalClaimOwnerSnapshotTests.cs:235
+]]></stack-trace>
+          </failure>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2719" name="CaptureUsesCurrentCompletedTokenAndBothWitnessesBindTheSameExactOwner" fullname="P12EPoliticalClaimOwnerSnapshotTests.CaptureUsesCurrentCompletedTokenAndBothWitnessesBindTheSameExactOwner" methodname="CaptureUsesCurrentCompletedTokenAndBothWitnessesBindTheSameExactOwner" classname="P12EPoliticalClaimOwnerSnapshotTests" runstate="Runnable" seed="460386767" result="Passed" start-time="2026-10-09 01:25:15Z" end-time="2026-10-09 01:25:15Z" duration="0.040635" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2715" name="ClaimsAndRecognitionStageEveryValueAndDoNotRecomputeRevisionFromCounts" fullname="P12EPoliticalClaimOwnerSnapshotTests.ClaimsAndRecognitionStageEveryValueAndDoNotRecomputeRevisionFromCounts" methodname="ClaimsAndRecognitionStageEveryValueAndDoNotRecomputeRevisionFromCounts" classname="P12EPoliticalClaimOwnerSnapshotTests" runstate="Runnable" seed="1100952925" result="Passed" start-time="2026-10-09 01:25:15Z" end-time="2026-10-09 01:25:15Z" duration="0.003777" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2714" name="EmptySectionsStageExplicitlyAndPreserveExactRevision" fullname="P12EPoliticalClaimOwnerSnapshotTests.EmptySectionsStageExplicitlyAndPreserveExactRevision" methodname="EmptySectionsStageExplicitlyAndPreserveExactRevision" classname="P12EPoliticalClaimOwnerSnapshotTests" runstate="Runnable" seed="860143817" result="Passed" start-time="2026-10-09 01:25:15Z" end-time="2026-10-09 01:25:15Z" duration="0.000288" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2717" name="StageAcceptsMaxRevisionAndStoreRejectsNextMutationAtomically" fullname="P12EPoliticalClaimOwnerSnapshotTests.StageAcceptsMaxRevisionAndStoreRejectsNextMutationAtomically" methodname="StageAcceptsMaxRevisionAndStoreRejectsNextMutationAtomically" classname="P12EPoliticalClaimOwnerSnapshotTests" runstate="Runnable" seed="2098108325" result="Passed" start-time="2026-10-09 01:25:15Z" end-time="2026-10-09 01:25:15Z" duration="0.000365" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2716" name="StageRejectsDuplicateRecognitionAndMalformedTerminalHistory" fullname="P12EPoliticalClaimOwnerSnapshotTests.StageRejectsDuplicateRecognitionAndMalformedTerminalHistory" methodname="StageRejectsDuplicateRecognitionAndMalformedTerminalHistory" classname="P12EPoliticalClaimOwnerSnapshotTests" runstate="Runnable" seed="1604774348" result="Passed" start-time="2026-10-09 01:25:15Z" end-time="2026-10-09 01:25:15Z" duration="0.000494" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2718" name="StageRejectsMissingSectionsUnsupportedSchemaAndDisagreeingRevisions" fullname="P12EPoliticalClaimOwnerSnapshotTests.StageRejectsMissingSectionsUnsupportedSchemaAndDisagreeingRevisions" methodname="StageRejectsMissingSectionsUnsupportedSchemaAndDisagreeingRevisions" classname="P12EPoliticalClaimOwnerSnapshotTests" runstate="Runnable" seed="1260712331" result="Passed" start-time="2026-10-09 01:25:15Z" end-time="2026-10-09 01:25:15Z" duration="0.000408" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2721" name="StagingRejectsMalformedClaimFieldsReferencesAndCountsWithoutChangingSourceOrPublicationTarget" fullname="P12EPoliticalClaimOwnerSnapshotTests.StagingRejectsMalformedClaimFieldsReferencesAndCountsWithoutChangingSourceOrPublicationTarget" methodname="StagingRejectsMalformedClaimFieldsReferencesAndCountsWithoutChangingSourceOrPublicationTarget" classname="P12EPoliticalClaimOwnerSnapshotTests" runstate="Runnable" seed="1528272782" result="Passed" start-time="2026-10-09 01:25:15Z" end-time="2026-10-09 01:25:15Z" duration="0.001553" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2722" name="StagingRejectsMalformedRecognitionReferencesDuplicatesAndHistory" fullname="P12EPoliticalClaimOwnerSnapshotTests.StagingRejectsMalformedRecognitionReferencesDuplicatesAndHistory" methodname="StagingRejectsMalformedRecognitionReferencesDuplicatesAndHistory" classname="P12EPoliticalClaimOwnerSnapshotTests" runstate="Runnable" seed="338543545" result="Passed" start-time="2026-10-09 01:25:15Z" end-time="2026-10-09 01:25:15Z" duration="0.000773" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

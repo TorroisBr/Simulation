@@ -245,6 +245,49 @@ public sealed class FactionStore : IAuthoritativeMutationGuardBindable
         return clone;
     }
 
+    /// <summary>Creates an unpublished exact owner from validated P12-E values.</summary>
+    internal static bool TryCreateFromP12EOwnerSnapshot(
+        PersonStore targetPersonStore,
+        IReadOnlyList<FactionRecord> sourceFactions,
+        IReadOnlyList<FactionAffiliationRecord> sourceAffiliations,
+        long sourceRevision,
+        out FactionStore staged)
+    {
+        staged = null;
+        if (targetPersonStore == null || sourceFactions == null || sourceAffiliations == null || sourceRevision < 0L)
+            return false;
+
+        FactionStore candidate = new FactionStore(targetPersonStore);
+        foreach (FactionRecord faction in sourceFactions)
+        {
+            if (faction?.Id == null || string.IsNullOrWhiteSpace(faction.Id.Value)
+                || candidate.factionsById.ContainsKey(faction.Id.Value)) return false;
+            candidate.factionsById.Add(faction.Id.Value, faction);
+        }
+        foreach (FactionAffiliationRecord affiliation in sourceAffiliations)
+        {
+            if (affiliation?.AffiliationId == null || affiliation.FactionId == null || affiliation.PersonId == null
+                || string.IsNullOrWhiteSpace(affiliation.AffiliationId.Value)
+                || string.IsNullOrWhiteSpace(affiliation.FactionId.Value)
+                || string.IsNullOrWhiteSpace(affiliation.PersonId.Value)
+                || candidate.affiliationsById.ContainsKey(affiliation.AffiliationId.Value)
+                || !candidate.factionsById.ContainsKey(affiliation.FactionId.Value)
+                || !targetPersonStore.TryGet(affiliation.PersonId, out _)) return false;
+
+            candidate.affiliationsById.Add(affiliation.AffiliationId.Value, affiliation);
+            if (affiliation.IsActive)
+            {
+                string key = Key(affiliation.FactionId, affiliation.PersonId);
+                // Keep the existing U+001F owner-key behavior, including collisions.
+                if (candidate.activeAffiliationIdByPair.ContainsKey(key)) return false;
+                candidate.activeAffiliationIdByPair.Add(key, affiliation.AffiliationId.Value);
+            }
+        }
+        candidate.revision = sourceRevision;
+        staged = candidate;
+        return true;
+    }
+
     private bool ValidateAffiliationEndpoints(FactionAffiliationRecord record, out FactionFoundationFailure failure)
     {
         if (record?.FactionId == null || record.PersonId == null || record.AffiliationId == null)
@@ -330,6 +373,11 @@ public sealed class FactionStore : IAuthoritativeMutationGuardBindable
     internal bool IsBoundToPersonStore(PersonStore candidate)
     {
         return ReferenceEquals(personStore, candidate);
+    }
+
+    internal bool HasPersonForP12EOwnerSnapshot(PersonId personId)
+    {
+        return personId != null && personStore.TryGet(personId, out _);
     }
 
     internal bool CanBindFactualReadAdmission(FactualReadAdmission admission)

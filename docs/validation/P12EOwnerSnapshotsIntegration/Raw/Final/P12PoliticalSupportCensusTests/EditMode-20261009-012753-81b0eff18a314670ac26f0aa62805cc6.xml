@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="6" result="Passed" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 01:28:02Z" end-time="2026-10-09 01:28:02Z" duration="0,1072648">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2683" result="Passed" start-time="2026-10-09 01:28:02Z" end-time="2026-10-09 01:28:02Z" duration="0.107265" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3939" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-faction-owner-snapshot-a768f2d/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2683" result="Passed" start-time="2026-10-09 01:28:02Z" end-time="2026-10-09 01:28:02Z" duration="0.094803" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="147360" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2736" name="P12PoliticalSupportCensusTests" fullname="P12PoliticalSupportCensusTests" classname="P12PoliticalSupportCensusTests" runstate="Runnable" testcasecount="6" result="Passed" start-time="2026-10-09 01:28:02Z" end-time="2026-10-09 01:28:02Z" duration="0.078923" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2742" name="DailyProfileFailsClosedOnExhaustedEpochOrStaleSectionBaselineBeforeMutation" fullname="P12PoliticalSupportCensusTests.DailyProfileFailsClosedOnExhaustedEpochOrStaleSectionBaselineBeforeMutation" methodname="DailyProfileFailsClosedOnExhaustedEpochOrStaleSectionBaselineBeforeMutation" classname="P12PoliticalSupportCensusTests" runstate="Runnable" seed="435138597" result="Passed" start-time="2026-10-09 01:28:02Z" end-time="2026-10-09 01:28:02Z" duration="0.061238" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2740" name="DailyProfileKeepsRevisionOverflowRejectionOutsideTheMutationEpoch" fullname="P12PoliticalSupportCensusTests.DailyProfileKeepsRevisionOverflowRejectionOutsideTheMutationEpoch" methodname="DailyProfileKeepsRevisionOverflowRejectionOutsideTheMutationEpoch" classname="P12PoliticalSupportCensusTests" runstate="Runnable" seed="1327969470" result="Passed" start-time="2026-10-09 01:28:02Z" end-time="2026-10-09 01:28:02Z" duration="0.001907" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2741" name="DailyProfileRejectsSupportCommitOffOwnerThreadBeforeMutation" fullname="P12PoliticalSupportCensusTests.DailyProfileRejectsSupportCommitOffOwnerThreadBeforeMutation" methodname="DailyProfileRejectsSupportCommitOffOwnerThreadBeforeMutation" classname="P12PoliticalSupportCensusTests" runstate="Runnable" seed="1086464300" result="Passed" start-time="2026-10-09 01:28:02Z" end-time="2026-10-09 01:28:02Z" duration="0.001045" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2739" name="DailyProfileRejectsTransitionFromAnotherSupportStoreWithoutMutation" fullname="P12PoliticalSupportCensusTests.DailyProfileRejectsTransitionFromAnotherSupportStoreWithoutMutation" methodname="DailyProfileRejectsTransitionFromAnotherSupportStoreWithoutMutation" classname="P12PoliticalSupportCensusTests" runstate="Runnable" seed="904222677" result="Passed" start-time="2026-10-09 01:28:02Z" end-time="2026-10-09 01:28:02Z" duration="0.001341" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2738" name="DailyProfileTracksCommitsAndLeavesProposalsAndRejectedWritesUnchanged" fullname="P12PoliticalSupportCensusTests.DailyProfileTracksCommitsAndLeavesProposalsAndRejectedWritesUnchanged" methodname="DailyProfileTracksCommitsAndLeavesProposalsAndRejectedWritesUnchanged" classname="P12PoliticalSupportCensusTests" runstate="Runnable" seed="1697644631" result="Passed" start-time="2026-10-09 01:28:02Z" end-time="2026-10-09 01:28:02Z" duration="0.002262" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2737" name="ProviderTracksAllRelationRowsAndTheExactOwnersSharedRevision" fullname="P12PoliticalSupportCensusTests.ProviderTracksAllRelationRowsAndTheExactOwnersSharedRevision" methodname="ProviderTracksAllRelationRowsAndTheExactOwnersSharedRevision" classname="P12PoliticalSupportCensusTests" runstate="Runnable" seed="360793001" result="Passed" start-time="2026-10-09 01:28:02Z" end-time="2026-10-09 01:28:02Z" duration="0.001367" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
