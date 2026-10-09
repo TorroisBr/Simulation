@@ -21,6 +21,45 @@ public sealed class EstateStore : IAuthoritativeMutationGuardBindable
         this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
     }
 
+    internal static bool TryCreateFromOwnerSnapshot(
+        PersonStore stagedPersonStore,
+        IReadOnlyList<EstateRecord> records,
+        long savedRevision,
+        long savedAbsoluteDay,
+        out EstateStore store)
+    {
+        store = null;
+        if (stagedPersonStore == null
+            || records == null
+            || savedAbsoluteDay < 0L
+            || savedRevision < 0L
+            || savedRevision != records.Count)
+            return false;
+
+        EstateStore candidate = new EstateStore(stagedPersonStore);
+        foreach (EstateRecord record in records)
+        {
+            if (record == null
+                || record.EstateId == null
+                || record.DeceasedPersonId == null
+                || record.OpenedAbsoluteDay < 0L
+                || record.OpenedAbsoluteDay > savedAbsoluteDay
+                || candidate.recordsById.ContainsKey(record.EstateId.Value)
+                || candidate.recordsByDeceasedPerson.ContainsKey(record.DeceasedPersonId)
+                || !stagedPersonStore.TryGet(record.DeceasedPersonId, out PersonRuntime deceased)
+                || !deceased.DeathAbsoluteDay.HasValue
+                || record.OpenedAbsoluteDay < deceased.DeathAbsoluteDay.Value)
+                return false;
+
+            candidate.recordsById.Add(record.EstateId.Value, record);
+            candidate.recordsByDeceasedPerson.Add(record.DeceasedPersonId, record);
+        }
+
+        candidate.revision = savedRevision;
+        store = candidate;
+        return true;
+    }
+
     internal PersonStore PersonStoreForWorldBoundary => personStore;
 
     public int Count => recordsById.Count;
