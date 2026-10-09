@@ -32,14 +32,14 @@ Preserve all time-bearing values, source AbsoluteDay, ordering/sequence and owne
 
 ## Minimal integration boundary and staging order
 
-1. At one successful P12-B boundary, use the same immutable token, exact owner-section vector and DailyCaptureStagingAttempt for each C/D/E/F package. Recheck owner identity/cardinality/revision before and after capture; reject stale or missing required evidence.
+1. At one successful P12-B boundary, pass the same immutable token, exact owner-section vector and DailyCaptureStagingAttempt into each C/D/E/F capture/staging call. Keep these source-linked identities only in the ephemeral parent composition context; recheck owner identity/cardinality/revision before and after capture and reject stale or missing required evidence.
 2. Capture immutable snapshots of standalone F owners once. The TravelParty snapshot supplies only its exact stable ID set to the existing P12DDailyV1OwnerPackage.TryCaptureAndStage stagedTravelPartyIds input. This resolves the existing D→F reference without a second party authority or source-object leakage.
-3. Stage C roots. The existing P12-D path then captures the shared NpcRuntime once, creates paired D/F projections, and reconstructs the one staged roster. The minimal seam is for P12DDailyV1OwnerPackage to retain the exact P12DNpcFProjection reference it already receives from TryCapture. F consumes that reference and its token/vector/attempt; it does not recapture or restage NPCs.
+3. Stage C roots. The existing P12-D path captures the shared NpcRuntime once, creates paired D/F projections, and reconstructs the one staged roster. P12DNpcFProjection and its capture evidence are transient: the evidence retains source NPC references. The minimal D/F seam is to expose only the detached immutable P12DNpcFRow values from this already-validated capture for F consumption; do not retain the projection or its evidence in a package. No second capture or NPC hydrator is added.
 4. Stage E from the same C/D roots through promoted P12EDailyV1OwnerPackage. Keep typed unresolved PoliticalKnowledge bindings for G.
 5. Stage standalone F owners against the exact C/D/E candidates. Bind the pre-captured TravelParty snapshot to the D-staged NPC objects and validate reciprocal IDs/membership. Stage directives and terminal ActorChoice after their staged identities/content exist. Keep all candidates private.
-6. Return a typed F package carrying the same attempt identity, the reused D/F projection reference, standalone staged F owners, and unresolved typed bindings for G. Revalidate the exact token/vector/attempt. P12-G alone resolves the complete graph and publishes once.
+6. Return an F value package containing only detached owner values and typed unresolved bindings for G. The parent composition context retains the exact token/vector/attempt identities while validating that C/D/E/F belong to the same boundary; P12-G alone resolves the complete graph and publishes once. Discard all source-linked metadata and unpublished candidates on completion or failure.
 
-F has no source-owner references in its candidate package. Snapshot values are detached and owner-local; do not add an aggregate NPC revision. Ordering may follow concrete references while preserving one boundary and the single NPC reconstruction.
+F owner values and staged owner candidates do not retain live source-domain owners. The capture token, owner-section vector and staging attempt can contain source-owner identity references under the existing P12 protocol; keep them as temporary private orchestration metadata only, never serialize or publish them, and drop them when the composition attempt ends. Do not add an aggregate NPC revision.
 
 ## Demonstrability and validation plan
 
