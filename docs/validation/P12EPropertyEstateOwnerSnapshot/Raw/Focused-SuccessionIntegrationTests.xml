@@ -1,142 +1,142 @@
 <?xml version="1.0" encoding="utf-8"?>
-<test-run id="2" testcasecount="21" result="Passed" total="21" passed="21" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0,1848592">
-  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2634" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.184859" total="21" passed="21" failed="0" inconclusive="0" skipped="0" asserts="0">
+<test-run id="2" testcasecount="21" result="Passed" total="21" passed="21" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 00:12:12Z" end-time="2026-10-09 00:12:13Z" duration="0,1728426">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2641" result="Passed" start-time="2026-10-09 00:12:12Z" end-time="2026-10-09 00:12:13Z" duration="0.172843" total="21" passed="21" failed="0" inconclusive="0" skipped="0" asserts="0">
     <properties>
       <property name="platform" value="EditMode" />
     </properties>
-    <test-suite type="Assembly" id="3885" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-property-estate-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2634" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.170179" total="21" passed="21" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <test-suite type="Assembly" id="3893" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-property-estate-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2641" result="Passed" start-time="2026-10-09 00:12:12Z" end-time="2026-10-09 00:12:13Z" duration="0.159476" total="21" passed="21" failed="0" inconclusive="0" skipped="0" asserts="0">
       <properties>
-        <property name="_PID" value="140480" />
+        <property name="_PID" value="136084" />
         <property name="_APPDOMAIN" value="Unity Child Domain" />
         <property name="platform" value="EditMode" />
         <property name="EditorOnly" value="True" />
       </properties>
-      <test-suite type="TestFixture" id="3043" name="PoliticalSuccessionIntegrationTests" fullname="PoliticalSuccessionIntegrationTests" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" testcasecount="13" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.143025" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <test-suite type="TestFixture" id="3051" name="PoliticalSuccessionIntegrationTests" fullname="PoliticalSuccessionIntegrationTests" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" testcasecount="13" result="Passed" start-time="2026-10-09 00:12:12Z" end-time="2026-10-09 00:12:13Z" duration="0.133757" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0">
         <properties />
-        <test-case id="3056" name="AuthoritativeKnowledgeRevisionAndOfficeBindingRejectStaleOrWrongTargets" fullname="PoliticalSuccessionIntegrationTests.AuthoritativeKnowledgeRevisionAndOfficeBindingRejectStaleOrWrongTargets" methodname="AuthoritativeKnowledgeRevisionAndOfficeBindingRejectStaleOrWrongTargets" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1295007713" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.047842" asserts="0">
+        <test-case id="3064" name="AuthoritativeKnowledgeRevisionAndOfficeBindingRejectStaleOrWrongTargets" fullname="PoliticalSuccessionIntegrationTests.AuthoritativeKnowledgeRevisionAndOfficeBindingRejectStaleOrWrongTargets" methodname="AuthoritativeKnowledgeRevisionAndOfficeBindingRejectStaleOrWrongTargets" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="719018630" result="Passed" start-time="2026-10-09 00:12:12Z" end-time="2026-10-09 00:12:13Z" duration="0.049522" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3049" name="ComposingPoliticalWorldPreservesCapturedRevisionAndAcceptsFreshDecision" fullname="PoliticalSuccessionIntegrationTests.ComposingPoliticalWorldPreservesCapturedRevisionAndAcceptsFreshDecision" methodname="ComposingPoliticalWorldPreservesCapturedRevisionAndAcceptsFreshDecision" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="223259021" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.001061" asserts="0">
+        <test-case id="3057" name="ComposingPoliticalWorldPreservesCapturedRevisionAndAcceptsFreshDecision" fullname="PoliticalSuccessionIntegrationTests.ComposingPoliticalWorldPreservesCapturedRevisionAndAcceptsFreshDecision" methodname="ComposingPoliticalWorldPreservesCapturedRevisionAndAcceptsFreshDecision" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1296470622" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.001274" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3046" name="DecisionRegistrationRejectsARecordBoundToAnotherWorld" fullname="PoliticalSuccessionIntegrationTests.DecisionRegistrationRejectsARecordBoundToAnotherWorld" methodname="DecisionRegistrationRejectsARecordBoundToAnotherWorld" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="203160911" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.000433" asserts="0">
+        <test-case id="3054" name="DecisionRegistrationRejectsARecordBoundToAnotherWorld" fullname="PoliticalSuccessionIntegrationTests.DecisionRegistrationRejectsARecordBoundToAnotherWorld" methodname="DecisionRegistrationRejectsARecordBoundToAnotherWorld" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="2108265335" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.000463" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3045" name="DecisionRegistrationRequiresCurrentKnowledgeHolderAndRejectsFutureDay" fullname="PoliticalSuccessionIntegrationTests.DecisionRegistrationRequiresCurrentKnowledgeHolderAndRejectsFutureDay" methodname="DecisionRegistrationRequiresCurrentKnowledgeHolderAndRejectsFutureDay" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="888569246" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.000443" asserts="0">
+        <test-case id="3053" name="DecisionRegistrationRequiresCurrentKnowledgeHolderAndRejectsFutureDay" fullname="PoliticalSuccessionIntegrationTests.DecisionRegistrationRequiresCurrentKnowledgeHolderAndRejectsFutureDay" methodname="DecisionRegistrationRequiresCurrentKnowledgeHolderAndRejectsFutureDay" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="740333257" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.000442" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3047" name="FailedDuplicateRegistrationDoesNotBindTheCallerDecisionRecord" fullname="PoliticalSuccessionIntegrationTests.FailedDuplicateRegistrationDoesNotBindTheCallerDecisionRecord" methodname="FailedDuplicateRegistrationDoesNotBindTheCallerDecisionRecord" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="2102682105" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.000371" asserts="0">
+        <test-case id="3055" name="FailedDuplicateRegistrationDoesNotBindTheCallerDecisionRecord" fullname="PoliticalSuccessionIntegrationTests.FailedDuplicateRegistrationDoesNotBindTheCallerDecisionRecord" methodname="FailedDuplicateRegistrationDoesNotBindTheCallerDecisionRecord" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="687126343" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.000354" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3051" name="FailedWorldCompositionDoesNotBindCallerDecisionStore" fullname="PoliticalSuccessionIntegrationTests.FailedWorldCompositionDoesNotBindCallerDecisionStore" methodname="FailedWorldCompositionDoesNotBindCallerDecisionStore" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1192296731" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.003309" asserts="0">
+        <test-case id="3059" name="FailedWorldCompositionDoesNotBindCallerDecisionStore" fullname="PoliticalSuccessionIntegrationTests.FailedWorldCompositionDoesNotBindCallerDecisionStore" methodname="FailedWorldCompositionDoesNotBindCallerDecisionStore" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1421539565" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.003176" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3050" name="ImportedPoliticalDecisionHistoryRequiresExplicitRevisionAndWorldPersonStore" fullname="PoliticalSuccessionIntegrationTests.ImportedPoliticalDecisionHistoryRequiresExplicitRevisionAndWorldPersonStore" methodname="ImportedPoliticalDecisionHistoryRequiresExplicitRevisionAndWorldPersonStore" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="2139456369" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.000910" asserts="0">
+        <test-case id="3058" name="ImportedPoliticalDecisionHistoryRequiresExplicitRevisionAndWorldPersonStore" fullname="PoliticalSuccessionIntegrationTests.ImportedPoliticalDecisionHistoryRequiresExplicitRevisionAndWorldPersonStore" methodname="ImportedPoliticalDecisionHistoryRequiresExplicitRevisionAndWorldPersonStore" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1450174700" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.000905" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3048" name="PoliticalDecisionCloneDoesNotShareMutableHistoryAndAdvanceDayDoesNotExecutePolitics" fullname="PoliticalSuccessionIntegrationTests.PoliticalDecisionCloneDoesNotShareMutableHistoryAndAdvanceDayDoesNotExecutePolitics" methodname="PoliticalDecisionCloneDoesNotShareMutableHistoryAndAdvanceDayDoesNotExecutePolitics" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1236368673" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.004261" asserts="0">
+        <test-case id="3056" name="PoliticalDecisionCloneDoesNotShareMutableHistoryAndAdvanceDayDoesNotExecutePolitics" fullname="PoliticalSuccessionIntegrationTests.PoliticalDecisionCloneDoesNotShareMutableHistoryAndAdvanceDayDoesNotExecutePolitics" methodname="PoliticalDecisionCloneDoesNotShareMutableHistoryAndAdvanceDayDoesNotExecutePolitics" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="2130819802" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.004192" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3053" name="PoliticalDecisionHistoryParticipatesInCanonicalDiagnosticsAndDiffs" fullname="PoliticalSuccessionIntegrationTests.PoliticalDecisionHistoryParticipatesInCanonicalDiagnosticsAndDiffs" methodname="PoliticalDecisionHistoryParticipatesInCanonicalDiagnosticsAndDiffs" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1464735480" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.064620" asserts="0">
+        <test-case id="3061" name="PoliticalDecisionHistoryParticipatesInCanonicalDiagnosticsAndDiffs" fullname="PoliticalSuccessionIntegrationTests.PoliticalDecisionHistoryParticipatesInCanonicalDiagnosticsAndDiffs" methodname="PoliticalDecisionHistoryParticipatesInCanonicalDiagnosticsAndDiffs" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1469132191" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.054548" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3054" name="PoliticalKnowledgeDiagnosticsRejectOfficeInstitutionMismatch" fullname="PoliticalSuccessionIntegrationTests.PoliticalKnowledgeDiagnosticsRejectOfficeInstitutionMismatch" methodname="PoliticalKnowledgeDiagnosticsRejectOfficeInstitutionMismatch" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1677616695" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.002343" asserts="0">
+        <test-case id="3062" name="PoliticalKnowledgeDiagnosticsRejectOfficeInstitutionMismatch" fullname="PoliticalSuccessionIntegrationTests.PoliticalKnowledgeDiagnosticsRejectOfficeInstitutionMismatch" methodname="PoliticalKnowledgeDiagnosticsRejectOfficeInstitutionMismatch" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1506082802" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.002097" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3052" name="PoliticalSelectionUsesCandidateFingerprintAndRevalidatesDeadCandidate" fullname="PoliticalSuccessionIntegrationTests.PoliticalSelectionUsesCandidateFingerprintAndRevalidatesDeadCandidate" methodname="PoliticalSelectionUsesCandidateFingerprintAndRevalidatesDeadCandidate" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1029975243" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.004105" asserts="0">
+        <test-case id="3060" name="PoliticalSelectionUsesCandidateFingerprintAndRevalidatesDeadCandidate" fullname="PoliticalSuccessionIntegrationTests.PoliticalSelectionUsesCandidateFingerprintAndRevalidatesDeadCandidate" methodname="PoliticalSelectionUsesCandidateFingerprintAndRevalidatesDeadCandidate" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1957054396" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.003658" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3044" name="RuntimeComposesDecisionHistoryReadOnlyAndAppliesOnlyThroughOfficeSuccession" fullname="PoliticalSuccessionIntegrationTests.RuntimeComposesDecisionHistoryReadOnlyAndAppliesOnlyThroughOfficeSuccession" methodname="RuntimeComposesDecisionHistoryReadOnlyAndAppliesOnlyThroughOfficeSuccession" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="971916264" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.002882" asserts="0">
+        <test-case id="3052" name="RuntimeComposesDecisionHistoryReadOnlyAndAppliesOnlyThroughOfficeSuccession" fullname="PoliticalSuccessionIntegrationTests.RuntimeComposesDecisionHistoryReadOnlyAndAppliesOnlyThroughOfficeSuccession" methodname="RuntimeComposesDecisionHistoryReadOnlyAndAppliesOnlyThroughOfficeSuccession" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="1350382736" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.002659" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3055" name="StaleDecisionAndWrongDecisionInputsCannotExecuteOfficeSuccession" fullname="PoliticalSuccessionIntegrationTests.StaleDecisionAndWrongDecisionInputsCannotExecuteOfficeSuccession" methodname="StaleDecisionAndWrongDecisionInputsCannotExecuteOfficeSuccession" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="2040760695" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.000496" asserts="0">
+        <test-case id="3063" name="StaleDecisionAndWrongDecisionInputsCannotExecuteOfficeSuccession" fullname="PoliticalSuccessionIntegrationTests.StaleDecisionAndWrongDecisionInputsCannotExecuteOfficeSuccession" methodname="StaleDecisionAndWrongDecisionInputsCannotExecuteOfficeSuccession" classname="PoliticalSuccessionIntegrationTests" runstate="Runnable" seed="95581720" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.000447" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
       </test-suite>
-      <test-suite type="TestFixture" id="3718" name="SuccessionIntegrationTests" fullname="SuccessionIntegrationTests" classname="SuccessionIntegrationTests" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.012385" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <test-suite type="TestFixture" id="3726" name="SuccessionIntegrationTests" fullname="SuccessionIntegrationTests" classname="SuccessionIntegrationTests" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.011527" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
         <properties />
-        <test-case id="3720" name="EstateSuccessionRejectsAProposalAfterSelectedCandidateDies" fullname="SuccessionIntegrationTests.EstateSuccessionRejectsAProposalAfterSelectedCandidateDies" methodname="EstateSuccessionRejectsAProposalAfterSelectedCandidateDies" classname="SuccessionIntegrationTests" runstate="Runnable" seed="1306071207" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.004193" asserts="0">
+        <test-case id="3728" name="EstateSuccessionRejectsAProposalAfterSelectedCandidateDies" fullname="SuccessionIntegrationTests.EstateSuccessionRejectsAProposalAfterSelectedCandidateDies" methodname="EstateSuccessionRejectsAProposalAfterSelectedCandidateDies" classname="SuccessionIntegrationTests" runstate="Runnable" seed="1806289117" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.004846" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3719" name="EstateSuccessionTransfersExplicitlySelectedChildAndRecordsHistory" fullname="SuccessionIntegrationTests.EstateSuccessionTransfersExplicitlySelectedChildAndRecordsHistory" methodname="EstateSuccessionTransfersExplicitlySelectedChildAndRecordsHistory" classname="SuccessionIntegrationTests" runstate="Runnable" seed="1600163990" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.002991" asserts="0">
+        <test-case id="3727" name="EstateSuccessionTransfersExplicitlySelectedChildAndRecordsHistory" fullname="SuccessionIntegrationTests.EstateSuccessionTransfersExplicitlySelectedChildAndRecordsHistory" methodname="EstateSuccessionTransfersExplicitlySelectedChildAndRecordsHistory" classname="SuccessionIntegrationTests" runstate="Runnable" seed="1892929107" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.002537" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3722" name="OfficeSuccessionCannotBypassInstitutionalVacancyRecognition" fullname="SuccessionIntegrationTests.OfficeSuccessionCannotBypassInstitutionalVacancyRecognition" methodname="OfficeSuccessionCannotBypassInstitutionalVacancyRecognition" classname="SuccessionIntegrationTests" runstate="Runnable" seed="563229276" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.000661" asserts="0">
+        <test-case id="3730" name="OfficeSuccessionCannotBypassInstitutionalVacancyRecognition" fullname="SuccessionIntegrationTests.OfficeSuccessionCannotBypassInstitutionalVacancyRecognition" methodname="OfficeSuccessionCannotBypassInstitutionalVacancyRecognition" classname="SuccessionIntegrationTests" runstate="Runnable" seed="419715844" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.000442" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3721" name="OfficeSuccessionRequiresRecognizedVacancyAndAssignsExplicitChild" fullname="SuccessionIntegrationTests.OfficeSuccessionRequiresRecognizedVacancyAndAssignsExplicitChild" methodname="OfficeSuccessionRequiresRecognizedVacancyAndAssignsExplicitChild" classname="SuccessionIntegrationTests" runstate="Runnable" seed="1335513370" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.001024" asserts="0">
+        <test-case id="3729" name="OfficeSuccessionRequiresRecognizedVacancyAndAssignsExplicitChild" fullname="SuccessionIntegrationTests.OfficeSuccessionRequiresRecognizedVacancyAndAssignsExplicitChild" methodname="OfficeSuccessionRequiresRecognizedVacancyAndAssignsExplicitChild" classname="SuccessionIntegrationTests" runstate="Runnable" seed="1352409449" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.000670" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3724" name="PropertyTransferDiagnosticsPreserveSameDayOwnerCycles" fullname="SuccessionIntegrationTests.PropertyTransferDiagnosticsPreserveSameDayOwnerCycles" methodname="PropertyTransferDiagnosticsPreserveSameDayOwnerCycles" classname="SuccessionIntegrationTests" runstate="Runnable" seed="354812096" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.001098" asserts="0">
+        <test-case id="3732" name="PropertyTransferDiagnosticsPreserveSameDayOwnerCycles" fullname="SuccessionIntegrationTests.PropertyTransferDiagnosticsPreserveSameDayOwnerCycles" methodname="PropertyTransferDiagnosticsPreserveSameDayOwnerCycles" classname="SuccessionIntegrationTests" runstate="Runnable" seed="322552779" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.000665" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3723" name="RuntimeRejectsAPropertyStoreBoundToAnotherPersonWorld" fullname="SuccessionIntegrationTests.RuntimeRejectsAPropertyStoreBoundToAnotherPersonWorld" methodname="RuntimeRejectsAPropertyStoreBoundToAnotherPersonWorld" classname="SuccessionIntegrationTests" runstate="Runnable" seed="655553817" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.000315" asserts="0">
+        <test-case id="3731" name="RuntimeRejectsAPropertyStoreBoundToAnotherPersonWorld" fullname="SuccessionIntegrationTests.RuntimeRejectsAPropertyStoreBoundToAnotherPersonWorld" methodname="RuntimeRejectsAPropertyStoreBoundToAnotherPersonWorld" classname="SuccessionIntegrationTests" runstate="Runnable" seed="1576251371" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.000249" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3726" name="RuntimeRejectsFutureDatedPropertyTransferApplication" fullname="SuccessionIntegrationTests.RuntimeRejectsFutureDatedPropertyTransferApplication" methodname="RuntimeRejectsFutureDatedPropertyTransferApplication" classname="SuccessionIntegrationTests" runstate="Runnable" seed="1889527488" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.000493" asserts="0">
+        <test-case id="3734" name="RuntimeRejectsFutureDatedPropertyTransferApplication" fullname="SuccessionIntegrationTests.RuntimeRejectsFutureDatedPropertyTransferApplication" methodname="RuntimeRejectsFutureDatedPropertyTransferApplication" classname="SuccessionIntegrationTests" runstate="Runnable" seed="579971473" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.000449" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
           </properties>
         </test-case>
-        <test-case id="3725" name="RuntimeRejectsFutureDatedPropertyTransferHistory" fullname="SuccessionIntegrationTests.RuntimeRejectsFutureDatedPropertyTransferHistory" methodname="RuntimeRejectsFutureDatedPropertyTransferHistory" classname="SuccessionIntegrationTests" runstate="Runnable" seed="976010600" result="Passed" start-time="2026-10-09 00:07:40Z" end-time="2026-10-09 00:07:40Z" duration="0.000293" asserts="0">
+        <test-case id="3733" name="RuntimeRejectsFutureDatedPropertyTransferHistory" fullname="SuccessionIntegrationTests.RuntimeRejectsFutureDatedPropertyTransferHistory" methodname="RuntimeRejectsFutureDatedPropertyTransferHistory" classname="SuccessionIntegrationTests" runstate="Runnable" seed="733334882" result="Passed" start-time="2026-10-09 00:12:13Z" end-time="2026-10-09 00:12:13Z" duration="0.000252" asserts="0">
           <properties>
             <property name="retryIteration" value="0" />
             <property name="repeatIteration" value="0" />
