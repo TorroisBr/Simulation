@@ -226,6 +226,7 @@ public sealed class P12CPrivateRootCompositionTests
             capturedF.TravelPartyIds,
             out P12DDailyV1OwnerPackage stagedD,
             out P12DDailyV1OwnerPackageFailure dFailure), Is.True, dFailure.ToString());
+        AssertStagedNpcReceiptOwners(stagedD);
 
         SimulationTime stagedTime = new SimulationTime(captureToken.AbsoluteDay);
         P12EDailyV1OwnerStagingContext eContext = new P12EDailyV1OwnerStagingContext(
@@ -246,6 +247,7 @@ public sealed class P12CPrivateRootCompositionTests
             eContext,
             out P12EDailyV1OwnerPackage stagedE,
             out P12EDailyV1OwnerPackageFailure eFailure), Is.True, eFailure.ToString());
+        AssertStagedJusticeReceiptSentinel(stagedE);
 
         Assert.That(capturedF.TryStage(
             sourceRuntime,
@@ -265,9 +267,97 @@ public sealed class P12CPrivateRootCompositionTests
         Assert.That(stagedF.TravelParties, Is.Not.SameAs(sourceBootstrap.TravelParties));
         Assert.That(stagedF.Expeditions, Is.Not.SameAs(sourceBootstrap.Expeditions));
         Assert.That(stagedF.Expeditions.ActiveExpeditions, Is.Empty);
+        AssertStagedActorChoiceTemporalOwner(stagedF);
         Assert.That(stagedF.DetachedNpcRows, Is.Not.Null);
         Assert.That(stagedF.UnresolvedPoliticalKnowledgeBindings, Is.Empty);
         Assert.That(attempt.IsCurrentFor(sourceRuntime, captureToken, captureToken.OwnerSections), Is.True);
+    }
+
+    private static void AssertStagedNpcReceiptOwners(P12DDailyV1OwnerPackage stagedD)
+    {
+        Assert.That(stagedD, Is.Not.Null);
+        IReadOnlyList<IOwnerSectionCensusProvider> providers =
+            P12DNpcReceiptOwnerCensusProvider.CreateProviders(stagedD.Npcs);
+        Assert.That(providers, Has.Count.EqualTo(stagedD.Npcs.Count * 2));
+
+        HashSet<string> localObservationRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> merchantTradeRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (IOwnerSectionCensusProvider untypedProvider in providers)
+        {
+            P12DNpcReceiptOwnerCensusProvider.IReceiptOwnerSectionCensusProvider provider =
+                untypedProvider as P12DNpcReceiptOwnerCensusProvider.IReceiptOwnerSectionCensusProvider;
+            Assert.That(provider, Is.Not.Null);
+
+            NpcRuntime stagedNpc = null;
+            foreach (NpcRuntime candidate in stagedD.Npcs)
+            {
+                if (string.Equals(candidate.RuntimeId, provider.RuntimeId, StringComparison.Ordinal))
+                {
+                    stagedNpc = candidate;
+                    break;
+                }
+            }
+
+            Assert.That(stagedNpc, Is.Not.Null, provider.RuntimeId);
+            Assert.That(provider.NpcOwner, Is.SameAs(stagedNpc));
+
+            object expectedReceiptOwner;
+            string expectedSectionId;
+            if (provider.Kind == P12DNpcReceiptOwnerCensusProvider.ReceiptOwnerKind.LocalObservation)
+            {
+                Assert.That(localObservationRuntimeIds.Add(provider.RuntimeId), Is.True, provider.RuntimeId);
+                expectedReceiptOwner = stagedNpc.ExistingLocalKnowledgeObservationRuntime;
+                expectedSectionId = P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(provider.RuntimeId);
+            }
+            else
+            {
+                Assert.That(provider.Kind,
+                    Is.EqualTo(P12DNpcReceiptOwnerCensusProvider.ReceiptOwnerKind.MerchantTradeState));
+                Assert.That(merchantTradeRuntimeIds.Add(provider.RuntimeId), Is.True, provider.RuntimeId);
+                expectedReceiptOwner = stagedNpc.ExistingMerchantTradeStateRuntime;
+                expectedSectionId = P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(provider.RuntimeId);
+            }
+
+            Assert.That(provider.ReceiptOwner, Is.SameAs(expectedReceiptOwner));
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            Assert.That(witness.SectionId, Is.EqualTo(expectedSectionId));
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(expectedReceiptOwner));
+            Assert.That(witness.Cardinality, Is.Zero);
+            Assert.That(witness.Revision, Is.Zero);
+        }
+
+        Assert.That(localObservationRuntimeIds.Count, Is.EqualTo(stagedD.Npcs.Count));
+        Assert.That(merchantTradeRuntimeIds.Count, Is.EqualTo(stagedD.Npcs.Count));
+    }
+
+    private static void AssertStagedJusticeReceiptSentinel(P12EDailyV1OwnerPackage stagedE)
+    {
+        Assert.That(stagedE, Is.Not.Null);
+        OwnerSectionCensusWitness witness =
+            new P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionProvider(stagedE.Justice)
+                .GetCurrentCensus();
+
+        Assert.That(witness.SectionId,
+            Is.EqualTo(P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId));
+        Assert.That(witness.SchemaVersion, Is.EqualTo(P12CrimeJusticeCensusProvider.SchemaVersion));
+        Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(stagedE.Justice));
+        Assert.That(witness.Cardinality, Is.EqualTo(1));
+        Assert.That(witness.Revision, Is.Zero);
+    }
+
+    private static void AssertStagedActorChoiceTemporalOwner(P12FDailyV1OwnerPackage stagedF)
+    {
+        OwnerSectionCensusWitness p11Witness =
+            new ActorChoiceP11CensusProvider(stagedF.ActorChoices).GetCurrentCensus();
+        OwnerSectionCensusWitness temporalWitness =
+            new ActorChoiceTemporalCensusProvider(stagedF.ActorChoices).GetCurrentCensus();
+
+        Assert.That(temporalWitness.SectionId, Is.EqualTo(ActorChoiceTemporalCensusProvider.SectionId));
+        Assert.That(temporalWitness.SchemaVersion, Is.EqualTo(ActorChoiceTemporalCensusProvider.SchemaVersion));
+        Assert.That(temporalWitness.OwnerInstanceIdentity, Is.SameAs(stagedF.ActorChoices.CensusOwnerIdentity));
+        Assert.That(temporalWitness.OwnerInstanceIdentity, Is.SameAs(p11Witness.OwnerInstanceIdentity));
+        Assert.That(temporalWitness.Cardinality, Is.Zero);
+        Assert.That(temporalWitness.Revision, Is.EqualTo(p11Witness.Revision));
     }
 
     [TestCase("hex-id")]
