@@ -6,7 +6,56 @@ COMPLETE/PROMOTED within its accepted identity, genesis-provenance, and
 deterministic-root continuation scope; P12-A remains `WAIT_DEPENDENCY`. P13
 remains `BLOCKED`.
 
-## Latest canonical promotion — P12-E War owner snapshot (2026-10-08)
+## Latest canonical promotion — P12-E Property/Estate owner snapshots (2026-10-08)
+
+After refreshing P12 canonical at `0709eec1244f791e81b1d05f669bb4a577a9fdb6`,
+the bounded current-base candidate `codex/phase12/P12EPropertyEstateOwnerSnapshotWarBaseFix`
+was promoted through candidate tip `f473c194af5dc19b25fca7682e6434e6cc4c5b80`
+and exact-tip review record `2440f29b5f09531a75a96108f0dc0c526973d4f7`.
+Its implementation/fix commit is
+`4490fd51a83e0ebd6b79801d9b18674655ec6adf`; the reviewed Git tree is
+`43efc164fe1668ca8fd19dba93c0dadf582b1e97` and tested `Assets` tree is
+`4ee9e00f3aaec28225fdebd2a38d8db78b2061e6`.
+
+The independent exact-tip review is recorded in
+[`design/PHASE12_P12E_PROPERTY_ESTATE_OWNER_SNAPSHOT_IMPLEMENTATION_REVIEW_F473C19.md`](design/PHASE12_P12E_PROPERTY_ESTATE_OWNER_SNAPSHOT_IMPLEMENTATION_REVIEW_F473C19.md).
+It confirms the earlier null transfer-row defect is fixed and the required
+malformed-row, reference, day-bound, capture-stamp, paired-output, and
+source-immutability regressions are present. The review verified all 20 raw
+artifact hashes/XML results and reports zero failures. Exact-tree validation
+passed focused snapshot 11/11, Property census 2/2, Estate census 1/1,
+Property/Estate foundation 9/9, transfer 5/5, succession 21/21, mutation epoch
+5/5, Person staging 5/5, ALL EditMode 2662/2662, official Smoke 5/5, and
+`git diff --check`. Evidence is retained in
+[`validation/P12EPropertyEstateOwnerSnapshot/ReviewFix/VALIDATION.md`](validation/P12EPropertyEstateOwnerSnapshot/ReviewFix/VALIDATION.md).
+
+This adds detached schema-v1 capture and private staged reconstruction for
+the selected Daily-v1 Property ownership, transfer-history, and Estate-record
+sections. Failed staging yields no partial Property/Estate pair. The slice
+does not add runtime/bootstrap integration, operation or epoch wiring, global
+quiescence, profile-wide capture eligibility, P12-G publication, or Phase 12
+closure. P12-E remains IN PROGRESS.
+
+### Refreshed P12 dependency DAG
+
+- P12-B and P12-C remain COMPLETE/PROMOTED within their accepted bounded
+  contracts; P12-D remains COMPLETE/PROMOTED within its Daily-v1 owner-package
+  boundary.
+- P12-E remains IN PROGRESS. Conflict, Battle, ArmedForce/manpower/position,
+  Institution/Office, War, and Property/Estate owner snapshots are promoted.
+  A PoliticalClaim/recognition owner-specific design candidate is available at
+  `c286bc7b41c1c5b499d98b55f192be784ee43faa`; implementation awaits its
+  independent exact-tip design review. Other accepted owner families remain
+  incomplete.
+- P12-F waits on P12-E. P12-G waits on P12-B through P12-F plus validated
+  live-profile inventory.
+- P12-A remains WAIT_DEPENDENCY until all included owners have exact
+  export/staged hydration, the live profile inventory is validated, and its
+  separate implementation authorization is recorded. P13 remains BLOCKED.
+- Phase 12 remains open. This owner slice does not imply profile-wide
+  export/hydration or Phase closure.
+
+## Previous canonical promotion — P12-E War owner snapshot (2026-10-08)
 
 After refreshing P12 canonical at `710874b06b3045bb75acb28feeb063d63a83c31e`,
 the bounded current-base War candidate `codex/phase12/P12EWarOwnerSnapshotIntegration`
