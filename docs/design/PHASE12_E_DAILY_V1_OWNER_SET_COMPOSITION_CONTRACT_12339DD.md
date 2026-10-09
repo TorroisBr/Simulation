@@ -58,7 +58,7 @@ This is a private in-assembly boundary, not a public API. Source-owner objects m
 - the token validates against `sourceRuntime` before capture and after capture/staging;
 - token profile is exactly `UnityBootstrapDailyV1` and the token denotes a successful completed boundary;
 - source, C, and D `WorldId` values agree;
-- the staged `SimulationTime.AbsoluteDay` equals the token's `AbsoluteDay`;
+- the staged `SimulationTime.AbsoluteDay` equals the token's `AbsoluteDay`; Crime/Social staging retains that exact supplied `SimulationTime` instance by reference;
 - the supplied D package and C roots are private staged values from the same enclosing reconstruction attempt and exact token;
 - P12-E receives the exact admitted definitions and transient `JusticeSystem` construction services already required by its owner adapter. It neither resolves replacements nor creates defaults.
 
@@ -94,6 +94,9 @@ Required focused tests cover:
 - each E-to-C/D dangling, duplicate, mismatched-owner, wrong-day, and incompatible-definition case fails without returning a partial package;
 - PoliticalDecision F knowledge references remain intact in typed unresolved evidence and are not resolved by E;
 - P10 `LocalTopologyStore` remains `NOT_COMPOSED` (passed as null to Military/Battle); an injected/composed topology fails;
+- promoted P16-A carried-supply/crossing-receipt state remains rejected by selected Daily-v1 admission;
+- P17-A strategic War state remains rejected by selected Daily-v1 admission both without P16 state and with matching P16 state;
+- staged Crime/Social retains `ReferenceEquals(stagedCrimeSocial.SimulationTime, suppliedStagedSimulationTime)` and its absolute day matches the token;
 - token invalidation before, during, or after capture/staging returns no package;
 - failure leaves the source runtime and the supplied staged C/D roots unchanged;
 - package output is deterministic for the same accepted input and preserves each owner's order/multiplicity semantics.
