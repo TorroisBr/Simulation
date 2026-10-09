@@ -1509,6 +1509,11 @@ public sealed class SimulationBootstrapCompositionTests
         OwnerSectionCensusWitness occurrenceReceipts = simulation.Bootstrap.GetNpcDecisionOccurrenceReceiptCensus();
         Assert.That(occurrenceReceipts.SectionId, Is.EqualTo(NpcDecisionRecorder.OccurrenceReceiptSectionId));
         Assert.That(occurrenceReceipts.SchemaVersion, Is.EqualTo(NpcDecisionRecorder.OccurrenceReceiptSectionSchemaVersion));
+        NpcDecisionRecorder expectedDecisionRecorder =
+            (NpcDecisionRecorder)GetRuntimeOwner(simulation.Runtime, "decisionRecorder");
+        Assert.That(occurrenceReceipts.OwnerInstanceIdentity,
+            Is.SameAs(expectedDecisionRecorder.GetOccurrenceReceiptCensus().OwnerInstanceIdentity),
+            "The bootstrap witness must belong to the exact decision recorder installed in the selected runtime.");
         Assert.That(occurrenceReceipts.Cardinality, Is.Zero,
             "The selected daily profile composes the recorder but not the P18-D receipt writer.");
         Assert.That(occurrenceReceipts.Revision, Is.Zero);
@@ -1518,6 +1523,11 @@ public sealed class SimulationBootstrapCompositionTests
         OwnerSectionCensusWitness keyedSaleReceipts = simulation.Bootstrap.GetEconomyKeyedSaleReceiptCensus();
         Assert.That(keyedSaleReceipts.SectionId, Is.EqualTo(EconomyTransactionService.KeyedSaleReceiptSectionId));
         Assert.That(keyedSaleReceipts.SchemaVersion, Is.EqualTo(EconomyTransactionService.KeyedSaleReceiptSectionSchemaVersion));
+        EconomyTransactionService expectedEconomyTransactionService =
+            (EconomyTransactionService)GetRuntimeOwner(simulation.Runtime, "economyTransactionService");
+        Assert.That(keyedSaleReceipts.OwnerInstanceIdentity,
+            Is.SameAs(expectedEconomyTransactionService.GetKeyedSaleReceiptCensus().OwnerInstanceIdentity),
+            "The bootstrap witness must belong to the exact economy transaction service installed in the selected runtime.");
         Assert.That(keyedSaleReceipts.Cardinality, Is.Zero,
             "The selected daily profile composes the keyed-sale receipt owner but does not invoke its P18-D consumer.");
         Assert.That(keyedSaleReceipts.Revision, Is.Zero);
