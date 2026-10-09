@@ -3669,4 +3669,3 @@ This completes P12-E only within its accepted selected-profile owner-set export/
 - P12-F's documented dependency on P12-C/D/E is now satisfied. Its existing technical design remains a proposal and requires current-base owner-inventory and shared-`NpcRuntime` seam revalidation plus independent design review before implementation. This promotion does not claim P12-F readiness or implementation.
 - P12-G remains WAIT_DEPENDENCY on P12-B through P12-F and the validated live-profile inventory. P12-A remains WAIT_DEPENDENCY on complete included-owner exports/hydration, validated live inventory, and its separate implementation authorization. P13 remains BLOCKED on its supported continuation/recoverable-causal-history requirements.
 - No other numbered-phase dependency edge changes. No closed Phase is reopened.
-## P12-G staged-package target-owner witnesses — reviewed 2026-10-09
