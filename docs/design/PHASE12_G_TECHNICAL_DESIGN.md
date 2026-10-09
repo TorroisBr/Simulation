@@ -187,7 +187,15 @@ objects. The active composition is read only until the final publication swap.
    manifest, effective configuration, calendar, P9 lineage, P8-A contract,
    successful boundary and required/empty/excluded section matrix with the
    current validated bootstrap composition. Reject unsupported or incomplete
-   owner inventory before domain-object allocation.
+   owner inventory before domain-object allocation. Before any staged domain
+   object is constructed, call
+   `P12FDailyV1OwnerCapture.TryCapture` with the exact source runtime,
+   composition, validated B token and owner-section vector. Retain this
+   detached F capture for later staging. It constructs only detached snapshot
+   values; in particular, its ActorChoice capture checks the composed store's
+   temporal-input count before constructing that snapshot. A staging-attempt
+   identity may be opened at this point, but no C root or other staged domain
+   object is allocated until the source capture succeeds.
 3. **Establish B/C roots.** B supplies the completed-boundary and inventory
    evidence. C stages exact typed-ID allocation/high-water roots, the shared
    record sequence, deterministic-random provenance/context, P9 historical
@@ -202,13 +210,15 @@ factual sections. C stages the P8-A SpatialAuthority roots. Construct each
 CityRuntime and NpcRuntime once from its D-owned projection.
 5. **Stage E owners.** Stage E authorities and typed unresolved bindings from
 their own exports. E supplies no CityRuntime or NpcRuntime factual projection.
-6. **Stage F owners and merge detached NPC sections once.** Stage the five
-fixed F authorities—PoliticalKnowledge, ScheduledDirective, ActorChoice,
-TravelParty, and Expedition—plus inventoried Knowledge, SpatialKnowledge,
-travel, active commitment, and action sections. Merge D-exported detached
-NPC sections into each staged NPC exactly once through the reviewed F
-boundary. F does not recreate D factual owners. The exact owner/package
-mapping is reconciled in PHASE12_OWNER_COVERAGE_INVENTORY.md.
+6. **Stage the pre-captured F owners and merge detached NPC sections once.**
+   Use the retained F capture to stage the five fixed F authorities—
+   PoliticalKnowledge, ScheduledDirective, ActorChoice, TravelParty, and
+   Expedition—plus inventoried Knowledge, SpatialKnowledge, travel, active
+   commitment, and action sections. Do not call source capture here: it already
+   ran before C staging. Merge D-exported detached NPC sections into each
+   staged NPC exactly once through the reviewed F boundary. F does not recreate
+   D factual owners. The exact owner/package mapping is reconciled in
+   PHASE12_OWNER_COVERAGE_INVENTORY.md.
 
 7. **Validate globally.** Run every owner-local validator, then the complete
    profile graph checks in §4. Only owner-defined derived indexes,
