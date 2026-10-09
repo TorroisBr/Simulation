@@ -1,3 +1,33 @@
+## P12-G staged-package target-owner witnesses — reviewed 2026-10-09
+
+Against P12 canonical base `0a0213fcc1bed7e2ad233d6681aca9e2eb935bb7`,
+test candidate `a73fdff877af9f0cbdb1657dff36a45b87eb25e9` passed independent
+exact-tip review at candidate tip `c6dfbb8b22f2acc695b7601ebedede88e1970250`.
+The reviewed `Assets` tree is
+`f3af2c9ce70ccc562c5f56d337e07a420dbf0ed8`; the durable review is recorded in
+[`design/PHASE12_G_STAGED_PACKAGE_TARGET_OWNER_IMPLEMENTATION_REVIEW_A73FDFF.md`](design/PHASE12_G_STAGED_PACKAGE_TARGET_OWNER_IMPLEMENTATION_REVIEW_A73FDFF.md),
+with focused/full/Smoke artifacts in
+[`validation/P12GStagedPackageTargetWitness/VALIDATION.md`](validation/P12GStagedPackageTargetWitness/VALIDATION.md).
+
+The existing private C/D/E/F composition test now checks the exact staged
+per-NPC receipt owners and their zero witnesses, the staged Justice receipt
+singleton and zero revision, and the staged ActorChoice temporal owner and
+zero-input witness while preserving the P11 shared identity/revision. This is
+test-only evidence for three package outputs that exist before the G assembler.
+It does not prove the future G coordinator creates or checks the complete
+target vector. P8-C/D, global receipt caches, and the Crime sentinel still
+require target checks at the G composition boundary.
+
+P12-G remains `WAIT_DEPENDENCY` on complete live owner/cardinality and
+operation/epoch coverage, integrated target-owner checks, target-bound
+restored-boundary admission, one active-session publication owner/swap, and
+whole-graph rejection, failure atomicity, no-replay, and continuation parity.
+P12-B through P12-F remain promoted within their recorded scopes; P12-A remains
+`WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`. No capture,
+export, hydration, P12-A/P13 readiness, or Phase 12 closure is claimed.
+Unrelated ProjectSettings edits and preexisting untracked `.meta` files remain
+untouched.
+
 ## P12-G current-base owner/cardinality revalidation — 2026-10-09
 
 At P12 canonical `448d3583a85730a7db9531e61c6b6fbaaeaf6430`, the
