@@ -37,6 +37,8 @@ Each row preserves exactly:
 
 `IsActive` is derived from `EndedAbsoluteDay == null`; it is not an independent field. Do not serialize `activeByPair`, `OwnerToken`, mutation guards, transitions, proposal objects, or derived indexes. Do not allocate/recompute relation IDs or revisions during capture or hydration.
 
+The enclosing snapshot also retains CapturedAbsoluteDay = token.AbsoluteDay as completed-boundary metadata. This is not an owner row or a new census section. TryCapture copies it from the exact P12-B token; no later clock read may replace it.
+
 Capture emits rows in the exact existing `PoliticalSupportStore.CompareRecords` order: source kind, source ID ordinal, target kind, target ID ordinal, disposition, start day, then relation ID ordinal. Preserve ended rows and history order as returned by the owner. A later re-add is a separate row with a new caller-provided relation ID; an existing ID is never reusable. Multiple ended rows for a pair are valid, while at most one row for that typed pair may be active regardless of disposition.
 
 ## Capture boundary
@@ -65,6 +67,8 @@ Validate the detached section before constructing any candidate:
 
 The source/target pair must use the store's existing length-prefixed typed `PairKey` semantics, so values containing separators cannot alias. Preserve exact typed distinctions even when two IDs have the same text. Rebuild `activeByPair` from active rows using the existing owner logic; it remains derived state.
 
+TryStage invokes validation using the snapshot''s retained CapturedAbsoluteDay; it does not accept or consult a current runtime day. The staged validator rejects any row outside that captured boundary even if the runtime later advances.
+
 Add one private unpublished factory in `PoliticalSupportStore`, analogous to the existing P12-E factories in `PoliticalClaimStore` and `FactionStore`. It receives the exact staged Person/Faction/PoliticalClaim roots, validated relation rows, and captured revision, constructs a fresh private candidate, preserves the revision exactly, and rebuilds the derived active-pair index. It must not bind/publish the candidate into a live runtime. Any failure returns `false` and a null staged owner; the three staged roots and current runtime remain unchanged.
 
 Staging is ordered after staged Person, Faction, and PoliticalClaim roots. Faction and PoliticalClaim may be staged independently once their own dependencies are staged; PoliticalSupport validates against both outputs. Whole-graph publication and cross-owner integration remain P12-G responsibilities.
@@ -80,6 +84,7 @@ The focused `P12EPoliticalSupportOwnerSnapshotTests` suite should cover:
 5. dangling Person, Faction, and PoliticalClaim references; wrong tags; malformed IDs/enums/dates; duplicate IDs; duplicate active pairs; cardinality/schema/revision errors; and late-failure all-or-nothing behavior;
 6. separator-containing source/target IDs that would expose an ambiguous concatenated key, plus same-text values under distinct typed kinds;
 7. failed capture for missing/duplicate/wrong-role/wrong-schema/stale witnesses, a changed owner revision/cardinality, and an invalidated completed-boundary token.
+8. the stored capture day is exact, staging uses it, and a later runtime day cannot admit future-to-capture relation dates.
 
 Keep the existing `PoliticalSupportFoundationTests`, `P12PoliticalSupportCensusTests`, and relevant PoliticalClaim/Faction staged-owner tests. On the final code tree run the focused owner and affected regression suites, ALL EditMode, official Smoke, and `git diff --check`; retain XML/log/hash artifacts. Existing P12-B census evidence remains evidence for its existing protocol only.
 
