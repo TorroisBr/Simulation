@@ -3375,3 +3375,18 @@ P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKE
 ### Promotion record
 
 The docs-only revalidation candidate `cb1191c182f347dd11ffb1768fc5228ad2ee7696` (tree `ffae914890a091298a8d6488267d622973b1bad9`) passed exact-tip independent review and was fast-forwarded from P12 canonical `f191f87fe548469ba3f329fa083be5adc49656a2` to `57a50449090f873b81d5600ac7ef0aadbbbe55e8`. The durable review is [`PHASE12_DAILY_INGRESS_P14C_PROFILE_REVALIDATION_REVIEW.md`](design/PHASE12_DAILY_INGRESS_P14C_PROFILE_REVALIDATION_REVIEW.md). Remote canonical and the candidate branch synchronized at `57a5044`; `git diff --check` passed. This promotion changes documentation only and leaves the status and limitations above unchanged.
+
+## P12-E Daily-v1 owner-package composition promotion — 2026-10-09
+
+`codex/phase12/canonical` was fast-forwarded from `12339dd423bcab787ef5d10fad4c6e2b1597603d` to the exact-tip reviewed candidate `2e25c4e152ce435c12d1cddee696d6e5fe37e33a`. The code implementation is `e329951680fc690f3bcf97d97c07f00703893786`; its exact reviewed `Assets` tree is `7d2d1a949d9b9c836ada8889314828c171d01aa7`. The full candidate evidence tip before the review record was `0a84c701f1e9d1bb3b7d464f47e5427c02f15746` (tree `69479a7f0d6b5f6957cbca63d95fbd453945b329`). The review record is [`design/PHASE12_P12E_DAILY_V1_OWNER_PACKAGE_IMPLEMENTATION_REVIEW_E329951.md`](design/PHASE12_P12E_DAILY_V1_OWNER_PACKAGE_IMPLEMENTATION_REVIEW_E329951.md), durably pushed with the candidate before promotion. Remote canonical and candidate were verified synchronized at `2e25c4e` immediately after promotion.
+
+The promoted private assembler captures and stages the complete accepted P12-E owner set for `UnityBootstrap-Daily-v1`, using one exact P12-B completed-boundary token, owner-section vector, and staging-attempt identity shared with the P12-C roots and P12-D package. Exact identity/cardinality/revision, required-empty owners, and cross-owner staged references are validated; the populated Institution → Office → Claim → Support path is covered. Typed P12-F Knowledge bindings remain unresolved evidence for P12-G. Validation remains tied to the exact `Assets` tree: P12-E package 6/6, P12-E focused 74/74, persistent-owner regressions 33/33, P12-C private-root composition 51/51, ALL EditMode 2715/2715, official Smoke 5/5, and `git diff --check` PASS. XML, archived log, and archive hashes are retained in [`validation/P12EOwnerSetComposition/VALIDATION.md`](validation/P12EOwnerSetComposition/VALIDATION.md); the final preflight independently rechecked all six XML/log hashes and the archive hash.
+
+This completes P12-E only within its accepted selected-profile owner-set export/private-staging contract. It does not add publication, P12-G, P12-A integration/readiness, P13 readiness, global quiescence, or Phase 12 closure. Phase 12 remains OPEN.
+
+### Refreshed P12 dependency DAG
+
+- P12-B, P12-C, P12-D, and P12-E are COMPLETE/PROMOTED within their recorded bounded scopes.
+- P12-F's documented dependency on P12-C/D/E is now satisfied. Its existing technical design remains a proposal and requires current-base owner-inventory and shared-`NpcRuntime` seam revalidation plus independent design review before implementation. This promotion does not claim P12-F readiness or implementation.
+- P12-G remains WAIT_DEPENDENCY on P12-B through P12-F and the validated live-profile inventory. P12-A remains WAIT_DEPENDENCY on complete included-owner exports/hydration, validated live inventory, and its separate implementation authorization. P13 remains BLOCKED on its supported continuation/recoverable-causal-history requirements.
+- No other numbered-phase dependency edge changes. No closed Phase is reopened.
