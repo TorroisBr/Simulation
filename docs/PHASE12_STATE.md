@@ -1,3 +1,36 @@
+## P12-G selected Daily-v1 City-bound materialization witness — promoted 2026-10-09
+
+`codex/phase12/canonical` advanced by a clean fast-forward from
+`93fd6ab7f39de572fafbfb1fa160f342935839e5` to
+`502ec81f7e808eafb6b90ac3487627c378ede4d5`. The promoted implementation is
+`11653ebd3947220a39d785c0c0641837e5cfadbe`, with reviewed `Assets` tree
+`032e65318ea510c1009f89c8b0431a4c6aea46c0`. Independent exact-tip review
+passed for candidate `d847102c5b3dfc28e3880d1ca1f2a96608ba2127`, recorded in
+[`design/PHASE12_G_CITY_BOUND_MATERIALIZATION_IMPLEMENTATION_REVIEW_D847102.md`](design/PHASE12_G_CITY_BOUND_MATERIALIZATION_IMPLEMENTATION_REVIEW_D847102.md).
+The only later candidate changes were review-record formatting and this State
+record; no executable file changed.
+
+On the exact reviewed tree, the focused bootstrap-composition suite passed
+26/26, ALL EditMode passed 2732/2732, official Smoke passed 5/5, and
+`git diff --check` passed. XML and compressed-log hashes are retained in
+[`validation/P12GCityBoundMaterialization/VALIDATION.md`](validation/P12GCityBoundMaterialization/VALIDATION.md).
+The repair marks the affected City-presence section after successful
+Person materialization into a non-null `startingCity`, within the existing
+`runtime.npc-membership` scope. The same mutation epoch now reconciles Person
+membership/binding, dynamic NPC owner families, and the City-presence owner.
+This closes that selected Daily-v1 transition witness only.
+
+P12-B through P12-F remain `COMPLETE/PROMOTED` within their bounded scopes.
+P12-G and P12-A remain `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12
+remains `OPEN`. P12-G still needs exhaustive live owner/cardinality and
+operation/epoch coverage, the remaining target-owner checks, restored-boundary
+admission, one active-session publication boundary, and whole-graph rejection,
+failure-atomicity, no-replay, and continuation-parity evidence. This promotion
+does not claim complete owner or shared-epoch coverage, capture eligibility,
+export/hydration, P12-G or P12-A readiness, P13 readiness, or Phase 12 closure.
+The unrelated ProjectSettings edits and untracked `.meta` files remain
+untouched.
+
 ## P12-G current-base technical design refresh — reviewed 2026-10-09
 
 The existing P12-G technical design was refreshed against P12 canonical
