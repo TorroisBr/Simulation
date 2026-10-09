@@ -26,3 +26,23 @@ git diff --check
 Intermediate diagnostic failures in `Focused/` are not counted as passing evidence; the table identifies the final successful runs. The unrelated `ProjectSettings/EditorBuildSettings.asset`, `ProjectSettings/ShaderGraphSettings.asset`, and three untracked `.meta` files were not staged or changed.
 
 This evidence closes one runtime-ingress witness only. It does not complete the P12-G owner/commit matrix, prove all direct writers or shared-epoch coverage, establish global quiescence, make P12-G implementation-ready, make P12-A ready, unblock P13, or close Phase 12.
+
+## Exact composite epoch follow-up — 2026-10-09
+
+**Code candidate:** `33ce3026297a372363624065d4f3240c9b49b44c`
+**Base:** P12 canonical `01e1008f204ca96bb21c799f1ae8b8e46a5f85f0`
+**Assets tree:** `cffa2ef1f4e6958cda4bc00f918b77b246678095`
+
+The selected Daily-v1 Steal ingress probe now reads the shared mutation epoch immediately before and after the complete `TryAcceptTheftOutcome` composite returns. It asserts that the Crime/Social composite advances the shared epoch exactly once while the `runtime.advance-day` operation is active. This isolates the composite's contribution from other valid owner changes during the full day advance. The test-only change adds no production behavior or gameplay semantics.
+
+Unity Editor `6000.3.9f1` validation for this exact Assets tree:
+
+| Gate | Result | XML SHA-256 | Compressed log SHA-256 |
+|---|---:|---|---|
+| `P12CrimeSocialAppraisalInvalidationTests` | 12/12 PASS | `8E4B7941A2C9B77DE19DCEC78EFF862A3C466C253FB039F33441016E4D85CDCF` | `693374891BA7E6B0B6A68F8E48F9A7D98887F326EE9EB219DD2D39B1003B8425` |
+| ALL EditMode | 2733/2733 PASS | `EEAE31737B6BFC9081C73BD88D92ED7749C9797AB5946A9B6AFE5E403CEFEC8D` | `41601601E87E5F31F3ADAC51BDCDB49E5379380F2D4CC55D0A2C90AECF2233AC` |
+| Official Smoke (`-TestFilter Smoke`) | 5/5 PASS | `D28412B671D3626BAC7FEDBA14009E4AEC4A6E98F9153C51EB93D60360A04420` | `18E6C13B8EF1D4E8F44E6067B3D457B1B90B254DE82FE7A5333AEE4B37855C36` |
+
+The exact XML and `.log.gz` files are stored in the corresponding `Focused`, `AllEditMode`, and `OfficialSmoke` directories. `git diff --check 01e1008..33ce302` passed. The existing ProjectSettings edits and three untracked `.meta` files were present but not staged or changed.
+
+This closes the exact Crime/Social composite epoch witness for the selected Daily-v1 Steal ingress. It does not prove the full `runtime.advance-day` epoch delta, exhaustive owner/shared-epoch coverage, P12-G readiness, P12-A readiness, P13 readiness, or Phase 12 closure.

@@ -1,3 +1,31 @@
+## P12-G Crime/Social exact composite epoch witness — promoted 2026-10-09
+
+P12 canonical was refreshed at `01e1008f204ca96bb21c799f1ae8b8e46a5f85f0`;
+the bounded follow-up code candidate is
+`33ce3026297a372363624065d4f3240c9b49b44c`, with exact `Assets` tree
+`cffa2ef1f4e6958cda4bc00f918b77b246678095`. Its independent exact-tip PASS
+is recorded in
+[`design/PHASE12_G_CRIME_SOCIAL_EXACT_EPOCH_REVIEW_33CE302.md`](design/PHASE12_G_CRIME_SOCIAL_EXACT_EPOCH_REVIEW_33CE302.md),
+and focused/full/Smoke validation hashes are retained in
+[`validation/P12GCrimeSocialRuntimeOperation/VALIDATION.md`](validation/P12GCrimeSocialRuntimeOperation/VALIDATION.md).
+
+The test reads the shared mutation epoch immediately around the completed
+`TryAcceptTheftOutcome` Crime/Social composite and asserts an exact `+1` delta
+while the existing registered `runtime.advance-day` operation is active.
+This establishes the composite's own shared-epoch contribution without
+attributing unrelated valid daily writes to it. The change is test/docs/evidence
+only; production behavior, operation IDs, and authored gameplay are unchanged.
+Focused Crime/Social invalidation passed 12/12, ALL EditMode passed 2733/2733,
+official Smoke passed 5/5, and `git diff --check` passed.
+
+This closes the exact Crime/Social composite epoch witness only. It does not
+prove the full-day epoch delta, exhaustive owner or shared-epoch coverage,
+target-owner checks, global quiescence, restored-boundary admission,
+single-session publication, P12-G/P12-A/P13 readiness, or Phase 12 closure.
+P12-B through P12-F remain promoted within scope; P12-G and P12-A remain
+`WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`.
+Unrelated ProjectSettings edits and untracked `.meta` files remain untouched.
+
 ## P12-G Crime/Social Daily-v1 ingress witness — promoted 2026-10-09
 
 `codex/phase12/canonical` advanced by a clean fast-forward from

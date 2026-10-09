@@ -608,3 +608,22 @@ operation/epoch coverage. The remaining live inventory, integrated target-owner
 checks, restored-boundary admission, one active-session publication root, and
 whole-graph evidence remain required; P12-G stays `WAIT_DEPENDENCY`, P12-A
 stays `WAIT_DEPENDENCY`, P13 stays `BLOCKED`, and Phase 12 stays `OPEN`.
+
+### Exact Crime/Social composite epoch follow-up — 2026-10-09
+
+The exact shared-epoch increment for the successful selected Daily-v1
+Crime/Social composite is now witnessed by the test-only candidate
+`33ce3026297a372363624065d4f3240c9b49b44c` (Assets tree
+`cffa2ef1f4e6958cda4bc00f918b77b246678095`). Its independently reviewed
+result is recorded in
+`PHASE12_G_CRIME_SOCIAL_EXACT_EPOCH_REVIEW_33CE302.md`; exact validation
+artifacts are listed in
+`../validation/P12GCrimeSocialRuntimeOperation/VALIDATION.md`.
+
+The probe captures epoch before and after `inner.TryAcceptTheftOutcome` and
+requires successful reads, one increment, and the outer
+`runtime.advance-day` operation. This closes the composite-local epoch item
+only. The full day delta, other direct writers, exhaustive owner/epoch
+coverage, integrated target checks, restored-boundary admission, publication
+ownership, and whole-graph proof remain outstanding. P12-G remains
+`WAIT_DEPENDENCY`.
