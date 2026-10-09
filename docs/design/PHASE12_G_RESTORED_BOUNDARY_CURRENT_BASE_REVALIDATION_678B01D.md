@@ -1,6 +1,8 @@
 # P12-G restored-boundary admission — current-base revalidation
 
-**Result:** `REVALIDATE` — PASS for this bounded capability only
+**Classification:** `REVALIDATE` for this bounded capability
+
+**Review status:** current-base technical assessment; independent documentation review pending
 
 **P12 canonical base:** `678b01dc9c9dddf05cbd0a64033afc7b1ed1615b`
 
@@ -28,7 +30,7 @@ publication behavior.
 
 ## Contract result
 
-The existing bounded API remains compatible with the refreshed source:
+The previously reviewed design continues to propose this bounded API:
 
 ```csharp
 TryAdmitRestoredDailyBoundary(
@@ -38,20 +40,21 @@ TryAdmitRestoredDailyBoundary(
     out DailyCaptureEligibilityFailure failure)
 ```
 
-The candidate runtime checks the exact `WorldId` instance and its
-constructor-captured initial absolute day, requires a positive preserved
-completed-core sequence, and rejects an existing boundary or published factual
-read. It requires the bound owner thread, healthy Daily-v1 runtime authorities,
-no runtime operation in progress, and a sealed census protocol. Its fresh
-quiescent snapshot reads the current City-presence revision/cardinality and
-shared mutation epoch after the membership operation has completed. If that
-operation is still active, the census protocol rejects admission. The new
-token binds the candidate runtime identity, target owner vector, preserved day
-and sequence, and `RestoredContinuation` provenance.
+An implementation of the reviewed design must check the exact `WorldId`
+instance and its constructor-captured initial absolute day, require a positive
+preserved completed-core sequence, and reject an existing boundary or
+published factual read. It must require the bound owner thread, healthy
+Daily-v1 runtime authorities, no runtime operation in progress, and a sealed
+census protocol. Its fresh quiescent snapshot must read the current
+City-presence revision/cardinality and shared mutation epoch after the
+membership operation has completed. If that operation is still active, the
+census protocol must reject admission. The new token must bind the candidate
+runtime identity, target owner vector, preserved day and sequence, and
+`RestoredContinuation` provenance.
 
-The seam neither transfers the source token nor calls `CurrentDay`, advances
-time, or increments the successful gameplay-advance sequence. The next normal
-successful advance replaces the restored token and increments from the
+The seam must neither transfer the source token nor call `CurrentDay`, advance
+time, or increment the successful gameplay-advance sequence. The next normal
+successful advance must replace the restored token and increment from the
 preserved sequence with `CompletedAdvance` provenance.
 
 The current P12-G design and this revalidation do not add an envelope parser,
@@ -60,12 +63,11 @@ semantics. A passing admission token is only the candidate-bound completed
 boundary prerequisite. It does not make P12-G ready, complete P12-B's bounded
 scope anew, unlock P12-A or P13, or close Phase 12.
 
-## Validation scope
+## Validation boundary
 
-The current candidate validation is recorded in
-[`../validation/P12GCrimeSocialRuntimeOperation/P12GRestoredBoundaryAdmissionValidation.md`](../validation/P12GCrimeSocialRuntimeOperation/P12GRestoredBoundaryAdmissionValidation.md).
-It includes the 75-test runtime-admission suite and the 26-test selected
-bootstrap-composition suite, followed by ALL EditMode and official Smoke.
+This is a source/design revalidation only. It does not validate or deliver an
+implementation. Any implementation validation must be recorded separately and
+bound to its exact code tree; this document cannot serve as that evidence.
 
 P12-B through P12-F remain promoted within their recorded scopes. P12-G and
 P12-A remain `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains
