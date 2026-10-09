@@ -69,6 +69,26 @@ public sealed class InstitutionStore : IAuthoritativeMutationGuardBindable
         return id != null && records.TryGetValue(id.Value, out record);
     }
 
+    /// <summary>Creates an unpublished exact owner from validated continuation values.</summary>
+    internal static bool TryCreateFromP12EOwnerSnapshot(
+        IReadOnlyList<InstitutionRecord> sourceRecords,
+        long sourceRevision,
+        out InstitutionStore staged)
+    {
+        staged = null;
+        if (sourceRecords == null || sourceRevision < 0L) return false;
+        InstitutionStore candidate = new InstitutionStore();
+        foreach (InstitutionRecord record in sourceRecords)
+        {
+            if (record == null || record.Id == null || string.IsNullOrWhiteSpace(record.Id.Value)
+                || candidate.records.ContainsKey(record.Id.Value)) return false;
+            candidate.records.Add(record.Id.Value, record);
+        }
+        candidate.revision = sourceRevision;
+        staged = candidate;
+        return true;
+    }
+
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
     internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
     bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
@@ -96,6 +116,45 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
     }
 
     internal InstitutionStore InstitutionStoreForWorldBoundary => institutionStore;
+
+    /// <summary>Creates an unpublished exact owner from validated continuation values.</summary>
+    internal static bool TryCreateFromP12EOwnerSnapshot(
+        InstitutionStore stagedInstitutions,
+        IReadOnlyList<OfficeRecord> sourceRecords,
+        IReadOnlyList<OfficeIncumbency> sourceIncumbencies,
+        IReadOnlyList<OfficeTenureRecord> sourceTenures,
+        long sourceRevision,
+        out OfficeStore staged)
+    {
+        staged = null;
+        if (stagedInstitutions == null || sourceRecords == null || sourceIncumbencies == null
+            || sourceTenures == null || sourceRevision < 0L) return false;
+        OfficeStore candidate = new OfficeStore(stagedInstitutions);
+        foreach (OfficeRecord record in sourceRecords)
+        {
+            if (record == null || record.Id == null || record.InstitutionId == null
+                || string.IsNullOrWhiteSpace(record.Id.Value)
+                || !stagedInstitutions.TryGet(record.InstitutionId, out _)
+                || candidate.records.ContainsKey(record.Id.Value)) return false;
+            candidate.records.Add(record.Id.Value, record);
+        }
+        foreach (OfficeIncumbency incumbency in sourceIncumbencies)
+        {
+            if (incumbency == null || incumbency.OfficeId == null || incumbency.Incumbent == null
+                || !candidate.records.ContainsKey(incumbency.OfficeId.Value)
+                || candidate.incumbencies.ContainsKey(incumbency.OfficeId.Value)) return false;
+            candidate.incumbencies.Add(incumbency.OfficeId.Value, incumbency);
+        }
+        foreach (OfficeTenureRecord tenure in sourceTenures)
+        {
+            if (tenure == null || tenure.OfficeId == null || tenure.Incumbent == null
+                || !candidate.records.ContainsKey(tenure.OfficeId.Value)) return false;
+            candidate.tenureHistory.Add(tenure);
+        }
+        candidate.revision = sourceRevision;
+        staged = candidate;
+        return true;
+    }
 
     public int Count => records.Count;
     public int IncumbencyCount => incumbencies.Count;
