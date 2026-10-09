@@ -17,9 +17,10 @@ audit. The retained focused 26/26, ALL EditMode 2732/2732, and official Smoke
 unchanged from source-audit baseline `02009f9`. No Unity tests were rerun for
 this docs-only refresh; `git diff --check` passed.
 
-No dependency edge or readiness label changes. P12-G and P12-A remain
-`WAIT_DEPENDENCY`, P12-B remains `INCOMPLETE`, P13 remains `BLOCKED`, and Phase
-12 remains `OPEN`. P12-G still requires complete live owner/cardinality
+No dependency edge or readiness label changes. P12-B remains
+`COMPLETE/PROMOTED` within its recorded bounded contract; P12-G and P12-A remain
+`WAIT_DEPENDENCY`, P13 remains `BLOCKED`, and Phase 12 remains `OPEN`. P12-G
+still requires complete live owner/cardinality
 coverage, current relevant B–F interface evidence, integrated target-owner
 checks, fresh target-bound restored-boundary admission, one active-session
 publication owner/swap, and whole-graph rejection, failure atomicity, no-replay,

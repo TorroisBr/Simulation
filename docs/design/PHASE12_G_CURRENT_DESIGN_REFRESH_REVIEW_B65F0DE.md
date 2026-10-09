@@ -25,8 +25,9 @@ remains unchanged from the `02009f9` source audit. No Unity validation was
 rerun for this documentation-only change; `git diff --check` passes.
 
 The update preserves the accepted checkpoint and profile scope. It keeps
-P12-G `WAIT_DEPENDENCY`, P12-A `WAIT_DEPENDENCY`, P12-B `INCOMPLETE`, P13
-`BLOCKED`, and Phase 12 `OPEN`. The remaining live owner/cardinality coverage,
+P12-B `COMPLETE/PROMOTED` within its recorded bounded contract, P12-G
+`WAIT_DEPENDENCY`, P12-A `WAIT_DEPENDENCY`, P13 `BLOCKED`, and Phase 12
+`OPEN`. The remaining live owner/cardinality coverage,
 operation/epoch evidence, target-owner checks, restored-boundary admission,
 single-session publication, and whole-graph proof remain open. No runtime code,
 tests, or gameplay behavior changed.
