@@ -1,3 +1,23 @@
+## Latest canonical promotion — P12-E Crime/Social Appraisal owner snapshot (2026-10-09)
+
+P12 canonical advanced by clean fast-forward from `29f719f428e29cc452ffa8435c0d601c2bed4787` to the exact-tip reviewed candidate `a998541f24841cbd0b1d6f0359a60aaa7b49ae90`. The candidate code commit/tree are `58a25ed8c6ea40d9767594ad2ee3800d13caa70c` / `951aeccd8f71a017729a06ed438b13f63f3a8378`; its full Git tree is `f57a889c8ffca4e5217d633514bc9e3eed053cb1`. The candidate and evidence were pushed on `codex/phase12/P12ECrimeSocialAppraisalOwnerSnapshotImplementation`, then promoted to `codex/phase12/canonical`.
+
+The exact-tip implementation review is VALIDATED_CANDIDATE at review branch commit fd3770d936b33b4cf410aadbc92f0c3a4dd5a253, with the durable follow-up in docs/design/PHASE12_P12E_CRIME_SOCIAL_APPRAISAL_OWNER_SNAPSHOT_REVIEW_FOLLOWUP_A998541.md. It resolves the prior docs-only NEEDS_CHANGES at 67740afbdfc4fed98830e13c539094a73e1567c0. The design review PASS is recorded at 3fe1bb522907797383e62559a2a62495bba1528e.
+
+Exact-code-tree validation passed the focused owner snapshot suite 6/6; Crime/Social Appraisal integration 12/12; Crime/Social invalidation 11/11; Crime/Justice invalidation 12/12; continuation census protocol 24/24; Institution/Office snapshot 11/11; Political Claim snapshot 9/9; Political Decision snapshot 5/5; Political Support snapshot 6/6; Runtime Admission 70/70; ALL EditMode 2700/2700; official Smoke 5/5; and git diff --check. The final focused, full-suite, and Smoke artifacts are tied to code tree 951aeccd; the Political Decision, Political Support, and Runtime Admission focused runs predate only test-file additions in this checkpoint, and the final ALL EditMode run covers them on the final source tree. Raw XML/logs and hashes are retained under docs/validation/P12ECrimeSocialAppraisalOwnerSnapshot/.
+
+This promotes detached schema-v1 snapshot capture and private staged reconstruction for the three existing TheftOutcomeStore, CrimeKnowledgeStore, and SocialReactionStore owners. It preserves exact independent cardinality/revision, stable IDs and typed endpoints, opaque provenance, current crime knowledge, historical reaction supersession, and binding to the supplied staged PersonStore, InstitutionStore, and SimulationTime roots. Capture uses the existing completed-boundary token and exact P12-B owner witnesses.
+
+No runtime/bootstrap composition, mutation-epoch wiring, gameplay behavior, P12-B completion, P12-A readiness, P13 readiness, P12-G publication, profile-wide export/hydration, or Phase 12 closure is added or claimed. Existing supported Crime/Social writes and P12-B behavior remain unchanged.
+
+### Refreshed P12 dependency DAG
+
+- P12-B and P12-C remain COMPLETE/PROMOTED within their recorded contracts; P12-D remains COMPLETE/PROMOTED within its Daily-v1 owner-package boundary.
+- P12-E remains IN PROGRESS. Crime/Social Appraisal owner snapshot capture/staging is now promoted; other composed E authorities remain subject to the accepted owner inventory and require their own bounded evidence or implementation.
+- P12-F waits on P12-E. P12-G waits on P12-B through P12-F and a validated live-profile inventory.
+- P12-A remains WAIT_DEPENDENCY pending complete included-owner export/staged hydration, live-profile inventory validation, and its separate implementation authorization. P13 remains BLOCKED.
+- Phase 12 remains OPEN. This slice does not establish complete P12-E owner coverage or broader continuation readiness.
+
 ## Latest canonical promotion — P12-E PoliticalDecision owner snapshot (2026-10-09)
 
 P12 canonical advanced by a clean fast-forward from `c9d2d8f9ff7176d4d36c5e0a007d2f9ddc7210f8` to reviewed candidate `df1daf8979079abf3cd1619b4a3992765988426e`. The candidate preserves the exact reviewed code commit/tree `8b0bbcb15e864fa0ebb4d26dbc6b205038a2f921` / `4496b67ed9f59d9cb95bc4e16bf0b90bd3ae7e2b` (Assets tree `04b8f0248dfcd4f164d7ba317ac34a159983a134`). The code candidate `293ad422153a6ef5b11c7e755757107d6cfba5ed` passed independent exact-tip review; the durable review is [`design/PHASE12_P12E_POLITICAL_DECISION_OWNER_SNAPSHOT_IMPLEMENTATION_REVIEW_8B0BBCB.md`](design/PHASE12_P12E_POLITICAL_DECISION_OWNER_SNAPSHOT_IMPLEMENTATION_REVIEW_8B0BBCB.md), recorded in the promoted candidate. Its design review is `d617aab13db2af4db0385e7c4d5b7eaa0375fe09`; the reviewed design is [`design/PHASE12_P12E_POLITICAL_DECISION_OWNER_SNAPSHOT_DESIGN.md`](design/PHASE12_P12E_POLITICAL_DECISION_OWNER_SNAPSHOT_DESIGN.md).
