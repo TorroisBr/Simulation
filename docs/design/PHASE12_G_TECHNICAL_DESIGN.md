@@ -584,9 +584,27 @@ Current evidence impact:
 
 - The selected 299-section Daily-v1 census and the retained focused 26/26, ALL EditMode 2732/2732, and official Smoke 5/5 results remain tied to Assets tree `1b90b4f`. These results validate the recorded inventory/test changes; they do not prove every supported dynamic owner transition or a generic live-graph traversal.
 - The exact-tip current C–F package-interface revalidation was promoted at P12 canonical `21c4e54`; its review record is `PHASE12_G_CURRENT_TIP_CF_PACKAGE_INTERFACE_REVALIDATION_REVIEW_D87D4A0.md`. It establishes the reviewed staging order and D/F `NpcFRows` ownership seam. It does not replace remaining B–F exact interface checks required by §7.
-- Crime/Social normal Daily theft and direct-call ingress are now source-mapped in `PHASE12_G_CRIME_SOCIAL_INGRESS_EPOCH_CROSSWALK_97BCC5C.md`, exact-tip reviewed at `c32a479`. Normal selected actor theft is enclosed by the existing `runtime.advance-day` operation; integration-local scopes add no registered operation IDs. The existing tests still do not exercise authored Steal through `SimulationRuntime.TryAdvanceDay` while asserting both operation and Crime/Social notifications.
+- Crime/Social normal Daily theft and direct-call ingress are source-mapped in `PHASE12_G_CRIME_SOCIAL_INGRESS_EPOCH_CROSSWALK_97BCC5C.md`, exact-tip reviewed at `c32a479`. Normal selected actor theft is enclosed by the existing `runtime.advance-day` operation; integration-local scopes add no registered operation IDs. At this refresh's `5047cdb` baseline, the runtime-ingress test was still missing; the later `6265c08` promotion below closes that evidence item only.
 - The P12-G target-owner exact-zero audit at baseline `02009f9` remains source-current for the production APIs because the production Scripts tree has not changed. Its exact-zero checks are interfaces for G to invoke; no current G orchestrator assembles the target census, calls restored-boundary admission, or publishes the candidate.
 
-Accordingly, this refresh does not mark P12-G `READY_FOR_IMPLEMENTATION`. The remaining hard prerequisites are validated complete live owner/cardinality coverage across the supported selected-profile transitions; current exact interface coverage for the relevant B–F outputs; integrated target-owner checks; a fresh target-bound restored-boundary admission preserving the source completed boundary; one `TesteSimulacao` active-session publication owner/swap; and whole-graph rejection, failure atomicity, no-replay, and continuation-parity evidence. Keep the runtime theft-path test evidence gap visible. P12-A's separate implementation authorization and export/hydration requirements remain unchanged; P13 remains blocked on its explicit prerequisites.
+Accordingly, this refresh did not mark P12-G `READY_FOR_IMPLEMENTATION`. The remaining hard prerequisites are validated complete live owner/cardinality coverage across the supported selected-profile transitions; current exact interface coverage for the relevant B–F outputs; integrated target-owner checks; a fresh target-bound restored-boundary admission preserving the source completed boundary; one `TesteSimulacao` active-session publication owner/swap; and whole-graph rejection, failure atomicity, no-replay, and continuation-parity evidence. The later runtime-ingress witness does not close those remaining gates. P12-A's separate implementation authorization and export/hydration requirements remain unchanged; P13 remains blocked on its explicit prerequisites.
 
 This is a current-base evidence refresh of the existing P12-G proposal. It changes no domain meaning, accepted profile, checkpoint identity, architecture, or gameplay; no runtime code or tests were changed or run.
+
+## Post-promotion runtime-ingress evidence update — 2026-10-09
+
+P12 canonical `6265c08bc2fcc65ca7d5bb864ddb518b1e769e4b` adds a reviewed
+selected-profile Crime/Social ingress witness. The test drives the authored
+Daily-v1 Steal action through `SimulationRuntime.TryAdvanceDay`, observes the
+Crime/Social composite commit with `runtime.advance-day` active, and validates
+the post-operation census and registered-operation quiescence. Exact review
+and validation are recorded in
+`PHASE12_G_CRIME_SOCIAL_RUNTIME_INGRESS_REVIEW_D859D0F.md` and
+`../validation/P12GCrimeSocialRuntimeOperation/VALIDATION.md`.
+
+This resolves only the Crime/Social runtime-ingress evidence gap identified in
+the prior refresh. It does not prove an exact epoch increment or exhaustive
+operation/epoch coverage. The remaining live inventory, integrated target-owner
+checks, restored-boundary admission, one active-session publication root, and
+whole-graph evidence remain required; P12-G stays `WAIT_DEPENDENCY`, P12-A
+stays `WAIT_DEPENDENCY`, P13 stays `BLOCKED`, and Phase 12 stays `OPEN`.

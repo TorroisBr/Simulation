@@ -1,3 +1,33 @@
+## P12-G Crime/Social Daily-v1 ingress witness — promoted 2026-10-09
+
+`codex/phase12/canonical` advanced by a clean fast-forward from
+`bc9ab6a27d5bb5c1e2de0987aa6377db6a96c37e` to candidate
+`6265c08bc2fcc65ca7d5bb864ddb518b1e769e4b`. The reviewed test code is
+`d859d0f36a34163a2f7dd46cbc77f7d859e46d73`, with exact `Assets` tree
+`592bff43b5ef1497f72ea3acb8e13a349d63ca6d`. Independent exact-tip PASS is
+recorded in
+[`design/PHASE12_G_CRIME_SOCIAL_RUNTIME_INGRESS_REVIEW_D859D0F.md`](design/PHASE12_G_CRIME_SOCIAL_RUNTIME_INGRESS_REVIEW_D859D0F.md).
+The validation manifest and exact XML/log hashes are in
+[`validation/P12GCrimeSocialRuntimeOperation/VALIDATION.md`](validation/P12GCrimeSocialRuntimeOperation/VALIDATION.md).
+
+The test proves that the authored Daily-v1 Steal path publishes one
+TheftOutcome, CrimeKnowledge row, and SocialReaction while the registered
+`runtime.advance-day` operation is active, then returns to zero active
+operations with registered-operation quiescence and roster census passing.
+The change is test/docs/evidence only; production source, saved action asset,
+operation IDs, and gameplay semantics are unchanged. Focused Crime/Social
+invalidation tests passed 12/12, ALL EditMode passed 2733/2733, official Smoke
+passed 5/5, and `git diff --check` passed.
+
+This closes the selected Daily-v1 Crime/Social runtime-ingress witness only.
+It does not establish an exact shared-epoch increment, exhaustive owner or
+shared-epoch coverage, target-owner checks, global quiescence, restored-boundary
+admission, single-session publication, P12-G/P12-A/P13 readiness, or Phase 12
+closure. P12-B through P12-F remain promoted within their bounded scopes;
+P12-G and P12-A remain `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12
+remains `OPEN`. Unrelated ProjectSettings edits and untracked `.meta` files
+remain untouched.
+
 ## P12-G selected Daily-v1 City-bound materialization witness — promoted 2026-10-09
 
 `codex/phase12/canonical` advanced by a clean fast-forward from
