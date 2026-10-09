@@ -1,3 +1,47 @@
+## P12-G restored-boundary admission prerequisite promotion — 2026-10-09
+
+`codex/phase12/canonical` advanced by clean fast-forward from
+`678b01dc9c9dddf05cbd0a64033afc7b1ed1615b` to
+`2235d8a3f9a7da3efe13fe0bb6580dea1edfc96e`. The reviewed implementation
+commit is `6f0dde51b1100c201346bb8a12c15f51952a5848`, with exact `Assets` tree
+`d7b179d40b8a0e70ade5ff8592028448bf7a7192`; its validation manifest and
+artifact hashes are recorded in
+[`validation/P12G_RESTORED_BOUNDARY_ADMISSION_VALIDATION.md`](validation/P12G_RESTORED_BOUNDARY_ADMISSION_VALIDATION.md).
+Independent exact-tip implementation review PASS is recorded in
+[`design/PHASE12_G_RESTORED_BOUNDARY_ADMISSION_IMPLEMENTATION_REVIEW_6F0DDE5.md`](design/PHASE12_G_RESTORED_BOUNDARY_ADMISSION_IMPLEMENTATION_REVIEW_6F0DDE5.md).
+The source/design revalidation at `562d7404f346867d793e1ec6ecaa3aca640f8607`
+and its independent review are recorded in
+[`design/PHASE12_G_RESTORED_BOUNDARY_CURRENT_BASE_REVALIDATION_678B01D.md`](design/PHASE12_G_RESTORED_BOUNDARY_CURRENT_BASE_REVALIDATION_678B01D.md)
+and
+[`design/PHASE12_G_RESTORED_BOUNDARY_CURRENT_BASE_REVALIDATION_REVIEW_562D740.md`](design/PHASE12_G_RESTORED_BOUNDARY_CURRENT_BASE_REVALIDATION_REVIEW_562D740.md).
+
+The bounded runtime seam admits a fresh Daily-v1 runtime at the preserved
+nonnegative absolute day and positive successful-core sequence. It issues a
+new candidate-bound token with `RestoredContinuation` provenance only after
+the current owner-thread and quiescent owner/epoch snapshot checks pass. It
+does not transfer the source token, advance time, replay an operation, or
+increment the sequence during admission. On the next normal successful
+advance, the runtime issues the ordinary `CompletedAdvance` token and
+increments from the preserved sequence.
+
+Exact-tree validation passed `SimulationRuntimeAdmissionTests` 75/75,
+ALL EditMode 2738/2738, official Smoke 5/5, and
+`SimulationBootstrapCompositionTests` 26/26; `git diff --check` passed.
+This promotes the restored-boundary admission prerequisite only. It does not
+deliver restore-envelope parsing, integrated target-owner exact-zero checks,
+the single active-session publication root, whole-graph rejection or failure
+atomicity, no-replay, continuation parity, P12-G readiness, P12-A readiness,
+P13 readiness, or Phase 12 closure.
+
+The refreshed P12 DAG is unchanged: P12-B through P12-F remain promoted within
+their bounded scopes; P12-G remains `WAIT_DEPENDENCY` on complete live
+owner/operation/epoch coverage, remaining integrated target-owner checks, one
+active-session publication boundary, and whole-graph rejection/failure-
+atomicity/no-replay/continuation-parity evidence. P12-A remains
+`WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`. Unrelated
+ProjectSettings changes, untracked `.meta` files, and old diagnostic XML files
+remain unstaged and untouched.
+
 ## P12-G fixed receipt-owner identity witness promotion — 2026-10-09
 
 P12 canonical was fast-forwarded from
