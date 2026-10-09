@@ -181,11 +181,13 @@ objects. The active composition is read only until the final publication swap.
    successful boundary and required/empty/excluded section matrix with the
    current validated bootstrap composition. Reject unsupported or incomplete
    owner inventory before domain-object allocation.
-3. **Establish roots.** Ask B/C contracts to stage the completed logical time,
-   exact typed identities, allocator high-water/next values, record sequence,
-   deterministic-random provenance/context, P9 historical manifest and P8-A
-   facts. Hydration preserves IDs and provenance; it never reruns genesis or
-   draws randomness.
+3. **Establish B/C roots.** B supplies the completed-boundary and inventory
+   evidence. C stages exact typed-ID allocation/high-water roots, the shared
+   record sequence, deterministic-random provenance/context, P9 historical
+   manifest, and P8-A facts. D then exports/stages the RuntimeIdentityRegistry
+   section from those exact IDs and its D-owned runtime entities. Preserve IDs
+   and provenance; never allocate replacements, rerun genesis, or draw
+   replacement randomness.
 4. **Stage D factual and spatial owners.** D supplies RuntimeIdentityRegistry,
 legacy SpatialNetwork, CityRuntime and NpcRuntime factual roots,
 Person/materialization/population/genealogy/site owners, and detached per-NPC
