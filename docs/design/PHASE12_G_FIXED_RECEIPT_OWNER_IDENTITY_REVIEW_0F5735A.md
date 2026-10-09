@@ -2,10 +2,14 @@
 
 **Verdict: PASS.**
 
-**P12 canonical base:** `fa5607e3a138365a0ed814cda193edfd4aaab55d`  
-**Candidate branch:** `codex/phase12/P12GFixedReceiptOwnerIdentity`  
-**Reviewed candidate:** `0f5735a09bc094c32bac0f2e316e154afbd1ada3`  
-**Candidate Git tree:** `f4d666da765327f395f8ea6bbbcb008f9eca6efd`  
+**P12 canonical base:** `fa5607e3a138365a0ed814cda193edfd4aaab55d`
+
+**Candidate branch:** `codex/phase12/P12GFixedReceiptOwnerIdentity`
+
+**Reviewed candidate:** `0f5735a09bc094c32bac0f2e316e154afbd1ada3`
+
+**Candidate Git tree:** `f4d666da765327f395f8ea6bbbcb008f9eca6efd`
+
 **Reviewed Assets tree:** `d88661ee88554716364855659e4f634b323519eb`
 
 An independent exact-tip review examined the complete base-to-candidate diff,
