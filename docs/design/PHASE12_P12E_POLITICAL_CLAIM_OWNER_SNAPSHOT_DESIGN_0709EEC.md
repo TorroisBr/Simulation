@@ -254,14 +254,15 @@ P12-G-boundary obligations; this contract does not claim them complete.
 
 The field and writer boundary is now specified by this candidate, but the
 candidate is not an implementation review or authorization to promote. Obtain
-independent exact-tip design review for this addendum before code work. Keep
-the owner code/tests separate from the active Property/Estate implementation
-where possible; serialize edits to `SimulationRuntime.cs`, the P12-E private
-staging coordinator, and any persistence/bootstrap integration. Integrate
-claims after Person, Institution/Office, and Property/Estate roots are
-available, then let downstream F owners consume the staged claim root without
-duplicating claim facts. A missing Property/Estate target package is a known
-dependency, not a product ambiguity.
+fresh current-base exact-tip design review before code work. Keep the owner
+code/tests in separate files; serialize edits to `SimulationRuntime.cs`, the
+P12-E private staging coordinator, and any persistence/bootstrap integration.
+Integrate claims after Person, Institution/Office, and Property/Estate roots
+are available, then let downstream F owners consume the staged claim root
+without duplicating claim facts. The promoted Property/Estate owner snapshot
+supplies the exact Property target root; staging must bind to it and reject a
+missing or mismatched owner. This is a known dependency boundary, not a
+product ambiguity.
 
 Explicit exclusions: no code implementation in this checkpoint; no changes to
 the two P12-B census IDs, schema, operation, or mutation wiring; no
@@ -272,3 +273,34 @@ no P12-A profile integration/readiness, global quiescence or capture-eligibility
 claim; no Phase closure; no P13 history/fork semantics; no new gameplay or
 claim/recognition meaning. Existing claim/recognition facts remain evidence
 about asserted claims only and do not change target truth.
+
+## Current-canonical base revalidation — P12 canonical `a768f2d` (2026-10-08)
+
+The exact-content design review for the original owner contract passed at
+`da4c02d` on `codex/review/phase12/P12EPoliticalClaimOwnerSnapshotDesignC286BC7`,
+reviewing design commit `c286bc7b41c1c5b499d98b55f192be784ee43faa` against
+canonical `0709eec1244f791e81b1d05f669bb4a577a9fdb6`. After that review, P12
+canonical advanced to `a768f2d9eca161f5cff059a782737412f43b2861` with the
+separately reviewed Property/Estate snapshot promotion. Current-base replay
+commit `465d0b2957b2d2dc621a4c0b3d79cccf971f5b89` places the same owner
+contract directly on that canonical base. This addendum records the current-
+base revalidation and is part of the candidate for fresh exact-tip review.
+
+**Classification: `BASE_DRIFT_ONLY`.** The `0709eec..a768f2d` delta adds the
+Property/Estate owner snapshot implementation, tests and validation, the
+independent review record, and the P12 State promotion update. It changes no
+`PoliticalClaimStore`, PoliticalClaim census provider, claim/recognition
+writer, revision rule, or P12-B claim operation. The two stable section IDs,
+exact fields, cardinalities, shared local revision, supported writer list,
+and failure/atomicity contract remain compatible. The promoted
+Property/Estate snapshot now provides the exact staged Property target root
+that this claim stage consumes. P12-E owner ordering remains after Person,
+Institution/Office and Property/Estate, with wrong or missing typed roots
+rejected before returning a candidate.
+
+This revalidation does not resolve the separate PoliticalDecisionStore or
+CrimeKnowledge ownership partition questions, add runtime integration, or
+change P12-B readiness. Obtain a fresh independent exact-tip review of this
+current-base design candidate before implementation. P12-E remains IN
+PROGRESS; P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12
+remains open.
