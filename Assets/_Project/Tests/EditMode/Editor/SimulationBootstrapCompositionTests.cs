@@ -163,6 +163,10 @@ public sealed class SimulationBootstrapCompositionTests
         DeterministicRandomSource deterministicSource = (DeterministicRandomSource)randomSource;
         Assert.That(deterministicSource.Seed, Is.EqualTo(expectedEffectiveSeed));
         Assert.That(
+            ReadPrivateField<IAuthoritativeRandomSource>(simulation.Runtime, "randomSource"),
+            Is.SameAs(randomSource),
+            "The P12-C continuation root is the exact deterministic source installed in the selected runtime.");
+        Assert.That(
             deterministicSource.CaptureSnapshot().Seed,
             Is.EqualTo(expectedEffectiveSeed));
     }
@@ -2418,6 +2422,27 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(bootstrap.WorldId, Is.Not.Null);
         Assert.That(bootstrap.Manifest, Is.Not.Null,
             "WorldId and P9 genesis manifest/provenance are continuation roots captured by P12-C, without standalone vector rows.");
+        Assert.That(bootstrap.WorldId, Is.SameAs(bootstrap.Runtime.WorldId));
+        Assert.That(bootstrap.SimulationTime, Is.Not.Null,
+            "The completed-day clock is composed boundary context, not a standalone owner-section row.");
+        Assert.That(bootstrap.Runtime.SimulationTime, Is.SameAs(bootstrap.SimulationTime));
+        Assert.That(bootstrap.Calendar, Is.Not.Null,
+            "The selected calendar is composed profile metadata, not a standalone owner-section row.");
+        Assert.That(bootstrap.Calendar.MonthsPerYear, Is.EqualTo(bootstrap.Manifest.CalendarMonthsPerYear));
+        Assert.That(bootstrap.Calendar.WeeksPerMonth, Is.EqualTo(bootstrap.Manifest.CalendarWeeksPerMonth));
+        Assert.That(bootstrap.Calendar.DaysPerWeek, Is.EqualTo(bootstrap.Manifest.CalendarDaysPerWeek));
+        Assert.That(bootstrap.Calendar.monthLengths ?? new List<int>(), Is.EqualTo(bootstrap.Manifest.MonthLengths));
+        Assert.That(bootstrap.Runtime.P8ETravelTransactionCoordinator, Is.Not.Null,
+            "P8-E is a composed transaction service over separately witnessed stores, not a standalone owner-section row.");
+
+        IAuthoritativeRandomSource randomRoot =
+            ReadPrivateField<IAuthoritativeRandomSource>(bootstrap.Runtime, "randomSource");
+        Assert.That(randomRoot, Is.TypeOf<DeterministicRandomSource>(),
+            "The selected profile's deterministic-random root is composed runtime state captured by P12-C, not a census row.");
+        DeterministicRandomRootSnapshot randomRootSnapshot =
+            ((DeterministicRandomSource)randomRoot).CaptureSnapshot();
+        Assert.That(randomRootSnapshot.ProviderId, Is.EqualTo("simulation/deterministic-random-source"));
+        Assert.That(randomRootSnapshot.Seed, Is.EqualTo(bootstrap.Manifest.Seed));
 
         string[] allocatorProviderIds = bootstrap.RuntimeIdAllocatorCensusProviders
             .Select(provider => provider.GetCurrentCensus().SectionId)
@@ -2465,6 +2490,30 @@ public sealed class SimulationBootstrapCompositionTests
             .Select(sectionId => ReadPrivateField<IOwnerSectionCensusProvider>(
                 registeredSections[sectionId], "Provider").GetCurrentCensus().OwnerInstanceIdentity)
             .ToArray();
+        object[] composedNoVectorObjects =
+        {
+            bootstrap.WorldId,
+            bootstrap.Manifest,
+            bootstrap.SimulationTime,
+            bootstrap.Calendar,
+            randomRoot,
+            bootstrap.Runtime.P8ETravelTransactionCoordinator
+        };
+        string[] composedNoVectorNames =
+        {
+            "WorldId",
+            "P9 genesis manifest",
+            "SimulationTime completed-boundary clock",
+            "CalendarDefinition profile metadata",
+            "P12-C deterministic-random root",
+            "P8-E travel transaction coordinator"
+        };
+        for (int i = 0; i < composedNoVectorObjects.Length; i++)
+        {
+            Assert.That(registeredOwners.Any(owner => System.Object.ReferenceEquals(owner, composedNoVectorObjects[i])),
+                Is.False,
+                composedNoVectorNames[i] + " is composed but has no standalone census row.");
+        }
         Assert.That(registeredOwners.Any(owner => System.Object.ReferenceEquals(owner, bootstrap.DomainEventStore)), Is.False);
         Assert.That(registeredOwners.Any(owner => System.Object.ReferenceEquals(owner, bootstrap.History)), Is.False);
         Assert.That(registeredOwners.Any(owner => System.Object.ReferenceEquals(owner, bootstrap.Decisions)), Is.False);
