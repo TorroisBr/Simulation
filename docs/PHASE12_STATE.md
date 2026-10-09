@@ -1,11 +1,20 @@
 ## Current P12 canonical checkpoint state — 2026-10-09
 
-Remote origin was checked directly: codex/phase12/canonical remains at 0619a33cd4287d89bad80fbe546763aff8f2a75b. Its latest formal promotion record completes P12-E within the reviewed UnityBootstrap-Daily-v1 owner-package/export/private-staging boundary. Together with the later P12-B completion record and promoted C/D packages, the current bounded status is:
+P12 canonical advanced by clean fast-forward from `0619a33cd4287d89bad80fbe546763aff8f2a75b` to the bounded P12-F owner-package candidate `c4977af1c6566bd5987b3fbdb64bbc7389245d3f`. The candidate was independently reviewed against the exact implementation tree and its validation evidence; this State update records the promotion and refreshed dependencies.
 
-- P12-B, P12-C, P12-D, and P12-E are COMPLETE/PROMOTED within their recorded scopes.
-- P12-F's C/D/E dependencies are satisfied. Its current-base design revalidation and independent exact-tip review PASS are recorded in [the revalidation](design/PHASE12_F_CURRENT_BASE_DESIGN_REVALIDATION_0619A33.md) and [the review record](design/PHASE12_F_CURRENT_BASE_DESIGN_REVIEW_FD40D2E.md) at candidate fd40d2e (design blob 69622d3). P12-F is READY_FOR_IMPLEMENTATION within previously accepted prerequisite scope; no F implementation has been promoted.
-- P12-G remains WAIT_DEPENDENCY on B through F and validated live-profile inventory. P12-A remains WAIT_DEPENDENCY on complete included-owner export/private hydration, validated inventory, and separate authorization. P13 remains BLOCKED on its supported reconstruction prerequisites. Phase 12 remains OPEN.
-- This summary supersedes the older opening crosswalk status below that marked P12-E IN PROGRESS and P12-F WAIT_DEPENDENCY on E. That entry remains historical evidence; checkpoint identities/history are unchanged.
+- P12-B through P12-F are PROMOTED within their individually recorded checkpoint scopes. P12-E's completion is limited to its selected Daily-v1 owner-package/export/private-staging boundary.
+- P12-G remains WAIT_DEPENDENCY on the required complete B-through-F composition and validated live-profile inventory. P12-A remains WAIT_DEPENDENCY on complete included-owner export/private hydration, validated inventory, and its separate authorization. P13 remains BLOCKED on its supported reconstruction prerequisites. Phase 12 remains OPEN.
+- Older State entries below retain their historical statuses at the time each record was written; this current summary supersedes them without changing checkpoint identities or prior promotion history.
+
+## Latest canonical promotion — P12-F Daily-v1 owner package — 2026-10-09
+
+The P12-F implementation candidate `codex/phase12/P12FImplementation` was promoted at `c4977af1c6566bd5987b3fbdb64bbc7389245d3f`, a clean fast-forward from P12 canonical `0619a33cd4287d89bad80fbe546763aff8f2a75b`. Its owner-package implementation commit is `8809be743cbc94155cd85a417e58ec55bd60965d`; aggregate C/D/E/F staging-test commit is `807f175fab5aa267c766f3f10452cdbcf3d5138e`; exact reviewed `Assets` tree is `a9a7c1015a5fa3cacfdb6219b18f2f593c863174`. The final candidate tip adds only review and evidence documents after that unchanged code tree.
+
+Independent exact-tip review PASS is recorded in [`design/PHASE12_P12F_DAILY_V1_OWNER_PACKAGE_IMPLEMENTATION_REVIEW_807F175.md`](design/PHASE12_P12F_DAILY_V1_OWNER_PACKAGE_IMPLEMENTATION_REVIEW_807F175.md). Exact-tree validation passed P12-F 24/24, P12-E regression 6/6, ALL EditMode 2732/2732, official Smoke 5/5, and `git diff --check`; XML/log hashes and run identities are in [`validation/P12FDailyV1OwnerPackage/VALIDATION.md`](validation/P12FDailyV1OwnerPackage/VALIDATION.md), `runs.csv`, and `SHA256SUMS.txt`. All artifact hashes were recomputed locally at preflight.
+
+This promotes detached schema-v1 capture and private staged reconstruction for the five selected Daily-v1 F authorities: PoliticalKnowledgeStore, ScheduledDirectiveStore, ActorChoiceStore, TravelPartyStore, and ExpeditionStore. It retains the shared completed-boundary token, exact owner-section vector, and same temporary staging attempt across C/D/E/F. The test proves aggregate F staging after private C, D, and E staging on that attempt. The package preserves explicit empty owners and detached NPC F rows, and performs no command dispatch, ActorChoice replay, travel replanning, or repeated effects.
+
+P12-F does not add save/load, whole-graph publication, continuation parity, capture eligibility, active-runtime swap, P12-G completion, P12-A/P13 readiness, or Phase 12 closure. P12-G remains blocked on complete profile composition and the validated live-profile inventory. P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`.
 
 ## Latest canonical promotion — P12-E effective-provider and owner source crosswalk — 2026-10-09
 
