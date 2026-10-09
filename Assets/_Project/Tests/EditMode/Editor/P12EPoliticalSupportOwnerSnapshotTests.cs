@@ -181,6 +181,74 @@ public sealed class P12EPoliticalSupportOwnerSnapshotTests
     }
 
     [Test]
+    public void CaptureRejectsPoliticalSupportOwnerCardinalityAndRevisionChanges()
+    {
+        SimulationRuntime runtime = CreateDailyRuntime();
+        PersonId firstSource = new PersonId("p12e-support-stale-source-a");
+        PersonId firstTarget = new PersonId("p12e-support-stale-target-a");
+        PersonId secondSource = new PersonId("p12e-support-stale-source-b");
+        PersonId secondTarget = new PersonId("p12e-support-stale-target-b");
+        RegisterPerson(runtime, firstSource);
+        RegisterPerson(runtime, firstTarget);
+        RegisterPerson(runtime, secondSource);
+        RegisterPerson(runtime, secondTarget);
+
+        PoliticalSupportRelationRecord first = new PoliticalSupportRelationRecord(
+            new PoliticalSupportRelationId("support.stale.first"),
+            PoliticalSupportSource.ForPerson(firstSource),
+            PoliticalSupportTarget.ForSuccessionCandidate(firstTarget),
+            PoliticalSupportDisposition.Support,
+            runtime.CurrentDay);
+        RegisterSupport(runtime, first);
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+            Is.True, advanceFailure.ToString());
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(out DailyCaptureEligibilityToken token,
+            out DailyCaptureEligibilityFailure tokenFailure), Is.True, tokenFailure.ToString());
+
+        OwnerSectionCensusSnapshot witness = FindWitness(token.OwnerSections,
+            PoliticalSupportStoreCensusProvider.RelationsSectionId);
+        PoliticalSupportStore owner = witness.OwnerInstanceIdentity as PoliticalSupportStore;
+        Assert.That(owner, Is.Not.Null);
+        int capturedCount = owner.Count;
+        long capturedRevision = owner.Revision;
+        PoliticalSupportRelationRecord second = new PoliticalSupportRelationRecord(
+            new PoliticalSupportRelationId("support.stale.second"),
+            PoliticalSupportSource.ForPerson(secondSource),
+            PoliticalSupportTarget.ForSuccessionCandidate(secondTarget),
+            PoliticalSupportDisposition.Oppose,
+            runtime.CurrentDay);
+        RegisterSupport(runtime, second);
+        Assert.That(owner.Count, Is.EqualTo(capturedCount + 1));
+        Assert.That(owner.Revision, Is.EqualTo(capturedRevision + 1L));
+        Assert.That(P12EPoliticalSupportOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+            out P12EPoliticalSupportOwnerSnapshot cardinalityStale, out P12EPoliticalSupportSnapshotFailure failure),
+            Is.False);
+        Assert.That(cardinalityStale, Is.Null);
+
+        Assert.That(runtime.TryAdvanceDay(out advanceFailure), Is.True, advanceFailure.ToString());
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(out DailyCaptureEligibilityToken revisionToken,
+            out tokenFailure), Is.True, tokenFailure.ToString());
+        witness = FindWitness(revisionToken.OwnerSections,
+            PoliticalSupportStoreCensusProvider.RelationsSectionId);
+        owner = witness.OwnerInstanceIdentity as PoliticalSupportStore;
+        Assert.That(owner, Is.Not.Null);
+        capturedCount = owner.Count;
+        capturedRevision = owner.Revision;
+
+        Assert.That(runtime.TryProposePoliticalSupportEnd(second.RelationId,
+            out PoliticalSupportEndTransition end, out PoliticalSupportFailure proposalFailure),
+            Is.True, proposalFailure.ToString());
+        Assert.That(runtime.TryApplyPoliticalSupportEnd(end, out PoliticalSupportFailure applyFailure),
+            Is.True, applyFailure.ToString());
+        Assert.That(owner.Count, Is.EqualTo(capturedCount));
+        Assert.That(owner.Revision, Is.EqualTo(capturedRevision + 1L));
+        Assert.That(P12EPoliticalSupportOwnerSnapshot.TryCapture(runtime, revisionToken,
+            revisionToken.OwnerSections, out P12EPoliticalSupportOwnerSnapshot revisionStale,
+            out failure), Is.False);
+        Assert.That(revisionStale, Is.Null);
+    }
+
+    [Test]
     public void StagePreservesAnExactRevisionThatDiffersFromRowCountAndAcceptsSaturation()
     {
         Roots roots = new Roots();
