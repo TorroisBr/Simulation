@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="26" result="Passed" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0,3525241">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2635" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.352524" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3886" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12d-owner-package-review-d1fef9a/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2635" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.340232" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="131264" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2645" name="P12DNpcRootOwnerSnapshotTests" fullname="P12DNpcRootOwnerSnapshotTests" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" testcasecount="26" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.325421" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2676" name="Capture_ProducesDetachedValuesWhenSourceOwnersChangeAfterCapture" fullname="P12DNpcRootOwnerSnapshotTests.Capture_ProducesDetachedValuesWhenSourceOwnersChangeAfterCapture" methodname="Capture_ProducesDetachedValuesWhenSourceOwnersChangeAfterCapture" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="597403522" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.102701" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="2657" name="Capture_RejectsAliasedOwnerIdentity" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsAliasedOwnerIdentity" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.008689" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2655" name="Capture_RejectsAliasedOwnerIdentity(&quot;inventory&quot;)" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsAliasedOwnerIdentity(&quot;inventory&quot;)" methodname="Capture_RejectsAliasedOwnerIdentity" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="106048058" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.004199" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2656" name="Capture_RejectsAliasedOwnerIdentity(&quot;money&quot;)" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsAliasedOwnerIdentity(&quot;money&quot;)" methodname="Capture_RejectsAliasedOwnerIdentity" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="1389093790" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.002905" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="2673" name="Capture_RejectsDailyV1LocalTopologyKnowledge" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsDailyV1LocalTopologyKnowledge" methodname="Capture_RejectsDailyV1LocalTopologyKnowledge" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="646420449" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.003653" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="2671" name="Capture_RejectsMissingOrReplacedReceiptOwner" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsMissingOrReplacedReceiptOwner" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.012208" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2667" name="Capture_RejectsMissingOrReplacedReceiptOwner(&quot;local&quot;,True)" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsMissingOrReplacedReceiptOwner(&quot;local&quot;,True)" methodname="Capture_RejectsMissingOrReplacedReceiptOwner" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="90281239" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.003185" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2668" name="Capture_RejectsMissingOrReplacedReceiptOwner(&quot;local&quot;,False)" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsMissingOrReplacedReceiptOwner(&quot;local&quot;,False)" methodname="Capture_RejectsMissingOrReplacedReceiptOwner" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="297007789" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.002787" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2669" name="Capture_RejectsMissingOrReplacedReceiptOwner(&quot;merchant&quot;,True)" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsMissingOrReplacedReceiptOwner(&quot;merchant&quot;,True)" methodname="Capture_RejectsMissingOrReplacedReceiptOwner" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="1784779914" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.002859" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2670" name="Capture_RejectsMissingOrReplacedReceiptOwner(&quot;merchant&quot;,False)" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsMissingOrReplacedReceiptOwner(&quot;merchant&quot;,False)" methodname="Capture_RejectsMissingOrReplacedReceiptOwner" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="1191259156" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.002868" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="2660" name="Capture_RejectsOwnerReplacementAfterCompletedBoundary" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsOwnerReplacementAfterCompletedBoundary" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.005783" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2658" name="Capture_RejectsOwnerReplacementAfterCompletedBoundary(&quot;inventory&quot;)" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsOwnerReplacementAfterCompletedBoundary(&quot;inventory&quot;)" methodname="Capture_RejectsOwnerReplacementAfterCompletedBoundary" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="859912478" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.002835" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2659" name="Capture_RejectsOwnerReplacementAfterCompletedBoundary(&quot;money&quot;)" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsOwnerReplacementAfterCompletedBoundary(&quot;money&quot;)" methodname="Capture_RejectsOwnerReplacementAfterCompletedBoundary" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="576938493" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.002512" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="2663" name="Capture_RejectsPostTokenP18ReceiptWrite" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsPostTokenP18ReceiptWrite" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.007169" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2661" name="Capture_RejectsPostTokenP18ReceiptWrite(&quot;local&quot;)" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsPostTokenP18ReceiptWrite(&quot;local&quot;)" methodname="Capture_RejectsPostTokenP18ReceiptWrite" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="940047820" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.003355" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2662" name="Capture_RejectsPostTokenP18ReceiptWrite(&quot;merchant&quot;)" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsPostTokenP18ReceiptWrite(&quot;merchant&quot;)" methodname="Capture_RejectsPostTokenP18ReceiptWrite" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="1106646899" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.003468" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="2666" name="Capture_RejectsReceiptOwnerPopulatedBeforeBoundary" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsReceiptOwnerPopulatedBeforeBoundary" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.004200" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2664" name="Capture_RejectsReceiptOwnerPopulatedBeforeBoundary(&quot;local&quot;)" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsReceiptOwnerPopulatedBeforeBoundary(&quot;local&quot;)" methodname="Capture_RejectsReceiptOwnerPopulatedBeforeBoundary" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="1075858814" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.001935" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2665" name="Capture_RejectsReceiptOwnerPopulatedBeforeBoundary(&quot;merchant&quot;)" fullname="P12DNpcRootOwnerSnapshotTests.Capture_RejectsReceiptOwnerPopulatedBeforeBoundary(&quot;merchant&quot;)" methodname="Capture_RejectsReceiptOwnerPopulatedBeforeBoundary" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="1123805920" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.001837" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="2651" name="CaptureAndStage_PreserveActiveTravelAndPartyProgressWithoutAdvancingIt" fullname="P12DNpcRootOwnerSnapshotTests.CaptureAndStage_PreserveActiveTravelAndPartyProgressWithoutAdvancingIt" methodname="CaptureAndStage_PreserveActiveTravelAndPartyProgressWithoutAdvancingIt" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="747043376" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.018232" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2650" name="CaptureAndStage_PreserveNpcDAndFValuesWithoutReplayingWrites" fullname="P12DNpcRootOwnerSnapshotTests.CaptureAndStage_PreserveNpcDAndFValuesWithoutReplayingWrites" methodname="CaptureAndStage_PreserveNpcDAndFValuesWithoutReplayingWrites" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="170879464" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.024193" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2652" name="CaptureAndStage_PreservePersonBindingAndPersonOwnedResidence" fullname="P12DNpcRootOwnerSnapshotTests.CaptureAndStage_PreservePersonBindingAndPersonOwnedResidence" methodname="CaptureAndStage_PreservePersonBindingAndPersonOwnedResidence" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="1622405338" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.014817" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2672" name="DailyV1Boundary_RejectsPopulatedLegacyExplorableSiteStore" fullname="P12DNpcRootOwnerSnapshotTests.DailyV1Boundary_RejectsPopulatedLegacyExplorableSiteStore" methodname="DailyV1Boundary_RejectsPopulatedLegacyExplorableSiteStore" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="960892448" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.003161" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2649" name="DailyV1Package_LateDanglingPersonResidenceReturnsNoPackageAndPreservesSources" fullname="P12DNpcRootOwnerSnapshotTests.DailyV1Package_LateDanglingPersonResidenceReturnsNoPackageAndPreservesSources" methodname="DailyV1Package_LateDanglingPersonResidenceReturnsNoPackageAndPreservesSources" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="412479674" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.016011" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2647" name="DailyV1Package_PreflightsCityLocationReciprocityBeforeAnyMembershipFill" fullname="P12DNpcRootOwnerSnapshotTests.DailyV1Package_PreflightsCityLocationReciprocityBeforeAnyMembershipFill" methodname="DailyV1Package_PreflightsCityLocationReciprocityBeforeAnyMembershipFill" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="1907469361" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.020458" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2648" name="DailyV1Package_StagesDormantMaterializedPeopleAndGenealogyTogether" fullname="P12DNpcRootOwnerSnapshotTests.DailyV1Package_StagesDormantMaterializedPeopleAndGenealogyTogether" methodname="DailyV1Package_StagesDormantMaterializedPeopleAndGenealogyTogether" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="2084083448" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.032091" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2646" name="DailyV1Package_StagesPersonFirstAndPreservesOneOrderedCityNpcGraph" fullname="P12DNpcRootOwnerSnapshotTests.DailyV1Package_StagesPersonFirstAndPreservesOneOrderedCityNpcGraph" methodname="DailyV1Package_StagesPersonFirstAndPreservesOneOrderedCityNpcGraph" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="2009967064" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.010177" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2675" name="Stage_RejectsCurrentCityLocationMismatchAndNonreciprocalMembershipWithoutPublication" fullname="P12DNpcRootOwnerSnapshotTests.Stage_RejectsCurrentCityLocationMismatchAndNonreciprocalMembershipWithoutPublication" methodname="Stage_RejectsCurrentCityLocationMismatchAndNonreciprocalMembershipWithoutPublication" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="462948249" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.008088" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2653" name="Stage_RejectsDAndFProjectionsCapturedWithDifferentStampsBeforeReturningRoster" fullname="P12DNpcRootOwnerSnapshotTests.Stage_RejectsDAndFProjectionsCapturedWithDifferentStampsBeforeReturningRoster" methodname="Stage_RejectsDAndFProjectionsCapturedWithDifferentStampsBeforeReturningRoster" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="265303114" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.007281" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2674" name="Stage_RejectsDanglingPersonAndMismatchedDestinationWithoutPublication" fullname="P12DNpcRootOwnerSnapshotTests.Stage_RejectsDanglingPersonAndMismatchedDestinationWithoutPublication" methodname="Stage_RejectsDanglingPersonAndMismatchedDestinationWithoutPublication" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="1984869424" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.008333" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2654" name="Stage_RejectsDifferentTokenAndOwnerVectorIdentity" fullname="P12DNpcRootOwnerSnapshotTests.Stage_RejectsDifferentTokenAndOwnerVectorIdentity" methodname="Stage_RejectsDifferentTokenAndOwnerVectorIdentity" classname="P12DNpcRootOwnerSnapshotTests" runstate="Runnable" seed="1587193091" result="Passed" start-time="2026-10-08 23:45:55Z" end-time="2026-10-08 23:45:55Z" duration="0.008123" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

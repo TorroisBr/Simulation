@@ -16,7 +16,54 @@ The exact reviewed tree passed P12-D focused coverage 26/26, ALL EditMode 2628/2
 
 **P12-D is COMPLETE/PROMOTED within this accepted Daily-v1 owner-export and private staged-hydration boundary.** This does not deliver whole B–F graph composition, runtime/bootstrap publication, final guard binding, continuation parity, or P12-G atomic publication; those remain P12-G obligations. Daily-v1 still requires the selected ExplorableSite section to be exactly empty. Populated site export is outside this profile. Earlier State text saying that D package assembly, whole-D integration, or other accepted D owner coverage remains outstanding is superseded by this promotion record.
 
+## Latest canonical promotion — P12-E Conflict owner snapshot (2026-10-08)
+
+After refreshed preflight, `codex/phase12/canonical` advanced by clean
+fast-forward from `f5d99cb7008023d14a0ed16ea2149a7d7c18def1` to
+`ff733409b4f38b4078f21d81f845e62b66ba3392`. The integrated candidate is
+`codex/phase12/P12EConflictCurrentBaseIntegration`; its reviewed Git tree is
+`3e0904b93a374b474d9d78866d00f763ca936a3c` and its tested `Assets` tree is
+`f503667082098813a87380b4c7f1c84de986970e`. Exact-tip independent review
+returned `VALIDATED_CANDIDATE` at `b3ada0be866b789b52fb4ea23d6698cb27374c91`
+on `codex/review/phase12/P12EConflictOwnerSnapshotImplementationReviewFF733R2`.
+The candidate's production Conflict snapshot code is unchanged from the
+current-base integrated implementation; this final candidate adds the two
+review-requested regressions and exact-tree validation artifacts.
+
+The bounded slice adds detached schema-v1 export and private staged
+reconstruction for the Required Daily-v1 `p12e.conflicts` owner. It preserves
+Conflict identity, lifecycle, sides, participant bindings, typed ArmedForce
+references, and exact local revision; capture is bound to the existing
+completed-boundary token and owner-section witness. Staging returns a private
+Conflict store or no candidate. It does not add runtime/bootstrap integration,
+operation wiring, shared-epoch or global-quiescence claims, whole P12-E package
+composition, P12-G publication, or profile-wide capture eligibility.
+
+Exact-tree validation passed: seven focused suites 63/63, ALL EditMode
+2635/2635, official Smoke 5/5, and `git diff --check`. XML, compressed-log,
+and decompressed raw-log hashes are in
+[`validation/P12EConflictOwnerSnapshot/ReviewFix-20261008/VALIDATION.md`](validation/P12EConflictOwnerSnapshot/ReviewFix-20261008/VALIDATION.md).
+The final preflight verified the clean fast-forward base, unchanged tested
+`Assets` tree, exact review, and canonical synchronization.
+
 ### Refreshed P12 dependency DAG
+
+- P12-B and P12-C remain COMPLETE/PROMOTED within their accepted bounded
+  contracts; P12-D remains COMPLETE/PROMOTED within its accepted Daily-v1
+  owner-export/private-staging boundary.
+- P12-E remains IN PROGRESS. Battle, ArmedForce/manpower/position, and Conflict
+  owner snapshots are promoted. Property/Estate and Institution/Office snapshot
+  designs have independent exact-content review PASS and their bounded owner
+  implementations are proceeding in separate isolated tracks. War snapshot
+  implementation remains ordered after the Conflict owner API is canonical.
+- P12-F waits on P12-E; P12-G waits on P12-B through P12-F and validated
+  live-profile inventory.
+- P12-A remains WAIT_DEPENDENCY; P13 remains BLOCKED; Phase 12 remains open.
+
+This promotion does not claim full P12-E owner coverage, profile-wide
+export/hydration, global quiescence, P12-A/P13 readiness, or Phase 12 closure.
+
+### Historical P12-D dependency DAG (before the Conflict promotion)
 
 - P12-B and P12-C remain COMPLETE/PROMOTED within their accepted bounded contracts.
 - P12-D is COMPLETE/PROMOTED within the boundary above.
