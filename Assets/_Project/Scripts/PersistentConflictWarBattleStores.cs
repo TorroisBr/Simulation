@@ -530,6 +530,65 @@ public sealed class PersistentWarStore : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    internal static bool TryCreateFromOwnerSnapshot(
+        PersistentWarOwnerSnapshot snapshot,
+        ArmedForceStore stagedArmedForceStore,
+        PersistentConflictStore stagedConflictStore,
+        out PersistentWarStore stagedWarStore,
+        out PersistentWarOwnerSnapshotFailure failure)
+    {
+        stagedWarStore = null;
+        failure = PersistentWarOwnerSnapshotFailure.Create(
+            PersistentWarOwnerSnapshotFailureCode.InvalidSnapshot,
+            "A War owner snapshot and its staged ArmedForce and Conflict authorities are required.");
+        if (snapshot == null || stagedArmedForceStore == null || stagedConflictStore == null)
+        {
+            failure = PersistentWarOwnerSnapshotFailure.Create(
+                PersistentWarOwnerSnapshotFailureCode.InvalidParentComposition,
+                "A War owner snapshot and its staged ArmedForce and Conflict authorities are required.");
+            return false;
+        }
+        if (!ReferenceEquals(stagedConflictStore.ArmedForceStore, stagedArmedForceStore))
+        {
+            failure = PersistentWarOwnerSnapshotFailure.Create(
+                PersistentWarOwnerSnapshotFailureCode.InvalidParentComposition,
+                "The staged Conflict store must reference the exact staged ArmedForce store.");
+            return false;
+        }
+        if (!snapshot.TryBuildRecords(
+                stagedArmedForceStore,
+                stagedConflictStore,
+                out IReadOnlyList<PersistentWarRecord> stagedRecords,
+                out failure))
+            return false;
+
+        PersistentWarStore candidate = new PersistentWarStore(stagedArmedForceStore, stagedConflictStore);
+        foreach (PersistentWarRecord record in stagedRecords)
+        {
+            if (record == null || record.Id == null || candidate.recordsById.ContainsKey(record.Id.Value))
+            {
+                failure = PersistentWarOwnerSnapshotFailure.Create(
+                    PersistentWarOwnerSnapshotFailureCode.DuplicateWarIdentity,
+                    "The staged War rows contain an invalid or duplicate WarId.");
+                return false;
+            }
+            candidate.recordsById.Add(record.Id.Value, record);
+        }
+        candidate.revision = snapshot.Revision;
+        if (candidate.recordsById.Count != snapshot.RecordCount
+            || !candidate.ValidateInvariants().IsValid)
+        {
+            failure = PersistentWarOwnerSnapshotFailure.Create(
+                PersistentWarOwnerSnapshotFailureCode.StageFailed,
+                "The privately staged War owner failed its existing invariant validation.");
+            return false;
+        }
+
+        stagedWarStore = candidate;
+        failure = PersistentWarOwnerSnapshotFailure.None;
+        return true;
+    }
+
     internal PersistentWarStore Clone(ArmedForceStore targetArmedForceStore, PersistentConflictStore targetConflictStore)
     {
         if (targetArmedForceStore == null) throw new ArgumentNullException(nameof(targetArmedForceStore));
