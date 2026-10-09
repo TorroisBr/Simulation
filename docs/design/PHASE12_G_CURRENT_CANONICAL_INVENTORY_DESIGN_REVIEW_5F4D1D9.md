@@ -1,9 +1,9 @@
 # P12-G current-canonical inventory and design refresh — independent review
 
-**Result:** PASS — design/documentation review only  
-**Reviewed candidate:** `5f4d1d9bf03f6c3e055e520ec3a1c1b058f3f7af`  
-**Reviewed tree:** `5a1be399643386cc8ac1e859a8f29c2f5c755d72`  
-**P12 canonical base:** `02009f9063dd252bd4b177fd6aef1e74dcd947f5`  
+**Result:** PASS — design/documentation review only
+**Reviewed candidate:** `5f4d1d9bf03f6c3e055e520ec3a1c1b058f3f7af`
+**Reviewed tree:** `5a1be399643386cc8ac1e859a8f29c2f5c755d72`
+**P12 canonical base:** `02009f9063dd252bd4b177fd6aef1e74dcd947f5`
 **Architecture canonical:** `47eff220c7ce00f6e7c759bdc2b76780bb46f628`
 
 The full candidate diff was reviewed against the current P12 State, P12 Brief,
