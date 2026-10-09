@@ -1,3 +1,31 @@
+## P12-G current-base technical design refresh — reviewed 2026-10-09
+
+The existing P12-G technical design was refreshed against P12 canonical
+`5047cdbc3bcb9da5238f56530c35b5ec495d452c` and Architecture General canonical
+`47eff220c7ce00f6e7c759bdc2b76780bb46f628`. The exact design refresh is
+`b65f0de18d5a01c720f8a2f232aed9351aeb27a4`; its independent exact-tip PASS is
+recorded in
+[`design/PHASE12_G_CURRENT_DESIGN_REFRESH_REVIEW_B65F0DE.md`](design/PHASE12_G_CURRENT_DESIGN_REFRESH_REVIEW_B65F0DE.md).
+The corrected design explicitly marks its `02009f9` dependency subsection as
+historical and superseded by the current-base evidence.
+
+The refresh reconciles the already reviewed C–F interfaces, Crime/Social
+ingress/epoch crosswalk, selected-profile inventory, and target-owner exact-zero
+audit. The retained focused 26/26, ALL EditMode 2732/2732, and official Smoke
+5/5 evidence remains tied to `Assets` tree
+`1b90b4f77586f69c04330b564a32e0a9475808d4`; the production Scripts tree is
+unchanged from source-audit baseline `02009f9`. No Unity tests were rerun for
+this docs-only refresh; `git diff --check` passed.
+
+No dependency edge or readiness label changes. P12-G and P12-A remain
+`WAIT_DEPENDENCY`, P12-B remains `INCOMPLETE`, P13 remains `BLOCKED`, and Phase
+12 remains `OPEN`. P12-G still requires complete live owner/cardinality
+coverage, current relevant B–F interface evidence, integrated target-owner
+checks, fresh target-bound restored-boundary admission, one active-session
+publication owner/swap, and whole-graph rejection, failure atomicity, no-replay,
+and continuation-parity evidence. This refresh adds no checkpoint, contract,
+runtime behavior, test, or implementation authorization.
+
 ## P12-G Crime/Social ingress and epoch crosswalk — reviewed 2026-10-09
 
 P12 canonical was `97bcc5c66fba0b03ef1242807fe8d9dc51a6dc10` at the audit baseline. The source-mapping artifact is [`design/PHASE12_G_CRIME_SOCIAL_INGRESS_EPOCH_CROSSWALK_97BCC5C.md`](design/PHASE12_G_CRIME_SOCIAL_INGRESS_EPOCH_CROSSWALK_97BCC5C.md), content commit `c32a4793613877eb8f24b5ae63aa0085778d7911`. Independent exact-tip review PASS is recorded in [`design/PHASE12_G_CRIME_SOCIAL_INGRESS_EPOCH_CROSSWALK_REVIEW_C32A479.md`](design/PHASE12_G_CRIME_SOCIAL_INGRESS_EPOCH_CROSSWALK_REVIEW_C32A479.md). The source map assigns normal selected-profile theft ingress to the existing outer `runtime.advance-day` operation, keeps integration-local `TheftAcceptance`/`KnowledgeAndAppraisal` stages out of the registered operation-ID set, and distinguishes accepted synchronous direct owner calls. It adds no operation ID or gameplay semantics.
