@@ -7867,7 +7867,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 failure = PersonMaterializationFailure.RuntimeFaulted;
                 return false;
             }
-            return PersonMaterializationSystem.TryMaterializePerson(
+            bool materialized = PersonMaterializationSystem.TryMaterializePerson(
                 this,
                 personId,
                 npcData,
@@ -7876,6 +7876,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 initialMoney,
                 out npcRuntime,
                 out failure);
+            if (materialized && startingCity != null)
+                censusScope.MarkCityPresenceChanged(startingCity);
+            return materialized;
         }
     }
 

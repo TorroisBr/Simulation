@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="26" result="Passed" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:37Z" duration="0,6657235">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2732" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:37Z" duration="0.665724" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3997" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12g-current-canonical-inventory/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2732" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:37Z" duration="0.644789" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="59988" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3543" name="SimulationBootstrapCompositionTests" fullname="SimulationBootstrapCompositionTests" classname="SimulationBootstrapCompositionTests" runstate="Runnable" testcasecount="26" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:37Z" duration="0.623705" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3565" name="ActionStatusWeightsAreIncludedInStableStatusIdentityValidation" fullname="SimulationBootstrapCompositionTests.ActionStatusWeightsAreIncludedInStableStatusIdentityValidation" methodname="ActionStatusWeightsAreIncludedInStableStatusIdentityValidation" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="635877187" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.024852" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3553" name="AuthoredGenesisFingerprintIsStableAndPreservesCausalListOrder" fullname="SimulationBootstrapCompositionTests.AuthoredGenesisFingerprintIsStableAndPreservesCausalListOrder" methodname="AuthoredGenesisFingerprintIsStableAndPreservesCausalListOrder" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="2107541027" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.028627" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3568" name="AuthoredGenesisPreservesPopulationDistinctRouteDurationsAndWarrantAccumulation" fullname="SimulationBootstrapCompositionTests.AuthoredGenesisPreservesPopulationDistinctRouteDurationsAndWarrantAccumulation" methodname="AuthoredGenesisPreservesPopulationDistinctRouteDurationsAndWarrantAccumulation" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="20557042" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.096226" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[genesis-warrant-target display agora possui mandado em a-genesis-origin display. Recompensa: 11. Pena: 2 dias.
+genesis-warrant-target display agora possui mandado em a-genesis-origin display. Recompensa: 18. Pena: 5 dias.
+]]></output>
+        </test-case>
+        <test-case id="3561" name="AuthoredGeographyFingerprintIncludesEverySelectedGeographyInput" fullname="SimulationBootstrapCompositionTests.AuthoredGeographyFingerprintIncludesEverySelectedGeographyInput" methodname="AuthoredGeographyFingerprintIncludesEverySelectedGeographyInput" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="6850759" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.002937" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3554" name="AuthoredGeographyProfilePublishesOneReconstructibleP8AuthorityBeforeSimulation" fullname="SimulationBootstrapCompositionTests.AuthoredGeographyProfilePublishesOneReconstructibleP8AuthorityBeforeSimulation" methodname="AuthoredGeographyProfilePublishesOneReconstructibleP8AuthorityBeforeSimulation" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1275723294" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.008387" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3560" name="AuthoredGeographyProfileRejectsIncompleteInputsBeforePublication" fullname="SimulationBootstrapCompositionTests.AuthoredGeographyProfileRejectsIncompleteInputsBeforePublication" methodname="AuthoredGeographyProfileRejectsIncompleteInputsBeforePublication" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1366609863" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.000737" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3563" name="DefaultAndJobWorkActionsMustReferenceTheExactSelectedDefinitionObject" fullname="SimulationBootstrapCompositionTests.DefaultAndJobWorkActionsMustReferenceTheExactSelectedDefinitionObject" methodname="DefaultAndJobWorkActionsMustReferenceTheExactSelectedDefinitionObject" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="437576362" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.001248" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3552" name="DisabledCrimeBootstrapAdvancesExistingHiddenTimerWithoutRegisteringCrimeProvider" fullname="SimulationBootstrapCompositionTests.DisabledCrimeBootstrapAdvancesExistingHiddenTimerWithoutRegisteringCrimeProvider" methodname="DisabledCrimeBootstrapAdvancesExistingHiddenTimerWithoutRegisteringCrimeProvider" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="904367106" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.013280" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[disabled-crime-npc display nao esta mais escondido.
+]]></output>
+        </test-case>
+        <test-case id="3548" name="FailedPublishCallbackDiscardsIdentityAndPermanentlyLatchesBootstrap" fullname="SimulationBootstrapCompositionTests.FailedPublishCallbackDiscardsIdentityAndPermanentlyLatchesBootstrap" methodname="FailedPublishCallbackDiscardsIdentityAndPermanentlyLatchesBootstrap" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="173987971" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.004495" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3559" name="GeneralTestRemainsASeparateP10RuinProvingProfile" fullname="SimulationBootstrapCompositionTests.GeneralTestRemainsASeparateP10RuinProvingProfile" methodname="GeneralTestRemainsASeparateP10RuinProvingProfile" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="890962443" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.009481" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3545" name="GenesisCallbacksCannotObserveWorldBeforeFinalPublicationGate" fullname="SimulationBootstrapCompositionTests.GenesisCallbacksCannotObserveWorldBeforeFinalPublicationGate" methodname="GenesisCallbacksCannotObserveWorldBeforeFinalPublicationGate" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="784573298" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.015912" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[NPC runtime resolution failed: identity registry is not initialized for RuntimeId 'npc-000001'.
+City runtime resolution failed: identity registry is not initialized for RuntimeId 'city-000001'.
+Location runtime resolution failed: spatial network is not initialized for RuntimeId 'location-000001'.
+Route runtime resolution failed: spatial network is not initialized for RuntimeId 'route-000001'.
+ExplorableSite runtime resolution failed: identity registry is not initialized for RuntimeId 'site-000001'.
+NPC runtime resolution failed: identity registry is not initialized for RuntimeId 'npc-000001'.
+City runtime resolution failed: identity registry is not initialized for RuntimeId 'city-000001'.
+Location runtime resolution failed: spatial network is not initialized for RuntimeId 'location-000001'.
+Route runtime resolution failed: spatial network is not initialized for RuntimeId 'route-000001'.
+ExplorableSite runtime resolution failed: identity registry is not initialized for RuntimeId 'site-000001'.
+NPC runtime resolution failed: identity registry is not initialized for RuntimeId 'npc-000001'.
+City runtime resolution failed: identity registry is not initialized for RuntimeId 'city-000001'.
+Location runtime resolution failed: spatial network is not initialized for RuntimeId 'location-000001'.
+Route runtime resolution failed: spatial network is not initialized for RuntimeId 'route-000001'.
+ExplorableSite runtime resolution failed: identity registry is not initialized for RuntimeId 'site-000001'.
+NPC runtime resolution failed: identity registry is not initialized for RuntimeId 'npc-000001'.
+City runtime resolution failed: identity registry is not initialized for RuntimeId 'city-000001'.
+Location runtime resolution failed: spatial network is not initialized for RuntimeId 'location-000001'.
+Route runtime resolution failed: spatial network is not initialized for RuntimeId 'route-000001'.
+ExplorableSite runtime resolution failed: identity registry is not initialized for RuntimeId 'site-000001'.
+NPC runtime resolution failed: identity registry is not initialized for RuntimeId 'npc-000001'.
+City runtime resolution failed: identity registry is not initialized for RuntimeId 'city-000001'.
+Location runtime resolution failed: spatial network is not initialized for RuntimeId 'location-000001'.
+Route runtime resolution failed: spatial network is not initialized for RuntimeId 'route-000001'.
+ExplorableSite runtime resolution failed: identity registry is not initialized for RuntimeId 'site-000001'.
+NPC runtime resolution failed: identity registry is not initialized for RuntimeId 'npc-000001'.
+City runtime resolution failed: identity registry is not initialized for RuntimeId 'city-000001'.
+Location runtime resolution failed: spatial network is not initialized for RuntimeId 'location-000001'.
+Route runtime resolution failed: spatial network is not initialized for RuntimeId 'route-000001'.
+ExplorableSite runtime resolution failed: identity registry is not initialized for RuntimeId 'site-000001'.
+]]></output>
+        </test-case>
+        <test-case id="3566" name="InvalidAuthoredCalendarFailsBeforeHostCompositionIsPublished" fullname="SimulationBootstrapCompositionTests.InvalidAuthoredCalendarFailsBeforeHostCompositionIsPublished" methodname="InvalidAuthoredCalendarFailsBeforeHostCompositionIsPublished" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="2087217148" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.000871" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3567" name="InvalidAuthoredProfileFailsBeforeHostCompositionIsPublished" fullname="SimulationBootstrapCompositionTests.InvalidAuthoredProfileFailsBeforeHostCompositionIsPublished" methodname="InvalidAuthoredProfileFailsBeforeHostCompositionIsPublished" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1334894454" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.000828" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3562" name="RouteIdentityUsesTupleComponentsEvenWhenDefinitionIdsContainSeparator" fullname="SimulationBootstrapCompositionTests.RouteIdentityUsesTupleComponentsEvenWhenDefinitionIdsContainSeparator" methodname="RouteIdentityUsesTupleComponentsEvenWhenDefinitionIdsContainSeparator" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1802883956" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.000878" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3569" name="RuntimeCannotAdvanceAfterValidationFailureBeforePublication" fullname="SimulationBootstrapCompositionTests.RuntimeCannotAdvanceAfterValidationFailureBeforePublication" methodname="RuntimeCannotAdvanceAfterValidationFailureBeforePublication" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1740000461" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.001842" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3546" name="SameSeedWorldsReceiveDistinctStableIdentitiesWithoutChangingSeededRandomDraws" fullname="SimulationBootstrapCompositionTests.SameSeedWorldsReceiveDistinctStableIdentitiesWithoutChangingSeededRandomDraws" methodname="SameSeedWorldsReceiveDistinctStableIdentitiesWithoutChangingSeededRandomDraws" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="750004624" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.002748" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3558" name="SelectedDailyProfileCompositionRejectsNpcMissingFromIdentityRegistry" fullname="SimulationBootstrapCompositionTests.SelectedDailyProfileCompositionRejectsNpcMissingFromIdentityRegistry" methodname="SelectedDailyProfileCompositionRejectsNpcMissingFromIdentityRegistry" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1002079011" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.002247" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3551" name="SelectedDailyProfilePublishesCoherentFactualReadOnlyAfterBootstrapCloses" fullname="SimulationBootstrapCompositionTests.SelectedDailyProfilePublishesCoherentFactualReadOnlyAfterBootstrapCloses" methodname="SelectedDailyProfilePublishesCoherentFactualReadOnlyAfterBootstrapCloses" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="698209192" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:36Z" duration="0.091717" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="3556" name="SelectedDailyV1NpcMembershipCommitsIdentityAndKeepsItAfterUnregister" fullname="SimulationBootstrapCompositionTests.SelectedDailyV1NpcMembershipCommitsIdentityAndKeepsItAfterUnregister" methodname="SelectedDailyV1NpcMembershipCommitsIdentityAndKeepsItAfterUnregister" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1813879027" result="Passed" start-time="2026-10-09 21:22:36Z" end-time="2026-10-09 21:22:37Z" duration="0.167358" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3557" name="SelectedDailyV1PersonMaterializationReconcilesDynamicOwnerCardinality" fullname="SimulationBootstrapCompositionTests.SelectedDailyV1PersonMaterializationReconcilesDynamicOwnerCardinality" methodname="SelectedDailyV1PersonMaterializationReconcilesDynamicOwnerCardinality" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="136658749" result="Passed" start-time="2026-10-09 21:22:37Z" end-time="2026-10-09 21:22:37Z" duration="0.053319" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3555" name="SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne" fullname="SimulationBootstrapCompositionTests.SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne" methodname="SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1276118733" result="Passed" start-time="2026-10-09 21:22:37Z" end-time="2026-10-09 21:22:37Z" duration="0.051482" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3564" name="SelectedNpcAndItemCapabilityAuthoringUseDomainValidators" fullname="SimulationBootstrapCompositionTests.SelectedNpcAndItemCapabilityAuthoringUseDomainValidators" methodname="SelectedNpcAndItemCapabilityAuthoringUseDomainValidators" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="911260134" result="Passed" start-time="2026-10-09 21:22:37Z" end-time="2026-10-09 21:22:37Z" duration="0.001638" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3549" name="UnityBootstrapDailyV1PreDraftFailureNeverPublishesIdentityOrRetries" fullname="SimulationBootstrapCompositionTests.UnityBootstrapDailyV1PreDraftFailureNeverPublishesIdentityOrRetries" methodname="UnityBootstrapDailyV1PreDraftFailureNeverPublishesIdentityOrRetries" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="829216638" result="Passed" start-time="2026-10-09 21:22:37Z" end-time="2026-10-09 21:22:37Z" duration="0.020779" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[NPC runtime resolution failed: identity registry is not initialized for RuntimeId 'npc-000001'.
+City runtime resolution failed: identity registry is not initialized for RuntimeId 'city-000001'.
+Location runtime resolution failed: spatial network is not initialized for RuntimeId 'location-000001'.
+Route runtime resolution failed: spatial network is not initialized for RuntimeId 'route-000001'.
+ExplorableSite runtime resolution failed: identity registry is not initialized for RuntimeId 'site-000001'.
+NPC runtime resolution failed: identity registry is not initialized for RuntimeId 'npc-000001'.
+City runtime resolution failed: identity registry is not initialized for RuntimeId 'city-000001'.
+Location runtime resolution failed: spatial network is not initialized for RuntimeId 'location-000001'.
+Route runtime resolution failed: spatial network is not initialized for RuntimeId 'route-000001'.
+ExplorableSite runtime resolution failed: identity registry is not initialized for RuntimeId 'site-000001'.
+NPC runtime resolution failed: identity registry is not initialized for RuntimeId 'npc-000001'.
+City runtime resolution failed: identity registry is not initialized for RuntimeId 'city-000001'.
+Location runtime resolution failed: spatial network is not initialized for RuntimeId 'location-000001'.
+Route runtime resolution failed: spatial network is not initialized for RuntimeId 'route-000001'.
+ExplorableSite runtime resolution failed: identity registry is not initialized for RuntimeId 'site-000001'.
+NPC runtime resolution failed: identity registry is not initialized for RuntimeId 'npc-000001'.
+City runtime resolution failed: identity registry is not initialized for RuntimeId 'city-000001'.
+Location runtime resolution failed: spatial network is not initialized for RuntimeId 'location-000001'.
+Route runtime resolution failed: spatial network is not initialized for RuntimeId 'route-000001'.
+ExplorableSite runtime resolution failed: identity registry is not initialized for RuntimeId 'site-000001'.
+NPC runtime resolution failed: identity registry is not initialized for RuntimeId 'npc-000001'.
+City runtime resolution failed: identity registry is not initialized for RuntimeId 'city-000001'.
+Location runtime resolution failed: spatial network is not initialized for RuntimeId 'location-000001'.
+Route runtime resolution failed: spatial network is not initialized for RuntimeId 'route-000001'.
+ExplorableSite runtime resolution failed: identity registry is not initialized for RuntimeId 'site-000001'.
+NPC runtime resolution failed: identity registry is not initialized for RuntimeId 'npc-000001'.
+City runtime resolution failed: identity registry is not initialized for RuntimeId 'city-000001'.
+Location runtime resolution failed: spatial network is not initialized for RuntimeId 'location-000001'.
+Route runtime resolution failed: spatial network is not initialized for RuntimeId 'route-000001'.
+ExplorableSite runtime resolution failed: identity registry is not initialized for RuntimeId 'site-000001'.
+NPC runtime resolution failed: identity registry is not initialized for RuntimeId 'npc-000001'.
+City runtime resolution failed: identity registry is not initialized for RuntimeId 'city-000001'.
+Location runtime resolution failed: spatial network is not initialized for RuntimeId 'location-000001'.
+Route runtime resolution failed: spatial network is not initialized for RuntimeId 'route-000001'.
+ExplorableSite runtime resolution failed: identity registry is not initialized for RuntimeId 'site-000001'.
+]]></output>
+        </test-case>
+        <test-case id="3547" name="UnityBootstrapDailyV1UsesBuiltInDeterministicRandomRootAndEffectiveSeed" fullname="SimulationBootstrapCompositionTests.UnityBootstrapDailyV1UsesBuiltInDeterministicRandomRootAndEffectiveSeed" methodname="UnityBootstrapDailyV1UsesBuiltInDeterministicRandomRootAndEffectiveSeed" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="695152326" result="Passed" start-time="2026-10-09 21:22:37Z" end-time="2026-10-09 21:22:37Z" duration="0.004462" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3550" name="UnsupportedRuntimeProfileExposesUnavailableFactualReadSurface" fullname="SimulationBootstrapCompositionTests.UnsupportedRuntimeProfileExposesUnavailableFactualReadSurface" methodname="UnsupportedRuntimeProfileExposesUnavailableFactualReadSurface" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1212734857" result="Passed" start-time="2026-10-09 21:22:37Z" end-time="2026-10-09 21:22:37Z" duration="0.001773" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3544" name="WorldIdUsesOneCanonicalNonEmptyGuidForm" fullname="SimulationBootstrapCompositionTests.WorldIdUsesOneCanonicalNonEmptyGuidForm" methodname="WorldIdUsesOneCanonicalNonEmptyGuidForm" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1187602136" result="Passed" start-time="2026-10-09 21:22:37Z" end-time="2026-10-09 21:22:37Z" duration="0.000926" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

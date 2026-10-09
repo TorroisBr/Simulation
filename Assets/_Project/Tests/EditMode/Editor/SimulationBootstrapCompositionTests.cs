@@ -2584,23 +2584,52 @@ public sealed class SimulationBootstrapCompositionTests
         simulation.Start();
         SimulationRuntime runtime = simulation.Bootstrap.Runtime;
         AssertSelectedDailyNpcOwnerFamilies(runtime);
+        CityRuntime startingCity = runtime.Cities
+            .OrderBy(city => city.RuntimeId, System.StringComparer.Ordinal)
+            .First();
+        IOwnerSectionCensusProvider cityPresenceProvider = simulation.Bootstrap.CityNpcPresenceCensusProviders
+            .Single(provider => provider.GetCurrentCensus().SectionId
+                == CityNpcPresenceCensusProvider.SectionIdFor(startingCity.RuntimeId));
+        OwnerSectionCensusWitness initialCityPresence = cityPresenceProvider.GetCurrentCensus();
+        int initialCityPresenceCardinality = startingCity.ImportantNpcs.Count;
+        long initialCityPresenceRevision = startingCity.ImportantNpcRevision;
+        ContinuationCensusProtocol censusProtocol = ReadPrivateField<ContinuationCensusProtocol>(
+            runtime,
+            "npcRosterCensusProtocol");
+        Assert.That(initialCityPresence.OwnerInstanceIdentity, Is.SameAs(startingCity));
+        Assert.That(initialCityPresence.Cardinality, Is.EqualTo(initialCityPresenceCardinality));
+        Assert.That(initialCityPresence.Revision, Is.EqualTo(initialCityPresenceRevision));
 
         PersonId personId = new PersonId("daily-dynamic-owner-person");
         PersonRuntime person = new PersonRuntime(personId);
         Assert.That(runtime.TryRegisterPerson(person, out PersonStoreFailure registrationFailure),
             Is.True, registrationFailure.ToString());
         AssertSelectedDailyNpcOwnerFamilies(runtime);
+        Assert.That(censusProtocol.TryReadMutationEpoch(
+            out long initialMutationEpoch,
+            out ContinuationCensusFailure initialEpochFailure), Is.True, initialEpochFailure.ToString());
 
         Assert.That(runtime.TryMaterializePerson(
             personId,
             SimulationTestFactory.CreateNpc("daily-dynamic-owner-person-definition"),
             "daily-dynamic-owner-person-npc",
-            null,
+            startingCity,
             0f,
             out NpcRuntime materializedNpc,
             out PersonMaterializationFailure failure), Is.True, failure.ToString());
         Assert.That(ReadNonPublicProperty(materializedNpc, "BoundPersonRuntime"), Is.SameAs(person));
+        Assert.That(materializedNpc.CurrentCity, Is.SameAs(startingCity));
+        Assert.That(startingCity.ImportantNpcs, Has.Member(materializedNpc));
         AssertSelectedDailyNpcOwnerFamilies(runtime);
+        OwnerSectionCensusWitness materializedCityPresence = cityPresenceProvider.GetCurrentCensus();
+        Assert.That(materializedCityPresence.OwnerInstanceIdentity, Is.SameAs(startingCity));
+        Assert.That(materializedCityPresence.Cardinality, Is.EqualTo(initialCityPresenceCardinality + 1));
+        Assert.That(materializedCityPresence.Revision, Is.EqualTo(initialCityPresenceRevision + 1));
+        Assert.That(censusProtocol.TryReadMutationEpoch(
+            out long materializedMutationEpoch,
+            out ContinuationCensusFailure materializedEpochFailure), Is.True, materializedEpochFailure.ToString());
+        Assert.That(materializedMutationEpoch, Is.EqualTo(initialMutationEpoch + 1),
+            "Person, NPC-family, and City-presence reconciliation must share one membership epoch.");
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure), Is.True,
             censusFailure.ToString());
     }
