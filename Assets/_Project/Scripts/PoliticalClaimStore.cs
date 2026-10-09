@@ -320,6 +320,36 @@ public sealed class PoliticalClaimStore : IAuthoritativeMutationGuardBindable
         return clone;
     }
 
+    /// <summary>Builds a private, unpublished owner from fully validated continuation rows.</summary>
+    internal static bool TryCreateFromP12EOwnerSnapshot(
+        IReadOnlyList<PoliticalClaimRecord> claims,
+        IReadOnlyList<PoliticalClaimRecognitionRecord> recognitions,
+        long savedRevision,
+        out PoliticalClaimStore store)
+    {
+        store = null;
+        if (claims == null || recognitions == null || savedRevision < 0L) return false;
+        PoliticalClaimStore candidate = new PoliticalClaimStore();
+        foreach (PoliticalClaimRecord record in claims)
+        {
+            if (record == null || record.ClaimId == null || record.ClaimantPersonId == null
+                || record.Target == null || !PoliticalClaimRecord.IsTargetCompatible(record.ClaimType, record.Target.Kind)
+                || candidate.recordsByClaimId.ContainsKey(record.ClaimId.Value)) return false;
+            candidate.recordsByClaimId.Add(record.ClaimId.Value, record);
+        }
+        foreach (PoliticalClaimRecognitionRecord record in recognitions)
+        {
+            if (record == null || record.ClaimId == null || record.InstitutionId == null
+                || !candidate.recordsByClaimId.ContainsKey(record.ClaimId.Value)) return false;
+            string key = RecognitionKey(record.ClaimId, record.InstitutionId);
+            if (key == null || candidate.recognitionsByKey.ContainsKey(key)) return false;
+            candidate.recognitionsByKey.Add(key, record);
+        }
+        candidate.revision = savedRevision;
+        store = candidate;
+        return true;
+    }
+
     private static int CompareRecords(PoliticalClaimRecord left, PoliticalClaimRecord right)
     {
         int claimId = StringComparer.Ordinal.Compare(left.ClaimId.Value, right.ClaimId.Value);

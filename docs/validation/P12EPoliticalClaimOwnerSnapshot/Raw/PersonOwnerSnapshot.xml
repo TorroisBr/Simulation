@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="5" result="Passed" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 01:03:27Z" end-time="2026-10-09 01:03:27Z" duration="0,0529277">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2667" result="Passed" start-time="2026-10-09 01:03:27Z" end-time="2026-10-09 01:03:27Z" duration="0.052928" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3922" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-office-promotion-state/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2667" result="Passed" start-time="2026-10-09 01:03:27Z" end-time="2026-10-09 01:03:27Z" duration="0.040501" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="143388" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2968" name="PersonOwnerSnapshotTests" fullname="PersonOwnerSnapshotTests" classname="PersonOwnerSnapshotTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-09 01:03:27Z" end-time="2026-10-09 01:03:27Z" duration="0.027453" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2971" name="CaptureTracksRegistrationBindingCompensationAndPersonLocalCommitsExactly" fullname="PersonOwnerSnapshotTests.CaptureTracksRegistrationBindingCompensationAndPersonLocalCommitsExactly" methodname="CaptureTracksRegistrationBindingCompensationAndPersonLocalCommitsExactly" classname="PersonOwnerSnapshotTests" runstate="Runnable" seed="605985455" result="Passed" start-time="2026-10-09 01:03:27Z" end-time="2026-10-09 01:03:27Z" duration="0.013070" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2969" name="EmptyOwnerRoundTripsAndRemainsDistinctFromMissingSnapshot" fullname="PersonOwnerSnapshotTests.EmptyOwnerRoundTripsAndRemainsDistinctFromMissingSnapshot" methodname="EmptyOwnerRoundTripsAndRemainsDistinctFromMissingSnapshot" classname="PersonOwnerSnapshotTests" runstate="Runnable" seed="747602134" result="Passed" start-time="2026-10-09 01:03:27Z" end-time="2026-10-09 01:03:27Z" duration="0.001899" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2970" name="PopulatedOwnerPreservesExactValuesOrderAndDetachedIndexes" fullname="PersonOwnerSnapshotTests.PopulatedOwnerPreservesExactValuesOrderAndDetachedIndexes" methodname="PopulatedOwnerPreservesExactValuesOrderAndDetachedIndexes" classname="PersonOwnerSnapshotTests" runstate="Runnable" seed="785861374" result="Passed" start-time="2026-10-09 01:03:27Z" end-time="2026-10-09 01:03:27Z" duration="0.002733" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2973" name="RejectsMalformedLocalValuesWithoutPublishingOrChangingSource" fullname="PersonOwnerSnapshotTests.RejectsMalformedLocalValuesWithoutPublishingOrChangingSource" methodname="RejectsMalformedLocalValuesWithoutPublishingOrChangingSource" classname="PersonOwnerSnapshotTests" runstate="Runnable" seed="853543363" result="Passed" start-time="2026-10-09 01:03:27Z" end-time="2026-10-09 01:03:27Z" duration="0.001148" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2972" name="StagingRestoresGappedAndSaturatedRevisionsWithoutReplay" fullname="PersonOwnerSnapshotTests.StagingRestoresGappedAndSaturatedRevisionsWithoutReplay" methodname="StagingRestoresGappedAndSaturatedRevisionsWithoutReplay" classname="PersonOwnerSnapshotTests" runstate="Runnable" seed="1069516893" result="Passed" start-time="2026-10-09 01:03:27Z" end-time="2026-10-09 01:03:27Z" duration="0.000737" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

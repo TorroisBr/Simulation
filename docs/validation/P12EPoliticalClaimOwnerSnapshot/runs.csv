@@ -1,0 +1,13 @@
+Suite,Passed,Failed,XML,CompressedLog
+PoliticalClaim owner snapshot,5,0,Raw/PoliticalClaimOwnerSnapshot.xml,Raw/PoliticalClaimOwnerSnapshot.log.gz
+PoliticalClaim foundation,13,0,Raw/PoliticalClaimFoundation.xml,Raw/PoliticalClaimFoundation.log.gz
+P12 PoliticalClaim census,6,0,Raw/P12PoliticalClaimCensus.xml,Raw/P12PoliticalClaimCensus.log.gz
+Political support foundation,6,0,Raw/PoliticalSupportFoundation.xml,Raw/PoliticalSupportFoundation.log.gz
+Political legitimacy decision foundation,8,0,Raw/PoliticalLegitimacyDecisionFoundation.xml,Raw/PoliticalLegitimacyDecisionFoundation.log.gz
+Institution/Office owner snapshot,11,0,Raw/InstitutionOfficeOwnerSnapshot.xml,Raw/InstitutionOfficeOwnerSnapshot.log.gz
+Property/Estate owner snapshot,11,0,Raw/PropertyEstateOwnerSnapshot.xml,Raw/PropertyEstateOwnerSnapshot.log.gz
+Person owner snapshot,5,0,Raw/PersonOwnerSnapshot.xml,Raw/PersonOwnerSnapshot.log.gz
+Bootstrap composition,26,0,Raw/BootstrapComposition.xml,Raw/BootstrapComposition.log.gz
+P12C private root composition,51,0,Raw/P12CPrivateRootComposition.xml,Raw/P12CPrivateRootComposition.log.gz
+ALL EditMode,2667,0,Raw/AllEditMode.xml,Raw/AllEditMode.log.gz
+Official Smoke,5,0,Raw/OfficialSmoke.xml,Raw/OfficialSmoke.log.gz
