@@ -166,6 +166,105 @@ public sealed class P12CPrivateRootCompositionTests
             Is.SameAs(sourceBootstrap.TravelParties));
     }
 
+    [Test]
+    public void P12FOwnerPackageStagesAggregateAgainstTheSamePrivateAttempt()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(DailyConfigPath);
+        Assert.That(config, Is.Not.Null);
+        Assert.That(DailyCaptureStagingAttempt.TryBegin(
+            sourceRuntime, captureToken, captureToken.OwnerSections,
+            out DailyCaptureStagingAttempt attempt), Is.True);
+        Assert.That(P12CContinuationRootStager.TryStage(
+            attempt,
+            (P12CWorldIdentitySnapshot)worldIdentitySnapshot,
+            allocatorSnapshot,
+            recordSequenceSnapshot,
+            (P12CSpatialAuthoritySnapshot)spatialSnapshot,
+            manifestSnapshot,
+            randomRootSnapshot,
+            out P12CStagedContinuationRoot stagedC,
+            out string cDiagnostic), Is.True, cDiagnostic);
+
+        Assert.That(P12FDailyV1OwnerCapture.TryCapture(
+            sourceRuntime, sourceBootstrap, captureToken, captureToken.OwnerSections,
+            out P12FDailyV1OwnerCapture capturedF,
+            out P12FDailyV1OwnerPackageFailure captureFailure), Is.True, captureFailure.ToString());
+
+        RuntimeIdentityRegistry sourceIdentities = FindOwnerSection(
+            captureToken.OwnerSections, RuntimeIdentityRegistryCensusProvider.NpcsSectionId)
+            .OwnerInstanceIdentity as RuntimeIdentityRegistry;
+        Assert.That(sourceIdentities, Is.Not.Null);
+        List<ItemData> itemDefinitions = CollectCurrentItemDefinitions(sourceRuntime);
+        List<CityData> cityDefinitions = new List<CityData>();
+        foreach (CityRuntime city in sourceRuntime.Cities)
+            cityDefinitions.Add(city.CityData);
+        List<NpcData> npcDefinitions = new List<NpcData>();
+        foreach (NpcRuntime npc in sourceRuntime.NpcRuntimes)
+            npcDefinitions.Add(npc.NpcData);
+
+        Assert.That(P12DDailyV1OwnerPackage.TryCaptureAndStage(
+            sourceRuntime,
+            captureToken,
+            attempt,
+            captureToken.OwnerSections,
+            sourceIdentities,
+            sourceBootstrap.SpatialNetwork,
+            sourceBootstrap.ExplorableSites,
+            new RuntimeIdentityRegistry(),
+            stagedC.WorldIdentity,
+            cityDefinitions,
+            itemDefinitions,
+            npcDefinitions,
+            config.Actions,
+            config.Statuses,
+            Array.Empty<ExplorableSiteData>(),
+            capturedF.TravelPartyIds,
+            out P12DDailyV1OwnerPackage stagedD,
+            out P12DDailyV1OwnerPackageFailure dFailure), Is.True, dFailure.ToString());
+
+        SimulationTime stagedTime = new SimulationTime(captureToken.AbsoluteDay);
+        P12EDailyV1OwnerStagingContext eContext = new P12EDailyV1OwnerStagingContext(
+            attempt,
+            stagedC,
+            stagedD,
+            stagedTime,
+            config.freeStatus,
+            config.wantedStatus,
+            config.arrestedStatus,
+            config.hiddenStatus,
+            null,
+            new SimulationLogger(null));
+        Assert.That(P12EDailyV1OwnerPackage.TryCaptureAndStage(
+            sourceRuntime,
+            captureToken,
+            captureToken.OwnerSections,
+            eContext,
+            out P12EDailyV1OwnerPackage stagedE,
+            out P12EDailyV1OwnerPackageFailure eFailure), Is.True, eFailure.ToString());
+
+        Assert.That(capturedF.TryStage(
+            sourceRuntime,
+            captureToken,
+            captureToken.OwnerSections,
+            eContext,
+            stagedE,
+            config.Actions,
+            out P12FDailyV1OwnerPackage stagedF,
+            out P12FDailyV1OwnerPackageFailure fFailure), Is.True, fFailure.ToString());
+        Assert.That(stagedF, Is.Not.Null);
+        Assert.That(stagedF.StagingAttempt, Is.SameAs(attempt));
+        Assert.That(stagedF.WorldId.Value, Is.EqualTo(captureToken.WorldId.Value));
+        Assert.That(stagedF.PoliticalKnowledge, Is.Not.SameAs(sourceRuntime.PoliticalKnowledgeStoreForWorldBoundary));
+        Assert.That(stagedF.ScheduledDirectives, Is.Not.SameAs(sourceBootstrap.ScheduledDirectives));
+        Assert.That(stagedF.ActorChoices, Is.Not.SameAs(sourceRuntime.ActorChoiceStore));
+        Assert.That(stagedF.TravelParties, Is.Not.SameAs(sourceBootstrap.TravelParties));
+        Assert.That(stagedF.Expeditions, Is.Not.SameAs(sourceBootstrap.Expeditions));
+        Assert.That(stagedF.Expeditions.ActiveExpeditions, Is.Empty);
+        Assert.That(stagedF.DetachedNpcRows, Is.Not.Null);
+        Assert.That(stagedF.UnresolvedPoliticalKnowledgeBindings, Is.Empty);
+        Assert.That(attempt.IsCurrentFor(sourceRuntime, captureToken, captureToken.OwnerSections), Is.True);
+    }
+
     [TestCase("hex-id")]
     [TestCase("hex-q")]
     [TestCase("hex-r")]
@@ -1003,6 +1102,37 @@ public sealed class P12CPrivateRootCompositionTests
         }
         Assert.That(found, Is.Not.Null, "Missing owner-section entry: " + sectionId);
         return found;
+    }
+
+    private static List<ItemData> CollectCurrentItemDefinitions(SimulationRuntime runtime)
+    {
+        List<ItemData> definitions = new List<ItemData>();
+        foreach (CityRuntime city in runtime.Cities)
+        {
+            foreach (MarketItemRuntime row in city.Market.Items)
+                AddUniqueDefinitionReference(definitions, row?.Item);
+        }
+        foreach (NpcRuntime npc in runtime.NpcRuntimes)
+        {
+            InventoryRuntime inventory = npc.ExistingInventory;
+            if (inventory == null)
+                continue;
+            foreach (InventoryItemRuntime row in inventory.Items)
+                AddUniqueDefinitionReference(definitions, row?.Item);
+        }
+        return definitions;
+    }
+
+    private static void AddUniqueDefinitionReference(List<ItemData> definitions, ItemData candidate)
+    {
+        if (candidate == null)
+            return;
+        foreach (ItemData definition in definitions)
+        {
+            if (ReferenceEquals(definition, candidate))
+                return;
+        }
+        definitions.Add(candidate);
     }
 
     private static object Read(object instance, string propertyName)
