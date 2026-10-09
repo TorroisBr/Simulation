@@ -10,48 +10,46 @@ separately gated.
 which the original G proposal was authored; it is not the current governing
 input set.
 
-**Current governing inputs (2026-09-29):** accepted decomposition at
-`7585863` with reference refresh `a2ac5d2`; owner-inventory snapshot at this
-proposal's P12 canonical base `4d2a9ad5c7f98a7805dede72f9722aec063231e8`
-(partial source/API evidence, not a live census; its P8-A scale ownership,
-current-canonical pointer, and conditional P18-D recorder-receipt census are
-corrected in the accompanying documentation reconciliation); P12-B
-current-evidence revalidation
-`ef8c72cd388445e25ce9360bb1e689fc0a07c639` (design only; implementation remains
-blocked); P12-C identity/genesis design `edc51571559a9ba4b1a025963de2e25b23c66fd3`
-(exact-tip independent review PASS); P12-D `e8b83d75e34f8456555065e24bfe67bb30366baa`
-and P12-E `104c21cbd53c7bba8855bcac076eddc84bab947e` (separate exact-content
-PASS records at `codex/phase12/P12DEIndependentReview`, commit
-`3d5d7a8ce41f34d1fb55864897f9d508f50d8fcf`); and P12-F current-inventory
-revalidation `2dcf4047619b047e93c837cc3c7d76f25974525a` (documentation only,
-with D/E review coverage limited to design contracts). Review evidence for
-these inputs and this proposal is tracked separately, not inferred from this
-traceability ledger.
-These are design artifacts, not proof that the corresponding capabilities
-have been delivered; revalidate hashes and owner interfaces before
-implementation.
+**Current governing inputs (2026-10-09):** P12 canonical is
+02009f9063dd252bd4b177fd6aef1e74dcd947f5 (tree
+e42ef56abd6780a565c68f5b8887d397518eafe8; Assets tree
+a9a7c1015a5fa3cacfdb6219b18f2f593c863174). Its current PHASE12_STATE records
+P12-B through P12-F promoted within their reviewed scopes, P12-G
+WAIT_DEPENDENCY on complete B-F composition and a validated live-profile
+inventory, P12-A WAIT_DEPENDENCY, P13 BLOCKED, and Phase 12 OPEN. This State
+supersedes dated implementation-status statements in this historical design
+and older inventory snapshots.
 
-The P18-D prerequisites are canonical at `9e790c5`. The reviewed optional-
-profile P18-D consumer runtime implementation `3ddf847` (based on
-P14 merge `a2a8edd`) composes chronological advance, successful P18-C handoff,
-and the bounded SellGoods consumer. It rejects P14-A local-material-flow
-Cities before mutation. Consumer replay regression `0887d18` has a
-comment-accuracy follow-up `6a4d971`; the corrected candidate passed fresh
-consumer, full EditMode, Smoke, and LongRun validation. Exact-tip review passed
-and the consumer was promoted at `f1cfed3`; State-only child `2d314be` records
-the promotion and review. P18 State `a49de9d` closes the phase and records the
-effective `SimulationRuntime` hotspot handoff to P12-B. This promoted consumer does not
-include P18 temporal state in `UnityBootstrap-Daily-v1`, provide P12 owner
-export/staged hydration, or remove B's census and mutation-invalidation gates.
+The latest Architecture General canonical is
+codex/architecture/world-identity-projection at
+47eff220c7ce00f6e7c759bdc2b76780bb46f628. Its SIMULATION_ARCHITECTURE.md
+blob is 25843842688239cdc3b80988b2e28dbaa16b4987, ROADMAP.md blob is
+d03e144544ab25371b71db64538c0de47ae8381c, and ARCHITECTURE_STATE.md blob is
+06a2ac9a3d38188c064e4b2290cc5d81108d3f66. The promoted P12 capability DAG is
+ee8cca1010c8f5f37928e81849b6489bffd6a318. The same architecture lineage
+contains the P12-B bounded-completion contract and Master handoff at blobs
+2338be53b9bc710acd03fc43858e040ee55fdae0 and
+e3ac52d9b3af9f4d4661782f78a60b39f9853d8d. Their dated INCOMPLETE status is
+superseded by current P12 State; their bounded completed-boundary and fresh
+admission meaning remains applicable.
 
-The accepted architecture baseline is `c285466`; current intraday/extensibility
-and multi-participant alignment records remain constraints. The selected daily
-profile excludes P18 timeline state, P19 module/loader state, and P20 shared
-activities. This bounded profile does not freeze a future Activity to one
-actor: any separately admitted profile that includes P20 must preserve
-`ActivityInstanceId` independently from definition and participant identities
-and honor the architecture's one-or-more participant cardinality.
+The alignment records remain current: INTRADAY_EXTENSIBILITY_ALIGNMENT.md,
+promoted commit 4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194 (blob
+a231a2a014bf58be5ce382c48a55f3654df89a61), and
+MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md, promoted commit
+c285466c355103d3637ac165246591b72eb7bda0 (blob
+4ed6fcc60b348461e3201d4f3d480c21a3154ec3). Daily-v1 remains bounded to its
+accepted P9-B authored geography profile. P10 LocalTopology, P14 material
+flow, P18 timeline state, P19 module state, and P20 shared activities remain
+outside its serialized payload. Current constraints for temporal identity,
+player-owned mod extensibility, and one-or-more activity participants apply
+to review; deferred loader work and future-profile guarantees remain deferred.
 
+The current 299-section census, temporal cardinality, owner-family mapping,
+role evidence, payload distinctions, and retained validation are reconciled
+in PHASE12_OWNER_COVERAGE_INVENTORY.md under “P12-G current canonical
+Daily-v1 census”. This census reconciliation is not whole-graph composition,
+restoration parity, or publication capability.
 ## 1. Purpose and boundary
 
 P12-G composes the exact profile sections produced by reviewed P12-B through
@@ -65,10 +63,13 @@ hydrators.
 
 G does not decide whether an owner exists or is empty. An absent owner is not
 an empty owner. It consumes B's current live-composition inventory and the
-explicit status of every required, empty, excluded, and conditionally included
-section. Unknown or incomplete coverage rejects admission before staged
-hydration. The current inventory demonstrates gaps; this design is not evidence
-that B-F delivery or the inventory gate has passed.
+explicit status of every required, explicitly empty, excluded, conditional, or
+omitted noncausal owner. The current 299-section census reconciles the selected
+Daily-v1 expected vector and its source identities/cardinalities; it is not by
+itself proof that every evolved live provider, export, staged hydrator, or
+mutation path is covered. Unknown or incomplete coverage rejects admission
+before staged hydration. Current Phase State and exact implementation evidence,
+not this proposal, determine which B-F capabilities have been delivered.
 
 G supplies the bounded final restore/publication capability in the accepted
 decomposition. It does not implement general storage, schema migration,
@@ -95,52 +96,64 @@ source, cardinality, and one of these composition states:
 | `OmittedNonCausalReadModel` | The live census identifies a non-authoritative read-model owner whose rows are not continuation inputs or graph-reference targets. Its known populated rows may be omitted without serialization or hydration; absence of this payload does not imply the owner is empty. |
 | Conditional | B's current provider/composition inventory resolves it to required, explicitly empty, or excluded before allocation. Unresolved conditional coverage rejects admission. |
 
-For this profile, the required set is exactly the reviewed B-F owner set:
+The 299 expected provider sections for the authored Daily-v1 proving
+composition are reconciled in PHASE12_OWNER_COVERAGE_INVENTORY.md. The 61
+fixed sections contain 48 Required and 13 Explicitly empty roles, with no
+section carrying an Excluded role. All dynamic per-NPC, per-Person, and
+per-City sections are Required, including sections whose current cardinality
+is zero. A Required role does not mean its record count must be positive.
 
-1. B admission, compatibility, completed-boundary, mutation-health and
-   quiescence evidence;
-2. C identity allocators/registry and shared record sequence, P9 genesis and
-   deterministic-random roots, and the selected P8-A one-Hex/one-anchored-
-   Location/one-scale facts;
-3. D factual roots, Person/population/genealogy relations and legacy
-   spatial/site authorities;
-4. E City economy projections plus all core and effective-configuration
-   selected official daily-domain authorities;
-5. F Knowledge, scheduled directives, P11 terminal actor-choice history, and
-   only the active commitment authorities proven by the refreshed inventory.
+The fixed explicitly-empty rows are four zero-cardinality
+RuntimeIdentityRegistry subsections, the ExplorableSiteStore section, six
+P8-B/C/D spatial sections, and two global keyed-receipt caches. P8-A has three
+Required facts: one Hex, one anchored Location, and one scale context. The
+P8-B/C/D zero rows are passage-option barrier state, crossings, city/site
+Location bindings, Person positions, spatial-route observations, and Person
+route-plan history. These are not P8-E travel sections.
 
-The profile requires P8-B passage, P8-C canonical anchors/Person positions,
-P8-D route Knowledge/plans, and P8-E travel sections to be explicitly empty;
-the selected P8-A cardinality remains exact. The P10 LocalTopology store is
-explicitly empty and rejects populated facts. P14-A material-flow state is
-excluded. P18 timeline/work/availability/continuation state, P19 module/loader
-state, P20 shared activities, P13 reconstruction/fork state, and
-`PlaceContentStore` have no serialized payload in this profile; any composed
-owner allowed by B/profile policy must be proven empty by the live inventory,
-while populated or unverified state rejects. External `WorldCommand`
-service/queue composition and unsupported/injected providers are prohibited
-compositions and reject immediately, independent of cardinality. The exact
-empty/excluded/prohibited matrix must be refreshed from the live owner
-inventory before implementation; these examples do not substitute for that
-evidence.
+SampleScene selects the separate P9-B authored-geography Daily-v1 profile,
+without the P10-A Ruin. Simulation-GeneralTest remains the P10-A
+Ruin/LocalTopology proving profile. LocalTopology has no expected section in
+the Daily-v1 provider vector; its absence is neither an Explicitly empty nor
+Excluded witness and does not prove a composed owner is empty. P14 material
+flow and P18/P19/P20 state are outside this accepted payload; absence from the
+vector is not evidence of an empty owner.
 
-`NpcDecisionRecorder.occurrenceReceipts` is a conditional composed owner
-section: the selected bootstrap constructs the recorder, but its receipt writer
-is called only by the optional P18-D merchant consumer, which this profile does
-not compose. Require a live exact-zero witness and reject populated or
-unverified receipt state. This map is distinct from `NpcDecisionStore` rows,
-which are an omitted noncausal read model; if a later supported profile includes
-the P18-D consumer, re-inventory and export/hydrate the receipt map.
+The per-NPC ActorChoice temporal census provider exists, but its temporal input
+section is not registered in the current expected vector. The P12-F
+actor-choice input section remains a separate Required section. Do not infer
+that the unregistered section is empty or excluded.
 
-The refreshed B owner census also classifies `NpcDecisionStore` and
-`DomainEventStore` rows as `OmittedNonCausalReadModel`: they may be populated
-at capture, but have no P12-G payload or staged hydration and are not foreign-
-key targets in the authoritative owner graph. `HistoryStore` is a subset of
-the event records; `NpcChronicle` is derived. Neither changes this omission
-rule. The live inventory must still identify these known owners and their
-classification; unknown owner coverage is not treated as an omitted read
-model. History retention, event replay, and UI-feed parity are outside this
-continuation contract.
+Provider/content identity is a compatibility input, not a security boundary.
+The profile may reject incompatible schema, provider, content, or effective
+configuration, or incomplete continuity coverage. It must not label
+player-owned/local extension state hostile or add anti-cheat, anti-tamper, or
+command-forgery validation. P19 loader work remains deferred; the manifest
+describes only the selected profile and its reviewed compatibility contract.
+Future deliberately composed profiles may extend that contract.
+
+Every serialized section carries explicit owner identity, schema/version,
+revision, and cardinality, including zero. The live admission inventory
+separately identifies every composed owner and its classification. Known
+omitted noncausal read models report observed cardinality without becoming
+payload sections. Unknown, omitted, duplicate, or mismatched declarations
+are not interpreted as empty. Required and Explicitly empty sections cannot
+be synthesized from defaults; no state may be silently discarded.
+
+The receipt inventory distinguishes three shapes. The two global keyed
+receipt caches for NPC decision occurrences and economy keyed sales are
+Explicitly empty. Crime and justice receipt IDs are Required sentinel witnesses
+with one owner and local revision zero; these sentinels carry no receipt
+payload. Per-NPC local-observation and Merchant-trade-state receipt rows are
+Required exact-zero witnesses with no payload. City population operation
+receipts are Required captured owner state, not exact-zero sentinels.
+
+NpcDecisionStore and DomainEventStore are known OmittedNonCausalReadModel
+authorities: they may have populated rows, but are not serialized or hydrated
+and are not authoritative graph targets. HistoryStore is a subset of event
+records and NpcChronicle is derived. Unknown owner coverage is never assigned
+this classification by default. History retention, event replay, and UI-feed
+parity are outside this continuation contract.
 
 Every serialized owner section must include explicit owner identity,
 schema/version, revision, and cardinality, including zero. The admission
@@ -173,44 +186,53 @@ objects. The active composition is read only until the final publication swap.
    deterministic-random provenance/context, P9 historical manifest and P8-A
    facts. Hydration preserves IDs and provenance; it never reruns genesis or
    draws randomness.
-4. **Stage factual roots and domain owners.** Invoke reviewed private
-   hydrators in dependency order: D root owners; the merged D/E CityRuntime
-   projection; the merged D/E/F NpcRuntime projection; other E owner sections;
-   then D relations and F Knowledge against available roots. Concrete owner
-   ordering follows B-F declared dependencies and owner constructors. Each
-   concrete CityRuntime and NpcRuntime is reconstructed once from its
-   disjoint projections and a common owner snapshot/revision token. G does not
-   recapture, duplicate, or independently hydrate those owners.
-5. **Stage deferred causal owners.** Restore F directives only as stored,
-   without processing. Restore terminal P11 choices with their exact
-   dispositions/idempotency history, rejecting pending/deferred or
-   `ConsumedAwaitingTerminalAttempt` state. Restore only inventoried active
-   commitments after their roots and target owners exist; do not decide,
-   reschedule, replan, retry, charge, move, consume or apply effects.
-6. **Resolve cross-section bindings.** Consume each typed unresolved binding
-   returned by B-F hydrators and resolve it against the staged owner graph.
-   Missing, wrong-kind, ambiguous or multiply-owned targets reject. No
-   validation path may consult current live truth to repair a staged record.
+4. **Stage D factual and spatial owners.** D supplies the identity registry,
+authored spatial roots, legacy SpatialNetwork, CityRuntime and NpcRuntime
+factual roots, Person/materialization/population/genealogy/site owners, and
+detached per-NPC factual sections. Construct each CityRuntime and NpcRuntime
+once from its D-owned projection.
+5. **Stage E owners.** Stage E authorities and typed unresolved bindings from
+their own exports. E supplies no CityRuntime or NpcRuntime factual projection.
+6. **Stage F owners and merge detached NPC sections once.** Stage the five
+fixed F authorities—PoliticalKnowledge, ScheduledDirective, ActorChoice,
+TravelParty, and Expedition—plus inventoried Knowledge, SpatialKnowledge,
+travel, active commitment, and action sections. Merge D-exported detached
+NPC sections into each staged NPC exactly once through the reviewed F
+boundary. F does not recreate D factual owners. The exact owner/package
+mapping is reconciled in PHASE12_OWNER_COVERAGE_INVENTORY.md.
+
 7. **Validate globally.** Run every owner-local validator, then the complete
    profile graph checks in §4. Only owner-defined derived indexes,
    registries, caches and projections may be rebuilt, and only from validated
    primary records. Any stage/validation failure abandons the private
    candidate; it does not invoke active-runtime rollback because the active
    runtime has not been mutated.
-8. **Bind and publish.** After all validators succeed, bind exactly one fresh
-   healthy mutation guard to the complete staged graph. Verify that the
-   candidate has one ownership path and no writable staging aliases. The
-   bootstrap/session publication owner performs one atomic runtime-reference
-   swap. Until that swap succeeds, the prior runtime and its mutation health
-   remain unchanged and authoritative. Only after swap may the owner detach or
-   dispose the old runtime through its existing lifecycle.
-
-There is one publication owner, not one swap per store, City, NPC, service, or
-section. The implementation must identify that concrete owner and its
-observation boundary from the live bootstrap; this document does not assume
-that the existing genesis publication method already supports replacement.
-If a one-reference swap cannot safely publish the complete graph, the track
-returns to technical review rather than mutating the live object incrementally.
+8. **Bind the candidate mutation guard.** Bind one fresh healthy mutation
+guard to the complete staged graph. Confirm that the candidate has one
+ownership path and no writable staging aliases. This does not make it active.
+9. **Admit the restored completed boundary through B.** A
+DailyCaptureEligibilityToken is in-memory and bound to its source runtime
+identity, completed sequence, mutation epoch, owner vector, profile,
+configuration, calendar, and day. It cannot be copied to the reconstructed
+runtime, which has a fresh identity and mutation epoch. Preserve the semantic
+completed boundary in the admitted roots, then call a narrowly scoped P12-B
+restored-boundary admission API only after the complete graph is staged,
+validated, and healthy. The API issues fresh in-memory admission bound to the
+candidate runtime and preserved boundary. It must not call a current-day
+getter, advance time, increment the successful-advance sequence, or claim
+restore was a gameplay advance. The current runtime has no such restore
+admission API; its exact contract is a required B/G design and review
+dependency before implementation.
+10. **Publish one coherent active composition.** TesteSimulacao is the
+current bootstrap/session owner. Genesis publication is one-shot, while
+Simulate reads a private SimulationRuntime field and reporting retains cached
+logger/City/NPC references. Changing publishedComposition alone would leave
+stale aliases active. G must route simulation and reporting through one
+current-composition holder/snapshot acquired at a defined operation boundary,
+then perform one atomic reference swap after restored-boundary admission.
+Before that swap the old graph and health remain authoritative. Preserve the
+existing lifecycle; do not assume a disposal API or add per-owner swaps or
+compensating mutations.
 
 ## 4. Whole-graph invariants
 
@@ -334,48 +356,71 @@ P12-G implementation evidence must demonstrate:
    long-run validation if implementation changes daily-loop or long-horizon
    behavior, per execution policy.
 
-No implementation, test execution, validation result, capability delivery,
-or P12-A readiness is claimed by this proposal.
+No runtime implementation, Unity test/regression result, capability delivery,
+or P12-A readiness is claimed by this proposal. Documentation diff checks are
+reported separately with the exact candidate evidence.
 
 ## 7. Dependencies, implementation gate, and exclusions
 
-P12-G implementation depends on exact reviewed B-F export/staged-hydration
-contracts and their delivered capabilities, a refreshed live
-`UnityBootstrap-Daily-v1` owner/provider inventory proving the included owner
-set complete, and stable
-cross-owner interfaces for the single CityRuntime and NpcRuntime projections.
-The inventory must show each required/empty/excluded/conditional owner,
-revision/cardinality source, supported mutation path and publication owner.
-P12-C refreshed design `a2ac5d2` passed exact-tip review; incorporate that
-reviewed contract and any later interface changes before implementation.
-Designs alone do not satisfy capability dependencies. G may not treat unknown
-or absent owner coverage as an empty section.
+Current P12 canonical State records B-F delivered within their approved
+scopes, P12-G WAIT_DEPENDENCY, P12-A WAIT_DEPENDENCY, P13 BLOCKED, and Phase
+12 OPEN. The exact State governs checkpoint and closure status.
 
-Even after G and B-F capability delivery, P12-A remains `WAIT_DEPENDENCY`
-until the complete included owner export/hydration set is demonstrably
-implemented, the live profile inventory is validated, and P12-A receives its
-separate implementation authorization. Acceptance of this design is not
-canonical promotion, save/load approval, or Phase 12 closure.
+Before implementation, the refreshed design and inventory require exact-tip
+independent review and the Execution Model's checkpoint acceptance. Remaining
+evidence is concrete:
+
+1. **Live inventory validation:** reconcile all 299 expected sections to every
+   owner/provider composed by the normal selected bootstrap; validate the
+   effective profile and dynamic roster/cardinality changes, conditional
+   owners, and known omitted noncausal read models. Record objects with no
+   expected section and whether they are composed. Absence is not zero.
+2. **Package interface verification:** verify each current B-F export/staged
+   hydrator, owner identity, schema, revision/cardinality, unresolved bindings,
+   failure semantics, and dependency order at exact canonical tips. The old
+   merged D/E CityRuntime and D/E/F NpcRuntime projections are not current:
+   D owns factual City/NPC roots and detached NPC facts, E owns its stores and
+   bindings, and F merges D-exported detached sections once.
+3. **Restored-boundary admission:** independently review the bounded P12-B
+   API that binds fresh admission to a healthy reconstructed runtime while
+   preserving the source completed logical boundary. The source token cannot
+   transfer. The API does not advance time or successful-advance sequence.
+4. **Single publication boundary:** audit all TesteSimulacao consumers and
+   define one authoritative holder/snapshot for simulation and reporting.
+   Demonstrate one atomic swap and failure behavior against the old graph.
+5. **Whole-graph evidence:** satisfy the admission, graph rejection,
+   failure-atomicity, no-replay, and continuation-parity obligations in §6.
+
+The current census, temporal roster test, Person materialization test,
+source crosswalks, and retained validations are useful evidence; they do not
+close these requirements by themselves. Design review, checkpoint acceptance,
+canonical promotion, P12-A authorization, and Phase closure are separate gates.
+P12-A remains WAIT_DEPENDENCY until the complete included owner
+export/hydration set and live profile inventory are demonstrated and its
+separate implementation authorization is granted. P13 remains blocked on its
+own prerequisites.
 
 Explicit exclusions:
 
-* no general-purpose storage backend, serializer, schema migration/version
-  upgrade, or cross-build/host compatibility framework;
+* no general storage backend, serializer, schema migration, or cross-build/
+  host compatibility framework;
 * no P13 historical boundary reconstruction, arbitrary fork, or replay log;
-* no P18 temporal timeline/work/availability state, P19 loader/module state,
-  P20 shared activity state, or retroactive future-phase guarantees;
-* no new gameplay, generation rerun, planning/decision framework, external
-  command queue, or security/authorization boundary;
-* no partial runtime publication, per-owner swap, silent omission/default,
-  guessed owner state, or claim that a candidate/diagnostic snapshot proves
-  complete continuation.
+* no P18 temporal timeline/work/availability, P19 loader/module, P20 shared
+  activity payload, or retroactive future-phase guarantee;
+* no new gameplay, genesis rerun, planning framework, external command queue,
+  or security/authorization boundary;
+* no partial publication, per-owner swap, silent omission/default, guessed
+  state, or claim that diagnostics prove complete continuation.
 
-The profile is bounded to its accepted same-build daily boundary. Any future
-profile that includes P18/P19/P20 state requires its own reviewed owner
-inventory and compatibility contract while retaining the architecture's
-temporal, extensibility and participant identity/cardinality constraints.
+The profile remains the accepted same-build P9-B authored-geography
+Daily-v1 boundary. Any future profile that includes P10 LocalTopology, P14,
+P18, P19, or P20 state needs deliberate owner admission, validated inventory,
+and a reviewed compatibility contract. Future admitted activities must
+preserve ActivityInstanceId independently from definition and participant
+identities and permit one or more participants; exactly two is only the P20
+proving fixture.
 
-## Current dependency refresh — 2026-09-29
+## Historical dependency refresh — 2026-09-29 (superseded by the current-base refresh below)
 
 P18 is formally closed by marker `a49de9d`; current P18 canonical State tip is
 `8ac2d78`, and its P12-B `SimulationRuntime` hotspot handoff is effective.
@@ -384,3 +429,36 @@ revalidation and is promoted to P12 canonical; the prior reviewed and validated
 executable tree is unchanged. The P12 live-profile, owner-coverage,
 mutation-invalidation, and prerequisite checkpoint deliveries remain
 outstanding. P12-A remains `WAIT_DEPENDENCY`.
+
+
+## Current dependency refresh — 2026-10-09
+
+The current P12 canonical ref observed for this refresh is
+02009f9063dd252bd4b177fd6aef1e74dcd947f5. Its Assets tree is
+a9a7c1015a5fa3cacfdb6219b18f2f593c863174. The Architecture General canonical
+is codex/architecture/world-identity-projection at
+47eff220c7ce00f6e7c759bdc2b76780bb46f628. The current Roadmap, architecture
+state, promoted P12 capability DAG, P12-B bounded-completion contract, and
+Master handoff are identified in the governing-input block above.
+
+The 299-section census establishes the current section vector,
+role/cardinality facts, and source ownership mapping. It does not establish
+whole-graph staging, restored-boundary admission, one coherent publication
+boundary, complete evolved-state inventory, P12-A readiness, or P13
+readiness. This is a design refresh, not a reviewed design, accepted new
+checkpoint, implementation, validation run, canonical promotion, or Phase
+closure.
+
+TesteSimulacao has cached runtime and reporting references that must move
+behind one active-composition snapshot. The current capture token is bound to
+its source runtime and cannot cross to a reconstructed runtime. The
+restore-specific P12-B admission seam remains a design/review dependency. Do
+not use an extra day advance or current-day read as a substitute.
+
+The intraday/extensibility alignment promoted at 4b6dd1d and
+multi-participant activity alignment promoted at c285466 remain review
+constraints. Daily-v1 excludes P18 timeline, P19 loader/module, and P20 shared
+activity payload. Any future admitted activity preserves ActivityInstanceId
+separately from its definition and participant identities and allows one or
+more participants; exactly two is only the P20 proving fixture. P19 loader
+implementation remains deferred.

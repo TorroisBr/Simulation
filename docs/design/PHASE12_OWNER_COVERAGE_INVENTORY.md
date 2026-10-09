@@ -405,7 +405,7 @@ this historical material. Neither audit is a complete live owner census.
 | Selected day input | `TesteSimulacao.Update` handles Space → private `Simulate` → repeated `SimulationRuntime.AdvanceDay` calls. | P18 canonical `SimulationRuntime` has a serialized advance lease for its guarded `AdvanceDay`/`AdvanceDays` entrypoints. That lease does not cover direct owner writes, bootstrap, or all command/transaction scopes. The P18-D consumer `3ddf847` extends the lease across chronological timeline/continuation work and P18-C handoff only when an explicit intraday profile is supplied; it is promoted at `f1cfed3`. P18-D has not handed off the hotspot to P12-B. At the time of this historical snapshot the candidate census was awaiting refresh; the source/API refresh is now recorded in the candidate-specific audit below. P18 review/validation does not establish a complete live census. |
 | Other bootstrap-facing commands | `TesteSimulacao.TryStartTravelParty` and `TryStartExpedition` synchronously enter the published runtime/system. `Runtime`/`Bootstrap` properties expose the runtime, stores, and systems to same-process callers. | No shared operation-scope registry wraps these entrypoints or all direct owner APIs. The selected scene has no external `WorldCommand` queue. `WorldObserverTimeController.AdvanceOneDay` exists but is not bound into this SampleScene; revisit it only if included in a supported profile. |
 | Included mutable truth | Runtime façade and exposed owners cover City/market/account, NPC/Person/population, legacy spatial/site, selected economy/merchant/Justice/Crime/Knowledge, P11 ActorChoice, and other profile-supported authorities listed above. Public operations include lifecycle/materialization/population, genealogy, route/observation/plan, travel/expedition, trade, and daily-economy paths. | A method-to-owner-to-committed-write map remains required. Classify proposals/queries by actual commit; guard bindings alone do not prove a committed write was counted or invalidated. Direct owner APIs and live mutable references can bypass runtime wrappers. |
-| Excluded or conditional authorities | Runtime surfaces can expose P8-B..E, P10 LocalTopology, P14 material flow, P18 temporal, P19 extension, P20 activity, and other conditional authorities. | These remain outside this profile. Each corresponding provider/store must report known explicit-empty or not-composed state at admission; populated or unverified state must reject. Initial-scene emptiness is not evidence for evolved runtime state. |
+| Historical excluded or conditional authorities | This 2026-09-29 source pass listed P8-B..E, P10 LocalTopology, P14, P18, P19, P20, and other conditional authorities. | Superseded by the current census below: P8-B/C/D have six explicit-empty rows; P8-E and P10 LocalTopology have no expected provider section, so absence is not an empty/excluded witness. Any composed owner still needs a current disposition. |
 
 **Revision, receipt, export, and hydration evidence:**
 `AuthoritativeMutationGuard` is a Healthy/Faulted latch with one-way binding; it
@@ -592,7 +592,7 @@ are recorded above. P12-A remains at
 |---|---|---|---|
 | Profile/build/content/provider identity; effective configuration, calendar, completed-day boundary and capture eligibility | No | No | No versioned P12 envelope/admission manifest or successful-advance token binds the runtime, configuration, content/providers and exact quiescent boundary. `SimulationBootstrapComposition` and runtime wiring describe construction, not a sealed continuation capture. |
 | Semantic/runtime IDs, allocator/high-water marks, record sequence and identity indexes | No | No | IDs and registries are used by live owners and partly observed by diagnostics, but there is no complete immutable owner export or restore API that reinstates exact identities/counters and validates global uniqueness before publication. |
-| Selected deterministic random provider and continuation state | No | No | The validated `af656e7` composition has one shared seed-0 `DeterministicRandomSource` and only pure keyed draws at index 0 for NPC decisions, crime steals, and action success; no mutable stream cursor is retained, so the profile's mutable-stream section is explicitly empty. No exact immutable provider/seed compatibility export or staged restore exists. Capture effective seed/source provenance, provider/algorithm/build compatibility, and the saved IDs/clock needed to reconstruct keys; reject unknown/injected providers or cursors. Conflict/battle/demo stream sources are excluded, and disabled demographic hash providers require re-audit if selected defaults change. |
+| Selected deterministic random provider and continuation state | No | No | The validated `af656e7` composition has one shared seed-0 `DeterministicRandomSource` and only pure keyed draws at index 0 for NPC decisions, crime steals, and action success; no mutable stream cursor is retained, so the profile's mutable-stream section is explicitly empty. No exact immutable provider/seed compatibility export or staged restore exists. Capture effective seed/source provenance, provider/algorithm/build compatibility, and the saved IDs/clock needed to reconstruct keys. Treat provider identity as profile compatibility data. If this profile has no supported export/stage contract for an owner, it cannot admit that owner for continuation; that is a capability gap, not a security finding. Conflict/battle/demo stream sources are excluded, and disabled demographic hash providers require re-audit if selected defaults change. |
 | Bootstrap roots: Cities/markets/accounts, NPC roster and mutable NPC/action/inventory/plan state | No | No | Unity assets and `[SerializeField]` fields describe authored inputs and selected object fields; they do not capture all evolved owner state, revisions, causal ordering and references. Owner-specific value DTOs, exact admission checks and validated hydration constructors are missing. |
 | Population aggregates, Persons, residence/lifecycle/materialization and genealogy | No | No | In-memory stores, registrations, clones and transaction snapshots support runtime operations/rollback, not a complete immutable representation and staged restore of aggregate/Person/NPC links, dates, relations, allocator state and owner revisions. |
 | Knowledge, directives, P11 actor-choice dispositions, travel parties, expeditions and other active commitments | No | No | Diagnostic projections cover selected fields; there is no owner export/hydration contract covering all observations/provenance/freshness, terminal input idempotency/sequence, commitment progress/costs and reciprocal references. P11's current canonical SimulationRuntime composes ActorChoiceStore by default even though the selected Unity bootstrap has no external WorldCommand service/queue; preserve complete records/dispositions, duplicate command IDs and next sequence, and reject in-flight inputs. The queue remains excluded. |
@@ -609,10 +609,15 @@ is incomplete for runtime continuation: it neither guarantees inclusion of
 all causal state nor supplies compatibility validation, owner hydration,
 cross-reference/cardinality checks, or atomic publication.
 
-## Explicit profile boundary
+## Historical explicit profile boundary — superseded by current census below
 
-P8-B through P8-E are explicit empty sections for this profile; populated state
-must reject admission. P10-A is promoted (`9501bf0`, with current P10
+This earlier snapshot treated P8-B through P8-E as explicit empty sections and
+used the then-selected GeneralTest profile. The current 299-section Daily-v1
+census below supersedes that mapping: six P8-B/C/D sections are explicitly
+empty, P8-E is not an expected provider section, and SampleScene selects the
+separate Daily-v1 authored-geography profile while GeneralTest remains the
+P10-A Ruin/LocalTopology proving profile. Do not infer that a missing P10
+section proves empty/excluded state. P10-A is promoted (`9501bf0`, with current P10
 canonical State/Brief tip `252ad6b`), but its Ruin/LocalTopology output is not
 composed by the selected GeneralTest bootstrap and remains excluded. P14-A is
 promoted (`c44904b`,
@@ -1097,13 +1102,12 @@ or epoch notice. The prior Daily-v1 day-path crosswalk remains current because
 the code delta from 62e12f9 to cda5a55 only adds the P8-D/P12-E census
 registration calls.
 
-The remaining P12-B evidence is complete effective owner/cardinality coverage
-across supported runtime evolution, the full supported-write/shared-epoch
-matrix, runtime-wide owner-thread/quiescence, and a completed-boundary token
-tied to a successful advance sequence. The FR-B current-day read is not such a
-token. This inventory remains partial; P12-B is INCOMPLETE, P12-A is
-WAIT_DEPENDENCY, and P13 is BLOCKED. No export, hydration, capture eligibility,
-or Phase closure is implied.
+At the time this 2026-10-06 snapshot was written, the listed P12-B evidence
+was still outstanding and the snapshot called P12-B INCOMPLETE. That status is
+superseded by the bounded P12-B completion recorded in current canonical
+PHASE12_STATE.md and the current P12-B handoff. This historical audit remains
+partial and does not establish P12-A readiness, P13 readiness, or Phase 12
+closure.
 
 ### P12-B P8-A/B/C admission providers — canonical `2d61e19` (2026-10-07)
 
@@ -1163,3 +1167,185 @@ snapshot implementation. It is source-level evidence, not a runtime provider
 manifest or proof that all E owners have exact exports and private staged
 hydrators. P12-E remains in progress; P12-F/G, P12-A, and P13 retain their
 recorded blockers.
+
+## P12-G current canonical Daily-v1 census — 2026-10-09
+
+This current reconciliation supersedes earlier inventory statements that
+classified P8-E as an empty section, treated P10 LocalTopology as an empty or
+Excluded Daily-v1 section, or described unknown/injected providers as a
+security rejection. SampleScene selects Simulation-DailyV1.asset; the separate
+Simulation-GeneralTest profile remains the P10-A Ruin proving profile. The
+current section is the source/test-backed reconciliation of the selected
+UnityBootstrap-Daily-v1 provider-section vector at P12 canonical
+02009f9063dd252bd4b177fd6aef1e74dcd947f5 (Assets tree
+a9a7c1015a5fa3cacfdb6219b18f2f593c863174). It supersedes older snapshot
+counts and role summaries in this historical inventory. It is a bounded
+day-zero/profile census plus the cited temporal tests, not proof of every
+evolved owner or every supported writer path.
+
+### Cardinality equation and profile fixture
+
+Let N be the live NpcRuntime count, C the City count, P the PersonStore count,
+and M the number of live NPCs bound to Persons. The expected section count is:
+
+    61 + 22N + (N - M) + P + 4C
+
+The selected fixture has N=10, C=2, P=0, M=0, yielding 299 sections. The
+22-per-NPC term includes life state. Add one NPC residence section when that
+NPC is not bound to a Person. Each Person contributes one person-life/residence
+section. Each City contributes four sections.
+
+There are 61 fixed rows: 48 Required, 13 ExplicitlyEmpty, and zero Excluded.
+Every dynamic per-NPC, per-Person, and per-City row is Required, even when its
+observed cardinality is currently zero. Role is the admission obligation, not
+the current record count. The provider vector has no Excluded section role.
+
+### Fixed 61 provider sections
+
+| Owner family | Count and role | Section IDs |
+|---|---:|---|
+| P12-D Person roots | 2 Required | p12d.person.membership; p12d.person.materialization-binding |
+| P12-C RuntimeIdentityRegistry | 4 Required, 4 ExplicitlyEmpty | Required: p12c.runtime-identities.npcs, .cities, .locations, .routes. Empty: .explorable-sites, .local-places, .local-connections, .notable-items. |
+| P12-D legacy SpatialNetwork | 2 Required | p12d.legacy-spatial-network.locations; p12d.legacy-spatial-network.routes |
+| P12-D ExplorableSiteStore | 1 ExplicitlyEmpty | p12d.explorable-sites |
+| P8 spatial authorities | 3 Required, 6 ExplicitlyEmpty | Required: p8a.hexes, p8a.locations, p8a.scale-context. Empty: p8b.passage-option-barrier-state, p8b.crossings, p8c.city-site-location-bindings, p8c.person-positions, p8d.spatial-route-observations, p8d.person-route-plan-history. |
+| P12-C continuation roots | 4 Required | p12c.runtime-id-allocator.events, p12c.runtime-id-allocator.decisions, p12c.runtime-id-allocator.travel-parties, p12c.simulation-record-sequence |
+| Gate-1 fixed authorities | 3 Required | p12d.genealogy.parentage; p12f.political-knowledge.holders; p12f.political-decisions.records |
+| P12-E crime/social appraisal | 3 Required | p12.crime-social-appraisal.outcomes; p12.crime-social-appraisal.knowledge; p12.crime-social-appraisal.reactions |
+| P12-B justice and P18 receipt sentinels | 3 Required | p12b.justice-records; p12b.crime-p18-receipts; p12b.justice-p18-receipts |
+| Global keyed-receipt caches | 2 ExplicitlyEmpty | p12f.npc-decision-occurrence-receipts; p12e.economy-keyed-sale-receipts |
+| P12-E military authorities | 8 Required | p12e.armed-force.forces, .contingents, .relevant-person-references; p12e.contingent-manpower.states; p12e.armed-force-spatial.positions; p12e.conflicts; p12e.wars; p12e.battles |
+| P12-E institutions and offices | 4 Required | p12e.institution.records; p12e.office.records; p12e.office.incumbencies; p12e.office.tenures |
+| P12-E factions | 2 Required | p12e.faction.records; p12e.faction.affiliations |
+| P12-E political claims | 2 Required | p12e.political-claim.records; p12e.political-claim.recognitions |
+| P12-E political support | 1 Required | p12e.political-support.relations |
+| P12-E property and estate | 3 Required | p12e.property.ownership; p12e.property.transfer-history; p12e.estate.records |
+| P12-F fixed authorities | 4 Required | p12f.actor-choice-inputs; p12f.scheduled-directives; p12f.travel-parties; p12f.expeditions |
+
+These fixed roles sum to 61. The 13 ExplicitlyEmpty sections are exactly the
+four RuntimeIdentityRegistry subsections, ExplorableSiteStore, six P8-B/C/D
+sections, and the two global keyed-receipt caches. All other fixed sections
+are Required.
+
+RuntimeIdAllocator owns 14 counter kinds, while this vector has three
+allocator-event counter sections plus the shared record-sequence row. The
+other allocator kinds, WorldId, genesis manifest/provenance, and deterministic
+random root are C continuation roots without a separate section in this
+provider vector; their export/root contracts still require verification.
+
+### Dynamic per-NPC sections
+
+Each live NPC contributes 22 Required sections:
+
+* Ten F Knowledge sections: p12f.explorable-site-knowledge,
+  p12f.local-topology-knowledge.places,
+  p12f.local-topology-knowledge.connections,
+  p12f.adventure-intel.opposition,
+  p12f.adventure-intel.notable-items,
+  p12f.adventure-intel.common-resources,
+  p12f.adventure-intel.access,
+  p12f.commercial-knowledge.markets,
+  p12f.commercial-knowledge.liquidity, and
+  p12f.commercial-knowledge.share-receipts.
+* Three F spatial/travel sections: p12f.spatial-knowledge.locations,
+  p12f.spatial-knowledge.routes, and p12f.npc-travel-state.
+* Four factual/plan sections: p12f.inventory and
+  p12e.npc-money-account are detached NPC factual roots exported by D;
+  p12b.merchant-trade-plan and p12b.npc-travel-plan are inventoried active
+  plan state whose exact current owner exporter must be confirmed at package
+  review.
+* Two D receipt witnesses: p12d.npc-local-observation-receipts and
+  p12d.npc-merchant-trade-state-receipts. Both are Required exact-zero
+  witnesses with no receipt payload in this profile.
+* Three lifecycle/action sections: p12b.npc-status-crime-state,
+  p12b.npc-current-action, and p12b.npc-life-state.
+
+For an NPC not bound to a Person, add its Required
+p12b.npc-residence/{NpcRuntimeId} section. This row is absent for a
+Person-bound NPC because person-life/residence state represents that
+relationship.
+
+### Dynamic Person and City sections
+
+Each Person contributes one Required
+p12b.person-life-residence/{length}:{PersonId} section.
+
+Each City contributes four Required sections:
+
+* p12b.city.important-npcs/{CityRuntimeId};
+* p12e.city-market-stock-rows/{length}:{CityRuntimeId};
+* p12d.city-population.aggregate/{length}:{CityRuntimeId};
+* p12d.city-population.operation-receipts/{length}:{CityRuntimeId}.
+
+City population aggregate and operation-receipt rows are separate. The
+operation-receipt section is captured owner state, not an exact-zero
+sentinel. P12-D owns City/NPC factual roots; Market rows are D-owned even
+though their stable section ID has a P12-E prefix.
+
+### Owner-family and package boundary
+
+* **P12-B** supplies profile admission, owner inventory, operation/quiescence
+  evidence, and completed-boundary admission. It does not own serialized
+  domain rows.
+* **P12-C** supplies WorldId/genesis and deterministic-random provenance,
+  allocator/identity roots, shared record sequence, and P8-A spatial roots.
+  Some roots have no standalone provider-section row.
+* **P12-D** supplies identity registry, spatial roots/legacy SpatialNetwork,
+  CityRuntime/NpcRuntime factual roots, Person/materialization/population/
+  genealogy/site owners, Market and MoneyAccount factual rows, Inventory, and
+  detached per-NPC factual sections that F later merges.
+* **P12-E** supplies Justice, Crime/Social Appraisal, PoliticalDecision,
+  military, institution/office, faction, political claim/support, property,
+  and estate authorities. E supplies no CityRuntime or NpcRuntime factual
+  projections. PoliticalDecision is E-owned despite its historical p12f prefix.
+* **P12-F** supplies PoliticalKnowledge, ScheduledDirective, ActorChoice,
+  TravelParty, Expedition, and its inventoried per-NPC Knowledge,
+  SpatialKnowledge, travel, active commitment, and action sections. D's
+  detached NPC facts are merged once at this boundary.
+* **P8-E and P10 LocalTopology** are not Daily-v1 proving-profile payload.
+  Daily-v1 has six P8-B/C/D empty witnesses but no expected LocalTopology
+  section. Its absence is not an empty witness.
+
+Historical section prefixes do not define current owner authority. Confirm
+the exact exporter, staged hydrator, owner identity, revision source, binding
+outputs, and dependency order from current package code and exact-tip
+contracts before implementation.
+
+### Census-only distinctions and retained evidence
+
+p12b.crime-p18-receipts and p12b.justice-p18-receipts are Required sentinels,
+each with one owner and revision zero; they carry no receipt content. The two
+global decision-occurrence/economy-sale receipt caches are ExplicitlyEmpty.
+Per-NPC D receipt rows are Required exact-zero witnesses with no payload. City
+population operation receipts are Required payload-bearing owner state. These
+patterns must not be conflated.
+
+NpcDecisionRecorder.occurrenceReceipts and the economy keyed-sale receipt
+cache are known global owners whose current sections require exact zero.
+NpcDecisionStore and DomainEventStore are known OmittedNonCausalReadModel
+authorities: their observed rows may be nonzero, but they are not serialized or
+hydrated and are not authoritative graph targets. HistoryStore is a subset of
+events, and NpcChronicle is derived. This does not imply event replay,
+history/UI parity, or that an unknown owner may be omitted.
+
+ActorChoiceTemporalCensusProvider exists in code, but the actor-choice
+temporal-inputs section is not registered in the expected Daily-v1 vector. Its
+absence from the vector is not a zero or Excluded witness. The fixed
+p12f.actor-choice-inputs section remains Required.
+
+The current profile-selection and day-zero evidence is retained in
+docs/validation/P12DailyProfileSeparation/VALIDATION.md; P12-F package
+validation is retained in
+docs/validation/P12FDailyV1OwnerPackage/VALIDATION.md. The census test asserts
+299 sections, the NPC roster test exercises 10-to-11-to-10-to-11 membership
+for NPC factual/knowledge families, and the Person materialization test
+reconciles residence cardinality. These artifacts prove only their recorded
+source, profile, and cases. They do not prove all evolved provider coverage,
+every owner export/staged hydrator, shared-epoch completeness, whole-graph
+restoration, capture eligibility, P12-A readiness, or P13 readiness.
+
+P12-B is complete only within the bounded scope recorded in current canonical
+PHASE12_STATE.md. P12-G remains WAIT_DEPENDENCY pending its separately
+reviewed design, validated live inventory, package-interface verification,
+restored-boundary admission, and coherent publication requirements. P12-A
+remains WAIT_DEPENDENCY, P13 remains BLOCKED, and Phase 12 remains OPEN.
