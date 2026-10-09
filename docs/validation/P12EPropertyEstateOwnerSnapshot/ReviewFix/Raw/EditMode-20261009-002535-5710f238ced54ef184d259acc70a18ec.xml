@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="5" result="Passed" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 00:25:47Z" end-time="2026-10-09 00:25:47Z" duration="0,0941744">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2646" result="Passed" start-time="2026-10-09 00:25:47Z" end-time="2026-10-09 00:25:47Z" duration="0.094174" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3898" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-property-estate-integration/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2646" result="Passed" start-time="2026-10-09 00:25:47Z" end-time="2026-10-09 00:25:47Z" duration="0.066222" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="143100" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3311" name="PropertyTransferFoundationTests" fullname="PropertyTransferFoundationTests" classname="PropertyTransferFoundationTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-09 00:25:47Z" end-time="2026-10-09 00:25:47Z" duration="0.041184" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3313" name="StaleTransferCannotOverwriteAChangedProperty" fullname="PropertyTransferFoundationTests.StaleTransferCannotOverwriteAChangedProperty" methodname="StaleTransferCannotOverwriteAChangedProperty" classname="PropertyTransferFoundationTests" runstate="Runnable" seed="2041914061" result="Passed" start-time="2026-10-09 00:25:47Z" end-time="2026-10-09 00:25:47Z" duration="0.019870" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3316" name="TransferDoesNotRequireNpcMaterialization" fullname="PropertyTransferFoundationTests.TransferDoesNotRequireNpcMaterialization" methodname="TransferDoesNotRequireNpcMaterialization" classname="PropertyTransferFoundationTests" runstate="Runnable" seed="1686781779" result="Passed" start-time="2026-10-09 00:25:47Z" end-time="2026-10-09 00:25:47Z" duration="0.000623" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3312" name="TransferIsExplicitDeterministicAndPreservesHistory" fullname="PropertyTransferFoundationTests.TransferIsExplicitDeterministicAndPreservesHistory" methodname="TransferIsExplicitDeterministicAndPreservesHistory" classname="PropertyTransferFoundationTests" runstate="Runnable" seed="319518891" result="Passed" start-time="2026-10-09 00:25:47Z" end-time="2026-10-09 00:25:47Z" duration="0.004388" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3315" name="TransferRejectsNewOwnerBornAfterTheTransferDay" fullname="PropertyTransferFoundationTests.TransferRejectsNewOwnerBornAfterTheTransferDay" methodname="TransferRejectsNewOwnerBornAfterTheTransferDay" classname="PropertyTransferFoundationTests" runstate="Runnable" seed="400127269" result="Passed" start-time="2026-10-09 00:25:47Z" end-time="2026-10-09 00:25:47Z" duration="0.000337" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3314" name="TransferRequiresRegisteredLivingNewOwnerAndMatchingWorld" fullname="PropertyTransferFoundationTests.TransferRequiresRegisteredLivingNewOwnerAndMatchingWorld" methodname="TransferRequiresRegisteredLivingNewOwnerAndMatchingWorld" classname="PropertyTransferFoundationTests" runstate="Runnable" seed="530670079" result="Passed" start-time="2026-10-09 00:25:47Z" end-time="2026-10-09 00:25:47Z" duration="0.000342" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

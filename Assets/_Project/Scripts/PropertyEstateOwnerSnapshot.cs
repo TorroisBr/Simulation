@@ -355,6 +355,20 @@ internal sealed class PropertyEstateOwnerSnapshot
 
         List<PropertyEstateTransferHistoryRow> historyRows =
             new List<PropertyEstateTransferHistoryRow>(TransferHistoryRows);
+        // Validate every row before comparing adjacent entries. The DTO is an
+        // untrusted detached value and may contain null rows; ordering must
+        // never dereference malformed input before returning a typed failure.
+        foreach (PropertyEstateTransferHistoryRow row in historyRows)
+        {
+            if (row == null || !HasValue(row.PropertyIdValue)
+                || !HasValue(row.PreviousOwnerPersonIdValue) || !HasValue(row.NewOwnerPersonIdValue))
+            {
+                failure = PropertyEstateOwnerSnapshotFailure.Create(
+                    PropertyEstateOwnerSnapshotFailureCode.InvalidIdentity,
+                    "Every transfer-history row requires PropertyId and both PersonId values.");
+                return false;
+            }
+        }
         for (int i = 1; i < historyRows.Count; i++)
         {
             if (CompareHistory(historyRows[i - 1], historyRows[i]) > 0)
@@ -493,7 +507,7 @@ internal sealed class PropertyEstateOwnerSnapshot
 
     private static int CompareHistory(PropertyEstateTransferHistoryRow left, PropertyEstateTransferHistoryRow right)
     {
-        int property = string.CompareOrdinal(left?.PropertyIdValue, right?.PropertyIdValue);
+        int property = string.CompareOrdinal(left.PropertyIdValue, right.PropertyIdValue);
         if (property != 0) return property;
         int day = left.TransferAbsoluteDay.CompareTo(right.TransferAbsoluteDay);
         if (day != 0) return day;

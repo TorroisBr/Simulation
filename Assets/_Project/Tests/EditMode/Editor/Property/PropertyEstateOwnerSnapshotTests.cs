@@ -119,15 +119,7 @@ public sealed class PropertyEstateOwnerSnapshotTests
                 new PropertyEstateEstateRow("estate-b", "deceased", 11L)
             });
 
-        Assert.That(duplicateDeceased.TryStage(world.People, 12L,
-            out PropertyOwnershipStore stagedProperties,
-            out EstateStore stagedEstates,
-            out PropertyEstateOwnerSnapshotFailure failure), Is.False);
-        Assert.That(stagedProperties, Is.Null);
-        Assert.That(stagedEstates, Is.Null);
-        Assert.That(failure.Code, Is.EqualTo(PropertyEstateOwnerSnapshotFailureCode.DuplicateIdentity));
-        Assert.That(world.Properties.Count, Is.EqualTo(2));
-        Assert.That(world.Estates.Count, Is.EqualTo(1));
+        AssertRejected(world, duplicateDeceased, PropertyEstateOwnerSnapshotFailureCode.DuplicateIdentity);
     }
 
     [Test]
@@ -207,6 +199,253 @@ public sealed class PropertyEstateOwnerSnapshotTests
             new[] { new PropertyEstateEstateRow("estate-deceased", "deceased", 10L) });
         Assert.That(unordered.TryStage(world.People, 12L, out _, out _, out failure), Is.False);
         Assert.That(failure.Code, Is.EqualTo(PropertyEstateOwnerSnapshotFailureCode.InvalidOrdering));
+    }
+
+    [Test]
+    public void StageRejectsNullMalformedAndDuplicateRowsBeforeReturningEitherOwner()
+    {
+        OwnerWorld world = CreateWorld(populated: true);
+        AssertRejected(world, CreateSnapshot(
+            new[] { new PropertyEstateOwnershipRow("property-a", "property-owner") },
+            new PropertyEstateTransferHistoryRow[] { null, null },
+            Array.Empty<PropertyEstateEstateRow>()), PropertyEstateOwnerSnapshotFailureCode.InvalidIdentity);
+
+        AssertRejected(world, CreateSnapshot(
+            new[] { new PropertyEstateOwnershipRow(" ", "property-owner") },
+            Array.Empty<PropertyEstateTransferHistoryRow>(),
+            Array.Empty<PropertyEstateEstateRow>()), PropertyEstateOwnerSnapshotFailureCode.InvalidIdentity);
+        AssertRejected(world, CreateSnapshot(
+            new PropertyEstateOwnershipRow[] { null },
+            Array.Empty<PropertyEstateTransferHistoryRow>(),
+            Array.Empty<PropertyEstateEstateRow>()), PropertyEstateOwnerSnapshotFailureCode.InvalidIdentity);
+        AssertRejected(world, CreateSnapshot(
+            new[] { new PropertyEstateOwnershipRow("property-a", " ") },
+            Array.Empty<PropertyEstateTransferHistoryRow>(),
+            Array.Empty<PropertyEstateEstateRow>()), PropertyEstateOwnerSnapshotFailureCode.InvalidIdentity);
+        AssertRejected(world, CreateSnapshot(
+            Array.Empty<PropertyEstateOwnershipRow>(),
+            new[] { new PropertyEstateTransferHistoryRow("property-a", " ", "successor", 8L) },
+            Array.Empty<PropertyEstateEstateRow>()), PropertyEstateOwnerSnapshotFailureCode.InvalidIdentity);
+        AssertRejected(world, CreateSnapshot(
+            Array.Empty<PropertyEstateOwnershipRow>(),
+            Array.Empty<PropertyEstateTransferHistoryRow>(),
+            new PropertyEstateEstateRow[] { null }), PropertyEstateOwnerSnapshotFailureCode.InvalidIdentity);
+        AssertRejected(world, CreateSnapshot(
+            Array.Empty<PropertyEstateOwnershipRow>(),
+            Array.Empty<PropertyEstateTransferHistoryRow>(),
+            new[] { new PropertyEstateEstateRow("estate-a", " ", 10L) }),
+            PropertyEstateOwnerSnapshotFailureCode.InvalidIdentity);
+        AssertRejected(world, CreateSnapshot(
+            new[]
+            {
+                new PropertyEstateOwnershipRow("property-a", "property-owner"),
+                new PropertyEstateOwnershipRow("property-a", "successor")
+            },
+            Array.Empty<PropertyEstateTransferHistoryRow>(),
+            Array.Empty<PropertyEstateEstateRow>()), PropertyEstateOwnerSnapshotFailureCode.DuplicateIdentity);
+        AssertRejected(world, CreateSnapshot(
+            Array.Empty<PropertyEstateOwnershipRow>(),
+            Array.Empty<PropertyEstateTransferHistoryRow>(),
+            new[] { new PropertyEstateEstateRow(" ", "deceased", 10L) }),
+            PropertyEstateOwnerSnapshotFailureCode.InvalidIdentity);
+        AssertRejected(world, CreateSnapshot(
+            Array.Empty<PropertyEstateOwnershipRow>(),
+            Array.Empty<PropertyEstateTransferHistoryRow>(),
+            new[]
+            {
+                new PropertyEstateEstateRow("estate-a", "deceased", 10L),
+                new PropertyEstateEstateRow("estate-a", "successor", 10L)
+            }), PropertyEstateOwnerSnapshotFailureCode.DuplicateIdentity);
+    }
+
+    [Test]
+    public void StageRejectsUnsupportedSchemaAndMalformedCountsOrRevisionsAtomically()
+    {
+        OwnerWorld world = CreateWorld(populated: true);
+        PropertyEstateOwnerSnapshot valid = CreateValidSnapshot();
+
+        AssertRejected(world, CreateSnapshot(valid.OwnershipRows, valid.TransferHistoryRows, valid.EstateRows,
+            ownershipSchema: 2), PropertyEstateOwnerSnapshotFailureCode.UnsupportedSchema);
+        AssertRejected(world, new PropertyEstateOwnerSnapshot(
+            1, -1, 3L, valid.OwnershipRows,
+            1, 1, 3L, valid.TransferHistoryRows,
+            1, 1, 1L, valid.EstateRows), PropertyEstateOwnerSnapshotFailureCode.InvalidCardinality);
+        AssertRejected(world, new PropertyEstateOwnerSnapshot(
+            1, 2, -1L, valid.OwnershipRows,
+            1, 1, -1L, valid.TransferHistoryRows,
+            1, 1, 1L, valid.EstateRows), PropertyEstateOwnerSnapshotFailureCode.InvalidCardinality);
+        AssertRejected(world, new PropertyEstateOwnerSnapshot(
+            1, 2, 3L, valid.OwnershipRows,
+            1, 1, 2L, valid.TransferHistoryRows,
+            1, 1, 1L, valid.EstateRows), PropertyEstateOwnerSnapshotFailureCode.InvalidCardinality);
+        AssertRejected(world, new PropertyEstateOwnerSnapshot(
+            1, 2, 3L, valid.OwnershipRows,
+            1, 1, 3L, valid.TransferHistoryRows,
+            1, 1, -1L, valid.EstateRows), PropertyEstateOwnerSnapshotFailureCode.InvalidCardinality);
+    }
+
+    [Test]
+    public void StageRejectsDanglingOwnerPersonHistoryReferencesAndMissingDeathFacts()
+    {
+        OwnerWorld world = CreateWorld(populated: true);
+        AssertRejected(world, CreateSnapshot(
+            new[] { new PropertyEstateOwnershipRow("property-a", "missing-person") },
+            Array.Empty<PropertyEstateTransferHistoryRow>(),
+            Array.Empty<PropertyEstateEstateRow>()), PropertyEstateOwnerSnapshotFailureCode.InvalidReference);
+
+        PropertyEstateOwnershipRow[] ownership =
+        {
+            new PropertyEstateOwnershipRow("property-a", "property-owner")
+        };
+        AssertRejected(world, CreateSnapshot(ownership,
+            new[] { new PropertyEstateTransferHistoryRow("missing-property", "property-owner", "successor", 8L) },
+            Array.Empty<PropertyEstateEstateRow>()), PropertyEstateOwnerSnapshotFailureCode.InvalidReference);
+        AssertRejected(world, CreateSnapshot(ownership,
+            new[] { new PropertyEstateTransferHistoryRow("property-a", "missing-person", "successor", 8L) },
+            Array.Empty<PropertyEstateEstateRow>()), PropertyEstateOwnerSnapshotFailureCode.InvalidReference);
+        AssertRejected(world, CreateSnapshot(ownership,
+            new[] { new PropertyEstateTransferHistoryRow("property-a", "property-owner", "missing-person", 8L) },
+            Array.Empty<PropertyEstateEstateRow>()), PropertyEstateOwnerSnapshotFailureCode.InvalidReference);
+        AssertRejected(world, CreateSnapshot(Array.Empty<PropertyEstateOwnershipRow>(),
+            Array.Empty<PropertyEstateTransferHistoryRow>(),
+            new[] { new PropertyEstateEstateRow("estate-a", "missing-person", 10L) }),
+            PropertyEstateOwnerSnapshotFailureCode.InvalidReference);
+        AssertRejected(world, CreateSnapshot(Array.Empty<PropertyEstateOwnershipRow>(),
+            Array.Empty<PropertyEstateTransferHistoryRow>(),
+            new[] { new PropertyEstateEstateRow("estate-a", "successor", 10L) }),
+            PropertyEstateOwnerSnapshotFailureCode.InvalidReference);
+    }
+
+    [Test]
+    public void StageRejectsTransferAndEstateDaysOutsideSavedTimelineOrBeforeDeath()
+    {
+        OwnerWorld world = CreateWorld(populated: true);
+        PropertyEstateOwnershipRow[] ownership =
+        {
+            new PropertyEstateOwnershipRow("property-a", "property-owner")
+        };
+        AssertRejected(world, CreateSnapshot(ownership,
+            new[] { new PropertyEstateTransferHistoryRow("property-a", "property-owner", "successor", -1L) },
+            Array.Empty<PropertyEstateEstateRow>()), PropertyEstateOwnerSnapshotFailureCode.InvalidDay);
+        AssertRejected(world, CreateSnapshot(ownership,
+            new[] { new PropertyEstateTransferHistoryRow("property-a", "property-owner", "successor", 13L) },
+            Array.Empty<PropertyEstateEstateRow>()), PropertyEstateOwnerSnapshotFailureCode.InvalidDay);
+        AssertRejected(world, CreateSnapshot(Array.Empty<PropertyEstateOwnershipRow>(),
+            Array.Empty<PropertyEstateTransferHistoryRow>(),
+            new[] { new PropertyEstateEstateRow("estate-a", "deceased", -1L) }),
+            PropertyEstateOwnerSnapshotFailureCode.InvalidDay);
+        AssertRejected(world, CreateSnapshot(Array.Empty<PropertyEstateOwnershipRow>(),
+            Array.Empty<PropertyEstateTransferHistoryRow>(),
+            new[] { new PropertyEstateEstateRow("estate-a", "deceased", 13L) }),
+            PropertyEstateOwnerSnapshotFailureCode.InvalidDay);
+        AssertRejected(world, CreateSnapshot(Array.Empty<PropertyEstateOwnershipRow>(),
+            Array.Empty<PropertyEstateTransferHistoryRow>(),
+            new[] { new PropertyEstateEstateRow("estate-a", "deceased", 9L) }),
+            PropertyEstateOwnerSnapshotFailureCode.InvalidReference);
+
+        PropertyEstateOwnerSnapshot valid = CreateValidSnapshot();
+        AssertRejected(world, valid, PropertyEstateOwnerSnapshotFailureCode.InvalidCardinality, -1L);
+    }
+
+    [Test]
+    public void CaptureRejectsOwnerIdentityAndSectionStampMismatches()
+    {
+        OwnerWorld world = CreateWorld();
+        AssertCaptureVectorRejected(world, 0,
+            new OwnerSectionCensusSnapshot(
+                world.Vector[0].SectionId, world.Vector[0].SchemaVersion, world.Vector[0].Role,
+                new object(), world.Vector[0].Cardinality, world.Vector[0].Revision));
+        AssertCaptureVectorRejected(world, 0,
+            new OwnerSectionCensusSnapshot(
+                world.Vector[0].SectionId, world.Vector[0].SchemaVersion, world.Vector[0].Role,
+                world.Vector[0].OwnerInstanceIdentity, world.Vector[0].Cardinality + 1, world.Vector[0].Revision));
+        AssertCaptureVectorRejected(world, 0,
+            new OwnerSectionCensusSnapshot(
+                world.Vector[0].SectionId, world.Vector[0].SchemaVersion, world.Vector[0].Role,
+                world.Vector[0].OwnerInstanceIdentity, world.Vector[0].Cardinality, world.Vector[0].Revision + 1L));
+        AssertCaptureVectorRejected(world, 0,
+            new OwnerSectionCensusSnapshot(
+                world.Vector[0].SectionId, world.Vector[0].SchemaVersion + 1, world.Vector[0].Role,
+                world.Vector[0].OwnerInstanceIdentity, world.Vector[0].Cardinality, world.Vector[0].Revision));
+    }
+
+    private static void AssertCaptureVectorRejected(
+        OwnerWorld world,
+        int index,
+        OwnerSectionCensusSnapshot replacement)
+    {
+        List<OwnerSectionCensusSnapshot> vector = new List<OwnerSectionCensusSnapshot>(world.Vector);
+        vector[index] = replacement;
+        DailyCaptureEligibilityToken token = CreateToken(vector, 12L);
+        Assert.That(PropertyEstateOwnerSnapshot.TryCapture(
+            world.Properties, world.Estates, token, vector,
+            out PropertyEstateOwnerSnapshot snapshot, out PropertyEstateOwnerSnapshotFailure failure), Is.False);
+        Assert.That(snapshot, Is.Null);
+        Assert.That(failure.Code, Is.EqualTo(PropertyEstateOwnerSnapshotFailureCode.InvalidOwnerSectionVector));
+    }
+
+    private static PropertyEstateOwnerSnapshot CreateValidSnapshot()
+    {
+        return CreateSnapshot(
+            new[]
+            {
+                new PropertyEstateOwnershipRow("property-a", "property-owner"),
+                new PropertyEstateOwnershipRow("property-z", "deceased")
+            },
+            new[] { new PropertyEstateTransferHistoryRow("property-a", "property-owner", "successor", 8L) },
+            new[] { new PropertyEstateEstateRow("estate-deceased", "deceased", 10L) });
+    }
+
+    private static PropertyEstateOwnerSnapshot CreateSnapshot(
+        IEnumerable<PropertyEstateOwnershipRow> ownership,
+        IEnumerable<PropertyEstateTransferHistoryRow> history,
+        IEnumerable<PropertyEstateEstateRow> estates,
+        int ownershipSchema = 1)
+    {
+        PropertyEstateOwnershipRow[] ownershipRows = new List<PropertyEstateOwnershipRow>(ownership).ToArray();
+        PropertyEstateTransferHistoryRow[] historyRows = new List<PropertyEstateTransferHistoryRow>(history).ToArray();
+        PropertyEstateEstateRow[] estateRows = new List<PropertyEstateEstateRow>(estates).ToArray();
+        long propertyRevision = ownershipRows.Length + historyRows.Length;
+        return new PropertyEstateOwnerSnapshot(
+            ownershipSchema, ownershipRows.Length, propertyRevision, ownershipRows,
+            1, historyRows.Length, propertyRevision, historyRows,
+            1, estateRows.Length, estateRows.Length, estateRows);
+    }
+
+    private static void AssertRejected(
+        OwnerWorld world,
+        PropertyEstateOwnerSnapshot snapshot,
+        PropertyEstateOwnerSnapshotFailureCode expectedCode,
+        long savedAbsoluteDay = 12L)
+    {
+        string before = CaptureSourceState(world);
+        Assert.That(snapshot.TryStage(world.People, savedAbsoluteDay,
+            out PropertyOwnershipStore stagedProperties,
+            out EstateStore stagedEstates,
+            out PropertyEstateOwnerSnapshotFailure failure), Is.False, failure?.Message);
+        Assert.That(stagedProperties, Is.Null);
+        Assert.That(stagedEstates, Is.Null);
+        Assert.That(failure.Code, Is.EqualTo(expectedCode));
+        Assert.That(CaptureSourceState(world), Is.EqualTo(before));
+    }
+
+    private static string CaptureSourceState(OwnerWorld world)
+    {
+        List<string> values = new List<string>
+        {
+            "property-revision=" + world.Properties.Revision,
+            "estate-revision=" + world.Estates.Revision,
+            "property-count=" + world.Properties.Count,
+            "estate-count=" + world.Estates.Count
+        };
+        foreach (PropertyOwnershipRecord row in world.Properties.OwnershipRecords)
+            values.Add("ownership=" + row.PropertyId.Value + ":" + row.OwnerPersonId.Value);
+        foreach (PropertyOwnershipTransferHistoryRecord row in world.Properties.TransferHistory)
+            values.Add("history=" + row.PropertyId.Value + ":" + row.PreviousOwnerPersonId.Value
+                + ":" + row.NewOwnerPersonId.Value + ":" + row.TransferAbsoluteDay);
+        foreach (EstateRecord row in world.Estates.Estates)
+            values.Add("estate=" + row.EstateId.Value + ":" + row.DeceasedPersonId.Value + ":" + row.OpenedAbsoluteDay);
+        return string.Join("|", values);
     }
 
     private static OwnerWorld CreateWorld(bool populated = false)
