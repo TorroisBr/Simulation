@@ -226,6 +226,7 @@ public sealed class PoliticalDecisionRecord
         }
 
         Outcome = outcome ?? throw new ArgumentNullException(nameof(outcome));
+        DecisionKind = decisionKind;
         List<PersonId> candidates = CanonicalizeCandidates(candidatePersonIds);
         if (Outcome.SelectedCandidatePersonId != null && Contains(candidates, Outcome.SelectedCandidatePersonId) == false)
         {
@@ -534,6 +535,38 @@ public sealed class PoliticalDecisionStore : IAuthoritativeMutationGuardBindable
     {
         record = null;
         return decisionId != null && recordsById.TryGetValue(decisionId.Value, out record);
+    }
+
+    /// <summary>Creates an unpublished exact owner for the P12-E decision section.</summary>
+    internal static bool TryCreateFromP12EOwnerSnapshot(
+        PersonStore stagedPersons,
+        IReadOnlyList<PoliticalDecisionRecord> sourceRecords,
+        int expectedCount,
+        long expectedRevision,
+        out PoliticalDecisionStore staged)
+    {
+        staged = null;
+        if (stagedPersons == null || sourceRecords == null || expectedCount < 0
+            || expectedRevision < 0L || expectedRevision != expectedCount
+            || sourceRecords.Count != expectedCount)
+        {
+            return false;
+        }
+
+        PoliticalDecisionStore candidate = new PoliticalDecisionStore();
+        if (!candidate.TryBindToPersonStore(stagedPersons)) return false;
+        foreach (PoliticalDecisionRecord record in sourceRecords)
+        {
+            if (record == null || record.DecisionId == null || record.Decider == null || record.Outcome == null
+                || !candidate.TryRegister(record, out _))
+            {
+                return false;
+            }
+        }
+
+        if (candidate.Count != expectedCount || candidate.Revision != expectedRevision) return false;
+        staged = candidate;
+        return true;
     }
 
     public PoliticalDecisionStore Clone()
