@@ -3,6 +3,7 @@
 **Base:** `93fd6ab7f39de572fafbfb1fa160f342935839e5`
 
 **Architecture:** `47eff220c7ce00f6e7c759bdc2b76780bb46f628`
+
 **Validated Assets tree:** `032e65318ea510c1009f89c8b0431a4c6aea46c0`
 
 This bounded source/inventory repair covers the existing `runtime.npc-membership` path when a newly materialized Person receives a `startingCity`. `TryRegisterNpc` sees the new NPC before City binding, while `PersonMaterializationSystem` commits City presence later in the same enclosing scope. The runtime now marks that exact City census section as changed after successful materialization. The scope then reconciles Person membership/binding, dynamic NPC owner families, and City presence together under its reserved mutation epoch.
