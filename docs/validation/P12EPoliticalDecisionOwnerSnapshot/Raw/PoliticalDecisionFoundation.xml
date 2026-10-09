@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="8" result="Passed" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 04:23:42Z" end-time="2026-10-09 04:23:42Z" duration="0,0566208">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2694" result="Passed" start-time="2026-10-09 04:23:42Z" end-time="2026-10-09 04:23:42Z" duration="0.056621" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3952" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-faction-owner-snapshot-a768f2d/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2694" result="Passed" start-time="2026-10-09 04:23:42Z" end-time="2026-10-09 04:23:42Z" duration="0.042461" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="161272" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3096" name="PoliticalLegitimacyDecisionFoundationTests" fullname="PoliticalLegitimacyDecisionFoundationTests" classname="PoliticalLegitimacyDecisionFoundationTests" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-10-09 04:23:42Z" end-time="2026-10-09 04:23:42Z" duration="0.027116" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3100" name="CandidateFingerprintIsCanonicalForSeveralCandidates" fullname="PoliticalLegitimacyDecisionFoundationTests.CandidateFingerprintIsCanonicalForSeveralCandidates" methodname="CandidateFingerprintIsCanonicalForSeveralCandidates" classname="PoliticalLegitimacyDecisionFoundationTests" runstate="Runnable" seed="584715722" result="Passed" start-time="2026-10-09 04:23:42Z" end-time="2026-10-09 04:23:42Z" duration="0.010189" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3099" name="CandidateInputsRejectInvalidCountsAndRecognitionValues" fullname="PoliticalLegitimacyDecisionFoundationTests.CandidateInputsRejectInvalidCountsAndRecognitionValues" methodname="CandidateInputsRejectInvalidCountsAndRecognitionValues" classname="PoliticalLegitimacyDecisionFoundationTests" runstate="Runnable" seed="1822173253" result="Passed" start-time="2026-10-09 04:23:42Z" end-time="2026-10-09 04:23:42Z" duration="0.000729" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3104" name="DecisionOutcomeIsProposalMetadataAndDoesNotExecuteRecognitionOrSuccession" fullname="PoliticalLegitimacyDecisionFoundationTests.DecisionOutcomeIsProposalMetadataAndDoesNotExecuteRecognitionOrSuccession" methodname="DecisionOutcomeIsProposalMetadataAndDoesNotExecuteRecognitionOrSuccession" classname="PoliticalLegitimacyDecisionFoundationTests" runstate="Runnable" seed="1042262113" result="Passed" start-time="2026-10-09 04:23:42Z" end-time="2026-10-09 04:23:42Z" duration="0.001763" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3101" name="DecisionRecordCapturesTypedKnowledgeAndStaleSafeMetadataReadOnly" fullname="PoliticalLegitimacyDecisionFoundationTests.DecisionRecordCapturesTypedKnowledgeAndStaleSafeMetadataReadOnly" methodname="DecisionRecordCapturesTypedKnowledgeAndStaleSafeMetadataReadOnly" classname="PoliticalLegitimacyDecisionFoundationTests" runstate="Runnable" seed="890958106" result="Passed" start-time="2026-10-09 04:23:42Z" end-time="2026-10-09 04:23:42Z" duration="0.002301" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3102" name="DecisionRejectsInvalidOrStaleShapedInputs" fullname="PoliticalLegitimacyDecisionFoundationTests.DecisionRejectsInvalidOrStaleShapedInputs" methodname="DecisionRejectsInvalidOrStaleShapedInputs" classname="PoliticalLegitimacyDecisionFoundationTests" runstate="Runnable" seed="223593127" result="Passed" start-time="2026-10-09 04:23:42Z" end-time="2026-10-09 04:23:42Z" duration="0.000339" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3103" name="DecisionStoreRetainsDeterministicHistoryAndCloneIsIndependent" fullname="PoliticalLegitimacyDecisionFoundationTests.DecisionStoreRetainsDeterministicHistoryAndCloneIsIndependent" methodname="DecisionStoreRetainsDeterministicHistoryAndCloneIsIndependent" classname="PoliticalLegitimacyDecisionFoundationTests" runstate="Runnable" seed="1913087931" result="Passed" start-time="2026-10-09 04:23:42Z" end-time="2026-10-09 04:23:42Z" duration="0.002070" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3097" name="LegitimacyIsPureAndKeepsTruthKnowledgeAndRecognitionSeparate" fullname="PoliticalLegitimacyDecisionFoundationTests.LegitimacyIsPureAndKeepsTruthKnowledgeAndRecognitionSeparate" methodname="LegitimacyIsPureAndKeepsTruthKnowledgeAndRecognitionSeparate" classname="PoliticalLegitimacyDecisionFoundationTests" runstate="Runnable" seed="1393295208" result="Passed" start-time="2026-10-09 04:23:42Z" end-time="2026-10-09 04:23:42Z" duration="0.000441" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3098" name="LegitimacyWeightsApplyCurrentFlagsRecognitionAndSupportOpposition" fullname="PoliticalLegitimacyDecisionFoundationTests.LegitimacyWeightsApplyCurrentFlagsRecognitionAndSupportOpposition" methodname="LegitimacyWeightsApplyCurrentFlagsRecognitionAndSupportOpposition" classname="PoliticalLegitimacyDecisionFoundationTests" runstate="Runnable" seed="2127037364" result="Passed" start-time="2026-10-09 04:23:42Z" end-time="2026-10-09 04:23:42Z" duration="0.000176" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
