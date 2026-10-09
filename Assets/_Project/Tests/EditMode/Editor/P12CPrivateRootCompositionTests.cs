@@ -167,13 +167,23 @@ public sealed class P12CPrivateRootCompositionTests
     }
 
     [Test]
-    public void P12FOwnerPackageStagesAggregateAgainstTheSamePrivateAttempt()
+    public void P12FOwnerPackageCapturesBeforeRootStagingAndStagesAggregateAgainstTheSameAttempt()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(DailyConfigPath);
         Assert.That(config, Is.Not.Null);
         Assert.That(DailyCaptureStagingAttempt.TryBegin(
             sourceRuntime, captureToken, captureToken.OwnerSections,
             out DailyCaptureStagingAttempt attempt), Is.True);
+
+        // Capture F while the source token is current and before C allocates
+        // any staged domain roots. In particular, this runs the P11-backed
+        // exact-zero check for unsupported temporal ActorChoice state first.
+        Assert.That(P12FDailyV1OwnerCapture.TryCapture(
+            sourceRuntime, sourceBootstrap, captureToken, captureToken.OwnerSections,
+            out P12FDailyV1OwnerCapture capturedF,
+            out P12FDailyV1OwnerPackageFailure captureFailure), Is.True, captureFailure.ToString());
+        Assert.That(capturedF, Is.Not.Null);
+
         Assert.That(P12CContinuationRootStager.TryStage(
             attempt,
             (P12CWorldIdentitySnapshot)worldIdentitySnapshot,
@@ -184,11 +194,6 @@ public sealed class P12CPrivateRootCompositionTests
             randomRootSnapshot,
             out P12CStagedContinuationRoot stagedC,
             out string cDiagnostic), Is.True, cDiagnostic);
-
-        Assert.That(P12FDailyV1OwnerCapture.TryCapture(
-            sourceRuntime, sourceBootstrap, captureToken, captureToken.OwnerSections,
-            out P12FDailyV1OwnerCapture capturedF,
-            out P12FDailyV1OwnerPackageFailure captureFailure), Is.True, captureFailure.ToString());
 
         RuntimeIdentityRegistry sourceIdentities = FindOwnerSection(
             captureToken.OwnerSections, RuntimeIdentityRegistryCensusProvider.NpcsSectionId)
