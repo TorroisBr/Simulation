@@ -65,9 +65,13 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
             Is.True, secondFailure.ToString());
 
         InstitutionId institutionId = new InstitutionId("p12e-office-institution");
+        InstitutionId secondInstitutionId = new InstitutionId("p12e-office-second-institution");
         OfficeId officeId = new OfficeId("p12e-office-office");
+        OfficeId vacantOfficeId = new OfficeId("p12e-office-office-extra");
         Assert.That(runtime.TryRegisterInstitution(new InstitutionRecord(institutionId, "Council"), out _), Is.True);
+        Assert.That(runtime.TryRegisterInstitution(new InstitutionRecord(secondInstitutionId, "Archive"), out _), Is.True);
         Assert.That(runtime.TryRegisterOffice(new OfficeRecord(officeId, institutionId, "Speaker"), out _), Is.True);
+        Assert.That(runtime.TryRegisterOffice(new OfficeRecord(vacantOfficeId, secondInstitutionId, "Clerk"), out _), Is.True);
         for (int repeat = 0; repeat < 2; repeat++)
         {
             Assert.That(runtime.TryAssignIncumbent(officeId, firstPerson, 10L, out _), Is.True);
@@ -84,8 +88,12 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
         Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(runtime,
             out P12EInstitutionOfficeOwnerSnapshot snapshot,
             out P12EInstitutionOfficeSnapshotFailure captureFailure), Is.True, captureFailure.Message);
+        Assert.That(snapshot.Institutions.Records, Has.Count.EqualTo(2));
         Assert.That(snapshot.Institutions.Records[0].DisplayName, Is.EqualTo("Council"));
+        Assert.That(snapshot.Institutions.Records[1].DisplayName, Is.EqualTo("Archive"));
+        Assert.That(snapshot.Offices.Records, Has.Count.EqualTo(2));
         Assert.That(snapshot.Offices.Records[0].InstitutionIdValue, Is.EqualTo(institutionId.Value));
+        Assert.That(snapshot.Offices.Records[1].InstitutionIdValue, Is.EqualTo(secondInstitutionId.Value));
         Assert.That(snapshot.Incumbencies.Records[0].PersonIdValue, Is.EqualTo(secondPerson.Value));
         Assert.That(snapshot.Incumbencies.Records[0].StartAbsoluteDay, Is.Null);
         Assert.That(snapshot.Tenures.Records, Has.Count.EqualTo(3));
@@ -95,16 +103,16 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
             Is.EqualTo((int)InstitutionalVacancyRecognitionReason.ExplicitDecision));
         Assert.That(snapshot.Tenures.Records[2].IsClosed, Is.False);
         Assert.That(snapshot.Tenures.Records[2].StartAbsoluteDay, Is.Null);
-        Assert.That(snapshot.Institutions.Revision, Is.EqualTo(1L));
-        Assert.That(snapshot.Offices.Revision, Is.EqualTo(6L));
-        Assert.That(snapshot.Incumbencies.Revision, Is.EqualTo(6L));
-        Assert.That(snapshot.Tenures.Revision, Is.EqualTo(6L));
+        Assert.That(snapshot.Institutions.Revision, Is.EqualTo(2L));
+        Assert.That(snapshot.Offices.Revision, Is.EqualTo(7L));
+        Assert.That(snapshot.Incumbencies.Revision, Is.EqualTo(7L));
+        Assert.That(snapshot.Tenures.Revision, Is.EqualTo(7L));
 
         Assert.That(snapshot.TryCreateStagedOwners(runtime.PersonStore,
             out InstitutionStore stagedInstitutions, out OfficeStore stagedOffices,
             out P12EInstitutionOfficeSnapshotFailure stageFailure), Is.True, stageFailure.Message);
-        Assert.That(stagedInstitutions.Revision, Is.EqualTo(1L));
-        Assert.That(stagedOffices.Revision, Is.EqualTo(6L));
+        Assert.That(stagedInstitutions.Revision, Is.EqualTo(2L));
+        Assert.That(stagedOffices.Revision, Is.EqualTo(7L));
         Assert.That(stagedOffices.TryGetIncumbency(officeId, out OfficeIncumbency stagedIncumbency), Is.True);
         Assert.That(stagedIncumbency.Incumbent.Value, Is.EqualTo(secondPerson.Value));
         IReadOnlyList<OfficeTenureRecord> stagedTenures = stagedOffices.TenureHistoryInMutationOrder;
@@ -211,6 +219,47 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
     }
 
     [Test]
+    public void StageRejectsMissingOrMultipleOpenRowsInvalidDatesAndMalformedHeaders()
+    {
+        PersonStore persons = new PersonStore();
+        Assert.That(persons.TryRegister(new PersonRuntime(new PersonId("person"), 0L), out _), Is.True);
+        P12EInstitutionSnapshotRecord[] institution = { new P12EInstitutionSnapshotRecord("i", "A") };
+        P12EOfficeSnapshotRecord[] office = { new P12EOfficeSnapshotRecord("o", "i", "Office") };
+        P12EOfficeIncumbencySnapshotRecord[] active =
+            { new P12EOfficeIncumbencySnapshotRecord("o", "person", 1L) };
+        P12EOfficeTenureSnapshotRecord open =
+            new P12EOfficeTenureSnapshotRecord("o", "person", 1L, null, null, false);
+
+        AssertStageFails(Snapshot(institution, office, active,
+            Array.Empty<P12EOfficeTenureSnapshotRecord>(), 1L, 2L), persons,
+            P12EInstitutionOfficeSnapshotFailureCode.InvalidTenure);
+        AssertStageFails(Snapshot(institution, office, active, new[] { open, open }, 1L, 2L), persons,
+            P12EInstitutionOfficeSnapshotFailureCode.InvalidTenure);
+        AssertStageFails(Snapshot(institution, office, active,
+            new[] { new P12EOfficeTenureSnapshotRecord("o", "person", 5L, 4L,
+                (int)InstitutionalVacancyRecognitionReason.Resignation, true) }, 1L, 2L), persons,
+            P12EInstitutionOfficeSnapshotFailureCode.InvalidTenure);
+        AssertStageFails(new P12EInstitutionOfficeOwnerSnapshot(
+            Section(InstitutionOfficeCensusProvider.InstitutionsSectionId, 1, 1L, institution, 2),
+            Section(InstitutionOfficeCensusProvider.OfficesSectionId, 1, 0L, office),
+            Section(InstitutionOfficeCensusProvider.IncumbenciesSectionId, 1, 0L, active),
+            Section(InstitutionOfficeCensusProvider.TenuresSectionId, 1, 0L, new[] { open })), persons,
+            P12EInstitutionOfficeSnapshotFailureCode.UnsupportedSchema);
+        AssertStageFails(new P12EInstitutionOfficeOwnerSnapshot(
+            Section(InstitutionOfficeCensusProvider.InstitutionsSectionId, 1, -1L, institution),
+            Section(InstitutionOfficeCensusProvider.OfficesSectionId, 1, 0L, office),
+            Section(InstitutionOfficeCensusProvider.IncumbenciesSectionId, 1, 0L, active),
+            Section(InstitutionOfficeCensusProvider.TenuresSectionId, 1, 0L, new[] { open })), persons,
+            P12EInstitutionOfficeSnapshotFailureCode.InvalidRevision);
+        AssertStageFails(new P12EInstitutionOfficeOwnerSnapshot(
+            Section(InstitutionOfficeCensusProvider.InstitutionsSectionId, 2, 0L, institution),
+            Section(InstitutionOfficeCensusProvider.OfficesSectionId, 1, 0L, office),
+            Section(InstitutionOfficeCensusProvider.IncumbenciesSectionId, 1, 0L, active),
+            Section(InstitutionOfficeCensusProvider.TenuresSectionId, 1, 0L, new[] { open })), persons,
+            P12EInstitutionOfficeSnapshotFailureCode.InvalidCardinality);
+    }
+
+    [Test]
     public void CaptureRejectsRuntimeWithoutCompletedBoundary()
     {
         SimulationRuntime runtime = CreateDailyRuntime();
@@ -219,6 +268,52 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
             out P12EInstitutionOfficeSnapshotFailure failure), Is.False);
         Assert.That(snapshot, Is.Null);
         Assert.That(failure.Code, Is.EqualTo(P12EInstitutionOfficeSnapshotFailureCode.InvalidCaptureContext));
+    }
+
+    [Test]
+    public void CaptureRejectsAStaleTokenAfterOwnerMutation()
+    {
+        SimulationRuntime runtime = CreateDailyRuntime();
+        Assert.That(runtime.TryAdvanceDay(out _), Is.True);
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(out _, out _), Is.True);
+        Assert.That(runtime.TryRegisterInstitution(
+            new InstitutionRecord(new InstitutionId("p12e-stale-capture")), out _), Is.True);
+        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(runtime,
+            out P12EInstitutionOfficeOwnerSnapshot snapshot,
+            out P12EInstitutionOfficeSnapshotFailure failure), Is.False);
+        Assert.That(snapshot, Is.Null);
+        Assert.That(failure.Code, Is.EqualTo(P12EInstitutionOfficeSnapshotFailureCode.InvalidCaptureContext));
+    }
+
+    [Test]
+    public void AssignmentAndVacancyCaptureExactCardinalityAndSingleRevisionChanges()
+    {
+        SimulationRuntime runtime = CreateDailyRuntime();
+        PersonId person = new PersonId("p12e-assignment-person");
+        InstitutionId institution = new InstitutionId("p12e-assignment-institution");
+        OfficeId office = new OfficeId("p12e-assignment-office");
+        Assert.That(runtime.TryRegisterPerson(new PersonRuntime(person, 0L), out _), Is.True);
+        Assert.That(runtime.TryRegisterInstitution(new InstitutionRecord(institution), out _), Is.True);
+        Assert.That(runtime.TryRegisterOffice(new OfficeRecord(office, institution), out _), Is.True);
+        Assert.That(runtime.TryAssignIncumbent(office, person, 12L, out _), Is.True);
+        Assert.That(runtime.TryAdvanceDay(out _), Is.True);
+        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(runtime, out var occupied, out var occupiedFailure),
+            Is.True, occupiedFailure.Message);
+        Assert.That(occupied.Incumbencies.RecordCount, Is.EqualTo(1));
+        Assert.That(occupied.Tenures.RecordCount, Is.EqualTo(1));
+        Assert.That(occupied.Offices.Revision, Is.EqualTo(2L));
+        Assert.That(occupied.Tenures.Records[0].IsClosed, Is.False);
+
+        Assert.That(runtime.TryVacateOffice(office, out _), Is.True);
+        Assert.That(runtime.TryAdvanceDay(out _), Is.True);
+        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(runtime, out var vacant, out var vacantFailure),
+            Is.True, vacantFailure.Message);
+        Assert.That(vacant.Incumbencies.RecordCount, Is.Zero);
+        Assert.That(vacant.Tenures.RecordCount, Is.EqualTo(1));
+        Assert.That(vacant.Offices.Revision, Is.EqualTo(occupied.Offices.Revision + 1L));
+        Assert.That(vacant.Tenures.Records[0].IsClosed, Is.True);
+        Assert.That(vacant.Tenures.Records[0].EndReason,
+            Is.EqualTo((int)InstitutionalVacancyRecognitionReason.ExplicitDecision));
     }
 
     [Test]
@@ -261,6 +356,11 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
                 source.SectionId, source.SchemaVersion, source.Role, source.OwnerInstanceIdentity,
                 source.Cardinality, source.Revision + 1L)),
             P12EInstitutionOfficeSnapshotFailureCode.InvalidOwnerSectionVector);
+
+        List<OwnerSectionCensusSnapshot> missing = new List<OwnerSectionCensusSnapshot>(currentToken.OwnerSections);
+        missing.Remove(source);
+        AssertSyntheticCaptureRejected(runtime, currentToken, missing,
+            P12EInstitutionOfficeSnapshotFailureCode.InvalidOwnerSectionVector);
     }
 
     private static P12EInstitutionOfficeOwnerSnapshot Snapshot(
@@ -279,8 +379,9 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
             Section(InstitutionOfficeCensusProvider.TenuresSectionId, tenures.Count, officeRevision, tenures));
     }
 
-    private static P12EInstitutionOfficeSnapshotSection<T> Section<T>(string id, int count, long revision, IEnumerable<T> rows) =>
-        new P12EInstitutionOfficeSnapshotSection<T>(id, 1, count, revision, rows, null);
+    private static P12EInstitutionOfficeSnapshotSection<T> Section<T>(
+        string id, int count, long revision, IEnumerable<T> rows, int schemaVersion = 1) =>
+        new P12EInstitutionOfficeSnapshotSection<T>(id, schemaVersion, count, revision, rows, null);
 
     private static OwnerSectionCensusSnapshot FindSection(
         IReadOnlyList<OwnerSectionCensusSnapshot> sections, string id)

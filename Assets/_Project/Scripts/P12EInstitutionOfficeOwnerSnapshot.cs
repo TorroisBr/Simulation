@@ -391,14 +391,16 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
             || !ValidSection(Tenures, InstitutionOfficeCensusProvider.TenuresSectionId))
             return Fail(P12EInstitutionOfficeSnapshotFailureCode.UnsupportedSchema,
                 "The snapshot must contain exactly the four existing schema-v1 sections.", out failure);
-        if (Institutions.Revision < 0L || Offices.Revision < 0L || Incumbencies.Revision != Offices.Revision
+        if (Institutions.Revision < 0L || Offices.Revision < 0L || Incumbencies.Revision < 0L
+            || Tenures.Revision < 0L || Incumbencies.Revision != Offices.Revision
             || Tenures.Revision != Offices.Revision)
             return Fail(P12EInstitutionOfficeSnapshotFailureCode.InvalidRevision,
                 "Owner revisions must be nonnegative and all Office sections must share one revision.", out failure);
-        if (Institutions.RecordCount < 0 || Offices.RecordCount < 0 || Incumbencies.RecordCount < 0
-            || Tenures.RecordCount < 0 || Institutions.Records.Count != Institutions.RecordCount
-            || Offices.Records.Count != Offices.RecordCount || Incumbencies.Records.Count != Incumbencies.RecordCount
-            || Tenures.Records.Count != Tenures.RecordCount)
+        if (Institutions.Records == null || Offices.Records == null || Incumbencies.Records == null
+            || Tenures.Records == null || Institutions.RecordCount < 0 || Offices.RecordCount < 0
+            || Incumbencies.RecordCount < 0 || Tenures.RecordCount < 0
+            || Institutions.Records.Count != Institutions.RecordCount || Offices.Records.Count != Offices.RecordCount
+            || Incumbencies.Records.Count != Incumbencies.RecordCount || Tenures.Records.Count != Tenures.RecordCount)
             return Fail(P12EInstitutionOfficeSnapshotFailureCode.InvalidCardinality,
                 "Section cardinality must equal its exact detached row count.", out failure);
 
@@ -472,8 +474,7 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
 
     private static bool ValidSection<T>(P12EInstitutionOfficeSnapshotSection<T> section, string expectedId) =>
         section != null && string.Equals(section.SectionId, expectedId, StringComparison.Ordinal)
-        && section.SchemaVersion == CurrentSchemaVersion && section.RecordCount >= 0
-        && section.Revision >= 0L && section.Records != null;
+        && section.SchemaVersion == CurrentSchemaVersion;
 
     private static P12EInstitutionOfficeSnapshotSection<T> Section<T>(
         string id, int count, long revision, IEnumerable<T> rows, Func<T, T> copy) =>
