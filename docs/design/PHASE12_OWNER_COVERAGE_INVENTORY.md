@@ -1205,7 +1205,7 @@ the current record count. The provider vector has no Excluded section role.
 | Owner family | Count and role | Section IDs |
 |---|---:|---|
 | P12-D Person roots | 2 Required | p12d.person.membership; p12d.person.materialization-binding |
-| P12-C RuntimeIdentityRegistry | 4 Required, 4 ExplicitlyEmpty | Required: p12c.runtime-identities.npcs, .cities, .locations, .routes. Empty: .explorable-sites, .local-places, .local-connections, .notable-items. |
+| P12-D RuntimeIdentityRegistry | 4 Required, 4 ExplicitlyEmpty | Required: p12c.runtime-identities.npcs, .cities, .locations, .routes. Empty: .explorable-sites, .local-places, .local-connections, .notable-items. |
 | P12-D legacy SpatialNetwork | 2 Required | p12d.legacy-spatial-network.locations; p12d.legacy-spatial-network.routes |
 | P12-D ExplorableSiteStore | 1 ExplicitlyEmpty | p12d.explorable-sites |
 | P8 spatial authorities | 3 Required, 6 ExplicitlyEmpty | Required: p8a.hexes, p8a.locations, p8a.scale-context. Empty: p8b.passage-option-barrier-state, p8b.crossings, p8c.city-site-location-bindings, p8c.person-positions, p8d.spatial-route-observations, p8d.person-route-plan-history. |
@@ -1251,9 +1251,9 @@ Each live NPC contributes 22 Required sections:
   p12f.spatial-knowledge.routes, and p12f.npc-travel-state.
 * Four factual/plan sections: p12f.inventory and
   p12e.npc-money-account are detached NPC factual roots exported by D;
-  p12b.merchant-trade-plan and p12b.npc-travel-plan are inventoried active
-  plan state whose exact current owner exporter must be confirmed at package
-  review.
+  p12b.merchant-trade-plan and p12b.npc-travel-plan are F-owned active
+  commitment projections despite their historical p12b prefixes. F stages
+  them; D may return detached NPC F projections for the single F merge.
 * Two D receipt witnesses: p12d.npc-local-observation-receipts and
   p12d.npc-merchant-trade-state-receipts. Both are Required exact-zero
   witnesses with no receipt payload in this profile.
@@ -1288,9 +1288,10 @@ though their stable section ID has a P12-E prefix.
   evidence, and completed-boundary admission. It does not own serialized
   domain rows.
 * **P12-C** supplies WorldId/genesis and deterministic-random provenance,
-  allocator/identity roots, shared record sequence, and P8-A spatial roots.
-  Some roots have no standalone provider-section row.
-* **P12-D** supplies identity registry, spatial roots/legacy SpatialNetwork,
+  allocator roots, shared record sequence, and P8-A SpatialAuthority roots.
+  Some roots have no standalone provider-section row; C supplies identity
+  allocation/invariants but does not own the RuntimeIdentityRegistry section.
+* **P12-D** supplies RuntimeIdentityRegistry, legacy SpatialNetwork,
   CityRuntime/NpcRuntime factual roots, Person/materialization/population/
   genealogy/site owners, Market and MoneyAccount factual rows, Inventory, and
   detached per-NPC factual sections that F later merges.
@@ -1300,8 +1301,8 @@ though their stable section ID has a P12-E prefix.
   projections. PoliticalDecision is E-owned despite its historical p12f prefix.
 * **P12-F** supplies PoliticalKnowledge, ScheduledDirective, ActorChoice,
   TravelParty, Expedition, and its inventoried per-NPC Knowledge,
-  SpatialKnowledge, travel, active commitment, and action sections. D's
-  detached NPC facts are merged once at this boundary.
+  SpatialKnowledge, travel, active commitment, and action sections, including F-owned merchant/travel plans. D's detached NPC facts
+  are merged once at this boundary.
 * **P8-E and P10 LocalTopology** are not Daily-v1 proving-profile payload.
   Daily-v1 has six P8-B/C/D empty witnesses but no expected LocalTopology
   section. Its absence is not an empty witness.

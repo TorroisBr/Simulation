@@ -186,11 +186,11 @@ objects. The active composition is read only until the final publication swap.
    deterministic-random provenance/context, P9 historical manifest and P8-A
    facts. Hydration preserves IDs and provenance; it never reruns genesis or
    draws randomness.
-4. **Stage D factual and spatial owners.** D supplies the identity registry,
-authored spatial roots, legacy SpatialNetwork, CityRuntime and NpcRuntime
-factual roots, Person/materialization/population/genealogy/site owners, and
-detached per-NPC factual sections. Construct each CityRuntime and NpcRuntime
-once from its D-owned projection.
+4. **Stage D factual and spatial owners.** D supplies RuntimeIdentityRegistry,
+legacy SpatialNetwork, CityRuntime and NpcRuntime factual roots,
+Person/materialization/population/genealogy/site owners, and detached per-NPC
+factual sections. C stages the P8-A SpatialAuthority roots. Construct each
+CityRuntime and NpcRuntime once from its D-owned projection.
 5. **Stage E owners.** Stage E authorities and typed unresolved bindings from
 their own exports. E supplies no CityRuntime or NpcRuntime factual projection.
 6. **Stage F owners and merge detached NPC sections once.** Stage the five
