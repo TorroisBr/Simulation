@@ -233,15 +233,105 @@ restore was a gameplay advance. The current runtime has no such restore
 admission API; its exact contract is a required B/G design and review
 dependency before implementation.
 10. **Publish one coherent active composition.** TesteSimulacao is the
-current bootstrap/session owner. Genesis publication is one-shot, while
-Simulate reads a private SimulationRuntime field and reporting retains cached
-logger/City/NPC references. Changing publishedComposition alone would leave
-stale aliases active. G must route simulation and reporting through one
-current-composition holder/snapshot acquired at a defined operation boundary,
-then perform one atomic reference swap after restored-boundary admission.
-Before that swap the old graph and health remain authoritative. Preserve the
-existing lifecycle; do not assume a disposal API or add per-owner swaps or
-compensating mutations.
+   current bootstrap/session owner. Genesis publication is one-shot, while
+   Simulate reads a private SimulationRuntime field and reporting retains cached
+   logger/City/NPC references. Changing publishedComposition alone would leave
+   stale aliases active. G must route simulation and reporting through one
+   current-composition holder/snapshot acquired at a defined operation boundary,
+   then perform one atomic reference swap after restored-boundary admission.
+   Before that swap the old graph and health remain authoritative. Preserve the
+   existing lifecycle; do not assume a disposal API or add per-owner swaps or
+   compensating mutations.
+
+### Restored-boundary admission seam
+
+The restore admission API belongs to the private candidate runtime and is
+internal to the Daily-v1 composition path. The proposed boundary is:
+
+```csharp
+internal bool TryAdmitRestoredDailyBoundary(
+    WorldId expectedWorldId,
+    long preservedAbsoluteDay,
+    long preservedCompletedCoreSequence,
+    out DailyCaptureEligibilityFailure failure);
+```
+
+The coordinator obtains the day and successful-core sequence from the source
+runtime's currently validated P12-B token and carries those scalar boundary
+facts with the selected continuation representation. It never transfers the
+source token. The final persistent encoding remains a separate P12-A decision.
+
+The method accepts only a newly constructed, still-private
+`UnityBootstrap-Daily-v1` candidate on its captured owner thread. Require the
+exact staged `WorldId` instance, the candidate constructor's captured
+`initialAbsoluteDay` to equal `preservedAbsoluteDay`, a positive preserved
+successful-core sequence, no existing token or completed sequence on the new
+runtime, an unpublished factual-read gate, a healthy mutation guard, no held
+advance lease or daily-operation context, and the sealed census protocol's
+quiescent exact owner snapshot. That snapshot supplies the candidate's own
+owner identities, cardinalities, revisions, and fresh mutation epoch; it is
+not copied from the source runtime. Global graph validation and the complete
+live profile inventory remain coordinator prerequisites and are not replaced
+by this local admission check.
+
+On success, preserve the supplied successful-core sequence verbatim, create a
+fresh eligibility token bound to this runtime identity, admission context,
+configuration, calendar, composition profile, exact staged `WorldId`, preserved
+day, candidate owner vector, and candidate mutation epoch, and mark the private
+candidate ready for factual reads. Record boundary provenance explicitly as
+`RestoredContinuation`; the normal successful-advance path records
+`CompletedAdvance`. Restoration does not call `AdvanceDay`, read `CurrentDay`,
+or increment the successful-core sequence. The next normal successful advance
+continues from the preserved sequence. A failed admission discards the
+candidate and leaves the old active composition and its token untouched.
+
+Invoke the successful admission immediately before the holder's single
+reference exchange, synchronously on the owner thread with no callback or
+yield. The candidate remains unreachable to public readers until that
+exchange. The exchange itself is the only active-publication operation; no
+fallible initialization or owner mutation follows it.
+
+The current implementation supports this boundary's pieces but not the seam:
+`SimulationRuntime` binds the owner thread, creates a fresh runtime identity,
+keeps the completed-core sequence and token private, and exposes a copied
+quiescent census through `ContinuationCensusProtocol`. Its existing token
+publisher runs only after a successful advance; `TryReadDailyCaptureEvidence`
+also requires `factualReadWorldPublished`, while
+`TryMarkWorldPublishedForFactualRead` reads `CurrentDay`. The restore-only
+method must use the constructor-captured day and direct sealed-census evidence
+instead of routing through either path.
+
+### Active-composition ownership seam
+
+The current source has one owning MonoBehaviour, but it does not yet publish
+one sufficient runtime reference: `TesteSimulacao` keeps
+`publishedComposition` and `worldPublished` separately, advances its cached
+`simulationRuntime`, and reports through cached `logger`, City/NPC lists, and
+`justiceSystem`. `SimulationBootstrapComposition` retains the runtime and
+selected stores but currently does not retain the logger or Justice system.
+Therefore, swapping only `publishedComposition` cannot make the live session
+coherent.
+
+G should give the owner one immutable active-session snapshot that contains the
+bootstrap composition plus every runtime-dependent reporting/operation
+dependency that currently lives in those cached fields. Each simulation or
+reporting operation reads that snapshot once and uses it throughout the
+operation; the restore coordinator builds and validates a replacement privately
+and atomically exchanges the active snapshot between owner-thread operations.
+No cached service/list/index in `TesteSimulacao` may remain an alternate active
+authority after the exchange. The current profile configuration is checked
+against the replacement before publication; the checkpoint does not add a
+second runtime, per-owner swap, or disposal policy.
+
+The focused admission evidence must prove that a source token cannot validate
+against the restored runtime, that the restored token carries the preserved
+day/sequence but fresh runtime/owner/epoch identities and
+`RestoredContinuation` provenance, and that the first later successful advance
+increments from that preserved sequence exactly once. Rejection cases include
+wrong world identity/day, zero or negative sequence, an already-admitted
+candidate, wrong thread, active operation/advance, unhealthy candidate, and
+incomplete or stale owner census. Every rejected restore leaves the prior
+active session reference and subsequent normal behavior unchanged.
 
 ## 4. Whole-graph invariants
 
