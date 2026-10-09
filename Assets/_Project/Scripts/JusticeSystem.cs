@@ -2011,6 +2011,113 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    internal bool TryCaptureP12EOwnerSnapshotRows(
+        out IReadOnlyList<P12EJusticeWantedSnapshotRow> wantedRows,
+        out IReadOnlyList<P12EJusticeSentenceSnapshotRow> sentenceRows)
+    {
+        wantedRows = null;
+        sentenceRows = null;
+        if (wantedRecords == null || prisonSentences == null || p12CrimeJusticeRevision < 0L)
+            return false;
+
+        List<P12EJusticeWantedSnapshotRow> wanted = new List<P12EJusticeWantedSnapshotRow>(wantedRecords.Count);
+        Dictionary<WantedRecordRuntime, int> wantedOrdinals =
+            new Dictionary<WantedRecordRuntime, int>();
+        for (int i = 0; i < wantedRecords.Count; i++)
+        {
+            WantedRecordRuntime row = wantedRecords[i];
+            if (row == null || row.Target == null || row.City == null || wantedOrdinals.ContainsKey(row))
+                return false;
+            wantedOrdinals.Add(row, i);
+            wanted.Add(new P12EJusticeWantedSnapshotRow(
+                i,
+                row.Target.RuntimeId,
+                row.Target.PersonId?.Value,
+                row.City.RuntimeId,
+                row.Bounty,
+                row.SentenceDays,
+                row.P12Resolved));
+        }
+
+        List<P12EJusticeSentenceSnapshotRow> sentences =
+            new List<P12EJusticeSentenceSnapshotRow>(prisonSentences.Count);
+        HashSet<PrisonSentenceRuntime> seenSentences = new HashSet<PrisonSentenceRuntime>();
+        for (int i = 0; i < prisonSentences.Count; i++)
+        {
+            PrisonSentenceRuntime row = prisonSentences[i];
+            if (row == null || row.Target == null || row.City == null || row.Warrant == null
+                || !seenSentences.Add(row) || !wantedOrdinals.TryGetValue(row.Warrant, out int warrantOrdinal)
+                || !ReferenceEquals(row.Target, row.Warrant.Target)
+                || !ReferenceEquals(row.City, row.Warrant.City))
+                return false;
+            sentences.Add(new P12EJusticeSentenceSnapshotRow(
+                i,
+                row.Target.RuntimeId,
+                row.Target.PersonId?.Value,
+                row.City.RuntimeId,
+                warrantOrdinal,
+                row.RemainingDays,
+                row.FailedEscapeAttempts,
+                row.WasArrestedToday));
+        }
+
+        wantedRows = wanted.AsReadOnly();
+        sentenceRows = sentences.AsReadOnly();
+        return true;
+    }
+
+    internal static bool TryCreateFromP12EOwnerSnapshot(
+        NpcStatusData freeStatus,
+        NpcStatusData wantedStatus,
+        NpcStatusData arrestedStatus,
+        NpcStatusData hiddenStatus,
+        DomainEventRecorder domainEventRecorder,
+        SimulationLogger logger,
+        IReadOnlyList<WantedRecordRuntime> wantedRows,
+        IReadOnlyList<PrisonSentenceRuntime> sentenceRows,
+        long revision,
+        out JusticeSystem staged)
+    {
+        staged = null;
+        if (freeStatus == null || wantedStatus == null || arrestedStatus == null || hiddenStatus == null
+            || wantedRows == null || sentenceRows == null || revision < 0L)
+            return false;
+
+        HashSet<WantedRecordRuntime> seenWanted = new HashSet<WantedRecordRuntime>();
+        foreach (WantedRecordRuntime row in wantedRows)
+        {
+            if (row == null || row.Target == null || row.City == null || !seenWanted.Add(row))
+                return false;
+        }
+        HashSet<PrisonSentenceRuntime> seenSentences = new HashSet<PrisonSentenceRuntime>();
+        foreach (PrisonSentenceRuntime row in sentenceRows)
+        {
+            if (row == null || row.Target == null || row.City == null || row.Warrant == null
+                || !seenSentences.Add(row) || !seenWanted.Contains(row.Warrant)
+                || !ReferenceEquals(row.Target, row.Warrant.Target)
+                || !ReferenceEquals(row.City, row.Warrant.City))
+                return false;
+        }
+
+        try
+        {
+            JusticeSystem candidate = new JusticeSystem(
+                freeStatus, wantedStatus, arrestedStatus, hiddenStatus, domainEventRecorder, logger);
+            candidate.wantedRecords.AddRange(wantedRows);
+            candidate.prisonSentences.AddRange(sentenceRows);
+            candidate.p12CrimeJusticeRevision = revision;
+            if (candidate.P12P18ReceiptCensusRevision != 0L) return false;
+            staged = candidate;
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException)
+        {
+            staged = null;
+            return false;
+        }
+    }
+
     internal bool TryBindP12CrimeJusticeMutationBoundary(
         Func<JusticeSystem, bool> admission,
         Action<JusticeSystem> committed)
@@ -2744,6 +2851,7 @@ public class WantedRecordRuntime : IAuthoritativeMutationGuardBindable
     public float Bounty => bounty;
     public int SentenceDays => sentenceDays;
     public bool IsActive => resolved == false && target != null && city != null;
+    internal bool P12Resolved => resolved;
 
     public WantedRecordRuntime(NpcRuntime target, CityRuntime city, float bounty, int sentenceDays)
     {
@@ -2751,6 +2859,26 @@ public class WantedRecordRuntime : IAuthoritativeMutationGuardBindable
         this.city = city;
         this.bounty = Mathf.Max(0f, bounty);
         this.sentenceDays = Mathf.Max(1, sentenceDays);
+    }
+
+    internal static bool TryCreateFromP12EOwnerSnapshot(
+        NpcRuntime target,
+        CityRuntime city,
+        float bounty,
+        int sentenceDays,
+        bool resolved,
+        out WantedRecordRuntime staged)
+    {
+        staged = null;
+        if (target == null || city == null || float.IsNaN(bounty) || float.IsInfinity(bounty)
+            || bounty < 0f || sentenceDays < 1)
+            return false;
+        WantedRecordRuntime candidate = new WantedRecordRuntime(target, city, bounty, sentenceDays);
+        candidate.bounty = bounty;
+        candidate.sentenceDays = sentenceDays;
+        candidate.resolved = resolved;
+        staged = candidate;
+        return true;
     }
 
     public void AddPenalty(float additionalBounty, int additionalSentenceDays)
@@ -2843,6 +2971,29 @@ public class PrisonSentenceRuntime : IAuthoritativeMutationGuardBindable
         this.warrant = warrant;
         remainingDays = Mathf.Max(1, sentenceDays);
         wasArrestedToday = true;
+    }
+
+    internal static bool TryCreateFromP12EOwnerSnapshot(
+        NpcRuntime target,
+        CityRuntime city,
+        WantedRecordRuntime warrant,
+        int remainingDays,
+        int failedEscapeAttempts,
+        bool wasArrestedToday,
+        out PrisonSentenceRuntime staged)
+    {
+        staged = null;
+        if (target == null || city == null || warrant == null || remainingDays < 0
+            || failedEscapeAttempts < 0 || !ReferenceEquals(target, warrant.Target)
+            || !ReferenceEquals(city, warrant.City))
+            return false;
+        PrisonSentenceRuntime candidate = new PrisonSentenceRuntime(
+            target, city, warrant, Math.Max(1, remainingDays));
+        candidate.remainingDays = remainingDays;
+        candidate.failedEscapeAttempts = failedEscapeAttempts;
+        candidate.wasArrestedToday = wasArrestedToday;
+        staged = candidate;
+        return true;
     }
 
     public void AdvanceDay()
