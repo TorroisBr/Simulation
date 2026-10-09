@@ -1115,10 +1115,19 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         out P12DDailyV1OwnerPackage package,
         out P12DDailyV1OwnerPackageFailure failure)
     {
+        if (!DailyCaptureStagingAttempt.TryBegin(
+                fixture.Runtime, token, token.OwnerSections,
+                out DailyCaptureStagingAttempt stagingAttempt))
+        {
+            package = null;
+            failure = P12DDailyV1OwnerPackageFailure.InvalidCaptureContext;
+            return false;
+        }
+
         return P12DDailyV1OwnerPackage.TryCaptureAndStage(
             fixture.Runtime,
             token,
-            new object(),
+            stagingAttempt,
             token.OwnerSections,
             fixture.Identities,
             fixture.SpatialNetwork,

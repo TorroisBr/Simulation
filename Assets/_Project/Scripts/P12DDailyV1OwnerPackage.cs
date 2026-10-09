@@ -23,6 +23,7 @@ internal enum P12DDailyV1OwnerPackageFailure
 /// </summary>
 internal sealed class P12DDailyV1OwnerPackage
 {
+    internal DailyCaptureStagingAttempt StagingAttempt { get; }
     internal WorldId WorldId { get; }
     internal RuntimeIdentityRegistry RuntimeIdentities { get; }
     internal SpatialNetworkRuntime SpatialNetwork { get; }
@@ -33,6 +34,7 @@ internal sealed class P12DDailyV1OwnerPackage
     internal ExplorableSiteStore EmptyExplorableSites { get; }
 
     private P12DDailyV1OwnerPackage(
+        DailyCaptureStagingAttempt stagingAttempt,
         WorldId worldId,
         RuntimeIdentityRegistry runtimeIdentities,
         SpatialNetworkRuntime spatialNetwork,
@@ -42,6 +44,7 @@ internal sealed class P12DDailyV1OwnerPackage
         GenealogyStore genealogy,
         ExplorableSiteStore emptyExplorableSites)
     {
+        StagingAttempt = stagingAttempt;
         WorldId = worldId;
         RuntimeIdentities = runtimeIdentities;
         SpatialNetwork = spatialNetwork;
@@ -62,7 +65,7 @@ internal sealed class P12DDailyV1OwnerPackage
     internal static bool TryCaptureAndStage(
         SimulationRuntime sourceRuntime,
         DailyCaptureEligibilityToken token,
-        object captureStamp,
+        DailyCaptureStagingAttempt stagingAttempt,
         IReadOnlyList<OwnerSectionCensusSnapshot> exactOwnerSectionVector,
         RuntimeIdentityRegistry sourceRuntimeIdentities,
         SpatialNetworkRuntime sourceSpatialNetwork,
@@ -81,7 +84,7 @@ internal sealed class P12DDailyV1OwnerPackage
     {
         package = null;
         failure = P12DDailyV1OwnerPackageFailure.InvalidCaptureContext;
-        if (sourceRuntime == null || token == null || captureStamp == null
+        if (sourceRuntime == null || token == null || stagingAttempt == null
             || exactOwnerSectionVector == null || sourceRuntimeIdentities == null
             || sourceSpatialNetwork == null || sourceExplorableSites == null
             || stagedRuntimeIdentities == null || stagedWorldId == null
@@ -90,6 +93,7 @@ internal sealed class P12DDailyV1OwnerPackage
             || statusDefinitions == null || admittedDailySiteDefinitions == null
             || stagedTravelPartyIds == null
             || !ReferenceEquals(token.OwnerSections, exactOwnerSectionVector)
+            || !stagingAttempt.IsCurrentFor(sourceRuntime, token, exactOwnerSectionVector)
             || !ReferenceEquals(token.WorldId, sourceRuntime.WorldId)
             || !token.WorldId.Equals(stagedWorldId)
             || !sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _)
@@ -111,7 +115,7 @@ internal sealed class P12DDailyV1OwnerPackage
             return false;
         }
 
-        object sharedStamp = captureStamp;
+        object sharedStamp = stagingAttempt;
         IReadOnlyList<OwnerSectionCensusSnapshot> vector = exactOwnerSectionVector;
         List<P12DCityRootOwnerSnapshot.StagingCaptureEnvelope> cityCaptures =
             new List<P12DCityRootOwnerSnapshot.StagingCaptureEnvelope>(sourceRuntime.Cities.Count);
@@ -269,7 +273,14 @@ internal sealed class P12DDailyV1OwnerPackage
             return false;
         }
 
+        if (!stagingAttempt.IsCurrentFor(sourceRuntime, token, exactOwnerSectionVector))
+        {
+            failure = P12DDailyV1OwnerPackageFailure.StaleBoundary;
+            return false;
+        }
+
         package = new P12DDailyV1OwnerPackage(
+            stagingAttempt,
             stagedWorldId, stagedRuntimeIdentities, stagedSpatialNetwork,
             stagedCities, stagedNpcRoster, stagedPersons, stagedGenealogy, stagedSites);
         failure = P12DDailyV1OwnerPackageFailure.None;

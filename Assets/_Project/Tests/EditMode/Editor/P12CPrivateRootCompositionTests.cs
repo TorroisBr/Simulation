@@ -18,6 +18,9 @@ public sealed class P12CPrivateRootCompositionTests
     private SimulationRecordSequenceSnapshot recordSequenceSnapshot;
     private DeterministicRandomRootSnapshot randomRootSnapshot;
     private object worldIdentitySnapshot;
+    private SimulationRuntime sourceRuntime;
+    private DailyCaptureEligibilityToken captureToken;
+    private static DailyCaptureStagingAttempt stagingAttempt;
     private WorldId sourceWorldIdentity;
     private SpatialAuthorityStore sourceSpatialOwner;
     private SimulationGenesisManifest sourceManifestOwner;
@@ -42,6 +45,15 @@ public sealed class P12CPrivateRootCompositionTests
         simulation.Start();
 
         Assert.That(simulation.Bootstrap, Is.Not.Null);
+        sourceRuntime = simulation.Runtime;
+        Assert.That(sourceRuntime, Is.Not.Null);
+        Assert.That(sourceRuntime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+            Is.True, advanceFailure.ToString());
+        Assert.That(sourceRuntime.TryGetCompletedDailyCaptureToken(
+            out captureToken, out DailyCaptureEligibilityFailure tokenFailure),
+            Is.True, tokenFailure.ToString());
+        Assert.That(DailyCaptureStagingAttempt.TryBegin(
+            sourceRuntime, captureToken, captureToken.OwnerSections, out stagingAttempt), Is.True);
         SimulationGenesisManifest sourceManifest = simulation.Bootstrap.Manifest;
         SpatialAuthorityStore sourceSpatial = simulation.Bootstrap.SpatialAuthority;
         sourceWorldIdentity = simulation.Bootstrap.WorldId;
@@ -770,10 +782,10 @@ public sealed class P12CPrivateRootCompositionTests
         Assert.That(stagerType, Is.Not.Null);
         MethodInfo method = stagerType.GetMethod("TryStage", BindingFlags.Static | BindingFlags.NonPublic);
         Assert.That(method, Is.Not.Null);
-        object[] arguments = { worldIdentity, allocator, sequence, spatial, manifest, random, null, null };
+        object[] arguments = { stagingAttempt, worldIdentity, allocator, sequence, spatial, manifest, random, null, null };
         bool result = (bool)method.Invoke(null, arguments);
-        staged = arguments[6];
-        diagnostic = arguments[7] as string;
+        staged = arguments[7];
+        diagnostic = arguments[8] as string;
         return result;
     }
 

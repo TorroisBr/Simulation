@@ -1,6 +1,63 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+
+/// <summary>
+/// Opaque identity for one reconstruction staging attempt at an exact
+/// completed Daily-v1 boundary. C, D, and E retain the same instance so roots
+/// from separate attempts cannot be combined accidentally.
+/// </summary>
+internal sealed class DailyCaptureStagingAttempt
+{
+    private readonly SimulationRuntime sourceRuntime;
+    private readonly DailyCaptureEligibilityToken token;
+    private readonly IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections;
+
+    private DailyCaptureStagingAttempt(
+        SimulationRuntime sourceRuntime,
+        DailyCaptureEligibilityToken token,
+        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections)
+    {
+        this.sourceRuntime = sourceRuntime;
+        this.token = token;
+        this.ownerSections = ownerSections;
+    }
+
+    internal static bool TryBegin(
+        SimulationRuntime sourceRuntime,
+        DailyCaptureEligibilityToken token,
+        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out DailyCaptureStagingAttempt attempt)
+    {
+        attempt = null;
+        if (sourceRuntime == null || token == null || ownerSections == null
+            || !ReferenceEquals(token.OwnerSections, ownerSections)
+            || !ReferenceEquals(token.WorldId, sourceRuntime.WorldId)
+            || token.AdmissionContext == null
+            || token.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || token.CompletedCoreSequence <= 0L
+            || !sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _))
+            return false;
+
+        attempt = new DailyCaptureStagingAttempt(sourceRuntime, token, ownerSections);
+        return true;
+    }
+
+    internal bool IsCurrentFor(
+        SimulationRuntime candidateRuntime,
+        DailyCaptureEligibilityToken candidateToken,
+        IReadOnlyList<OwnerSectionCensusSnapshot> candidateOwnerSections)
+    {
+        return ReferenceEquals(sourceRuntime, candidateRuntime)
+            && ReferenceEquals(token, candidateToken)
+            && ReferenceEquals(ownerSections, candidateOwnerSections)
+            && candidateRuntime != null
+            && candidateRuntime.TryValidateCompletedDailyCaptureToken(candidateToken, out _);
+    }
+
+    internal bool IsCurrent => IsCurrentFor(sourceRuntime, token, ownerSections);
+}
 
 /// <summary>
 /// Detached value for the identity of the same causal world continuation.
@@ -66,6 +123,7 @@ internal sealed class P12CWorldIdentitySnapshot
 internal sealed class P12CStagedContinuationRoot
 {
     internal P12CStagedContinuationRoot(
+        DailyCaptureStagingAttempt stagingAttempt,
         WorldId worldIdentity,
         RuntimeIdAllocator runtimeIdAllocator,
         SimulationRecordSequence recordSequence,
@@ -73,6 +131,7 @@ internal sealed class P12CStagedContinuationRoot
         SimulationGenesisManifest genesisManifest,
         DeterministicRandomSource deterministicRandom)
     {
+        StagingAttempt = stagingAttempt;
         WorldIdentity = worldIdentity;
         RuntimeIdAllocator = runtimeIdAllocator;
         RecordSequence = recordSequence;
@@ -81,6 +140,7 @@ internal sealed class P12CStagedContinuationRoot
         DeterministicRandom = deterministicRandom;
     }
 
+    internal DailyCaptureStagingAttempt StagingAttempt { get; }
     internal WorldId WorldIdentity { get; }
     internal RuntimeIdAllocator RuntimeIdAllocator { get; }
     internal SimulationRecordSequence RecordSequence { get; }
@@ -98,6 +158,7 @@ internal static class P12CContinuationRootStager
     private const string SpatialAuthorityOutputOwner = "SpatialAuthorityStore";
 
     internal static bool TryStage(
+        DailyCaptureStagingAttempt stagingAttempt,
         P12CWorldIdentitySnapshot worldIdentitySnapshot,
         RuntimeIdAllocatorSnapshot allocatorSnapshot,
         SimulationRecordSequenceSnapshot recordSequenceSnapshot,
@@ -112,6 +173,12 @@ internal static class P12CContinuationRootStager
 
         try
         {
+            if (stagingAttempt == null || !stagingAttempt.IsCurrent)
+            {
+                diagnostic = "P12-C staging attempt is stale or incomplete.";
+                return false;
+            }
+
             if (worldIdentitySnapshot == null)
             {
                 diagnostic = "P12-C WorldId snapshot is required.";
@@ -211,13 +278,20 @@ internal static class P12CContinuationRootStager
                 return false;
             }
 
-            staged = new P12CStagedContinuationRoot(
+            P12CStagedContinuationRoot candidate = new P12CStagedContinuationRoot(
+                stagingAttempt,
                 stagedWorldIdentity,
                 stagedAllocator,
                 stagedRecordSequence,
                 stagedSpatialAuthority,
                 stagedManifest,
                 stagedRandom);
+            if (!stagingAttempt.IsCurrent)
+            {
+                diagnostic = "P12-C staging attempt became stale before the continuation roots were returned.";
+                return false;
+            }
+            staged = candidate;
             return true;
         }
         catch (Exception exception)

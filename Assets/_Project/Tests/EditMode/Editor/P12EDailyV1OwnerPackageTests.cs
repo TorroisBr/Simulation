@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 
 public sealed class P12EDailyV1OwnerPackageTests
@@ -113,7 +114,8 @@ public sealed class P12EDailyV1OwnerPackageTests
         Assert.That(TryCreateContext(otherFixture, otherToken, new SimulationTime(token.AbsoluteDay),
             out P12EDailyV1OwnerStagingContext otherContext), Is.True);
         P12EDailyV1OwnerStagingContext mismatchedWorldContext = new P12EDailyV1OwnerStagingContext(
-            validContext.P12CRoots, otherContext.P12DPackage, new SimulationTime(token.AbsoluteDay),
+            validContext.StagingAttempt, validContext.P12CRoots, otherContext.P12DPackage,
+            new SimulationTime(token.AbsoluteDay),
             validContext.FreeStatus, validContext.WantedStatus,
             validContext.ArrestedStatus, validContext.HiddenStatus,
             validContext.DomainEventRecorder, validContext.Logger);
@@ -145,6 +147,114 @@ public sealed class P12EDailyV1OwnerPackageTests
         Assert.That(package, Is.Null);
         Assert.That(failure, Is.EqualTo(P12EDailyV1OwnerPackageFailure.InvalidCaptureContext));
         Assert.That(context.P12DPackage.Persons.Revision, Is.EqualTo(stagedPersonRevision));
+    }
+
+    [Test]
+    public void TryCaptureAndStage_RejectsSameWorldRootsFromDifferentAttemptsAndTokens()
+    {
+        DailyFixture fixture = CreateDailyFixture("p12e-package-attempt-binding");
+        DailyCaptureEligibilityToken firstToken = CompleteDailyBoundary(fixture.Runtime);
+        Assert.That(TryCreateContext(fixture, firstToken, new SimulationTime(firstToken.AbsoluteDay),
+            out P12EDailyV1OwnerStagingContext firstContext), Is.True);
+        Assert.That(TryCreateContext(fixture, firstToken, new SimulationTime(firstToken.AbsoluteDay),
+            out P12EDailyV1OwnerStagingContext secondAttemptContext), Is.True);
+
+        P12EDailyV1OwnerStagingContext mixedAttemptContext = new P12EDailyV1OwnerStagingContext(
+            firstContext.StagingAttempt, firstContext.P12CRoots, secondAttemptContext.P12DPackage,
+            new SimulationTime(firstToken.AbsoluteDay), firstContext.FreeStatus, firstContext.WantedStatus,
+            firstContext.ArrestedStatus, firstContext.HiddenStatus,
+            firstContext.DomainEventRecorder, firstContext.Logger);
+        Assert.That(P12EDailyV1OwnerPackage.TryCaptureAndStage(
+            fixture.Runtime, firstToken, firstToken.OwnerSections, mixedAttemptContext,
+            out P12EDailyV1OwnerPackage mixedAttemptPackage,
+            out P12EDailyV1OwnerPackageFailure mixedAttemptFailure), Is.False);
+        Assert.That(mixedAttemptPackage, Is.Null);
+        Assert.That(mixedAttemptFailure, Is.EqualTo(P12EDailyV1OwnerPackageFailure.InvalidCaptureContext));
+
+        Assert.That(fixture.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextAdvanceFailure),
+            Is.True, nextAdvanceFailure.ToString());
+        Assert.That(fixture.Runtime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken secondToken,
+            out DailyCaptureEligibilityFailure secondTokenFailure), Is.True, secondTokenFailure.ToString());
+        Assert.That(secondToken.WorldId.Value, Is.EqualTo(firstToken.WorldId.Value));
+        Assert.That(TryCreateContext(fixture, secondToken, new SimulationTime(secondToken.AbsoluteDay),
+            out P12EDailyV1OwnerStagingContext secondTokenContext), Is.True);
+
+        P12EDailyV1OwnerStagingContext mixedTokenContext = new P12EDailyV1OwnerStagingContext(
+            secondTokenContext.StagingAttempt, firstContext.P12CRoots, secondTokenContext.P12DPackage,
+            new SimulationTime(secondToken.AbsoluteDay), secondTokenContext.FreeStatus,
+            secondTokenContext.WantedStatus, secondTokenContext.ArrestedStatus,
+            secondTokenContext.HiddenStatus, secondTokenContext.DomainEventRecorder,
+            secondTokenContext.Logger);
+        Assert.That(P12EDailyV1OwnerPackage.TryCaptureAndStage(
+            fixture.Runtime, secondToken, secondToken.OwnerSections, mixedTokenContext,
+            out P12EDailyV1OwnerPackage mixedTokenPackage,
+            out P12EDailyV1OwnerPackageFailure mixedTokenFailure), Is.False);
+        Assert.That(mixedTokenPackage, Is.Null);
+        Assert.That(mixedTokenFailure, Is.EqualTo(P12EDailyV1OwnerPackageFailure.InvalidCaptureContext));
+    }
+
+    [Test]
+    public void TryCaptureAndStage_ComposesPopulatedOfficeClaimSupportRelationsThroughExactStagedParents()
+    {
+        DailyFixture fixture = CreateDailyFixture("p12e-package-populated-graph");
+        PersonId claimant = new PersonId("p12e-package-populated-claimant");
+        PersonId target = new PersonId("p12e-package-populated-target");
+        InstitutionId institutionId = new InstitutionId("p12e-package-populated-institution");
+        OfficeId officeId = new OfficeId("p12e-package-populated-office");
+        PoliticalClaimId claimId = new PoliticalClaimId("p12e-package-populated-claim");
+        PoliticalSupportRelationId supportId = new PoliticalSupportRelationId("p12e-package-populated-support");
+
+        Assert.That(fixture.Runtime.TryRegisterPerson(
+            new PersonRuntime(claimant, fixture.Runtime.CurrentDay), out PersonStoreFailure claimantFailure),
+            Is.True, claimantFailure.ToString());
+        Assert.That(fixture.Runtime.TryRegisterPerson(
+            new PersonRuntime(target, fixture.Runtime.CurrentDay), out PersonStoreFailure targetFailure),
+            Is.True, targetFailure.ToString());
+        Assert.That(fixture.Runtime.TryRegisterInstitution(
+            new InstitutionRecord(institutionId, "Council"), out InstitutionFoundationFailure institutionFailure),
+            Is.True, institutionFailure.ToString());
+        Assert.That(fixture.Runtime.TryRegisterOffice(
+            new OfficeRecord(officeId, institutionId, "Speaker"), out InstitutionFoundationFailure officeFailure),
+            Is.True, officeFailure.ToString());
+
+        PoliticalClaimRecord claim = new PoliticalClaimRecord(
+            claimId, claimant, PoliticalClaimType.OfficeEntitlement,
+            PoliticalClaimTarget.ForOffice(officeId), PoliticalClaimBasis.OfficeIncumbency,
+            "office entitlement fixture", fixture.Runtime.CurrentDay, Array.Empty<string>());
+        Assert.That(fixture.Runtime.TryRegisterPoliticalClaim(claim, out PoliticalClaimFailure claimFailure),
+            Is.True, claimFailure.ToString());
+        PoliticalSupportRelationRecord support = new PoliticalSupportRelationRecord(
+            supportId, PoliticalSupportSource.ForPerson(claimant),
+            PoliticalSupportTarget.ForPoliticalClaim(claimId),
+            PoliticalSupportDisposition.Support, fixture.Runtime.CurrentDay);
+        Assert.That(fixture.Runtime.TryRegisterPoliticalSupport(support, out PoliticalSupportFailure supportFailure),
+            Is.True, supportFailure.ToString());
+
+        DailyCaptureEligibilityToken token = CompleteDailyBoundary(fixture.Runtime);
+        Assert.That(TryCreateContext(fixture, token, new SimulationTime(token.AbsoluteDay),
+            out P12EDailyV1OwnerStagingContext context), Is.True);
+        Assert.That(P12EDailyV1OwnerPackage.TryCaptureAndStage(
+            fixture.Runtime, token, token.OwnerSections, context,
+            out P12EDailyV1OwnerPackage package,
+            out P12EDailyV1OwnerPackageFailure failure), Is.True, failure.ToString());
+
+        Assert.That(package.Institutions.TryGet(institutionId, out InstitutionRecord stagedInstitution), Is.True);
+        Assert.That(package.Offices.TryGet(officeId, out OfficeRecord stagedOffice), Is.True);
+        Assert.That(stagedOffice.InstitutionId, Is.EqualTo(institutionId));
+        Assert.That(package.Offices.InstitutionStoreForWorldBoundary, Is.SameAs(package.Institutions));
+        Assert.That(package.PoliticalClaims.TryGet(claimId, out PoliticalClaimRecord stagedClaim), Is.True);
+        Assert.That(stagedClaim.Target.Kind, Is.EqualTo(PoliticalClaimTargetKind.Office));
+        Assert.That(stagedClaim.Target.TargetId, Is.EqualTo(officeId.Value));
+        Assert.That(package.PoliticalSupport.TryGet(supportId,
+            out PoliticalSupportRelationRecord stagedSupport), Is.True);
+        Assert.That(stagedSupport.Target, Is.EqualTo(PoliticalSupportTarget.ForPoliticalClaim(claimId)));
+        Assert.That(GetField<InstitutionStore>(package.Offices, "institutionStore"), Is.SameAs(package.Institutions));
+        Assert.That(GetField<PoliticalClaimStore>(package.PoliticalSupport, "politicalClaimStore"),
+            Is.SameAs(package.PoliticalClaims));
+        Assert.That(GetField<PersonStore>(package.PoliticalSupport, "personStore"),
+            Is.SameAs(context.P12DPackage.Persons));
+        Assert.That(GetField<FactionStore>(package.PoliticalSupport, "factionStore"), Is.SameAs(package.Factions));
     }
 
     [Test]
@@ -255,6 +365,11 @@ public sealed class P12EDailyV1OwnerPackageTests
         out P12EDailyV1OwnerStagingContext context)
     {
         context = null;
+        if (!DailyCaptureStagingAttempt.TryBegin(
+                fixture.Runtime, token, token.OwnerSections,
+                out DailyCaptureStagingAttempt stagingAttempt))
+            return false;
+
         if (!P12CWorldIdentitySnapshot.TryCapture(
                 token.WorldId, out P12CWorldIdentitySnapshot identitySnapshot, out _)
             || !identitySnapshot.TryStage(out WorldId stagedWorldId, out _)
@@ -269,9 +384,9 @@ public sealed class P12EDailyV1OwnerPackageTests
             return false;
 
         P12CStagedContinuationRoot stagedC = new P12CStagedContinuationRoot(
-            stagedWorldId, null, null, stagedSpatialAuthority, null, null);
+            stagingAttempt, stagedWorldId, null, null, stagedSpatialAuthority, null, null);
         if (!P12DDailyV1OwnerPackage.TryCaptureAndStage(
-                fixture.Runtime, token, new object(), token.OwnerSections,
+                fixture.Runtime, token, stagingAttempt, token.OwnerSections,
                 fixture.Identities, fixture.Network, fixture.Sites,
                 new RuntimeIdentityRegistry(), stagedWorldId,
                 fixture.Cities.Select(city => city.CityData).ToArray(),
@@ -283,7 +398,7 @@ public sealed class P12EDailyV1OwnerPackageTests
             return false;
 
         context = new P12EDailyV1OwnerStagingContext(
-            stagedC, stagedD, stagedTime,
+            stagingAttempt, stagedC, stagedD, stagedTime,
             fixture.FreeStatus, fixture.WantedStatus,
             fixture.ArrestedStatus, fixture.HiddenStatus,
             null, fixture.Logger);
@@ -331,5 +446,12 @@ public sealed class P12EDailyV1OwnerPackageTests
         }
         if (match == null) throw new InvalidOperationException("Missing section: " + sectionId);
         return match;
+    }
+
+    private static T GetField<T>(object source, string fieldName) where T : class
+    {
+        FieldInfo field = source.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, "Expected private owner reference field " + fieldName + ".");
+        return field.GetValue(source) as T;
     }
 }

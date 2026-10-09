@@ -20,6 +20,7 @@ internal enum P12EDailyV1OwnerPackageFailure
 /// </summary>
 internal sealed class P12EDailyV1OwnerStagingContext
 {
+    internal DailyCaptureStagingAttempt StagingAttempt { get; }
     internal P12CStagedContinuationRoot P12CRoots { get; }
     internal P12DDailyV1OwnerPackage P12DPackage { get; }
     internal SimulationTime StagedSimulationTime { get; }
@@ -31,6 +32,7 @@ internal sealed class P12EDailyV1OwnerStagingContext
     internal SimulationLogger Logger { get; }
 
     internal P12EDailyV1OwnerStagingContext(
+        DailyCaptureStagingAttempt stagingAttempt,
         P12CStagedContinuationRoot p12cRoots,
         P12DDailyV1OwnerPackage p12dPackage,
         SimulationTime stagedSimulationTime,
@@ -41,6 +43,7 @@ internal sealed class P12EDailyV1OwnerStagingContext
         DomainEventRecorder domainEventRecorder,
         SimulationLogger logger)
     {
+        StagingAttempt = stagingAttempt;
         P12CRoots = p12cRoots;
         P12DPackage = p12dPackage;
         StagedSimulationTime = stagedSimulationTime;
@@ -236,7 +239,8 @@ internal sealed class P12EDailyV1OwnerPackage
                 return false;
             }
 
-            if (!sourceRuntime.TryValidateCompletedDailyCaptureToken(exactCompletedToken, out _))
+            if (!context.StagingAttempt.IsCurrentFor(
+                    sourceRuntime, exactCompletedToken, exactTokenOwnerSections))
             {
                 failure = P12EDailyV1OwnerPackageFailure.StaleBoundary;
                 return false;
@@ -309,7 +313,8 @@ internal sealed class P12EDailyV1OwnerPackage
                 return false;
             }
 
-            if (!sourceRuntime.TryValidateCompletedDailyCaptureToken(exactCompletedToken, out _))
+            if (!context.StagingAttempt.IsCurrentFor(
+                    sourceRuntime, exactCompletedToken, exactTokenOwnerSections))
             {
                 failure = P12EDailyV1OwnerPackageFailure.StaleBoundary;
                 return false;
@@ -344,11 +349,15 @@ internal sealed class P12EDailyV1OwnerPackage
         P12EDailyV1OwnerStagingContext context)
     {
         if (sourceRuntime == null || token == null || ownerSections == null || context == null
+            || context.StagingAttempt == null
+            || !context.StagingAttempt.IsCurrentFor(sourceRuntime, token, ownerSections)
             || !ReferenceEquals(token.OwnerSections, ownerSections)
             || token.AdmissionContext == null
             || token.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || token.CompletedCoreSequence <= 0L || token.AbsoluteDay < 0L || token.MutationEpoch < 0L
             || context.P12CRoots == null || context.P12DPackage == null
+            || !ReferenceEquals(context.P12CRoots.StagingAttempt, context.StagingAttempt)
+            || !ReferenceEquals(context.P12DPackage.StagingAttempt, context.StagingAttempt)
             || context.StagedSimulationTime == null
             || context.FreeStatus == null || context.WantedStatus == null
             || context.ArrestedStatus == null || context.HiddenStatus == null || context.Logger == null
