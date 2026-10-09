@@ -1,3 +1,32 @@
+## P12-G current-base owner/cardinality revalidation — 2026-10-09
+
+At P12 canonical `448d3583a85730a7db9531e61c6b6fbaaeaf6430`, the
+299-row/24-operation family reconciliation was revalidated against all
+`Assets/_Project` source/test changes since its `564553f` baseline. The only
+changes are the `SimulationRuntime` City-bound materialization fix and its
+focused bootstrap witness, plus the Crime/Social ingress witness at `d859d0f`
+and exact epoch test at `33ce302`.
+The source-linked detail is in
+[`design/PHASE12_G_CURRENT_BASE_OWNER_CARDINALITY_RECONCILIATION_448D358.md`](design/PHASE12_G_CURRENT_BASE_OWNER_CARDINALITY_RECONCILIATION_448D358.md).
+Its independent review PASS is recorded in
+[`design/PHASE12_G_CURRENT_BASE_OWNER_CARDINALITY_RECONCILIATION_REVIEW_448D358.md`](design/PHASE12_G_CURRENT_BASE_OWNER_CARDINALITY_RECONCILIATION_REVIEW_448D358.md).
+
+The refresh ties City NPC-presence cardinality/revision and one shared-epoch
+increment to successful Person-bound NPC materialization under
+`runtime.npc-membership`. It also ties normal selected Daily-v1 Steal ingress
+to the existing `runtime.advance-day` operation and the Crime/Social composite's
+exact `+1` epoch contribution. These close two row-specific evidence items;
+they do not establish complete 299-row live owner/cardinality or
+operation/epoch coverage.
+
+Next, complete the source-linked fixed-row owner identity/cardinality audit,
+then close remaining dynamic/conditional rows and successful-writer
+dispositions. Target-owner checks, target-bound restored-boundary admission,
+one active-session publication owner/swap, and whole-graph evidence also
+remain. P12-G and P12-A remain `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase
+12 remains `OPEN`. P12-B and P12-C remain promoted within their existing
+scopes; this record adds no implementation readiness or scope.
+
 ## P12-G Crime/Social exact composite epoch witness — promoted 2026-10-09
 
 P12 canonical was refreshed at `01e1008f204ca96bb21c799f1ae8b8e46a5f85f0`;
