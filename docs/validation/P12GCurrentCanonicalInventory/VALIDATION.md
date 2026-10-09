@@ -2,9 +2,12 @@
 
 **Status:** validated test-only evidence slice; P12-G implementation remains `WAIT_DEPENDENCY`.
 
-**P12 canonical base:** `02009f9063dd252bd4b177fd6aef1e74dcd947f5`  
-**Architecture baseline:** `47eff220c7ce00f6e7c759bdc2b76780bb46f628`  
-**Code candidate:** `a2a48da75b818133252f4cf51ce5beeb2fc4b5a0`  
+**P12 canonical base:** `02009f9063dd252bd4b177fd6aef1e74dcd947f5`
+
+**Architecture baseline:** `47eff220c7ce00f6e7c759bdc2b76780bb46f628`
+
+**Code candidate:** `a2a48da75b818133252f4cf51ce5beeb2fc4b5a0`
+
 **Reviewed code tree to be independently reviewed:** `ec20bc3fae20f3bdb4dc7b89bed61373d41b4974` (`Assets`)
 
 The test-only change adds an independent literal Daily-v1 section manifest and compares its exact IDs and roles with both the protocol's expected-section set and its live provider registrations. It applies the same comparison to the authored bootstrap fixture, NPC roster mutations, and Person registration/materialization. It checks the documented `61 + 22N + (N-M) + P + 4C` cardinality equation, exact-zero roles, witness identity stability, revision/cardinality shape, the unregistered ActorChoice temporal provider's shared owner identity and zero current inputs, allocator counters outside the vector, P10 LocalTopology absence, and known omitted read-model/root dispositions.
