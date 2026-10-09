@@ -1,4 +1,4 @@
-## Latest canonical promotion — P12-E PoliticalClaim and Faction owner snapshots (2026-10-08)
+## Latest canonical promotion — P12-E PoliticalClaim and Faction owner snapshots (2026-10-09)
 
 P12 canonical was refreshed at `a768f2d9eca161f5cff059a782737412f43b2861`.
 Immediately before promotion, the canonical, candidate, review, code tree, artifact hashes, protected-file hashes, ancestry, and diff checks were revalidated. `codex/phase12/canonical` advanced by clean fast-forward from `a768f2d9eca161f5cff059a782737412f43b2861` to the promotion State commit `9c4874bae64224a68844c503be423955a3bef987`; local and remote refs were verified synchronized at that SHA.
