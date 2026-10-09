@@ -497,6 +497,62 @@ public sealed class PoliticalSupportStore : IAuthoritativeMutationGuardBindable
         return clone;
     }
 
+    internal bool HasValidEndpointsForP12EOwnerSnapshot(PoliticalSupportRelationRecord record)
+    {
+        return record != null && ValidateEndpoints(record, out _);
+    }
+
+    internal static string PairKeyForP12EOwnerSnapshot(
+        PoliticalSupportSource source,
+        PoliticalSupportTarget target)
+    {
+        return source == null || target == null ? null : PairKey(source, target);
+    }
+
+    internal static bool TryCreateFromP12EOwnerSnapshot(
+        PersonStore stagedPersons,
+        FactionStore stagedFactions,
+        PoliticalClaimStore stagedPoliticalClaims,
+        IReadOnlyList<PoliticalSupportRelationRecord> records,
+        long restoredRevision,
+        out PoliticalSupportStore staged)
+    {
+        staged = null;
+        if (stagedPersons == null || stagedFactions == null || stagedPoliticalClaims == null
+            || records == null || restoredRevision < 0L)
+            return false;
+
+        PoliticalSupportStore candidate = new PoliticalSupportStore(
+            stagedPersons, stagedFactions, stagedPoliticalClaims);
+        for (int index = 0; index < records.Count; index++)
+        {
+            PoliticalSupportRelationRecord record = records[index];
+            if (record == null || record.RelationId == null || string.IsNullOrWhiteSpace(record.RelationId.Value)
+                || record.Source == null || record.Target == null
+                || !Enum.IsDefined(typeof(PoliticalSupportSourceKind), record.Source.Kind)
+                || !Enum.IsDefined(typeof(PoliticalSupportTargetKind), record.Target.Kind)
+                || !Enum.IsDefined(typeof(PoliticalSupportDisposition), record.Disposition)
+                || record.StartedAbsoluteDay < 0L
+                || (record.EndedAbsoluteDay.HasValue
+                    && record.EndedAbsoluteDay.Value < record.StartedAbsoluteDay)
+                || candidate.recordsById.ContainsKey(record.RelationId.Value)
+                || !candidate.ValidateEndpoints(record, out _))
+                return false;
+
+            candidate.recordsById.Add(record.RelationId.Value, record);
+            if (record.IsActive)
+            {
+                string key = PairKey(record.Source, record.Target);
+                if (candidate.activeByPair.ContainsKey(key)) return false;
+                candidate.activeByPair.Add(key, record);
+            }
+        }
+
+        candidate.revision = restoredRevision;
+        staged = candidate;
+        return true;
+    }
+
     private bool ValidateEndpoints(
         PoliticalSupportRelationRecord record,
         out PoliticalSupportFailure failure)
