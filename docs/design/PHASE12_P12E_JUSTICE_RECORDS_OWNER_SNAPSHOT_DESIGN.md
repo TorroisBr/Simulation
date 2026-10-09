@@ -1,6 +1,6 @@
 # P12-E Justice Records Owner Snapshot Design
 
-**Status:** Current-base technical design candidate; pending independent exact-content review.
+**Status:** Current-base technical design candidate; identity correction applied after independent review, pending exact-content re-review.
 
 **Checkpoint:** P12-E — Profile-selected core and official daily-domain owners.
 **P12 canonical base:** `codex/phase12/canonical` at `565f6b5817e0126c2f89e0a1452b09a8fb03cc19`.
@@ -21,13 +21,13 @@ This is a bounded owner subtask under P12-E, not a new numbered checkpoint. It d
 
 For each wanted-record row, preserve:
 
-- target `NpcRuntime.RuntimeId` and City `RuntimeId`;
+- target `NpcRuntime.RuntimeId`, the target's nullable `PersonId` when it is Person-backed, and City `RuntimeId`;
 - exact `Bounty`, `SentenceDays`, and resolved/active disposition;
 - its original list ordinal.
 
 For each prison-sentence row, preserve:
 
-- target and City RuntimeIds;
+- target `NpcRuntime.RuntimeId`, the target's nullable `PersonId` when it is Person-backed, and City `RuntimeId`;
 - the referenced wanted-record ordinal;
 - exact `RemainingDays`, `FailedEscapeAttempts`, and `WasArrestedToday`;
 - its original list ordinal.
@@ -36,11 +36,13 @@ Preserve the exact nonnegative `P12CrimeJusticeRevision` independently of row co
 
 The P12-E value section does not copy the P12-B witness, NPC statuses, City facts, operation events, diagnostic logs, or P18 temporal receipts. The selected Daily-v1 profile excludes the Justice P18 boundary-step receipt state. Capture must consume its existing exact `p12b.justice-p18-receipts` witness with the exact registered owner, cardinality one, and revision zero; reject a nonzero or mismatched witness. Do not add another census provider or serialize transient mutation-guard, P12 callback, or Daily-profile receipt-boundary bindings.
 
+`RuntimeId` identifies the exact active NPC representation needed to reconstruct the current owner links. `PersonId` preserves the persistent identity of person-backed targets under the canonical continuation identity rule. Store it as nullable because legacy NPC-only actors remain supported: do not mint, infer, or upgrade a PersonId during capture or staging. For a non-null value, preserve the exact stable ID string from the staged D/F NPC root.
+
 ## 3. Capture and staged-root order
 
 Capture accepts the admitted runtime, its exact installed `JusticeSystem`, the completed-day eligibility token, and that token's exact P12-B owner-section vector. Require the exact `p12b.justice-records` witness to reference that Justice instance and match its current combined cardinality and local revision before copying. Copy wanted and sentence rows in owner order, then recheck the token, both owner witnesses, and the exact-zero Justice P18 receipt witness. Any owner, count, revision, or boundary change rejects capture.
 
-Staging runs after the exact P12-D staged City and D/F NPC roots exist. Resolve every RuntimeId against those exact staged roots; reject missing or ambiguous identities. Reconstruct wanted records first, preserving their order and all historical/resolved rows. Then reconstruct sentences using the wanted-row transport ordinal and require the sentence's target and City to be the exact same references as its referenced warrant. Retain the current domain invariants and reject malformed scalar values, null rows, invalid ordinals, duplicate object references, and declared count/revision mismatch.
+Staging runs after the exact P12-D staged City, D/F NPC roots, and PersonStore exist. Resolve every target RuntimeId and City RuntimeId against those exact staged roots; reject missing or ambiguous identities. For a null target PersonId, require the exact staged NPC root to be legacy NPC-only and require that the staged PersonStore has no reciprocal materialized-NPC binding for its RuntimeId. For a non-null target PersonId, parse it as a valid `PersonId`, require that exact staged Person in the staged PersonStore, require its `MaterializedNpcRuntimeId` to equal the target RuntimeId, and require `TryGetByMaterializedNpcRuntimeId` to return the same Person object. Also require the NPC root's `PersonIdValue` to equal the row's PersonId. Reject dangling, mismatched, or one-sided bindings. Apply these checks independently to wanted rows and sentence rows; sentences must still refer to the exact same target and City objects as their referenced warrant. Reconstruct wanted records first, preserving their order and all historical/resolved rows. Then reconstruct sentences using the wanted-row transport ordinal. Retain the current domain invariants and reject malformed scalar values, null rows, invalid ordinals, duplicate object references, and declared count/revision mismatch.
 
 Private owner factories must install recorded values without calling public live mutation methods, notifying P12, emitting events, synchronizing statuses, or replaying daily work. The staged group remains unreachable from the active runtime. It uses the admitted profile's existing status/configuration assets; it does not serialize those assets or diagnostics. Later publication binds fresh P12 callbacks and the mutation guard through the normal P12-G integration. No transient P18 receipts or runtime bindings are restored.
 
@@ -52,7 +54,7 @@ Add a focused `P12EJusticeRecordsOwnerSnapshotTests` suite covering:
 
 1. Exact empty capture/stage with section identity, owner identity, cardinality zero, revision zero, and a current completed-day token.
 2. Populated round-trip of multiple ordered wanted rows (including resolved history) and sentences, preserving every scalar, row order, multiplicity, exact local revision, and sentence-to-warrant relation.
-3. Exact staged NPC and City object references, including rejection of missing or ambiguous RuntimeIds and mismatched target/City/warrant links.
+3. Exact staged NPC, Person, and City references: round-trip Person-backed targets with stable PersonId and exact reciprocal PersonStore/NPC-root mapping; round-trip legacy NPC-only targets with null PersonId and no PersonStore binding; reject dangling/mismatched/one-sided PersonId mappings, missing or ambiguous RuntimeIds, and mismatched target/City/warrant links.
 4. Rejection of missing, duplicated, reordered, wrong-owner, stale, or changed P12-B witnesses; stale-token rejection when capture crosses a successful owner mutation.
 5. Rejection of negative revisions/counts, overflowed cardinality, malformed bounty/sentence values, null rows, duplicate object references, invalid sentence ordinals, and row/cardinality mismatch; all failure paths return no staged group and leave source and previously staged roots unchanged.
 6. Exact-zero Justice P18 receipt admission and rejection of a populated or stale receipt witness. No receipt is restored by this Daily-v1 slice.
