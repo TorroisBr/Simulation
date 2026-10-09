@@ -3,7 +3,7 @@
 Remote origin was checked directly: codex/phase12/canonical remains at 0619a33cd4287d89bad80fbe546763aff8f2a75b. Its latest formal promotion record completes P12-E within the reviewed UnityBootstrap-Daily-v1 owner-package/export/private-staging boundary. Together with the later P12-B completion record and promoted C/D packages, the current bounded status is:
 
 - P12-B, P12-C, P12-D, and P12-E are COMPLETE/PROMOTED within their recorded scopes.
-- P12-F's C/D/E dependencies are satisfied. Its 2026-09-29 design is stale against the current owner inventory/package seams and architecture 47eff220; current-base design revalidation and independent review are required before implementation.
+- P12-F's C/D/E dependencies are satisfied. Its current-base design revalidation and independent exact-tip review PASS are recorded in [the revalidation](design/PHASE12_F_CURRENT_BASE_DESIGN_REVALIDATION_0619A33.md) and [the review record](design/PHASE12_F_CURRENT_BASE_DESIGN_REVIEW_FD40D2E.md) at candidate fd40d2e (design blob 69622d3). P12-F is READY_FOR_IMPLEMENTATION within previously accepted prerequisite scope; no F implementation has been promoted.
 - P12-G remains WAIT_DEPENDENCY on B through F and validated live-profile inventory. P12-A remains WAIT_DEPENDENCY on complete included-owner export/private hydration, validated inventory, and separate authorization. P13 remains BLOCKED on its supported reconstruction prerequisites. Phase 12 remains OPEN.
 - This summary supersedes the older opening crosswalk status below that marked P12-E IN PROGRESS and P12-F WAIT_DEPENDENCY on E. That entry remains historical evidence; checkpoint identities/history are unchanged.
 
