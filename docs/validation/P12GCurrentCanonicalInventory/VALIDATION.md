@@ -56,3 +56,23 @@ Unity Editor: `6000.3.9f1`. Each XML reports `Passed`, zero failures/inconclusiv
 | Official Smoke (`-testFilter Smoke`) | 5/5 PASS | `3C49F6F152374734928E65D17B7D2D8AD6F7097B68AFE2AB748C748EA67E54D4` | `303E46C2E07C1BCB503D2A0ED383DBDB459E309B08C027D698B0B0B56BC892AA` |
 
 The exact XML and `.log.gz` artifacts are stored in the existing `Focused`, `AllEditMode`, and `OfficialSmoke` directories. The successful runs used `Invoke-UnityValidation.ps1` with their corresponding filters; ALL EditMode used `-All`. `git diff --check` passed. The unrelated `ProjectSettings` edits and untracked `.meta` files remain untouched.
+
+## TravelParty allocator owner-identity follow-up — 2026-10-09
+
+**Code commit:** `c65f251c15d2df217fdd8a376cbecdc262e60bca`
+
+**Reviewed Assets tree candidate:** `1b90b4f77586f69c04330b564a32e0a9475808d4`
+
+The focused inventory test now compares the TravelParty allocator-counter provider exposed by the bootstrap with the provider registered by the live runtime and asserts that both witnesses identify the same owner instance. This closes the identified selected-profile bootstrap/runtime identity mismatch check. It does not establish exhaustive supported-writer coverage, every reachable owner state, restored-boundary admission, whole-graph publication, continuation parity, or P12-G readiness. P12-G remains `WAIT_DEPENDENCY`; P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains open.
+
+### Follow-up validation
+
+Unity Editor: `6000.3.9f1`. Each XML reports passed tests with zero failures and zero inconclusive tests. Results correspond to the Assets tree above.
+
+| Run | Result | XML SHA-256 | Compressed log SHA-256 |
+|---|---:|---|---|
+| `SimulationBootstrapCompositionTests` | 26/26 PASS | `716CCD640F315FC50BD2127253B183209A3849822F3CA3F93C9F29B12086095B` | `5A186D9DCC4575CE00EC8B577895EC0BE4513A9A57F24A6F4898669717E0D5F5` |
+| ALL EditMode | 2732/2732 PASS | `7D0C990349B40DB5D14E2005D64993C48C34EF07ECCD8DCB77085CA2ABE42D9D` | `E379F51A6582A96C570D5387BBEE715E7F3848649E36F5E07E196D8D8FD8EC52` |
+| Official Smoke (`-testFilter Smoke`) | 5/5 PASS | `38B6E299E6160A1BF9D512C4755C88CC160299CA8825051FB91E2AF4681CD5EA` | `D27B36618FC0602840C3BA1CA1112564430C53AA83B893E9BF08E095C61B5AB4` |
+
+The exact XML and `.log.gz` artifacts are stored in the `Focused`, `AllEditMode`, and `OfficialSmoke` subdirectories. `git diff --check` passed after the test change. The unrelated `ProjectSettings` edits and untracked `.meta` files were not staged or changed by this candidate.
