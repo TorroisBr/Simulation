@@ -219,6 +219,39 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         Assert.That(P12EJusticeRecordsOwnerSnapshot.TryCapture(runtime, currentToken, currentToken.OwnerSections,
             out P12EJusticeRecordsOwnerSnapshot nonzeroReceipt, out _), Is.False);
         Assert.That(nonzeroReceipt, Is.Null);
+
+    }
+
+    [Test]
+    public void ReceiptWitnessValidatorRejectsNonzeroRevisionCardinalityAndWrongOwner()
+    {
+        JusticeConfiguration configuration = CreateJusticeConfiguration("p12e-justice-receipt-witness");
+        JusticeSystem owner = configuration.CreateOwner();
+        MethodInfo validate = typeof(P12EJusticeRecordsOwnerSnapshot).GetMethod(
+            "TryMatchesReceiptWitness", BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.That(validate, Is.Not.Null);
+
+        OwnerSectionCensusSnapshot exactZero = new OwnerSectionCensusSnapshot(
+            P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId,
+            P12CrimeJusticeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
+            owner, 1, 0L);
+        Assert.That((bool)validate.Invoke(null, new object[] { exactZero, owner }), Is.True);
+
+        OwnerSectionCensusSnapshot nonzeroRevision = new OwnerSectionCensusSnapshot(
+            exactZero.SectionId, exactZero.SchemaVersion, exactZero.Role,
+            owner, 1, 1L);
+        Assert.That((bool)validate.Invoke(null, new object[] { nonzeroRevision, owner }), Is.False);
+
+        OwnerSectionCensusSnapshot wrongCardinality = new OwnerSectionCensusSnapshot(
+            exactZero.SectionId, exactZero.SchemaVersion, exactZero.Role,
+            owner, 2, 0L);
+        Assert.That((bool)validate.Invoke(null, new object[] { wrongCardinality, owner }), Is.False);
+
+        OwnerSectionCensusSnapshot wrongOwner = new OwnerSectionCensusSnapshot(
+            exactZero.SectionId, exactZero.SchemaVersion, exactZero.Role,
+            configuration.CreateOwner(), 1, 0L);
+        Assert.That((bool)validate.Invoke(null, new object[] { wrongOwner, owner }), Is.False);
+        Assert.That((bool)validate.Invoke(null, new object[] { null, owner }), Is.False);
     }
 
     [Test]
@@ -383,6 +416,9 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
             new P12EJusticeWantedSnapshotRow[] { null },
             Array.Empty<P12EJusticeSentenceSnapshotRow>(), 0L), P12EJusticeSnapshotFailureCode.InvalidIdentity);
         AssertStageRejected(Snapshot(
+            Array.Empty<P12EJusticeWantedSnapshotRow>(),
+            new P12EJusticeSentenceSnapshotRow[] { null }, 0L), P12EJusticeSnapshotFailureCode.InvalidIdentity);
+        AssertStageRejected(Snapshot(
             new[] { Wanted(0, "target", null, "city", 1f, 1, false) },
             new[] { Sentence(0, "target", null, "city", 0, -1, 0, false) }, 0L),
             P12EJusticeSnapshotFailureCode.InvalidIdentity);
@@ -413,6 +449,22 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         wantedRows.Add(warrant);
         Assert.That(justice.TryCaptureP12EOwnerSnapshotRows(out IReadOnlyList<P12EJusticeWantedSnapshotRow> copiedWanted,
             out IReadOnlyList<P12EJusticeSentenceSnapshotRow> copiedSentences), Is.False);
+        Assert.That(copiedWanted, Is.Null);
+        Assert.That(copiedSentences, Is.Null);
+
+        CityRuntime sentenceCity = CreateCity("p12e-justice-duplicate-sentence-city");
+        NpcRuntime sentenceTarget = CreateNpc("p12e-justice-duplicate-sentence-target");
+        NpcRuntime sentenceGuard = CreateNpc("p12e-justice-duplicate-sentence-guard");
+        JusticeSystem duplicateSentenceJustice = configuration.CreateOwner();
+        Assert.That(duplicateSentenceJustice.CreateOrIncreaseWarrant(
+            sentenceTarget, sentenceCity, 1f, 1), Is.Not.Null);
+        Assert.That(duplicateSentenceJustice.Arrest(sentenceGuard, sentenceTarget, sentenceCity), Is.True);
+        List<PrisonSentenceRuntime> sentenceRows =
+            ReadOwnerRows<PrisonSentenceRuntime>(duplicateSentenceJustice, "prisonSentences");
+        Assert.That(sentenceRows, Has.Count.EqualTo(1));
+        sentenceRows.Add(sentenceRows[0]);
+        Assert.That(duplicateSentenceJustice.TryCaptureP12EOwnerSnapshotRows(
+            out copiedWanted, out copiedSentences), Is.False);
         Assert.That(copiedWanted, Is.Null);
         Assert.That(copiedSentences, Is.Null);
 
