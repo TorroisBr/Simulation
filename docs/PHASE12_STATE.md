@@ -1,3 +1,12 @@
+## Current P12 canonical checkpoint state — 2026-10-09
+
+Remote origin was checked directly: codex/phase12/canonical remains at 0619a33cd4287d89bad80fbe546763aff8f2a75b. Its latest formal promotion record completes P12-E within the reviewed UnityBootstrap-Daily-v1 owner-package/export/private-staging boundary. Together with the later P12-B completion record and promoted C/D packages, the current bounded status is:
+
+- P12-B, P12-C, P12-D, and P12-E are COMPLETE/PROMOTED within their recorded scopes.
+- P12-F's C/D/E dependencies are satisfied. Its 2026-09-29 design is stale against the current owner inventory/package seams and architecture 47eff220; current-base design revalidation and independent review are required before implementation.
+- P12-G remains WAIT_DEPENDENCY on B through F and validated live-profile inventory. P12-A remains WAIT_DEPENDENCY on complete included-owner export/private hydration, validated inventory, and separate authorization. P13 remains BLOCKED on its supported reconstruction prerequisites. Phase 12 remains OPEN.
+- This summary supersedes the older opening crosswalk status below that marked P12-E IN PROGRESS and P12-F WAIT_DEPENDENCY on E. That entry remains historical evidence; checkpoint identities/history are unchanged.
+
 ## Latest canonical promotion — P12-E effective-provider and owner source crosswalk — 2026-10-09
 
 P12 canonical advanced by a clean fast-forward from `a2e8b696054089378748354703dd2e0f50245769` to the reviewed documentation candidate `fe490b0368fa50c1bc5196b628e20151323edcc9` on `codex/phase12/canonical`. The original crosswalk candidate is `687eaf3a73e7651005192c6e7a739c738e1c0b2d`, tree `1cb5e4cae1af6eff5b75d3e0f4da3536d614a95e`; its exact crosswalk blob is `5d2280c957deb7df9bb78183cc2d472e62966429`. Independent exact-tip content review PASS is recorded in [`design/PHASE12_E_EFFECTIVE_PROVIDER_OWNER_CROSSWALK_REVIEW_A2E8B69.md`](design/PHASE12_E_EFFECTIVE_PROVIDER_OWNER_CROSSWALK_REVIEW_A2E8B69.md), durably added at the promoted tip. The only change after the reviewed candidate was that review record; final preflight confirmed the three reviewed document blobs were unchanged, ancestry was fast-forward-only, the diff contained documentation only, and `git diff --check` passed. No Unity tests were applicable or run for this documentation-only slice.
