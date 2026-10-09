@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="9" result="Passed" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 13:51:19Z" end-time="2026-10-09 13:51:19Z" duration="0,1745211">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2709" result="Passed" start-time="2026-10-09 13:51:19Z" end-time="2026-10-09 13:51:19Z" duration="0.174521" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3969" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-justice-owner-snapshot-design/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2709" result="Passed" start-time="2026-10-09 13:51:19Z" end-time="2026-10-09 13:51:19Z" duration="0.159868" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="93664" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2709" name="P12EJusticeRecordsOwnerSnapshotTests" fullname="P12EJusticeRecordsOwnerSnapshotTests" classname="P12EJusticeRecordsOwnerSnapshotTests" runstate="Runnable" testcasecount="9" result="Passed" start-time="2026-10-09 13:51:19Z" end-time="2026-10-09 13:51:19Z" duration="0.142754" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2710" name="CaptureAndStagePreserveOrderedHistorySentenceLinksAndBothTargetIdentityForms" fullname="P12EJusticeRecordsOwnerSnapshotTests.CaptureAndStagePreserveOrderedHistorySentenceLinksAndBothTargetIdentityForms" methodname="CaptureAndStagePreserveOrderedHistorySentenceLinksAndBothTargetIdentityForms" classname="P12EJusticeRecordsOwnerSnapshotTests" runstate="Runnable" seed="393858154" result="Passed" start-time="2026-10-09 13:51:19Z" end-time="2026-10-09 13:51:19Z" duration="0.115612" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[definition-p12e-justice-person-target display agora possui mandado em definition-p12e-justice-city-a display. Recompensa: 3,5. Pena: 2 dias.
+definition-p12e-justice-person-target display agora possui mandado em definition-p12e-justice-city-a display. Recompensa: 12,25. Pena: 5 dias.
+definition-p12e-justice-legacy-target display agora possui mandado em definition-p12e-justice-city-b display. Recompensa: 8. Pena: 3 dias.
+definition-p12e-justice-person-guard display prendeu definition-p12e-justice-person-target display em definition-p12e-justice-city-a display. Pena restante: 5 dias.
+definition-p12e-justice-legacy-guard display prendeu definition-p12e-justice-legacy-target display em definition-p12e-justice-city-b display. Pena restante: 3 dias.
+definition-p12e-justice-city-a display atualizou os precos do mercado.
+definition-p12e-justice-city-b display atualizou os precos do mercado.
+definition-p12e-justice-city-a display atualizou os precos do mercado.
+definition-p12e-justice-city-b display atualizou os precos do mercado.
+]]></output>
+        </test-case>
+        <test-case id="2717" name="CaptureAndStageRejectDuplicateOwnerObjectsAndMissingOrAmbiguousRoots" fullname="P12EJusticeRecordsOwnerSnapshotTests.CaptureAndStageRejectDuplicateOwnerObjectsAndMissingOrAmbiguousRoots" methodname="CaptureAndStageRejectDuplicateOwnerObjectsAndMissingOrAmbiguousRoots" classname="P12EJusticeRecordsOwnerSnapshotTests" runstate="Runnable" seed="510130171" result="Passed" start-time="2026-10-09 13:51:19Z" end-time="2026-10-09 13:51:19Z" duration="0.003976" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[definition-p12e-justice-duplicate-target display agora possui mandado em definition-p12e-justice-duplicate-city display. Recompensa: 2. Pena: 2 dias.
+definition-p12e-justice-duplicate-sentence-target display agora possui mandado em definition-p12e-justice-duplicate-sentence-city display. Recompensa: 1. Pena: 1 dias.
+definition-p12e-justice-duplicate-sentence-guard display prendeu definition-p12e-justice-duplicate-sentence-target display em definition-p12e-justice-duplicate-sentence-city display. Pena restante: 1 dias.
+]]></output>
+        </test-case>
+        <test-case id="2715" name="CaptureRejectsPostBoundaryDanglingAndNpcOnlyPersonBindings" fullname="P12EJusticeRecordsOwnerSnapshotTests.CaptureRejectsPostBoundaryDanglingAndNpcOnlyPersonBindings" methodname="CaptureRejectsPostBoundaryDanglingAndNpcOnlyPersonBindings" classname="P12EJusticeRecordsOwnerSnapshotTests" runstate="Runnable" seed="145304798" result="Passed" start-time="2026-10-09 13:51:19Z" end-time="2026-10-09 13:51:19Z" duration="0.003760" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[definition-p12e-justice-capture-dangling-npc display agora possui mandado em definition-p12e-justice-capture-dangling-city display. Recompensa: 1. Pena: 1 dias.
+definition-p12e-justice-capture-dangling-city display atualizou os precos do mercado.
+definition-p12e-justice-capture-npc-only-npc display agora possui mandado em definition-p12e-justice-capture-npc-only-city display. Recompensa: 1. Pena: 1 dias.
+definition-p12e-justice-capture-npc-only-city display atualizou os precos do mercado.
+]]></output>
+        </test-case>
+        <test-case id="2711" name="EmptyCaptureRequiresExactTokenVectorAndRejectsStaleOrNonzeroJusticeReceiptWitness" fullname="P12EJusticeRecordsOwnerSnapshotTests.EmptyCaptureRequiresExactTokenVectorAndRejectsStaleOrNonzeroJusticeReceiptWitness" methodname="EmptyCaptureRequiresExactTokenVectorAndRejectsStaleOrNonzeroJusticeReceiptWitness" classname="P12EJusticeRecordsOwnerSnapshotTests" runstate="Runnable" seed="613046427" result="Passed" start-time="2026-10-09 13:51:19Z" end-time="2026-10-09 13:51:19Z" duration="0.003439" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[definition-p12e-justice-empty-city display atualizou os precos do mercado.
+definition-p12e-justice-empty-city display atualizou os precos do mercado.
+]]></output>
+        </test-case>
+        <test-case id="2712" name="ReceiptWitnessValidatorRejectsNonzeroRevisionCardinalityAndWrongOwner" fullname="P12EJusticeRecordsOwnerSnapshotTests.ReceiptWitnessValidatorRejectsNonzeroRevisionCardinalityAndWrongOwner" methodname="ReceiptWitnessValidatorRejectsNonzeroRevisionCardinalityAndWrongOwner" classname="P12EJusticeRecordsOwnerSnapshotTests" runstate="Runnable" seed="1178837349" result="Passed" start-time="2026-10-09 13:51:19Z" end-time="2026-10-09 13:51:19Z" duration="0.000744" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2718" name="StagePreservesEverySentenceScalarAndExactRevisionWithoutDerivingFromCardinality" fullname="P12EJusticeRecordsOwnerSnapshotTests.StagePreservesEverySentenceScalarAndExactRevisionWithoutDerivingFromCardinality" methodname="StagePreservesEverySentenceScalarAndExactRevisionWithoutDerivingFromCardinality" classname="P12EJusticeRecordsOwnerSnapshotTests" runstate="Runnable" seed="335138090" result="Passed" start-time="2026-10-09 13:51:19Z" end-time="2026-10-09 13:51:19Z" duration="0.000692" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2714" name="StageRejectsDanglingPersonIdentityAndBothOneSidedMaterializedBindings" fullname="P12EJusticeRecordsOwnerSnapshotTests.StageRejectsDanglingPersonIdentityAndBothOneSidedMaterializedBindings" methodname="StageRejectsDanglingPersonIdentityAndBothOneSidedMaterializedBindings" classname="P12EJusticeRecordsOwnerSnapshotTests" runstate="Runnable" seed="1990559306" result="Passed" start-time="2026-10-09 13:51:19Z" end-time="2026-10-09 13:51:19Z" duration="0.000702" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2716" name="StageRejectsMalformedMetadataCardinalityScalarsAndNullRows" fullname="P12EJusticeRecordsOwnerSnapshotTests.StageRejectsMalformedMetadataCardinalityScalarsAndNullRows" methodname="StageRejectsMalformedMetadataCardinalityScalarsAndNullRows" classname="P12EJusticeRecordsOwnerSnapshotTests" runstate="Runnable" seed="2008230555" result="Passed" start-time="2026-10-09 13:51:19Z" end-time="2026-10-09 13:51:19Z" duration="0.000942" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2713" name="StageRejectsPersonBindingMismatchAndMalformedSentenceWarrantRelation" fullname="P12EJusticeRecordsOwnerSnapshotTests.StageRejectsPersonBindingMismatchAndMalformedSentenceWarrantRelation" methodname="StageRejectsPersonBindingMismatchAndMalformedSentenceWarrantRelation" classname="P12EJusticeRecordsOwnerSnapshotTests" runstate="Runnable" seed="860311894" result="Passed" start-time="2026-10-09 13:51:19Z" end-time="2026-10-09 13:51:19Z" duration="0.000963" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
