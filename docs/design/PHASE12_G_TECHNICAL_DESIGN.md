@@ -10,7 +10,9 @@ separately gated.
 which the original G proposal was authored; it is not the current governing
 input set.
 
-**Current governing inputs (2026-10-09):** P12 canonical is
+**Prior governing-input snapshot (2026-10-09; superseded by the current-base refresh below):**
+
+P12 canonical is
 02009f9063dd252bd4b177fd6aef1e74dcd947f5 (tree
 e42ef56abd6780a565c68f5b8887d397518eafe8; Assets tree
 a9a7c1015a5fa3cacfdb6219b18f2f593c863174). Its current PHASE12_STATE records
@@ -571,3 +573,20 @@ activity payload. Any future admitted activity preserves ActivityInstanceId
 separately from its definition and participant identities and allows one or
 more participants; exactly two is only the P20 proving fixture. P19 loader
 implementation remains deferred.
+
+## Current-base dependency refresh — 2026-10-09 (P12 canonical 5047cdb)
+
+The current P12 canonical at this refresh is `5047cdbc3bcb9da5238f56530c35b5ec495d452c`; its `Assets` tree is `1b90b4f77586f69c04330b564a32e0a9475808d4`. Production `Assets/_Project/Scripts` is unchanged from the source-audit baseline `02009f9063dd252bd4b177fd6aef1e74dcd947f5`; the later Assets changes are test-only. Current P12 State is `5047cdb`, with P12-B through P12-F promoted within scope, P12-G/P12-A `WAIT_DEPENDENCY`, P13 `BLOCKED`, and Phase 12 `OPEN`. P12 Brief continues to record the accepted P12-A–G checkpoint scopes and prerequisite capability authorization; this refresh creates no new checkpoint or scope.
+
+The current Architecture General canonical remains `codex/architecture/world-identity-projection` at `47eff220c7ce00f6e7c759bdc2b76780bb46f628`, with `SIMULATION_ARCHITECTURE.md` blob `25843842688239cdc3b80988b2e28dbaa16b4987` and `ROADMAP.md` blob `d03e144544ab25371b71db64538c0de47ae8381c`. Architecture §92A keeps continuation-aware owner design as the entry constraint; it does not supply G restore or publication capability. The Roadmap's dated P12-B status is superseded by the current owning Phase 12 State and promoted history.
+
+Current evidence impact:
+
+- The selected 299-section Daily-v1 census and the retained focused 26/26, ALL EditMode 2732/2732, and official Smoke 5/5 results remain tied to Assets tree `1b90b4f`. These results validate the recorded inventory/test changes; they do not prove every supported dynamic owner transition or a generic live-graph traversal.
+- The exact-tip current C–F package-interface revalidation was promoted at P12 canonical `21c4e54`; its review record is `PHASE12_G_CURRENT_TIP_CF_PACKAGE_INTERFACE_REVALIDATION_REVIEW_D87D4A0.md`. It establishes the reviewed staging order and D/F `NpcFRows` ownership seam. It does not replace remaining B–F exact interface checks required by §7.
+- Crime/Social normal Daily theft and direct-call ingress are now source-mapped in `PHASE12_G_CRIME_SOCIAL_INGRESS_EPOCH_CROSSWALK_97BCC5C.md`, exact-tip reviewed at `c32a479`. Normal selected actor theft is enclosed by the existing `runtime.advance-day` operation; integration-local scopes add no registered operation IDs. The existing tests still do not exercise authored Steal through `SimulationRuntime.TryAdvanceDay` while asserting both operation and Crime/Social notifications.
+- The P12-G target-owner exact-zero audit at baseline `02009f9` remains source-current for the production APIs because the production Scripts tree has not changed. Its exact-zero checks are interfaces for G to invoke; no current G orchestrator assembles the target census, calls restored-boundary admission, or publishes the candidate.
+
+Accordingly, this refresh does not mark P12-G `READY_FOR_IMPLEMENTATION`. The remaining hard prerequisites are validated complete live owner/cardinality coverage across the supported selected-profile transitions; current exact interface coverage for the relevant B–F outputs; integrated target-owner checks; a fresh target-bound restored-boundary admission preserving the source completed boundary; one `TesteSimulacao` active-session publication owner/swap; and whole-graph rejection, failure atomicity, no-replay, and continuation-parity evidence. Keep the runtime theft-path test evidence gap visible. P12-A's separate implementation authorization and export/hydration requirements remain unchanged; P13 remains blocked on its explicit prerequisites.
+
+This is a current-base evidence refresh of the existing P12-G proposal. It changes no domain meaning, accepted profile, checkpoint identity, architecture, or gameplay; no runtime code or tests were changed or run.
