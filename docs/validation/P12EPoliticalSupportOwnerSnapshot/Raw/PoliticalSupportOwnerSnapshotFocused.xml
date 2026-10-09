@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="5" result="Passed" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-09 03:40:27Z" end-time="2026-10-09 03:40:28Z" duration="0,2718291">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2688" result="Passed" start-time="2026-10-09 03:40:27Z" end-time="2026-10-09 03:40:28Z" duration="0.271829" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3945" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12e-faction-owner-snapshot-a768f2d/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2688" result="Passed" start-time="2026-10-09 03:40:27Z" end-time="2026-10-09 03:40:28Z" duration="0.257210" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="158732" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2723" name="P12EPoliticalSupportOwnerSnapshotTests" fullname="P12EPoliticalSupportOwnerSnapshotTests" classname="P12EPoliticalSupportOwnerSnapshotTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-09 03:40:27Z" end-time="2026-10-09 03:40:28Z" duration="0.239520" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2725" name="CaptureRejectsCopiedOwnerVectorAndSnapshotRetainsItsOwnCapturedDay" fullname="P12EPoliticalSupportOwnerSnapshotTests.CaptureRejectsCopiedOwnerVectorAndSnapshotRetainsItsOwnCapturedDay" methodname="CaptureRejectsCopiedOwnerVectorAndSnapshotRetainsItsOwnCapturedDay" classname="P12EPoliticalSupportOwnerSnapshotTests" runstate="Runnable" seed="909004923" result="Passed" start-time="2026-10-09 03:40:27Z" end-time="2026-10-09 03:40:28Z" duration="0.194043" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2724" name="CaptureUsesExactCompletedTokenAndRoundTripsEveryTypedRelationAndHistoryRow" fullname="P12EPoliticalSupportOwnerSnapshotTests.CaptureUsesExactCompletedTokenAndRoundTripsEveryTypedRelationAndHistoryRow" methodname="CaptureUsesExactCompletedTokenAndRoundTripsEveryTypedRelationAndHistoryRow" classname="P12EPoliticalSupportOwnerSnapshotTests" runstate="Runnable" seed="1542050070" result="Passed" start-time="2026-10-09 03:40:28Z" end-time="2026-10-09 03:40:28Z" duration="0.033259" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2728" name="StageChecksTypedReferencesAndLengthPrefixedPairIdentity" fullname="P12EPoliticalSupportOwnerSnapshotTests.StageChecksTypedReferencesAndLengthPrefixedPairIdentity" methodname="StageChecksTypedReferencesAndLengthPrefixedPairIdentity" classname="P12EPoliticalSupportOwnerSnapshotTests" runstate="Runnable" seed="1282893146" result="Passed" start-time="2026-10-09 03:40:28Z" end-time="2026-10-09 03:40:28Z" duration="0.000734" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2726" name="StagePreservesAnExactRevisionThatDiffersFromRowCountAndAcceptsSaturation" fullname="P12EPoliticalSupportOwnerSnapshotTests.StagePreservesAnExactRevisionThatDiffersFromRowCountAndAcceptsSaturation" methodname="StagePreservesAnExactRevisionThatDiffersFromRowCountAndAcceptsSaturation" classname="P12EPoliticalSupportOwnerSnapshotTests" runstate="Runnable" seed="952593926" result="Passed" start-time="2026-10-09 03:40:28Z" end-time="2026-10-09 03:40:28Z" duration="0.000422" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2727" name="StageRejectsMalformedSectionsRowsDuplicatesAndUnsortedData" fullname="P12EPoliticalSupportOwnerSnapshotTests.StageRejectsMalformedSectionsRowsDuplicatesAndUnsortedData" methodname="StageRejectsMalformedSectionsRowsDuplicatesAndUnsortedData" classname="P12EPoliticalSupportOwnerSnapshotTests" runstate="Runnable" seed="28796109" result="Passed" start-time="2026-10-09 03:40:28Z" end-time="2026-10-09 03:40:28Z" duration="0.000528" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
