@@ -140,6 +140,161 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void RestoredDailyBoundaryAdmissionIssuesFreshTokenAndResumesSequence()
+    {
+        WorldId worldId = new WorldId(Guid.NewGuid());
+        SimulationRuntime source = CreatePublishedDailyCaptureRuntime(
+            new SimulationTime(), worldId: worldId);
+        Assert.That(source.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance), Is.True,
+            sourceAdvance.ToString());
+        Assert.That(source.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken sourceToken, out DailyCaptureEligibilityFailure sourceFailure), Is.True,
+            sourceFailure.ToString());
+
+        SimulationRuntime restored = CreateUnpublishedDailyCaptureRuntime(
+            new SimulationTime(sourceToken.AbsoluteDay), worldId);
+        Assert.That(restored.TryAdmitRestoredDailyBoundary(
+            worldId,
+            sourceToken.AbsoluteDay,
+            sourceToken.CompletedCoreSequence,
+            out DailyCaptureEligibilityFailure admissionFailure), Is.True,
+            admissionFailure.ToString());
+
+        Assert.That(restored.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken restoredToken,
+            out DailyCaptureEligibilityFailure restoredFailure), Is.True, restoredFailure.ToString());
+        Assert.That(restoredToken, Is.Not.SameAs(sourceToken));
+        Assert.That(restoredToken.RuntimeInstanceIdentity, Is.Not.SameAs(sourceToken.RuntimeInstanceIdentity));
+        Assert.That(restoredToken.AdmissionContext, Is.SameAs(ReadPrivateField<SimulationRuntimeAdmissionContext>(
+            restored, "runtimeAdmissionContext")));
+        Assert.That(restoredToken.WorldId, Is.SameAs(worldId));
+        Assert.That(restoredToken.AbsoluteDay, Is.EqualTo(sourceToken.AbsoluteDay));
+        Assert.That(restoredToken.CompletedCoreSequence, Is.EqualTo(sourceToken.CompletedCoreSequence));
+        Assert.That(restoredToken.BoundaryProvenance,
+            Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
+        Assert.That(restoredToken.OwnerSections, Is.Not.Empty);
+        Assert.That(restored.TryValidateCompletedDailyCaptureToken(restoredToken, out _), Is.True);
+        Assert.That(source.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True,
+            "admitting the staged runtime must not stale or transfer the source runtime's token");
+        Assert.That(source.TryValidateCompletedDailyCaptureToken(restoredToken, out DailyCaptureEligibilityFailure crossRuntime), Is.False);
+        Assert.That(crossRuntime, Is.EqualTo(DailyCaptureEligibilityFailure.StaleToken));
+
+        Assert.That(restored.TryAdvanceDay(out SimulationRuntimeAdvanceFailure resumedAdvance), Is.True,
+            resumedAdvance.ToString());
+        Assert.That(restored.CurrentDay, Is.EqualTo(sourceToken.AbsoluteDay + 1L));
+        Assert.That(ReadPrivateField<long>(restored, "completedDailyCoreSequence"),
+            Is.EqualTo(sourceToken.CompletedCoreSequence + 1L));
+        Assert.That(restored.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken nextToken,
+            out DailyCaptureEligibilityFailure nextFailure), Is.True, nextFailure.ToString());
+        Assert.That(nextToken.BoundaryProvenance,
+            Is.EqualTo(DailyCaptureBoundaryProvenance.CompletedAdvance));
+        Assert.That(nextToken.CompletedCoreSequence, Is.EqualTo(sourceToken.CompletedCoreSequence + 1L));
+    }
+
+    [Test]
+    public void RestoredDailyBoundaryAdmissionRejectsWrongIdentityDayAndSequenceWithoutPartialPublication()
+    {
+        WorldId worldId = new WorldId(Guid.NewGuid());
+        WorldId otherWorldId = new WorldId(Guid.NewGuid());
+        SimulationRuntime wrongIdentityRuntime = CreateUnpublishedDailyCaptureRuntime(
+            new SimulationTime(4L), worldId);
+        Assert.That(wrongIdentityRuntime.TryAdmitRestoredDailyBoundary(
+            otherWorldId, 4L, 7L, out DailyCaptureEligibilityFailure wrongIdentityFailure), Is.False);
+        Assert.That(wrongIdentityFailure, Is.EqualTo(DailyCaptureEligibilityFailure.StaleToken));
+        AssertRestoredAdmissionWasNotPublished(wrongIdentityRuntime);
+
+        SimulationRuntime wrongDayRuntime = CreateUnpublishedDailyCaptureRuntime(
+            new SimulationTime(4L), worldId);
+        Assert.That(wrongDayRuntime.TryAdmitRestoredDailyBoundary(
+            worldId, 5L, 7L, out DailyCaptureEligibilityFailure wrongDayFailure), Is.False);
+        Assert.That(wrongDayFailure, Is.EqualTo(DailyCaptureEligibilityFailure.StaleToken));
+        AssertRestoredAdmissionWasNotPublished(wrongDayRuntime);
+
+        SimulationRuntime zeroSequenceRuntime = CreateUnpublishedDailyCaptureRuntime(
+            new SimulationTime(4L), worldId);
+        Assert.That(zeroSequenceRuntime.TryAdmitRestoredDailyBoundary(
+            worldId, 4L, 0L, out DailyCaptureEligibilityFailure zeroSequenceFailure), Is.False);
+        Assert.That(zeroSequenceFailure, Is.EqualTo(DailyCaptureEligibilityFailure.NoCompletedBoundary));
+        AssertRestoredAdmissionWasNotPublished(zeroSequenceRuntime);
+
+        SimulationRuntime negativeDayRuntime = CreateUnpublishedDailyCaptureRuntime(
+            new SimulationTime(4L), worldId);
+        Assert.That(negativeDayRuntime.TryAdmitRestoredDailyBoundary(
+            worldId, -1L, 7L, out DailyCaptureEligibilityFailure negativeDayFailure), Is.False);
+        Assert.That(negativeDayFailure, Is.EqualTo(DailyCaptureEligibilityFailure.StaleToken));
+        AssertRestoredAdmissionWasNotPublished(negativeDayRuntime);
+    }
+
+    [Test]
+    public void RestoredDailyBoundaryAdmissionRejectsAlreadyPublishedOrAdvancedCandidateWithoutReplacement()
+    {
+        WorldId worldId = new WorldId(Guid.NewGuid());
+        SimulationRuntime publishedRuntime = CreateUnpublishedDailyCaptureRuntime(new SimulationTime(2L), worldId);
+        Assert.That(publishedRuntime.TryMarkWorldPublishedForFactualRead(), Is.True);
+        Assert.That(publishedRuntime.TryAdmitRestoredDailyBoundary(
+            worldId, 2L, 11L, out DailyCaptureEligibilityFailure publishedFailure), Is.False);
+        Assert.That(publishedFailure, Is.EqualTo(DailyCaptureEligibilityFailure.StaleToken));
+        Assert.That(ReadPrivateField<bool>(publishedRuntime, "factualReadWorldPublished"), Is.True);
+        Assert.That(ReadPrivateField<long>(publishedRuntime, "completedDailyCoreSequence"), Is.Zero);
+        Assert.That(ReadPrivateField<DailyCaptureEligibilityToken>(publishedRuntime, "currentDailyCaptureToken"), Is.Null);
+
+        SimulationRuntime advancedRuntime = CreatePublishedDailyCaptureRuntime(
+            new SimulationTime(2L), worldId: worldId);
+        Assert.That(advancedRuntime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.True,
+            advanceFailure.ToString());
+        Assert.That(advancedRuntime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken existingToken, out _), Is.True);
+        Assert.That(advancedRuntime.TryAdmitRestoredDailyBoundary(
+            worldId, 2L, 11L, out DailyCaptureEligibilityFailure advancedFailure), Is.False);
+        Assert.That(advancedFailure, Is.EqualTo(DailyCaptureEligibilityFailure.StaleToken));
+        Assert.That(ReadPrivateField<long>(advancedRuntime, "completedDailyCoreSequence"), Is.EqualTo(1L));
+        Assert.That(ReadPrivateField<DailyCaptureEligibilityToken>(advancedRuntime, "currentDailyCaptureToken"),
+            Is.SameAs(existingToken));
+        Assert.That(advancedRuntime.TryValidateCompletedDailyCaptureToken(existingToken, out _), Is.True);
+    }
+
+    [Test]
+    public void RestoredDailyBoundaryAdmissionRejectsActiveOperationAndWrongThreadWithoutMutation()
+    {
+        WorldId worldId = new WorldId(Guid.NewGuid());
+        SimulationRuntime activeOperationRuntime = CreateUnpublishedDailyCaptureRuntime(new SimulationTime(3L), worldId);
+        Assert.That(activeOperationRuntime.TryBeginBootstrapPublicationScope(out SimulationOperationScope activeScope), Is.True);
+        using (activeScope)
+        {
+            Assert.That(activeOperationRuntime.TryAdmitRestoredDailyBoundary(
+                worldId, 3L, 9L, out DailyCaptureEligibilityFailure operationFailure), Is.False);
+            Assert.That(operationFailure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
+            AssertRestoredAdmissionWasNotPublished(activeOperationRuntime);
+        }
+
+        SimulationRuntime wrongThreadRuntime = CreateUnpublishedDailyCaptureRuntime(new SimulationTime(3L), worldId);
+        bool admittedFromWorker = true;
+        DailyCaptureEligibilityFailure workerFailure = DailyCaptureEligibilityFailure.None;
+        Thread worker = new Thread(() => admittedFromWorker = wrongThreadRuntime.TryAdmitRestoredDailyBoundary(
+            worldId, 3L, 9L, out workerFailure));
+        worker.Start();
+        worker.Join();
+
+        Assert.That(admittedFromWorker, Is.False);
+        Assert.That(workerFailure, Is.EqualTo(DailyCaptureEligibilityFailure.WrongOwnerThread));
+        AssertRestoredAdmissionWasNotPublished(wrongThreadRuntime);
+    }
+
+    [Test]
+    public void RestoredDailyBoundaryAdmissionRejectsNonDailyProfile()
+    {
+        WorldId worldId = new WorldId(Guid.NewGuid());
+        SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(3L), null, null, worldId: worldId);
+
+        Assert.That(runtime.TryAdmitRestoredDailyBoundary(
+            worldId, 3L, 9L, out DailyCaptureEligibilityFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.UnsupportedProfile));
+        Assert.That(ReadPrivateField<long>(runtime, "completedDailyCoreSequence"), Is.Zero);
+        Assert.That(ReadPrivateField<DailyCaptureEligibilityToken>(runtime, "currentDailyCaptureToken"), Is.Null);
+    }
+
+    [Test]
     public void CompletedDailyTokenIsUnavailableDuringCallbacksAndBatchPublishesOnlyOnceAtReturn()
     {
         NpcActionData action = SimulationTestFactory.CreateAction("daily-token-probe", NpcActionType.Travel);
@@ -2607,9 +2762,24 @@ public sealed class SimulationRuntimeAdmissionTests
         SimulationTime time,
         NpcRuntime[] npcRuntimes = null,
         NpcDecisionSystem npcDecisionSystem = null,
+        IReadOnlyList<NpcActionData> configuredActions = null,
+        WorldId worldId = null)
+    {
+        SimulationRuntime runtime = CreateUnpublishedDailyCaptureRuntime(time, worldId, npcRuntimes,
+            npcDecisionSystem, configuredActions);
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True,
+            "The test runtime must complete the selected-profile publication boundary before issuing a daily token.");
+        return runtime;
+    }
+
+    private static SimulationRuntime CreateUnpublishedDailyCaptureRuntime(
+        SimulationTime time,
+        WorldId worldId = null,
+        NpcRuntime[] npcRuntimes = null,
+        NpcDecisionSystem npcDecisionSystem = null,
         IReadOnlyList<NpcActionData> configuredActions = null)
     {
-        SimulationRuntime runtime = new SimulationRuntime(
+        return new SimulationRuntime(
             time ?? new SimulationTime(),
             null,
             npcRuntimes,
@@ -2617,10 +2787,14 @@ public sealed class SimulationRuntimeAdmissionTests
             configuredActions: configuredActions,
             npcDecisionSystem: npcDecisionSystem,
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
-            worldId: new WorldId(Guid.NewGuid()));
-        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True,
-            "The test runtime must complete the selected-profile publication boundary before issuing a daily token.");
-        return runtime;
+            worldId: worldId ?? new WorldId(Guid.NewGuid()));
+    }
+
+    private static void AssertRestoredAdmissionWasNotPublished(SimulationRuntime runtime)
+    {
+        Assert.That(ReadPrivateField<bool>(runtime, "factualReadWorldPublished"), Is.False);
+        Assert.That(ReadPrivateField<long>(runtime, "completedDailyCoreSequence"), Is.Zero);
+        Assert.That(ReadPrivateField<DailyCaptureEligibilityToken>(runtime, "currentDailyCaptureToken"), Is.Null);
     }
 
     private static T ReadPrivateField<T>(object target, string name)

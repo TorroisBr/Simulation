@@ -34,10 +34,16 @@ internal enum DailyCaptureEligibilityFailure
     WorldNotPublished = 8
 }
 
+internal enum DailyCaptureBoundaryProvenance
+{
+    CompletedAdvance = 1,
+    RestoredContinuation = 2
+}
+
 /// <summary>
-/// Ephemeral, in-memory proof that one live Daily-v1 runtime completed a
-/// positive outer day advance and remains unchanged at its captured boundary.
-/// This is not serialized authority or a domain-state export.
+/// Ephemeral, in-memory proof that one live Daily-v1 runtime has an admitted
+/// completed or restored continuation boundary and remains unchanged at that
+/// boundary. This is not serialized authority or a domain-state export.
 /// </summary>
 internal sealed class DailyCaptureEligibilityToken
 {
@@ -50,6 +56,7 @@ internal sealed class DailyCaptureEligibilityToken
         WorldId worldId,
         long absoluteDay,
         long completedCoreSequence,
+        DailyCaptureBoundaryProvenance boundaryProvenance,
         long mutationEpoch,
         IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections)
     {
@@ -61,8 +68,35 @@ internal sealed class DailyCaptureEligibilityToken
         WorldId = worldId ?? throw new ArgumentNullException(nameof(worldId));
         AbsoluteDay = absoluteDay;
         CompletedCoreSequence = completedCoreSequence;
+        BoundaryProvenance = boundaryProvenance;
         MutationEpoch = mutationEpoch;
         OwnerSections = ownerSections ?? throw new ArgumentNullException(nameof(ownerSections));
+    }
+
+    internal DailyCaptureEligibilityToken(
+        object runtimeInstanceIdentity,
+        SimulationRuntimeAdmissionContext admissionContext,
+        EffectiveSimulationConfiguration configurationIdentity,
+        SimulationCalendar calendarIdentity,
+        SimulationRuntimeCompositionProfile compositionProfile,
+        WorldId worldId,
+        long absoluteDay,
+        long completedCoreSequence,
+        long mutationEpoch,
+        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections)
+        : this(
+            runtimeInstanceIdentity,
+            admissionContext,
+            configurationIdentity,
+            calendarIdentity,
+            compositionProfile,
+            worldId,
+            absoluteDay,
+            completedCoreSequence,
+            DailyCaptureBoundaryProvenance.CompletedAdvance,
+            mutationEpoch,
+            ownerSections)
+    {
     }
 
     internal object RuntimeInstanceIdentity { get; }
@@ -73,6 +107,7 @@ internal sealed class DailyCaptureEligibilityToken
     internal WorldId WorldId { get; }
     internal long AbsoluteDay { get; }
     internal long CompletedCoreSequence { get; }
+    internal DailyCaptureBoundaryProvenance BoundaryProvenance { get; }
     internal long MutationEpoch { get; }
     internal IReadOnlyList<OwnerSectionCensusSnapshot> OwnerSections { get; }
 }
@@ -8385,6 +8420,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             && token.AbsoluteDay == CurrentDay
             && token.CompletedCoreSequence == completedDailyCoreSequence
             && token.CompletedCoreSequence > 0L
+            && (token.BoundaryProvenance == DailyCaptureBoundaryProvenance.CompletedAdvance
+                || token.BoundaryProvenance == DailyCaptureBoundaryProvenance.RestoredContinuation)
             && token.MutationEpoch == currentMutationEpoch
             && AreDailyCaptureOwnerSectionsEqual(token.OwnerSections, currentOwnerSections);
     }
@@ -8413,9 +8450,118 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             WorldId,
             CurrentDay,
             completedDailyCoreSequence,
+            DailyCaptureBoundaryProvenance.CompletedAdvance,
             mutationEpoch,
             ownerSections);
         currentDailyCaptureToken = token;
+        return true;
+    }
+
+    internal bool TryAdmitRestoredDailyBoundary(
+        WorldId expectedWorldId,
+        long preservedAbsoluteDay,
+        long preservedCompletedCoreSequence,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        failure = DailyCaptureEligibilityFailure.None;
+        if (!IsDailyCaptureProfile)
+        {
+            failure = DailyCaptureEligibilityFailure.UnsupportedProfile;
+            return false;
+        }
+
+        if (!IsRuntimeAdmissionOwnerThreadCurrent())
+        {
+            failure = DailyCaptureEligibilityFailure.WrongOwnerThread;
+            return false;
+        }
+
+        if (expectedWorldId == null
+            || !ReferenceEquals(expectedWorldId, WorldId)
+            || preservedAbsoluteDay < 0L
+            || initialAbsoluteDay != preservedAbsoluteDay
+            || currentDailyCaptureToken != null
+            || completedDailyCoreSequence != 0L
+            || factualReadWorldPublished)
+        {
+            failure = DailyCaptureEligibilityFailure.StaleToken;
+            return false;
+        }
+
+        if (preservedCompletedCoreSequence <= 0L)
+        {
+            failure = DailyCaptureEligibilityFailure.NoCompletedBoundary;
+            return false;
+        }
+
+        if (advanceLeaseHeld || HasActiveDailyOperationContext())
+        {
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        if (!mutationGuard.CanMutate
+            || npcRosterCensusProtocol == null
+            || factualReadCoordinator == null
+            || configuration == null
+            || calendar == null)
+        {
+            failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
+            return false;
+        }
+
+        if (!npcRosterCensusProtocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out ContinuationCensusFailure censusFailure))
+        {
+            failure = MapDailyCaptureFailure(censusFailure);
+            return false;
+        }
+
+        if (!IsRuntimeAdmissionOwnerThreadCurrent())
+        {
+            failure = DailyCaptureEligibilityFailure.WrongOwnerThread;
+            return false;
+        }
+
+        if (advanceLeaseHeld || HasActiveDailyOperationContext())
+        {
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        if (!mutationGuard.CanMutate || factualReadWorldPublished)
+        {
+            failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
+            return false;
+        }
+
+        if (!ReferenceEquals(expectedWorldId, WorldId)
+            || initialAbsoluteDay != preservedAbsoluteDay
+            || currentDailyCaptureToken != null
+            || completedDailyCoreSequence != 0L)
+        {
+            failure = DailyCaptureEligibilityFailure.StaleToken;
+            return false;
+        }
+
+        DailyCaptureEligibilityToken restoredToken = new DailyCaptureEligibilityToken(
+            dailyCaptureRuntimeIdentity,
+            runtimeAdmissionContext,
+            configuration,
+            calendar,
+            compositionProfile,
+            expectedWorldId,
+            preservedAbsoluteDay,
+            preservedCompletedCoreSequence,
+            DailyCaptureBoundaryProvenance.RestoredContinuation,
+            mutationEpoch,
+            ownerSections);
+
+        completedDailyCoreSequence = preservedCompletedCoreSequence;
+        currentDailyCaptureToken = restoredToken;
+        factualReadWorldPublished = true;
         return true;
     }
 
