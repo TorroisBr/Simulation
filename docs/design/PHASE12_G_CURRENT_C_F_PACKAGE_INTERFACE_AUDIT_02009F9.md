@@ -17,15 +17,17 @@
 
 The API dependencies imply this bounded order for a future G orchestrator:
 
-1. Begin one `DailyCaptureStagingAttempt` for the source runtime, exact completed-boundary token, and exact owner-section vector; keep it current for every source capture and package stage.
-2. Stage C's continuation roots privately.
-3. Capture F before D staging so the stable TravelParty IDs are available to D for reciprocal NPC TravelParty restoration. F capture must also complete its ActorChoice exact-zero check before G allocates or publishes the reconstructed graph.
-4. Capture and stage D against the private roots and the captured TravelParty IDs.
+1. Begin one `DailyCaptureStagingAttempt` for the source runtime, exact completed-boundary token, and exact owner-section vector for the private staging calls.
+2. Capture F from the source runtime/composition using the exact token and owner vector. `TryCapture` validates those directly; it does not receive the staging-attempt object.
+3. Stage C's continuation roots privately under the shared attempt.
+4. Capture and stage D against the private roots and F's captured TravelParty IDs, which D needs to restore reciprocal NPC TravelParty links.
 5. Capture and stage E against the same attempt, C roots, and D package.
 6. Stage F against the same attempt and the staged C/D/E packages; resolve only the typed bindings admitted by the current contracts.
 7. Build and validate the entire candidate runtime, establish fresh admission bound to that reconstructed runtime while preserving the source logical boundary, then publish it through one active-session root.
 
-The first six steps are derivable from current method signatures and guards. There is no current P12-G orchestrator that performs the complete sequence. Step 7 remains a G/B admission and publication obligation; the source capture token is identity-bound to the original runtime and cannot be reused as the reconstructed runtime's admission token.
+The P12-F regression `P12FOwnerPackageCapturesBeforeRootStagingAndStagesAggregateAgainstTheSameAttempt` fixes the key temporal order: F capture, including the ActorChoice exact-zero check, precedes C root staging. Later D/E/F staging must retain the shared current attempt.
+
+The sequence is supported by current method signatures, guards, and the cited F regression. There is no current P12-G orchestrator that performs the complete sequence. Step 7 remains a G/B admission and publication obligation; the source capture token is identity-bound to the original runtime and cannot be reused as the reconstructed runtime's admission token.
 
 ## Remaining gates
 
