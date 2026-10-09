@@ -3,10 +3,41 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
+using UnityEngine;
 
 public sealed class P12CrimeSocialAppraisalInvalidationTests
 {
     private const string MembershipOperationId = "runtime.npc-membership";
+    private const string DailyAdvanceOperationId = "runtime.advance-day";
+
+    private sealed class DailyOperationProbeTheftOutcomeSink : ITheftOutcomeSink
+    {
+        private readonly ITheftOutcomeSink inner;
+        private readonly Func<SimulationRuntime> runtimeProvider;
+
+        public readonly List<int> TheftOutcomeCommitActiveOperationCounts = new List<int>();
+
+        public DailyOperationProbeTheftOutcomeSink(
+            ITheftOutcomeSink inner,
+            Func<SimulationRuntime> runtimeProvider)
+        {
+            this.inner = inner ?? throw new ArgumentNullException(nameof(inner));
+            this.runtimeProvider = runtimeProvider ?? throw new ArgumentNullException(nameof(runtimeProvider));
+        }
+
+        public bool CanAcceptTheftOutcome(TheftOutcome outcome) => inner.CanAcceptTheftOutcome(outcome);
+
+        public bool TryAcceptTheftOutcome(TheftOutcome outcome)
+        {
+            SimulationRuntime runtime = runtimeProvider();
+            int activeOperationCount = -1;
+            bool read = runtime != null
+                && GetProtocol(runtime).TryReadActiveOperationCount(out activeOperationCount, out _);
+            TheftOutcomeCommitActiveOperationCounts.Add(read ? activeOperationCount : -1);
+            return inner.TryAcceptTheftOutcome(outcome);
+        }
+    }
 
     private sealed class StaleAfterOwnerWriteProvider : IOwnerSectionCensusProvider
     {
@@ -50,6 +81,126 @@ public sealed class P12CrimeSocialAppraisalInvalidationTests
         AssertWitness(providers[1], P12CrimeSocialAppraisalCensusProvider.KnowledgeSectionId, world.CrimeKnowledge, 0, 0);
         AssertWitness(providers[2], P12CrimeSocialAppraisalCensusProvider.ReactionsSectionId, world.SocialReactions, 0, 0);
         AssertCensus(runtime);
+    }
+
+    [Test]
+    public void SelectedDailyV1AdvanceDayExecutesStealInsideOuterOperationAndReconcilesCrimeSocialOwners()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        NpcActionData steal = AssetDatabase.LoadAssetAtPath<NpcActionData>(
+            "Assets/_Project/Data/Actions/Action-Roubar.asset");
+        Assert.That(config, Is.Not.Null);
+        Assert.That(steal, Is.Not.Null);
+        bool originalStealCanFail = steal.canFail;
+
+        GameObject bootstrapObject = new GameObject("P12 Crime/Social daily operation integration test");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            SetPrivateField(bootstrap, "simulationConfig", config);
+            SetPrivateField(bootstrap, "runtimeAdmissionProfile", SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+            bootstrap.Start();
+
+            SimulationRuntime runtime = bootstrap.Runtime;
+            Assert.That(runtime, Is.Not.Null);
+            Assert.That(runtime.Configuration.Crime.Enabled, Is.True);
+            Assert.That(runtime.Configuration.MerchantTrade.Enabled, Is.True);
+            Assert.That(runtime.PersonStore.Persons, Is.Empty,
+                "Daily-v1 starts with its accepted empty PersonStore; this fixture adds the local action participants through runtime admission.");
+            Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            NpcRuntime thief = null;
+            foreach (NpcRuntime candidate in runtime.NpcRuntimes)
+            {
+                if (candidate?.NpcData?.acoesPadrao == null)
+                    continue;
+                foreach (NPCDefaultAction preference in candidate.NpcData.acoesPadrao)
+                {
+                    if (preference != null && ReferenceEquals(preference.action, steal))
+                    {
+                        thief = candidate;
+                        break;
+                    }
+                }
+                if (thief != null)
+                    break;
+            }
+            Assert.That(thief, Is.Not.Null);
+            CityRuntime city = thief.CurrentCity;
+            Assert.That(city, Is.Not.Null);
+            Assert.That(city.ImportantNpcs.Count, Is.GreaterThan(1));
+            Assert.That(thief.MerchantTradePlan.IsActive, Is.False);
+
+            List<NpcActionData> runtimeActions = (List<NpcActionData>)GetPrivateField(runtime, "configuredActions");
+            Assert.That(runtimeActions, Does.Contain(steal));
+            runtimeActions.Clear();
+            runtimeActions.Add(steal);
+
+            foreach (NpcRuntime participant in city.ImportantNpcs)
+            {
+                PersonId personId = new PersonId("p12-social-runtime-" + participant.RuntimeId);
+                Assert.That(runtime.TryRegisterPerson(new PersonRuntime(personId, runtime.CurrentDay),
+                    out PersonStoreFailure registrationFailure), Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(personId, participant.RuntimeId,
+                    out PersonMaterializationFailure bindingFailure), Is.True, bindingFailure.ToString());
+            }
+            Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure boundCensusFailure),
+                Is.True, boundCensusFailure.ToString());
+
+            CrimeSocialAppraisalWorldState world = runtime.CrimeSocialAppraisal;
+            Assert.That(world.TheftOutcomes.Count, Is.Zero);
+            Assert.That(world.CrimeKnowledge.Count, Is.Zero);
+            Assert.That(world.SocialReactions.Count, Is.Zero);
+
+            CrimeSystem crime = (CrimeSystem)GetPrivateField(bootstrap, "crimeSystem");
+            Assert.That(crime, Is.Not.Null);
+            ITheftOutcomeSink integration = crime.TheftOutcomeSink;
+            Assert.That(integration, Is.SameAs(world.Integration));
+            DailyOperationProbeTheftOutcomeSink probe = new DailyOperationProbeTheftOutcomeSink(
+                integration,
+                () => runtime);
+            SetPrivateField(crime, "theftOutcomeSink", probe);
+
+            ContinuationCensusProtocol protocol = GetProtocol(runtime);
+            HashSet<string> expectedOperations = (HashSet<string>)GetPrivateField(protocol, "expectedOperations");
+            Assert.That(expectedOperations, Does.Contain(DailyAdvanceOperationId));
+            Assert.That(protocol.TryReadMutationEpoch(out long startingEpoch, out ContinuationCensusFailure startFailure),
+                Is.True, startFailure.ToString());
+            steal.canFail = false;
+            Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+
+            Assert.That(runtime.CurrentDay, Is.EqualTo(1L));
+            Assert.That(bootstrap.Decisions.Decisions, Has.Count.EqualTo(1));
+            Assert.That(bootstrap.Decisions.Decisions[0].Origin, Is.EqualTo(NpcDecisionOrigin.Autonomous));
+            Assert.That(bootstrap.Decisions.Decisions[0].ActionDefinitionId, Is.EqualTo(steal.DefinitionId));
+            Assert.That(world.TheftOutcomes.Count, Is.EqualTo(1));
+            Assert.That(world.CrimeKnowledge.Count, Is.EqualTo(1));
+            Assert.That(world.SocialReactions.Count, Is.EqualTo(1));
+            Assert.That(world.TheftOutcomes.P12CensusRevision, Is.EqualTo(1L));
+            Assert.That(world.CrimeKnowledge.P12CensusRevision, Is.EqualTo(1L));
+            Assert.That(world.SocialReactions.P12CensusRevision, Is.EqualTo(1L));
+            Assert.That(probe.TheftOutcomeCommitActiveOperationCounts, Is.EqualTo(new[] { 1 }),
+                "Crime/Social commit runs while the selected Daily-v1 runtime.advance-day operation is active.");
+
+            Assert.That(protocol.TryReadActiveOperationCount(out int activeOperationCount, out ContinuationCensusFailure operationFailure),
+                Is.True, operationFailure.ToString());
+            Assert.That(activeOperationCount, Is.Zero);
+            Assert.That(protocol.TryAssessRegisteredOperationQuiescence(out ContinuationCensusFailure quiescenceFailure),
+                Is.True, quiescenceFailure.ToString());
+            Assert.That(protocol.TryReadMutationEpoch(out long endingEpoch, out ContinuationCensusFailure endFailure),
+                Is.True, endFailure.ToString());
+            Assert.That(endingEpoch, Is.GreaterThan(startingEpoch));
+            Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure),
+                Is.True, censusFailure.ToString());
+        }
+        finally
+        {
+            steal.canFail = originalStealCanFail;
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+        }
     }
 
     [Test]

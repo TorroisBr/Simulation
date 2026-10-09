@@ -30,10 +30,20 @@ These are the existing one-write and bounded composite paths from the accepted P
 
 ## Existing evidence and remaining limit
 
-`P12CrimeSocialAppraisalInvalidationTests` covers exact selected-profile owner registration, initially empty owners and later Person admission; direct store writes outside and inside registered operations; composite theft batching in reserved and immediate modes; nested compensation; and refusal on owner-revision or shared-epoch exhaustion. The action regressions call `CrimeSystem.TryExecuteAction` directly. The current test set does not drive the authored `Steal` action through `SimulationRuntime.TryAdvanceDay` and assert the combined `runtime.advance-day` plus Crime/Social notifications.
+At the source-audit baseline, `P12CrimeSocialAppraisalInvalidationTests` covered exact selected-profile owner registration, initially empty owners and later Person admission; direct store writes outside and inside registered operations; composite theft batching in reserved and immediate modes; nested compensation; and refusal on owner-revision or shared-epoch exhaustion. Its action regressions called `CrimeSystem.TryExecuteAction` directly, so runtime ingress evidence remained open at that point.
 
-Thus this audit resolves the source mapping and distinguishes internal integration scopes from registered runtime operations. It does not claim end-to-end selected-runtime execution evidence for that ingress. That test-evidence item remains open for P12-G review; no test was added or run as part of this documentation audit.
+Thus this audit resolves the source mapping and distinguishes internal integration scopes from registered runtime operations. It does not claim all supported direct paths or complete shared-epoch coverage.
 
 ## Status boundary
 
 No registered operation ID is added or changed, and no Crime/Social gameplay semantics are changed. This document closes only the stale source-mapping question for Crime/Social in the P12-G owner/operation/epoch ledger. It does not complete the entire owner matrix, prove all supported direct paths, make P12-G implementation-ready, make P12-A ready, unblock P13, or close Phase 12. Other operation/epoch rows, fresh target witnesses, restored-boundary admission, single-session publication, and whole-graph proof retain their recorded gates.
+
+## Current-base runtime ingress evidence — 2026-10-09
+
+The test-evidence gap above was subsequently closed on P12 canonical base `bc9ab6a27d5bb5c1e2de0987aa6377db6a96c37e` by `P12CrimeSocialAppraisalInvalidationTests.SelectedDailyV1AdvanceDayExecutesStealInsideOuterOperationAndReconcilesCrimeSocialOwners`.
+
+The test starts the actual authored `Simulation-DailyV1.asset` bootstrap under `UnityBootstrapDailyV1`, selects the profile's existing NPC whose default actions include the authored `Action-Roubar`, and restricts the runtime's configured action list to that action for this fixture. It registers and materializes Persons for the NPCs in the same City through normal runtime admission because the authored profile begins with an empty PersonStore. The test makes the authored action non-failing only for this run and restores its original setting in `finally`, so the assertion proves the successful Crime/Social commit path without depending on a probabilistic action roll or changing the saved asset.
+
+The test calls `SimulationRuntime.TryAdvanceDay`. At the integration sink, the registered protocol reports one active operation; the protocol identifies that enclosing operation as `runtime.advance-day`. After return, the test observes one TheftOutcome, one CrimeKnowledge row and one SocialReaction row, each with local revision `1`; a greater shared mutation epoch; zero active operations; successful registered-operation quiescence; and a successful roster census. The focused `P12CrimeSocialAppraisalInvalidationTests` suite passed 12/12, ALL EditMode passed 2733/2733, and official Smoke passed 5/5. Exact result artifacts and hashes are in `docs/validation/P12GCrimeSocialRuntimeOperation/VALIDATION.md`.
+
+This closes only the selected Daily-v1 Crime/Social runtime-ingress witness. It does not complete the owner/commit matrix, prove all supported direct paths, establish global quiescence, complete P12-G, make P12-A ready, unblock P13, or close Phase 12. The other recorded operation/epoch rows, fresh target witnesses, restored-boundary admission, single-session publication and whole-graph proof remain outstanding.
