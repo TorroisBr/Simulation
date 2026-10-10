@@ -8,7 +8,7 @@
 **Reviewed candidate tip:** `7910a2383b8e1bd46649357067982c5eac0a48fb`
 **Code commit:** `a5af39f3323be8a8de4e01eb81161d200b7f0e53`
 **Code Git tree:** `24237c5d00a7f2929cfcb753564150f23b2a0563`
-**Reviewed Assets tree:** `480136d37053888910a54a134154ce9a4c105256`
+**Reviewed Assets tree:** `480136d37053888910a54c134154ce9a4c105256`
 **Candidate Git tree:** `2d4404d4ad69e44959be50b590e817dc38f58e42`
 
 The candidate is a clean two-commit fast-forward from the exact P12 canonical base. Its code-bearing commit changes only the selected Daily-v1 composition test. The later candidate commit adds State and validation evidence; it leaves the reviewed Assets tree unchanged.
