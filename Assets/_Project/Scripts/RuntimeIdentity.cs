@@ -885,6 +885,36 @@ public sealed class RuntimeIdentityRegistry
         }
     }
 
+    internal IReadOnlyList<KeyValuePair<string, string>> CaptureRegisteredRuntimeIdentityValues()
+    {
+        List<KeyValuePair<string, string>> values = new List<KeyValuePair<string, string>>();
+        AddIdentityValues(values, "npc", npcsByRuntimeId);
+        AddIdentityValues(values, "city", citiesByRuntimeId);
+        AddIdentityValues(values, "location", locationsByRuntimeId);
+        AddIdentityValues(values, "route", routesByRuntimeId);
+        AddIdentityValues(values, "site", explorableSitesByRuntimeId);
+        AddIdentityValues(values, "local-place", localPlacesByRuntimeId);
+        AddIdentityValues(values, "local-connection", localConnectionsByRuntimeId);
+        AddIdentityValues(values, "notable-item", notableItemsByRuntimeId);
+        values.Sort((left, right) =>
+        {
+            int familyOrder = string.Compare(left.Key, right.Key, StringComparison.Ordinal);
+            return familyOrder != 0
+                ? familyOrder
+                : string.Compare(left.Value, right.Value, StringComparison.Ordinal);
+        });
+        return values.AsReadOnly();
+    }
+
+    private static void AddIdentityValues<TValue>(
+        List<KeyValuePair<string, string>> values,
+        string familyId,
+        Dictionary<string, TValue> identities)
+    {
+        foreach (KeyValuePair<string, TValue> identity in identities)
+            values.Add(new KeyValuePair<string, string>(familyId, identity.Key));
+    }
+
     private bool CanAdvanceCensusRevision(string identityKind)
     {
         if (censusRevision < long.MaxValue)

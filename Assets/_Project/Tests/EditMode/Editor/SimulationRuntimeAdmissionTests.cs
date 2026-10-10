@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using NUnit.Framework;
 using UnityEditor;
@@ -140,6 +143,98 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void UnadmittedRestoredOwnerVectorCaptureIsReadOnlyAndQuiescent()
+    {
+        SimulationRuntime runtime = CreateUnpublishedDailyCaptureRuntime(new SimulationTime(8L));
+
+        Assert.That(runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> first,
+            out long firstEpoch,
+            out ContinuationCensusFailure firstFailure), Is.True, firstFailure.ToString());
+        Assert.That(first, Is.Not.Null.And.Not.Empty);
+        Assert.That(firstEpoch, Is.Zero);
+        AssertRestoredAdmissionWasNotPublished(runtime);
+
+        Assert.That(runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> second,
+            out long secondEpoch,
+            out ContinuationCensusFailure secondFailure), Is.True, secondFailure.ToString());
+        Assert.That(second, Is.Not.SameAs(first), "each capture returns a copied read-only vector");
+        Assert.That(second.Count, Is.EqualTo(first.Count));
+        Assert.That(secondEpoch, Is.EqualTo(firstEpoch));
+        for (int i = 0; i < first.Count; i++)
+        {
+            Assert.That(second[i].SectionId, Is.EqualTo(first[i].SectionId));
+            Assert.That(second[i].OwnerInstanceIdentity, Is.SameAs(first[i].OwnerInstanceIdentity));
+            Assert.That(second[i].Cardinality, Is.EqualTo(first[i].Cardinality));
+            Assert.That(second[i].Revision, Is.EqualTo(first[i].Revision));
+        }
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(out _, out _), Is.False,
+            "reading the private target census cannot issue a completed-boundary token");
+        Assert.That(ReadPrivateField<bool>(runtime, "factualReadWorldPublished"), Is.False);
+        Assert.That(ReadPrivateField<long>(runtime, "completedDailyCoreSequence"), Is.Zero);
+    }
+
+    [Test]
+    public void UnadmittedRestoredOwnerVectorCaptureRejectsActiveAdvanceAndWrongThread()
+    {
+        NpcActionData action = SimulationTestFactory.CreateAction("restore-vector-probe", NpcActionType.Travel);
+        action.baseUtility = 1f;
+        NpcRuntime npc = new NpcRuntime("restore-vector-probe", SimulationTestFactory.CreateNpc("restore-vector-probe"));
+        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+
+        SimulationRuntime runtime = null;
+        bool capturedDuringAdvance = true;
+        ContinuationCensusFailure advanceCaptureFailure = ContinuationCensusFailure.None;
+        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        {
+            capturedDuringAdvance = runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                out _, out _, out advanceCaptureFailure);
+        });
+        runtime = CreatePublishedDailyCaptureRuntime(
+            new SimulationTime(),
+            new[] { npc },
+            new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
+            new[] { action });
+
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.True,
+            advanceFailure.ToString());
+        Assert.That(capturedDuringAdvance, Is.False);
+        Assert.That(advanceCaptureFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+
+        SimulationRuntime wrongThreadRuntime = CreateUnpublishedDailyCaptureRuntime(new SimulationTime(3L));
+        bool capturedFromWorker = true;
+        ContinuationCensusFailure workerFailure = ContinuationCensusFailure.None;
+        Thread worker = new Thread(() =>
+        {
+            capturedFromWorker = wrongThreadRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                out _, out _, out workerFailure);
+        });
+        worker.Start();
+        worker.Join();
+        Assert.That(capturedFromWorker, Is.False);
+        Assert.That(workerFailure, Is.EqualTo(ContinuationCensusFailure.WrongOwnerThread));
+        AssertRestoredAdmissionWasNotPublished(wrongThreadRuntime);
+    }
+
+    [Test]
+    public void UnadmittedRestoredOwnerVectorCaptureRejectsPublishedCandidate()
+    {
+        SimulationRuntime runtime = CreatePublishedDailyCaptureRuntime(new SimulationTime(3L));
+
+        Assert.That(runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> sections,
+            out long mutationEpoch,
+            out ContinuationCensusFailure failure), Is.False);
+        Assert.That(sections, Is.Null);
+        Assert.That(mutationEpoch, Is.Zero);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+        Assert.That(ReadPrivateField<bool>(runtime, "factualReadWorldPublished"), Is.True);
+        Assert.That(ReadPrivateField<long>(runtime, "completedDailyCoreSequence"), Is.Zero);
+        Assert.That(ReadPrivateField<DailyCaptureEligibilityToken>(runtime, "currentDailyCaptureToken"), Is.Null);
+    }
+
+    [Test]
     public void RestoredDailyBoundaryAdmissionIssuesFreshTokenAndResumesSequence()
     {
         WorldId worldId = new WorldId(Guid.NewGuid());
@@ -153,10 +248,17 @@ public sealed class SimulationRuntimeAdmissionTests
 
         SimulationRuntime restored = CreateUnpublishedDailyCaptureRuntime(
             new SimulationTime(sourceToken.AbsoluteDay), worldId);
+        Assert.That(restored.TryCaptureUnadmittedRestoredDailyOwnerVector(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> validatedTargetSections,
+            out long validatedTargetEpoch,
+            out ContinuationCensusFailure targetCaptureFailure), Is.True,
+            targetCaptureFailure.ToString());
         Assert.That(restored.TryAdmitRestoredDailyBoundary(
             worldId,
             sourceToken.AbsoluteDay,
             sourceToken.CompletedCoreSequence,
+            validatedTargetSections,
+            validatedTargetEpoch,
             out DailyCaptureEligibilityFailure admissionFailure), Is.True,
             admissionFailure.ToString());
 
@@ -170,6 +272,8 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(restoredToken.WorldId, Is.SameAs(worldId));
         Assert.That(restoredToken.AbsoluteDay, Is.EqualTo(sourceToken.AbsoluteDay));
         Assert.That(restoredToken.CompletedCoreSequence, Is.EqualTo(sourceToken.CompletedCoreSequence));
+        Assert.That(restoredToken.OwnerSections, Is.SameAs(validatedTargetSections),
+            "The admission token must retain the target vector that passed P12-G graph validation.");
         Assert.That(restoredToken.BoundaryProvenance,
             Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
         Assert.That(restoredToken.OwnerSections, Is.Not.Empty);
@@ -2625,6 +2729,222 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
 
+    [Test]
+    public void DailyV1RestoreStagesFreshGraphPublishesOnceAndContinuesDeterministically()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+
+        GameObject uninterruptedObject = new GameObject("P12-G uninterrupted continuation");
+        GameObject restoredObject = new GameObject("P12-G restored continuation");
+        try
+        {
+            TesteSimulacao uninterrupted = uninterruptedObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao restored = restoredObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(uninterrupted, config);
+            ConfigureSelectedBootstrap(restored, config);
+            InvokeInitializeSimulation(uninterrupted, null);
+            InvokeInitializeSimulation(restored, null);
+
+            SimulationActiveSession uninterruptedSession = ReadPrivateField<SimulationActiveSession>(
+                uninterrupted, "activeSession");
+            SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(
+                restored, "activeSession");
+            Assert.That(uninterruptedSession, Is.Not.Null);
+            Assert.That(sourceSession, Is.Not.Null);
+
+            CaptureTerminalP11History(uninterruptedSession.Runtime, "p12g-terminal-input");
+            CaptureTerminalP11History(sourceSession.Runtime, "p12g-terminal-input");
+
+            Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure uninterruptedFirst),
+                Is.True, uninterruptedFirst.ToString());
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceFirst),
+                Is.True, sourceFirst.ToString());
+            Assert.That(sourceSession.Runtime.TryGetCompletedDailyCaptureToken(
+                out DailyCaptureEligibilityToken sourceToken,
+                out DailyCaptureEligibilityFailure sourceTokenFailure), Is.True, sourceTokenFailure.ToString());
+
+            string sourceFactsBeforeRestore = CaptureSelectedDailyFacts(sourceSession.Runtime);
+            string sourceRootsBeforeRestore = CaptureContinuationRootFacts(sourceSession);
+            string uninterruptedFactsAtBoundary = CaptureSelectedDailyFacts(uninterruptedSession.Runtime);
+            Assert.That(sourceFactsBeforeRestore, Is.EqualTo(uninterruptedFactsAtBoundary));
+            Assert.That(CaptureContinuationRootFacts(sourceSession, includeWorldIdentity: false),
+                Is.EqualTo(CaptureContinuationRootFacts(uninterruptedSession, includeWorldIdentity: false)));
+
+            Assert.That(restored.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure restoreFailure,
+                    out string restoreDiagnostic), Is.True,
+                restoreFailure + ": " + restoreDiagnostic);
+
+            SimulationActiveSession targetSession = ReadPrivateField<SimulationActiveSession>(restored, "activeSession");
+            Assert.That(targetSession, Is.Not.Null.And.Not.SameAs(sourceSession),
+                "The operation must publish one fresh active-session reference.");
+            Assert.That(targetSession.Runtime, Is.Not.SameAs(sourceSession.Runtime));
+            Assert.That(targetSession.Composition, Is.Not.SameAs(sourceSession.Composition));
+            Assert.That(targetSession.IdentityRegistry, Is.Not.SameAs(sourceSession.IdentityRegistry));
+            Assert.That(targetSession.SpatialNetwork, Is.Not.SameAs(sourceSession.SpatialNetwork));
+            Assert.That(targetSession.Runtime.CurrentDay, Is.EqualTo(sourceToken.AbsoluteDay),
+                "Staging must not execute another gameplay day.");
+            Assert.That(targetSession.Runtime.TryGetCompletedDailyCaptureToken(
+                out DailyCaptureEligibilityToken restoredToken,
+                out DailyCaptureEligibilityFailure restoredTokenFailure), Is.True,
+                restoredTokenFailure.ToString());
+            Assert.That(restoredToken, Is.Not.SameAs(sourceToken));
+            Assert.That(restoredToken.BoundaryProvenance,
+                Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
+            Assert.That(restoredToken.OwnerSections, Is.Not.SameAs(sourceToken.OwnerSections));
+            Assert.That(CaptureSelectedDailyFacts(targetSession.Runtime), Is.EqualTo(sourceFactsBeforeRestore));
+            Assert.That(CaptureContinuationRootFacts(targetSession), Is.EqualTo(sourceRootsBeforeRestore),
+                "Restore must preserve allocator, shared sequence, world lineage, and random root without replaying genesis or allocating replacement identities.");
+            Assert.That(targetSession.Runtime.ActorChoiceStore.TemporalInputCount, Is.Zero);
+            OwnerSectionCensusSnapshot restoredP11Section = restoredToken.OwnerSections.Single(
+                section => section.SectionId == ActorChoiceP11CensusProvider.SectionId);
+            OwnerSectionCensusWitness restoredTemporalWitness =
+                targetSession.Composition.ActorChoiceTemporalCensusProvider.GetCurrentCensus();
+            Assert.That(restoredP11Section.Revision, Is.GreaterThan(0L));
+            Assert.That(restoredTemporalWitness.Revision, Is.EqualTo(restoredP11Section.Revision));
+            Assert.That(restoredTemporalWitness.Cardinality, Is.Zero);
+            Assert.That(restoredTemporalWitness.OwnerInstanceIdentity, Is.SameAs(restoredP11Section.OwnerInstanceIdentity));
+            Assert.That(sourceSession.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True,
+                "The detached source remains valid and unchanged after the candidate exchange.");
+            Assert.That(CaptureSelectedDailyFacts(sourceSession.Runtime), Is.EqualTo(sourceFactsBeforeRestore));
+            AssertOwnerVectorFactsMatch(sourceToken.OwnerSections, restoredToken.OwnerSections,
+                requireFreshOwners: true);
+
+            for (int boundary = 0; boundary < 2; boundary++)
+            {
+                Assert.That(uninterrupted.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFailure),
+                    Is.True, controlFailure.ToString());
+                Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredFailure),
+                    Is.True, restoredFailure.ToString());
+                Assert.That(restored.Runtime.TryGetCompletedDailyCaptureToken(
+                    out DailyCaptureEligibilityToken nextRestoredToken,
+                    out DailyCaptureEligibilityFailure nextRestoredFailure), Is.True,
+                    nextRestoredFailure.ToString());
+                Assert.That(uninterrupted.Runtime.TryGetCompletedDailyCaptureToken(
+                    out DailyCaptureEligibilityToken nextControlToken,
+                    out DailyCaptureEligibilityFailure nextControlFailure), Is.True,
+                    nextControlFailure.ToString());
+                Assert.That(nextRestoredToken.AbsoluteDay, Is.EqualTo(nextControlToken.AbsoluteDay));
+                Assert.That(nextRestoredToken.CompletedCoreSequence,
+                    Is.EqualTo(nextControlToken.CompletedCoreSequence));
+                Assert.That(nextRestoredToken.BoundaryProvenance,
+                    Is.EqualTo(DailyCaptureBoundaryProvenance.CompletedAdvance));
+                AssertOwnerVectorFactsMatch(nextControlToken.OwnerSections, nextRestoredToken.OwnerSections,
+                    requireFreshOwners: true);
+                Assert.That(CaptureSelectedDailyFacts(restored.Runtime),
+                    Is.EqualTo(CaptureSelectedDailyFacts(uninterrupted.Runtime)),
+                    "Authoritative Daily-v1 facts must remain equal after each identical continuation advance.");
+                Assert.That(CaptureContinuationRootFacts(
+                        ReadPrivateField<SimulationActiveSession>(restored, "activeSession"), includeWorldIdentity: false),
+                    Is.EqualTo(CaptureContinuationRootFacts(uninterruptedSession, includeWorldIdentity: false)),
+                    "Continuation must preserve identical allocator, shared-sequence, world-lineage, and random-root facts.");
+            }
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(uninterruptedObject);
+            UnityEngine.Object.DestroyImmediate(restoredObject);
+        }
+    }
+
+    [Test]
+    public void DailyV1RestoreRejectsBeforeBoundaryWithoutChangingActiveSession()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject bootstrapObject = new GameObject("P12-G restore before completed boundary");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(bootstrap, config);
+            InvokeInitializeSimulation(bootstrap, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            string before = CaptureSelectedDailyFacts(original.Runtime);
+
+            Assert.That(bootstrap.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure failure,
+                    out string diagnostic), Is.False);
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.InvalidSourceSession), diagnostic);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureSelectedDailyFacts(original.Runtime), Is.EqualTo(before));
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString(),
+                "A rejected restore must leave the original graph able to continue normally.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+        }
+    }
+
+    [TestCase((int)P12GDailyV1RestoreStage.SourceCaptured)]
+    [TestCase((int)P12GDailyV1RestoreStage.RootsStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.OwnersStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.CandidateComposed)]
+    [TestCase((int)P12GDailyV1RestoreStage.TargetChecksCompleted)]
+    [TestCase((int)P12GDailyV1RestoreStage.BoundaryAdmitted)]
+    [TestCase((int)P12GDailyV1RestoreStage.BeforePublication)]
+    public void DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(
+        int injectedStageValue)
+    {
+        P12GDailyV1RestoreStage injectedStage = (P12GDailyV1RestoreStage)injectedStageValue;
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject bootstrapObject = new GameObject("P12-G restore private-stage atomicity");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(bootstrap, config);
+            InvokeInitializeSimulation(bootstrap, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstAdvanceFailure),
+                Is.True, firstAdvanceFailure.ToString());
+            Assert.That(original.Runtime.TryGetCompletedDailyCaptureToken(
+                    out DailyCaptureEligibilityToken originalToken,
+                    out DailyCaptureEligibilityFailure tokenFailure), Is.True,
+                tokenFailure.ToString());
+            string beforeFacts = CaptureSelectedDailyFacts(original.Runtime);
+            string beforeRoots = CaptureContinuationRootFacts(original);
+            bool injected = false;
+
+            Assert.That(bootstrap.TryRestoreDailyContinuation(stage =>
+            {
+                if (stage != injectedStage) return;
+                injected = true;
+                throw new InvalidOperationException("P12-G test failure at " + stage + ".");
+            }, out P12GDailyV1RestoreFailure restoreFailure, out string diagnostic), Is.False);
+            Assert.That(injected, Is.True, "The selected private stage must be reached before fault injection.");
+            Assert.That(restoreFailure, Is.Not.EqualTo(P12GDailyV1RestoreFailure.None));
+            Assert.That(diagnostic, Does.Contain("P12-G test failure at " + injectedStage));
+            Assert.That(ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(originalToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureSelectedDailyFacts(original.Runtime), Is.EqualTo(beforeFacts));
+            Assert.That(CaptureContinuationRootFacts(original), Is.EqualTo(beforeRoots));
+
+            Assert.That(bootstrap.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure,
+                    out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            Assert.That(restored, Is.Not.SameAs(original));
+            Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextAdvanceFailure),
+                Is.True, nextAdvanceFailure.ToString(),
+                "A later valid restore and normal advance must succeed after a discarded candidate.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+        }
+    }
+
     private static void AssertP14FiniteProfileWithP10Rejected(bool generated)
     {
         SimulationConfigData config = CreateP14AdmissionConfig(
@@ -2869,6 +3189,191 @@ public sealed class SimulationRuntimeAdmissionTests
             compose();
         });
         Assert.That(failure.Message, Does.Contain("P12 runtime-admission adapter could not bind"));
+    }
+
+    private static void AssertOwnerVectorFactsMatch(
+        IReadOnlyList<OwnerSectionCensusSnapshot> expected,
+        IReadOnlyList<OwnerSectionCensusSnapshot> actual,
+        bool requireFreshOwners)
+    {
+        Assert.That(expected, Is.Not.Null);
+        Assert.That(actual, Is.Not.Null);
+        Assert.That(actual.Count, Is.EqualTo(expected.Count));
+        Dictionary<string, OwnerSectionCensusSnapshot> actualById = actual.ToDictionary(
+            section => section.SectionId, StringComparer.Ordinal);
+        List<OwnerSectionCensusSnapshot> orderedExpected = new List<OwnerSectionCensusSnapshot>();
+        List<OwnerSectionCensusSnapshot> orderedActual = new List<OwnerSectionCensusSnapshot>();
+        foreach (OwnerSectionCensusSnapshot expectedSection in expected)
+        {
+            Assert.That(actualById.TryGetValue(expectedSection.SectionId, out OwnerSectionCensusSnapshot actualSection),
+                Is.True, expectedSection.SectionId);
+            Assert.That(actualSection.SchemaVersion, Is.EqualTo(expectedSection.SchemaVersion), expectedSection.SectionId);
+            Assert.That(actualSection.Role, Is.EqualTo(expectedSection.Role), expectedSection.SectionId);
+            Assert.That(actualSection.Cardinality, Is.EqualTo(expectedSection.Cardinality), expectedSection.SectionId);
+            Assert.That(actualSection.Revision, Is.EqualTo(expectedSection.Revision), expectedSection.SectionId);
+            if (requireFreshOwners)
+                Assert.That(actualSection.OwnerInstanceIdentity, Is.Not.SameAs(expectedSection.OwnerInstanceIdentity),
+                    expectedSection.SectionId);
+            orderedExpected.Add(expectedSection);
+            orderedActual.Add(actualSection);
+        }
+
+        for (int left = 0; left < orderedExpected.Count; left++)
+        {
+            for (int right = left + 1; right < orderedExpected.Count; right++)
+            {
+                Assert.That(
+                    ReferenceEquals(orderedExpected[left].OwnerInstanceIdentity, orderedExpected[right].OwnerInstanceIdentity),
+                    Is.EqualTo(ReferenceEquals(orderedActual[left].OwnerInstanceIdentity, orderedActual[right].OwnerInstanceIdentity)),
+                    orderedExpected[left].SectionId + " / " + orderedExpected[right].SectionId);
+            }
+        }
+    }
+
+    private static void CaptureTerminalP11History(SimulationRuntime runtime, string commandId)
+    {
+        Assert.That(runtime, Is.Not.Null);
+        PersonId personId = new PersonId("p12g-terminal-actor-" + commandId);
+        Assert.That(runtime.TryRegisterPerson(
+                new PersonRuntime(personId), out PersonStoreFailure personFailure), Is.True,
+            personFailure.ToString());
+        Assert.That(runtime.TryCaptureActorChoiceInput(
+                commandId,
+                personId,
+                "sell-goods",
+                WorldCommandOrigin.System,
+                WorldCommandAuthorityMode.Request,
+                out ActorChoiceStoreFailureCode captureFailure), Is.True,
+            captureFailure.ToString());
+
+        ActorChoiceInput pending = runtime.ActorChoiceStore.Inputs.Single(
+            input => input.WorldCommandId == commandId);
+        Assert.That(runtime.ActorChoiceStore.TryReject(
+                pending.InputId,
+                runtime.CurrentDay,
+                0,
+                ActorChoiceFailure.ActionUnavailable,
+                out ActorChoiceStoreFailureCode rejectFailure), Is.True,
+            rejectFailure.ToString());
+    }
+
+    private static string CaptureSelectedDailyFacts(SimulationRuntime runtime)
+    {
+        Assert.That(runtime, Is.Not.Null);
+        StringBuilder facts = new StringBuilder();
+        facts.Append("day=").Append(runtime.CurrentDay.ToString(CultureInfo.InvariantCulture));
+
+        facts.Append("|actor-choice-revision=")
+            .Append(runtime.ActorChoiceStore.CensusRevision.ToString(CultureInfo.InvariantCulture))
+            .Append(",temporal=")
+            .Append(runtime.ActorChoiceStore.TemporalInputCount.ToString(CultureInfo.InvariantCulture));
+        foreach (ActorChoiceInput input in runtime.ActorChoiceStore.Inputs.OrderBy(value => value.InputSequence))
+        {
+            facts.Append("|actor-choice=").Append(input.InputId?.Value)
+                .Append(',').Append(input.WorldCommandId)
+                .Append(',').Append(input.InputSequence.ToString(CultureInfo.InvariantCulture))
+                .Append(',').Append(input.PersonId?.Value)
+                .Append(',').Append(input.ActionDefinitionId)
+                .Append(',').Append(input.Origin)
+                .Append(',').Append(input.Authority)
+                .Append(',').Append(input.CapturedAbsoluteDay.ToString(CultureInfo.InvariantCulture))
+                .Append(',').Append(input.Status);
+            foreach (ActorChoiceDisposition disposition in input.Dispositions)
+            {
+                facts.Append(",disposition=").Append(disposition.TransitionOrdinal.ToString(CultureInfo.InvariantCulture))
+                    .Append(':').Append(disposition.Kind)
+                    .Append(':').Append(disposition.AbsoluteDay.ToString(CultureInfo.InvariantCulture))
+                    .Append(':').Append(disposition.ActorTurnRosterOrdinal.ToString(CultureInfo.InvariantCulture))
+                    .Append(':').Append(disposition.DeferralReason)
+                    .Append(':').Append(disposition.Failure)
+                    .Append(':').Append(disposition.DecisionRecordId)
+                    .Append(':').Append(disposition.AttemptOutcome)
+                    .Append(':').Append(disposition.ReturnedResultStatus);
+            }
+        }
+
+        foreach (CityRuntime city in runtime.Cities.OrderBy(value => value.RuntimeId, StringComparer.Ordinal))
+        {
+            facts.Append("|city=").Append(city.RuntimeId)
+                .Append(',').Append(city.DefinitionId)
+                .Append(',').Append(city.Location?.RuntimeId)
+                .Append(',').Append(city.CurrentPopulation.ToString(CultureInfo.InvariantCulture))
+                .Append(',').Append(city.ImportantNpcRevision.ToString(CultureInfo.InvariantCulture))
+                .Append(",marketRev=").Append(city.Market.Revision.ToString(CultureInfo.InvariantCulture));
+            foreach (NpcRuntime importantNpc in city.ImportantNpcs.OrderBy(value => value.RuntimeId, StringComparer.Ordinal))
+                facts.Append(",important=").Append(importantNpc.RuntimeId);
+            foreach (MarketItemRuntime row in city.Market.Items.OrderBy(
+                         value => value.Item?.DefinitionId, StringComparer.Ordinal))
+                facts.Append(",stock=").Append(row.Item?.DefinitionId)
+                    .Append(':').Append(row.Amount.ToString(CultureInfo.InvariantCulture))
+                    .Append(':').Append(row.DesiredAmount.ToString(CultureInfo.InvariantCulture))
+                    .Append(':').Append(row.CurrentPrice.ToString("R", CultureInfo.InvariantCulture));
+        }
+
+        foreach (NpcRuntime npc in runtime.NpcRuntimes.OrderBy(value => value.RuntimeId, StringComparer.Ordinal))
+        {
+            facts.Append("|npc=").Append(npc.RuntimeId)
+                .Append(',').Append(npc.DefinitionId)
+                .Append(',').Append(npc.PersonId?.Value)
+                .Append(',').Append(npc.ResidenceSettlementRuntimeId)
+                .Append(',').Append(npc.CurrentCity?.RuntimeId)
+                .Append(',').Append(npc.CurrentLocation?.RuntimeId)
+                .Append(',').Append(npc.DestinationCity?.RuntimeId)
+                .Append(',').Append(npc.DestinationLocation?.RuntimeId)
+                .Append(',').Append(npc.TravelRouteRuntimeId)
+                .Append(',').Append(npc.TravelDaysRemaining.ToString(CultureInfo.InvariantCulture))
+                .Append(',').Append(npc.TravelDaysTotal.ToString(CultureInfo.InvariantCulture))
+                .Append(',').Append(npc.TravelOriginDecisionId)
+                .Append(',').Append(npc.ActiveTravelPartyId)
+                .Append(',').Append(npc.CurrentAction?.DefinitionId)
+                .Append(',').Append(npc.LifeState)
+                .Append(',').Append(npc.InjurySeverity)
+                .Append(',').Append(npc.HiddenDaysRemaining.ToString(CultureInfo.InvariantCulture))
+                .Append(",money=").Append(npc.MoneyAccount.Balance.ToString("R", CultureInfo.InvariantCulture))
+                .Append(',').Append(npc.MoneyAccount.Revision.ToString(CultureInfo.InvariantCulture))
+                .Append(",inventoryRev=").Append(npc.Inventory.Revision.ToString(CultureInfo.InvariantCulture));
+            foreach (InventoryItemRuntime row in npc.Inventory.Items.OrderBy(
+                         value => value.Item?.DefinitionId, StringComparer.Ordinal))
+                facts.Append(",item=").Append(row.Item?.DefinitionId)
+                    .Append(':').Append(row.Amount.ToString(CultureInfo.InvariantCulture))
+                    .Append(':').Append(row.AverageUnitCost.ToString("R", CultureInfo.InvariantCulture));
+        }
+
+        return facts.ToString();
+    }
+
+    private static string CaptureContinuationRootFacts(
+        SimulationActiveSession session,
+        bool includeWorldIdentity = true)
+    {
+        Assert.That(session, Is.Not.Null);
+        Assert.That(session.Composition, Is.Not.Null);
+        Assert.That(session.RandomSource, Is.TypeOf<DeterministicRandomSource>());
+        RuntimeIdAllocatorSnapshot allocator = session.Composition.RuntimeIdAllocator.CaptureSnapshot();
+        SimulationRecordSequenceSnapshot sequence = session.Composition.RecordSequence.CaptureSnapshot();
+        DeterministicRandomRootSnapshot random = ((DeterministicRandomSource)session.RandomSource).CaptureSnapshot();
+        StringBuilder facts = new StringBuilder();
+        if (includeWorldIdentity)
+            facts.Append("world=").Append(session.Composition.WorldId.Value).Append('|');
+        facts.Append("profile=").Append(session.Composition.ProfileContractIdentity)
+            .Append('|').Append(session.Composition.ProfileFingerprint)
+            .Append("|sequence=").Append(sequence.SchemaId).Append(':')
+            .Append(sequence.SchemaVersion.ToString(CultureInfo.InvariantCulture)).Append(':')
+            .Append(sequence.NextSequence.ToString(CultureInfo.InvariantCulture))
+            .Append("|random=").Append(random.SchemaId).Append(':')
+            .Append(random.SchemaVersion.ToString(CultureInfo.InvariantCulture)).Append(':')
+            .Append(random.ProviderId).Append(':')
+            .Append(random.ProviderVersion.ToString(CultureInfo.InvariantCulture)).Append(':')
+            .Append(random.AlgorithmId).Append(':')
+            .Append(random.AlgorithmVersion.ToString(CultureInfo.InvariantCulture)).Append(':')
+            .Append(random.Seed.ToString(CultureInfo.InvariantCulture));
+        foreach (RuntimeIdAllocatorCounterSnapshot counter in allocator.Counters.OrderBy(
+                     value => value.FamilyId, StringComparer.Ordinal))
+        {
+            facts.Append("|allocator=").Append(counter.FamilyId).Append(':')
+                .Append(counter.NextSequence.ToString(CultureInfo.InvariantCulture));
+        }
+        return facts.ToString();
     }
 
     private static void ConfigureUnscopedBootstrap(TesteSimulacao bootstrap, SimulationConfigData config)

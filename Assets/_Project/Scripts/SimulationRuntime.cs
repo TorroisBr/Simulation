@@ -654,6 +654,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private readonly SimulationLogger logger;
 
     public SimulationTime SimulationTime => simulationTime;
+    internal CrimeSystem CrimeSystemForWorldBoundary => crimeSystem;
+    internal JusticeSystem JusticeSystemForWorldBoundary => justiceSystem;
     public AuthoritativeMutationHealth MutationHealth => mutationGuard.Health;
     public bool IsMutationFaulted => mutationGuard.Health == AuthoritativeMutationHealth.Faulted;
     public AuthoritativeMutationFaultReason MutationFaultReason => mutationGuard.FaultReason;
@@ -906,7 +908,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         bool requireP12ReceiptCensusOwners = false,
         RuntimeIdentityRegistry runtimeIdentityRegistry = null,
         SpatialNetworkRuntime spatialNetworkRuntime = null,
-        bool requireP12RuntimeIdentitySpatialCensusOwners = false)
+        bool requireP12RuntimeIdentitySpatialCensusOwners = false,
+        CrimeSocialAppraisalWorldState p12CrimeSocialAppraisalWorldState = null)
     {
         WorldId = worldId;
         if (!Enum.IsDefined(typeof(SimulationRuntimeCompositionProfile), compositionProfile))
@@ -1235,7 +1238,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 resolvedSpatialRouteKnowledgeStore);
         InstitutionStore resolvedInstitutionStore = ResolveInstitutionStore(
             institutionStore,
-            officeStore);
+            officeStore,
+            p12CrimeSocialAppraisalWorldState);
         OfficeStore resolvedOfficeStore = CloneOfficeStore(
             officeStore,
             resolvedInstitutionStore,
@@ -1379,10 +1383,33 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             this.politicalClaimStore,
             initialPoliticalWorldRevision,
             this.politicalKnowledgeStore.Revision);
-        this.crimeSocialAppraisalWorldState = new CrimeSocialAppraisalWorldState(
-            this.personStore,
-            this.institutionStore,
-            this.simulationTime);
+        if (p12CrimeSocialAppraisalWorldState != null)
+        {
+            if (runtimeAdmissionContext == null)
+            {
+                throw new ArgumentException(
+                    "A P12 Crime/Social continuation owner requires the selected Daily-v1 runtime.",
+                    nameof(p12CrimeSocialAppraisalWorldState));
+            }
+
+            if (!ReferenceEquals(p12CrimeSocialAppraisalWorldState.PersonStore, this.personStore)
+                || !ReferenceEquals(p12CrimeSocialAppraisalWorldState.InstitutionStore, this.institutionStore)
+                || !ReferenceEquals(p12CrimeSocialAppraisalWorldState.SimulationTime, this.simulationTime))
+            {
+                throw new ArgumentException(
+                    "The P12 Crime/Social owner must use the exact installed Person, Institution, and time owners.",
+                    nameof(p12CrimeSocialAppraisalWorldState));
+            }
+
+            this.crimeSocialAppraisalWorldState = p12CrimeSocialAppraisalWorldState;
+        }
+        else
+        {
+            this.crimeSocialAppraisalWorldState = new CrimeSocialAppraisalWorldState(
+                this.personStore,
+                this.institutionStore,
+                this.simulationTime);
+        }
         if (crimeSystem != null
             && crimeSystem.SimulationTime != null
             && !ReferenceEquals(crimeSystem.SimulationTime, this.simulationTime))
@@ -8478,6 +8505,28 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         long preservedCompletedCoreSequence,
         out DailyCaptureEligibilityFailure failure)
     {
+        return TryAdmitRestoredDailyBoundary(
+            expectedWorldId,
+            preservedAbsoluteDay,
+            preservedCompletedCoreSequence,
+            null,
+            -1L,
+            out failure);
+    }
+
+    /// <summary>
+    /// Admits a private restored candidate only if its fresh owner census still
+    /// exactly matches the vector and mutation epoch that passed P12-G graph
+    /// validation. The token retains that validated vector instance.
+    /// </summary>
+    internal bool TryAdmitRestoredDailyBoundary(
+        WorldId expectedWorldId,
+        long preservedAbsoluteDay,
+        long preservedCompletedCoreSequence,
+        IReadOnlyList<OwnerSectionCensusSnapshot> validatedTargetOwnerSections,
+        long validatedTargetMutationEpoch,
+        out DailyCaptureEligibilityFailure failure)
+    {
         failure = DailyCaptureEligibilityFailure.None;
         if (!IsDailyCaptureProfile)
         {
@@ -8534,6 +8583,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
+        if (validatedTargetOwnerSections != null
+            && !P12GDailyV1OwnerVector.TryMatchCurrentTargetSnapshot(
+                validatedTargetOwnerSections,
+                validatedTargetMutationEpoch,
+                ownerSections,
+                mutationEpoch,
+                out _,
+                out _))
+        {
+            failure = DailyCaptureEligibilityFailure.StaleToken;
+            return false;
+        }
+
         if (!IsRuntimeAdmissionOwnerThreadCurrent())
         {
             failure = DailyCaptureEligibilityFailure.WrongOwnerThread;
@@ -8572,7 +8634,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             preservedCompletedCoreSequence,
             DailyCaptureBoundaryProvenance.RestoredContinuation,
             mutationEpoch,
-            ownerSections);
+            validatedTargetOwnerSections ?? ownerSections);
 
         completedDailyCoreSequence = preservedCompletedCoreSequence;
         currentDailyCaptureToken = restoredToken;
@@ -8610,6 +8672,80 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         token = current;
         failure = DailyCaptureEligibilityFailure.None;
+        return true;
+    }
+
+    /// <summary>
+    /// Captures the private Daily-v1 candidate's own exact owner vector before
+    /// restored-boundary admission. This is read-only evidence for P12-G to
+    /// compare against its staged owner graph; it does not publish factual
+    /// reads or issue a completed-boundary token.
+    /// </summary>
+    internal bool TryCaptureUnadmittedRestoredDailyOwnerVector(
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out ContinuationCensusFailure failure)
+    {
+        ownerSections = null;
+        mutationEpoch = 0L;
+
+        if (!IsDailyCaptureProfile || npcRosterCensusProtocol == null)
+        {
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        if (!IsRuntimeAdmissionOwnerThreadCurrent())
+        {
+            failure = ContinuationCensusFailure.WrongOwnerThread;
+            return false;
+        }
+
+        if (advanceLeaseHeld || HasActiveDailyOperationContext())
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
+
+        if (factualReadWorldPublished
+            || currentDailyCaptureToken != null
+            || completedDailyCoreSequence != 0L
+            || !mutationGuard.CanMutate)
+        {
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+
+        if (!npcRosterCensusProtocol.TryCaptureQuiescentOwnerSectionSnapshot(
+                out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+                out long capturedMutationEpoch,
+                out failure))
+            return false;
+
+        if (!IsRuntimeAdmissionOwnerThreadCurrent())
+        {
+            failure = ContinuationCensusFailure.WrongOwnerThread;
+            return false;
+        }
+
+        if (advanceLeaseHeld || HasActiveDailyOperationContext())
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
+
+        if (factualReadWorldPublished
+            || currentDailyCaptureToken != null
+            || completedDailyCoreSequence != 0L
+            || !mutationGuard.CanMutate)
+        {
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+
+        ownerSections = captured;
+        mutationEpoch = capturedMutationEpoch;
+        failure = ContinuationCensusFailure.None;
         return true;
     }
 
@@ -10175,7 +10311,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
     private static InstitutionStore ResolveInstitutionStore(
         InstitutionStore institutionStore,
-        OfficeStore officeStore)
+        OfficeStore officeStore,
+        CrimeSocialAppraisalWorldState p12CrimeSocialAppraisalWorldState = null)
     {
         if (institutionStore != null
             && officeStore != null
@@ -10190,6 +10327,18 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         InstitutionStore source = institutionStore
             ?? officeStore?.InstitutionStoreForWorldBoundary;
+        if (p12CrimeSocialAppraisalWorldState != null)
+        {
+            if (!ReferenceEquals(source, p12CrimeSocialAppraisalWorldState.InstitutionStore))
+            {
+                throw new ArgumentException(
+                    "The supplied P12 Crime/Social state must share the selected InstitutionStore owner.",
+                    nameof(p12CrimeSocialAppraisalWorldState));
+            }
+
+            return source;
+        }
+
         return CloneInstitutionStore(source ?? new InstitutionStore());
     }
 

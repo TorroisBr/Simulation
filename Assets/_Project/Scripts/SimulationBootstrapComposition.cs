@@ -45,6 +45,8 @@ public sealed class SimulationBootstrapComposition
         Manifest = manifest;
         SimulationTime = time;
         Calendar = calendar;
+        RuntimeIdAllocator = runtimeIdAllocator ?? throw new ArgumentNullException(nameof(runtimeIdAllocator));
+        RecordSequence = recordSequence ?? throw new ArgumentNullException(nameof(recordSequence));
         SpatialNetwork = spatialNetwork;
         DomainEventStore = events;
         History = history;
@@ -152,6 +154,8 @@ public sealed class SimulationBootstrapComposition
     public SimulationGenesisManifest Manifest { get; }
     public SimulationTime SimulationTime { get; }
     public CalendarDefinition Calendar { get; }
+    internal RuntimeIdAllocator RuntimeIdAllocator { get; }
+    internal SimulationRecordSequence RecordSequence { get; }
     public SpatialNetworkRuntime SpatialNetwork { get; }
     public DomainEventStore DomainEventStore { get; }
     public HistoryStore History { get; }

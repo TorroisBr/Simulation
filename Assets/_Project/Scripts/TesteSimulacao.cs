@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -609,6 +610,72 @@ public class TesteSimulacao : MonoBehaviour
                 return false;
 
             Interlocked.Exchange(ref activeSession, candidateSession);
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Restores the selected Daily-v1 boundary while holding the serialized
+    /// active-session gate, then publishes exactly one fully validated session.
+    /// </summary>
+    internal bool TryRestoreDailyContinuation(
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic)
+    {
+        return TryRestoreDailyContinuation(null, out failure, out diagnostic);
+    }
+
+    internal bool TryRestoreDailyContinuation(
+        System.Action<P12GDailyV1RestoreStage> stageObserver,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic)
+    {
+        lock (activeSessionGate)
+        {
+            SimulationActiveSession expectedSession = activeSession;
+            if (expectedSession == null
+                || activeSessionOperationCount != 0
+                || expectedSession.AdmissionContext == null
+                || expectedSession.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !expectedSession.AdmissionContext.IsOwnedByCurrentThread()
+                || !expectedSession.Runtime.IsHealthyDailyOwnerThreadBoundary()
+                || !expectedSession.Runtime.HasValidCompletedDailyBoundaryAdmission())
+            {
+                failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
+                diagnostic = "Daily-v1 restore requires the current healthy completed-boundary session while idle on its owner thread.";
+                return false;
+            }
+
+            if (!P12GDailyV1RestoreCoordinator.TryCreateRestoredSession(
+                    expectedSession,
+                    out SimulationActiveSession candidateSession,
+                    out failure,
+                    out diagnostic,
+                    stageObserver))
+                return false;
+
+            try
+            {
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.BeforePublication);
+            }
+            catch (Exception exception) when (exception is InvalidOperationException
+                || exception is ArgumentException)
+            {
+                failure = P12GDailyV1RestoreFailure.PublicationFailed;
+                diagnostic = "The private candidate was rejected before the active-session exchange: "
+                    + exception.Message;
+                return false;
+            }
+
+            if (!TryPublishRestoredSession(expectedSession, candidateSession))
+            {
+                failure = P12GDailyV1RestoreFailure.PublicationFailed;
+                diagnostic = "The restored session failed the existing single-reference publication gate.";
+                return false;
+            }
+
+            failure = P12GDailyV1RestoreFailure.None;
+            diagnostic = null;
             return true;
         }
     }
@@ -2043,7 +2110,7 @@ public class TesteSimulacao : MonoBehaviour
         return runtimes[0];
     }
 
-    private static NpcChronicleFormatter CreateNpcChronicleFormatter(
+    internal static NpcChronicleFormatter CreateNpcChronicleFormatter(
         RuntimeIdentityRegistry identityRegistry,
         SpatialNetworkRuntime spatialNetwork,
         IReadOnlyDictionary<SpatialLocationRuntime, CityRuntime> cityRuntimeByLocation,
