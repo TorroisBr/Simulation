@@ -2,11 +2,11 @@
 
 **Scope:** add a restore-only observer cutpoint immediately before `GenealogyStore.TryCreateFromOwnerSnapshot`, plus one case in the existing private-stage fault-injection harness. The new case confirms rejection before publication and reuses the existing assertions for source session/reference, completed-boundary token, owner-thread health, selected facts, continuation roots, complete included-owner projection, deterministic next-boundary parity, and successful retry. This covers the Genealogy hydrator entry only; it does not cover every internal false/throw path or every B–F hydrator.
 
-**Base P12 canonical:** `95e922eb3c2083a87bf1353bce60303f42a2a62c`  
-**Code candidate:** `732864564bbf2fa8bd7373cac1994876280e876d`  
-**Code tree:** `8754f563b43e0a3b3994b1acc65ccfca2846fb89`  
-**Assets tree:** `161d5e89f178a43672804f4f5b28739e51ceaee2`  
-**Changed code:** `P12DDailyV1OwnerPackage.cs`, `P12GDailyV1RestoreCoordinator.cs`, and `SimulationRuntimeAdmissionTests.cs`.  
+**Base P12 canonical:** `95e922eb3c2083a87bf1353bce60303f42a2a62c`<br>
+**Code candidate:** `732864564bbf2fa8bd7373cac1994876280e876d`<br>
+**Code tree:** `8754f563b43e0a3b3994b1acc65ccfca2846fb89`<br>
+**Assets tree:** `161d5e89f178a43672804f4f5b28739e51ceaee2`<br>
+**Changed code:** `P12DDailyV1OwnerPackage.cs`, `P12GDailyV1RestoreCoordinator.cs`, and `SimulationRuntimeAdmissionTests.cs`.<br>
 **Unity Editor:** `6000.3.9f1`; runner: `Tools/UnityValidation/Invoke-UnityValidation.ps1`.
 
 | Gate | Result | XML artifact | XML SHA-256 | Compressed log | Compressed SHA-256 | Uncompressed log SHA-256 |
