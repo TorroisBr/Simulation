@@ -1,12 +1,12 @@
 # P12-G Genealogy internal partial-stage failure — exact-tip independent review
 
-**Verdict:** VALIDATED_CANDIDATE  
-**Review date:** 2026-10-10  
-**Candidate branch:** `codex/phase12/P12GGenealogyInternalFailureAtomicity`  
-**Candidate tip:** `888decd21fc0ed169b837e10a21d173206107100`  
-**Base and current P12 canonical:** `f5f1a247bf72b8d1cfdffe62f3486989e4692d5c`  
-**Implementation commit:** `45692c94c6f22fb3798cc246a89007d151930315`  
-**Implementation Git tree:** `23727c85a540bf30f595875294532e5080ce3c9f`  
+**Verdict:** VALIDATED_CANDIDATE
+**Review date:** 2026-10-10
+**Candidate branch:** `codex/phase12/P12GGenealogyInternalFailureAtomicity`
+**Candidate tip:** `888decd21fc0ed169b837e10a21d173206107100`
+**Base and current P12 canonical:** `f5f1a247bf72b8d1cfdffe62f3486989e4692d5c`
+**Implementation commit:** `45692c94c6f22fb3798cc246a89007d151930315`
+**Implementation Git tree:** `23727c85a540bf30f595875294532e5080ce3c9f`
 **Validated Assets tree (manifest):** `a3b896bb1e2ff3005be642557780ea563ed98f88`
 
 ## Review findings
