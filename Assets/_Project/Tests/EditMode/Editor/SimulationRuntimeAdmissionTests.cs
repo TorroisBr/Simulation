@@ -4031,6 +4031,7 @@ public sealed class SimulationRuntimeAdmissionTests
     [TestCase("p8c-city-location-binding-owner")]
     [TestCase("p8c-city-location-binding-populated-target")]
     [TestCase("p8c-person-position-owner")]
+    [TestCase("p8c-person-position-populated-target")]
     [TestCase("p8d-route-observation-owner")]
     [TestCase("p8d-person-route-plan-owner")]
     [TestCase("p12f-expedition-owner")]
@@ -4072,6 +4073,12 @@ public sealed class SimulationRuntimeAdmissionTests
             OwnerSectionCensusWitness p8CPopulatedTargetWitness = null;
             PersonSpatialPositionStore p8CPositionReplacementStore = null;
             bool p8CPositionStoreReplaced = false;
+            PersonId p8CPopulatedPositionPersonId = null;
+            PersonSpatialPositionStore p8CPopulatedPositionStore = null;
+            LocationId p8CPopulatedPositionLocationId = null;
+            bool p8CPopulatedPositionApplied = false;
+            string p8CPopulatedPositionFailure = null;
+            OwnerSectionCensusWitness p8CPopulatedPositionWitness = null;
             SpatialRouteKnowledgeStore p8DRouteKnowledgeReplacementStore = null;
             bool p8DRouteKnowledgeStoreReplaced = false;
             PersonRoutePlanStore p8DRoutePlanReplacementStore = null;
@@ -4109,6 +4116,16 @@ public sealed class SimulationRuntimeAdmissionTests
             PersonId genealogyMissingEndpoint = null;
             GenealogyStore corruptedGenealogyStore = null;
             bool genealogyEdgeAdded = false;
+            if (corruptionKind == "p8c-person-position-populated-target")
+            {
+                p8CPopulatedPositionPersonId = new PersonId("p12g-p8c-person-position");
+                Assert.That(original.Runtime.TryRegisterPerson(
+                    new PersonRuntime(p8CPopulatedPositionPersonId, 0L),
+                    out PersonStoreFailure sourcePersonFailure), Is.True, sourcePersonFailure.ToString());
+                Assert.That(controlSession.Runtime.TryRegisterPerson(
+                    new PersonRuntime(p8CPopulatedPositionPersonId, 0L),
+                    out PersonStoreFailure controlPersonFailure), Is.True, controlPersonFailure.ToString());
+            }
             if (corruptionKind == "genealogy-dangling-person-endpoint")
             {
                 genealogyExistingEndpoint = new PersonId("p12g-existing-genealogy-endpoint");
@@ -4207,6 +4224,24 @@ public sealed class SimulationRuntimeAdmissionTests
                                 p8CPositionReplacementStore);
                         }
                         break;
+                    case "p8c-person-position-populated-target":
+                    {
+                        p8CPopulatedPositionStore = candidate.Runtime.PersonSpatialPositionStore;
+                        Assert.That(p8CPopulatedPositionStore, Is.Not.Null);
+                        Assert.That(p8CPopulatedPositionStore.Count, Is.Zero);
+                        p8CPopulatedPositionLocationId = candidate.Runtime.SpatialAuthorityStore.Locations.Single().Id;
+                        p8CPopulatedPositionApplied = p8CPopulatedPositionStore.TrySetAt(
+                            p8CPopulatedPositionPersonId,
+                            StablePositionReference.ForLocation(p8CPopulatedPositionLocationId),
+                            out PersonSpatialPositionFailure p8CPositionFailure);
+                        p8CPopulatedPositionFailure = p8CPositionFailure.ToString();
+                        if (p8CPopulatedPositionApplied)
+                        {
+                            p8CPopulatedPositionWitness = new PersonSpatialPositionCensusProvider(
+                                p8CPopulatedPositionStore).GetCurrentCensus();
+                        }
+                        break;
+                    }
                     case "p8d-route-observation-owner":
                         p8DRouteKnowledgeReplacementStore = new SpatialRouteKnowledgeStore(
                             candidate.Runtime.PersonStore);
@@ -4629,6 +4664,24 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(p8CPositionStoreReplaced, Is.True);
                 Assert.That(p8CPositionReplacementStore, Is.Not.Null);
                 Assert.That(p8CPositionReplacementStore.Count, Is.Zero);
+            }
+            if (corruptionKind == "p8c-person-position-populated-target")
+            {
+                Assert.That(p8CPopulatedPositionApplied, Is.True, p8CPopulatedPositionFailure);
+                Assert.That(p8CPopulatedPositionStore, Is.Not.Null);
+                Assert.That(p8CPopulatedPositionWitness, Is.Not.Null, p8CPopulatedPositionFailure);
+                Assert.That(p8CPopulatedPositionWitness.SectionId,
+                    Is.EqualTo(PersonSpatialPositionCensusProvider.SectionId));
+                Assert.That(p8CPopulatedPositionWitness.OwnerInstanceIdentity,
+                    Is.SameAs(p8CPopulatedPositionStore));
+                Assert.That(p8CPopulatedPositionWitness.Cardinality, Is.EqualTo(1));
+                Assert.That(p8CPopulatedPositionWitness.Revision, Is.EqualTo(1L));
+                Assert.That(p8CPopulatedPositionStore.Count, Is.EqualTo(1));
+                Assert.That(p8CPopulatedPositionStore.Revision, Is.EqualTo(1L));
+                Assert.That(p8CPopulatedPositionStore.TryGetPosition(
+                    p8CPopulatedPositionPersonId, out PersonSpatialPosition retainedPosition), Is.True);
+                Assert.That(retainedPosition.Position, Is.EqualTo(
+                    StablePositionReference.ForLocation(p8CPopulatedPositionLocationId)));
             }
             if (corruptionKind == "p8d-route-observation-owner")
             {
