@@ -7917,6 +7917,21 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         }
     }
 
+    internal bool HasSameJusticeSystemOwner(JusticeSystem otherJusticeSystem)
+    {
+        return ReferenceEquals(justiceSystem, otherJusticeSystem);
+    }
+
+    internal bool HasSameLoggerOwner(SimulationLogger otherLogger)
+    {
+        return ReferenceEquals(logger, otherLogger);
+    }
+
+    internal bool HasSameRuntimeAdmissionContext(SimulationRuntimeAdmissionContext otherContext)
+    {
+        return ReferenceEquals(runtimeAdmissionContext, otherContext);
+    }
+
     public bool TryBindExistingNpcToPerson(
         PersonId personId,
         string npcRuntimeId,
@@ -8596,6 +8611,41 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         token = current;
         failure = DailyCaptureEligibilityFailure.None;
         return true;
+    }
+
+    internal bool IsHealthyDailyOwnerThreadBoundary()
+    {
+        return IsDailyCaptureProfile
+            && IsRuntimeAdmissionOwnerThreadCurrent()
+            && !advanceLeaseHeld
+            && !HasActiveDailyOperationContext()
+            && factualReadWorldPublished
+            && mutationGuard.CanMutate;
+    }
+
+    internal bool HasValidCompletedDailyBoundaryAdmission()
+    {
+        return HasValidDailyBoundaryAdmission(requiredProvenance: null);
+    }
+
+    internal bool HasValidRestoredDailyBoundaryAdmission()
+    {
+        return HasValidDailyBoundaryAdmission(DailyCaptureBoundaryProvenance.RestoredContinuation);
+    }
+
+    private bool HasValidDailyBoundaryAdmission(DailyCaptureBoundaryProvenance? requiredProvenance)
+    {
+        if (!TryReadDailyCaptureEvidence(
+                finalizingHeldAdvance: false,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+                out long mutationEpoch,
+                out _))
+            return false;
+
+        DailyCaptureEligibilityToken current = currentDailyCaptureToken;
+        return current != null
+            && (!requiredProvenance.HasValue || current.BoundaryProvenance == requiredProvenance.Value)
+            && TryCompareDailyCaptureToken(current, ownerSections, mutationEpoch);
     }
 
     internal bool TryValidateCompletedDailyCaptureToken(

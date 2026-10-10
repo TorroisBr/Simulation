@@ -297,19 +297,23 @@ public sealed class P10BGeneratedRuinGenesisTests
             Is.EqualTo(SimulationGenesisPipeline.P10BGeneratedRuinProfileContractIdentity));
         Assert.That(simulation.Bootstrap.Manifest.StageOrder,
             Does.Contain(SimulationGenesisPipeline.P10BGeneratedRuinStageId));
-        P10BGeneratedRuinGenesis.PreparedRuin prepared =
-            (P10BGeneratedRuinGenesis.PreparedRuin)ReadField(simulation, "p10BPreparedRuin");
-        Assert.That(prepared, Is.Not.Null);
+        P10BGeneratedRuinGenesis.PreparedRuin expected = P10BGeneratedRuinGenesis.Prepare(
+            config,
+            simulation.Bootstrap.Manifest.SelectedP9ProfileFingerprint,
+            simulation.Runtime.SpatialAuthorityStore,
+            new RuntimeIdentityRegistry(),
+            out string prepareDiagnostic);
+        Assert.That(expected, Is.Not.Null, prepareDiagnostic);
         Assert.That(simulation.Bootstrap.Manifest.Fingerprint,
-            Is.EqualTo(prepared.GeneratedTopology.ComposedProfileFingerprint),
-            "The end-to-end manifest must publish the generator's v1 composed-profile golden value.");
+            Is.EqualTo(expected.GeneratedTopology.ComposedProfileFingerprint),
+            "The end-to-end manifest must publish the deterministic generator's v1 composed-profile value.");
         Assert.That(simulation.Bootstrap.Manifest.Fingerprint,
             Is.EqualTo(FingerprintRecords(new[]
             {
                 "p10b.genesis-profile/v1",
-                prepared.Request.P9ProfileFingerprint,
-                prepared.Request.RequestFingerprint,
-                prepared.GeneratedTopology.GraphFingerprint
+                expected.Request.P9ProfileFingerprint,
+                expected.Request.RequestFingerprint,
+                expected.GeneratedTopology.GraphFingerprint
             })));
         Assert.That(simulation.Bootstrap.Manifest.Fingerprint,
             Is.Not.EqualTo(FingerprintRecords(simulation.Bootstrap.Manifest.CanonicalProvenanceRecords)),

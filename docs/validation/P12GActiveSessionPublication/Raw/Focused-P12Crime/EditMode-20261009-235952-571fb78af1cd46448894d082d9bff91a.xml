@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="12" result="Passed" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-10 00:00:00Z" end-time="2026-10-10 00:00:00Z" duration="0,2241903">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2738" result="Passed" start-time="2026-10-10 00:00:00Z" end-time="2026-10-10 00:00:00Z" duration="0.224190" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="4003" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12g-current-canonical-inventory/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2738" result="Passed" start-time="2026-10-10 00:00:00Z" end-time="2026-10-10 00:00:00Z" duration="0.212841" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="95888" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2609" name="P12CrimeSocialAppraisalInvalidationTests" fullname="P12CrimeSocialAppraisalInvalidationTests" classname="P12CrimeSocialAppraisalInvalidationTests" runstate="Runnable" testcasecount="12" result="Passed" start-time="2026-10-10 00:00:00Z" end-time="2026-10-10 00:00:00Z" duration="0.197501" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2617" name="CompositeLocalRevisionHeadroomRefusalLeavesAllCrimeRowsUnchanged" fullname="P12CrimeSocialAppraisalInvalidationTests.CompositeLocalRevisionHeadroomRefusalLeavesAllCrimeRowsUnchanged" methodname="CompositeLocalRevisionHeadroomRefusalLeavesAllCrimeRowsUnchanged" classname="P12CrimeSocialAppraisalInvalidationTests" runstate="Runnable" seed="830033742" result="Passed" start-time="2026-10-10 00:00:00Z" end-time="2026-10-10 00:00:00Z" duration="0.061520" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2613" name="CompositeTheftBatchesOutcomeKnowledgeAndReactionIntoOneEpochInBothModes" fullname="P12CrimeSocialAppraisalInvalidationTests.CompositeTheftBatchesOutcomeKnowledgeAndReactionIntoOneEpochInBothModes" methodname="CompositeTheftBatchesOutcomeKnowledgeAndReactionIntoOneEpochInBothModes" classname="P12CrimeSocialAppraisalInvalidationTests" runstate="Runnable" seed="1206012901" result="Passed" start-time="2026-10-10 00:00:00Z" end-time="2026-10-10 00:00:00Z" duration="0.003528" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2618" name="DirectSingleWriteRevisionExhaustionRejectsBeforeMutation" fullname="P12CrimeSocialAppraisalInvalidationTests.DirectSingleWriteRevisionExhaustionRejectsBeforeMutation" methodname="DirectSingleWriteRevisionExhaustionRejectsBeforeMutation" classname="P12CrimeSocialAppraisalInvalidationTests" runstate="Runnable" seed="572872665" result="Passed" start-time="2026-10-10 00:00:00Z" end-time="2026-10-10 00:00:00Z" duration="0.001094" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2612" name="DirectStoreWritersNotifySeparatelyOutsideAndInsideRegisteredOperations" fullname="P12CrimeSocialAppraisalInvalidationTests.DirectStoreWritersNotifySeparatelyOutsideAndInsideRegisteredOperations" methodname="DirectStoreWritersNotifySeparatelyOutsideAndInsideRegisteredOperations" classname="P12CrimeSocialAppraisalInvalidationTests" runstate="Runnable" seed="354828006" result="Passed" start-time="2026-10-10 00:00:00Z" end-time="2026-10-10 00:00:00Z" duration="0.000919" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2616" name="EmptyCompositeReleasesItsReservedEpochToken" fullname="P12CrimeSocialAppraisalInvalidationTests.EmptyCompositeReleasesItsReservedEpochToken" methodname="EmptyCompositeReleasesItsReservedEpochToken" classname="P12CrimeSocialAppraisalInvalidationTests" runstate="Runnable" seed="1492635910" result="Passed" start-time="2026-10-10 00:00:00Z" end-time="2026-10-10 00:00:00Z" duration="0.000640" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2615" name="ExistingEpochReservationRejectsDirectOwnerWriteBeforeMutation" fullname="P12CrimeSocialAppraisalInvalidationTests.ExistingEpochReservationRejectsDirectOwnerWriteBeforeMutation" methodname="ExistingEpochReservationRejectsDirectOwnerWriteBeforeMutation" classname="P12CrimeSocialAppraisalInvalidationTests" runstate="Runnable" seed="547676047" result="Passed" start-time="2026-10-10 00:00:00Z" end-time="2026-10-10 00:00:00Z" duration="0.000423" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2614" name="NestedCoordinatorKeepsCompensatedChildWritesInOneOuterEpoch" fullname="P12CrimeSocialAppraisalInvalidationTests.NestedCoordinatorKeepsCompensatedChildWritesInOneOuterEpoch" methodname="NestedCoordinatorKeepsCompensatedChildWritesInOneOuterEpoch" classname="P12CrimeSocialAppraisalInvalidationTests" runstate="Runnable" seed="140961363" result="Passed" start-time="2026-10-10 00:00:00Z" end-time="2026-10-10 00:00:00Z" duration="0.001219" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2611" name="SelectedDailyV1AdvanceDayExecutesStealInsideOuterOperationAndReconcilesCrimeSocialOwners" fullname="P12CrimeSocialAppraisalInvalidationTests.SelectedDailyV1AdvanceDayExecutesStealInsideOuterOperationAndReconcilesCrimeSocialOwners" methodname="SelectedDailyV1AdvanceDayExecutesStealInsideOuterOperationAndReconcilesCrimeSocialOwners" classname="P12CrimeSocialAppraisalInvalidationTests" runstate="Runnable" seed="571584516" result="Passed" start-time="2026-10-10 00:00:00Z" end-time="2026-10-10 00:00:00Z" duration="0.112744" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Jobson escolheu ROUBAR Marcus.
+Jobson roubou Marcus e levou 20 moedas.
+Jobson agora possui mandado em Campo Verde. Recompensa: 50. Pena: 3 dias.
+]]></output>
+        </test-case>
+        <test-case id="2610" name="SelectedProfileRegistersExactEmptyCrimeAppraisalOwnersAndKeepsThemAcrossPersonAdmission" fullname="P12CrimeSocialAppraisalInvalidationTests.SelectedProfileRegistersExactEmptyCrimeAppraisalOwnersAndKeepsThemAcrossPersonAdmission" methodname="SelectedProfileRegistersExactEmptyCrimeAppraisalOwnersAndKeepsThemAcrossPersonAdmission" classname="P12CrimeSocialAppraisalInvalidationTests" runstate="Runnable" seed="298524353" result="Passed" start-time="2026-10-10 00:00:00Z" end-time="2026-10-10 00:00:00Z" duration="0.000885" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2621" name="SharedEpochSaturationRejectsCompositeBeforeTheFirstCrimeWrite" fullname="P12CrimeSocialAppraisalInvalidationTests.SharedEpochSaturationRejectsCompositeBeforeTheFirstCrimeWrite" methodname="SharedEpochSaturationRejectsCompositeBeforeTheFirstCrimeWrite" classname="P12CrimeSocialAppraisalInvalidationTests" runstate="Runnable" seed="484174135" result="Passed" start-time="2026-10-10 00:00:00Z" end-time="2026-10-10 00:00:00Z" duration="0.000454" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2619" name="TheftActionCompensatesMoneyWhenCrimeAppraisalRevisionBudgetIsExhausted" fullname="P12CrimeSocialAppraisalInvalidationTests.TheftActionCompensatesMoneyWhenCrimeAppraisalRevisionBudgetIsExhausted" methodname="TheftActionCompensatesMoneyWhenCrimeAppraisalRevisionBudgetIsExhausted" classname="P12CrimeSocialAppraisalInvalidationTests" runstate="Runnable" seed="1048567085" result="Passed" start-time="2026-10-10 00:00:00Z" end-time="2026-10-10 00:00:00Z" duration="0.002418" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[p12-social-thief display roubou p12-social-victim display e levou 20 moedas.
+]]></output>
+        </test-case>
+        <test-case id="2620" name="TheftActionDoesNotReverseCommittedMoneyWhenPostCommitEpochNotificationFails" fullname="P12CrimeSocialAppraisalInvalidationTests.TheftActionDoesNotReverseCommittedMoneyWhenPostCommitEpochNotificationFails" methodname="TheftActionDoesNotReverseCommittedMoneyWhenPostCommitEpochNotificationFails" classname="P12CrimeSocialAppraisalInvalidationTests" runstate="Runnable" seed="1375351252" result="Passed" start-time="2026-10-10 00:00:00Z" end-time="2026-10-10 00:00:00Z" duration="0.002171" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[p12-social-notify-thief display roubou p12-social-notify-victim display e levou 20 moedas.
+p12-social-notify-thief display agora possui mandado em definition-p12-social-notify-failure-city display. Recompensa: 50. Pena: 3 dias.
+Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

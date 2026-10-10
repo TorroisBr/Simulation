@@ -5,6 +5,104 @@ using System.Threading;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+internal sealed class SimulationSessionReportState
+{
+    public long LastEconomySnapshotDay { get; private set; }
+
+    public SimulationSessionReportState(long lastEconomySnapshotDay)
+    {
+        LastEconomySnapshotDay = lastEconomySnapshotDay;
+    }
+
+    public void MarkEconomySnapshotDay(long day)
+    {
+        LastEconomySnapshotDay = day;
+    }
+}
+
+/// <summary>Immutable reference set for the currently published TesteSimulacao session.</summary>
+internal sealed class SimulationActiveSession
+{
+    private readonly Dictionary<SpatialLocationRuntime, CityRuntime> cityRuntimeByLocation;
+
+    public SimulationBootstrapComposition Composition { get; }
+    public SimulationRuntime Runtime => Composition.Runtime;
+    public SimulationLogger Logger { get; }
+    public JusticeSystem Justice { get; }
+    public RuntimeIdentityRegistry IdentityRegistry { get; }
+    public SpatialNetworkRuntime SpatialNetwork { get; }
+    public ExplorableSiteStore ExplorableSites => Composition.ExplorableSites;
+    public SimulationConfigData Configuration { get; }
+    public SimulationRuntimeAdmissionContext AdmissionContext { get; }
+    public IAuthoritativeRandomSource RandomSource { get; }
+    public SimulationSessionReportState ReportState { get; }
+
+    public SimulationActiveSession(
+        SimulationBootstrapComposition composition,
+        SimulationLogger logger,
+        JusticeSystem justice,
+        RuntimeIdentityRegistry identityRegistry,
+        SpatialNetworkRuntime spatialNetwork,
+        IReadOnlyDictionary<SpatialLocationRuntime, CityRuntime> cityRuntimeByLocation,
+        SimulationConfigData configuration,
+        SimulationRuntimeAdmissionContext admissionContext,
+        IAuthoritativeRandomSource randomSource,
+        SimulationSessionReportState reportState)
+    {
+        Composition = composition ?? throw new System.ArgumentNullException(nameof(composition));
+        Logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
+        Justice = justice;
+        IdentityRegistry = identityRegistry ?? throw new System.ArgumentNullException(nameof(identityRegistry));
+        SpatialNetwork = spatialNetwork ?? throw new System.ArgumentNullException(nameof(spatialNetwork));
+        Configuration = configuration;
+        AdmissionContext = admissionContext;
+        RandomSource = randomSource ?? throw new System.ArgumentNullException(nameof(randomSource));
+        ReportState = reportState ?? throw new System.ArgumentNullException(nameof(reportState));
+
+        if (!ReferenceEquals(Composition.SpatialNetwork, SpatialNetwork)
+            || !ReferenceEquals(Composition.ExplorableSites, ExplorableSites)
+            || !Runtime.HasSameP12RuntimeIdentitySpatialOwners(IdentityRegistry, SpatialNetwork, ExplorableSites)
+            || !Runtime.HasSameJusticeSystemOwner(Justice)
+            || !Runtime.HasSameLoggerOwner(Logger)
+            || !Runtime.HasSameRuntimeAdmissionContext(AdmissionContext))
+            throw new System.ArgumentException("The active-session references must be the exact owners installed in its bootstrap composition.");
+
+        this.cityRuntimeByLocation = new Dictionary<SpatialLocationRuntime, CityRuntime>();
+        if (cityRuntimeByLocation != null)
+        {
+            foreach (KeyValuePair<SpatialLocationRuntime, CityRuntime> pair in cityRuntimeByLocation)
+            {
+                if (pair.Key == null || pair.Value == null || this.cityRuntimeByLocation.ContainsKey(pair.Key))
+                    throw new System.ArgumentException("The active-session City-location index must contain unique, non-null runtime owners.", nameof(cityRuntimeByLocation));
+                this.cityRuntimeByLocation.Add(pair.Key, pair.Value);
+            }
+        }
+    }
+
+    public bool TryGetCityByLocation(SpatialLocationRuntime location, out CityRuntime city)
+    {
+        if (location == null)
+        {
+            city = null;
+            return false;
+        }
+
+        return cityRuntimeByLocation.TryGetValue(location, out city);
+    }
+
+    public bool IsProfileCompatibleWith(SimulationActiveSession candidate)
+    {
+        return candidate != null
+            && ReferenceEquals(Configuration, candidate.Configuration)
+            && string.Equals(Composition.ProfileContractIdentity, candidate.Composition.ProfileContractIdentity, System.StringComparison.Ordinal)
+            && string.Equals(Composition.ProfileFingerprint, candidate.Composition.ProfileFingerprint, System.StringComparison.Ordinal)
+            && AdmissionContext != null
+            && candidate.AdmissionContext != null
+            && AdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            && candidate.AdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1;
+    }
+}
+
 public class TesteSimulacao : MonoBehaviour
 {
     [SerializeField] private SimulationConfigData simulationConfig;
@@ -62,8 +160,9 @@ public class TesteSimulacao : MonoBehaviour
     private WorldId unpublishedWorldId;
     private long lastEconomySnapshotDay;
     private SimulationBootstrapComposition draftComposition;
-    private SimulationBootstrapComposition publishedComposition;
-    private volatile bool worldPublished;
+    private SimulationActiveSession activeSession;
+    private readonly object activeSessionGate = new object();
+    private int activeSessionOperationCount;
     private Thread bootstrapStartThread;
     private int bootstrapStartThreadId;
     private SimulationRuntimeAdmissionContext runtimeAdmissionContext;
@@ -72,35 +171,49 @@ public class TesteSimulacao : MonoBehaviour
     private bool bootstrapFailed;
 
 
-    private SimulationBootstrapComposition PublicComposition => worldPublished ? publishedComposition : null;
+    private SimulationBootstrapComposition PublicComposition => CaptureActiveSession()?.Composition;
 
     public SimulationBootstrapComposition Bootstrap => PublicComposition;
-    public string FullLog => PublicComposition != null && logger != null ? logger.FullLog : string.Empty;
-    public SimulationTime SimulationTime => PublicComposition?.SimulationTime;
-    public CalendarDefinition Calendar => PublicComposition?.Calendar;
-    public SpatialNetworkRuntime SpatialNetwork => PublicComposition?.SpatialNetwork;
-    public DomainEventStore DomainEventStore => PublicComposition?.DomainEventStore;
-    public HistoryStore History => PublicComposition?.History;
-    public ScheduledDirectiveStore ScheduledDirectives => PublicComposition?.ScheduledDirectives;
-    public NpcDecisionStore Decisions => PublicComposition?.Decisions;
-    public NpcChronicleService NpcChronicles => PublicComposition?.NpcChronicles;
-    public NpcChronicleFormatter ChronicleFormatter => PublicComposition?.ChronicleFormatter;
-    public TravelPartyStore TravelParties => PublicComposition?.TravelParties;
-    public TravelPartySystem GroupTravel => PublicComposition?.GroupTravel;
-    public SimulationRuntime Runtime => PublicComposition?.Runtime;
-    public ExplorableSiteStore ExplorableSites => PublicComposition?.ExplorableSites;
-    public ExpeditionStore Expeditions => PublicComposition?.Expeditions;
-    public ExpeditionSystem ExpeditionRuntime => PublicComposition?.ExpeditionSystem;
-    public ExpeditionSystem ExpeditionSystem => PublicComposition?.ExpeditionSystem;
-    public long CurrentDay => PublicComposition != null ? PublicComposition.SimulationTime.AbsoluteDay : 0;
-    public SimulationDate CurrentDate => PublicComposition != null
-        ? PublicComposition.Runtime.Calendar.GetDate(CurrentDay)
+    public string FullLog
+    {
+        get
+        {
+            SimulationActiveSession session = CaptureActiveSession();
+            return session != null ? session.Logger.FullLog : string.Empty;
+        }
+    }
+    public SimulationTime SimulationTime => CaptureActiveSession()?.Composition.SimulationTime;
+    public CalendarDefinition Calendar => CaptureActiveSession()?.Composition.Calendar;
+    public SpatialNetworkRuntime SpatialNetwork => CaptureActiveSession()?.SpatialNetwork;
+    public DomainEventStore DomainEventStore => CaptureActiveSession()?.Composition.DomainEventStore;
+    public HistoryStore History => CaptureActiveSession()?.Composition.History;
+    public ScheduledDirectiveStore ScheduledDirectives => CaptureActiveSession()?.Composition.ScheduledDirectives;
+    public NpcDecisionStore Decisions => CaptureActiveSession()?.Composition.Decisions;
+    public NpcChronicleService NpcChronicles => CaptureActiveSession()?.Composition.NpcChronicles;
+    public NpcChronicleFormatter ChronicleFormatter => CaptureActiveSession()?.Composition.ChronicleFormatter;
+    public TravelPartyStore TravelParties => CaptureActiveSession()?.Composition.TravelParties;
+    public TravelPartySystem GroupTravel => CaptureActiveSession()?.Composition.GroupTravel;
+    public SimulationRuntime Runtime => CaptureActiveSession()?.Runtime;
+    public ExplorableSiteStore ExplorableSites => CaptureActiveSession()?.ExplorableSites;
+    public ExpeditionStore Expeditions => CaptureActiveSession()?.Composition.Expeditions;
+    public ExpeditionSystem ExpeditionRuntime => CaptureActiveSession()?.Composition.ExpeditionSystem;
+    public ExpeditionSystem ExpeditionSystem => CaptureActiveSession()?.Composition.ExpeditionSystem;
+    public long CurrentDay => CaptureActiveSession()?.Composition.SimulationTime.AbsoluteDay ?? 0L;
+    public SimulationDate CurrentDate => CaptureActiveSession() is SimulationActiveSession session
+        ? session.Runtime.Calendar.GetDate(session.Composition.SimulationTime.AbsoluteDay)
         : default(SimulationDate);
 
     public bool TryStartTravelParty(ActionExecutionContext context)
     {
-        SimulationBootstrapComposition composition = PublicComposition;
-        return composition != null && composition.Runtime.TryStartTravelParty(context);
+        if (!TryBeginActiveSessionOperation(out SimulationActiveSession session)) return false;
+        try
+        {
+            return session.Runtime.TryStartTravelParty(context);
+        }
+        finally
+        {
+            EndActiveSessionOperation();
+        }
     }
 
     public bool TryStartExpedition(
@@ -108,14 +221,24 @@ public class TesteSimulacao : MonoBehaviour
         ActionExecutionContext context,
         out ExpeditionRuntime expedition)
     {
-        SimulationBootstrapComposition composition = PublicComposition;
-        if (composition == null || composition.ExpeditionSystem == null)
+        if (!TryBeginActiveSessionOperation(out SimulationActiveSession session))
         {
             expedition = null;
             return false;
         }
-
-        return composition.ExpeditionSystem.TryStartExpedition(targetSite, context, out expedition);
+        try
+        {
+            if (session.Composition.ExpeditionSystem == null)
+            {
+                expedition = null;
+                return false;
+            }
+            return session.Composition.ExpeditionSystem.TryStartExpedition(targetSite, context, out expedition);
+        }
+        finally
+        {
+            EndActiveSessionOperation();
+        }
     }
 
     public void Start()
@@ -151,22 +274,23 @@ public class TesteSimulacao : MonoBehaviour
         if (bootstrapFailed)
             return;
 
-        if (runtimeAdmissionContext != null && !IsBootstrapStartThreadCurrent())
+        SimulationActiveSession session = CaptureActiveSession();
+        if (session?.AdmissionContext != null && !session.AdmissionContext.IsOwnedByCurrentThread())
         {
-            simulationRuntime?.FaultRuntimeAdmission();
+            session.Runtime.FaultRuntimeAdmission();
             return;
         }
 
-        if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame == true)
+        if (session != null && Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame == true)
         {
-            Simulate(Mathf.Max(1, daysToSimulate));
+            SimulateWithSession(session, Mathf.Max(1, daysToSimulate));
         }
     }
 
     private void InitializeSimulation(System.Action<string> stageCompleted = null)
     {
         bool selectedAdmissionProfile = runtimeAdmissionProfile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1;
-        if (bootstrapFailed || publishedComposition != null || draftComposition != null) return;
+        if (bootstrapFailed || CaptureActiveSession() != null || draftComposition != null) return;
         if (selectedAdmissionProfile && runtimeAdmissionContext == null)
         {
             bootstrapFailed = true;
@@ -232,7 +356,6 @@ public class TesteSimulacao : MonoBehaviour
                         decisionStore = new NpcDecisionStore(logger);
                         decisionRecorder = new NpcDecisionRecorder(runtimeIdAllocator, simulationTime, recordSequence, decisionStore, logger);
                         npcChronicleService = new NpcChronicleService(decisionStore, domainEventStore);
-                        npcChronicleFormatter = new NpcChronicleFormatter(ResolveNpcDisplayName, ResolveLocationDisplayName, ResolveItemDisplayName, ResolveActionDisplayName);
                         scheduledDirectiveStore = new ScheduledDirectiveStore(simulationTime, logger);
                         runtimeIdentityRegistry = new RuntimeIdentityRegistry(logger);
                         spatialNetwork = new SpatialNetworkRuntime(runtimeIdentityRegistry, logger);
@@ -327,6 +450,13 @@ public class TesteSimulacao : MonoBehaviour
                             throw new System.InvalidOperationException("P10-B atomic topology publication failed: " + p10BCommitDiagnostic);
                         if (p10BPreparedRuin != null)
                             AddExplorableSiteRuntimeByDefinition(p10BPreparedRuin.Site.Definition, p10BPreparedRuin.Site);
+                        npcChronicleFormatter = CreateNpcChronicleFormatter(
+                            runtimeIdentityRegistry,
+                            spatialNetwork,
+                            cityRuntimeByLocation,
+                            explorableSiteStore,
+                            CityRuntimeList,
+                            simulationConfig);
                         draftComposition = new SimulationBootstrapComposition(
                             unpublishedWorldId,
                             new SimulationGenesisManifest(
@@ -358,9 +488,6 @@ public class TesteSimulacao : MonoBehaviour
             if (runtimeAdmissionContext != null && !IsBootstrapStartThreadCurrent())
                 throw new System.InvalidOperationException("Simulation bootstrap completed on a thread other than its captured Unity Start thread.");
 
-            publishedComposition = draftComposition;
-            draftComposition = null;
-
             if (bootstrapPublicationScope != null)
             {
                 bootstrapPublicationScope.Dispose();
@@ -376,16 +503,29 @@ public class TesteSimulacao : MonoBehaviour
                 throw new System.InvalidOperationException(
                     "The FR-B factual-read surface could not bind to a healthy completed world publication.");
 
+            SimulationActiveSession candidateSession = new SimulationActiveSession(
+                draftComposition,
+                logger,
+                justiceSystem,
+                runtimeIdentityRegistry,
+                spatialNetwork,
+                cityRuntimeByLocation,
+                simulationConfig,
+                runtimeAdmissionContext,
+                authoritativeRandomSource,
+                new SimulationSessionReportState(lastEconomySnapshotDay));
+
             unpublishedWorldId = null;
-            worldPublished = true;
+            draftComposition = null;
+            if (Interlocked.CompareExchange(ref activeSession, candidateSession, null) != null)
+                throw new System.InvalidOperationException("A simulation session was already published for this bootstrap owner.");
+            ReleaseBootstrapAliases();
         }
         catch
         {
             bootstrapFailed = true;
-            worldPublished = false;
             unpublishedWorldId = null;
             draftComposition = null;
-            publishedComposition = null;
             if (runtimeAdmissionContext != null)
                 simulationRuntime?.FaultRuntimeAdmission();
             throw;
@@ -406,6 +546,123 @@ public class TesteSimulacao : MonoBehaviour
         return bootstrapStartThread != null
             && ReferenceEquals(bootstrapStartThread, Thread.CurrentThread)
             && bootstrapStartThreadId == Thread.CurrentThread.ManagedThreadId;
+    }
+
+    private SimulationActiveSession CaptureActiveSession()
+    {
+        return Volatile.Read(ref activeSession);
+    }
+
+    private bool TryBeginActiveSessionOperation(out SimulationActiveSession session)
+    {
+        return TryBeginActiveSessionOperation(expectedSession: null, out session);
+    }
+
+    private bool TryBeginActiveSessionOperation(
+        SimulationActiveSession expectedSession,
+        out SimulationActiveSession session)
+    {
+        lock (activeSessionGate)
+        {
+            session = activeSession;
+            if (session == null || (expectedSession != null && !ReferenceEquals(session, expectedSession)))
+            {
+                session = null;
+                return false;
+            }
+
+            activeSessionOperationCount++;
+            return true;
+        }
+    }
+
+    private void EndActiveSessionOperation()
+    {
+        lock (activeSessionGate)
+        {
+            if (activeSessionOperationCount <= 0)
+                throw new System.InvalidOperationException("Active-session operation scope underflow.");
+            activeSessionOperationCount--;
+        }
+    }
+
+    /// <summary>Single-reference exchange seam for a privately built, restored Daily-v1 session.</summary>
+    internal bool TryPublishRestoredSession(
+        SimulationActiveSession expectedSession,
+        SimulationActiveSession candidateSession)
+    {
+        if (expectedSession == null || candidateSession == null)
+            return false;
+
+        lock (activeSessionGate)
+        {
+            if (!ReferenceEquals(activeSession, expectedSession)
+                || activeSessionOperationCount != 0
+                || expectedSession.AdmissionContext == null
+                || candidateSession.AdmissionContext == null
+                || !expectedSession.AdmissionContext.IsOwnedByCurrentThread()
+                || !candidateSession.AdmissionContext.IsOwnedByCurrentThread()
+                || !expectedSession.IsProfileCompatibleWith(candidateSession)
+                || !expectedSession.Runtime.IsHealthyDailyOwnerThreadBoundary()
+                || !expectedSession.Runtime.HasValidCompletedDailyBoundaryAdmission()
+                || !candidateSession.Runtime.HasValidRestoredDailyBoundaryAdmission())
+                return false;
+
+            Interlocked.Exchange(ref activeSession, candidateSession);
+            return true;
+        }
+    }
+
+    private void ReleaseBootstrapAliases()
+    {
+        npcRuntimeList = null;
+        cityRuntimeList = null;
+        explorableSiteStore = null;
+        genesisLocalTopologyStore = null;
+        genesisLegacySpatialAnchorBindingStore = null;
+        p10RuinCandidate = null;
+        p10RuinRuntime = null;
+        p10BPreparedRuin = null;
+        actionProviders.Clear();
+        cityRuntimesByDefinition = null;
+        npcRuntimesByDefinition = null;
+        explorableSiteRuntimesByDefinition = null;
+        explorableSiteKnowledgeSystem = null;
+        expeditionStore = null;
+        cityRuntimeByLocation = null;
+        runtimeIdAllocator = null;
+        runtimeIdentityRegistry = null;
+        spatialNetwork = null;
+        genesisSpatialAuthority = null;
+        domainEventStore = null;
+        historyStore = null;
+        domainEventRecorder = null;
+        recordSequence = null;
+        decisionStore = null;
+        decisionRecorder = null;
+        npcChronicleService = null;
+        npcChronicleFormatter = null;
+        scheduledDirectiveStore = null;
+        scheduledDirectiveSystem = null;
+        enabledModules = null;
+        justiceSystem = null;
+        crimeSystem = null;
+        npcDecisionSystem = null;
+        travelSystem = null;
+        travelPartyStore = null;
+        travelPartySystem = null;
+        expeditionSystem = null;
+        merchantSystem = null;
+        commercialKnowledgeSharingSystem = null;
+        economyTransactionService = null;
+        logger = null;
+        simulationRuntime = null;
+        simulationTime = null;
+        calendarDefinition = null;
+        effectiveConfiguration = null;
+        authoritativeRandomSource = null;
+        bootstrapPublicationScope = null;
+        lastEconomySnapshotDay = 0L;
     }
 
     private static WorldId CreateWorldIdentity()
@@ -720,69 +977,101 @@ public class TesteSimulacao : MonoBehaviour
 
     public bool TryGetNpcRuntime(string runtimeId, out NpcRuntime npcRuntime)
     {
-        if (PublicComposition != null && runtimeIdentityRegistry != null)
+        if (!TryBeginActiveSessionOperation(out SimulationActiveSession session))
         {
-            return runtimeIdentityRegistry.TryGetNpc(runtimeId, out npcRuntime);
+            npcRuntime = null;
+            return false;
         }
-
-        npcRuntime = null;
-        logger?.LogWarning($"NPC runtime resolution failed: identity registry is not initialized for RuntimeId '{runtimeId ?? "<empty>"}'.");
-        return false;
+        try
+        {
+            return session.IdentityRegistry.TryGetNpc(runtimeId, out npcRuntime);
+        }
+        finally
+        {
+            EndActiveSessionOperation();
+        }
     }
 
     public bool TryGetCityRuntime(string runtimeId, out CityRuntime cityRuntime)
     {
-        if (PublicComposition != null && runtimeIdentityRegistry != null)
+        if (!TryBeginActiveSessionOperation(out SimulationActiveSession session))
         {
-            return runtimeIdentityRegistry.TryGetCity(runtimeId, out cityRuntime);
+            cityRuntime = null;
+            return false;
         }
-
-        cityRuntime = null;
-        logger?.LogWarning($"City runtime resolution failed: identity registry is not initialized for RuntimeId '{runtimeId ?? "<empty>"}'.");
-        return false;
+        try
+        {
+            return session.IdentityRegistry.TryGetCity(runtimeId, out cityRuntime);
+        }
+        finally
+        {
+            EndActiveSessionOperation();
+        }
     }
 
     public bool TryGetSpatialLocation(string runtimeId, out SpatialLocationRuntime location)
     {
-        if (PublicComposition != null && spatialNetwork != null)
+        if (!TryBeginActiveSessionOperation(out SimulationActiveSession session))
         {
-            return spatialNetwork.TryGetLocation(runtimeId, out location);
+            location = null;
+            return false;
         }
-
-        location = null;
-        logger?.LogWarning($"Location runtime resolution failed: spatial network is not initialized for RuntimeId '{runtimeId ?? "<empty>"}'.");
-        return false;
+        try
+        {
+            return session.SpatialNetwork.TryGetLocation(runtimeId, out location);
+        }
+        finally
+        {
+            EndActiveSessionOperation();
+        }
     }
 
     public bool TryGetSpatialRoute(string runtimeId, out SpatialRouteRuntime route)
     {
-        if (PublicComposition != null && spatialNetwork != null)
+        if (!TryBeginActiveSessionOperation(out SimulationActiveSession session))
         {
-            return spatialNetwork.TryGetRoute(runtimeId, out route);
+            route = null;
+            return false;
         }
-
-        route = null;
-        logger?.LogWarning($"Route runtime resolution failed: spatial network is not initialized for RuntimeId '{runtimeId ?? "<empty>"}'.");
-        return false;
+        try
+        {
+            return session.SpatialNetwork.TryGetRoute(runtimeId, out route);
+        }
+        finally
+        {
+            EndActiveSessionOperation();
+        }
     }
 
     public bool TryGetExplorableSiteRuntime(string runtimeId, out ExplorableSiteRuntime siteRuntime)
     {
-        if (PublicComposition != null && runtimeIdentityRegistry != null)
+        if (!TryBeginActiveSessionOperation(out SimulationActiveSession session))
         {
-            return runtimeIdentityRegistry.TryGetExplorableSite(runtimeId, out siteRuntime);
+            siteRuntime = null;
+            return false;
         }
-
-        siteRuntime = null;
-        logger?.LogWarning($"ExplorableSite runtime resolution failed: identity registry is not initialized for RuntimeId '{runtimeId ?? "<empty>"}'.");
-        return false;
+        try
+        {
+            return session.IdentityRegistry.TryGetExplorableSite(runtimeId, out siteRuntime);
+        }
+        finally
+        {
+            EndActiveSessionOperation();
+        }
     }
 
     public IReadOnlyList<NpcChronicleEntry> GetNpcChronicle(string npcRuntimeId)
     {
-        return PublicComposition != null && npcChronicleService != null
-            ? npcChronicleService.GetChronicle(npcRuntimeId)
-            : System.Array.Empty<NpcChronicleEntry>();
+        if (!TryBeginActiveSessionOperation(out SimulationActiveSession session))
+            return System.Array.Empty<NpcChronicleEntry>();
+        try
+        {
+            return session.Composition.NpcChronicles.GetChronicle(npcRuntimeId);
+        }
+        finally
+        {
+            EndActiveSessionOperation();
+        }
     }
 
     private CalendarDefinition ResolveCalendarDefinition()
@@ -808,28 +1097,38 @@ public class TesteSimulacao : MonoBehaviour
             contentOverrides: simulationConfig.CreateConfigurationOverrides());
     }
 
+    private void SimulateWithSession(SimulationActiveSession expectedSession, int daysToSimulate)
+    {
+        if (!TryBeginActiveSessionOperation(expectedSession, out SimulationActiveSession session)) return;
+        try
+        {
+            for (int i = 0; i < daysToSimulate; i++)
+            {
+                session.Runtime.AdvanceDay();
+                AppendNpcStateSummary(session);
+                AppendEconomySnapshotIfNeeded(session, false);
+            }
+
+            if (session.Configuration != null
+                && session.Configuration.includeEconomySnapshots == true
+                && daysToSimulate >= Mathf.Max(1, session.Configuration.economySnapshotIntervalDays))
+            {
+                AppendEconomySnapshotIfNeeded(session, true);
+            }
+
+            SaveSimulationLog(session);
+        }
+        finally
+        {
+            EndActiveSessionOperation();
+        }
+    }
+
     private void Simulate(int daysToSimulate)
     {
-        if (PublicComposition == null || simulationRuntime == null)
-        {
-            return;
-        }
-
-        for (int i = 0; i < daysToSimulate; i++)
-        {
-            simulationRuntime.AdvanceDay();
-            AppendNpcStateSummary();
-            AppendEconomySnapshotIfNeeded(false);
-        }
-
-        if (simulationConfig != null
-            && simulationConfig.includeEconomySnapshots == true
-            && daysToSimulate >= Mathf.Max(1, simulationConfig.economySnapshotIntervalDays))
-        {
-            AppendEconomySnapshotIfNeeded(true);
-        }
-
-        SaveSimulationLog();
+        SimulationActiveSession session = CaptureActiveSession();
+        if (session != null)
+            SimulateWithSession(session, daysToSimulate);
     }
 
     private void AppendScenarioDiagnostics(EffectiveSimulationConfiguration configuration)
@@ -886,32 +1185,37 @@ public class TesteSimulacao : MonoBehaviour
         return string.CompareOrdinal(firstKey, secondKey) < 0 ? firstKey + "|" + secondKey : secondKey + "|" + firstKey;
     }
 
-    private void AppendEconomySnapshotIfNeeded(bool forceFinal)
+    private void AppendEconomySnapshotIfNeeded(SimulationActiveSession session, bool forceFinal)
     {
-        if (simulationConfig == null || simulationConfig.includeEconomySnapshots == false || CurrentDay <= 0 || CurrentDay == lastEconomySnapshotDay)
+        SimulationConfigData configuration = session.Configuration;
+        long currentDay = session.Composition.SimulationTime.AbsoluteDay;
+        if (configuration == null
+            || configuration.includeEconomySnapshots == false
+            || currentDay <= 0
+            || currentDay == session.ReportState.LastEconomySnapshotDay)
         {
             return;
         }
 
-        int interval = Mathf.Max(1, simulationConfig.economySnapshotIntervalDays);
+        int interval = Mathf.Max(1, configuration.economySnapshotIntervalDays);
 
-        if (CurrentDay % interval != 0 && forceFinal == false)
+        if (currentDay % interval != 0 && forceFinal == false)
         {
             return;
         }
 
-        logger.AddReportLine(string.Empty);
-        logger.AddReportLine("=== ECONOMY SNAPSHOT - DAY " + CurrentDay + " ===");
+        session.Logger.AddReportLine(string.Empty);
+        session.Logger.AddReportLine("=== ECONOMY SNAPSHOT - DAY " + currentDay + " ===");
 
-        foreach (CityRuntime cityRuntime in CityRuntimeList)
+        foreach (CityRuntime cityRuntime in session.Runtime.Cities)
         {
             if (cityRuntime == null)
             {
                 continue;
             }
 
-            logger.AddReportLine(string.Empty);
-            logger.AddReportLine(cityRuntime.CityName);
+            session.Logger.AddReportLine(string.Empty);
+            session.Logger.AddReportLine(cityRuntime.CityName);
 
             foreach (MarketItemRuntime marketItem in cityRuntime.Market.Items)
             {
@@ -920,30 +1224,31 @@ public class TesteSimulacao : MonoBehaviour
                     continue;
                 }
 
-                logger.AddReportLine($"{marketItem.Item.itemName}: stock {marketItem.Amount} / desired {marketItem.DesiredAmount} | ${marketItem.CurrentPrice:0.##}");
+                session.Logger.AddReportLine($"{marketItem.Item.itemName}: stock {marketItem.Amount} / desired {marketItem.DesiredAmount} | ${marketItem.CurrentPrice:0.##}");
             }
         }
 
-        lastEconomySnapshotDay = CurrentDay;
+        session.ReportState.MarkEconomySnapshotDay(currentDay);
     }
 
-    private void AppendNpcStateSummary()
+    private void AppendNpcStateSummary(SimulationActiveSession session)
     {
-        logger.AddReportLine(string.Empty);
-        logger.AddReportLine($"--- ESTADO AO FIM DO DIA {CurrentDay} ---");
+        long currentDay = session.Composition.SimulationTime.AbsoluteDay;
+        session.Logger.AddReportLine(string.Empty);
+        session.Logger.AddReportLine($"--- ESTADO AO FIM DO DIA {currentDay} ---");
 
-        foreach (NpcRuntime npcRuntime in NpcRuntimeList)
+        foreach (NpcRuntime npcRuntime in session.Runtime.NpcRuntimes)
         {
             if (npcRuntime != null)
             {
-                logger.AddReportLine(CreateNpcStateLine(npcRuntime));
+                session.Logger.AddReportLine(CreateNpcStateLine(session, npcRuntime));
             }
         }
     }
 
-    private string CreateNpcStateLine(NpcRuntime npcRuntime)
+    private string CreateNpcStateLine(SimulationActiveSession session, NpcRuntime npcRuntime)
     {
-        string location = CreateNpcLocationText(npcRuntime);
+        string location = CreateNpcLocationText(session, npcRuntime);
         string status = CreateNpcStatusText(npcRuntime);
         string line = $"{npcRuntime.NpcName} | {location} | ${npcRuntime.Money:0.##} | {status}";
 
@@ -959,7 +1264,7 @@ public class TesteSimulacao : MonoBehaviour
             }
         }
 
-        string warrantText = CreateWarrantText(npcRuntime);
+        string warrantText = CreateWarrantText(session, npcRuntime);
 
         if (string.IsNullOrEmpty(warrantText) == false)
         {
@@ -969,13 +1274,13 @@ public class TesteSimulacao : MonoBehaviour
         return line;
     }
 
-    private string CreateNpcLocationText(NpcRuntime npcRuntime)
+    private string CreateNpcLocationText(SimulationActiveSession session, NpcRuntime npcRuntime)
     {
         if (npcRuntime.IsTraveling == true)
         {
             string destinationName = npcRuntime.DestinationCity != null
                 ? npcRuntime.DestinationCity.CityName
-                : ResolveLocationDisplayName(npcRuntime.DestinationLocation?.RuntimeId) ?? "destino desconhecido";
+                : ResolveLocationDisplayName(session, npcRuntime.DestinationLocation?.RuntimeId) ?? "destino desconhecido";
             string dayText = npcRuntime.TravelDaysRemaining == 1 ? "dia restante" : "dias restantes";
             return $"VIAJANDO -> {destinationName} | {npcRuntime.TravelDaysRemaining} {dayText}";
         }
@@ -1047,14 +1352,14 @@ public class TesteSimulacao : MonoBehaviour
         return inventoryBuilder.Length > 0 ? inventoryBuilder.ToString() : "vazio";
     }
 
-    private string CreateWarrantText(NpcRuntime npcRuntime)
+    private string CreateWarrantText(SimulationActiveSession session, NpcRuntime npcRuntime)
     {
-        if (justiceSystem == null)
+        if (session.Justice == null)
         {
             return string.Empty;
         }
 
-        List<WantedRecordRuntime> warrants = justiceSystem.GetActiveWarrants(npcRuntime);
+        List<WantedRecordRuntime> warrants = session.Justice.GetActiveWarrants(npcRuntime);
 
         if (warrants == null || warrants.Count == 0)
         {
@@ -1082,10 +1387,10 @@ public class TesteSimulacao : MonoBehaviour
         return warrantBuilder.ToString();
     }
 
-    private void SaveSimulationLog()
+    private void SaveSimulationLog(SimulationActiveSession session)
     {
-        string simulationName = simulationConfig != null ? simulationConfig.simulationName : "Simulation";
-        logger.SaveToFile(simulationName + "-Run.txt");
+        string simulationName = session.Configuration != null ? session.Configuration.simulationName : "Simulation";
+        session.Logger.SaveToFile(simulationName + "-Run.txt");
     }
 
     private List<NpcRuntime> NpcRuntimeList
@@ -1489,7 +1794,7 @@ public class TesteSimulacao : MonoBehaviour
         economyTransactionService = economyTransactionService ?? new EconomyTransactionService();
         travelSystem = new TravelSystem(
             spatialNetwork,
-            GetCityRuntimeByLocation,
+            CreateCityRuntimeByLocationResolver(cityRuntimeByLocation),
             configuration.Travel,
             domainEventRecorder,
             logger,
@@ -1677,15 +1982,21 @@ public class TesteSimulacao : MonoBehaviour
         runtimes.Add(siteRuntime);
     }
 
-    private CityRuntime GetCityRuntimeByLocation(SpatialLocationRuntime location)
+    private static System.Func<SpatialLocationRuntime, CityRuntime> CreateCityRuntimeByLocationResolver(
+        IReadOnlyDictionary<SpatialLocationRuntime, CityRuntime> cityRuntimeByLocation)
     {
-        if (location == null)
+        Dictionary<SpatialLocationRuntime, CityRuntime> locationIndex =
+            new Dictionary<SpatialLocationRuntime, CityRuntime>();
+        if (cityRuntimeByLocation != null)
         {
-            return null;
+            foreach (KeyValuePair<SpatialLocationRuntime, CityRuntime> pair in cityRuntimeByLocation)
+                if (pair.Key != null && pair.Value != null && !locationIndex.ContainsKey(pair.Key))
+                    locationIndex.Add(pair.Key, pair.Value);
         }
 
-        cityRuntimeByLocation.TryGetValue(location, out CityRuntime cityRuntime);
-        return cityRuntime;
+        return location => location != null && locationIndex.TryGetValue(location, out CityRuntime cityRuntime)
+            ? cityRuntime
+            : null;
     }
 
     private CityRuntime GetSingleCityRuntimeByDefinition(CityData cityData)
@@ -1732,80 +2043,129 @@ public class TesteSimulacao : MonoBehaviour
         return runtimes[0];
     }
 
-    private string ResolveNpcDisplayName(string runtimeId)
+    private static NpcChronicleFormatter CreateNpcChronicleFormatter(
+        RuntimeIdentityRegistry identityRegistry,
+        SpatialNetworkRuntime spatialNetwork,
+        IReadOnlyDictionary<SpatialLocationRuntime, CityRuntime> cityRuntimeByLocation,
+        ExplorableSiteStore explorableSites,
+        IReadOnlyList<CityRuntime> cities,
+        SimulationConfigData configuration)
     {
-        return runtimeIdentityRegistry != null
-            && runtimeIdentityRegistry.TryGetNpc(runtimeId, out NpcRuntime npcRuntime) == true
+        Dictionary<SpatialLocationRuntime, CityRuntime> locationIndex =
+            new Dictionary<SpatialLocationRuntime, CityRuntime>();
+        if (cityRuntimeByLocation != null)
+        {
+            foreach (KeyValuePair<SpatialLocationRuntime, CityRuntime> pair in cityRuntimeByLocation)
+                if (pair.Key != null && pair.Value != null && !locationIndex.ContainsKey(pair.Key))
+                    locationIndex.Add(pair.Key, pair.Value);
+        }
+
+        List<CityRuntime> citySnapshot = cities == null
+            ? new List<CityRuntime>()
+            : new List<CityRuntime>(cities);
+        return new NpcChronicleFormatter(
+            runtimeId => ResolveNpcDisplayName(identityRegistry, runtimeId),
+            runtimeId => ResolveLocationDisplayName(spatialNetwork, locationIndex, explorableSites, runtimeId),
+            definitionId => ResolveItemDisplayName(citySnapshot, definitionId),
+            definitionId => ResolveActionDisplayName(configuration, definitionId));
+    }
+
+    private static string ResolveNpcDisplayName(RuntimeIdentityRegistry identityRegistry, string runtimeId)
+    {
+        return identityRegistry != null
+            && identityRegistry.TryGetNpc(runtimeId, out NpcRuntime npcRuntime)
                 ? npcRuntime.NpcName
                 : null;
     }
 
-    private string ResolveLocationDisplayName(string runtimeId)
+    private static string ResolveLocationDisplayName(SimulationActiveSession session, string runtimeId)
+    {
+        return session == null
+            ? null
+            : ResolveLocationDisplayName(
+                session.SpatialNetwork,
+                session,
+                session.ExplorableSites,
+                runtimeId);
+    }
+
+    private static string ResolveLocationDisplayName(
+        SpatialNetworkRuntime spatialNetwork,
+        SimulationActiveSession sessionCityIndex,
+        ExplorableSiteStore explorableSites,
+        string runtimeId)
     {
         if (spatialNetwork == null
-            || spatialNetwork.TryGetLocation(runtimeId, out SpatialLocationRuntime location) == false)
-        {
+            || !spatialNetwork.TryGetLocation(runtimeId, out SpatialLocationRuntime location))
             return null;
-        }
 
-        if (cityRuntimeByLocation.TryGetValue(location, out CityRuntime cityRuntime) == true)
-        {
+        if (sessionCityIndex != null
+            && sessionCityIndex.TryGetCityByLocation(location, out CityRuntime cityRuntime))
             return cityRuntime.CityName;
-        }
 
-        if (explorableSiteStore != null)
+        if (explorableSites != null)
         {
-            foreach (ExplorableSiteRuntime siteRuntime in explorableSiteStore.GetForLocation(location))
+            foreach (ExplorableSiteRuntime siteRuntime in explorableSites.GetForLocation(location))
             {
                 if (siteRuntime?.Definition != null)
-                {
-                    return string.IsNullOrWhiteSpace(siteRuntime.Definition.DisplayName) == false
-                        ? siteRuntime.Definition.DisplayName
-                        : siteRuntime.DefinitionId;
-                }
+                    return string.IsNullOrWhiteSpace(siteRuntime.Definition.DisplayName)
+                        ? siteRuntime.DefinitionId
+                        : siteRuntime.Definition.DisplayName;
             }
         }
 
         return null;
     }
 
-    private string ResolveItemDisplayName(string definitionId)
+    private static string ResolveLocationDisplayName(
+        SpatialNetworkRuntime spatialNetwork,
+        IReadOnlyDictionary<SpatialLocationRuntime, CityRuntime> cityRuntimeByLocation,
+        ExplorableSiteStore explorableSites,
+        string runtimeId)
     {
-        foreach (CityRuntime cityRuntime in CityRuntimeList)
-        {
-            if (cityRuntime == null)
-            {
-                continue;
-            }
-
-            foreach (MarketItemRuntime marketItem in cityRuntime.Market.Items)
-            {
-                if (marketItem?.Item != null
-                    && string.Equals(marketItem.Item.DefinitionId, definitionId, System.StringComparison.Ordinal) == true)
-                {
-                    return marketItem.Item.itemName;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private string ResolveActionDisplayName(string definitionId)
-    {
-        if (simulationConfig == null)
-        {
+        if (spatialNetwork == null
+            || !spatialNetwork.TryGetLocation(runtimeId, out SpatialLocationRuntime location))
             return null;
-        }
 
-        foreach (NpcActionData action in simulationConfig.Actions)
+        if (cityRuntimeByLocation != null
+            && cityRuntimeByLocation.TryGetValue(location, out CityRuntime cityRuntime))
+            return cityRuntime.CityName;
+
+        if (explorableSites != null)
         {
-            if (action != null && string.Equals(action.DefinitionId, definitionId, System.StringComparison.Ordinal) == true)
+            foreach (ExplorableSiteRuntime siteRuntime in explorableSites.GetForLocation(location))
             {
-                return action.actionName;
+                if (siteRuntime?.Definition != null)
+                    return string.IsNullOrWhiteSpace(siteRuntime.Definition.DisplayName)
+                        ? siteRuntime.DefinitionId
+                        : siteRuntime.Definition.DisplayName;
             }
         }
 
+        return null;
+    }
+
+    private static string ResolveItemDisplayName(IReadOnlyList<CityRuntime> cities, string definitionId)
+    {
+        if (cities == null) return null;
+        foreach (CityRuntime cityRuntime in cities)
+        {
+            if (cityRuntime == null) continue;
+            foreach (MarketItemRuntime marketItem in cityRuntime.Market.Items)
+                if (marketItem?.Item != null
+                    && string.Equals(marketItem.Item.DefinitionId, definitionId, System.StringComparison.Ordinal))
+                    return marketItem.Item.itemName;
+        }
+        return null;
+    }
+
+    private static string ResolveActionDisplayName(SimulationConfigData configuration, string definitionId)
+    {
+        if (configuration == null) return null;
+        foreach (NpcActionData action in configuration.Actions)
+            if (action != null
+                && string.Equals(action.DefinitionId, definitionId, System.StringComparison.Ordinal))
+                return action.actionName;
         return null;
     }
 

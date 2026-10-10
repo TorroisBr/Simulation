@@ -126,8 +126,8 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(second.Runtime.WorldId, Is.SameAs(secondIdentity));
         Assert.That(firstIdentity, Is.Not.EqualTo(secondIdentity));
         Assert.That(first.Bootstrap.ProfileFingerprint, Is.EqualTo(second.Bootstrap.ProfileFingerprint));
-        IAuthoritativeRandomSource firstRandom = ReadPrivateField<IAuthoritativeRandomSource>(first, "authoritativeRandomSource");
-        IAuthoritativeRandomSource secondRandom = ReadPrivateField<IAuthoritativeRandomSource>(second, "authoritativeRandomSource");
+        IAuthoritativeRandomSource firstRandom = ReadPrivateField<SimulationActiveSession>(first, "activeSession").RandomSource;
+        IAuthoritativeRandomSource secondRandom = ReadPrivateField<SimulationActiveSession>(second, "activeSession").RandomSource;
         Assert.That(firstRandom.NextUnit("world-identity-independent-stream"),
             Is.EqualTo(secondRandom.NextUnit("world-identity-independent-stream")));
 
@@ -158,7 +158,7 @@ public sealed class SimulationBootstrapCompositionTests
 
         Assert.That(simulation.Bootstrap, Is.Not.Null);
         IAuthoritativeRandomSource randomSource =
-            ReadPrivateField<IAuthoritativeRandomSource>(simulation, "authoritativeRandomSource");
+            ReadPrivateField<SimulationActiveSession>(simulation, "activeSession").RandomSource;
         Assert.That(randomSource, Is.TypeOf<DeterministicRandomSource>());
         DeterministicRandomSource deterministicSource = (DeterministicRandomSource)randomSource;
         Assert.That(deterministicSource.Seed, Is.EqualTo(expectedEffectiveSeed));
@@ -279,10 +279,8 @@ public sealed class SimulationBootstrapCompositionTests
             .GetValue(simulation), Is.Null);
         Assert.That(typeof(TesteSimulacao).GetField("draftComposition", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(simulation), Is.Null);
-        Assert.That(typeof(TesteSimulacao).GetField("publishedComposition", BindingFlags.Instance | BindingFlags.NonPublic)
+        Assert.That(typeof(TesteSimulacao).GetField("activeSession", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(simulation), Is.Null);
-        Assert.That(typeof(TesteSimulacao).GetField("worldPublished", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(simulation), Is.EqualTo(false));
 
         simulation.Start();
         int retryCallbackCount = 0;
@@ -517,14 +515,8 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(simulation.Runtime.Configuration.Crime.Enabled, Is.False);
         Assert.That(simulation.TryGetNpcRuntime("npc-000001", out NpcRuntime npc), Is.True);
 
-        FieldInfo crimeField = typeof(TesteSimulacao).GetField(
-            "crimeSystem",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        FieldInfo decisionField = typeof(TesteSimulacao).GetField(
-            "npcDecisionSystem",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        CrimeSystem composedCrime = crimeField.GetValue(simulation) as CrimeSystem;
-        NpcDecisionSystem decisions = decisionField.GetValue(simulation) as NpcDecisionSystem;
+        CrimeSystem composedCrime = ReadPrivateField<CrimeSystem>(simulation.Runtime, "crimeSystem");
+        NpcDecisionSystem decisions = ReadPrivateField<NpcDecisionSystem>(simulation.Runtime, "npcDecisionSystem");
 
         Assert.That(composedCrime, Is.Not.Null);
         Assert.That(decisions, Is.Not.Null);
@@ -3043,7 +3035,10 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(simulation.SpatialNetwork.Routes, Has.Some.Property("TravelDays").EqualTo(5));
         Assert.That(simulation.TryGetNpcRuntime("npc-000001", out NpcRuntime actorRuntime), Is.True);
         Assert.That(actorRuntime.CurrentStatus, Is.EqualTo(new[] { authoredStatus, config.wantedStatus }));
-        JusticeSystem justice = typeof(TesteSimulacao).GetField("justiceSystem", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(simulation) as JusticeSystem;
+        SimulationActiveSession activeSession = typeof(TesteSimulacao).GetField("activeSession", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(simulation) as SimulationActiveSession;
+        Assert.That(activeSession, Is.Not.Null);
+        JusticeSystem justice = activeSession.Justice;
         WantedRecordRuntime warrant = justice.GetActiveWarrants(actorRuntime).Single();
         Assert.That(warrant.Bounty, Is.EqualTo(18f));
         Assert.That(warrant.SentenceDays, Is.EqualTo(5));

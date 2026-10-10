@@ -2223,7 +2223,7 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(ReadPrivateField<RuntimeIdAllocator>(bootstrap, "runtimeIdAllocator"), Is.Null);
             Assert.That(ReadPrivateField<SimulationRuntime>(bootstrap, "simulationRuntime"), Is.Null);
             Assert.That(ReadPrivateField<SimulationBootstrapComposition>(bootstrap, "draftComposition"), Is.Null);
-            Assert.That(ReadPrivateField<SimulationBootstrapComposition>(bootstrap, "publishedComposition"), Is.Null);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession"), Is.Null);
             Assert.That(ReadPrivateField<List<CityRuntime>>(bootstrap, "cityRuntimeList"), Is.Empty);
             Assert.That(ReadPrivateField<bool>(bootstrap, "bootstrapFailed"), Is.True);
             Assert.That(bootstrap.Bootstrap, Is.Null);
@@ -2265,7 +2265,7 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(ReadPrivateField<RuntimeIdAllocator>(bootstrap, "runtimeIdAllocator"), Is.Null);
             Assert.That(ReadPrivateField<SimulationRuntime>(bootstrap, "simulationRuntime"), Is.Null);
             Assert.That(ReadPrivateField<SimulationBootstrapComposition>(bootstrap, "draftComposition"), Is.Null);
-            Assert.That(ReadPrivateField<SimulationBootstrapComposition>(bootstrap, "publishedComposition"), Is.Null);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession"), Is.Null);
             Assert.That(ReadPrivateField<List<CityRuntime>>(bootstrap, "cityRuntimeList"), Is.Empty);
             Assert.That(ReadPrivateField<bool>(bootstrap, "bootstrapFailed"), Is.True);
             Assert.That(bootstrap.Bootstrap, Is.Null);
@@ -2474,6 +2474,37 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(ReadPrivateField<int>(bootstrap, "bootstrapStartThreadId"), Is.EqualTo(Thread.CurrentThread.ManagedThreadId));
             Assert.That(bootstrap.Runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.True,
                 failure.ToString());
+
+            SimulationActiveSession activeSession = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            Assert.That(activeSession, Is.Not.Null);
+            Assert.That(bootstrap.Bootstrap, Is.SameAs(activeSession.Composition));
+            Assert.That(bootstrap.Runtime, Is.SameAs(activeSession.Runtime));
+            Assert.That(bootstrap.ChronicleFormatter, Is.SameAs(activeSession.Composition.ChronicleFormatter));
+            Assert.That(bootstrap.FullLog, Is.EqualTo(activeSession.Logger.FullLog));
+            Assert.That(ReadPrivateField<SimulationRuntime>(bootstrap, "simulationRuntime"), Is.Null,
+                "Published runtime access must come from the one active-session snapshot.");
+            Assert.That(ReadPrivateField<SimulationLogger>(bootstrap, "logger"), Is.Null);
+            Assert.That(ReadPrivateField<JusticeSystem>(bootstrap, "justiceSystem"), Is.Null);
+            Assert.That(ReadPrivateField<RuntimeIdentityRegistry>(bootstrap, "runtimeIdentityRegistry"), Is.Null);
+            Assert.That(ReadPrivateField<SpatialNetworkRuntime>(bootstrap, "spatialNetwork"), Is.Null);
+            Assert.That(ReadPrivateField<List<CityRuntime>>(bootstrap, "cityRuntimeList"), Is.Null);
+            Assert.That(ReadPrivateField<List<NpcRuntime>>(bootstrap, "npcRuntimeList"), Is.Null);
+            Assert.That(ReadPrivateField<Dictionary<SpatialLocationRuntime, CityRuntime>>(bootstrap, "cityRuntimeByLocation"), Is.Null);
+
+            Assert.That(bootstrap.TryPublishRestoredSession(activeSession, activeSession), Is.False,
+                "A normal genesis/completed-boundary runtime is not a restored continuation candidate.");
+            Assert.That(bootstrap.Bootstrap, Is.SameAs(activeSession.Composition),
+                "Rejected admission must keep the original active-session reference authoritative.");
+
+            bootstrap.Runtime.AdvanceDay();
+            Assert.That(bootstrap.TryPublishRestoredSession(activeSession, activeSession), Is.False,
+                "A normal completed advance cannot be relabeled as restored-continuation admission.");
+            Assert.That(bootstrap.Runtime.TryGetCompletedDailyCaptureToken(
+                out DailyCaptureEligibilityToken completedToken,
+                out DailyCaptureEligibilityFailure tokenFailure), Is.True, tokenFailure.ToString());
+            Assert.That(completedToken.BoundaryProvenance, Is.EqualTo(DailyCaptureBoundaryProvenance.CompletedAdvance),
+                "A rejected exchange must leave the source completed-boundary behavior intact.");
+            Assert.That(bootstrap.Bootstrap, Is.SameAs(activeSession.Composition));
         }
         finally
         {

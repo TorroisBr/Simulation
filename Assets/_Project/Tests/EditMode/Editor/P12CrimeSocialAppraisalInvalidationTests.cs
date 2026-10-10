@@ -168,7 +168,7 @@ public sealed class P12CrimeSocialAppraisalInvalidationTests
             Assert.That(world.CrimeKnowledge.Count, Is.Zero);
             Assert.That(world.SocialReactions.Count, Is.Zero);
 
-            CrimeSystem crime = (CrimeSystem)GetPrivateField(bootstrap, "crimeSystem");
+            CrimeSystem crime = (CrimeSystem)GetPrivateField(runtime, "crimeSystem");
             Assert.That(crime, Is.Not.Null);
             ITheftOutcomeSink integration = crime.TheftOutcomeSink;
             Assert.That(integration, Is.SameAs(world.Integration));
