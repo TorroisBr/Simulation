@@ -1,3 +1,35 @@
+## P12-G well-formed inconsistent P9 fingerprint rejection — promoted — 2026-10-10
+
+P12 canonical advanced by a clean fast-forward from
+`f8fea5b603fdfb42dbbf11ddc447ce1e4931f9ce` through the reviewed candidate
+`34d027adcbc2611d2862a81e35c456fffd5aade8`. The test-only code commit is
+`3e1e1eea9aa94bc0c2bbb509faaccc45c35292a4`, with code tree
+`60ab88b969f7b626f9e2eb88340fba24c5a94750` and validated `Assets` tree
+`d188470c2cf8a07ea0cd4c2de98773ed514b8798`. Independent exact-tip review of
+candidate `2240f38419a6fc07fc0dae3697ed6298d539e9220` passed and is recorded
+in [`design/PHASE12_G_P9_FINGERPRINT_CONSISTENCY_REVIEW_3E1E1EE.md`](design/PHASE12_G_P9_FINGERPRINT_CONSISTENCY_REVIEW_3E1E1EE.md).
+Validation results, XML, compressed logs, and hashes are retained in
+[`validation/P12GGraphRejectionCoverage/P9FingerprintConsistency-20261010-VALIDATION.md`](validation/P12GGraphRejectionCoverage/P9FingerprintConsistency-20261010-VALIDATION.md).
+
+The integrated restore test now covers both malformed selected-P9 fingerprint
+format and a distinct, valid lowercase SHA-256 fingerprint inconsistent with
+the full-profile fingerprint. Both reject after source capture and before root
+staging. The test verifies source session/token/health/graph preservation,
+continuation parity, and successful retry after restoring the original value.
+Validation passed focused admission 121/121, ALL EditMode 2795/2795, official
+Smoke 5/5, and `git diff --check`; the independent review verified the exact
+test tree and artifact hashes.
+
+This closes only the well-formed-but-inconsistent selected-P9 fingerprint
+rejection row alongside the prior malformed case. Remaining P12-G work still
+includes current B–F package-interface/owner-vector reconciliation, remaining
+graph/compatibility rejection cases, failure atomicity across the restore
+boundaries, causal no-replay evidence, and full included-owner multi-boundary
+continuation parity. P12-G remains `WAIT_DEPENDENCY`; P12-A remains
+`WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains open. No capture
+eligibility, export, hydration, or downstream readiness is implied. Protected
+ProjectSettings edits and unrelated untracked `.meta`/XML files remain
+untouched.
 ## P12-G P8-D target-owner identity checks — promoted — 2026-10-10
 
 P12 canonical advanced by a clean fast-forward from
