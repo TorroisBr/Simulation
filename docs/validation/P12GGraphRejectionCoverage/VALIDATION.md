@@ -40,3 +40,53 @@ This advances only integrated rejection and failure-atomicity evidence for the i
 Also outstanding are the complete section/compatibility rejection matrix; systematic B-F definition/provider and cross-section corruption coverage; failure injection inside each owner hydrator/validator and publication-owner lifecycle disposal; and exact P8/P9 lineage variants. P12-G's full evidence contract remains open even though in-memory round-trip and multi-boundary parity tests exist. Do not infer persistence, capture eligibility, P12-A export/hydration readiness, or P13 readiness.
 
 Independent review of the exact amended candidate is pending. P12-G remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`. Unrelated ProjectSettings edits and untracked `.meta` files are excluded.
+
+## Latest code candidate — evolved Person/Genealogy restore (2026-10-10)
+
+- Canonical base: `3c1575530a1d44c3932767b6e8879be2e6672dc8`.
+- Code commit: `fdc9ac26ff015015399253555747f387d5f2207d`.
+- Code Git tree: `244d91042ed14cf43955789e2780d47d9c9d5099`.
+- Code `Assets` tree: `d12e8f6a5f75c986b09b3dcad95ffe8ddb4406c0`.
+- Changed code paths: `Assets/_Project/Scripts/SimulationRuntime.cs` and
+  `Assets/_Project/Tests/EditMode/Editor/SimulationRuntimeAdmissionTests.cs`.
+- Review record for prior exact code `3239c32` remains historical evidence only;
+  independent review of this changed code tip is pending.
+
+The integrated restore test registers two Persons, binds one existing NPC to
+the child Person, adds a valid parentage edge, advances the source and an
+equivalent control, restores the source, then checks exact Person identity,
+NPC binding, genealogy direction, owner-section cardinality and full included
+owner projection. It compares the restored graph with the uninterrupted
+control on two subsequent daily boundaries.
+
+The first focused execution exposed a real restore-admission defect: the
+runtime treated Genealogy, PoliticalKnowledge and PoliticalDecision as if they
+must still have bootstrap-empty state after their reconstructed owners were
+staged. The fix keeps empty-state checks for a fresh bootstrap and lets a
+restored continuation establish its census baseline from the reconstructed
+required owners. The one-test rerun and all required suites then passed.
+
+| Gate | Result | Artifact | XML SHA-256 | Raw log SHA-256 |
+|---|---:|---|---|---|
+| Focused new restore test | 1/1 | `PersonGenealogy-20261010/EditMode-20261010-155531-4b697725cd274ecc93392748c7621b54.xml` | `1B300D9E54E922D02EA79881CE0D57B6DE5ADDF8262609856F05FD747B60FEB8` | `D8FBEEC42E44007DCB9574ED85441A4366250C42AEAA0DCC0993FD3F49AABB8C` |
+| Focused `SimulationRuntimeAdmissionTests` | 114/114 | `PersonGenealogy-20261010/EditMode-20261010-155553-d597e6991df44dd298bad66ed052f3d7.xml` | `38A1A801DE7B1EC138591DA35EBD42AAAAF722071F45C932F21FA830D2D6B4A9` | `BE5DD63553A566D76CF1099AAD8B15DA191306CE480234903F59D31D695873A4` |
+| ALL EditMode | 2788/2788 | `PersonGenealogy-20261010/EditMode-20261010-155611-a7c43d24e1d04c11826f6d5291d357af.xml` | `FCC9956E091779A005F00289BE2E995E22008FE8EEB1D60BD311E5D0F020C066` | `9AD6E85E79BA025D224E16064AB0E02DA8047151C2DA3EA74082368E21DD307D` |
+| Official Smoke (`-TestFilter Smoke`) | 5/5 | `PersonGenealogy-20261010/EditMode-20261010-155649-8d0d50edeb48496bb6f54965f38debcf.xml` | `2AE3986BDD1DF03DBA4DED6CDB9ECD4985349F8A345493EA724B79C522A75F92` | `03B59BDFAFD1A4AEC0CEB7C7E1EA3BCAA73D6745A7D712A282ABB35A6E507A7F` |
+| `git diff --check` | PASS | Code commit `fdc9ac2` | — | — |
+
+Passing XMLs and raw logs are archived in
+[`PersonGenealogy-20261010/UnityValidationLogs-20261010.zip`](PersonGenealogy-20261010/UnityValidationLogs-20261010.zip)
+(SHA-256 `DA7CDBDB621255609AD0E3CAC1B0F29AD397DE0BB61668B0074D35685B449EBF`,
+4,186,868 bytes). The artifact set excludes the initial failing diagnostic run
+and includes the passing one-test rerun, full focused suite, ALL EditMode and
+official Smoke outputs.
+
+This is an integrated Person/Genealogy restore and continuation-parity
+increment only. It does not close the remaining P12-G rejection-compatibility
+matrix, systematic B–F/cross-section corruption matrix, owner-hydrator and
+validator failure injection, publication-owner disposal cases, or exact P8/P9
+lineage variants. Serialized-envelope parsing and its compatibility matrix
+remain at the documented P12-A boundary. P12-G remains incomplete; P12-A is
+still `WAIT_DEPENDENCY`; P13 is still `BLOCKED`; Phase 12 remains `OPEN`.
+Unrelated ProjectSettings changes and untracked `.meta` files remain outside
+this candidate.
