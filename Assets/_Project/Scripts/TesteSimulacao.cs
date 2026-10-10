@@ -661,13 +661,24 @@ public class TesteSimulacao : MonoBehaviour
             stageObserver, null, out failure, out diagnostic, null, snapshotOverride);
     }
 
+    internal bool TryRestoreDailyContinuationWithPoliticalSupportSnapshotForTest(
+        System.Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> snapshotOverride,
+        System.Action<P12GDailyV1RestoreStage> stageObserver,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic)
+    {
+        return TryRestoreDailyContinuationCore(
+            stageObserver, null, out failure, out diagnostic, null, null, snapshotOverride);
+    }
+
     private bool TryRestoreDailyContinuationCore(
         System.Action<P12GDailyV1RestoreStage> stageObserver,
         System.Action<SimulationActiveSession> privateCandidateObserver,
         out P12GDailyV1RestoreFailure failure,
         out string diagnostic,
         System.Func<GenealogyOwnerSnapshot, GenealogyOwnerSnapshot> genealogySnapshotOverrideForTest = null,
-        System.Func<PropertyEstateOwnerSnapshot, PropertyEstateOwnerSnapshot> propertyEstateSnapshotOverrideForTest = null)
+        System.Func<PropertyEstateOwnerSnapshot, PropertyEstateOwnerSnapshot> propertyEstateSnapshotOverrideForTest = null,
+        System.Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest = null)
     {
         lock (activeSessionGate)
         {
@@ -693,7 +704,8 @@ public class TesteSimulacao : MonoBehaviour
                     stageObserver,
                     privateCandidateObserver,
                     genealogySnapshotOverrideForTest,
-                    propertyEstateSnapshotOverrideForTest))
+                    propertyEstateSnapshotOverrideForTest,
+                    politicalSupportSnapshotOverrideForTest))
                 return false;
 
             try

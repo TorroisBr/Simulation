@@ -2562,6 +2562,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
+        bool requireEmptyBootstrapState = runtimeAdmissionContext?.IsRestoredContinuation != true;
+
         try
         {
             IReadOnlyList<IOwnerSectionCensusProvider> providers =
@@ -2579,7 +2581,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     : null;
                 OwnerSectionCensusWitness witness = provider?.GetCurrentCensus();
                 if (providers == null || providers.Count != sectionIds.Length
-                    || cardinalities[i] != 0
+                    || (requireEmptyBootstrapState && cardinalities[i] != 0)
                     || witness == null
                     || !string.Equals(witness.SectionId, sectionIds[i], StringComparison.Ordinal)
                     || witness.SchemaVersion != PoliticalClaimStoreCensusProvider.SchemaVersion
@@ -2617,6 +2619,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
+        bool requireEmptyBootstrapState = runtimeAdmissionContext?.IsRestoredContinuation != true;
+
         try
         {
             IReadOnlyList<IOwnerSectionCensusProvider> providers =
@@ -2632,6 +2636,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     StringComparison.Ordinal)
                 || witness.SchemaVersion != PoliticalSupportStoreCensusProvider.SchemaVersion
                 || witness.Cardinality != politicalSupportStore.Count
+                || (requireEmptyBootstrapState && politicalSupportStore.Count != 0)
                 || !ReferenceEquals(witness.OwnerInstanceIdentity, politicalSupportStore)
                 || witness.Revision != politicalSupportStore.Revision
                 || witness.Revision < 0L
