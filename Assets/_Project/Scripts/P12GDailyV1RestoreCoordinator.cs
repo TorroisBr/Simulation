@@ -302,6 +302,13 @@ internal static class P12GDailyV1RestoreCoordinator
             privateCandidateObserver?.Invoke(candidate);
 
             SimulationRuntime targetRuntime = candidate.Runtime;
+            if (!TryValidatePersonNpcGenealogyBindings(targetRuntime, out string personBindingDiagnostic))
+            {
+                failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
+                diagnostic = personBindingDiagnostic;
+                return false;
+            }
+
             if (!targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
                     out IReadOnlyList<OwnerSectionCensusSnapshot> targetOwnerSections,
                     out long targetMutationEpoch,
@@ -588,6 +595,92 @@ internal static class P12GDailyV1RestoreCoordinator
                 || !string.Equals(partyId, npc.ActiveTravelPartyId, StringComparison.Ordinal))
             {
                 diagnostic = "An NPC's ActiveTravelPartyId has no reciprocal active-party member binding.";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool TryValidatePersonNpcGenealogyBindings(
+        SimulationRuntime runtime,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        PersonStore people = runtime?.PersonStore;
+        IReadOnlyList<NpcRuntime> npcs = runtime?.NpcRuntimes;
+        IReadOnlyList<ParentageRecord> genealogy = runtime?.GenealogyRecords;
+        if (people == null || npcs == null || genealogy == null)
+        {
+            diagnostic = "The private target's Person/NPC/Genealogy graph is unavailable.";
+            return false;
+        }
+
+        Dictionary<string, PersonRuntime> personsById = new Dictionary<string, PersonRuntime>(StringComparer.Ordinal);
+        Dictionary<string, NpcRuntime> npcsById = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        foreach (PersonRuntime person in people.Persons)
+        {
+            if (person?.PersonId == null
+                || string.IsNullOrWhiteSpace(person.PersonId.Value)
+                || !personsById.TryAdd(person.PersonId.Value, person))
+            {
+                diagnostic = "The private target's PersonStore has a missing or duplicate PersonId.";
+                return false;
+            }
+        }
+
+        foreach (NpcRuntime npc in npcs)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
+                || !npcsById.TryAdd(npc.RuntimeId, npc))
+            {
+                diagnostic = "The private target's NPC roster has a missing or duplicate RuntimeId.";
+                return false;
+            }
+
+            if (npc.PersonId == null)
+            {
+                if (npc.BoundPersonRuntime != null)
+                {
+                    diagnostic = "An unbound NPC retains a private Person/NPC materialization reference.";
+                    return false;
+                }
+                continue;
+            }
+
+            if (!personsById.TryGetValue(npc.PersonId.Value, out PersonRuntime person)
+                || !string.Equals(person.MaterializedNpcRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
+                || !ReferenceEquals(person, npc.BoundPersonRuntime)
+                || !people.TryGetByMaterializedNpcRuntimeId(npc.RuntimeId, out PersonRuntime reversePerson)
+                || !ReferenceEquals(person, reversePerson))
+            {
+                diagnostic = "An NPC PersonId does not resolve to the exact reciprocal Person/NPC materialization binding.";
+                return false;
+            }
+        }
+
+        foreach (PersonRuntime person in people.Persons)
+        {
+            if (string.IsNullOrWhiteSpace(person.MaterializedNpcRuntimeId))
+                continue;
+            if (!npcsById.TryGetValue(person.MaterializedNpcRuntimeId, out NpcRuntime npc)
+                || npc.PersonId != person.PersonId
+                || !ReferenceEquals(npc.BoundPersonRuntime, person)
+                || !people.TryGetByMaterializedNpcRuntimeId(person.MaterializedNpcRuntimeId, out PersonRuntime indexedPerson)
+                || !ReferenceEquals(person, indexedPerson))
+            {
+                diagnostic = "A Person materialized-NPC id does not resolve to the exact reciprocal NPC/Person binding.";
+                return false;
+            }
+        }
+
+        foreach (ParentageRecord edge in genealogy)
+        {
+            if (edge?.ParentId == null || edge.ChildId == null
+                || !personsById.ContainsKey(edge.ParentId.Value)
+                || !personsById.ContainsKey(edge.ChildId.Value))
+            {
+                diagnostic = "A Genealogy edge endpoint does not resolve to a Person in the private target.";
                 return false;
             }
         }

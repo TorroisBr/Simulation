@@ -2998,7 +2998,6 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(controlSession.Runtime.TryAddParentage(
                 parentId, childId, out PersonGenealogyFailure controlGenealogyFailure),
                 Is.True, controlGenealogyFailure.ToString());
-
             Assert.That(sourceSession.Runtime.PersonStore.Persons.Count, Is.EqualTo(2));
             Assert.That(sourceSession.Runtime.ContainsParentage(parentId, childId), Is.True);
             Assert.That(sourceSession.Runtime.NpcRuntimes.Count(npc => npc.PersonId != null), Is.EqualTo(1));
@@ -3071,6 +3070,192 @@ public sealed class SimulationRuntimeAdmissionTests
             UnityEngine.Object.DestroyImmediate(controlObject);
             UnityEngine.Object.DestroyImmediate(sourceObject);
         }
+    }
+
+    [Test]
+    public void DailyV1RestoreRejectsBrokenPersonNpcBindingAtomically()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G Person/NPC binding source");
+        GameObject controlObject = new GameObject("P12-G Person/NPC binding control");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            ConfigureSelectedBootstrap(control, config);
+            InvokeInitializeSimulation(source, null);
+            InvokeInitializeSimulation(control, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
+
+            PersonId personId = new PersonId("p12g-broken-binding-person");
+            Assert.That(original.Runtime.TryRegisterPerson(new PersonRuntime(personId, 0L), out PersonStoreFailure sourcePersonFailure),
+                Is.True, sourcePersonFailure.ToString());
+            Assert.That(controlSession.Runtime.TryRegisterPerson(new PersonRuntime(personId, 0L), out PersonStoreFailure controlPersonFailure),
+                Is.True, controlPersonFailure.ToString());
+            NpcRuntime sourceNpc = original.Runtime.NpcRuntimes
+                .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal).First();
+            NpcRuntime controlNpc = controlSession.Runtime.NpcRuntimes
+                .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal).First();
+            Assert.That(sourceNpc.RuntimeId, Is.EqualTo(controlNpc.RuntimeId));
+            Assert.That(original.Runtime.TryBindExistingNpcToPerson(
+                personId, sourceNpc.RuntimeId, out PersonMaterializationFailure sourceBindFailure),
+                Is.True, sourceBindFailure.ToString());
+            Assert.That(controlSession.Runtime.TryBindExistingNpcToPerson(
+                personId, controlNpc.RuntimeId, out PersonMaterializationFailure controlBindFailure),
+                Is.True, controlBindFailure.ToString());
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
+                Is.True, sourceAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
+                Is.True, controlAdvance.ToString());
+
+            DailyCaptureEligibilityToken originalToken = GetCompletedDailyToken(original.Runtime);
+            string originalGraph = CaptureCompleteDailyV1OwnerProjection(original, originalToken);
+            Assert.That(source.TryRestoreDailyContinuationForTest(candidate =>
+            {
+                Assert.That(candidate.IdentityRegistry.TryGetNpc(sourceNpc.RuntimeId, out NpcRuntime candidateNpc), Is.True);
+                WritePrivateField<PersonRuntime>(candidateNpc, "personRuntime", null);
+            }, out P12GDailyV1RestoreFailure restoreFailure, out string diagnostic), Is.False);
+            Assert.That(restoreFailure, Is.EqualTo(P12GDailyV1RestoreFailure.BindingValidationFailed), diagnostic);
+            Assert.That(diagnostic, Does.Contain("Person/NPC"));
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(originalToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, originalToken), Is.EqualTo(originalGraph));
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retainedAdvance),
+                Is.True, retainedAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure expectedAdvance),
+                Is.True, expectedAdvance.ToString());
+            DailyCaptureEligibilityToken retainedToken = GetCompletedDailyToken(original.Runtime);
+            DailyCaptureEligibilityToken expectedToken = GetCompletedDailyToken(controlSession.Runtime);
+            string continuedGraph = CaptureCompleteDailyV1OwnerProjection(original, retainedToken);
+            Assert.That(continuedGraph,
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, expectedToken)),
+                "Rejecting a broken private Person/NPC link must preserve later source continuation parity.");
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure,
+                    out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(restored, Is.Not.SameAs(original));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, GetCompletedDailyToken(restored.Runtime)),
+                Is.EqualTo(continuedGraph));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+            UnityEngine.Object.DestroyImmediate(controlObject);
+        }
+    }
+
+    [Test]
+    public void RestoredDailyOwnerBaselineAcceptsPopulatedPoliticalKnowledgeAndDecisionOwners()
+    {
+        PersonStore people = new PersonStore();
+        PersonId parentId = new PersonId("p12g-restored-political-parent");
+        PersonId childId = new PersonId("p12g-restored-political-child");
+        Assert.That(people.TryRegister(new PersonRuntime(parentId, 0L), out PersonStoreFailure parentFailure),
+            Is.True, parentFailure.ToString());
+        Assert.That(people.TryRegister(new PersonRuntime(childId, 0L), out PersonStoreFailure childFailure),
+            Is.True, childFailure.ToString());
+
+        GenealogyStore genealogy = new GenealogyStore();
+        Assert.That(genealogy.TryAddParentage(parentId, childId, out GenealogyFailure genealogyFailure),
+            Is.True, genealogyFailure.ToString());
+        InstitutionStore institutions = new InstitutionStore();
+        OfficeStore offices = new OfficeStore(institutions);
+        PropertyOwnershipStore property = new PropertyOwnershipStore(people);
+        PoliticalClaimStore claims = new PoliticalClaimStore();
+        FactionStore factions = new FactionStore(people);
+        PoliticalKnowledgeStore knowledge = new PoliticalKnowledgeStore(
+            people, institutions, claims, factions, offices, property);
+        PoliticalKnowledgeHolder holder = PoliticalKnowledgeHolder.ForPerson(parentId);
+        Assert.That(knowledge.TryRegisterHolder(holder, 0L, out PoliticalKnowledgeFailure holderFailure),
+            Is.True, holderFailure.ToString());
+        Assert.That(knowledge.TryRecordObservation(
+            holder,
+            new PersonDeathKnowledgeObservation(
+                childId,
+                false,
+                null,
+                0L,
+                0L,
+                new PoliticalKnowledgeProvenance(
+                    PoliticalKnowledgeSource.DirectObservation,
+                    "p12g-restored-political-child")),
+            0L,
+            out PoliticalKnowledgeFailure observationFailure),
+            Is.True, observationFailure.ToString());
+
+        PoliticalDecisionStore decisions = new PoliticalDecisionStore();
+        PoliticalDecisionId decisionId = new PoliticalDecisionId("p12g-restored-political-decision");
+        PoliticalDecisionRecord decision = new PoliticalDecisionRecord(
+            decisionId,
+            holder,
+            PoliticalDecisionKind.Other,
+            Array.Empty<PersonId>(),
+            PoliticalDecisionOutcome.None(),
+            0L,
+            0L,
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            0L,
+            knowledge.Revision);
+        Assert.That(decisions.TryRegister(decision, out PoliticalDecisionFailure decisionFailure),
+            Is.True, decisionFailure.ToString());
+
+        SimulationRuntimeAdmissionContext bootstrapContext =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            cities: null,
+            npcRuntimes: null,
+            economyEnabled: false,
+            runtimeAdmissionContext: bootstrapContext.CreateRestoredContinuationContext(),
+            personStore: people,
+            genealogyStore: genealogy,
+            institutionStore: institutions,
+            officeStore: offices,
+            propertyOwnershipStore: property,
+            politicalClaimStore: claims,
+            factionStore: factions,
+            politicalKnowledgeStore: knowledge,
+            politicalDecisionStore: decisions,
+            politicalWorldRevision: 0L,
+            worldId: new WorldId(Guid.Parse("7dd77620-2057-4588-87b4-c7b039585299")));
+
+        Assert.That(runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> sections,
+            out _,
+            out ContinuationCensusFailure censusFailure),
+            Is.True, censusFailure.ToString());
+        OwnerSectionCensusSnapshot knowledgeSection = sections.Single(section =>
+            section.SectionId == PoliticalKnowledgeStoreCensusProvider.SectionId);
+        OwnerSectionCensusSnapshot decisionSection = sections.Single(section =>
+            section.SectionId == PoliticalDecisionStoreCensusProvider.SectionId);
+        Assert.That(knowledgeSection.Cardinality, Is.EqualTo(1));
+        Assert.That(knowledgeSection.Revision, Is.EqualTo(knowledge.Revision));
+        Assert.That(knowledgeSection.OwnerInstanceIdentity,
+            Is.SameAs(runtime.PoliticalKnowledgeStoreForWorldBoundary));
+        Assert.That(decisionSection.Cardinality, Is.EqualTo(1));
+        Assert.That(decisionSection.Revision, Is.EqualTo(decisions.Revision));
+        Assert.That(decisionSection.OwnerInstanceIdentity, Is.TypeOf<PoliticalDecisionStore>());
+        Assert.That(((PoliticalDecisionStore)decisionSection.OwnerInstanceIdentity).Count, Is.EqualTo(1));
+        Assert.That(runtime.PoliticalKnowledgeHolderCount, Is.EqualTo(1));
+        Assert.That(runtime.PoliticalKnowledgeRevision, Is.EqualTo(knowledge.Revision));
+        Assert.That(runtime.TryGetPoliticalKnowledge(holder, out PoliticalKnowledgeRuntime restoredKnowledge), Is.True);
+        Assert.That(restoredKnowledge.PersonDeathObservations, Has.Count.EqualTo(1));
+        Assert.That(restoredKnowledge.PersonDeathObservations[0].PersonId, Is.EqualTo(childId));
+        Assert.That(runtime.TryGetPoliticalDecision(decisionId, out PoliticalDecisionRecord restoredDecision), Is.True);
+        Assert.That(restoredDecision.Decider, Is.EqualTo(holder));
+        Assert.That(restoredDecision.ExpectedKnowledgeRevision, Is.EqualTo(knowledge.Revision));
     }
 
     [Test]
