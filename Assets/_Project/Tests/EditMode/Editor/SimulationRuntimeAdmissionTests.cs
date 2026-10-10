@@ -4027,6 +4027,7 @@ public sealed class SimulationRuntimeAdmissionTests
     [TestCase("p18-justice-receipt-owner")]
     [TestCase("p18-npc-local-observation-receipt-owner")]
     [TestCase("p18-npc-merchant-trade-state-receipt-owner")]
+    [TestCase("genealogy-dangling-person-endpoint")]
     [TestCase("wrong-family-identity-key")]
     public void DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(string corruptionKind)
     {
@@ -4084,6 +4085,20 @@ public sealed class SimulationRuntimeAdmissionTests
             bool npcReceiptCompositionProvidersReplaced = false;
             bool npcReceiptVectorStillIdentifiesTarget = false;
             string replacedNpcReceiptSectionPrefix = null;
+            PersonId genealogyExistingEndpoint = null;
+            PersonId genealogyMissingEndpoint = null;
+            GenealogyStore corruptedGenealogyStore = null;
+            bool genealogyEdgeAdded = false;
+            if (corruptionKind == "genealogy-dangling-person-endpoint")
+            {
+                genealogyExistingEndpoint = new PersonId("p12g-existing-genealogy-endpoint");
+                Assert.That(original.Runtime.TryRegisterPerson(
+                    new PersonRuntime(genealogyExistingEndpoint, 0L),
+                    out PersonStoreFailure sourcePersonFailure), Is.True, sourcePersonFailure.ToString());
+                Assert.That(controlSession.Runtime.TryRegisterPerson(
+                    new PersonRuntime(genealogyExistingEndpoint, 0L),
+                    out PersonStoreFailure controlPersonFailure), Is.True, controlPersonFailure.ToString());
+            }
             Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
                 Is.True, sourceAdvance.ToString());
             Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
@@ -4508,6 +4523,22 @@ public sealed class SimulationRuntimeAdmissionTests
                         Assert.That(selectedRows, Is.EqualTo(candidate.Runtime.NpcRuntimes.Count));
                         break;
                     }
+                    case "genealogy-dangling-person-endpoint":
+                    {
+                        corruptedGenealogyStore = candidate.Runtime.GenealogyStoreForWorldBoundary;
+                        genealogyMissingEndpoint = new PersonId("p12g-absent-genealogy-endpoint");
+                        Assert.That(candidate.Runtime.PersonStore.TryGet(
+                            genealogyExistingEndpoint, out _), Is.True);
+                        Assert.That(candidate.Runtime.PersonStore.TryGet(
+                            genealogyMissingEndpoint, out _), Is.False);
+                        Assert.That(corruptedGenealogyStore.TryAddParentage(
+                            genealogyExistingEndpoint,
+                            genealogyMissingEndpoint,
+                            out GenealogyFailure genealogyFailure), Is.True, genealogyFailure.ToString());
+                        genealogyEdgeAdded = corruptedGenealogyStore.ContainsParentage(
+                            genealogyExistingEndpoint, genealogyMissingEndpoint);
+                        break;
+                    }
                     case "wrong-family-identity-key":
                         Dictionary<string, CityRuntime> cities = ReadPrivateField<Dictionary<string, CityRuntime>>(
                             candidate.IdentityRegistry, "citiesByRuntimeId");
@@ -4615,12 +4646,28 @@ public sealed class SimulationRuntimeAdmissionTests
                     "The runtime target vector must remain bound to its own per-NPC receipt owners.");
                 Assert.That(replacedNpcReceiptSectionPrefix, Is.Not.Null);
             }
+            if (corruptionKind == "genealogy-dangling-person-endpoint")
+            {
+                Assert.That(genealogyExistingEndpoint, Is.Not.Null);
+                Assert.That(genealogyMissingEndpoint, Is.Not.Null);
+                Assert.That(corruptedGenealogyStore, Is.Not.Null);
+                Assert.That(genealogyEdgeAdded, Is.True);
+                Assert.That(corruptedGenealogyStore.Count, Is.EqualTo(1));
+                Assert.That(corruptedGenealogyStore.ContainsParentage(
+                    genealogyExistingEndpoint, genealogyMissingEndpoint), Is.True);
+            }
             Assert.That(restoreSucceeded, Is.False, diagnostic);
             Assert.That(diagnostic, Is.Not.Null.And.Not.Empty);
             Assert.That(restoreFailure, Is.EqualTo(corruptionKind == "allocator-high-water"
+                || corruptionKind == "genealogy-dangling-person-endpoint"
                 || corruptionKind == "wrong-family-identity-key"
                 ? P12GDailyV1RestoreFailure.BindingValidationFailed
                 : P12GDailyV1RestoreFailure.TargetOwnerVectorFailed));
+            if (corruptionKind == "genealogy-dangling-person-endpoint")
+            {
+                Assert.That(diagnostic, Is.EqualTo(
+                    "A Genealogy edge endpoint does not resolve to a Person in the private target."));
+            }
             Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
             Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True);
             Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
