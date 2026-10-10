@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="4" result="Passed" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-10 22:55:17Z" end-time="2026-10-10 22:55:17Z" duration="0,1847986">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2854" result="Passed" start-time="2026-10-10 22:55:17Z" end-time="2026-10-10 22:55:17Z" duration="0.184799" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="4122" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12g-political-claim-target-20261010/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2854" result="Passed" start-time="2026-10-10 22:55:17Z" end-time="2026-10-10 22:55:17Z" duration="0.175904" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="129280" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2098" name="InstitutionOfficeCensusTests" fullname="InstitutionOfficeCensusTests" classname="InstitutionOfficeCensusTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-10-10 22:55:17Z" end-time="2026-10-10 22:55:17Z" duration="0.161252" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2102" name="PopulatedRuntimeClonePublishesInstalledOwnersAndPreservesSource" fullname="InstitutionOfficeCensusTests.PopulatedRuntimeClonePublishesInstalledOwnersAndPreservesSource" methodname="PopulatedRuntimeClonePublishesInstalledOwnersAndPreservesSource" classname="InstitutionOfficeCensusTests" runstate="Runnable" seed="313274234" result="Passed" start-time="2026-10-10 22:55:17Z" end-time="2026-10-10 22:55:17Z" duration="0.044187" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2099" name="RuntimeWitnessTracksInstitutionOfficeAndIncumbencyCommits" fullname="InstitutionOfficeCensusTests.RuntimeWitnessTracksInstitutionOfficeAndIncumbencyCommits" methodname="RuntimeWitnessTracksInstitutionOfficeAndIncumbencyCommits" classname="InstitutionOfficeCensusTests" runstate="Runnable" seed="1443237684" result="Passed" start-time="2026-10-10 22:55:17Z" end-time="2026-10-10 22:55:17Z" duration="0.077029" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2100" name="SelectedDailyV1InstitutionOfficeCommitsAdvanceOneSharedEpoch" fullname="InstitutionOfficeCensusTests.SelectedDailyV1InstitutionOfficeCommitsAdvanceOneSharedEpoch" methodname="SelectedDailyV1InstitutionOfficeCommitsAdvanceOneSharedEpoch" classname="InstitutionOfficeCensusTests" runstate="Runnable" seed="711960224" result="Passed" start-time="2026-10-10 22:55:17Z" end-time="2026-10-10 22:55:17Z" duration="0.027847" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2101" name="SelectedDailyV1OffOwnerThreadVacancyApplyIsRejectedBeforeStoreMutation" fullname="InstitutionOfficeCensusTests.SelectedDailyV1OffOwnerThreadVacancyApplyIsRejectedBeforeStoreMutation" methodname="SelectedDailyV1OffOwnerThreadVacancyApplyIsRejectedBeforeStoreMutation" classname="InstitutionOfficeCensusTests" runstate="Runnable" seed="330331390" result="Passed" start-time="2026-10-10 22:55:17Z" end-time="2026-10-10 22:55:17Z" duration="0.004013" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
