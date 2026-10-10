@@ -3509,6 +3509,101 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
 
+    [TestCase("allocator-high-water")]
+    [TestCase("record-sequence")]
+    [TestCase("owner-revision")]
+    [TestCase("p8-location-cardinality")]
+    public void DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(string corruptionKind)
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G corrupted graph source " + corruptionKind);
+        GameObject controlObject = new GameObject("P12-G corrupted graph control " + corruptionKind);
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            ConfigureSelectedBootstrap(control, config);
+            InvokeInitializeSimulation(source, null);
+            InvokeInitializeSimulation(control, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
+                Is.True, sourceAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
+                Is.True, controlAdvance.ToString());
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(original.Runtime);
+            string sourceGraph = CaptureCompleteDailyV1OwnerProjection(original, sourceToken);
+
+            bool corrupted = false;
+            bool restoreSucceeded = source.TryRestoreDailyContinuationForTest(candidate =>
+            {
+                Assert.That(candidate, Is.Not.Null);
+                switch (corruptionKind)
+                {
+                    case "allocator-high-water":
+                        WritePrivateField(candidate.Composition.RuntimeIdAllocator, "nextNpcSequence", 1L);
+                        break;
+                    case "record-sequence":
+                        WritePrivateField(candidate.Composition.RecordSequence, "nextSequence", 1L);
+                        break;
+                    case "owner-revision":
+                        NpcRuntime candidateNpc = candidate.Runtime.NpcRuntimes.First();
+                        long accountRevision = ReadPrivateField<long>(candidateNpc.MoneyAccount, "revision");
+                        WritePrivateField(candidateNpc.MoneyAccount, "revision", accountRevision + 1L);
+                        break;
+                    case "p8-location-cardinality":
+                        Dictionary<string, SpatialLocationRuntime> locations = ReadPrivateField<Dictionary<string, SpatialLocationRuntime>>(
+                            candidate.IdentityRegistry, "locationsByRuntimeId");
+                        locations.Clear();
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(corruptionKind), corruptionKind, "Unknown P12-G corruption case.");
+                }
+                corrupted = true;
+            }, out P12GDailyV1RestoreFailure restoreFailure, out string diagnostic);
+
+            Assert.That(corrupted, Is.True);
+            Assert.That(restoreSucceeded, Is.False, diagnostic);
+            Assert.That(diagnostic, Is.Not.Null.And.Not.Empty);
+            Assert.That(restoreFailure, Is.EqualTo(corruptionKind == "allocator-high-water"
+                ? P12GDailyV1RestoreFailure.BindingValidationFailed
+                : P12GDailyV1RestoreFailure.TargetOwnerVectorFailed));
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, sourceToken), Is.EqualTo(sourceGraph));
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retainedAdvance),
+                Is.True, retainedAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure expectedAdvance),
+                Is.True, expectedAdvance.ToString());
+            DailyCaptureEligibilityToken retainedToken = GetCompletedDailyToken(original.Runtime);
+            string continuedGraph = CaptureCompleteDailyV1OwnerProjection(original, retainedToken);
+            Assert.That(continuedGraph,
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    controlSession, GetCompletedDailyToken(controlSession.Runtime))),
+                "A rejected staged graph must not change subsequent normal continuation.");
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession retried = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(retried, Is.Not.SameAs(original));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                    retried, GetCompletedDailyToken(retried.Runtime)), Is.EqualTo(continuedGraph),
+                "A later valid restore must reconstruct the same graph after every rejection case.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+            UnityEngine.Object.DestroyImmediate(controlObject);
+        }
+    }
     [TestCase((int)P12GDailyV1RestoreStage.SourceCaptured)]
     [TestCase((int)P12GDailyV1RestoreStage.RootsStaged)]
     [TestCase((int)P12GDailyV1RestoreStage.DStaged)]
