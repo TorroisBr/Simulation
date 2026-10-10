@@ -4,7 +4,9 @@
 **Initial evidence candidate Git tree:** `59ab054c5a4a89281176ef30dd64e8cd39a16402`
 **Initial validation Assets tree:** `85f1ff86e02e3fe25d947c42584f5bf8b6364705`
 **Unity Editor:** `6000.3.9f1`
-**Status:** all required validation passed; independent exact-tip review pending.
+**Status:** validation passed; independent exact-tip code review passed for
+Assets tree `c35e2a82d5607f191fb0d31bb82be4f14e7e7756`. The review record is
+[`PHASE12_G_LIVE_INVENTORY_CLOSURE_REVIEW_7B2846A.md`](../../design/PHASE12_G_LIVE_INVENTORY_CLOSURE_REVIEW_7B2846A.md).
 
 Each result XML reports `Passed`, zero failed, zero skipped, and zero
 inconclusive tests. Result XML and runner log hashes are SHA-256.

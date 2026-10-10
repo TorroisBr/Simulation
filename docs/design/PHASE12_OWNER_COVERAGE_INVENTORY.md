@@ -1371,7 +1371,9 @@ every owner export/staged hydrator, shared-epoch completeness, whole-graph
 restoration, capture eligibility, P12-A readiness, or P13 readiness.
 
 P12-B is complete only within the bounded scope recorded in current canonical
-PHASE12_STATE.md. P12-G remains WAIT_DEPENDENCY pending its separately
-reviewed design, validated live inventory, package-interface verification,
-restored-boundary admission, and coherent publication requirements. P12-A
-remains WAIT_DEPENDENCY, P13 remains BLOCKED, and Phase 12 remains OPEN.
+PHASE12_STATE.md. The reviewed candidate evidence closes the selected
+Daily-v1 live-inventory prerequisite for P12-G; canonical P12-G remains
+WAIT_DEPENDENCY until that checkpoint is promoted and the remaining
+package-interface, restored-boundary admission, and coherent publication
+requirements are implemented and validated. P12-A remains WAIT_DEPENDENCY,
+P13 remains BLOCKED, and Phase 12 remains OPEN.
