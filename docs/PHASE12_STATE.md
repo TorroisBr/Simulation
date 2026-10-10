@@ -32,6 +32,7 @@ remains `WAIT_DEPENDENCY`, P13 remains `BLOCKED`, and Phase 12 remains open.
 No capture eligibility, export, hydration, or downstream readiness is
 implied. Protected ProjectSettings edits and unrelated untracked `.meta`/XML
 files remain untouched.
+
 ## P12-G P8-C target-owner identity checks — promoted — 2026-10-10
 
 P12 canonical advanced by a clean fast-forward from
