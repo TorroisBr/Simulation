@@ -2818,10 +2818,23 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(CaptureContinuationRootFacts(sourceSession, includeWorldIdentity: false),
                 Is.EqualTo(CaptureContinuationRootFacts(uninterruptedSession, includeWorldIdentity: false)));
 
-            Assert.That(restored.TryRestoreDailyContinuation(
-                    out P12GDailyV1RestoreFailure restoreFailure,
-                    out string restoreDiagnostic), Is.True,
-                restoreFailure + ": " + restoreDiagnostic);
+            P12GDailyV1RestoreFailure restoreFailure;
+            string restoreDiagnostic;
+            SimulationGenesisPipeline.ExecutionProbeForTest genesisExecutionProbe =
+                SimulationGenesisPipeline.BeginExecutionProbeForTest();
+            try
+            {
+                Assert.That(restored.TryRestoreDailyContinuation(
+                        out restoreFailure,
+                        out restoreDiagnostic), Is.True,
+                    restoreFailure + ": " + restoreDiagnostic);
+            }
+            finally
+            {
+                genesisExecutionProbe.Dispose();
+            }
+            Assert.That(genesisExecutionProbe.ExecuteStagesInvocationCount, Is.Zero,
+                "Daily-v1 restoration stages the captured P9 manifest and must not enter the P9 genesis pipeline.");
 
             SimulationActiveSession targetSession = ReadPrivateField<SimulationActiveSession>(restored, "activeSession");
             Assert.That(targetSession, Is.Not.Null.And.Not.SameAs(sourceSession),

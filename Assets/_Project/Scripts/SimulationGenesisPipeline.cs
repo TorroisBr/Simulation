@@ -14,6 +14,46 @@ public static class SimulationGenesisPipeline
     public const string P10BGeneratedRuinProfileContractIdentity = "unity-authored-bootstrap/ruin-topology-v1";
     public const string P10BGeneratedRuinStageId = "p10b.genesis.ruin-topology/v1";
 
+    [ThreadStatic]
+    private static ExecutionProbeForTest activeExecutionProbeForTest;
+
+    /// <summary>
+    /// Scoped, thread-local test witness for entry into the P9 genesis stage
+    /// pipeline. It observes calls only and does not alter stage execution.
+    /// </summary>
+    internal sealed class ExecutionProbeForTest : IDisposable
+    {
+        private bool disposed;
+
+        internal int ExecuteStagesInvocationCount { get; private set; }
+
+        internal ExecutionProbeForTest()
+        {
+            if (activeExecutionProbeForTest != null)
+                throw new InvalidOperationException("A P9 genesis execution probe is already active on this thread.");
+            activeExecutionProbeForTest = this;
+        }
+
+        internal void RecordExecuteStagesInvocation()
+        {
+            ExecuteStagesInvocationCount++;
+        }
+
+        public void Dispose()
+        {
+            if (disposed) return;
+            if (!ReferenceEquals(activeExecutionProbeForTest, this))
+                throw new InvalidOperationException("The P9 genesis execution probe is not the active probe on this thread.");
+            activeExecutionProbeForTest = null;
+            disposed = true;
+        }
+    }
+
+    internal static ExecutionProbeForTest BeginExecutionProbeForTest()
+    {
+        return new ExecutionProbeForTest();
+    }
+
     public static bool IsP10BGeneratedRuinEnabled(SimulationConfigData config) => config != null
         && string.Equals(config.GenesisProfileContractIdentity, P10BGeneratedRuinProfileContractIdentity, StringComparison.Ordinal);
 
@@ -93,6 +133,7 @@ public static class SimulationGenesisPipeline
         bool includeP10RuinLocalTopology = false, bool includeP10BGeneratedRuin = false)
     {
         if (execute == null) throw new ArgumentNullException(nameof(execute));
+        activeExecutionProbeForTest?.RecordExecuteStagesInvocation();
         foreach (string stageId in ResolveStageOrder(includeAuthoredGeography, includeP10RuinLocalTopology, includeP10BGeneratedRuin))
             execute(stageId);
     }
