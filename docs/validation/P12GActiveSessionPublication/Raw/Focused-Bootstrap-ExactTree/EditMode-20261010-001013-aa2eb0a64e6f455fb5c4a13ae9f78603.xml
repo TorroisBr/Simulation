@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="26" result="Passed" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0,4238232">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2739" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.423823" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="4004" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12g-current-canonical-inventory/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2739" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.408484" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="166716" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3544" name="SimulationBootstrapCompositionTests" fullname="SimulationBootstrapCompositionTests" classname="SimulationBootstrapCompositionTests" runstate="Runnable" testcasecount="26" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.393432" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3566" name="ActionStatusWeightsAreIncludedInStableStatusIdentityValidation" fullname="SimulationBootstrapCompositionTests.ActionStatusWeightsAreIncludedInStableStatusIdentityValidation" methodname="ActionStatusWeightsAreIncludedInStableStatusIdentityValidation" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="711758658" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.015149" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3554" name="AuthoredGenesisFingerprintIsStableAndPreservesCausalListOrder" fullname="SimulationBootstrapCompositionTests.AuthoredGenesisFingerprintIsStableAndPreservesCausalListOrder" methodname="AuthoredGenesisFingerprintIsStableAndPreservesCausalListOrder" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="2047875471" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.021237" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3569" name="AuthoredGenesisPreservesPopulationDistinctRouteDurationsAndWarrantAccumulation" fullname="SimulationBootstrapCompositionTests.AuthoredGenesisPreservesPopulationDistinctRouteDurationsAndWarrantAccumulation" methodname="AuthoredGenesisPreservesPopulationDistinctRouteDurationsAndWarrantAccumulation" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1743242987" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.072662" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[genesis-warrant-target display agora possui mandado em a-genesis-origin display. Recompensa: 11. Pena: 2 dias.
+genesis-warrant-target display agora possui mandado em a-genesis-origin display. Recompensa: 18. Pena: 5 dias.
+]]></output>
+        </test-case>
+        <test-case id="3562" name="AuthoredGeographyFingerprintIncludesEverySelectedGeographyInput" fullname="SimulationBootstrapCompositionTests.AuthoredGeographyFingerprintIncludesEverySelectedGeographyInput" methodname="AuthoredGeographyFingerprintIncludesEverySelectedGeographyInput" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1876041313" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.001607" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3555" name="AuthoredGeographyProfilePublishesOneReconstructibleP8AuthorityBeforeSimulation" fullname="SimulationBootstrapCompositionTests.AuthoredGeographyProfilePublishesOneReconstructibleP8AuthorityBeforeSimulation" methodname="AuthoredGeographyProfilePublishesOneReconstructibleP8AuthorityBeforeSimulation" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="2145858304" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.005316" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3561" name="AuthoredGeographyProfileRejectsIncompleteInputsBeforePublication" fullname="SimulationBootstrapCompositionTests.AuthoredGeographyProfileRejectsIncompleteInputsBeforePublication" methodname="AuthoredGeographyProfileRejectsIncompleteInputsBeforePublication" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="596730412" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.000426" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3564" name="DefaultAndJobWorkActionsMustReferenceTheExactSelectedDefinitionObject" fullname="SimulationBootstrapCompositionTests.DefaultAndJobWorkActionsMustReferenceTheExactSelectedDefinitionObject" methodname="DefaultAndJobWorkActionsMustReferenceTheExactSelectedDefinitionObject" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1014669161" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.000907" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3553" name="DisabledCrimeBootstrapAdvancesExistingHiddenTimerWithoutRegisteringCrimeProvider" fullname="SimulationBootstrapCompositionTests.DisabledCrimeBootstrapAdvancesExistingHiddenTimerWithoutRegisteringCrimeProvider" methodname="DisabledCrimeBootstrapAdvancesExistingHiddenTimerWithoutRegisteringCrimeProvider" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1835735069" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.008480" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[disabled-crime-npc display nao esta mais escondido.
+]]></output>
+        </test-case>
+        <test-case id="3549" name="FailedPublishCallbackDiscardsIdentityAndPermanentlyLatchesBootstrap" fullname="SimulationBootstrapCompositionTests.FailedPublishCallbackDiscardsIdentityAndPermanentlyLatchesBootstrap" methodname="FailedPublishCallbackDiscardsIdentityAndPermanentlyLatchesBootstrap" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1413540354" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.002071" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3560" name="GeneralTestRemainsASeparateP10RuinProvingProfile" fullname="SimulationBootstrapCompositionTests.GeneralTestRemainsASeparateP10RuinProvingProfile" methodname="GeneralTestRemainsASeparateP10RuinProvingProfile" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1836271038" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.006824" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3546" name="GenesisCallbacksCannotObserveWorldBeforeFinalPublicationGate" fullname="SimulationBootstrapCompositionTests.GenesisCallbacksCannotObserveWorldBeforeFinalPublicationGate" methodname="GenesisCallbacksCannotObserveWorldBeforeFinalPublicationGate" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="547609588" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.002064" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3567" name="InvalidAuthoredCalendarFailsBeforeHostCompositionIsPublished" fullname="SimulationBootstrapCompositionTests.InvalidAuthoredCalendarFailsBeforeHostCompositionIsPublished" methodname="InvalidAuthoredCalendarFailsBeforeHostCompositionIsPublished" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1912612725" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.000340" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3568" name="InvalidAuthoredProfileFailsBeforeHostCompositionIsPublished" fullname="SimulationBootstrapCompositionTests.InvalidAuthoredProfileFailsBeforeHostCompositionIsPublished" methodname="InvalidAuthoredProfileFailsBeforeHostCompositionIsPublished" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="923443228" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.000422" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3563" name="RouteIdentityUsesTupleComponentsEvenWhenDefinitionIdsContainSeparator" fullname="SimulationBootstrapCompositionTests.RouteIdentityUsesTupleComponentsEvenWhenDefinitionIdsContainSeparator" methodname="RouteIdentityUsesTupleComponentsEvenWhenDefinitionIdsContainSeparator" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1138591331" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.000536" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3570" name="RuntimeCannotAdvanceAfterValidationFailureBeforePublication" fullname="SimulationBootstrapCompositionTests.RuntimeCannotAdvanceAfterValidationFailureBeforePublication" methodname="RuntimeCannotAdvanceAfterValidationFailureBeforePublication" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1161267383" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.000987" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3547" name="SameSeedWorldsReceiveDistinctStableIdentitiesWithoutChangingSeededRandomDraws" fullname="SimulationBootstrapCompositionTests.SameSeedWorldsReceiveDistinctStableIdentitiesWithoutChangingSeededRandomDraws" methodname="SameSeedWorldsReceiveDistinctStableIdentitiesWithoutChangingSeededRandomDraws" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1673747924" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.001413" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3559" name="SelectedDailyProfileCompositionRejectsNpcMissingFromIdentityRegistry" fullname="SimulationBootstrapCompositionTests.SelectedDailyProfileCompositionRejectsNpcMissingFromIdentityRegistry" methodname="SelectedDailyProfileCompositionRejectsNpcMissingFromIdentityRegistry" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="945680713" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.001214" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3552" name="SelectedDailyProfilePublishesCoherentFactualReadOnlyAfterBootstrapCloses" fullname="SimulationBootstrapCompositionTests.SelectedDailyProfilePublishesCoherentFactualReadOnlyAfterBootstrapCloses" methodname="SelectedDailyProfilePublishesCoherentFactualReadOnlyAfterBootstrapCloses" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="308847879" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.060756" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="3557" name="SelectedDailyV1NpcMembershipCommitsIdentityAndKeepsItAfterUnregister" fullname="SimulationBootstrapCompositionTests.SelectedDailyV1NpcMembershipCommitsIdentityAndKeepsItAfterUnregister" methodname="SelectedDailyV1NpcMembershipCommitsIdentityAndKeepsItAfterUnregister" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="27990465" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.061230" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3558" name="SelectedDailyV1PersonMaterializationReconcilesDynamicOwnerCardinality" fullname="SimulationBootstrapCompositionTests.SelectedDailyV1PersonMaterializationReconcilesDynamicOwnerCardinality" methodname="SelectedDailyV1PersonMaterializationReconcilesDynamicOwnerCardinality" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="38493587" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.075552" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3556" name="SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne" fullname="SimulationBootstrapCompositionTests.SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne" methodname="SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="599456643" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.035780" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3565" name="SelectedNpcAndItemCapabilityAuthoringUseDomainValidators" fullname="SimulationBootstrapCompositionTests.SelectedNpcAndItemCapabilityAuthoringUseDomainValidators" methodname="SelectedNpcAndItemCapabilityAuthoringUseDomainValidators" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="1595734938" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.000981" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3550" name="UnityBootstrapDailyV1PreDraftFailureNeverPublishesIdentityOrRetries" fullname="SimulationBootstrapCompositionTests.UnityBootstrapDailyV1PreDraftFailureNeverPublishesIdentityOrRetries" methodname="UnityBootstrapDailyV1PreDraftFailureNeverPublishesIdentityOrRetries" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="2063793946" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.003010" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3548" name="UnityBootstrapDailyV1UsesBuiltInDeterministicRandomRootAndEffectiveSeed" fullname="SimulationBootstrapCompositionTests.UnityBootstrapDailyV1UsesBuiltInDeterministicRandomRootAndEffectiveSeed" methodname="UnityBootstrapDailyV1UsesBuiltInDeterministicRandomRootAndEffectiveSeed" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="25131669" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.002669" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3551" name="UnsupportedRuntimeProfileExposesUnavailableFactualReadSurface" fullname="SimulationBootstrapCompositionTests.UnsupportedRuntimeProfileExposesUnavailableFactualReadSurface" methodname="UnsupportedRuntimeProfileExposesUnavailableFactualReadSurface" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="770803504" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.000581" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3545" name="WorldIdUsesOneCanonicalNonEmptyGuidForm" fullname="SimulationBootstrapCompositionTests.WorldIdUsesOneCanonicalNonEmptyGuidForm" methodname="WorldIdUsesOneCanonicalNonEmptyGuidForm" classname="SimulationBootstrapCompositionTests" runstate="Runnable" seed="347135015" result="Passed" start-time="2026-10-10 00:10:21Z" end-time="2026-10-10 00:10:21Z" duration="0.000697" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
