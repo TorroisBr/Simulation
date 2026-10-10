@@ -3156,6 +3156,110 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestoreRejectsCorruptedP9LineageBeforeRootStagingAtomicallyAndAllowsRetry()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G P9 lineage rejection source");
+        GameObject controlObject = new GameObject("P12-G P9 lineage rejection control");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            ConfigureSelectedBootstrap(control, config);
+            InvokeInitializeSimulation(source, null);
+            InvokeInitializeSimulation(control, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
+                Is.True, sourceAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
+                Is.True, controlAdvance.ToString());
+            DailyCaptureEligibilityToken originalToken = GetCompletedDailyToken(original.Runtime);
+            string originalGraph = CaptureCompleteDailyV1OwnerProjection(original, originalToken);
+            SimulationGenesisManifest manifest = original.Composition.Manifest;
+            string originalSelectedP9Fingerprint = manifest.SelectedP9ProfileFingerprint;
+            Assert.That(originalSelectedP9Fingerprint, Is.EqualTo(manifest.Fingerprint));
+
+            // Corrupt only the retained selected-P9 lineage field. The coordinator
+            // must reject it during P9 root capture, before staging candidate roots.
+            WritePrivateField(
+                manifest,
+                "<SelectedP9ProfileFingerprint>k__BackingField",
+                "invalid-selected-p9-fingerprint");
+            bool sourceCaptured = false;
+            bool rootsStaged = false;
+            try
+            {
+                Assert.That(source.TryRestoreDailyContinuation(stage =>
+                {
+                    sourceCaptured |= stage == P12GDailyV1RestoreStage.SourceCaptured;
+                    rootsStaged |= stage == P12GDailyV1RestoreStage.RootsStaged;
+                }, out P12GDailyV1RestoreFailure restoreFailure, out string diagnostic), Is.False);
+                Assert.That(restoreFailure, Is.EqualTo(P12GDailyV1RestoreFailure.SourceCaptureFailed), diagnostic);
+                Assert.That(diagnostic, Does.Contain("P12-C P9 manifest capture failed"));
+                Assert.That(sourceCaptured, Is.True,
+                    "The selected-profile source census is completed before retained P9 lineage is validated.");
+                Assert.That(rootsStaged, Is.False,
+                    "Invalid P9 lineage must reject before P12-C candidate roots are staged.");
+                Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+                Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(originalToken, out _), Is.True);
+                Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            }
+            finally
+            {
+                WritePrivateField(
+                    manifest,
+                    "<SelectedP9ProfileFingerprint>k__BackingField",
+                    originalSelectedP9Fingerprint);
+            }
+
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, originalToken), Is.EqualTo(originalGraph),
+                "Rejected P9 lineage must leave the active source owner graph unchanged.");
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retainedAdvance),
+                Is.True, retainedAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure expectedAdvance),
+                Is.True, expectedAdvance.ToString());
+            DailyCaptureEligibilityToken retainedToken = GetCompletedDailyToken(original.Runtime);
+            DailyCaptureEligibilityToken expectedToken = GetCompletedDailyToken(controlSession.Runtime);
+            string continuedGraph = CaptureCompleteDailyV1OwnerProjection(original, retainedToken);
+            Assert.That(continuedGraph,
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, expectedToken)),
+                "Rejecting invalid P9 lineage must preserve later deterministic continuation parity.");
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure,
+                    out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(restored, Is.Not.SameAs(original));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, GetCompletedDailyToken(restored.Runtime)),
+                Is.EqualTo(continuedGraph),
+                "Restoring the original P9 lineage must allow a valid retry from the retained boundary.");
+
+            Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredAdvance),
+                Is.True, restoredAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextControlAdvance),
+                Is.True, nextControlAdvance.ToString());
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, GetCompletedDailyToken(restored.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    controlSession, GetCompletedDailyToken(controlSession.Runtime))),
+                "A valid retry must continue with exact owner parity at the next boundary.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(controlObject);
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+        }
+    }
+
+    [Test]
     public void RestoredDailyOwnerBaselineAcceptsPopulatedPoliticalKnowledgeAndDecisionOwners()
     {
         PersonStore people = new PersonStore();
