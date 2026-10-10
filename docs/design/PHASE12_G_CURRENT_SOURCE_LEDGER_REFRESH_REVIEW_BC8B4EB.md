@@ -2,10 +2,10 @@
 
 **Verdict:** `VALIDATED_CANDIDATE` (documentation-only; no implementation claim)
 
-**Candidate branch:** `codex/phase12/P12GSourceEpochInventory`  
-**Reviewed candidate:** `bc8b4ebc106d502552f5a1bfce5ab04e0060462e`  
-**Canonical base:** `38334ad55ce1ad467d2119ac968f52cc3aad055a`  
-**Candidate tree:** `843eb33c13ee8066f878fe555b0a19fb48d3d8d4`  
+**Candidate branch:** `codex/phase12/P12GSourceEpochInventory`
+**Reviewed candidate:** `bc8b4ebc106d502552f5a1bfce5ab04e0060462e`
+**Canonical base:** `38334ad55ce1ad467d2119ac968f52cc3aad055a`
+**Candidate tree:** `843eb33c13ee8066f878fe555b0a19fb48d3d8d4`
 **Architecture baseline:** `47eff220c7ce00f6e7c759bdc2b76780bb46f628`
 
 ## Independent review
