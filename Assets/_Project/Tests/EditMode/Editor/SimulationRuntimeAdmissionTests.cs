@@ -3934,6 +3934,7 @@ public sealed class SimulationRuntimeAdmissionTests
     [TestCase("p8-location-cardinality")]
     [TestCase("p8-authoritative-location-cardinality")]
     [TestCase("p8c-city-location-binding-owner")]
+    [TestCase("p8c-person-position-owner")]
     [TestCase("wrong-family-identity-key")]
     public void DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(string corruptionKind)
     {
@@ -3956,6 +3957,8 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(controlSession, Is.Not.Null);
             LegacySpatialAnchorBindingStore p8CReplacementStore = null;
             bool p8CStoreReplaced = false;
+            PersonSpatialPositionStore p8CPositionReplacementStore = null;
+            bool p8CPositionStoreReplaced = false;
             Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
                 Is.True, sourceAdvance.ToString());
             Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
@@ -4005,6 +4008,23 @@ public sealed class SimulationRuntimeAdmissionTests
                                 p8CReplacementStore);
                         }
                         break;
+                    case "p8c-person-position-owner":
+                        p8CPositionReplacementStore = new PersonSpatialPositionStore(
+                            candidate.Runtime.PersonStore,
+                            candidate.Runtime.SpatialAuthorityStore,
+                            new SpatialPassageTraversalOptionResolver(
+                                candidate.Runtime.SpatialAuthorityStore.PassageAuthority));
+                        FieldInfo p8CPositionField = candidate.Runtime.GetType().GetField(
+                            "personSpatialPositionStore",
+                            BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (p8CPositionField != null)
+                        {
+                            p8CPositionField.SetValue(candidate.Runtime, p8CPositionReplacementStore);
+                            p8CPositionStoreReplaced = ReferenceEquals(
+                                candidate.Runtime.PersonSpatialPositionStore,
+                                p8CPositionReplacementStore);
+                        }
+                        break;
                     case "wrong-family-identity-key":
                         Dictionary<string, CityRuntime> cities = ReadPrivateField<Dictionary<string, CityRuntime>>(
                             candidate.IdentityRegistry, "citiesByRuntimeId");
@@ -4026,7 +4046,12 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(p8CStoreReplaced, Is.True);
                 Assert.That(p8CReplacementStore, Is.Not.Null);
                 Assert.That(p8CReplacementStore.Count, Is.Zero);
-                Assert.That(p8CReplacementStore.Revision, Is.Zero);
+            }
+            if (corruptionKind == "p8c-person-position-owner")
+            {
+                Assert.That(p8CPositionStoreReplaced, Is.True);
+                Assert.That(p8CPositionReplacementStore, Is.Not.Null);
+                Assert.That(p8CPositionReplacementStore.Count, Is.Zero);
             }
             Assert.That(restoreSucceeded, Is.False, diagnostic);
             Assert.That(diagnostic, Is.Not.Null.And.Not.Empty);

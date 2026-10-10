@@ -941,12 +941,17 @@ internal static class P12GDailyV1RestoreCoordinator
         out string diagnostic)
     {
         diagnostic = null;
-        if (!TryValidateWitness(
+        if (!TryValidateCurrentRevisionWitness(
                 sections,
                 new LegacySpatialAnchorBindingCensusProvider(
                     composition.Runtime.LegacySpatialAnchorBindingStore).GetCurrentCensus(),
                 0,
-                0L,
+                out diagnostic)
+            || !TryValidateCurrentRevisionWitness(
+                sections,
+                new PersonSpatialPositionCensusProvider(
+                    composition.Runtime.PersonSpatialPositionStore).GetCurrentCensus(),
+                0,
                 out diagnostic)
             || !TryValidateWitness(
                 sections,
@@ -984,6 +989,27 @@ internal static class P12GDailyV1RestoreCoordinator
                 return false;
         }
         return true;
+    }
+
+    private static bool TryValidateCurrentRevisionWitness(
+        IReadOnlyList<OwnerSectionCensusSnapshot> sections,
+        OwnerSectionCensusWitness witness,
+        int expectedCardinality,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (witness == null || witness.Revision < 0L)
+        {
+            diagnostic = "A current target census witness with a non-negative local revision is required.";
+            return false;
+        }
+
+        return TryValidateWitness(
+            sections,
+            witness,
+            expectedCardinality,
+            witness.Revision,
+            out diagnostic);
     }
 
     internal static bool TryValidateDailyV1ExpeditionExactZero(
