@@ -630,6 +630,23 @@ public class TesteSimulacao : MonoBehaviour
         out P12GDailyV1RestoreFailure failure,
         out string diagnostic)
     {
+        return TryRestoreDailyContinuationCore(stageObserver, null, out failure, out diagnostic);
+    }
+
+    internal bool TryRestoreDailyContinuationForTest(
+        System.Action<SimulationActiveSession> privateCandidateObserver,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic)
+    {
+        return TryRestoreDailyContinuationCore(null, privateCandidateObserver, out failure, out diagnostic);
+    }
+
+    private bool TryRestoreDailyContinuationCore(
+        System.Action<P12GDailyV1RestoreStage> stageObserver,
+        System.Action<SimulationActiveSession> privateCandidateObserver,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic)
+    {
         lock (activeSessionGate)
         {
             SimulationActiveSession expectedSession = activeSession;
@@ -651,7 +668,8 @@ public class TesteSimulacao : MonoBehaviour
                     out SimulationActiveSession candidateSession,
                     out failure,
                     out diagnostic,
-                    stageObserver))
+                    stageObserver,
+                    privateCandidateObserver))
                 return false;
 
             try

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -2765,10 +2766,20 @@ public sealed class SimulationRuntimeAdmissionTests
                 out DailyCaptureEligibilityToken sourceToken,
                 out DailyCaptureEligibilityFailure sourceTokenFailure), Is.True, sourceTokenFailure.ToString());
 
+            Assert.That(sourceSession.Runtime.NpcRuntimes.Any(npc => npc?.CurrentAction != null), Is.True,
+                "The authored continuation must exercise deterministic autonomous action selection; its authoritative current-action result is compared below.");
+
             string sourceFactsBeforeRestore = CaptureSelectedDailyFacts(sourceSession.Runtime);
             string sourceRootsBeforeRestore = CaptureContinuationRootFacts(sourceSession);
+            string sourceGraphBeforeRestore = CaptureCompleteDailyV1OwnerProjection(
+                sourceSession, sourceToken);
             string uninterruptedFactsAtBoundary = CaptureSelectedDailyFacts(uninterruptedSession.Runtime);
             Assert.That(sourceFactsBeforeRestore, Is.EqualTo(uninterruptedFactsAtBoundary));
+            Assert.That(sourceGraphBeforeRestore,
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    uninterruptedSession,
+                    GetCompletedDailyToken(uninterruptedSession.Runtime))),
+                "The C-F detached snapshots must agree across independently bootstrapped equivalent worlds.");
             Assert.That(CaptureContinuationRootFacts(sourceSession, includeWorldIdentity: false),
                 Is.EqualTo(CaptureContinuationRootFacts(uninterruptedSession, includeWorldIdentity: false)));
 
@@ -2795,6 +2806,9 @@ public sealed class SimulationRuntimeAdmissionTests
                 Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
             Assert.That(restoredToken.OwnerSections, Is.Not.SameAs(sourceToken.OwnerSections));
             Assert.That(CaptureSelectedDailyFacts(targetSession.Runtime), Is.EqualTo(sourceFactsBeforeRestore));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                    targetSession, restoredToken), Is.EqualTo(sourceGraphBeforeRestore),
+                "Restore must preserve every included typed C-F owner snapshot, not only selected facts and census metadata.");
             Assert.That(CaptureContinuationRootFacts(targetSession), Is.EqualTo(sourceRootsBeforeRestore),
                 "Restore must preserve allocator, shared sequence, world lineage, and random root without replaying genesis or allocating replacement identities.");
             Assert.That(targetSession.Runtime.ActorChoiceStore.TemporalInputCount, Is.Zero);
@@ -2836,6 +2850,10 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(CaptureSelectedDailyFacts(restored.Runtime),
                     Is.EqualTo(CaptureSelectedDailyFacts(uninterrupted.Runtime)),
                     "Authoritative Daily-v1 facts must remain equal after each identical continuation advance.");
+                Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                        ReadPrivateField<SimulationActiveSession>(restored, "activeSession"), nextRestoredToken),
+                    Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(uninterruptedSession, nextControlToken)),
+                    "Every included typed C-F owner snapshot must remain equal after each identical continuation advance.");
                 Assert.That(CaptureContinuationRootFacts(
                         ReadPrivateField<SimulationActiveSession>(restored, "activeSession"), includeWorldIdentity: false),
                     Is.EqualTo(CaptureContinuationRootFacts(uninterruptedSession, includeWorldIdentity: false)),
@@ -2882,8 +2900,283 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
 
+    [Test]
+    public void DailyV1RestoreDoesNotReplayFutureScheduledDirectiveAndItsFirstDueAdvanceMatches()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        NpcActionData escapeAction = SimulationTestFactory.CreateAction(
+            "p12g-no-replay-escape", NpcActionType.EscapePrison, NpcActionCategory.Justice);
+        config.Actions.Add(escapeAction);
+        config.ScheduledDirectives.Add(new ScheduledDirectiveConfig
+        {
+            absoluteDay = 5L,
+            mode = ScheduledDirectiveMode.RequestAction,
+            operation = ScheduledDirectiveOperation.EscapePrison,
+            actor = config.Npcs[0].npc,
+            action = escapeAction
+        });
+
+        GameObject uninterruptedObject = new GameObject("P12-G directive uninterrupted");
+        GameObject restoredObject = new GameObject("P12-G directive restored");
+        try
+        {
+            TesteSimulacao uninterrupted = uninterruptedObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao restored = restoredObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(uninterrupted, config);
+            ConfigureSelectedBootstrap(restored, config);
+            InvokeInitializeSimulation(uninterrupted, null);
+            InvokeInitializeSimulation(restored, null);
+
+            SimulationActiveSession uninterruptedSession = ReadPrivateField<SimulationActiveSession>(
+                uninterrupted, "activeSession");
+            SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(restored, "activeSession");
+            Assert.That(uninterruptedSession, Is.Not.Null);
+            Assert.That(sourceSession, Is.Not.Null);
+            Assert.That(uninterrupted.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFirst),
+                Is.True, controlFirst.ToString());
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceFirst),
+                Is.True, sourceFirst.ToString());
+
+            ScheduledDirective sourceDirective = sourceSession.Composition.ScheduledDirectives.Directives.Single();
+            Assert.That(sourceDirective.AbsoluteDay, Is.EqualTo(5L));
+            Assert.That(sourceDirective.State, Is.EqualTo(ScheduledDirectiveState.Pending));
+            long sourceDirectiveRevision = sourceSession.Composition.ScheduledDirectives.Revision;
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(sourceSession.Runtime);
+            string sourceGraph = CaptureCompleteDailyV1OwnerProjection(sourceSession, sourceToken);
+            Assert.That(sourceGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                uninterruptedSession, GetCompletedDailyToken(uninterruptedSession.Runtime))));
+
+            Assert.That(restored.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure restoreFailure,
+                    out string restoreDiagnostic), Is.True,
+                restoreFailure + ": " + restoreDiagnostic);
+            SimulationActiveSession targetSession = ReadPrivateField<SimulationActiveSession>(restored, "activeSession");
+            DailyCaptureEligibilityToken targetToken = GetCompletedDailyToken(targetSession.Runtime);
+            ScheduledDirective restoredDirective = targetSession.Composition.ScheduledDirectives.Directives.Single();
+            Assert.That(restoredDirective.DirectiveId, Is.EqualTo(sourceDirective.DirectiveId));
+            Assert.That(restoredDirective.State, Is.EqualTo(ScheduledDirectiveState.Pending),
+                "Staging a future directive must not dispatch, consume, retry, or mark it processed.");
+            Assert.That(targetSession.Composition.ScheduledDirectives.Revision, Is.EqualTo(sourceDirectiveRevision));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(targetSession, targetToken), Is.EqualTo(sourceGraph));
+
+            for (int day = 2; day <= 5; day++)
+            {
+                Assert.That(uninterrupted.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFailure),
+                    Is.True, controlFailure.ToString());
+                Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredFailure),
+                    Is.True, restoredFailure.ToString());
+                DailyCaptureEligibilityToken controlToken = GetCompletedDailyToken(uninterrupted.Runtime);
+                DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restored.Runtime);
+                Assert.That(CaptureCompleteDailyV1OwnerProjection(uninterruptedSession, controlToken),
+                    Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                        ReadPrivateField<SimulationActiveSession>(restored, "activeSession"), restoredToken)),
+                    "The pending directive must be applied once on its due day with identical authoritative results.");
+            }
+
+            ScheduledDirective controlDirective = uninterruptedSession.Composition.ScheduledDirectives.Directives.Single();
+            restoredDirective = targetSession.Composition.ScheduledDirectives.Directives.Single();
+            Assert.That(controlDirective.State, Is.Not.EqualTo(ScheduledDirectiveState.Pending));
+            Assert.That(restoredDirective.State, Is.EqualTo(controlDirective.State));
+            Assert.That(restoredDirective.ProcessedDay, Is.EqualTo(controlDirective.ProcessedDay));
+            Assert.That(targetSession.Composition.ScheduledDirectives.Revision,
+                Is.EqualTo(uninterruptedSession.Composition.ScheduledDirectives.Revision));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(uninterruptedObject);
+            UnityEngine.Object.DestroyImmediate(restoredObject);
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    [Test]
+    public void DailyV1RestorePreservesActiveTravelPartyWithoutReplayingEffects()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject uninterruptedObject = new GameObject("P12-G active party uninterrupted");
+        GameObject restoredObject = new GameObject("P12-G active party restored");
+        try
+        {
+            TesteSimulacao uninterrupted = uninterruptedObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao restored = restoredObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(uninterrupted, config);
+            ConfigureSelectedBootstrap(restored, config);
+            InvokeInitializeSimulation(uninterrupted, null);
+            InvokeInitializeSimulation(restored, null);
+
+            SimulationActiveSession uninterruptedSession = ReadPrivateField<SimulationActiveSession>(
+                uninterrupted, "activeSession");
+            SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(
+                restored, "activeSession");
+            Assert.That(uninterruptedSession, Is.Not.Null);
+            Assert.That(sourceSession, Is.Not.Null);
+
+            ActionExecutionContext controlTravel = CreateDailyTravelPartyContext(uninterruptedSession);
+            ActionExecutionContext sourceTravel = CreateDailyTravelPartyContext(sourceSession);
+            Assert.That(uninterrupted.Runtime.TryStartTravelParty(controlTravel), Is.True,
+                "The authored Daily-v1 cities support a normal active TravelParty commitment.");
+            Assert.That(sourceSession.Runtime.TryStartTravelParty(sourceTravel), Is.True);
+            Assert.That(uninterruptedSession.Composition.TravelParties.ActiveParties, Has.Count.EqualTo(1));
+            Assert.That(sourceSession.Composition.TravelParties.ActiveParties, Has.Count.EqualTo(1));
+
+            Assert.That(uninterrupted.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFirst),
+                Is.True, controlFirst.ToString());
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceFirst),
+                Is.True, sourceFirst.ToString());
+            Assert.That(sourceSession.Runtime.TryGetCompletedDailyCaptureToken(
+                    out DailyCaptureEligibilityToken sourceToken,
+                    out DailyCaptureEligibilityFailure sourceTokenFailure), Is.True,
+                sourceTokenFailure.ToString());
+            string beforeRestoreFacts = CaptureSelectedDailyFacts(sourceSession.Runtime);
+            string beforeRestoreRoots = CaptureContinuationRootFacts(sourceSession);
+            string beforeRestoreGraph = CaptureCompleteDailyV1OwnerProjection(sourceSession, sourceToken);
+            Assert.That(beforeRestoreGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                uninterruptedSession, GetCompletedDailyToken(uninterruptedSession.Runtime))));
+
+            TravelPartyRuntime sourceParty = sourceSession.Composition.TravelParties.ActiveParties.Single();
+            Assert.That(sourceParty.IsActive, Is.True);
+            Assert.That(sourceParty.TravelerRuntimeIds, Is.Not.Empty);
+            float[] memberBalances = sourceParty.MemberRuntimeIds
+                .Select(runtimeId => sourceSession.IdentityRegistry.TryGetNpc(runtimeId, out NpcRuntime npc)
+                    ? npc.MoneyAccount.Balance : float.NaN)
+                .ToArray();
+            int[] memberProgress = sourceParty.MemberRuntimeIds
+                .Select(runtimeId => sourceSession.IdentityRegistry.TryGetNpc(runtimeId, out NpcRuntime npc)
+                    ? npc.TravelDaysRemaining : -1)
+                .ToArray();
+
+            Assert.That(restored.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure restoreFailure,
+                    out string restoreDiagnostic), Is.True,
+                restoreFailure + ": " + restoreDiagnostic);
+            SimulationActiveSession restoredSession = ReadPrivateField<SimulationActiveSession>(restored, "activeSession");
+            Assert.That(restoredSession, Is.Not.SameAs(sourceSession));
+            Assert.That(CaptureSelectedDailyFacts(restoredSession.Runtime), Is.EqualTo(beforeRestoreFacts));
+            Assert.That(CaptureContinuationRootFacts(restoredSession, includeWorldIdentity: false),
+                Is.EqualTo(CaptureContinuationRootFacts(sourceSession, includeWorldIdentity: false)));
+            DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restoredSession.Runtime);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredToken),
+                Is.EqualTo(beforeRestoreGraph),
+                "Restore must retain active commitment values/revisions without charging, moving, or reapplying its effects.");
+
+            TravelPartyRuntime restoredParty = restoredSession.Composition.TravelParties.ActiveParties.Single();
+            Assert.That(restoredParty.TravelPartyId, Is.EqualTo(sourceParty.TravelPartyId));
+            Assert.That(restoredParty.TravelerRuntimeIds, Is.EqualTo(sourceParty.TravelerRuntimeIds));
+            Assert.That(restoredParty.EscortRuntimeIds, Is.EqualTo(sourceParty.EscortRuntimeIds));
+            Assert.That(restoredParty.OriginDecisionId, Is.EqualTo(sourceParty.OriginDecisionId));
+            Assert.That(restoredParty.MemberRuntimeIds.Select(runtimeId =>
+                    restoredSession.IdentityRegistry.TryGetNpc(runtimeId, out NpcRuntime npc)
+                        ? npc.MoneyAccount.Balance : float.NaN), Is.EqualTo(memberBalances));
+            Assert.That(restoredParty.MemberRuntimeIds.Select(runtimeId =>
+                    restoredSession.IdentityRegistry.TryGetNpc(runtimeId, out NpcRuntime npc)
+                        ? npc.TravelDaysRemaining : -1), Is.EqualTo(memberProgress));
+
+            for (int boundary = 0; boundary < 4; boundary++)
+            {
+                Assert.That(uninterrupted.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFailure),
+                    Is.True, controlFailure.ToString());
+                Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredFailure),
+                    Is.True, restoredFailure.ToString());
+                DailyCaptureEligibilityToken controlToken = GetCompletedDailyToken(uninterruptedSession.Runtime);
+                restoredSession = ReadPrivateField<SimulationActiveSession>(restored, "activeSession");
+                restoredToken = GetCompletedDailyToken(restoredSession.Runtime);
+                Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredToken),
+                    Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(uninterruptedSession, controlToken)),
+                    "The active commitment must advance and resolve identically on every later boundary.");
+            }
+
+            Assert.That(uninterruptedSession.Composition.TravelParties.ActiveParties, Is.Empty,
+                "The supported active commitment should reach the same terminal arrival on the control.");
+            Assert.That(restoredSession.Composition.TravelParties.ActiveParties, Is.Empty);
+            Assert.That(CaptureContinuationRootFacts(restoredSession, includeWorldIdentity: false),
+                Is.EqualTo(CaptureContinuationRootFacts(uninterruptedSession, includeWorldIdentity: false)));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(uninterruptedObject);
+            UnityEngine.Object.DestroyImmediate(restoredObject);
+        }
+    }
+
+    [Test]
+    public void DailyV1RestoreRejectsCorruptedTravelPartyCrossOwnerBindingAtomically()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G party-link source");
+        GameObject controlObject = new GameObject("P12-G party-link control");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            ConfigureSelectedBootstrap(control, config);
+            InvokeInitializeSimulation(source, null);
+            InvokeInitializeSimulation(control, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
+            Assert.That(original.Runtime.TryStartTravelParty(CreateDailyTravelPartyContext(original)), Is.True);
+            Assert.That(controlSession.Runtime.TryStartTravelParty(CreateDailyTravelPartyContext(controlSession)), Is.True);
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
+                Is.True, sourceAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
+                Is.True, controlAdvance.ToString());
+            DailyCaptureEligibilityToken originalToken = GetCompletedDailyToken(original.Runtime);
+            string originalGraph = CaptureCompleteDailyV1OwnerProjection(original, originalToken);
+
+            Assert.That(source.TryRestoreDailyContinuationForTest(candidate =>
+            {
+                TravelPartyRuntime party = candidate.Composition.TravelParties.ActiveParties.Single();
+                Assert.That(candidate.IdentityRegistry.TryGetNpc(party.MemberRuntimeIds[0], out NpcRuntime member), Is.True);
+                WritePrivateField(member, "activeTravelPartyId", "p12g/missing-party");
+            }, out P12GDailyV1RestoreFailure restoreFailure, out string diagnostic), Is.False);
+            Assert.That(restoreFailure, Is.EqualTo(P12GDailyV1RestoreFailure.BindingValidationFailed));
+            Assert.That(diagnostic, Does.Contain("ActiveTravelPartyId"));
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(originalToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, originalToken), Is.EqualTo(originalGraph));
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retainedAdvance),
+                Is.True, retainedAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure expectedAdvance),
+                Is.True, expectedAdvance.ToString());
+            DailyCaptureEligibilityToken retainedToken = GetCompletedDailyToken(original.Runtime);
+            DailyCaptureEligibilityToken expectedToken = GetCompletedDailyToken(controlSession.Runtime);
+            string continuedGraph = CaptureCompleteDailyV1OwnerProjection(original, retainedToken);
+            Assert.That(continuedGraph,
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, expectedToken)),
+                "Rejecting a broken private reciprocal link must preserve the old session's later continuation.");
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure,
+                    out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(restored, Is.Not.SameAs(original));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, GetCompletedDailyToken(restored.Runtime)),
+                Is.EqualTo(continuedGraph));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+            UnityEngine.Object.DestroyImmediate(controlObject);
+        }
+    }
+
     [TestCase((int)P12GDailyV1RestoreStage.SourceCaptured)]
     [TestCase((int)P12GDailyV1RestoreStage.RootsStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.DStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.EStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.FStaged)]
     [TestCase((int)P12GDailyV1RestoreStage.OwnersStaged)]
     [TestCase((int)P12GDailyV1RestoreStage.CandidateComposed)]
     [TestCase((int)P12GDailyV1RestoreStage.TargetChecksCompleted)]
@@ -2897,21 +3190,30 @@ public sealed class SimulationRuntimeAdmissionTests
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
         Assert.That(config, Is.Not.Null);
         GameObject bootstrapObject = new GameObject("P12-G restore private-stage atomicity");
+        GameObject controlObject = new GameObject("P12-G restore private-stage control");
         try
         {
             TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
             ConfigureSelectedBootstrap(bootstrap, config);
+            ConfigureSelectedBootstrap(control, config);
             InvokeInitializeSimulation(bootstrap, null);
+            InvokeInitializeSimulation(control, null);
             SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
             Assert.That(original, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
             Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstAdvanceFailure),
                 Is.True, firstAdvanceFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFirstFailure),
+                Is.True, controlFirstFailure.ToString());
             Assert.That(original.Runtime.TryGetCompletedDailyCaptureToken(
                     out DailyCaptureEligibilityToken originalToken,
                     out DailyCaptureEligibilityFailure tokenFailure), Is.True,
                 tokenFailure.ToString());
             string beforeFacts = CaptureSelectedDailyFacts(original.Runtime);
             string beforeRoots = CaptureContinuationRootFacts(original);
+            string beforeOwnerGraph = CaptureCompleteDailyV1OwnerProjection(original, originalToken);
             bool injected = false;
 
             Assert.That(bootstrap.TryRestoreDailyContinuation(stage =>
@@ -2928,6 +3230,25 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
             Assert.That(CaptureSelectedDailyFacts(original.Runtime), Is.EqualTo(beforeFacts));
             Assert.That(CaptureContinuationRootFacts(original), Is.EqualTo(beforeRoots));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, originalToken),
+                Is.EqualTo(beforeOwnerGraph),
+                "A discarded candidate must leave every included C-F owner value and revision unchanged.");
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retainedFailure),
+                Is.True, retainedFailure.ToString(),
+                "A rejected restore must leave the still-active original graph able to continue normally.");
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlRetainedFailure),
+                Is.True, controlRetainedFailure.ToString());
+            Assert.That(ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryGetCompletedDailyCaptureToken(
+                    out DailyCaptureEligibilityToken continuedToken,
+                    out DailyCaptureEligibilityFailure continuedFailure), Is.True,
+                continuedFailure.ToString());
+            string continuedOwnerGraph = CaptureCompleteDailyV1OwnerProjection(original, continuedToken);
+            DailyCaptureEligibilityToken continuedControlToken = GetCompletedDailyToken(controlSession.Runtime);
+            Assert.That(continuedOwnerGraph,
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, continuedControlToken)),
+                "After rejection, the original and uninterrupted runtimes must continue identically with the same input.");
 
             Assert.That(bootstrap.TryRestoreDailyContinuation(
                     out P12GDailyV1RestoreFailure retryFailure,
@@ -2935,6 +3256,13 @@ public sealed class SimulationRuntimeAdmissionTests
                 retryFailure + ": " + retryDiagnostic);
             SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
             Assert.That(restored, Is.Not.SameAs(original));
+            Assert.That(restored.Runtime.TryGetCompletedDailyCaptureToken(
+                    out DailyCaptureEligibilityToken restoredToken,
+                    out DailyCaptureEligibilityFailure restoredTokenFailure), Is.True,
+                restoredTokenFailure.ToString());
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, restoredToken),
+                Is.EqualTo(continuedOwnerGraph),
+                "A successful retry after each injected failure must reconstruct the original graph after its normal continuation.");
             Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextAdvanceFailure),
                 Is.True, nextAdvanceFailure.ToString(),
                 "A later valid restore and normal advance must succeed after a discarded candidate.");
@@ -2942,6 +3270,7 @@ public sealed class SimulationRuntimeAdmissionTests
         finally
         {
             UnityEngine.Object.DestroyImmediate(bootstrapObject);
+            UnityEngine.Object.DestroyImmediate(controlObject);
         }
     }
 
@@ -3342,6 +3671,39 @@ public sealed class SimulationRuntimeAdmissionTests
         return facts.ToString();
     }
 
+    private static ActionExecutionContext CreateDailyTravelPartyContext(SimulationActiveSession session)
+    {
+        Assert.That(session?.Runtime, Is.Not.Null);
+        Assert.That(session.SpatialNetwork, Is.Not.Null);
+        foreach (SpatialRouteRuntime route in session.SpatialNetwork.Routes
+                     .OrderBy(value => value.RuntimeId, StringComparer.Ordinal))
+        {
+            float memberCost = session.Runtime.Configuration.Travel.TravelCostPerDay * route.TravelDays;
+            NpcRuntime[] members = session.Runtime.NpcRuntimes
+                .Where(npc => npc != null
+                    && npc.IsAlive
+                    && npc.CurrentLocation == route.Origin
+                    && !npc.IsTraveling
+                    && string.IsNullOrWhiteSpace(npc.ActiveTravelPartyId)
+                    && npc.MoneyAccount != null
+                    && npc.MoneyAccount.Balance >= memberCost)
+                .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal)
+                .Take(2)
+                .ToArray();
+            if (members.Length != 2) continue;
+
+            return new ActionExecutionContext(
+                "p12g-active-travel-party",
+                members.Select(member => new ActionExecutionParticipant(
+                    member.RuntimeId, ActionExecutionParticipantRole.Performer)),
+                route.Destination.RuntimeId,
+                route.RuntimeId);
+        }
+
+        Assert.Fail("The authored Daily-v1 profile must expose a direct route with two eligible NPCs.");
+        return null;
+    }
+
     private static string CaptureContinuationRootFacts(
         SimulationActiveSession session,
         bool includeWorldIdentity = true)
@@ -3374,6 +3736,358 @@ public sealed class SimulationRuntimeAdmissionTests
                 .Append(counter.NextSequence.ToString(CultureInfo.InvariantCulture));
         }
         return facts.ToString();
+    }
+
+    private static DailyCaptureEligibilityToken GetCompletedDailyToken(SimulationRuntime runtime)
+    {
+        Assert.That(runtime.TryGetCompletedDailyCaptureToken(
+            out DailyCaptureEligibilityToken token,
+            out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
+        return token;
+    }
+
+    /// <summary>
+    /// Captures every typed C-F owner snapshot used by the accepted Daily-v1
+    /// package graph. The structural formatter below is test diagnostics only;
+    /// it is not an envelope encoding or production persistence contract.
+    /// </summary>
+    private static string CaptureCompleteDailyV1OwnerProjection(
+        SimulationActiveSession session,
+        DailyCaptureEligibilityToken token)
+    {
+        Assert.That(session, Is.Not.Null);
+        Assert.That(token, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
+        SimulationBootstrapComposition composition = session.Composition;
+        IReadOnlyList<OwnerSectionCensusSnapshot> vector = token.OwnerSections;
+        Assert.That(runtime.TryValidateCompletedDailyCaptureToken(token, out _), Is.True);
+        SortedDictionary<string, object> snapshots = new SortedDictionary<string, object>(StringComparer.Ordinal);
+
+        Assert.That(P12CP9GenesisManifestSnapshot.TryCapture(
+            SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
+            composition.Manifest,
+            out P12CP9GenesisManifestSnapshot manifestSnapshot,
+            out string manifestDiagnostic), Is.True, manifestDiagnostic);
+        snapshots.Add("C/P9Manifest", manifestSnapshot);
+        Assert.That(P12CSpatialAuthoritySnapshot.TryCapture(
+            SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
+            composition.Manifest.SelectedP9ContractIdentity,
+            composition.Manifest.SelectedP9SchemaVersion,
+            composition.SpatialAuthority,
+            out P12CSpatialAuthoritySnapshot spatialAuthoritySnapshot,
+            out P12CSpatialAuthoritySnapshotFailure spatialFailure), Is.True,
+            spatialFailure?.Message);
+        snapshots.Add("C/P8SpatialAuthority", spatialAuthoritySnapshot);
+        snapshots.Add("C/RuntimeIdentityValues", session.IdentityRegistry.CaptureRegisteredRuntimeIdentityValues());
+        snapshots.Add("C/RuntimeIdAllocator", composition.RuntimeIdAllocator.CaptureSnapshot());
+        snapshots.Add("C/RecordSequence", composition.RecordSequence.CaptureSnapshot());
+        Assert.That(session.RandomSource, Is.TypeOf<DeterministicRandomSource>());
+        snapshots.Add("C/RandomRoot", ((DeterministicRandomSource)session.RandomSource).CaptureSnapshot());
+
+        object sharedCaptureStamp = new object();
+        for (int index = 0; index < runtime.Cities.Count; index++)
+        {
+            CityRuntime city = runtime.Cities[index];
+            Assert.That(P12DCityRootOwnerSnapshot.TryCaptureForStaging(
+                city, token, sharedCaptureStamp, vector,
+                out P12DCityRootOwnerSnapshot.StagingCaptureEnvelope cityCapture,
+                out P12DCityRootOwnerSnapshotFailure cityFailure), Is.True,
+                cityFailure.ToString());
+            snapshots.Add("D/City/" + city.RuntimeId, cityCapture.Snapshot);
+        }
+        Assert.That(P12DNpcRootOwnerSnapshot.TryCapture(
+            runtime, token, sharedCaptureStamp, vector,
+            out P12DNpcDProjection npcDProjection,
+            out P12DNpcFProjection npcFProjection,
+            out P12DNpcRootOwnerSnapshotFailure npcFailure), Is.True,
+            npcFailure.ToString());
+        snapshots.Add("D/NpcRoots", npcDProjection.Rows);
+        snapshots.Add("D/NpcFProjection", npcFProjection.Rows);
+        snapshots.Add("D/Persons", runtime.PersonStore.CaptureOwnerSnapshot());
+        snapshots.Add("D/Genealogy", runtime.GenealogyStoreForWorldBoundary.CaptureOwnerSnapshot());
+        snapshots.Add("D/SpatialNetwork", session.SpatialNetwork.CaptureOwnerSnapshot());
+        Assert.That(composition.ExplorableSites.TryCaptureOwnerSnapshot(
+            out ExplorableSiteOwnerSnapshot siteSnapshot, out var siteFailure), Is.True, siteFailure?.Message);
+        snapshots.Add("D/EmptyExplorableSites", siteSnapshot);
+
+        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(
+            runtime, token, vector,
+            out P12EInstitutionOfficeOwnerSnapshot institutionOfficeSnapshot,
+            out P12EInstitutionOfficeSnapshotFailure institutionFailure), Is.True,
+            institutionFailure?.Message);
+        snapshots.Add("E/InstitutionOffice", institutionOfficeSnapshot);
+        Assert.That(PropertyEstateOwnerSnapshot.TryCapture(
+            runtime.PropertyOwnershipStore, runtime.EstateStore, token, vector,
+            out PropertyEstateOwnerSnapshot propertyEstateSnapshot,
+            out PropertyEstateOwnerSnapshotFailure propertyEstateFailure), Is.True,
+            propertyEstateFailure?.Message);
+        snapshots.Add("E/PropertyEstate", propertyEstateSnapshot);
+        Assert.That(P12EFactionOwnerSnapshot.TryCapture(
+            runtime, GetRequiredOwner<FactionStore>(vector, FactionStoreCensusProvider.FactionsSectionId),
+            token, vector,
+            out P12EFactionOwnerSnapshot factionSnapshot,
+            out P12EFactionSnapshotFailure factionFailure), Is.True,
+            factionFailure?.Message);
+        snapshots.Add("E/Factions", factionSnapshot);
+        Assert.That(P12EPoliticalClaimOwnerSnapshot.TryCapture(
+            runtime, token, vector,
+            out P12EPoliticalClaimOwnerSnapshot claimSnapshot,
+            out P12EPoliticalClaimSnapshotFailure claimFailure), Is.True,
+            claimFailure?.Message);
+        snapshots.Add("E/PoliticalClaims", claimSnapshot);
+        Assert.That(P12EPoliticalSupportOwnerSnapshot.TryCapture(
+            runtime, token, vector,
+            out P12EPoliticalSupportOwnerSnapshot supportSnapshot,
+            out P12EPoliticalSupportSnapshotFailure supportFailure), Is.True,
+            supportFailure?.Message);
+        snapshots.Add("E/PoliticalSupport", supportSnapshot);
+        Assert.That(P12EPoliticalDecisionOwnerSnapshot.TryCapture(
+            runtime, token, vector,
+            out P12EPoliticalDecisionOwnerSnapshot decisionSnapshot,
+            out P12EPoliticalDecisionSnapshotFailure decisionFailure), Is.True,
+            decisionFailure?.Message);
+        snapshots.Add("E/PoliticalDecisions", decisionSnapshot);
+        Assert.That(P12EMilitaryOwnerSnapshot.TryCapture(
+            runtime.ArmedForceStore,
+            runtime.ContingentManpowerStateStore,
+            runtime.ArmedForceSpatialStateStore,
+            token, vector,
+            out P12EMilitaryOwnerSnapshot militarySnapshot,
+            out P12EMilitaryOwnerSnapshotFailure militaryFailure), Is.True,
+            militaryFailure?.Message);
+        snapshots.Add("E/Military", militarySnapshot);
+        Assert.That(PersistentConflictOwnerSnapshot.TryCapture(
+            runtime.ConflictStore, token, vector,
+            out PersistentConflictOwnerSnapshot conflictSnapshot,
+            out PersistentConflictOwnerSnapshotFailure conflictFailure), Is.True,
+            conflictFailure?.Message);
+        snapshots.Add("E/Conflicts", conflictSnapshot);
+        Assert.That(PersistentWarOwnerSnapshot.TryCapture(
+            runtime.WarStore, token, vector,
+            out PersistentWarOwnerSnapshot warSnapshot,
+            out PersistentWarOwnerSnapshotFailure warFailure), Is.True,
+            warFailure?.Message);
+        snapshots.Add("E/Wars", warSnapshot);
+        Assert.That(PersistentBattleOwnerSnapshot.TryCapture(
+            runtime.BattleStore, token, vector,
+            out PersistentBattleOwnerSnapshot battleSnapshot,
+            out PersistentBattleOwnerSnapshotFailure battleFailure), Is.True,
+            battleFailure?.Message);
+        snapshots.Add("E/Battles", battleSnapshot);
+        Assert.That(P12EJusticeRecordsOwnerSnapshot.TryCapture(
+            runtime, token, vector,
+            out P12EJusticeRecordsOwnerSnapshot justiceSnapshot,
+            out P12EJusticeSnapshotFailure justiceFailure), Is.True,
+            justiceFailure?.Message);
+        snapshots.Add("E/Justice", justiceSnapshot);
+        Assert.That(P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(
+            runtime, token, vector,
+            out P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialSnapshot,
+            out P12ECrimeSocialAppraisalSnapshotFailure crimeSocialFailure), Is.True,
+            crimeSocialFailure?.Message);
+        snapshots.Add("E/CrimeSocial", crimeSocialSnapshot);
+
+        Assert.That(P12FPoliticalKnowledgeOwnerSnapshot.TryCapture(
+            runtime.PoliticalKnowledgeStoreForWorldBoundary, token, vector,
+            out P12FPoliticalKnowledgeOwnerSnapshot knowledgeSnapshot,
+            out string knowledgeFailure), Is.True, knowledgeFailure);
+        snapshots.Add("F/PoliticalKnowledge", knowledgeSnapshot.CopyDetachedRuntimes());
+        Assert.That(P12FScheduledDirectiveOwnerSnapshot.TryCapture(
+            composition.ScheduledDirectives, token, vector,
+            out P12FScheduledDirectiveOwnerSnapshot directiveSnapshot,
+            out string directiveFailure), Is.True, directiveFailure);
+        snapshots.Add("F/ScheduledDirectives", directiveSnapshot);
+        Assert.That(P12FActorChoiceSnapshot.TryCapture(
+            runtime.ActorChoiceStore, token, vector,
+            out P12FActorChoiceSnapshot actorChoiceSnapshot,
+            out P12FActorChoiceSnapshotFailure actorChoiceFailure), Is.True, actorChoiceFailure.ToString());
+        snapshots.Add("F/ActorChoice", actorChoiceSnapshot);
+        Assert.That(P12FTravelPartyOwnerSnapshot.TryCapture(
+            composition.TravelParties, token, vector,
+            out P12FTravelPartyOwnerSnapshot travelPartySnapshot,
+            out P12FCommitmentSnapshotFailure travelPartyFailure), Is.True, travelPartyFailure.ToString());
+        snapshots.Add("F/TravelParties", travelPartySnapshot);
+        Assert.That(P12FExpeditionOwnerSnapshot.TryCapture(
+            composition.Expeditions, token, vector,
+            out P12FExpeditionOwnerSnapshot expeditionSnapshot,
+            out P12FCommitmentSnapshotFailure expeditionFailure), Is.True, expeditionFailure.ToString());
+        snapshots.Add("F/Expeditions", expeditionSnapshot);
+
+        Assert.That(runtime.TryValidateCompletedDailyCaptureToken(token, out _), Is.True,
+            "Capturing the diagnostic projection must leave the exact completed boundary current.");
+        StringBuilder result = new StringBuilder();
+        foreach (KeyValuePair<string, object> entry in snapshots)
+        {
+            AppendSnapshotToken(result, entry.Key);
+            AppendCanonicalSnapshotValue(result, entry.Value, 0);
+        }
+        return result.ToString();
+    }
+
+    private static T GetRequiredOwner<T>(
+        IReadOnlyList<OwnerSectionCensusSnapshot> vector,
+        string sectionId) where T : class
+    {
+        OwnerSectionCensusSnapshot section = vector.SingleOrDefault(value =>
+            string.Equals(value.SectionId, sectionId, StringComparison.Ordinal));
+        Assert.That(section, Is.Not.Null, sectionId);
+        Assert.That(section.Role, Is.EqualTo(OwnerSectionRole.Required), sectionId);
+        T owner = section.OwnerInstanceIdentity as T;
+        Assert.That(owner, Is.Not.Null, sectionId);
+        return owner;
+    }
+
+    private static void AppendCanonicalSnapshotValue(StringBuilder output, object value, int depth)
+    {
+        if (depth > 64) throw new InvalidOperationException(
+            "Typed snapshot projection exceeded its acyclic depth bound at "
+            + (value?.GetType().FullName ?? "null") + ".");
+        if (value == null)
+        {
+            AppendSnapshotToken(output, "null");
+            return;
+        }
+
+        Type type = value.GetType();
+        AppendSnapshotToken(output, type.FullName ?? type.Name);
+        if (type == typeof(object))
+        {
+            // Some detached snapshots retain an opaque source-owner marker;
+            // owner identity and alias shape are compared separately from the
+            // value projection in AssertOwnerVectorFactsMatch.
+            AppendSnapshotToken(output, "opaque-owner-marker");
+            return;
+        }
+        if (value is string text)
+        {
+            AppendSnapshotToken(output, text);
+            return;
+        }
+        if (value is Type reflectedType)
+        {
+            AppendSnapshotToken(output, reflectedType.AssemblyQualifiedName ?? reflectedType.FullName ?? reflectedType.Name);
+            return;
+        }
+        if (type.IsEnum)
+        {
+            AppendSnapshotToken(output, Convert.ToInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture));
+            return;
+        }
+        if (value is bool boolean)
+        {
+            AppendSnapshotToken(output, boolean ? "1" : "0");
+            return;
+        }
+        if (value is float single)
+        {
+            AppendSnapshotToken(output, BitConverter.ToInt32(BitConverter.GetBytes(single), 0).ToString("X8", CultureInfo.InvariantCulture));
+            return;
+        }
+        if (value is double doubleValue)
+        {
+            AppendSnapshotToken(output, BitConverter.DoubleToInt64Bits(doubleValue).ToString("X16", CultureInfo.InvariantCulture));
+            return;
+        }
+        if (value is decimal decimalValue)
+        {
+            foreach (int part in decimal.GetBits(decimalValue))
+                AppendSnapshotToken(output, part.ToString("X8", CultureInfo.InvariantCulture));
+            return;
+        }
+        if (value is DateTime dateTime)
+        {
+            AppendSnapshotToken(output, dateTime.ToBinary().ToString(CultureInfo.InvariantCulture));
+            return;
+        }
+        if (value is TimeSpan timeSpan)
+        {
+            AppendSnapshotToken(output, timeSpan.Ticks.ToString(CultureInfo.InvariantCulture));
+            return;
+        }
+        if (value is Guid guid)
+        {
+            AppendSnapshotToken(output, guid.ToString("N"));
+            return;
+        }
+        if (type.IsPrimitive || value is IFormattable)
+        {
+            AppendSnapshotToken(output, Convert.ToString(value, CultureInfo.InvariantCulture));
+            return;
+        }
+        if (value is IDictionary dictionary)
+        {
+            List<string> entries = new List<string>();
+            foreach (DictionaryEntry entry in dictionary)
+            {
+                StringBuilder item = new StringBuilder();
+                AppendCanonicalSnapshotValue(item, entry.Key, depth + 1);
+                AppendCanonicalSnapshotValue(item, entry.Value, depth + 1);
+                entries.Add(item.ToString());
+            }
+            entries.Sort(StringComparer.Ordinal);
+            foreach (string entry in entries) AppendSnapshotToken(output, entry);
+            return;
+        }
+        if (value is IEnumerable enumerable)
+        {
+            List<string> items = new List<string>();
+            foreach (object item in enumerable)
+            {
+                StringBuilder itemOutput = new StringBuilder();
+                AppendCanonicalSnapshotValue(itemOutput, item, depth + 1);
+                items.Add(itemOutput.ToString());
+            }
+            if (type.GetInterfaces().Any(candidate => candidate.IsGenericType
+                    && candidate.GetGenericTypeDefinition() == typeof(ISet<>)))
+                items.Sort(StringComparer.Ordinal);
+            foreach (string item in items) AppendSnapshotToken(output, item);
+            return;
+        }
+
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        PropertyInfo[] properties = type.GetProperties(flags)
+            .Where(property => property.GetIndexParameters().Length == 0
+                && property.GetGetMethod(true) != null
+                && !IsSnapshotContextMember(property.Name)
+                && !string.Equals(property.Name, "WorldId", StringComparison.Ordinal))
+            .OrderBy(property => property.Name, StringComparer.Ordinal)
+            .ToArray();
+        if (properties.Length > 0)
+        {
+            foreach (PropertyInfo property in properties)
+            {
+                AppendSnapshotToken(output, property.Name);
+                AppendCanonicalSnapshotValue(output, property.GetValue(value, null), depth + 1);
+            }
+            return;
+        }
+
+        FieldInfo[] fields = type.GetFields(flags)
+            .Where(field => !field.IsStatic && !field.IsNotSerialized
+                && !IsSnapshotContextMember(field.Name)
+                && !string.Equals(field.Name, "WorldId", StringComparison.Ordinal))
+            .OrderBy(field => field.Name, StringComparer.Ordinal)
+            .ToArray();
+        if (fields.Length == 0)
+            throw new InvalidOperationException("No stable value members found for snapshot type " + type.FullName + ".");
+        foreach (FieldInfo field in fields)
+        {
+            AppendSnapshotToken(output, field.Name);
+            AppendCanonicalSnapshotValue(output, field.GetValue(value), depth + 1);
+        }
+    }
+
+    private static bool IsSnapshotContextMember(string name) =>
+        string.Equals(name, "token", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(name, "vector", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(name, "ownerSections", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(name, "stagingAttempt", StringComparison.OrdinalIgnoreCase);
+
+    private static void AppendSnapshotToken(StringBuilder output, string value)
+    {
+        value = value ?? string.Empty;
+        output.Append(value.Length.ToString(CultureInfo.InvariantCulture))
+            .Append(':').Append(value).Append(';');
     }
 
     private static void ConfigureUnscopedBootstrap(TesteSimulacao bootstrap, SimulationConfigData config)

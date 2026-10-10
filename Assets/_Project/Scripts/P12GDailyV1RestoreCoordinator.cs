@@ -22,6 +22,9 @@ internal enum P12GDailyV1RestoreStage
 {
     SourceCaptured = 1,
     RootsStaged,
+    DStaged,
+    EStaged,
+    FStaged,
     OwnersStaged,
     CandidateComposed,
     TargetChecksCompleted,
@@ -43,7 +46,8 @@ internal static class P12GDailyV1RestoreCoordinator
         out SimulationActiveSession restoredSession,
         out P12GDailyV1RestoreFailure failure,
         out string diagnostic,
-        Action<P12GDailyV1RestoreStage> stageObserver = null)
+        Action<P12GDailyV1RestoreStage> stageObserver = null,
+        Action<SimulationActiveSession> privateCandidateObserver = null)
     {
         restoredSession = null;
         failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
@@ -196,6 +200,7 @@ internal static class P12GDailyV1RestoreCoordinator
                 diagnostic = "P12-D could not stage the factual roots: " + dFailure + ".";
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.DStaged);
 
             SimulationTime stagedTime = new SimulationTime(sourceToken.AbsoluteDay);
             SimulationLogger logger = new SimulationLogger(sourceSession.Configuration.LogSettings);
@@ -231,6 +236,7 @@ internal static class P12GDailyV1RestoreCoordinator
                 diagnostic = "P12-E could not stage the configured domain owners: " + eFailure + ".";
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.EStaged);
 
             if (!capturedF.TryStage(
                     sourceRuntime,
@@ -246,6 +252,7 @@ internal static class P12GDailyV1RestoreCoordinator
                 diagnostic = "P12-F could not stage the retained owner capture: " + fStageFailure + ".";
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.FStaged);
             stageObserver?.Invoke(P12GDailyV1RestoreStage.OwnersStaged);
 
             if (!stagingAttempt.IsCurrentFor(sourceRuntime, sourceToken, sourceOwnerSections)
@@ -278,6 +285,9 @@ internal static class P12GDailyV1RestoreCoordinator
                 return false;
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.CandidateComposed);
+            // Tests can corrupt only the still-private candidate to verify the
+            // integrated graph validator. Production restore calls pass null.
+            privateCandidateObserver?.Invoke(candidate);
 
             SimulationRuntime targetRuntime = candidate.Runtime;
             if (!TryValidateAllocatorHighWater(candidate, out string allocatorDiagnostic))
@@ -337,6 +347,13 @@ internal static class P12GDailyV1RestoreCoordinator
             {
                 failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
                 diagnostic = "The private target failed NPC roster census validation: " + targetAssessFailure + ".";
+                return false;
+            }
+
+            if (!TryValidateTravelPartyBindings(candidate, out string travelPartyDiagnostic))
+            {
+                failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
+                diagnostic = travelPartyDiagnostic;
                 return false;
             }
 
@@ -407,6 +424,116 @@ internal static class P12GDailyV1RestoreCoordinator
             && session.Runtime.IsHealthyDailyOwnerThreadBoundary()
             && session.Composition.Runtime.HasSameP12RuntimeIdentitySpatialOwners(
                 session.IdentityRegistry, session.SpatialNetwork, session.ExplorableSites);
+    }
+
+    private static bool TryValidateTravelPartyBindings(
+        SimulationActiveSession session,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        TravelPartyStore parties = session?.Composition?.TravelParties;
+        SimulationRuntime runtime = session?.Runtime;
+        RuntimeIdentityRegistry identities = session?.IdentityRegistry;
+        SpatialNetworkRuntime spatialNetwork = session?.SpatialNetwork;
+        if (parties == null || runtime == null || identities == null || spatialNetwork == null
+            || !parties.ValidateCensus(out int partyCount, out _)
+            || partyCount != parties.ActiveParties.Count)
+        {
+            diagnostic = "The private target's TravelParty owner census is unavailable or inconsistent.";
+            return false;
+        }
+
+        Dictionary<string, NpcRuntime> npcsById = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        foreach (NpcRuntime npc in runtime.NpcRuntimes)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
+                || !npcsById.TryAdd(npc.RuntimeId, npc))
+            {
+                diagnostic = "The private target's NPC roster has a missing or duplicate RuntimeId.";
+                return false;
+            }
+        }
+
+        Dictionary<string, string> partyByMemberId = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (TravelPartyRuntime party in parties.ActiveParties)
+        {
+            if (party == null || !party.IsActive
+                || !identities.TryGetLocation(party.OriginLocationRuntimeId, out SpatialLocationRuntime origin)
+                || !identities.TryGetLocation(party.DestinationLocationRuntimeId, out SpatialLocationRuntime destination)
+                || !identities.TryGetRoute(party.RouteRuntimeId, out SpatialRouteRuntime route)
+                || !spatialNetwork.TryGetRoute(party.RouteRuntimeId, out SpatialRouteRuntime networkRoute)
+                || !ReferenceEquals(route, networkRoute)
+                || !ReferenceEquals(route.Origin, origin)
+                || !ReferenceEquals(route.Destination, destination)
+                || route.TravelDays != party.TravelDaysTotal)
+            {
+                diagnostic = "An active TravelParty has an unresolved or inconsistent Location/Route binding.";
+                return false;
+            }
+
+            int sharedRemainingDays = -1;
+            bool? sharedStartedToday = null;
+            foreach (string memberId in party.MemberRuntimeIds)
+            {
+                if (string.IsNullOrWhiteSpace(memberId)
+                    || !partyByMemberId.TryAdd(memberId, party.TravelPartyId)
+                    || !npcsById.TryGetValue(memberId, out NpcRuntime member)
+                    || !identities.TryGetNpc(memberId, out NpcRuntime registeredMember)
+                    || !ReferenceEquals(member, registeredMember)
+                    || !member.IsAlive
+                    || !member.IsTraveling
+                    || member.CurrentLocation != null
+                    || member.CurrentCity != null
+                    || !ReferenceEquals(member.DestinationLocation, destination)
+                    || !string.Equals(member.TravelRouteRuntimeId, party.RouteRuntimeId, StringComparison.Ordinal)
+                    || member.TravelDaysTotal != party.TravelDaysTotal
+                    || member.TravelDaysRemaining <= 0
+                    || member.TravelDaysRemaining > party.TravelDaysTotal
+                    || !string.Equals(member.TravelOriginDecisionId, party.OriginDecisionId, StringComparison.Ordinal))
+                {
+                    diagnostic = "An active TravelParty member does not resolve to the exact traveling NPC state.";
+                    return false;
+                }
+                if (!string.Equals(member.ActiveTravelPartyId, party.TravelPartyId, StringComparison.Ordinal))
+                {
+                    diagnostic = "An NPC ActiveTravelPartyId does not reciprocally identify its staged owner party.";
+                    return false;
+                }
+
+                CityRuntime expectedDestinationCity = null;
+                session.TryGetCityByLocation(destination, out expectedDestinationCity);
+                if (!ReferenceEquals(member.DestinationCity, expectedDestinationCity))
+                {
+                    diagnostic = "An active TravelParty member's destination City projection is inconsistent.";
+                    return false;
+                }
+
+                if (sharedRemainingDays < 0)
+                {
+                    sharedRemainingDays = member.TravelDaysRemaining;
+                    sharedStartedToday = member.TravelStartedToday;
+                }
+                else if (sharedRemainingDays != member.TravelDaysRemaining
+                    || sharedStartedToday != member.TravelStartedToday)
+                {
+                    diagnostic = "Active TravelParty members do not share the same remaining-day/start boundary.";
+                    return false;
+                }
+            }
+        }
+
+        foreach (NpcRuntime npc in runtime.NpcRuntimes)
+        {
+            if (string.IsNullOrWhiteSpace(npc.ActiveTravelPartyId)) continue;
+            if (!partyByMemberId.TryGetValue(npc.RuntimeId, out string partyId)
+                || !string.Equals(partyId, npc.ActiveTravelPartyId, StringComparison.Ordinal))
+            {
+                diagnostic = "An NPC's ActiveTravelPartyId has no reciprocal active-party member binding.";
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool TryBuildDailyV1Definitions(
