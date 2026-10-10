@@ -3933,6 +3933,7 @@ public sealed class SimulationRuntimeAdmissionTests
     [TestCase("owner-revision")]
     [TestCase("p8-location-cardinality")]
     [TestCase("p8-authoritative-location-cardinality")]
+    [TestCase("p8c-city-location-binding-owner")]
     [TestCase("wrong-family-identity-key")]
     public void DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(string corruptionKind)
     {
@@ -3953,6 +3954,8 @@ public sealed class SimulationRuntimeAdmissionTests
             SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
             Assert.That(original, Is.Not.Null);
             Assert.That(controlSession, Is.Not.Null);
+            LegacySpatialAnchorBindingStore p8CReplacementStore = null;
+            bool p8CStoreReplaced = false;
             Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
                 Is.True, sourceAdvance.ToString());
             Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
@@ -3988,6 +3991,20 @@ public sealed class SimulationRuntimeAdmissionTests
                             new LocationRecord(new LocationId("p12g-extra-location"), anchorHex.Id),
                             out SpatialAuthorityFailure locationFailure), Is.True, locationFailure?.ToString());
                         break;
+                    case "p8c-city-location-binding-owner":
+                        p8CReplacementStore = new LegacySpatialAnchorBindingStore(
+                            candidate.Runtime.SpatialAuthorityStore);
+                        FieldInfo p8CBindingField = candidate.Runtime.GetType().GetField(
+                            "legacySpatialAnchorBindingStore",
+                            BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (p8CBindingField != null)
+                        {
+                            p8CBindingField.SetValue(candidate.Runtime, p8CReplacementStore);
+                            p8CStoreReplaced = ReferenceEquals(
+                                candidate.Runtime.LegacySpatialAnchorBindingStore,
+                                p8CReplacementStore);
+                        }
+                        break;
                     case "wrong-family-identity-key":
                         Dictionary<string, CityRuntime> cities = ReadPrivateField<Dictionary<string, CityRuntime>>(
                             candidate.IdentityRegistry, "citiesByRuntimeId");
@@ -4004,6 +4021,13 @@ public sealed class SimulationRuntimeAdmissionTests
             }, out P12GDailyV1RestoreFailure restoreFailure, out string diagnostic);
 
             Assert.That(corrupted, Is.True);
+            if (corruptionKind == "p8c-city-location-binding-owner")
+            {
+                Assert.That(p8CStoreReplaced, Is.True);
+                Assert.That(p8CReplacementStore, Is.Not.Null);
+                Assert.That(p8CReplacementStore.Count, Is.Zero);
+                Assert.That(p8CReplacementStore.Revision, Is.Zero);
+            }
             Assert.That(restoreSucceeded, Is.False, diagnostic);
             Assert.That(diagnostic, Is.Not.Null.And.Not.Empty);
             Assert.That(restoreFailure, Is.EqualTo(corruptionKind == "allocator-high-water"

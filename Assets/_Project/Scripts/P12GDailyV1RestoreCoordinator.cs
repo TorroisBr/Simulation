@@ -943,6 +943,13 @@ internal static class P12GDailyV1RestoreCoordinator
         diagnostic = null;
         if (!TryValidateWitness(
                 sections,
+                new LegacySpatialAnchorBindingCensusProvider(
+                    composition.Runtime.LegacySpatialAnchorBindingStore).GetCurrentCensus(),
+                0,
+                0L,
+                out diagnostic)
+            || !TryValidateWitness(
+                sections,
                 composition.GetNpcDecisionOccurrenceReceiptCensus(),
                 0,
                 0L,
