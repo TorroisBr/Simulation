@@ -4029,6 +4029,7 @@ public sealed class SimulationRuntimeAdmissionTests
     [TestCase("p8-location-cardinality")]
     [TestCase("p8-authoritative-location-cardinality")]
     [TestCase("p8c-city-location-binding-owner")]
+    [TestCase("p8c-city-location-binding-populated-target")]
     [TestCase("p8c-person-position-owner")]
     [TestCase("p8d-route-observation-owner")]
     [TestCase("p8d-person-route-plan-owner")]
@@ -4063,6 +4064,12 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(controlSession, Is.Not.Null);
             LegacySpatialAnchorBindingStore p8CReplacementStore = null;
             bool p8CStoreReplaced = false;
+            LegacySpatialAnchorBindingStore p8CPopulatedTargetStore = null;
+            string p8CPopulatedTargetCityId = null;
+            LocationId p8CPopulatedTargetLocationId = null;
+            bool p8CPopulatedTargetBindingApplied = false;
+            string p8CPopulatedTargetBindingFailure = null;
+            OwnerSectionCensusWitness p8CPopulatedTargetWitness = null;
             PersonSpatialPositionStore p8CPositionReplacementStore = null;
             bool p8CPositionStoreReplaced = false;
             SpatialRouteKnowledgeStore p8DRouteKnowledgeReplacementStore = null;
@@ -4161,6 +4168,28 @@ public sealed class SimulationRuntimeAdmissionTests
                                 p8CReplacementStore);
                         }
                         break;
+                    case "p8c-city-location-binding-populated-target":
+                    {
+                        p8CPopulatedTargetStore = candidate.Runtime.LegacySpatialAnchorBindingStore;
+                        Assert.That(p8CPopulatedTargetStore, Is.Not.Null);
+                        Assert.That(p8CPopulatedTargetStore.Count, Is.Zero);
+                        CityRuntime stagedCity = candidate.Runtime.Cities
+                            .OrderBy(city => city.RuntimeId, StringComparer.Ordinal)
+                            .First();
+                        p8CPopulatedTargetCityId = stagedCity.RuntimeId;
+                        p8CPopulatedTargetLocationId = candidate.Runtime.SpatialAuthorityStore.Locations.Single().Id;
+                        p8CPopulatedTargetBindingApplied = p8CPopulatedTargetStore.TryBindCity(
+                            p8CPopulatedTargetCityId,
+                            p8CPopulatedTargetLocationId,
+                            out SpatialAnchorBindingFailure p8CBindingFailure);
+                        p8CPopulatedTargetBindingFailure = p8CBindingFailure.ToString();
+                        if (p8CPopulatedTargetBindingApplied)
+                        {
+                            p8CPopulatedTargetWitness = new LegacySpatialAnchorBindingCensusProvider(
+                                p8CPopulatedTargetStore).GetCurrentCensus();
+                        }
+                        break;
+                    }
                     case "p8c-person-position-owner":
                         p8CPositionReplacementStore = new PersonSpatialPositionStore(
                             candidate.Runtime.PersonStore,
@@ -4567,12 +4596,33 @@ public sealed class SimulationRuntimeAdmissionTests
                 corrupted = true;
             }, out P12GDailyV1RestoreFailure restoreFailure, out string diagnostic);
 
-            Assert.That(corrupted, Is.True);
+            Assert.That(corrupted, Is.True,
+                "The private candidate corruption callback must execute. Restore returned: "
+                + restoreFailure + ": " + diagnostic);
             if (corruptionKind == "p8c-city-location-binding-owner")
             {
                 Assert.That(p8CStoreReplaced, Is.True);
                 Assert.That(p8CReplacementStore, Is.Not.Null);
                 Assert.That(p8CReplacementStore.Count, Is.Zero);
+            }
+            if (corruptionKind == "p8c-city-location-binding-populated-target")
+            {
+                Assert.That(p8CPopulatedTargetBindingApplied, Is.True);
+                Assert.That(p8CPopulatedTargetStore, Is.Not.Null);
+                Assert.That(p8CPopulatedTargetWitness, Is.Not.Null, p8CPopulatedTargetBindingFailure);
+                Assert.That(p8CPopulatedTargetWitness.SectionId,
+                    Is.EqualTo(LegacySpatialAnchorBindingCensusProvider.SectionId));
+                Assert.That(p8CPopulatedTargetWitness.OwnerInstanceIdentity,
+                    Is.SameAs(p8CPopulatedTargetStore));
+                Assert.That(p8CPopulatedTargetWitness.Cardinality, Is.EqualTo(1));
+                Assert.That(p8CPopulatedTargetWitness.Revision, Is.EqualTo(1L));
+                Assert.That(p8CPopulatedTargetStore.Count, Is.EqualTo(1));
+                Assert.That(p8CPopulatedTargetStore.Revision, Is.EqualTo(1L));
+                Assert.That(p8CPopulatedTargetStore.TryGet(
+                        new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.City, p8CPopulatedTargetCityId),
+                        out LocationId retainedP8CLocationId),
+                    Is.True);
+                Assert.That(retainedP8CLocationId, Is.EqualTo(p8CPopulatedTargetLocationId));
             }
             if (corruptionKind == "p8c-person-position-owner")
             {
