@@ -1,10 +1,10 @@
 # P12 State Genealogy failure-atomicity promotion record — exact-tip review
 
-**Verdict:** PASS — docs-only State candidate  
-**Review date:** 2026-10-10  
-**Candidate tip:** `6c2733e0a7b85adcb2b246dbf2ace25ea8e4d6e5`  
-**Parent, base, and current P12 canonical:** `66e5a94ddc296f80100dbd877169389feea2387b`  
-**Candidate branch:** `codex/phase12/P12GGenealogyFailureAtomicityPromotionState`  
+**Verdict:** PASS — docs-only State candidate
+**Review date:** 2026-10-10
+**Candidate tip:** `6c2733e0a7b85adcb2b246dbf2ace25ea8e4d6e5`
+**Parent, base, and current P12 canonical:** `66e5a94ddc296f80100dbd877169389feea2387b`
+**Candidate branch:** `codex/phase12/P12GGenealogyFailureAtomicityPromotionState`
 **Reviewed file:** `docs/PHASE12_STATE.md`
 
 The candidate is a one-commit fast-forward from the stated current canonical base and changes only `docs/PHASE12_STATE.md`. No code, validation artifacts, ProjectSettings, or unrelated files are changed. The canonical ref resolves to the stated base.
