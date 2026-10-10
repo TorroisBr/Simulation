@@ -3980,6 +3980,10 @@ public sealed class SimulationRuntimeAdmissionTests
     [TestCase("p12f-decision-occurrence-receipt-owner")]
     [TestCase("p12e-economy-keyed-sale-receipt-owner")]
     [TestCase("p12f-actor-choice-temporal-owner")]
+    [TestCase("p18-crime-receipt-owner")]
+    [TestCase("p18-justice-receipt-owner")]
+    [TestCase("p18-npc-local-observation-receipt-owner")]
+    [TestCase("p18-npc-merchant-trade-state-receipt-owner")]
     [TestCase("wrong-family-identity-key")]
     public void DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(string corruptionKind)
     {
@@ -4024,6 +4028,19 @@ public sealed class SimulationRuntimeAdmissionTests
             bool actorChoiceTemporalCompositionProviderReplaced = false;
             bool actorChoiceTemporalVectorStillIdentifiesRuntimeOwner = false;
             long actorChoiceTemporalCapturedRevision = -1L;
+            CrimeSystem targetCrimeReceiptOwner = null;
+            CrimeSystem sourceCrimeReceiptOwner = null;
+            bool crimeReceiptRuntimeOwnerReplaced = false;
+            bool crimeReceiptVectorStillIdentifiesTarget = false;
+            JusticeSystem targetJusticeReceiptOwner = null;
+            JusticeSystem sourceJusticeReceiptOwner = null;
+            bool justiceReceiptRuntimeOwnerReplaced = false;
+            bool justiceReceiptVectorStillIdentifiesTarget = false;
+            IOwnerSectionCensusProvider[] sourceNpcReceiptProviders = null;
+            IOwnerSectionCensusProvider[] replacementNpcReceiptProviders = null;
+            bool npcReceiptCompositionProvidersReplaced = false;
+            bool npcReceiptVectorStillIdentifiesTarget = false;
+            string replacedNpcReceiptSectionPrefix = null;
             Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
                 Is.True, sourceAdvance.ToString());
             Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
@@ -4295,6 +4312,159 @@ public sealed class SimulationRuntimeAdmissionTests
                         actorChoiceTemporalCapturedRevision = candidateTemporal.Revision;
                         break;
                     }
+                    case "p18-crime-receipt-owner":
+                    {
+                        sourceCrimeReceiptOwner = original.Runtime.CrimeSystemForWorldBoundary;
+                        targetCrimeReceiptOwner = candidate.Runtime.CrimeSystemForWorldBoundary;
+                        Assert.That(sourceCrimeReceiptOwner, Is.Not.Null);
+                        Assert.That(targetCrimeReceiptOwner, Is.Not.Null.And.Not.SameAs(sourceCrimeReceiptOwner));
+                        OwnerSectionCensusWitness sourceReceipt =
+                            new P12CrimeJusticeCensusProvider.CrimeP18ReceiptsSectionProvider(
+                                sourceCrimeReceiptOwner).GetCurrentCensus();
+                        OwnerSectionCensusWitness targetReceipt =
+                            new P12CrimeJusticeCensusProvider.CrimeP18ReceiptsSectionProvider(
+                                targetCrimeReceiptOwner).GetCurrentCensus();
+                        Assert.That(sourceReceipt.Cardinality, Is.EqualTo(1));
+                        Assert.That(sourceReceipt.Revision, Is.Zero);
+                        Assert.That(targetReceipt.Cardinality, Is.EqualTo(1));
+                        Assert.That(targetReceipt.Revision, Is.Zero);
+                        Assert.That(sourceReceipt.OwnerInstanceIdentity, Is.Not.SameAs(targetReceipt.OwnerInstanceIdentity));
+
+                        WritePrivateField(candidate.Runtime, "crimeSystem", sourceCrimeReceiptOwner);
+                        crimeReceiptRuntimeOwnerReplaced = ReferenceEquals(
+                            candidate.Runtime.CrimeSystemForWorldBoundary, sourceCrimeReceiptOwner);
+                        Assert.That(candidate.Runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                            out IReadOnlyList<OwnerSectionCensusSnapshot> crimeTargetRows,
+                            out _, out ContinuationCensusFailure crimeTargetFailure), Is.True,
+                            crimeTargetFailure.ToString());
+                        OwnerSectionCensusSnapshot crimeTargetRow = crimeTargetRows.Single(row =>
+                            string.Equals(row.SectionId,
+                                P12CrimeJusticeCensusProvider.CrimeP18ReceiptsSectionId,
+                                StringComparison.Ordinal));
+                        crimeReceiptVectorStillIdentifiesTarget =
+                            ReferenceEquals(crimeTargetRow.OwnerInstanceIdentity, targetCrimeReceiptOwner)
+                            && crimeTargetRow.Cardinality == 1
+                            && crimeTargetRow.Revision == 0L;
+                        break;
+                    }
+                    case "p18-justice-receipt-owner":
+                    {
+                        sourceJusticeReceiptOwner = original.Runtime.JusticeSystemForWorldBoundary;
+                        targetJusticeReceiptOwner = candidate.Runtime.JusticeSystemForWorldBoundary;
+                        Assert.That(sourceJusticeReceiptOwner, Is.Not.Null);
+                        Assert.That(targetJusticeReceiptOwner, Is.Not.Null.And.Not.SameAs(sourceJusticeReceiptOwner));
+                        OwnerSectionCensusWitness sourceReceipt =
+                            new P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionProvider(
+                                sourceJusticeReceiptOwner).GetCurrentCensus();
+                        OwnerSectionCensusWitness targetReceipt =
+                            new P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionProvider(
+                                targetJusticeReceiptOwner).GetCurrentCensus();
+                        Assert.That(sourceReceipt.Cardinality, Is.EqualTo(1));
+                        Assert.That(sourceReceipt.Revision, Is.Zero);
+                        Assert.That(targetReceipt.Cardinality, Is.EqualTo(1));
+                        Assert.That(targetReceipt.Revision, Is.Zero);
+                        Assert.That(sourceReceipt.OwnerInstanceIdentity, Is.Not.SameAs(targetReceipt.OwnerInstanceIdentity));
+
+                        WritePrivateField(candidate.Runtime, "justiceSystem", sourceJusticeReceiptOwner);
+                        justiceReceiptRuntimeOwnerReplaced = ReferenceEquals(
+                            candidate.Runtime.JusticeSystemForWorldBoundary, sourceJusticeReceiptOwner);
+                        Assert.That(candidate.Runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                            out IReadOnlyList<OwnerSectionCensusSnapshot> justiceTargetRows,
+                            out _, out ContinuationCensusFailure justiceTargetFailure), Is.True,
+                            justiceTargetFailure.ToString());
+                        OwnerSectionCensusSnapshot justiceTargetRow = justiceTargetRows.Single(row =>
+                            string.Equals(row.SectionId,
+                                P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId,
+                                StringComparison.Ordinal));
+                        justiceReceiptVectorStillIdentifiesTarget =
+                            ReferenceEquals(justiceTargetRow.OwnerInstanceIdentity, targetJusticeReceiptOwner)
+                            && justiceTargetRow.Cardinality == 1
+                            && justiceTargetRow.Revision == 0L;
+                        break;
+                    }
+                    case "p18-npc-local-observation-receipt-owner":
+                    case "p18-npc-merchant-trade-state-receipt-owner":
+                    {
+                        bool replaceLocalObservation = string.Equals(
+                            corruptionKind,
+                            "p18-npc-local-observation-receipt-owner",
+                            StringComparison.Ordinal);
+                        replacedNpcReceiptSectionPrefix = replaceLocalObservation
+                            ? P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionPrefix
+                            : P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionPrefix;
+                        sourceNpcReceiptProviders = original.Composition.NpcReceiptOwnerCensusProviders.ToArray();
+                        IOwnerSectionCensusProvider[] candidateNpcReceiptProviders =
+                            candidate.Composition.NpcReceiptOwnerCensusProviders.ToArray();
+                        Assert.That(sourceNpcReceiptProviders.Length,
+                            Is.EqualTo(original.Runtime.NpcRuntimes.Count * 2));
+                        Assert.That(candidateNpcReceiptProviders.Length,
+                            Is.EqualTo(candidate.Runtime.NpcRuntimes.Count * 2));
+                        Dictionary<string, IOwnerSectionCensusProvider> sourceProvidersBySection =
+                            sourceNpcReceiptProviders.ToDictionary(
+                                provider => provider.GetCurrentCensus().SectionId,
+                                StringComparer.Ordinal);
+                        replacementNpcReceiptProviders = new IOwnerSectionCensusProvider[candidateNpcReceiptProviders.Length];
+                        bool replacedAtLeastOne = false;
+                        for (int i = 0; i < candidateNpcReceiptProviders.Length; i++)
+                        {
+                            IOwnerSectionCensusProvider targetProvider = candidateNpcReceiptProviders[i];
+                            OwnerSectionCensusWitness targetWitness = targetProvider.GetCurrentCensus();
+                            Assert.That(targetWitness.Cardinality, Is.Zero);
+                            Assert.That(targetWitness.Revision, Is.Zero);
+                            if (targetWitness.SectionId.StartsWith(
+                                    replacedNpcReceiptSectionPrefix, StringComparison.Ordinal))
+                            {
+                                IOwnerSectionCensusProvider sourceProvider =
+                                    sourceProvidersBySection[targetWitness.SectionId];
+                                OwnerSectionCensusWitness sourceWitness = sourceProvider.GetCurrentCensus();
+                                Assert.That(sourceWitness.Cardinality, Is.Zero);
+                                Assert.That(sourceWitness.Revision, Is.Zero);
+                                Assert.That(sourceWitness.OwnerInstanceIdentity,
+                                    Is.Not.SameAs(targetWitness.OwnerInstanceIdentity));
+                                replacementNpcReceiptProviders[i] = sourceProvider;
+                                replacedAtLeastOne = true;
+                            }
+                            else
+                            {
+                                replacementNpcReceiptProviders[i] = targetProvider;
+                            }
+                        }
+                        Assert.That(replacedAtLeastOne, Is.True,
+                            "The selected receipt family must have one exact-zero row per NPC.");
+                        WritePrivateField(candidate.Composition,
+                            "<NpcReceiptOwnerCensusProviders>k__BackingField",
+                            Array.AsReadOnly(replacementNpcReceiptProviders));
+                        npcReceiptCompositionProvidersReplaced =
+                            ReferenceEquals(candidate.Composition.NpcReceiptOwnerCensusProviders,
+                                replacementNpcReceiptProviders)
+                            || candidate.Composition.NpcReceiptOwnerCensusProviders
+                                .SequenceEqual(replacementNpcReceiptProviders);
+
+                        Assert.That(candidate.Runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                            out IReadOnlyList<OwnerSectionCensusSnapshot> npcReceiptTargetRows,
+                            out _, out ContinuationCensusFailure npcReceiptTargetFailure), Is.True,
+                            npcReceiptTargetFailure.ToString());
+                        npcReceiptVectorStillIdentifiesTarget = true;
+                        int selectedRows = 0;
+                        foreach (OwnerSectionCensusSnapshot row in npcReceiptTargetRows.Where(row =>
+                                     row.SectionId.StartsWith(replacedNpcReceiptSectionPrefix,
+                                         StringComparison.Ordinal)))
+                        {
+                            IOwnerSectionCensusProvider sourceProvider =
+                                sourceProvidersBySection[row.SectionId];
+                            OwnerSectionCensusWitness sourceWitness = sourceProvider.GetCurrentCensus();
+                            Assert.That(row.Cardinality, Is.Zero);
+                            Assert.That(row.Revision, Is.Zero);
+                            Assert.That(row.OwnerInstanceIdentity,
+                                Is.Not.SameAs(sourceWitness.OwnerInstanceIdentity));
+                            Assert.That(replacementNpcReceiptProviders.Single(provider =>
+                                provider.GetCurrentCensus().SectionId == row.SectionId),
+                                Is.SameAs(sourceProvider));
+                            selectedRows++;
+                        }
+                        Assert.That(selectedRows, Is.EqualTo(candidate.Runtime.NpcRuntimes.Count));
+                        break;
+                    }
                     case "wrong-family-identity-key":
                         Dictionary<string, CityRuntime> cities = ReadPrivateField<Dictionary<string, CityRuntime>>(
                             candidate.IdentityRegistry, "citiesByRuntimeId");
@@ -4379,6 +4549,28 @@ public sealed class SimulationRuntimeAdmissionTests
                 StringAssert.Contains(
                     "The non-serialized ActorChoice temporal input count must be zero on the required P11 owner at its captured census revision.",
                     diagnostic);
+            }
+            if (corruptionKind == "p18-crime-receipt-owner")
+            {
+                Assert.That(crimeReceiptRuntimeOwnerReplaced, Is.True);
+                Assert.That(crimeReceiptVectorStillIdentifiesTarget, Is.True,
+                    "The candidate target vector must retain the exact staged CrimeSystem owner.");
+            }
+            if (corruptionKind == "p18-justice-receipt-owner")
+            {
+                Assert.That(justiceReceiptRuntimeOwnerReplaced, Is.True);
+                Assert.That(justiceReceiptVectorStillIdentifiesTarget, Is.True,
+                    "The candidate target vector must retain the exact staged JusticeSystem owner.");
+            }
+            if (corruptionKind == "p18-npc-local-observation-receipt-owner"
+                || corruptionKind == "p18-npc-merchant-trade-state-receipt-owner")
+            {
+                Assert.That(sourceNpcReceiptProviders, Is.Not.Null);
+                Assert.That(replacementNpcReceiptProviders, Is.Not.Null);
+                Assert.That(npcReceiptCompositionProvidersReplaced, Is.True);
+                Assert.That(npcReceiptVectorStillIdentifiesTarget, Is.True,
+                    "The runtime target vector must remain bound to its own per-NPC receipt owners.");
+                Assert.That(replacedNpcReceiptSectionPrefix, Is.Not.Null);
             }
             Assert.That(restoreSucceeded, Is.False, diagnostic);
             Assert.That(diagnostic, Is.Not.Null.And.Not.Empty);
