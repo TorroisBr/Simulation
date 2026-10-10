@@ -45,4 +45,3 @@ matrix, whole-graph failure injection, causal no-replay, or full included-owner
 multi-boundary continuation parity. P12-G remains `WAIT_DEPENDENCY`; P12-A
 remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains open. No
 capture eligibility, export, hydration, or downstream readiness is implied.
-
