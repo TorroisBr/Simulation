@@ -42,10 +42,12 @@ No operation ID is added, no owner is reclassified as empty, and no gameplay is 
 
 This read-only source audit is current through P12 canonical
 `38334ad55ce1ad467d2119ac968f52cc3aad055a` and architecture canonical
-`47eff220c7ce00f6e7c759bdc2b76780bb46f628`. Since the source-ledger refresh
-above, the only `Assets` change is the reviewed test assertion recorded in
+`47eff220c7ce00f6e7c759bdc2b76780bb46f628`. Canonical tip `38334ad` is a
+docs-only child of reviewed code candidate `eb41667`, which is based on
+`b516a0e`. The only `Assets` delta between `b516a0e` and `eb41667` is the
+reviewed test assertion recorded in
 `PHASE12_G_EXACT_CRIME_RECEIPT_REGISTRATION_REVIEW_EB41667.md`; production
-owner and writer code did not change.
+owner and writer code did not change from that code base.
 
 ### Supported writer and epoch dispositions
 
