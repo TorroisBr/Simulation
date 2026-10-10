@@ -3872,3 +3872,24 @@ Independent exact-tip documentation review passed for candidate
 [`design/PHASE12_G_CURRENT_SOURCE_LEDGER_REFRESH_REVIEW_BC8B4EB.md`](design/PHASE12_G_CURRENT_SOURCE_LEDGER_REFRESH_REVIEW_BC8B4EB.md).
 The review confirms the source/epoch dispositions and remaining live-inventory
 and same-attempt target-census blockers without changing code or readiness.
+
+### Promotion and refreshed P12-G evidence queue — 2026-10-09
+
+The documentation-only source-ledger candidate was fast-forwarded on
+`codex/phase12/canonical` from `38334ad55ce1ad467d2119ac968f52cc3aad055a` to
+`28c7b7e62fddf6a04351730cfb1c9a0ccd5116f6`. The durable independent review is
+[`design/PHASE12_G_CURRENT_SOURCE_LEDGER_REFRESH_REVIEW_BC8B4EB.md`](design/PHASE12_G_CURRENT_SOURCE_LEDGER_REFRESH_REVIEW_BC8B4EB.md).
+The Assets tree remains `0dd621c5b5071f22d75676cb12ca14cd0a8b602e`; no Unity
+validation was needed. `git diff --check` passed and the remote canonical and
+candidate refs were synchronized at promotion.
+
+The dependency graph did not change: P12-B through P12-F remain promoted in
+their recorded scopes; P12-G remains `WAIT_DEPENDENCY`; P12-A remains
+`WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`. The next
+bounded source-evidence slice is to bind the registered Justice record and
+Justice receipt providers, plus both global receipt-cache providers, to their
+exact installed runtime owner instances in the selected Daily-v1 composition.
+The read-only row-family audit identified this as a concrete source
+registration gap; owner-package tests already establish the underlying
+cardinality/revision semantics. This test-only slice will not close the same-
+attempt target census or the whole live 299-row inventory.
