@@ -188,6 +188,7 @@ public sealed class P17AWarObservation
 public sealed class SimulationRuntimeAdmissionContext
 {
     public SimulationRuntimeAdmissionProfile Profile { get; }
+    internal bool IsRestoredContinuation { get; }
     internal Thread ExpectedOwnerThread { get; }
     internal int ExpectedOwnerThreadId { get; }
 
@@ -195,6 +196,15 @@ public sealed class SimulationRuntimeAdmissionContext
         SimulationRuntimeAdmissionProfile profile,
         Thread expectedOwnerThread,
         int expectedOwnerThreadId)
+        : this(profile, expectedOwnerThread, expectedOwnerThreadId, false)
+    {
+    }
+
+    private SimulationRuntimeAdmissionContext(
+        SimulationRuntimeAdmissionProfile profile,
+        Thread expectedOwnerThread,
+        int expectedOwnerThreadId,
+        bool isRestoredContinuation)
     {
         if (profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
             throw new ArgumentOutOfRangeException(nameof(profile));
@@ -207,8 +217,21 @@ public sealed class SimulationRuntimeAdmissionContext
                 nameof(expectedOwnerThreadId));
 
         Profile = profile;
+        IsRestoredContinuation = isRestoredContinuation;
         ExpectedOwnerThread = expectedOwnerThread;
         ExpectedOwnerThreadId = expectedOwnerThreadId;
+    }
+
+    internal SimulationRuntimeAdmissionContext CreateRestoredContinuationContext()
+    {
+        if (Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1 || IsRestoredContinuation)
+            throw new InvalidOperationException("A restored continuation context must derive from the selected Daily-v1 bootstrap context.");
+
+        return new SimulationRuntimeAdmissionContext(
+            Profile,
+            ExpectedOwnerThread,
+            ExpectedOwnerThreadId,
+            true);
     }
 
     public static SimulationRuntimeAdmissionContext CaptureUnityBootstrapDailyV1()
@@ -535,6 +558,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     }
 
     private readonly AuthoritativeMutationGuard mutationGuard = new AuthoritativeMutationGuard();
+    private bool coreMutationGuardAuthoritiesBound;
     private readonly object dailyCaptureRuntimeIdentity = new object();
     private bool advanceLeaseHeld;
     private long completedDailyCoreSequence;
@@ -1503,7 +1527,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             this,
             this.battleDirectConsequencePolicy);
 
-        BindCoreMutationGuardAuthorities();
+        if (runtimeAdmissionContext?.IsRestoredContinuation != true)
+        {
+            BindCoreMutationGuardAuthorities();
+            coreMutationGuardAuthoritiesBound = true;
+        }
         if (this.crimeSystem != null
             && this.crimeSystem.TryBindSimulationTime(this.simulationTime) == false)
         {
@@ -5880,6 +5908,47 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 throw new InvalidOperationException("An NpcRuntime could not bind to its SimulationRuntime.");
             }
         }
+
+        coreMutationGuardAuthoritiesBound = true;
+    }
+
+    internal bool AreCoreMutationGuardAuthoritiesBound => coreMutationGuardAuthoritiesBound;
+
+    internal bool TryBindRestoredCandidateMutationGuard(out string diagnostic)
+    {
+        diagnostic = null;
+        if (runtimeAdmissionContext == null
+            || !runtimeAdmissionContext.IsRestoredContinuation
+            || !IsRuntimeAdmissionOwnerThreadCurrent()
+            || coreMutationGuardAuthoritiesBound
+            || !mutationGuard.CanMutate
+            || factualReadWorldPublished
+            || currentDailyCaptureToken != null
+            || completedDailyCoreSequence != 0L
+            || advanceLeaseHeld
+            || HasActiveDailyOperationContext())
+        {
+            diagnostic = "The private restored candidate is not at its unbound, healthy owner-thread boundary.";
+            return false;
+        }
+
+        try
+        {
+            BindCoreMutationGuardAuthorities();
+            if (!coreMutationGuardAuthoritiesBound)
+            {
+                diagnostic = "The private restored candidate mutation guard did not bind to its complete owner graph.";
+                return false;
+            }
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+            || exception is InvalidOperationException)
+        {
+            diagnostic = "The private restored candidate mutation guard could not bind: " + exception.Message;
+            return false;
+        }
     }
 
     private static void AddRequiredMutationGuardBinding(
@@ -8564,7 +8633,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
-        if (!mutationGuard.CanMutate
+        if (!coreMutationGuardAuthoritiesBound
+            || !mutationGuard.CanMutate
             || npcRosterCensusProtocol == null
             || factualReadCoordinator == null
             || configuration == null

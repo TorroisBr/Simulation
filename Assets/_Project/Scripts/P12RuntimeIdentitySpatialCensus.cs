@@ -92,7 +92,11 @@ public sealed partial class SimulationRuntime
             OwnerSectionRole.ExplicitlyEmpty,
             OwnerSectionRole.ExplicitlyEmpty
         };
-        int?[] identityInitialCardinalities = { 10, 2, 2, 2, null, null, null, null };
+        // The authored Daily-v1 bootstrap has ten NPC identities. A restored
+        // continuation instead reconciles its live NPC count against the exact
+        // source owner vector before target-bound admission.
+        int? npcIdentityInitialCardinality = runtimeAdmissionContext.IsRestoredContinuation ? (int?)null : 10;
+        int?[] identityInitialCardinalities = { npcIdentityInitialCardinality, 2, 2, 2, null, null, null, null };
         if (identityProviders.Count != P12RuntimeIdentitySectionIds.Length
             || spatialProviders.Count != 2
             || p8abcProviders.Count != 7)

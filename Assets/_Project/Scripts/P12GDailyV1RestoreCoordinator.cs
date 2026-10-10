@@ -27,7 +27,10 @@ internal enum P12GDailyV1RestoreStage
     FStaged,
     OwnersStaged,
     CandidateComposed,
+    TargetOwnerVectorCaptured,
     TargetChecksCompleted,
+    CandidateGuardBound,
+    TargetOwnerVectorRecaptured,
     BoundaryAdmitted,
     BeforePublication
 }
@@ -309,6 +312,7 @@ internal static class P12GDailyV1RestoreCoordinator
                     + targetCensusFailure + ".";
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorCaptured);
 
             if (!TryValidateDailyV1ExpeditionExactZero(
                     candidate.Composition, targetOwnerSections, out string targetExpeditionDiagnostic))
@@ -384,6 +388,42 @@ internal static class P12GDailyV1RestoreCoordinator
                 return false;
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetChecksCompleted);
+
+            if (!targetRuntime.TryBindRestoredCandidateMutationGuard(out string mutationGuardDiagnostic))
+            {
+                failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
+                diagnostic = mutationGuardDiagnostic;
+                return false;
+            }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.CandidateGuardBound);
+
+            if (!targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> postBindingOwnerSections,
+                    out long postBindingMutationEpoch,
+                    out ContinuationCensusFailure postBindingCensusFailure))
+            {
+                failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                diagnostic = "The private target could not recapture its owner vector after mutation-guard binding: "
+                    + postBindingCensusFailure + ".";
+                return false;
+            }
+
+            if (!P12GDailyV1OwnerVector.TryMatchCurrentTargetSnapshot(
+                    targetOwnerSections,
+                    targetMutationEpoch,
+                    postBindingOwnerSections,
+                    postBindingMutationEpoch,
+                    out P12GDailyV1OwnerVectorFailure postBindingVectorFailure,
+                    out string postBindingVectorDiagnostic))
+            {
+                failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                diagnostic = "The private target owner vector changed during mutation-guard binding: "
+                    + (postBindingVectorDiagnostic ?? postBindingVectorFailure.ToString());
+                return false;
+            }
+            targetOwnerSections = postBindingOwnerSections;
+            targetMutationEpoch = postBindingMutationEpoch;
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured);
 
             if (!targetRuntime.TryAdmitRestoredDailyBoundary(
                     stagedC.WorldIdentity,
@@ -701,6 +741,8 @@ internal static class P12GDailyV1RestoreCoordinator
         if (effective.GuardCrime.Enabled == true)
             actionProviders.Add(new GuardSystem(stagedE.Justice, config.hiddenStatus, effective.GuardCrime));
         NpcDecisionSystem decisionsSystem = new NpcDecisionSystem(actionProviders, stagedC.DeterministicRandom);
+        SimulationRuntimeAdmissionContext restoredAdmissionContext =
+            sourceSession.AdmissionContext.CreateRestoredContinuationContext();
 
         SimulationRuntime runtime = new SimulationRuntime(
             simulationTime: time,
@@ -743,7 +785,7 @@ internal static class P12GDailyV1RestoreCoordinator
             armedForceSpatialStateStore: stagedE.ArmedForcePositions,
             contingentManpowerStateStore: stagedE.ContingentManpower,
             actorChoiceStore: stagedF.ActorChoices,
-            runtimeAdmissionContext: sourceSession.AdmissionContext,
+            runtimeAdmissionContext: restoredAdmissionContext,
             recordSequence: stagedC.RecordSequence,
             worldId: stagedC.WorldIdentity,
             runtimeIdAllocator: stagedC.RuntimeIdAllocator,
@@ -794,7 +836,7 @@ internal static class P12GDailyV1RestoreCoordinator
             stagedD.SpatialNetwork,
             cityByLocation,
             config,
-            sourceSession.AdmissionContext,
+            restoredAdmissionContext,
             stagedC.DeterministicRandom,
             new SimulationSessionReportState(sourceSession.ReportState.LastEconomySnapshotDay));
         return true;

@@ -2868,6 +2868,82 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestorePreservesDynamicNpcRosterTransitionAndContinuesDeterministically()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject controlObject = new GameObject("P12-G dynamic roster uninterrupted control");
+        GameObject sourceObject = new GameObject("P12-G dynamic roster restore source");
+        try
+        {
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(control, config);
+            ConfigureSelectedBootstrap(source, config);
+            InvokeInitializeSimulation(control, null);
+            InvokeInitializeSimulation(source, null);
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(controlSession, Is.Not.Null);
+            Assert.That(sourceSession, Is.Not.Null);
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFirst),
+                Is.True, controlFirst.ToString());
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceFirst),
+                Is.True, sourceFirst.ToString());
+
+            NpcData lateNpcDefinition = SimulationTestFactory.CreateNpc("p12g-dynamic-roster-late-npc");
+            string sourceLateNpcId = sourceSession.Composition.RuntimeIdAllocator.AllocateNpcId();
+            string controlLateNpcId = controlSession.Composition.RuntimeIdAllocator.AllocateNpcId();
+            Assert.That(sourceLateNpcId, Is.EqualTo(controlLateNpcId));
+            Assert.That(sourceSession.Runtime.TryRegisterNpc(
+                    new NpcRuntime(sourceLateNpcId, lateNpcDefinition),
+                    out WorldNpcRegistryFailure sourceRegisterFailure), Is.True, sourceRegisterFailure.ToString());
+            Assert.That(controlSession.Runtime.TryRegisterNpc(
+                    new NpcRuntime(controlLateNpcId, lateNpcDefinition),
+                    out WorldNpcRegistryFailure controlRegisterFailure), Is.True, controlRegisterFailure.ToString());
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceSecond),
+                Is.True, sourceSecond.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlSecond),
+                Is.True, controlSecond.ToString());
+
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(sourceSession.Runtime);
+            DailyCaptureEligibilityToken controlToken = GetCompletedDailyToken(controlSession.Runtime);
+            string sourceGraph = CaptureCompleteDailyV1OwnerProjection(sourceSession, sourceToken);
+            Assert.That(sourceGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, controlToken)),
+                "Equivalent supported roster transitions must produce the same completed-boundary owner graph.");
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic), Is.True,
+                restoreFailure + ": " + restoreDiagnostic);
+            SimulationActiveSession restoredSession = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(restoredSession.AdmissionContext.IsRestoredContinuation, Is.True);
+            DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restoredSession.Runtime);
+            Assert.That(restoredToken.AbsoluteDay, Is.EqualTo(sourceToken.AbsoluteDay));
+            Assert.That(restoredToken.CompletedCoreSequence, Is.EqualTo(sourceToken.CompletedCoreSequence));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredToken), Is.EqualTo(sourceGraph),
+                "Restore must retain the post-transition dynamic roster and its typed owner vector.");
+
+            Assert.That(restoredSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredNext),
+                Is.True, restoredNext.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlNext),
+                Is.True, controlNext.ToString());
+            DailyCaptureEligibilityToken nextRestoredToken = GetCompletedDailyToken(restoredSession.Runtime);
+            DailyCaptureEligibilityToken nextControlToken = GetCompletedDailyToken(controlSession.Runtime);
+            Assert.That(nextRestoredToken.AbsoluteDay, Is.EqualTo(nextControlToken.AbsoluteDay));
+            Assert.That(nextRestoredToken.CompletedCoreSequence, Is.EqualTo(nextControlToken.CompletedCoreSequence));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, nextRestoredToken),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, nextControlToken)),
+                "Identical continuation after restore must preserve deterministic owner-state parity after dynamic roster membership.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(controlObject);
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreRejectsBeforeBoundaryWithoutChangingActiveSession()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
@@ -3233,6 +3309,95 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1PopulatedExpeditionCannotProduceCompletedBoundaryForRestore()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G populated source Expedition rejection");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            InvokeInitializeSimulation(source, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(original.Composition.Expeditions.Add(CreateUnsupportedDailyV1Expedition()), Is.True);
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.False);
+            Assert.That(advanceFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
+            Assert.That(original.Runtime.TryGetCompletedDailyCaptureToken(
+                    out _, out DailyCaptureEligibilityFailure tokenFailure), Is.False);
+            Assert.That(tokenFailure, Is.EqualTo(DailyCaptureEligibilityFailure.RuntimeFaulted));
+            OwnerSectionCensusWitness expeditionWitness =
+                new ExpeditionCensusProvider(original.Composition.Expeditions).GetCurrentCensus();
+            Assert.That(expeditionWitness.Cardinality, Is.EqualTo(1));
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+        }
+    }
+
+    [Test]
+    public void DailyV1RestoreRejectsTargetExpeditionAddedAfterOwnerCensusAndKeepsSourceRetryable()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G target Expedition post-census rejection");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            InvokeInitializeSimulation(source, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(original.Runtime);
+            string sourceGraph = CaptureCompleteDailyV1OwnerProjection(original, sourceToken);
+
+            SimulationActiveSession privateCandidate = null;
+            bool targetMutationApplied = false;
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSession(
+                    original,
+                    out SimulationActiveSession restored,
+                    out P12GDailyV1RestoreFailure failure,
+                    out string diagnostic,
+                    stage =>
+                    {
+                        if (stage != P12GDailyV1RestoreStage.TargetOwnerVectorCaptured) return;
+                        Assert.That(privateCandidate, Is.Not.Null);
+                        Assert.That(privateCandidate.Composition.Expeditions.Add(CreateUnsupportedDailyV1Expedition()),
+                            Is.True);
+                        targetMutationApplied = true;
+                    },
+                    candidate => privateCandidate = candidate), Is.False);
+
+            Assert.That(targetMutationApplied, Is.True);
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.TargetOwnerVectorFailed));
+            Assert.That(diagnostic, Does.Contain("exact-empty Expedition owner"));
+            Assert.That(restored, Is.Null);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, sourceToken), Is.EqualTo(sourceGraph));
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession retried = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(retried, GetCompletedDailyToken(retried.Runtime)),
+                Is.EqualTo(sourceGraph));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreChecksOpaqueActorAndPartyDecisionReferencesAgainstAllocatorHighWater()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
@@ -3351,7 +3516,10 @@ public sealed class SimulationRuntimeAdmissionTests
     [TestCase((int)P12GDailyV1RestoreStage.FStaged)]
     [TestCase((int)P12GDailyV1RestoreStage.OwnersStaged)]
     [TestCase((int)P12GDailyV1RestoreStage.CandidateComposed)]
+    [TestCase((int)P12GDailyV1RestoreStage.TargetOwnerVectorCaptured)]
     [TestCase((int)P12GDailyV1RestoreStage.TargetChecksCompleted)]
+    [TestCase((int)P12GDailyV1RestoreStage.CandidateGuardBound)]
+    [TestCase((int)P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured)]
     [TestCase((int)P12GDailyV1RestoreStage.BoundaryAdmitted)]
     [TestCase((int)P12GDailyV1RestoreStage.BeforePublication)]
     public void DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(
@@ -3443,6 +3611,139 @@ public sealed class SimulationRuntimeAdmissionTests
         {
             UnityEngine.Object.DestroyImmediate(bootstrapObject);
             UnityEngine.Object.DestroyImmediate(controlObject);
+        }
+    }
+
+    [Test]
+    public void DailyV1RestoreRejectsPrivateTargetMutationAfterGraphChecksAndKeepsSourceRetryable()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G target epoch admission race");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            InvokeInitializeSimulation(source, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(original.Runtime);
+            string sourceGraph = CaptureCompleteDailyV1OwnerProjection(original, sourceToken);
+
+            SimulationActiveSession privateCandidate = null;
+            bool mutationInjected = false;
+            bool targetRosterMutationApplied = false;
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSession(
+                    original,
+                    out SimulationActiveSession restored,
+                    out P12GDailyV1RestoreFailure failure,
+                    out string diagnostic,
+                    stage =>
+                    {
+                        if (stage != P12GDailyV1RestoreStage.TargetChecksCompleted) return;
+                        mutationInjected = true;
+                        Assert.That(privateCandidate, Is.Not.Null,
+                            "The private candidate must be available before its final admission check.");
+                        Assert.That(privateCandidate.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.False,
+                            "Whole-graph checks must finish before binding the candidate mutation guard.");
+                        NpcRuntime lateNpc = new NpcRuntime(
+                            "p12g-private-target-late-npc",
+                            SimulationTestFactory.CreateNpc("p12g-private-target-late-npc"));
+                        Assert.That(privateCandidate.Runtime.TryRegisterNpc(
+                                lateNpc, out WorldNpcRegistryFailure registerFailure),
+                            Is.True, registerFailure.ToString());
+                        targetRosterMutationApplied = true;
+                    },
+                    candidate => privateCandidate = candidate), Is.False);
+
+            Assert.That(mutationInjected, Is.True);
+            Assert.That(targetRosterMutationApplied, Is.True);
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.TargetOwnerVectorFailed));
+            Assert.That(diagnostic, Does.Contain("owner vector changed during mutation-guard binding"));
+            Assert.That(restored, Is.Null, "A target changed after graph checks must never be returned for publication.");
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, sourceToken), Is.EqualTo(sourceGraph));
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession retried = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(retried, Is.Not.SameAs(original));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(retried, GetCompletedDailyToken(retried.Runtime)),
+                Is.EqualTo(sourceGraph), "A rejected private-target mutation must not affect a later valid reconstruction.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+        }
+    }
+
+    [Test]
+    public void DailyV1RestoreRejectsMutationGuardBindFailureBeforeBoundaryAdmissionAndKeepsSourceRetryable()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G mutation-guard bind failure");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            InvokeInitializeSimulation(source, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(original.Runtime);
+            string sourceGraph = CaptureCompleteDailyV1OwnerProjection(original, sourceToken);
+
+            SimulationActiveSession privateCandidate = null;
+            bool conflictInjected = false;
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSession(
+                    original,
+                    out SimulationActiveSession restored,
+                    out P12GDailyV1RestoreFailure failure,
+                    out string diagnostic,
+                    stage =>
+                    {
+                        if (stage != P12GDailyV1RestoreStage.TargetChecksCompleted) return;
+                        Assert.That(privateCandidate, Is.Not.Null);
+                        Assert.That(privateCandidate.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.False);
+                        AuthoritativeMutationGuard foreignGuard = new AuthoritativeMutationGuard();
+                        Assert.That(privateCandidate.Runtime.Cities[0].TryBindRuntimeMutationGuard(foreignGuard),
+                            Is.True, "The private candidate CityRuntime should be unbound before guard installation.");
+                        conflictInjected = true;
+                    },
+                    candidate => privateCandidate = candidate), Is.False);
+
+            Assert.That(conflictInjected, Is.True);
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.BindingValidationFailed));
+            Assert.That(diagnostic, Does.Contain("already owned by another SimulationRuntime"));
+            Assert.That(privateCandidate.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.False,
+                "A failed guard preflight must not report a complete candidate binding.");
+            Assert.That(restored, Is.Null);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, sourceToken), Is.EqualTo(sourceGraph));
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession retried = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(retried, Is.Not.SameAs(original));
+            Assert.That(retried.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.True);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(retried, GetCompletedDailyToken(retried.Runtime)),
+                Is.EqualTo(sourceGraph));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
         }
     }
 
