@@ -23,4 +23,3 @@
 | Official Smoke | 5/5 PASS; failed=0, skipped=0, inconclusive=0 | `P12GPoliticalClaimOffice-OfficialSmoke.xml` | `EEA5C001812B8077812F9F615C7CDA653066802528456DFAF66E02FA1C8BBAC4` | `P12GPoliticalClaimOffice-OfficialSmoke.log.gz` | `BA68754F56BE65B476624BCF0512BBC7966E9E8E935BCBB1935BF2BEDDF5F732` | `A55C1F6849BEB31188911ADD517144F92758087D36C1AD499D10F99DA4E6DD7B` |
 
 All XML files are retained with compressed logs. Focused and full-suite validation completed on the implementation commit exact Assets tree; no code changed after those runs.
-
