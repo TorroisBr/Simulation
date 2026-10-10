@@ -2809,10 +2809,14 @@ public sealed class SimulationBootstrapCompositionTests
             "P10 LocalTopology is not composed by the selected Daily-v1 profile; absence is not an empty owner row.");
         Assert.That(bootstrap.DomainEventStore, Is.Not.Null,
             "DomainEventStore is composed as an omitted noncausal read model; its rows need not be empty.");
+        Assert.That(bootstrap.DomainEventStore.Events.Count, Is.EqualTo(0),
+            "The pre-day-one Daily-v1 admission fixture observes exactly zero DomainEventStore rows; this is an observed count, not an empty-owner classification.");
         Assert.That(bootstrap.History, Is.Not.Null,
             "HistoryStore is a derived/subset read model and is not a serialized owner section.");
         Assert.That(bootstrap.Decisions, Is.Not.Null,
             "NpcDecisionStore is an omitted noncausal read model; its rows need not be empty.");
+        Assert.That(bootstrap.Decisions.Decisions.Count, Is.EqualTo(0),
+            "The pre-day-one Daily-v1 admission fixture observes exactly zero NpcDecisionStore rows; this is an observed count, not an empty-owner classification.");
         Assert.That(bootstrap.NpcChronicles, Is.Not.Null,
             "NpcChronicle is derived and is not a serialized owner section.");
         Assert.That(bootstrap.WorldId, Is.Not.Null);
