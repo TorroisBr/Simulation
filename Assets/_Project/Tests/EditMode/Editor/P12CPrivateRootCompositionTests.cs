@@ -269,6 +269,24 @@ public sealed class P12CPrivateRootCompositionTests
         Assert.That(stagedF.Expeditions.ActiveExpeditions, Is.Empty);
         AssertStagedActorChoiceTemporalOwner(stagedF);
         Assert.That(stagedF.DetachedNpcRows, Is.Not.Null);
+        Assert.That(stagedD.NpcFRows, Is.Not.Null);
+        Assert.That(stagedF.DetachedNpcRows, Has.Count.EqualTo(stagedD.NpcFRows.Count));
+
+        HashSet<string> stagedDNpcRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < stagedD.NpcFRows.Count; i++)
+        {
+            P12DNpcFRow stagedDRow = stagedD.NpcFRows[i];
+            P12DNpcFRow stagedFRow = stagedF.DetachedNpcRows[i];
+            Assert.That(stagedDRow, Is.Not.Null);
+            Assert.That(stagedDRow.RuntimeId, Is.Not.Null.And.Not.Empty);
+            Assert.That(stagedDNpcRuntimeIds.Add(stagedDRow.RuntimeId), Is.True,
+                $"Duplicate P12-D detached NPC row for '{stagedDRow.RuntimeId}'.");
+            Assert.That(stagedFRow, Is.SameAs(stagedDRow),
+                $"P12-F must carry the same staged P12-D row at index {i}.");
+            Assert.That(stagedFRow.RuntimeId, Is.EqualTo(stagedDRow.RuntimeId));
+        }
+
+        Assert.That(stagedDNpcRuntimeIds, Has.Count.EqualTo(stagedF.DetachedNpcRows.Count));
         Assert.That(stagedF.UnresolvedPoliticalKnowledgeBindings, Is.Empty);
         Assert.That(attempt.IsCurrentFor(sourceRuntime, captureToken, captureToken.OwnerSections), Is.True);
     }

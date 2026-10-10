@@ -800,6 +800,8 @@ public sealed class SimulationBootstrapCompositionTests
             .GetField("registeredSections", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(censusProtocol);
         AssertSelectedDailyV1SectionInventory(runtime, expectedCensusSections, registeredSections);
+        AssertSelectedDailyV1RegisteredOwnerIdentityMap(
+            runtime, simulation.Bootstrap, expectedCensusSections, registeredSections);
         AssertSelectedDailyV1NonVectorOwnerDisposition(
             simulation.Bootstrap,
             expectedCensusSections,
@@ -1950,6 +1952,9 @@ public sealed class SimulationBootstrapCompositionTests
             runtime,
             ReadPrivateField<IDictionary>(protocol, "expectedSections"),
             ReadPrivateField<IDictionary>(protocol, "registeredSections"));
+        AssertSelectedDailyV1DynamicRegisteredOwnerIdentities(
+            runtime,
+            ReadPrivateField<IDictionary>(protocol, "registeredSections"));
 
         IReadOnlyList<IOwnerSectionCensusProvider> travelStateProviders =
             protocol.NpcTravelStateFamilyProviders;
@@ -2197,6 +2202,343 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(expectedSections.Count, Is.EqualTo(
             69 + (22 * roster.Length) + unboundNpcCount + people.Length),
             "The 69 fixed sections, including the P12-F Expedition owner, plus 22 per-NPC dynamic sections, unbound residence rows, and Person rows must match the sealed Daily-v1 inventory.");
+    }
+
+    private static Dictionary<string, object> BuildSelectedDailyV1DynamicOwnerIdentityMap(
+        SimulationRuntime runtime)
+    {
+        Dictionary<string, object> expected = new Dictionary<string, object>(System.StringComparer.Ordinal);
+
+        foreach (CityRuntime city in runtime.Cities.OrderBy(
+            candidate => candidate.RuntimeId, System.StringComparer.Ordinal))
+        {
+            string encodedCityId = city.RuntimeId.Length.ToString(
+                System.Globalization.CultureInfo.InvariantCulture) + ":" + city.RuntimeId;
+            AddExpectedDailyV1OwnerIdentity(
+                expected, CityNpcPresenceCensusProvider.SectionIdPrefix + city.RuntimeId, city);
+            AddExpectedDailyV1OwnerIdentity(
+                expected, CityMarketCensusProvider.SectionIdPrefix + encodedCityId, city.Market);
+            AddExpectedDailyV1OwnerIdentity(
+                expected, SettlementPopulationCensusProvider.AggregateSectionPrefix + encodedCityId,
+                city.Population);
+            AddExpectedDailyV1OwnerIdentity(
+                expected, SettlementPopulationCensusProvider.OperationReceiptsSectionPrefix + encodedCityId,
+                city.Population);
+        }
+
+        string[] knowledgePrefixes =
+        {
+            "p12f.explorable-site-knowledge/",
+            "p12f.local-topology-knowledge.places/",
+            "p12f.local-topology-knowledge.connections/",
+            "p12f.adventure-intel.opposition/",
+            "p12f.adventure-intel.notable-items/",
+            "p12f.adventure-intel.common-resources/",
+            "p12f.adventure-intel.access/",
+            "p12f.commercial-knowledge.markets/",
+            "p12f.commercial-knowledge.liquidity/",
+            "p12f.commercial-knowledge.share-receipts/"
+        };
+        foreach (NpcRuntime npc in runtime.NpcRuntimes.OrderBy(
+            candidate => candidate.RuntimeId, System.StringComparer.Ordinal))
+        {
+            string runtimeId = npc.RuntimeId;
+            object explorableKnowledge = ReadNonPublicProperty(npc, "ExistingExplorableSiteKnowledge");
+            object localKnowledge = ReadNonPublicProperty(npc, "ExistingLocalTopologyKnowledge");
+            object adventureKnowledge = ReadNonPublicProperty(npc, "ExistingAdventureSiteIntelKnowledge");
+            object commercialKnowledge = ReadNonPublicProperty(npc, "ExistingCommercialKnowledge");
+            object[] knowledgeOwners =
+            {
+                explorableKnowledge,
+                localKnowledge,
+                localKnowledge,
+                adventureKnowledge,
+                adventureKnowledge,
+                adventureKnowledge,
+                adventureKnowledge,
+                commercialKnowledge,
+                commercialKnowledge,
+                commercialKnowledge
+            };
+            for (int i = 0; i < knowledgePrefixes.Length; i++)
+                AddExpectedDailyV1OwnerIdentity(expected, knowledgePrefixes[i] + runtimeId, knowledgeOwners[i]);
+
+            AddExpectedDailyV1OwnerIdentity(
+                expected, SpatialKnowledgeCensusProvider.LocationsSectionPrefix + runtimeId,
+                npc.SpatialKnowledge);
+            AddExpectedDailyV1OwnerIdentity(
+                expected, SpatialKnowledgeCensusProvider.RoutesSectionPrefix + runtimeId,
+                npc.SpatialKnowledge);
+            AddExpectedDailyV1OwnerIdentity(
+                expected, NpcTravelStateCensusProvider.SectionIdFor(runtimeId), npc);
+            AddExpectedDailyV1OwnerIdentity(
+                expected, NpcInventoryCensusProvider.SectionPrefix + runtimeId, npc.Inventory);
+            AddExpectedDailyV1OwnerIdentity(
+                expected, NpcMoneyAccountCensusProvider.SectionPrefix + runtimeId, npc.MoneyAccount);
+            AddExpectedDailyV1OwnerIdentity(
+                expected,
+                NpcPlanCensusProvider.SectionIdFor(NpcPlanCensusProvider.MerchantTradePlanKind, runtimeId),
+                ReadNonPublicProperty(npc, "ExistingMerchantTradePlan"));
+            AddExpectedDailyV1OwnerIdentity(
+                expected,
+                NpcPlanCensusProvider.SectionIdFor(NpcPlanCensusProvider.TravelPlanKind, runtimeId),
+                ReadNonPublicProperty(npc, "ExistingTravelPlan"));
+            AddExpectedDailyV1OwnerIdentity(
+                expected, P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(runtimeId),
+                ReadNonPublicProperty(npc, "ExistingLocalKnowledgeObservationRuntime"));
+            AddExpectedDailyV1OwnerIdentity(
+                expected, P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(runtimeId),
+                ReadNonPublicProperty(npc, "ExistingMerchantTradeStateRuntime"));
+            AddExpectedDailyV1OwnerIdentity(
+                expected, P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(runtimeId), npc);
+            AddExpectedDailyV1OwnerIdentity(
+                expected, NpcCurrentActionCensusProvider.SectionIdFor(runtimeId), npc);
+            AddExpectedDailyV1OwnerIdentity(
+                expected, NpcLifecycleCensusProvider.SectionIdFor(runtimeId, residence: false), npc);
+
+            if (!IsNpcBoundToRegisteredPerson(runtime, npc))
+            {
+                AddExpectedDailyV1OwnerIdentity(
+                    expected, NpcLifecycleCensusProvider.SectionIdFor(runtimeId, residence: true), npc);
+            }
+        }
+
+        foreach (PersonRuntime person in runtime.PersonStore.Persons.OrderBy(
+            candidate => candidate.PersonId.Value, System.StringComparer.Ordinal))
+        {
+            AddExpectedDailyV1OwnerIdentity(
+                expected, PersonLifeResidenceCensusProvider.SectionIdFor(person.PersonId), person);
+        }
+
+        return expected;
+    }
+
+    private static Dictionary<string, object> BuildSelectedDailyV1RegisteredOwnerIdentityMap(
+        SimulationRuntime runtime,
+        SimulationBootstrapComposition bootstrap)
+    {
+        Dictionary<string, object> expected = BuildSelectedDailyV1DynamicOwnerIdentityMap(runtime);
+
+        AddExpectedDailyV1OwnerIdentity(expected, PersonMembershipCensusProvider.SectionId, runtime.PersonStore);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, PersonMaterializationBindingCensusProvider.SectionId, runtime.PersonStore);
+
+        RuntimeIdentityRegistry identityRegistry =
+            (RuntimeIdentityRegistry)GetRuntimeOwner(runtime, "p12RuntimeIdentityRegistry");
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.NpcsSectionId, identityRegistry);
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.CitiesSectionId, identityRegistry);
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.LocationsSectionId, identityRegistry);
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.RoutesSectionId, identityRegistry);
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.ExplorableSitesSectionId, identityRegistry);
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.LocalPlacesSectionId, identityRegistry);
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.LocalConnectionsSectionId, identityRegistry);
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.NotableItemsSectionId, identityRegistry);
+
+        SpatialNetworkRuntime spatialNetwork =
+            (SpatialNetworkRuntime)GetRuntimeOwner(runtime, "p12SpatialNetworkRuntime");
+        Assert.That(spatialNetwork, Is.SameAs(bootstrap.SpatialNetwork));
+        AddExpectedDailyV1OwnerIdentity(expected, SpatialNetworkCensusProvider.LocationsSectionId, spatialNetwork);
+        AddExpectedDailyV1OwnerIdentity(expected, SpatialNetworkCensusProvider.RoutesSectionId, spatialNetwork);
+
+        SpatialAuthorityStore spatialAuthority = runtime.SpatialAuthorityStore;
+        AddExpectedDailyV1OwnerIdentity(expected, SpatialHexCensusProvider.SectionId, spatialAuthority);
+        AddExpectedDailyV1OwnerIdentity(expected, SpatialLocationCensusProvider.SectionId, spatialAuthority);
+        AddExpectedDailyV1OwnerIdentity(expected, SpatialScaleContextCensusProvider.SectionId, spatialAuthority);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, SpatialPassageStateCensusProvider.SectionId, spatialAuthority.PassageAuthority);
+        AddExpectedDailyV1OwnerIdentity(expected, SpatialCrossingCensusProvider.SectionId, spatialAuthority);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, LegacySpatialAnchorBindingCensusProvider.SectionId, runtime.LegacySpatialAnchorBindingStore);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, PersonSpatialPositionCensusProvider.SectionId, runtime.PersonSpatialPositionStore);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, SpatialRouteObservationCensusProvider.SectionId, runtime.SpatialRouteKnowledgeStore);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, PersonRoutePlanHistoryCensusProvider.SectionId, runtime.PersonRoutePlanStore);
+
+        RuntimeIdAllocator allocator = (RuntimeIdAllocator)GetRuntimeOwner(runtime, "runtimeIdAllocator");
+        object allocatorIdentity = ReadNonPublicProperty(allocator, "CensusOwnerIdentity");
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdAllocatorCensusProvider.EventsSectionId, allocatorIdentity);
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdAllocatorCensusProvider.DecisionsSectionId, allocatorIdentity);
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId, allocatorIdentity);
+        SimulationRecordSequence recordSequence =
+            (SimulationRecordSequence)GetRuntimeOwner(runtime, "simulationRecordSequence");
+        AddExpectedDailyV1OwnerIdentity(
+            expected, SimulationRecordSequenceCensusProvider.SectionId,
+            ReadNonPublicProperty(recordSequence, "CensusOwnerIdentity"));
+
+        AddExpectedDailyV1OwnerIdentity(
+            expected, GenealogyCensusProvider.SectionId, runtime.GenealogyStoreForWorldBoundary);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, PoliticalKnowledgeStoreCensusProvider.SectionId, runtime.PoliticalKnowledgeStoreForWorldBoundary);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, PoliticalDecisionStoreCensusProvider.SectionId,
+            GetRuntimeOwner(runtime, "politicalDecisionStore"));
+        CrimeSocialAppraisalWorldState crimeSocial = runtime.CrimeSocialAppraisal;
+        AddExpectedDailyV1OwnerIdentity(
+            expected, P12CrimeSocialAppraisalCensusProvider.OutcomesSectionId, crimeSocial.TheftOutcomes);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, P12CrimeSocialAppraisalCensusProvider.KnowledgeSectionId, crimeSocial.CrimeKnowledge);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, P12CrimeSocialAppraisalCensusProvider.ReactionsSectionId, crimeSocial.SocialReactions);
+
+        AddExpectedDailyV1OwnerIdentity(
+            expected, P12CrimeJusticeCensusProvider.CrimeP18ReceiptsSectionId,
+            GetRuntimeOwner(runtime, "crimeSystem"));
+        JusticeSystem justiceSystem = (JusticeSystem)GetRuntimeOwner(runtime, "justiceSystem");
+        AddExpectedDailyV1OwnerIdentity(
+            expected, P12CrimeJusticeCensusProvider.JusticeRecordsSectionId, justiceSystem);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId, justiceSystem);
+
+        object armedForce = runtime.ArmedForceStore;
+        AddExpectedDailyV1OwnerIdentity(expected, ArmedForceStoreCensusProvider.ForcesSectionId, armedForce);
+        AddExpectedDailyV1OwnerIdentity(expected, ArmedForceStoreCensusProvider.ContingentsSectionId, armedForce);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, ArmedForceStoreCensusProvider.RelevantPersonReferencesSectionId, armedForce);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, ContingentManpowerCensusProvider.SectionId, runtime.ContingentManpowerStateStore);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, ArmedForceSpatialCensusProvider.SectionId, runtime.ArmedForceSpatialStateStore);
+        AddExpectedDailyV1OwnerIdentity(expected, PersistentConflictCensusProvider.SectionId, runtime.ConflictStore);
+        AddExpectedDailyV1OwnerIdentity(expected, PersistentWarCensusProvider.SectionId, runtime.WarStore);
+        AddExpectedDailyV1OwnerIdentity(expected, PersistentBattleCensusProvider.SectionId, runtime.BattleStore);
+
+        AddExpectedDailyV1OwnerIdentity(
+            expected, InstitutionOfficeCensusProvider.InstitutionsSectionId,
+            runtime.InstitutionStoreForWorldBoundary);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, InstitutionOfficeCensusProvider.OfficesSectionId, runtime.OfficeStoreForWorldBoundary);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, InstitutionOfficeCensusProvider.IncumbenciesSectionId, runtime.OfficeStoreForWorldBoundary);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, InstitutionOfficeCensusProvider.TenuresSectionId, runtime.OfficeStoreForWorldBoundary);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, FactionStoreCensusProvider.FactionsSectionId, GetRuntimeOwner(runtime, "factionStore"));
+        AddExpectedDailyV1OwnerIdentity(
+            expected, FactionStoreCensusProvider.AffiliationsSectionId, GetRuntimeOwner(runtime, "factionStore"));
+        AddExpectedDailyV1OwnerIdentity(
+            expected, PoliticalClaimStoreCensusProvider.ClaimsSectionId,
+            GetRuntimeOwner(runtime, "politicalClaimStore"));
+        AddExpectedDailyV1OwnerIdentity(
+            expected, PoliticalClaimStoreCensusProvider.RecognitionsSectionId,
+            GetRuntimeOwner(runtime, "politicalClaimStore"));
+        AddExpectedDailyV1OwnerIdentity(
+            expected, PoliticalSupportStoreCensusProvider.RelationsSectionId,
+            GetRuntimeOwner(runtime, "politicalSupportStore"));
+        AddExpectedDailyV1OwnerIdentity(
+            expected, PropertyOwnershipCensusProvider.OwnershipSectionId, runtime.PropertyOwnershipStore);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, PropertyOwnershipCensusProvider.TransferHistorySectionId, runtime.PropertyOwnershipStore);
+        AddExpectedDailyV1OwnerIdentity(expected, EstateCensusProvider.SectionId, runtime.EstateStore);
+
+        AddExpectedDailyV1OwnerIdentity(
+            expected, ActorChoiceP11CensusProvider.SectionId,
+            ReadNonPublicProperty(runtime.ActorChoiceStore, "CensusOwnerIdentity"));
+        AddExpectedDailyV1OwnerIdentity(
+            expected, ScheduledDirectiveCensusProvider.SectionId, bootstrap.ScheduledDirectives);
+        AddExpectedDailyV1OwnerIdentity(expected, TravelPartyCensusProvider.SectionId, bootstrap.TravelParties);
+        AddExpectedDailyV1OwnerIdentity(expected, ExpeditionCensusProvider.SectionId, bootstrap.Expeditions);
+        AddExpectedDailyV1OwnerIdentity(expected, ExplorableSiteCensusProvider.SectionId, bootstrap.ExplorableSites);
+
+        NpcDecisionRecorder decisionRecorder =
+            (NpcDecisionRecorder)GetRuntimeOwner(runtime, "decisionRecorder");
+        AddExpectedDailyV1OwnerIdentity(
+            expected, NpcDecisionRecorder.OccurrenceReceiptSectionId,
+            decisionRecorder.GetOccurrenceReceiptCensus().OwnerInstanceIdentity);
+        AddExpectedDailyV1OwnerIdentity(
+            expected, EconomyTransactionService.KeyedSaleReceiptSectionId,
+            bootstrap.GetEconomyKeyedSaleReceiptCensus().OwnerInstanceIdentity);
+
+        return expected;
+    }
+
+    private static void AssertSelectedDailyV1RegisteredOwnerIdentityMap(
+        SimulationRuntime runtime,
+        SimulationBootstrapComposition bootstrap,
+        IDictionary expectedSections,
+        IDictionary registeredSections)
+    {
+        Dictionary<string, object> expectedOwners =
+            BuildSelectedDailyV1RegisteredOwnerIdentityMap(runtime, bootstrap);
+        string[] expectedSectionIds = expectedSections.Keys.Cast<string>()
+            .OrderBy(sectionId => sectionId, System.StringComparer.Ordinal).ToArray();
+        string[] expectedOwnerIds = expectedOwners.Keys
+            .OrderBy(sectionId => sectionId, System.StringComparer.Ordinal).ToArray();
+        Assert.That(expectedOwnerIds, Is.EqualTo(expectedSectionIds),
+            "The independent source-owner map must identify every selected Daily-v1 row exactly once.");
+        AssertRegisteredOwnerIdentityMap(registeredSections, expectedOwners);
+    }
+
+    private static void AssertSelectedDailyV1DynamicRegisteredOwnerIdentities(
+        SimulationRuntime runtime,
+        IDictionary registeredSections)
+    {
+        Dictionary<string, object> expectedOwners = BuildSelectedDailyV1DynamicOwnerIdentityMap(runtime);
+        string[] expectedDynamicIds = BuildSelectedDailyV1SectionInventory(runtime).Keys
+            .Where(IsSelectedDailyV1DynamicOwnerSection)
+            .OrderBy(sectionId => sectionId, System.StringComparer.Ordinal).ToArray();
+        string[] actualDynamicIds = expectedOwners.Keys
+            .OrderBy(sectionId => sectionId, System.StringComparer.Ordinal).ToArray();
+        Assert.That(actualDynamicIds, Is.EqualTo(expectedDynamicIds),
+            "The source owner map must cover every live NPC, conditional residence, Person, and City row.");
+        AssertRegisteredOwnerIdentityMap(registeredSections, expectedOwners);
+    }
+
+    private static bool IsSelectedDailyV1DynamicOwnerSection(string sectionId)
+    {
+        return sectionId.StartsWith("p12b.city.important-npcs/", System.StringComparison.Ordinal)
+            || sectionId.StartsWith(CityMarketCensusProvider.SectionIdPrefix, System.StringComparison.Ordinal)
+            || sectionId.StartsWith(SettlementPopulationCensusProvider.AggregateSectionPrefix, System.StringComparison.Ordinal)
+            || sectionId.StartsWith(SettlementPopulationCensusProvider.OperationReceiptsSectionPrefix, System.StringComparison.Ordinal)
+            || sectionId.StartsWith("p12b.npc-residence/", System.StringComparison.Ordinal)
+            || sectionId.StartsWith("p12b.person-life-residence/", System.StringComparison.Ordinal)
+            || sectionId.StartsWith("p12f.explorable-site-knowledge/", System.StringComparison.Ordinal)
+            || sectionId.StartsWith("p12f.local-topology-knowledge.places/", System.StringComparison.Ordinal)
+            || sectionId.StartsWith("p12f.local-topology-knowledge.connections/", System.StringComparison.Ordinal)
+            || sectionId.StartsWith("p12f.adventure-intel.", System.StringComparison.Ordinal)
+            || sectionId.StartsWith("p12f.commercial-knowledge.", System.StringComparison.Ordinal)
+            || sectionId.StartsWith(SpatialKnowledgeCensusProvider.LocationsSectionPrefix, System.StringComparison.Ordinal)
+            || sectionId.StartsWith(SpatialKnowledgeCensusProvider.RoutesSectionPrefix, System.StringComparison.Ordinal)
+            || sectionId.StartsWith(NpcTravelStateCensusProvider.SectionPrefix, System.StringComparison.Ordinal)
+            || sectionId.StartsWith(NpcInventoryCensusProvider.SectionPrefix, System.StringComparison.Ordinal)
+            || sectionId.StartsWith(NpcMoneyAccountCensusProvider.SectionPrefix, System.StringComparison.Ordinal)
+            || sectionId.StartsWith(NpcPlanCensusProvider.MerchantTradePlanSectionPrefix, System.StringComparison.Ordinal)
+            || sectionId.StartsWith(NpcPlanCensusProvider.TravelPlanSectionPrefix, System.StringComparison.Ordinal)
+            || sectionId.StartsWith(P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionPrefix, System.StringComparison.Ordinal)
+            || sectionId.StartsWith(P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionPrefix, System.StringComparison.Ordinal)
+            || sectionId.StartsWith(P12CrimeJusticeCensusProvider.NpcStatusSectionPrefix, System.StringComparison.Ordinal)
+            || sectionId.StartsWith(NpcCurrentActionCensusProvider.SectionPrefix, System.StringComparison.Ordinal)
+            || sectionId.StartsWith(NpcLifecycleCensusProvider.LifeStateSectionPrefix, System.StringComparison.Ordinal)
+            || sectionId.StartsWith(NpcLifecycleCensusProvider.ResidenceSectionPrefix, System.StringComparison.Ordinal);
+    }
+
+    private static void AssertRegisteredOwnerIdentityMap(
+        IDictionary registeredSections,
+        IDictionary<string, object> expectedOwners)
+    {
+        foreach (KeyValuePair<string, object> expected in expectedOwners)
+        {
+            Assert.That(registeredSections.Contains(expected.Key), Is.True,
+                "Missing live registration for " + expected.Key + ".");
+            object registered = registeredSections[expected.Key];
+            IOwnerSectionCensusProvider provider =
+                ReadPrivateField<IOwnerSectionCensusProvider>(registered, "Provider");
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(expected.Value),
+                "The live registered row must identify its authoritative source owner: " + expected.Key + ".");
+        }
+    }
+
+    private static void AddExpectedDailyV1OwnerIdentity(
+        IDictionary<string, object> expected,
+        string sectionId,
+        object ownerIdentity)
+    {
+        Assert.That(ownerIdentity, Is.Not.Null, "Expected source owner for " + sectionId + ".");
+        Assert.That(expected.ContainsKey(sectionId), Is.False,
+            "The independent source-owner map must not contain duplicate IDs: " + sectionId + ".");
+        expected.Add(sectionId, ownerIdentity);
     }
 
     private static void AssertSelectedDailyV1SectionInventory(
