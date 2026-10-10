@@ -3836,3 +3836,32 @@ checks, and integrated restored-graph validation, rejection, failure
 atomicity, no-replay, and deterministic continuation parity. P12-A remains
 `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`. No capture,
 export, hydration, or broader census readiness is implied.
+
+### Current canonical blocker refresh — `38334ad`
+
+The current-source writer audit is recorded in
+[`design/PHASE12_G_CURRENT_SOURCE_LEDGER_REFRESH_A88CC73.md`](design/PHASE12_G_CURRENT_SOURCE_LEDGER_REFRESH_A88CC73.md).
+It supersedes the older Crime/Social selected-ingress concern with the
+reviewed `runtime.advance-day` mapping and exact composite `+1` epoch
+evidence. It also preserves the explicit no-supported-Daily-writer
+dispositions for Expedition and the P12-E Military/Conflict/War/Battle base
+owners, with the remaining public-source/quiescence caveat kept separate.
+No missing supported Daily-v1 writer or epoch edge was confirmed.
+
+The live inventory remains open: the 299-row vector is mapped by owner
+families, and the promoted NPC/Person transition witness covers its tested
+N/P/M transitions, but the full live identity/cardinality/revision,
+writer/operation, dynamic-transition, and B-F-consumer join is not yet proven
+at admission. For target ownership, the P12-D receipt, P12-E Justice, and
+P12-F temporal package witnesses are already promoted; `eb41667` closes the
+source Crime registration identity check. A same-attempt G target census is
+still needed for P8-C/D, global caches, target Crime, and the complete staged
+owner vector.
+
+The next implementation boundary remains blocked on that live inventory.
+After it closes, the accepted G coordinator must reuse the promoted B
+restored-boundary and active-session publication seams, then validate
+pre-allocation rejection, graph references, failure atomicity, no replay,
+and continuation parity. No Phase dependency edge or readiness label
+changes: P12-B through P12-F remain promoted within scope; P12-G and P12-A
+remain `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`.

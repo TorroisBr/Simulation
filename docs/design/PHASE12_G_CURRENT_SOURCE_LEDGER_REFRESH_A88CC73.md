@@ -37,3 +37,82 @@ P12-G is still `WAIT_DEPENDENCY`. The remaining evidence and implementation gate
 3. After the live inventory prerequisite is complete, implement the bounded G coordinator using the promoted B admission and active-session publication seams, then prove whole-graph validation/rejection, failure atomicity, no replay/repeated effects, and continuation parity under the accepted technical design.
 
 No operation ID is added, no owner is reclassified as empty, and no gameplay is added. P12-B through P12-F remain promoted within their recorded scopes; P12-G and P12-A remain `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`. This reconciliation makes no capture-eligibility, export/hydration, P12-A/P13-readiness, or Phase-closure claim.
+
+## Current-canonical writer and inventory blocker refresh — `38334ad`
+
+This read-only source audit is current through P12 canonical
+`38334ad55ce1ad467d2119ac968f52cc3aad055a` and architecture canonical
+`47eff220c7ce00f6e7c759bdc2b76780bb46f628`. Since the source-ledger refresh
+above, the only `Assets` change is the reviewed test assertion recorded in
+`PHASE12_G_EXACT_CRIME_RECEIPT_REGISTRATION_REVIEW_EB41667.md`; production
+owner and writer code did not change.
+
+### Supported writer and epoch dispositions
+
+- **Crime/Social:** the old open selected-ingress item in the
+  `564553f` reconciliation is superseded by
+  `PHASE12_G_CRIME_SOCIAL_INGRESS_EPOCH_CROSSWALK_97BCC5C.md` and
+  `PHASE12_G_CRIME_SOCIAL_EXACT_EPOCH_REVIEW_33CE302.md`. The supported
+  authored Daily-v1 Steal path is inside the registered
+  `runtime.advance-day`; its nested Crime/Social stages are not separate
+  operation IDs. The exact runtime test observes the three owner rows, an
+  active outer operation, and the composite's exact `+1` shared epoch.
+  Covered direct standalone writes have their existing owner-thread,
+  revision/headroom, epoch-capacity, and callback behavior. This does not
+  certify arbitrary direct calls or exhaustive runtime quiescence.
+- **Crime and Justice daily/action writes:** supported Daily mutation uses
+  the reserved owner scopes nested under `runtime.advance-day`; normal action
+  commits use the exact-owner action scopes. P12-bound owner mutators reject
+  when the required scope is absent. This is no confirmed selected-profile
+  writer/epoch defect. Justice target-sentinel validation remains a G target
+  composition obligation.
+- **Expedition:** the accepted Daily-v1 profile has no Ruin site or composed
+  Expedition producer. Keep the required source owner and F payload. A public
+  facade is not evidence of a supported selected-profile writer; do not add
+  an operation or infer a permanent zero rule.
+- **Military, Conflict, War, and Battle:** the eight base owners remain
+  required and captured by E. P16/P17 producers are outside this profile. No
+  normal Daily-v1 mutator caller is evidenced. Public mutable references
+  remain a source-surface/quiescence caveat, not a confirmed supported
+  unwrapped writer or missing epoch edge.
+- **Other public helpers:** the registered runtime facades define supported
+  ingress. A public helper or raw owner reference alone does not establish a
+  second supported Daily-v1 operation. Preserve this as an evidence boundary;
+  do not add speculative wrappers or security checks.
+
+No new production writer or mutation-epoch implementation is justified by
+the current source audit. The owner-to-writer join remains incomplete as a
+whole because the 299-row reconciliation is organized by row family and does
+not yet prove every live object's identity, cardinality/revision source,
+supported transition, and package/target consumer together at admission.
+
+### Current remaining P12-G obligations
+
+1. Complete the live 299-row owner/provider join, including exact identity,
+   cardinality and revision source, supported successful writer and
+   enclosing operation or explicit no-supported-writer disposition, and
+   B-F package or target consumer. Validate every supported dynamic
+   membership, binding, and owner-state transition; the promoted N/P/M
+   transition witness is retained evidence for those tested transitions only.
+2. Integrate one complete fresh target-owner census with the same staged
+   restore attempt. The promoted P12-D per-NPC receipt, P12-E Justice
+   sentinel, and P12-F ActorChoice temporal package witnesses remain valid;
+   the promoted `eb41667` assertion covers the source Crime owner only.
+   Still bind/validate P8-C and P8-D fresh target stores, global receipt
+   caches, and the target Crime sentinel, and include the existing package
+   witnesses in the coordinator's target census.
+3. After the live inventory prerequisite is closed, implement the accepted
+   G parse/admit/stage/validate/publish coordinator. Reuse the promoted
+   completed-boundary admission and active-session exchange seams; do not
+   recreate them.
+4. Validate pre-allocation rejection and complete typed cross-owner graph
+   checks, then prove failure atomicity, no replay or repeated effects, and
+   deterministic continuation parity for the exact selected Daily-v1
+   profile.
+
+The current audit therefore closes no additional readiness gate: P12-G
+remains `WAIT_DEPENDENCY`, P12-A remains `WAIT_DEPENDENCY`, P13 remains
+`BLOCKED`, and Phase 12 remains `OPEN`. It identifies no product or
+architecture decision required for the supported writer paths above. The
+public Military source-surface caveat is preserved for the G quiescence
+review and is not treated as authorization to add a new caller or owner.
