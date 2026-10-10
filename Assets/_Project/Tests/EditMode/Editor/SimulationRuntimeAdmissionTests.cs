@@ -5352,6 +5352,155 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestoreRejectsPropertyEstateDanglingOwnerAfterEarlierEOwnersStageAtomically()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject bootstrapObject = new GameObject("P12-G Property/Estate false-return atomicity");
+        GameObject controlObject = new GameObject("P12-G Property/Estate false-return control");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(bootstrap, config);
+            ConfigureSelectedBootstrap(control, config);
+            InvokeInitializeSimulation(bootstrap, null);
+            InvokeInitializeSimulation(control, null);
+
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
+
+            PersonId ownerId = new PersonId("p12g-property-estate-failure-owner");
+            PropertyId propertyId = new PropertyId("p12g-property-estate-failure-property");
+            Assert.That(original.Runtime.TryRegisterPerson(
+                new PersonRuntime(ownerId, 0L), out PersonStoreFailure sourcePersonFailure),
+                Is.True, sourcePersonFailure.ToString());
+            Assert.That(controlSession.Runtime.TryRegisterPerson(
+                new PersonRuntime(ownerId, 0L), out PersonStoreFailure controlPersonFailure),
+                Is.True, controlPersonFailure.ToString());
+            Assert.That(original.Runtime.TryRegisterPropertyOwnership(
+                new PropertyOwnershipRecord(propertyId, ownerId), out PropertyFoundationFailure sourcePropertyFailure),
+                Is.True, sourcePropertyFailure.ToString());
+            Assert.That(controlSession.Runtime.TryRegisterPropertyOwnership(
+                new PropertyOwnershipRecord(propertyId, ownerId), out PropertyFoundationFailure controlPropertyFailure),
+                Is.True, controlPropertyFailure.ToString());
+            Assert.That(original.Runtime.PropertyOwnershipStore.Count, Is.EqualTo(1));
+            Assert.That(controlSession.Runtime.PropertyOwnershipStore.Count, Is.EqualTo(1));
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstAdvanceFailure),
+                Is.True, firstAdvanceFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFirstFailure),
+                Is.True, controlFirstFailure.ToString());
+            DailyCaptureEligibilityToken originalToken = GetCompletedDailyToken(original.Runtime);
+            string beforeFacts = CaptureSelectedDailyFacts(original.Runtime);
+            string beforeRoots = CaptureContinuationRootFacts(original);
+            string beforeOwnerGraph = CaptureCompleteDailyV1OwnerProjection(original, originalToken);
+
+            PersonId missingStagedPersonId = new PersonId("p12g-property-estate-missing-staged-person");
+            bool snapshotsCaptured = false;
+            bool institutionOfficeStaged = false;
+            bool propertyEstateStaged = false;
+            bool replacementApplied = false;
+            Assert.That(bootstrap.TryRestoreDailyContinuationWithPropertyEstateSnapshotForTest(
+                snapshot =>
+                {
+                    Assert.That(snapshotsCaptured, Is.True,
+                        "The detached Property/Estate snapshot is replaced only after all E snapshots were captured.");
+                    Assert.That(institutionOfficeStaged, Is.True,
+                        "Institution and Office must already be privately staged at this failure boundary.");
+                    Assert.That(snapshot, Is.Not.Null);
+                    Assert.That(snapshot.OwnershipSchemaVersion,
+                        Is.EqualTo(PropertyEstateOwnerSnapshot.CurrentSchemaVersion));
+                    Assert.That(snapshot.OwnershipRecordCount, Is.EqualTo(1));
+                    Assert.That(snapshot.PropertyRevision, Is.EqualTo(1L));
+                    Assert.That(snapshot.TransferHistoryRecordCount, Is.EqualTo(0));
+                    Assert.That(snapshot.EstateRecordCount, Is.EqualTo(0));
+                    Assert.That(snapshot.OwnershipRows, Has.Count.EqualTo(1));
+                    PropertyEstateOwnershipRow current = snapshot.OwnershipRows[0];
+                    Assert.That(current.PropertyIdValue, Is.EqualTo(propertyId.Value));
+                    Assert.That(current.OwnerPersonIdValue, Is.EqualTo(ownerId.Value));
+                    replacementApplied = true;
+                    return new PropertyEstateOwnerSnapshot(
+                        snapshot.OwnershipSchemaVersion,
+                        snapshot.OwnershipRecordCount,
+                        snapshot.PropertyRevision,
+                        new[] { new PropertyEstateOwnershipRow(current.PropertyIdValue, missingStagedPersonId.Value) },
+                        snapshot.TransferHistorySchemaVersion,
+                        snapshot.TransferHistoryRecordCount,
+                        snapshot.TransferHistoryRevision,
+                        snapshot.TransferHistoryRows,
+                        snapshot.EstateSchemaVersion,
+                        snapshot.EstateRecordCount,
+                        snapshot.EstateRevision,
+                        snapshot.EstateRows);
+                },
+                stage =>
+                {
+                    if (stage == P12GDailyV1RestoreStage.EOwnerSnapshotsCaptured)
+                        snapshotsCaptured = true;
+                    if (stage == P12GDailyV1RestoreStage.EInstitutionOfficeOwnersStaged)
+                    {
+                        Assert.That(snapshotsCaptured, Is.True);
+                        institutionOfficeStaged = true;
+                    }
+                    if (stage == P12GDailyV1RestoreStage.EPropertyEstateOwnersStaged)
+                        propertyEstateStaged = true;
+                },
+                out P12GDailyV1RestoreFailure restoreFailure,
+                out string diagnostic), Is.False);
+
+            Assert.That(replacementApplied, Is.True,
+                "The test-only detached replacement must run at the Property/Estate stage boundary.");
+            Assert.That(propertyEstateStaged, Is.False,
+                "The dangling Person reference must reject before a Property/Estate owner pair is staged.");
+            Assert.That(restoreFailure, Is.EqualTo(P12GDailyV1RestoreFailure.OwnerStageFailed));
+            Assert.That(diagnostic, Does.Contain("P12-E could not stage the configured domain owners"));
+            Assert.That(ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(originalToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureSelectedDailyFacts(original.Runtime), Is.EqualTo(beforeFacts));
+            Assert.That(CaptureContinuationRootFacts(original), Is.EqualTo(beforeRoots));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, originalToken), Is.EqualTo(beforeOwnerGraph));
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retainedFailure),
+                Is.True, retainedFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlRetainedFailure),
+                Is.True, controlRetainedFailure.ToString());
+            DailyCaptureEligibilityToken continuedToken = GetCompletedDailyToken(original.Runtime);
+            DailyCaptureEligibilityToken continuedControlToken = GetCompletedDailyToken(controlSession.Runtime);
+            string continuedOwnerGraph = CaptureCompleteDailyV1OwnerProjection(original, continuedToken);
+            Assert.That(continuedOwnerGraph,
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, continuedControlToken)),
+                "After rejection, source and uninterrupted runtimes must continue identically.");
+
+            Assert.That(bootstrap.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            Assert.That(restored, Is.Not.SameAs(original));
+            DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restored.Runtime);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, restoredToken), Is.EqualTo(continuedOwnerGraph));
+
+            Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextAdvanceFailure),
+                Is.True, nextAdvanceFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlNextFailure),
+                Is.True, controlNextFailure.ToString());
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, GetCompletedDailyToken(restored.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    controlSession, GetCompletedDailyToken(controlSession.Runtime))),
+                "The restored runtime and uninterrupted control must remain in parity after another boundary.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+            UnityEngine.Object.DestroyImmediate(controlObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreRejectsPrivateTargetMutationAfterGraphChecksAndKeepsSourceRetryable()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(

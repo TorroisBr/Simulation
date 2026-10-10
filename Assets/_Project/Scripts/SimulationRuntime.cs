@@ -2667,6 +2667,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
+        bool requireEmptyBootstrapState = runtimeAdmissionContext?.IsRestoredContinuation != true;
         try
         {
             IReadOnlyList<IOwnerSectionCensusProvider> propertyProviders =
@@ -2716,7 +2717,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     || !string.Equals(witness.SectionId, sectionIds[i], StringComparison.Ordinal)
                     || witness.SchemaVersion != schemaVersions[i]
                     || witness.Cardinality != expectedCardinality
-                    || expectedCardinality != 0
+                    || (requireEmptyBootstrapState && expectedCardinality != 0)
                     || !ReferenceEquals(witness.OwnerInstanceIdentity, expectedOwners[i])
                     || witness.Revision != expectedRevisions[i]
                     || witness.Revision < 0L

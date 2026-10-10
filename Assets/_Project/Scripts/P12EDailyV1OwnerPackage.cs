@@ -151,7 +151,8 @@ internal sealed class P12EDailyV1OwnerPackage
         P12EDailyV1OwnerStagingContext context,
         out P12EDailyV1OwnerPackage package,
         out P12EDailyV1OwnerPackageFailure failure,
-        Action<P12GDailyV1RestoreStage> stageObserver = null)
+        Action<P12GDailyV1RestoreStage> stageObserver = null,
+        Func<PropertyEstateOwnerSnapshot, PropertyEstateOwnerSnapshot> propertyEstateSnapshotOverrideForTest = null)
     {
         package = null;
         failure = P12EDailyV1OwnerPackageFailure.InvalidCaptureContext;
@@ -262,7 +263,11 @@ internal sealed class P12EDailyV1OwnerPackage
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.EInstitutionOfficeOwnersStaged);
 
-            if (!propertyEstateSnapshot.TryStage(
+            PropertyEstateOwnerSnapshot propertyEstateSnapshotForStage =
+                propertyEstateSnapshotOverrideForTest != null
+                    ? propertyEstateSnapshotOverrideForTest(propertyEstateSnapshot)
+                    : propertyEstateSnapshot;
+            if (!propertyEstateSnapshotForStage.TryStage(
                     stagedD.Persons, exactCompletedToken.AbsoluteDay,
                     out PropertyOwnershipStore stagedPropertyOwnership,
                     out EstateStore stagedEstates, out _))
