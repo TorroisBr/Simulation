@@ -3514,7 +3514,7 @@ public sealed class SimulationRuntimeAdmissionTests
     [TestCase("owner-revision")]
     [TestCase("p8-location-cardinality")]
     [TestCase("p8-authoritative-location-cardinality")]
-    [TestCase("cross-kind-id")]
+    [TestCase("wrong-family-identity-key")]
     public void DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(string corruptionKind)
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
@@ -3569,7 +3569,7 @@ public sealed class SimulationRuntimeAdmissionTests
                             new LocationRecord(new LocationId("p12g-extra-location"), anchorHex.Id),
                             out SpatialAuthorityFailure locationFailure), Is.True, locationFailure?.ToString());
                         break;
-                    case "cross-kind-id":
+                    case "wrong-family-identity-key":
                         Dictionary<string, CityRuntime> cities = ReadPrivateField<Dictionary<string, CityRuntime>>(
                             candidate.IdentityRegistry, "citiesByRuntimeId");
                         CityRuntime city = cities.Values.First();
@@ -3588,7 +3588,7 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(restoreSucceeded, Is.False, diagnostic);
             Assert.That(diagnostic, Is.Not.Null.And.Not.Empty);
             Assert.That(restoreFailure, Is.EqualTo(corruptionKind == "allocator-high-water"
-                || corruptionKind == "cross-kind-id"
+                || corruptionKind == "wrong-family-identity-key"
                 ? P12GDailyV1RestoreFailure.BindingValidationFailed
                 : P12GDailyV1RestoreFailure.TargetOwnerVectorFailed));
             Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
@@ -3624,7 +3624,7 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
-    public void DailyV1RestoreRejectsAdmittedCandidateTokenDriftBeforeReturningAndKeepsSourceRetryable()
+    public void DailyV1RestoreRejectsTransferredSourceTokenBeforeReturningAndKeepsSourceRetryable()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
@@ -3662,8 +3662,8 @@ public sealed class SimulationRuntimeAdmissionTests
                         if (stage != P12GDailyV1RestoreStage.BoundaryAdmitted) return;
                         Assert.That(privateCandidate, Is.Not.Null);
                         Assert.That(privateCandidate.Runtime.HasValidRestoredDailyBoundaryAdmission(), Is.True);
-                        WritePrivateField<DailyCaptureEligibilityToken>(
-                            privateCandidate.Runtime, "currentDailyCaptureToken", null);
+                        WritePrivateField(
+                            privateCandidate.Runtime, "currentDailyCaptureToken", sourceToken);
                         tokenCorruptedAfterAdmission = true;
                     },
                     candidate => privateCandidate = candidate), Is.False);
