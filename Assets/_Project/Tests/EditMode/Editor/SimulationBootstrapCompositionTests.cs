@@ -806,6 +806,14 @@ public sealed class SimulationBootstrapCompositionTests
             registeredSections);
         AssertRegisteredOwnerProvider(
             registeredSections,
+            P12CrimeJusticeCensusProvider.CrimeP18ReceiptsSectionId,
+            P12CrimeJusticeCensusProvider.SchemaVersion,
+            OwnerSectionRole.Required,
+            GetRuntimeOwner(runtime, "crimeSystem"),
+            expectedCardinality: 1,
+            expectedRevision: 0L);
+        AssertRegisteredOwnerProvider(
+            registeredSections,
             ExpeditionCensusProvider.SectionId,
             ExpeditionCensusProvider.SchemaVersion,
             OwnerSectionRole.Required,
