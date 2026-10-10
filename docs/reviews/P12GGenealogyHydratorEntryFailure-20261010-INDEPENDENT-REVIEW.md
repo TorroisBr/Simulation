@@ -1,12 +1,12 @@
 # P12-G Genealogy hydrator-entry failure-atomicity — exact-tip independent review
 
-**Verdict:** `VALIDATED_CANDIDATE` — bounded restore-stage test evidence only  
-**Review date:** 2026-10-10  
-**Candidate branch:** `codex/phase12/P12GGenealogyHydratorEntryFailure`  
-**Candidate evidence tip:** `8405ffca5f496c2f9c9d7fd4e34553cce5c327d4`  
-**Reviewed code commit:** `732864564bbf2fa8bd7373cac1994876280e876d`  
-**Canonical base and current canonical:** `95e922eb3c2083a87bf1353bce60303f42a2a62c`  
-**Reviewed code tree:** `8754f563b43e0a3b3994b1acc65ccfca2846fb89`  
+**Verdict:** `VALIDATED_CANDIDATE` — bounded restore-stage test evidence only
+**Review date:** 2026-10-10
+**Candidate branch:** `codex/phase12/P12GGenealogyHydratorEntryFailure`
+**Candidate evidence tip:** `8405ffca5f496c2f9c9d7fd4e34553cce5c327d4`
+**Reviewed code commit:** `732864564bbf2fa8bd7373cac1994876280e876d`
+**Canonical base and current canonical:** `95e922eb3c2083a87bf1353bce60303f42a2a62c`
+**Reviewed code tree:** `8754f563b43e0a3b3994b1acc65ccfca2846fb89`
 **Reviewed Assets tree:** `161d5e89f178a43672804f4f5b28739e51ceaee2`
 
 ## Review findings
