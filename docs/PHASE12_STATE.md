@@ -1,3 +1,48 @@
+## P12-G active-session publication prerequisite promotion — 2026-10-10
+
+`codex/phase12/canonical` advanced by clean fast-forward from
+`8f5ec2cb9211a6520f31e65e83450d5bd9bfb039` to
+`1c4ff4dba21aab9ee498f0c9615df17cfbdd15a3`. The implementation commit is
+`c5f80a1aaeedbba00e713829a2479544ad50f340`, with code Git tree
+`e158a38add785c2fbc80f3529f0c6869fa898730` and `Assets` tree
+`a253d7425c9d482da136d0fca8acd17b2445870b`. Independent exact-tip review
+passed and is durably recorded in
+[`design/PHASE12_G_ACTIVE_SESSION_PUBLICATION_IMPLEMENTATION_REVIEW_C5F80A1.md`](design/PHASE12_G_ACTIVE_SESSION_PUBLICATION_IMPLEMENTATION_REVIEW_C5F80A1.md),
+commit `4441c25aef3da57583c2cbd870bd4c659fe81855` on
+`codex/phase12/P12GRestoredBoundaryAdmissionReview`. Exact-tree validation and
+artifact hashes are in
+[`validation/P12GActiveSessionPublication/VALIDATION.md`](validation/P12GActiveSessionPublication/VALIDATION.md).
+
+The promoted slice gives `TesteSimulacao` one immutable active-session
+reference for its composition and runtime-dependent operation, lookup,
+reporting, and logging aliases; releases the bootstrap aliases after initial
+publication; and provides an owner-thread serialized exchange for an already
+admitted, separately built restored Daily-v1 session. The exact-tree tests
+passed `SimulationRuntimeAdmissionTests` 76/76,
+`SimulationBootstrapCompositionTests` 26/26,
+`P10BGeneratedRuinGenesisTests` 10/10,
+`P12CrimeSocialAppraisalInvalidationTests` 12/12, ALL EditMode 2739/2739, and
+official Smoke 5/5. `git diff --check` passed. The successful-exchange test
+also proves that an active operation rejects the exchange, idle publication
+switches the active aliases and spatial lookup, and the detached source token
+remains valid.
+
+This promotes the bounded active-session publication seam only. It does not
+implement restore-envelope coordination, complete graph staging/hydration or
+cross-owner validation, whole-graph failure atomicity, no-replay or
+continuation-parity proof, complete owner/operation/epoch coverage, P12-G
+readiness, P12-A readiness, P13 readiness, or Phase 12 closure.
+
+The refreshed dependency graph has no edge changes. P12-B through P12-F remain
+promoted within their recorded scopes. P12-G remains `WAIT_DEPENDENCY` on the
+remaining complete live owner/cardinality and operation/epoch coverage,
+integrated target-owner and whole-graph validation, restore coordination, and
+rejection/failure-atomicity/no-replay/continuation-parity evidence; its
+active-session publication prerequisite is now promoted. P12-A remains
+`WAIT_DEPENDENCY`, P13 remains `BLOCKED`, and Phase 12 remains `OPEN`. No
+export/hydration readiness or downstream readiness is implied. The unrelated
+ProjectSettings edits and untracked `.meta` files remain untouched.
+
 ## P12-G restored-boundary admission prerequisite promotion — 2026-10-09
 
 `codex/phase12/canonical` advanced by clean fast-forward from
