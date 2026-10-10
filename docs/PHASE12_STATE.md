@@ -1,3 +1,43 @@
+## P12-G P8-C target-owner identity checks — promoted — 2026-10-10
+
+P12 canonical advanced by a clean fast-forward from
+`c57fd22bb058e43672c01d8f5755d5d29eaa40b0` to reviewed candidate
+`5b0aaf20aa1921efd34f8f882ab7e9a10d84de40`. The implementation commit is
+`3d4f8b403dd93c8872699455c3494105f73096a9`; its validated `Assets` tree is
+`c4d1b78a92e95f10d83726bcc5f98f791c68122d`. Exact-tip independent review
+passed and is recorded in
+[`design/PHASE12_G_P8C_TARGET_OWNERS_IMPLEMENTATION_REVIEW_3D4F8B4.md`](design/PHASE12_G_P8C_TARGET_OWNERS_IMPLEMENTATION_REVIEW_3D4F8B4.md).
+Focused, ALL EditMode, and official Smoke evidence and hashes are retained in
+[`validation/P12GGraphRejectionCoverage/P8CTargetOwners-20261010/VALIDATION.md`](validation/P12GGraphRejectionCoverage/P8CTargetOwners-20261010/VALIDATION.md).
+
+The restore coordinator now reads fresh witnesses from the target runtime's
+installed P8-C `LegacySpatialAnchorBindingStore` and
+`PersonSpatialPositionStore`, requiring exact target-owner identity and zero
+cardinality. It compares each current revision with the revision in the
+target owner vector; P8-C does not require revision zero. Tests substitute
+each owner with a distinct valid empty instance and verify pre-publication
+rejection, source session/token/graph preservation, deterministic next-step
+parity against a control runtime, and successful retry.
+
+This promotes only both selected Daily-v1 P8-C target-owner checks. It does
+not complete the same-attempt target-owner census or P12-G. P8-D route
+observations and Person route-plan history remain unvalidated at the target
+composition boundary; their accepted contract requires exact installed-owner
+identity, cardinality zero, and revision zero. Other remaining P12-G work is
+the current B-F package-interface/owner-vector reconciliation, remaining
+graph and compatibility rejection cases (including well-formed inconsistent
+P9 lineage), failure injection across restore boundaries, causal no-replay
+proof, and exact multi-boundary continuation parity over all included
+owners. The promoted selected-profile live inventory and its covered dynamic
+transitions remain valid; this slice adds no new inventory or writer/epoch
+claim.
+
+P12-G remains `WAIT_DEPENDENCY`; P12-A remains `WAIT_DEPENDENCY`; P13 remains
+`BLOCKED`; Phase 12 remains `OPEN`. No capture eligibility, export,
+hydration, downstream readiness, or Phase closure is implied. Protected
+ProjectSettings edits and unrelated untracked `.meta`/XML files remain
+outside the promotion.
+
 ## P12-G selected Daily-v1 live inventory prerequisite — promoted — 2026-10-10
 
 The candidate code commits `e60cbed0832ba6861cdaa31f1332208e5f215eb4` and
