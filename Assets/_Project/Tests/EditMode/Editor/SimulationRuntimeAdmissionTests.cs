@@ -2766,6 +2766,41 @@ public sealed class SimulationRuntimeAdmissionTests
                 out DailyCaptureEligibilityToken sourceToken,
                 out DailyCaptureEligibilityFailure sourceTokenFailure), Is.True, sourceTokenFailure.ToString());
 
+            Assert.That(sourceSession.Composition.Decisions, Is.Not.Null,
+                "The omitted NPC decision read model remains composed at the completed boundary.");
+            Assert.That(sourceSession.Composition.DomainEventStore, Is.Not.Null,
+                "The omitted domain-event read model remains composed at the completed boundary.");
+            int sourceOmittedDecisionCount = sourceSession.Composition.Decisions.Decisions.Count;
+            Assert.That(sourceOmittedDecisionCount, Is.GreaterThan(0),
+                "The source boundary deliberately contains populated NpcDecisionStore rows; their omission is not evidence of emptiness.");
+
+            string sourceRootsBeforeReadModelSeed = CaptureContinuationRootFacts(sourceSession);
+            if (sourceSession.Composition.DomainEventStore.Events.Count == 0)
+            {
+                NpcRuntime readModelActor = sourceSession.Runtime.NpcRuntimes.FirstOrDefault(
+                    npc => npc?.CurrentLocation != null);
+                Assert.That(readModelActor, Is.Not.Null,
+                    "The selected profile supplies an existing actor/location pair for the omitted event row.");
+                NpcDecisionRecord decisionReference = sourceSession.Composition.Decisions.Decisions[0];
+                // This profile need not emit a travel/arrest/escape event on day one. Seed one
+                // concrete read-model row directly so the test covers the permitted populated case.
+                // Do not use DomainEventRecorder here: it allocates the authoritative record sequence.
+                Assert.That(sourceSession.Composition.DomainEventStore.Record(new NpcArrivedEvent(
+                    "p12g-omitted-read-model-arrival-" + sourceToken.AbsoluteDay.ToString(CultureInfo.InvariantCulture),
+                    sourceToken.AbsoluteDay,
+                    Math.Max(1L, sourceToken.AbsoluteDay),
+                    readModelActor.RuntimeId,
+                    readModelActor.CurrentLocation.RuntimeId,
+                    decisionReference.DecisionId)), Is.True);
+            }
+            int sourceOmittedEventCount = sourceSession.Composition.DomainEventStore.Events.Count;
+            Assert.That(sourceOmittedEventCount, Is.GreaterThan(0),
+                "The source boundary deliberately contains populated DomainEventStore rows; their omission is not evidence of emptiness.");
+            Assert.That(sourceSession.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True,
+                "Populating a known omitted read model must not stale the completed authoritative boundary.");
+            Assert.That(CaptureContinuationRootFacts(sourceSession), Is.EqualTo(sourceRootsBeforeReadModelSeed),
+                "The read-model-only row must leave allocator, shared sequence, lineage, and random roots unchanged.");
+
             Assert.That(sourceSession.Runtime.NpcRuntimes.Any(npc => npc?.CurrentAction != null), Is.True,
                 "The authored continuation must exercise deterministic autonomous action selection; its authoritative current-action result is compared below.");
 
@@ -2795,6 +2830,14 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(targetSession.Composition, Is.Not.SameAs(sourceSession.Composition));
             Assert.That(targetSession.IdentityRegistry, Is.Not.SameAs(sourceSession.IdentityRegistry));
             Assert.That(targetSession.SpatialNetwork, Is.Not.SameAs(sourceSession.SpatialNetwork));
+            Assert.That(targetSession.Composition.Decisions, Is.Not.SameAs(sourceSession.Composition.Decisions));
+            Assert.That(targetSession.Composition.Decisions.Decisions, Is.Empty,
+                "The populated source NpcDecisionStore is an omitted noncausal read model and is not hydrated into the candidate.");
+            Assert.That(targetSession.Composition.DomainEventStore, Is.Not.SameAs(sourceSession.Composition.DomainEventStore));
+            Assert.That(targetSession.Composition.DomainEventStore.Events, Is.Empty,
+                "The populated source DomainEventStore is an omitted noncausal read model and is not hydrated into the candidate.");
+            Assert.That(sourceSession.Composition.Decisions.Decisions.Count, Is.EqualTo(sourceOmittedDecisionCount));
+            Assert.That(sourceSession.Composition.DomainEventStore.Events.Count, Is.EqualTo(sourceOmittedEventCount));
             Assert.That(targetSession.Runtime.CurrentDay, Is.EqualTo(sourceToken.AbsoluteDay),
                 "Staging must not execute another gameplay day.");
             Assert.That(targetSession.Runtime.TryGetCompletedDailyCaptureToken(
