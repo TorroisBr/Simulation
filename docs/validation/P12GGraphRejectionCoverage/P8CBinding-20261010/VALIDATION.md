@@ -1,5 +1,14 @@
 # P12-G P8-C target-owner identity validation — 2026-10-10
 
+**Supersession note:** the validation below records the earlier binding-only
+code candidate `06b5008`. Its target check's fixed revision-zero condition has
+been superseded by current code commit `3d4f8b4`, which compares the live
+revision with the revision already captured in the target owner vector and
+validates both P8-C target owners. The current contract-aligned validation is
+[`../P8CTargetOwners-20261010/VALIDATION.md`](../P8CTargetOwners-20261010/VALIDATION.md).
+The earlier review and test evidence remains historical evidence for the
+earlier code/tree only.
+
 This bounded slice closes the target-side identity check for the selected Daily-v1 `p8c.city-site-location-bindings` owner. The restore coordinator now compares the target owner vector against a fresh witness from the exact `LegacySpatialAnchorBindingStore` installed on the staged target runtime, requiring cardinality 0 and local revision 0.
 
 The focused rejection case substitutes a distinct, valid empty binding store into the still-private target runtime while the registered census provider remains bound to the original staged store. Both owners report 0/0, so generic owner-vector shape/cardinality comparison alone cannot distinguish them. Restore must reject the mismatched target owner before publication; the shared assertions verify the active source session/token/graph remain valid, continuation parity holds, and a subsequent valid restore succeeds.
