@@ -1,35 +1,36 @@
-## P12-G registered-owner inventory and same-attempt row evidence candidate — 2026-10-10
+## P12-G live inventory closure evidence — reviewed candidate, pending promotion — 2026-10-10
 
-Candidate code commit `e60cbed0832ba6861cdaa31f1332208e5f215eb4` is based on
-P12 canonical `a39bbd49ef8755f5eaa6613594e143de4f9d6c3e`; its `Assets` tree is
-`85f1ff86e02e3fe25d947c42584f5bf8b6364705`. The selected Daily-v1 bootstrap
-test now constructs an independent expected source-owner map for all 299
-section IDs and compares each registered provider's owner identity by
-reference. The dynamic-family assertion repeats this registered-owner check
-after covered NPC roster, Person materialization, and existing-NPC binding
-transitions.
+Candidate code commits `e60cbed0832ba6861cdaa31f1332208e5f215eb4` and
+`7b2846aa49272a8467e930529eee8f162755cf4f` descend from P12 canonical base
+`a39bbd49ef8755f5eaa6613594e143de4f9d6c3e`; latest `Assets` tree is
+`c35e2a82d5607f191fb0d31bb82be4f14e7e7756`. The selected Daily-v1 bootstrap
+test derives all 299 expected section-to-owner identities from independent
+runtime/bootstrap roots and exact NPC/City/Person rosters, then compares each
+registered provider's identity by reference. It repeats this check after the
+covered NPC roster, Person materialization, and existing-NPC binding
+transitions. The pre-day-one fixture also records observed cardinality zero
+for both `DomainEventStore.Events` and `NpcDecisionStore.Decisions`, while
+retaining their `OmittedNonCausalReadModel` classification.
 
-The same-attempt C/D/E/F package test also checks P12-F's detached NPC rows
-against staged P12-D rows by exact count, unique RuntimeId, order, and object
-identity. No production behavior, owner, operation, profile row, or gameplay
-scope changed. The reviewable evidence and validation artifacts are in
-[`design/PHASE12_G_SAME_ATTEMPT_C_D_F_ROW_VECTOR_EVIDENCE_A39BBD4.md`](design/PHASE12_G_SAME_ATTEMPT_C_D_F_ROW_VECTOR_EVIDENCE_A39BBD4.md)
-and [`validation/P12GSameAttemptOwnerVectorEvidence/VALIDATION.md`](validation/P12GSameAttemptOwnerVectorEvidence/VALIDATION.md).
-Focused suites passed 27/27 and 53/53, ALL EditMode passed 2740/2740, official
-Smoke passed 5/5, and `git diff --check` passed. Independent exact-tip review
-is pending.
+The same-attempt C/D/E/F package test checks P12-F's detached NPC rows against
+staged P12-D rows by exact count, unique RuntimeId, order, and object identity.
+The independent code review passed for the exact latest code commit; the
+combined inventory review found no remaining supported Daily-v1 live source,
+cardinality/revision, or writer/operation/epoch family gap. The review record
+is [`design/PHASE12_G_LIVE_INVENTORY_CLOSURE_REVIEW_7B2846A.md`](design/PHASE12_G_LIVE_INVENTORY_CLOSURE_REVIEW_7B2846A.md).
 
-The combined 299-row owner/cardinality/revision, writer/operation/epoch,
-transition, and B-F consumer inventory still requires independent closure
-review against the source ledger, 24-operation matrix, and specialized owner
-tests. The current-base audit found no concrete missing supported Daily-v1
-writer/epoch edge or uncovered supported membership/binding transition. This
-candidate does not complete that review and does not provide the same-attempt
-target census or P12-G restore coordinator. P12-G remains
-`WAIT_DEPENDENCY`; P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase
-12 remains `OPEN`. No capture, export/hydration, or downstream readiness is
-implied. Protected ProjectSettings edits and unrelated untracked `.meta` files
-remain outside the candidate.
+Validation on the current `Assets` tree: focused bootstrap composition 27/27,
+P12-C private-root package 53/53, ALL EditMode 2740/2740, official Smoke 5/5,
+and `git diff --check` PASS. Exact XML/log hashes are in
+[`validation/P12GSameAttemptOwnerVectorEvidence/VALIDATION.md`](validation/P12GSameAttemptOwnerVectorEvidence/VALIDATION.md).
+No production behavior, owner, operation, profile row, or gameplay scope
+changed. This closes only the accepted selected-profile live inventory
+prerequisite; it does not provide the same-attempt target census or P12-G
+restore coordinator. Until this candidate is promoted and canonical State is
+updated, P12-G remains `WAIT_DEPENDENCY`; P12-A remains `WAIT_DEPENDENCY`; P13
+remains `BLOCKED`; Phase 12 remains `OPEN`. No capture, export/hydration, or
+downstream readiness is implied. Protected ProjectSettings edits and
+unrelated untracked `.meta` files remain outside the candidate.
 
 ## P12-G existing-NPC Person-binding inventory witness — 2026-10-10
 

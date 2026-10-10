@@ -1,7 +1,7 @@
 # P12-G live source-owner and same-attempt package evidence
 
 **Canonical code baseline:** `a39bbd49ef8755f5eaa6613594e143de4f9d6c3e`
-**Candidate Assets tree:** `85f1ff86e02e3fe25d947c42584f5bf8b6364705`
+**Candidate Assets tree:** `c35e2a82d5607f191fb0d31bb82be4f14e7e7756`
 **Profile:** accepted `UnityBootstrap-Daily-v1`
 **Scope:** selected Daily-v1 live owner identity and existing P12-D to P12-F detached NPC-row handoff.
 **Validation:** focused 27/27 and 53/53, ALL EditMode 2740/2740, Smoke 5/5;
@@ -35,6 +35,13 @@ owner-state transition and no specific missing writer/epoch implementation;
 the 24-operation matrix and specialized owner tests remain the operation
 evidence. No speculative operation or mutation path is added here.
 
+The same pre-day-one live admission fixture also observes
+`DomainEventStore.Events.Count == 0` and
+`NpcDecisionStore.Decisions.Count == 0`. Both remain classified as
+`OmittedNonCausalReadModel`; the observed counts do not imply an empty-owner
+contract or predict later session counts. A restored-boundary census must
+report each current observed cardinality as required by the G design.
+
 ## Existing contract
 
 `P12FDailyV1OwnerPackage.TryCaptureAndStage` validates that the staged P12-D
@@ -62,31 +69,29 @@ The same-attempt test now proves that:
 
 The D-to-F assertions are a bounded package-integration witness. The separate
 299-row source-owner oracle covers registered identity for the selected live
-fixture, while existing specialized suites and the reviewed source ledger
-remain the evidence for owner cardinality/revision and supported writer/epoch
-behavior. These tests do not prove runtime-wide quiescence, a complete
+fixture, the same test reports the two known omitted-read-model counts, and
+existing specialized suites plus the reviewed source ledger remain the
+evidence for owner cardinality/revision and supported writer/epoch behavior.
+These tests do not prove runtime-wide quiescence, a complete
 same-attempt target census, or P12-G readiness.
 
 ## Remaining P12-G gates
 
 The new source-owner oracle closes the registered identity mapping for the
 current authored Daily-v1 fixture and the explicitly tested NPC/Person
-transitions. The existing source ledger and family tests still require an
-independent review as a combined owner/cardinality/revision/writer/operation-
-epoch/consumer inventory. The remaining evidence/design/implementation
-obligations are:
+transitions. The combined source-ledger, family-test, operation/epoch, and
+publication-consumer review passed; it found no remaining supported Daily-v1
+live inventory gap. Its exact code review and evidence are recorded in
+[`PHASE12_G_LIVE_INVENTORY_CLOSURE_REVIEW_7B2846A.md`](PHASE12_G_LIVE_INVENTORY_CLOSURE_REVIEW_7B2846A.md).
+The remaining implementation obligations are:
 
-1. Independently review the exact 299-row registered-owner oracle together
-   with the current row-family source ledger, 24-operation matrix, and
-   specialized writer/epoch/transition tests. Do not infer unsupported
-   direct mutation paths from this selected-profile fixture.
-2. Compose a complete fresh target-owner census in the restore attempt. This
+1. Compose a complete fresh target-owner census in the restore attempt. This
    includes P8-C/D target stores, global receipt caches, the target Crime
    sentinel and full typed row coverage; consume existing P12-D per-NPC receipt,
    P12-E Justice sentinel, and P12-F ActorChoice temporal checks.
-3. After the live inventory prerequisite closes, implement the accepted bounded
-   G coordinator using the promoted restored-boundary and active-session seams.
-4. Prove pre-allocation rejection, typed whole-graph validation, failed-attempt
+2. Implement the accepted bounded G coordinator using the promoted
+   restored-boundary and active-session seams.
+3. Prove pre-allocation rejection, typed whole-graph validation, failed-attempt
    atomicity, no replay, and exact deterministic continuation parity.
 
 No new mutation operation, epoch path, profile row, or gameplay scope is added.

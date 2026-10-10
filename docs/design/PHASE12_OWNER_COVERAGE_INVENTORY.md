@@ -231,6 +231,14 @@ toward continuation-owner completeness. The shared `SimulationRecordSequence`
 remains a separate P12-C causal root and must retain its exact next value. This
 does not promise historical, Chronicle, activity-feed, or UI-feed parity.
 
+**Selected-fixture observation, 2026-10-10:** the accepted pre-day-one
+`UnityBootstrap-Daily-v1` composition test directly reads both composed stores
+and records observed cardinality zero for `DomainEventStore.Events` and
+`NpcDecisionStore.Decisions`. This supplies the fixture's observed values; it
+does not add a production P12 census API, assert an empty-owner contract, or
+predict later-session counts. The P12-G admission/restore census must still
+report each live boundary's current count and revision.
+
 This classification does not relax profile exclusions: populated P8-B through
 P8-E, P10, P14, P18, P19, or P20 authoritative state still rejects admission.
 External `WorldCommand` service/queue composition and unknown or injected
