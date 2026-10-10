@@ -3910,3 +3910,13 @@ compressed-log SHA-256 values are in
 This test-only candidate is not yet independently reviewed or promoted.
 P12-G remains `WAIT_DEPENDENCY`; P12-A remains `WAIT_DEPENDENCY`; P13 remains
 `BLOCKED`; Phase 12 remains `OPEN`.
+
+## P12-G registered source-owner witnesses — exact-tip review PASS
+
+The exact-tip independent review of candidate `7910a2383b8e1bd46649357067982c5eac0a48fb` passed against current P12 canonical base `7ad325b7fe5f9003be0947d18798182496eace31`. The reviewed code commit is `a5af39f3323be8a8de4e01eb81161d200b7f0e53`, Git tree `24237c5d00a7f2929cfcb753564150f23b2a0563`, and Assets tree `480136d37053888910a54a134154ce9a4c105256`. The durable independent review is [`PHASE12_G_REGISTERED_OWNER_SOURCE_WITNESS_REVIEW_A5AF39F.md`](design/PHASE12_G_REGISTERED_OWNER_SOURCE_WITNESS_REVIEW_A5AF39F.md).
+
+Review confirmed the selected Daily-v1 composition test binds the registered Justice records, Justice receipt sentinel, NPC decision-occurrence receipt cache, and economy keyed-sale receipt cache to their exact installed source owners with the expected cardinality, role, schema, revision, and repeat-read semantics. This closes those four source-registration identity checks only.
+
+Validation remains tied to Assets tree `480136d37053888910a54a134154ce9a4c105256`: focused composition 27/27, ALL EditMode 2740/2740, official Smoke 5/5, and `git diff --check` PASS. Exact XML/log hashes and independent hash/count verification are retained in [`validation/P12GRegisteredOwnerSourceWitness/VALIDATION.md`](validation/P12GRegisteredOwnerSourceWitness/VALIDATION.md). The architecture-file baseline drift was reviewed and found nonblocking; this candidate does not modify architecture or profile scope.
+
+The candidate is validated for canonical preflight; it is not yet promoted at this State revision. P12-G remains `WAIT_DEPENDENCY` on the broader live 299-row owner/cardinality/transition and writer/epoch join, remaining same-attempt target-owner census, and the accepted restored-graph coordinator's rejection, atomicity, no-replay, and deterministic continuation-parity evidence. P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`. No capture, export, hydration, or broader readiness claim is implied.
