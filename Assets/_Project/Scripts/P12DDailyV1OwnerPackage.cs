@@ -85,7 +85,8 @@ internal sealed class P12DDailyV1OwnerPackage
         out P12DDailyV1OwnerPackage package,
         out P12DDailyV1OwnerPackageFailure failure,
         Action<P12GDailyV1RestoreStage> stageObserver = null,
-        Action afterGenealogyRecordStagedForTest = null)
+        Action afterGenealogyRecordStagedForTest = null,
+        Func<GenealogyOwnerSnapshot, GenealogyOwnerSnapshot> genealogySnapshotOverrideForTest = null)
     {
         package = null;
         failure = P12DDailyV1OwnerPackageFailure.InvalidCaptureContext;
@@ -193,6 +194,9 @@ internal sealed class P12DDailyV1OwnerPackage
             return false;
         }
         stageObserver?.Invoke(P12GDailyV1RestoreStage.DPersonsStaged);
+
+        if (genealogySnapshotOverrideForTest != null)
+            genealogySnapshot = genealogySnapshotOverrideForTest(genealogySnapshot);
 
         stageObserver?.Invoke(P12GDailyV1RestoreStage.DGenealogyHydratorEntry);
         if (!GenealogyStore.TryCreateFromOwnerSnapshot(

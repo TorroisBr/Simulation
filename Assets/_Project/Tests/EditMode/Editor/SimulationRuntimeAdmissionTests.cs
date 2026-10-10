@@ -5228,6 +5228,130 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestoreRejectsDuplicateGenealogySnapshotAfterOnePrivateEdgeAndKeepsSourceRetryable()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject bootstrapObject = new GameObject("P12-G duplicate genealogy snapshot atomicity");
+        GameObject controlObject = new GameObject("P12-G duplicate genealogy snapshot control");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(bootstrap, config);
+            ConfigureSelectedBootstrap(control, config);
+            InvokeInitializeSimulation(bootstrap, null);
+            InvokeInitializeSimulation(control, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
+
+            PersonId parentId = new PersonId("p12g-genealogy-duplicate-parent");
+            PersonId firstChildId = new PersonId("p12g-genealogy-duplicate-first-child");
+            PersonId secondChildId = new PersonId("p12g-genealogy-duplicate-second-child");
+            foreach (SimulationRuntime runtime in new[] { original.Runtime, controlSession.Runtime })
+            {
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(parentId, 0L), out PersonStoreFailure parentFailure),
+                    Is.True, parentFailure.ToString());
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(firstChildId, 0L), out PersonStoreFailure firstChildFailure),
+                    Is.True, firstChildFailure.ToString());
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(secondChildId, 0L), out PersonStoreFailure secondChildFailure),
+                    Is.True, secondChildFailure.ToString());
+                Assert.That(runtime.TryAddParentage(
+                    parentId, firstChildId, out PersonGenealogyFailure firstEdgeFailure),
+                    Is.True, firstEdgeFailure.ToString());
+                Assert.That(runtime.TryAddParentage(
+                    parentId, secondChildId, out PersonGenealogyFailure secondEdgeFailure),
+                    Is.True, secondEdgeFailure.ToString());
+            }
+
+            Assert.That(original.Runtime.GenealogyStoreForWorldBoundary.Count, Is.EqualTo(2));
+            Assert.That(controlSession.Runtime.GenealogyStoreForWorldBoundary.Count, Is.EqualTo(2));
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstAdvanceFailure),
+                Is.True, firstAdvanceFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFirstFailure),
+                Is.True, controlFirstFailure.ToString());
+            Assert.That(original.Runtime.TryGetCompletedDailyCaptureToken(
+                    out DailyCaptureEligibilityToken originalToken,
+                    out DailyCaptureEligibilityFailure tokenFailure), Is.True,
+                tokenFailure.ToString());
+
+            string beforeFacts = CaptureSelectedDailyFacts(original.Runtime);
+            string beforeRoots = CaptureContinuationRootFacts(original);
+            string beforeOwnerGraph = CaptureCompleteDailyV1OwnerProjection(original, originalToken);
+            bool transformApplied = false;
+            int stagedGenealogyEdges = 0;
+
+            Assert.That(bootstrap.TryRestoreDailyContinuationWithGenealogySnapshotForTest(
+                snapshot =>
+                {
+                    Assert.That(snapshot, Is.Not.Null);
+                    Assert.That(snapshot.SchemaVersion, Is.EqualTo(GenealogyOwnerSnapshot.CurrentSchemaVersion));
+                    Assert.That(snapshot.Revision, Is.EqualTo(2L));
+                    Assert.That(snapshot.Records, Has.Count.EqualTo(2));
+                    transformApplied = true;
+                    return new GenealogyOwnerSnapshot(
+                        snapshot.SchemaVersion,
+                        snapshot.Revision,
+                        new[] { snapshot.Records[0], snapshot.Records[0] });
+                },
+                stage =>
+                {
+                    if (stage == P12GDailyV1RestoreStage.DGenealogyEdgeStaged)
+                        stagedGenealogyEdges++;
+                },
+                out P12GDailyV1RestoreFailure restoreFailure,
+                out string diagnostic), Is.False);
+
+            Assert.That(transformApplied, Is.True,
+                "The test-only snapshot replacement must run at the private snapshot-to-hydrator handoff.");
+            Assert.That(stagedGenealogyEdges, Is.EqualTo(1),
+                "The factory must stage the first duplicate row, then reject the second before its stage observer.");
+            Assert.That(restoreFailure, Is.EqualTo(P12GDailyV1RestoreFailure.OwnerStageFailed));
+            Assert.That(diagnostic, Does.Contain("P12-D could not stage the factual roots"));
+            Assert.That(ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(originalToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureSelectedDailyFacts(original.Runtime), Is.EqualTo(beforeFacts));
+            Assert.That(CaptureContinuationRootFacts(original), Is.EqualTo(beforeRoots));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, originalToken), Is.EqualTo(beforeOwnerGraph));
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retainedFailure),
+                Is.True, retainedFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlRetainedFailure),
+                Is.True, controlRetainedFailure.ToString());
+            Assert.That(ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession"), Is.SameAs(original));
+            DailyCaptureEligibilityToken continuedToken = GetCompletedDailyToken(original.Runtime);
+            DailyCaptureEligibilityToken continuedControlToken = GetCompletedDailyToken(controlSession.Runtime);
+            string continuedOwnerGraph = CaptureCompleteDailyV1OwnerProjection(original, continuedToken);
+            Assert.That(continuedOwnerGraph,
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, continuedControlToken)),
+                "After rejection, source and uninterrupted runtimes must continue identically.");
+
+            Assert.That(bootstrap.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure,
+                    out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            Assert.That(restored, Is.Not.SameAs(original));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, GetCompletedDailyToken(restored.Runtime)),
+                Is.EqualTo(continuedOwnerGraph));
+            Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextAdvanceFailure),
+                Is.True, nextAdvanceFailure.ToString());
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+            UnityEngine.Object.DestroyImmediate(controlObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreRejectsPrivateTargetMutationAfterGraphChecksAndKeepsSourceRetryable()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(

@@ -93,7 +93,8 @@ internal static class P12GDailyV1RestoreCoordinator
         out P12GDailyV1RestoreFailure failure,
         out string diagnostic,
         Action<P12GDailyV1RestoreStage> stageObserver = null,
-        Action<SimulationActiveSession> privateCandidateObserver = null)
+        Action<SimulationActiveSession> privateCandidateObserver = null,
+        Func<GenealogyOwnerSnapshot, GenealogyOwnerSnapshot> genealogySnapshotOverrideForTest = null)
     {
         restoredSession = null;
         failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
@@ -255,7 +256,8 @@ internal static class P12GDailyV1RestoreCoordinator
                     stageObserver,
                     stageObserver == null
                         ? null
-                        : (Action)(() => stageObserver(P12GDailyV1RestoreStage.DGenealogyEdgeStaged))))
+                        : (Action)(() => stageObserver(P12GDailyV1RestoreStage.DGenealogyEdgeStaged)),
+                    genealogySnapshotOverrideForTest))
             {
                 failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
                 diagnostic = "P12-D could not stage the factual roots: " + dFailure + ".";

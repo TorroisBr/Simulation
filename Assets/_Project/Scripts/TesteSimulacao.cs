@@ -641,11 +641,22 @@ public class TesteSimulacao : MonoBehaviour
         return TryRestoreDailyContinuationCore(null, privateCandidateObserver, out failure, out diagnostic);
     }
 
+    internal bool TryRestoreDailyContinuationWithGenealogySnapshotForTest(
+        System.Func<GenealogyOwnerSnapshot, GenealogyOwnerSnapshot> snapshotOverride,
+        System.Action<P12GDailyV1RestoreStage> stageObserver,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic)
+    {
+        return TryRestoreDailyContinuationCore(
+            stageObserver, null, out failure, out diagnostic, snapshotOverride);
+    }
+
     private bool TryRestoreDailyContinuationCore(
         System.Action<P12GDailyV1RestoreStage> stageObserver,
         System.Action<SimulationActiveSession> privateCandidateObserver,
         out P12GDailyV1RestoreFailure failure,
-        out string diagnostic)
+        out string diagnostic,
+        System.Func<GenealogyOwnerSnapshot, GenealogyOwnerSnapshot> genealogySnapshotOverrideForTest = null)
     {
         lock (activeSessionGate)
         {
@@ -669,7 +680,8 @@ public class TesteSimulacao : MonoBehaviour
                     out failure,
                     out diagnostic,
                     stageObserver,
-                    privateCandidateObserver))
+                    privateCandidateObserver,
+                    genealogySnapshotOverrideForTest))
                 return false;
 
             try
