@@ -668,6 +668,16 @@ public class TesteSimulacao : MonoBehaviour
         out string diagnostic)
     {
         return TryRestoreDailyContinuationCore(
+            stageObserver, null, out failure, out diagnostic, null, null, null, snapshotOverride);
+    }
+
+    internal bool TryRestoreDailyContinuationWithPoliticalClaimSnapshotForTest(
+        System.Func<P12EPoliticalClaimOwnerSnapshot, P12EPoliticalClaimOwnerSnapshot> snapshotOverride,
+        System.Action<P12GDailyV1RestoreStage> stageObserver,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic)
+    {
+        return TryRestoreDailyContinuationCore(
             stageObserver, null, out failure, out diagnostic, null, null, snapshotOverride);
     }
 
@@ -678,6 +688,7 @@ public class TesteSimulacao : MonoBehaviour
         out string diagnostic,
         System.Func<GenealogyOwnerSnapshot, GenealogyOwnerSnapshot> genealogySnapshotOverrideForTest = null,
         System.Func<PropertyEstateOwnerSnapshot, PropertyEstateOwnerSnapshot> propertyEstateSnapshotOverrideForTest = null,
+        System.Func<P12EPoliticalClaimOwnerSnapshot, P12EPoliticalClaimOwnerSnapshot> politicalClaimSnapshotOverrideForTest = null,
         System.Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest = null)
     {
         lock (activeSessionGate)
@@ -705,6 +716,7 @@ public class TesteSimulacao : MonoBehaviour
                     privateCandidateObserver,
                     genealogySnapshotOverrideForTest,
                     propertyEstateSnapshotOverrideForTest,
+                    politicalClaimSnapshotOverrideForTest,
                     politicalSupportSnapshotOverrideForTest))
                 return false;
 

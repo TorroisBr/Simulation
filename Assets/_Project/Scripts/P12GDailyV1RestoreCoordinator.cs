@@ -96,6 +96,7 @@ internal static class P12GDailyV1RestoreCoordinator
         Action<SimulationActiveSession> privateCandidateObserver = null,
         Func<GenealogyOwnerSnapshot, GenealogyOwnerSnapshot> genealogySnapshotOverrideForTest = null,
         Func<PropertyEstateOwnerSnapshot, PropertyEstateOwnerSnapshot> propertyEstateSnapshotOverrideForTest = null,
+        Func<P12EPoliticalClaimOwnerSnapshot, P12EPoliticalClaimOwnerSnapshot> politicalClaimSnapshotOverrideForTest = null,
         Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest = null)
     {
         restoredSession = null;
@@ -298,6 +299,7 @@ internal static class P12GDailyV1RestoreCoordinator
                     out P12EDailyV1OwnerPackageFailure eFailure,
                     stageObserver,
                     propertyEstateSnapshotOverrideForTest,
+                    politicalClaimSnapshotOverrideForTest,
                     politicalSupportSnapshotOverrideForTest))
             {
                 failure = P12GDailyV1RestoreFailure.OwnerStageFailed;

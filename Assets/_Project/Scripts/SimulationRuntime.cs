@@ -2444,6 +2444,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
+        bool requireEmptyBootstrapState = runtimeAdmissionContext?.IsRestoredContinuation != true;
         try
         {
             IReadOnlyList<IOwnerSectionCensusProvider> providers =
@@ -2454,6 +2455,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 InstitutionOfficeCensusProvider.OfficesSectionId,
                 InstitutionOfficeCensusProvider.IncumbenciesSectionId,
                 InstitutionOfficeCensusProvider.TenuresSectionId
+            };
+            int[] cardinalities =
+            {
+                institutionStore.Count,
+                officeStore.Count,
+                officeStore.IncumbencyCount,
+                officeStore.TenureCount
             };
             if (providers == null || providers.Count != sectionIds.Length)
             {
@@ -2470,7 +2478,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 if (witness == null
                     || !string.Equals(witness.SectionId, sectionIds[i], StringComparison.Ordinal)
                     || witness.SchemaVersion != InstitutionOfficeCensusProvider.SchemaVersion
-                    || witness.Cardinality != 0
+                    || witness.Cardinality != cardinalities[i]
+                    || (requireEmptyBootstrapState && cardinalities[i] != 0)
                     || !ReferenceEquals(witness.OwnerInstanceIdentity, expectedOwner)
                     || witness.Revision != expectedRevision
                     || witness.Revision < 0L
