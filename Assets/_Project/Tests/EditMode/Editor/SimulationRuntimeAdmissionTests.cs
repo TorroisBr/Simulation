@@ -2512,6 +2512,119 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
 
+    [Test]
+    public void RestoredSessionExchangeWaitsForIdleWindowAndSwitchesActiveAliases()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+
+        GameObject activeOwnerObject = new GameObject("P12 active restored-session exchange owner");
+        GameObject stagedOwnerObject = new GameObject("P12 staged restored-session candidate");
+        try
+        {
+            TesteSimulacao activeOwner = activeOwnerObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(activeOwner, config);
+            InvokeInitializeSimulation(activeOwner, null);
+            SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(activeOwner, "activeSession");
+            Assert.That(sourceSession, Is.Not.Null);
+
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
+                Is.True, sourceAdvance.ToString());
+            Assert.That(sourceSession.Runtime.TryGetCompletedDailyCaptureToken(
+                out DailyCaptureEligibilityToken sourceToken,
+                out DailyCaptureEligibilityFailure sourceFailure), Is.True, sourceFailure.ToString());
+
+            TesteSimulacao stagedOwner = stagedOwnerObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(stagedOwner, config);
+            WritePrivateField(stagedOwner, "worldIdentityAllocator", new Func<WorldId>(() => sourceSession.Composition.WorldId));
+            InvokeInitializeSimulation(stagedOwner, stageId =>
+            {
+                if (stageId == "p9.genesis.resolve-profile/v1")
+                    ReadPrivateField<SimulationTime>(stagedOwner, "simulationTime").AdvanceDay();
+            });
+
+            SimulationActiveSession candidateSession = ReadPrivateField<SimulationActiveSession>(stagedOwner, "activeSession");
+            Assert.That(candidateSession, Is.Not.Null);
+            Assert.That(candidateSession.Composition.WorldId, Is.SameAs(sourceToken.WorldId));
+            Assert.That(candidateSession.Runtime.CurrentDay, Is.EqualTo(sourceToken.AbsoluteDay));
+
+            // The bootstrap-built graph is now detached as a private restore candidate. The
+            // runtime is still fresh: give it the preserved boundary identity and let the real
+            // restored-admission protocol issue its candidate-bound token.
+            WritePrivateField(candidateSession.Runtime, "factualReadWorldPublished", false);
+            WritePrivateField<SimulationActiveSession>(stagedOwner, "activeSession", null);
+            Assert.That(stagedOwner.Bootstrap, Is.Null);
+            Assert.That(candidateSession.Runtime.TryAdmitRestoredDailyBoundary(
+                sourceToken.WorldId,
+                sourceToken.AbsoluteDay,
+                sourceToken.CompletedCoreSequence,
+                out DailyCaptureEligibilityFailure candidateAdmissionFailure), Is.True,
+                candidateAdmissionFailure.ToString());
+            Assert.That(candidateSession.Runtime.TryGetCompletedDailyCaptureToken(
+                out DailyCaptureEligibilityToken candidateToken,
+                out DailyCaptureEligibilityFailure candidateTokenFailure), Is.True,
+                candidateTokenFailure.ToString());
+            Assert.That(candidateToken.BoundaryProvenance,
+                Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
+            Assert.That(candidateToken, Is.Not.SameAs(sourceToken));
+
+            MethodInfo beginOperation = typeof(TesteSimulacao).GetMethod(
+                "TryBeginActiveSessionOperation",
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                null,
+                new[] { typeof(SimulationActiveSession).MakeByRefType() },
+                null);
+            MethodInfo endOperation = typeof(TesteSimulacao).GetMethod(
+                "EndActiveSessionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginOperation, Is.Not.Null);
+            Assert.That(endOperation, Is.Not.Null);
+            object[] operationArguments = { null };
+            Assert.That((bool)beginOperation.Invoke(activeOwner, operationArguments), Is.True);
+            Assert.That(operationArguments[0], Is.SameAs(sourceSession));
+            try
+            {
+                Assert.That(activeOwner.TryPublishRestoredSession(sourceSession, candidateSession), Is.False,
+                    "A restored session must not exchange while an owner operation is in flight.");
+                Assert.That(activeOwner.Bootstrap, Is.SameAs(sourceSession.Composition));
+                Assert.That(sourceSession.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True,
+                    "Rejected exchange must leave the source boundary and active reference unchanged.");
+            }
+            finally
+            {
+                endOperation.Invoke(activeOwner, null);
+            }
+
+            Assert.That(activeOwner.TryPublishRestoredSession(sourceSession, candidateSession), Is.True,
+                "An admitted restored candidate may publish at an idle owner-thread boundary.");
+            Assert.That(ReadPrivateField<SimulationActiveSession>(activeOwner, "activeSession"), Is.SameAs(candidateSession));
+            Assert.That(activeOwner.Bootstrap, Is.SameAs(candidateSession.Composition));
+            Assert.That(activeOwner.Runtime, Is.SameAs(candidateSession.Runtime));
+            Assert.That(activeOwner.SpatialNetwork, Is.SameAs(candidateSession.SpatialNetwork));
+            Assert.That(activeOwner.NpcChronicles, Is.SameAs(candidateSession.Composition.NpcChronicles));
+            Assert.That(activeOwner.FullLog, Is.EqualTo(candidateSession.Logger.FullLog));
+            Assert.That(activeOwner.CurrentDay, Is.EqualTo(sourceToken.AbsoluteDay));
+
+            SpatialLocationRuntime candidateLocation = null;
+            foreach (SpatialLocationRuntime location in candidateSession.SpatialNetwork.Locations)
+            {
+                candidateLocation = location;
+                break;
+            }
+            Assert.That(candidateLocation, Is.Not.Null);
+            Assert.That(activeOwner.TryGetSpatialLocation(candidateLocation.RuntimeId, out SpatialLocationRuntime resolved), Is.True);
+            Assert.That(resolved, Is.SameAs(candidateLocation),
+                "Post-exchange lookups must resolve through the candidate session's spatial owners.");
+            Assert.That(sourceSession.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True,
+                "Publishing the candidate must not mutate the detached source runtime.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(stagedOwnerObject);
+            UnityEngine.Object.DestroyImmediate(activeOwnerObject);
+        }
+    }
+
     private static void AssertP14FiniteProfileWithP10Rejected(bool generated)
     {
         SimulationConfigData config = CreateP14AdmissionConfig(
