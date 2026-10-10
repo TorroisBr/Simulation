@@ -1,3 +1,37 @@
+## P12-G P8-D target-owner identity checks — promoted — 2026-10-10
+
+P12 canonical advanced by a clean fast-forward from
+`1f34fc1458e29569888c6e0f764012eddb7ecd88` to the exact reviewed candidate
+`4759d185c052f33fc0dae3697ed6298d539e9220`. The implementation commit is
+`b95740629b6b7b6c5ef4a2f5076e6352ae09f091`, with code tree
+`7971311c5adc409c772c99eea8ed71099e8f30ac` and validated `Assets` tree
+`fd06e830670acfff5477420da4fe5cfa98c3d2aa`. The exact-tip review of code
+candidate `92659d587fe684b1a884d585d213bb7c956cf4e8` is recorded in
+[`design/PHASE12_G_P8D_TARGET_OWNERS_IMPLEMENTATION_REVIEW_B957406.md`](design/PHASE12_G_P8D_TARGET_OWNERS_IMPLEMENTATION_REVIEW_B957406.md);
+review and promotion commits add documentation only. Test artifacts and
+hashes are in
+[`validation/P12GGraphRejectionCoverage/P8DTargetOwners-20261010/VALIDATION.md`](validation/P12GGraphRejectionCoverage/P8DTargetOwners-20261010/VALIDATION.md).
+
+The coordinator obtains fresh witnesses from the staged runtime's exact
+`SpatialRouteKnowledgeStore` and `PersonRoutePlanStore`. It enforces the P8-D
+contract's exact owner identity, zero cardinality, and zero local revision for
+both `p8d.spatial-route-observations` and
+`p8d.person-route-plan-history`. Replacement tests prove rejection before
+publication, source session/token/graph preservation, deterministic
+continuation parity against a control runtime, and successful valid retry.
+Validation passed focused admission 121/121, ALL EditMode 2795/2795,
+official Smoke 5/5, and `git diff --check`; the exact-tree review verified
+artifact hashes and zero failures, skips, or inconclusive results.
+
+This promotes only the two selected Daily-v1 P8-D target-owner checks. It
+does not close the same-attempt target census, current B–F package-interface
+and owner-vector reconciliation, remaining graph/compatibility rejection
+cases, whole-graph failure atomicity, causal no-replay proof, or full
+multi-boundary continuation parity. P12-G remains `WAIT_DEPENDENCY`, P12-A
+remains `WAIT_DEPENDENCY`, P13 remains `BLOCKED`, and Phase 12 remains open.
+No capture eligibility, export, hydration, or downstream readiness is
+implied. Protected ProjectSettings edits and unrelated untracked `.meta`/XML
+files remain untouched.
 ## P12-G P8-C target-owner identity checks — promoted — 2026-10-10
 
 P12 canonical advanced by a clean fast-forward from
