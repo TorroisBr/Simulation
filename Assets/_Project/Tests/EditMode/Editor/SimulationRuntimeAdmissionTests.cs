@@ -5874,6 +5874,196 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestoreRejectsPoliticalClaimRecognitionForMissingInstitutionAfterEarlierEOwnersStageAtomically()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject bootstrapObject = new GameObject("P12-G PoliticalClaim Recognition Institution rejection atomicity");
+        GameObject controlObject = new GameObject("P12-G PoliticalClaim Recognition Institution control");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(bootstrap, config);
+            ConfigureSelectedBootstrap(control, config);
+            InvokeInitializeSimulation(bootstrap, null);
+            InvokeInitializeSimulation(control, null);
+
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
+
+            PersonId claimant = new PersonId("p12g-recognition-failure-claimant");
+            InstitutionId institutionId = new InstitutionId("p12g-recognition-failure-institution");
+            PoliticalClaimId claimId = new PoliticalClaimId("p12g-recognition-failure-claim");
+            Action<SimulationRuntime> registerFixture = runtime =>
+            {
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(claimant, runtime.CurrentDay), out PersonStoreFailure personFailure),
+                    Is.True, personFailure.ToString());
+                Assert.That(runtime.TryRegisterInstitution(
+                    new InstitutionRecord(institutionId), out InstitutionFoundationFailure institutionFailure),
+                    Is.True, institutionFailure.ToString());
+                PoliticalClaimRecord claim = new PoliticalClaimRecord(
+                    claimId, claimant, PoliticalClaimType.StatusRecognition,
+                    PoliticalClaimTarget.ForPerson(claimant), PoliticalClaimBasis.Other,
+                    "P12-G integrated PoliticalClaim Recognition fixture", runtime.CurrentDay, Array.Empty<string>());
+                Assert.That(runtime.TryRegisterPoliticalClaim(claim, out PoliticalClaimFailure claimFailure),
+                    Is.True, claimFailure.ToString());
+                Assert.That(runtime.TryProposePoliticalClaimRecognition(
+                        claimId, institutionId, PoliticalClaimRecognitionState.Recognized,
+                        "P12-G retained recognition history", out PoliticalClaimRecognitionTransition transition,
+                        out PoliticalClaimFailure proposeFailure),
+                    Is.True, proposeFailure.ToString());
+                Assert.That(runtime.TryApplyPoliticalClaimRecognition(transition, out PoliticalClaimFailure applyFailure),
+                    Is.True, applyFailure.ToString());
+            };
+            registerFixture(original.Runtime);
+            registerFixture(controlSession.Runtime);
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstAdvanceFailure),
+                Is.True, firstAdvanceFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFirstFailure),
+                Is.True, controlFirstFailure.ToString());
+            DailyCaptureEligibilityToken originalToken = GetCompletedDailyToken(original.Runtime);
+            string beforeFacts = CaptureSelectedDailyFacts(original.Runtime);
+            string beforeRoots = CaptureContinuationRootFacts(original);
+            string beforeOwnerGraph = CaptureCompleteDailyV1OwnerProjection(original, originalToken);
+            PoliticalClaimRecognitionRecord originalRecognition = original.Runtime.PoliticalClaimRecognitionRecords.Single();
+            Assert.That(originalRecognition.RecognitionId,
+                Is.EqualTo(PoliticalClaimRecognitionRecord.BuildRecognitionId(claimId, institutionId)));
+            Assert.That(originalRecognition.History, Is.Not.Empty);
+            PoliticalClaimRecognitionHistoryEntry[] originalHistory = originalRecognition.History.ToArray();
+
+            InstitutionId missingStagedInstitutionId = new InstitutionId("p12g-recognition-failure-missing-institution");
+            bool snapshotsCaptured = false;
+            bool institutionOfficeStaged = false;
+            bool propertyEstateStaged = false;
+            bool factionStaged = false;
+            bool claimStaged = false;
+            bool supportStaged = false;
+            bool replacementApplied = false;
+            Assert.That(bootstrap.TryRestoreDailyContinuationWithPoliticalClaimSnapshotForTest(
+                snapshot =>
+                {
+                    Assert.That(snapshotsCaptured, Is.True,
+                        "The detached PoliticalClaim snapshot is replaced only after all E snapshots were captured.");
+                    Assert.That(institutionOfficeStaged, Is.True);
+                    Assert.That(propertyEstateStaged, Is.True);
+                    Assert.That(factionStaged, Is.True);
+                    Assert.That(claimStaged, Is.False,
+                        "Recognition validation must reject before the PoliticalClaim owner stage event.");
+                    Assert.That(snapshot, Is.Not.Null);
+                    Assert.That(snapshot.Claims.RecordCount, Is.EqualTo(1));
+                    Assert.That(snapshot.Claims.Revision, Is.GreaterThan(0L));
+                    Assert.That(snapshot.Recognitions.SectionId,
+                        Is.EqualTo(PoliticalClaimStoreCensusProvider.RecognitionsSectionId));
+                    Assert.That(snapshot.Recognitions.SchemaVersion,
+                        Is.EqualTo(P12EPoliticalClaimOwnerSnapshot.CurrentSchemaVersion));
+                    Assert.That(snapshot.Recognitions.RecordCount, Is.EqualTo(1));
+                    Assert.That(snapshot.Recognitions.Revision, Is.EqualTo(snapshot.Claims.Revision));
+                    Assert.That(snapshot.Recognitions.Records, Has.Count.EqualTo(1));
+                    P12EPoliticalClaimRecognitionRow current = snapshot.Recognitions.Records[0];
+                    Assert.That(current.ClaimId, Is.EqualTo(claimId.Value));
+                    Assert.That(current.InstitutionId, Is.EqualTo(institutionId.Value));
+                    Assert.That(current.RecognitionId,
+                        Is.EqualTo(PoliticalClaimRecognitionRecord.BuildRecognitionId(claimId, institutionId)));
+                    Assert.That(current.History, Has.Count.EqualTo(originalHistory.Length));
+                    Assert.That(current.State, Is.EqualTo((int)originalRecognition.State));
+                    Assert.That(current.RecognitionAbsoluteDay, Is.EqualTo(originalRecognition.RecognitionAbsoluteDay));
+                    Assert.That(current.Reason, Is.EqualTo(originalRecognition.Reason));
+
+                    P12EPoliticalClaimRecognitionRow corrupted = new P12EPoliticalClaimRecognitionRow(
+                        current.ClaimId,
+                        missingStagedInstitutionId.Value,
+                        PoliticalClaimRecognitionRecord.BuildRecognitionId(claimId, missingStagedInstitutionId),
+                        current.State,
+                        current.RecognitionAbsoluteDay,
+                        current.Reason,
+                        current.History);
+                    replacementApplied = true;
+                    return new P12EPoliticalClaimOwnerSnapshot(
+                        snapshot.Claims,
+                        new P12EPoliticalClaimSnapshotSection<P12EPoliticalClaimRecognitionRow>(
+                            snapshot.Recognitions.SectionId,
+                            snapshot.Recognitions.SchemaVersion,
+                            snapshot.Recognitions.RecordCount,
+                            snapshot.Recognitions.Revision,
+                            new[] { corrupted },
+                            row => row?.Copy()));
+                },
+                stage =>
+                {
+                    if (stage == P12GDailyV1RestoreStage.EOwnerSnapshotsCaptured)
+                        snapshotsCaptured = true;
+                    if (stage == P12GDailyV1RestoreStage.EInstitutionOfficeOwnersStaged)
+                        institutionOfficeStaged = true;
+                    if (stage == P12GDailyV1RestoreStage.EPropertyEstateOwnersStaged)
+                        propertyEstateStaged = true;
+                    if (stage == P12GDailyV1RestoreStage.EFactionOwnerStaged)
+                        factionStaged = true;
+                    if (stage == P12GDailyV1RestoreStage.EPoliticalClaimsOwnerStaged)
+                        claimStaged = true;
+                    if (stage == P12GDailyV1RestoreStage.EPoliticalSupportOwnerStaged)
+                        supportStaged = true;
+                },
+                out P12GDailyV1RestoreFailure restoreFailure,
+                out string diagnostic), Is.False);
+
+            Assert.That(replacementApplied, Is.True);
+            Assert.That(claimStaged, Is.False);
+            Assert.That(supportStaged, Is.False);
+            Assert.That(restoreFailure, Is.EqualTo(P12GDailyV1RestoreFailure.OwnerStageFailed));
+            Assert.That(diagnostic, Does.Contain("P12-E could not stage the configured domain owners"));
+            Assert.That(ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(originalToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureSelectedDailyFacts(original.Runtime), Is.EqualTo(beforeFacts));
+            Assert.That(CaptureContinuationRootFacts(original), Is.EqualTo(beforeRoots));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, originalToken), Is.EqualTo(beforeOwnerGraph));
+            PoliticalClaimRecognitionRecord retainedRecognition = original.Runtime.PoliticalClaimRecognitionRecords.Single();
+            Assert.That(retainedRecognition, Is.EqualTo(originalRecognition));
+            Assert.That(retainedRecognition.History, Is.EqualTo(originalHistory));
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retainedFailure),
+                Is.True, retainedFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlRetainedFailure),
+                Is.True, controlRetainedFailure.ToString());
+            DailyCaptureEligibilityToken continuedToken = GetCompletedDailyToken(original.Runtime);
+            DailyCaptureEligibilityToken continuedControlToken = GetCompletedDailyToken(controlSession.Runtime);
+            string continuedOwnerGraph = CaptureCompleteDailyV1OwnerProjection(original, continuedToken);
+            Assert.That(continuedOwnerGraph,
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, continuedControlToken)),
+                "After rejection, source and uninterrupted runtimes must continue identically.");
+
+            Assert.That(bootstrap.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            Assert.That(restored, Is.Not.SameAs(original));
+            Assert.That(restored.Runtime.PoliticalClaimRecognitionRecords.Single(), Is.EqualTo(originalRecognition));
+            DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restored.Runtime);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, restoredToken), Is.EqualTo(continuedOwnerGraph));
+
+            Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextAdvanceFailure),
+                Is.True, nextAdvanceFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlNextFailure),
+                Is.True, controlNextFailure.ToString());
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, GetCompletedDailyToken(restored.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    controlSession, GetCompletedDailyToken(controlSession.Runtime))),
+                "The restored runtime and uninterrupted control must remain in parity after another boundary.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+            UnityEngine.Object.DestroyImmediate(controlObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreRejectsPrivateTargetMutationAfterGraphChecksAndKeepsSourceRetryable()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
