@@ -43,4 +43,3 @@ The current Architecture General baseline is `47eff220c7ce00f6e7c759bdc2b76780bb
 This closes the four registered source-owner identity checks only. It does not close the full 299-row live owner/cardinality/transition and writer/epoch join, same-attempt target census, restored-graph coordinator, whole-graph rejection, failure atomicity, no-replay, deterministic continuation parity, or any capture/export/hydration readiness. P12-B through P12-F remain promoted within scope; P12-G and P12-A remain `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`.
 
 **Reviewer:** independent P12-G exact-tip reviewer (`/root/p12g_source_witness_exact_review`). The reviewer did not modify the candidate or rerun tests.
-
