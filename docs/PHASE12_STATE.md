@@ -1,3 +1,30 @@
+## P12-G existing-NPC Person-binding inventory witness — 2026-10-10
+
+This State entry records the reviewed test-only witness promoted from P12
+canonical `a7810cd149abbc1bcdadca9073db9001162431ad`. The code-bearing
+candidate is `4c23600a5424cf3955fb774f8a03b201f8956573`, with Git tree
+`1255f32ce4594a072afa8ffbcb464c3023acdd93` and `Assets` tree
+`4a00345b555642b25c6e2c8acb0b1cd9009e8ca1`. Independent exact-tip review
+PASS is recorded in
+[`design/PHASE12_G_DYNAMIC_TRANSITION_WITNESS_REVIEW_4C23600.md`](design/PHASE12_G_DYNAMIC_TRANSITION_WITNESS_REVIEW_4C23600.md),
+commit `a1bf79a4a16c068c7a63e76532c2f1ea934cb996`; validation artifacts and
+hashes are in
+[`validation/P12GDynamicTransitionWitness/VALIDATION.md`](validation/P12GDynamicTransitionWitness/VALIDATION.md).
+
+The new Daily-v1 test independently rebuilds the selected 299-section
+manifest after registering a Person and again after binding it to an existing
+NPC. It verifies the Person-row and binding-cardinality transitions separately
+while the NPC roster and City-presence cardinality/revision remain unchanged.
+Focused validation passed 1/1, ALL EditMode 2740/2740, official Smoke 5/5,
+and `git diff --check`.
+
+This closes that transition-evidence gap only. It does not certify exhaustive
+live owner/writer coverage, runtime-wide quiescence, integrated P12-G target
+owner checks, whole-graph rejection or failure atomicity, no-replay,
+continuation parity, capture eligibility, export, or hydration. P12-B through
+P12-F remain promoted within their bounded contracts; P12-G and P12-A remain
+`WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`.
+
 ## P12-G current-source ledger refresh — 2026-10-10
 
 At P12 canonical `a88cc7386fa89aa1354dea2a160a4705092657fe`, the source-linked

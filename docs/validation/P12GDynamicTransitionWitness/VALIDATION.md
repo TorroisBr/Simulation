@@ -17,6 +17,12 @@ P12-A remain `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains open.
 ## Exact-tree validation
 
 All runs used the candidate worktree on 2026-10-10 with Unity `6000.3.9f1`.
+The code-bearing test candidate is `4c23600a5424cf3955fb774f8a03b201f8956573`
+(Git tree `1255f32ce4594a072afa8ffbcb464c3023acdd93`; `Assets` tree
+`4a00345b555642b25c6e2c8acb0b1cd9009e8ca1`). Independent exact-tip review
+PASS is recorded in
+[`../../design/PHASE12_G_DYNAMIC_TRANSITION_WITNESS_REVIEW_4C23600.md`](../../design/PHASE12_G_DYNAMIC_TRANSITION_WITNESS_REVIEW_4C23600.md),
+commit `a1bf79a4a16c068c7a63e76532c2f1ea934cb996`.
 
 | Suite | Result | Result XML | XML SHA-256 |
 |---|---:|---|---|
