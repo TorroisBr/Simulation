@@ -83,7 +83,8 @@ internal sealed class P12DDailyV1OwnerPackage
         IReadOnlyList<ExplorableSiteData> admittedDailySiteDefinitions,
         IReadOnlyList<string> stagedTravelPartyIds,
         out P12DDailyV1OwnerPackage package,
-        out P12DDailyV1OwnerPackageFailure failure)
+        out P12DDailyV1OwnerPackageFailure failure,
+        Action<P12GDailyV1RestoreStage> stageObserver = null)
     {
         package = null;
         failure = P12DDailyV1OwnerPackageFailure.InvalidCaptureContext;
@@ -171,21 +172,35 @@ internal sealed class P12DDailyV1OwnerPackage
             failure = P12DDailyV1OwnerPackageFailure.StaleBoundary;
             return false;
         }
+        stageObserver?.Invoke(P12GDailyV1RestoreStage.DSnapshotsCaptured);
 
         if (!SpatialNetworkRuntime.TryCreateFromOwnerSnapshot(
                 spatialSnapshot, stagedRuntimeIdentities,
                 out SpatialNetworkRuntime stagedSpatialNetwork, out _)
-            || stagedSpatialNetwork == null
-            || !PersonStore.TryCreateFromOwnerSnapshot(
+            || stagedSpatialNetwork == null)
+        {
+            failure = P12DDailyV1OwnerPackageFailure.StageFailed;
+            return false;
+        }
+        stageObserver?.Invoke(P12GDailyV1RestoreStage.DSpatialNetworkStaged);
+
+        if (!PersonStore.TryCreateFromOwnerSnapshot(
                 personSnapshot, out PersonStore stagedPersons, out _)
-            || stagedPersons == null
-            || !GenealogyStore.TryCreateFromOwnerSnapshot(
+            || stagedPersons == null)
+        {
+            failure = P12DDailyV1OwnerPackageFailure.StageFailed;
+            return false;
+        }
+        stageObserver?.Invoke(P12GDailyV1RestoreStage.DPersonsStaged);
+
+        if (!GenealogyStore.TryCreateFromOwnerSnapshot(
                 genealogySnapshot, out GenealogyStore stagedGenealogy, out _)
             || stagedGenealogy == null)
         {
             failure = P12DDailyV1OwnerPackageFailure.StageFailed;
             return false;
         }
+        stageObserver?.Invoke(P12GDailyV1RestoreStage.DGenealogyStaged);
 
         SpatialLocationRuntime[] stagedLocations = stagedSpatialNetwork.Locations.ToArray();
         string[] stagedRouteIds = stagedSpatialNetwork.Routes.Select(route => route?.RuntimeId).ToArray();
@@ -232,6 +247,7 @@ internal sealed class P12DDailyV1OwnerPackage
             stagedCities.Add(stagedCity);
             cityLinkers.Add(linker);
         }
+        stageObserver?.Invoke(P12GDailyV1RestoreStage.DCitiesStaged);
 
         if (!TryPreflightRelations(
                 personSnapshot, genealogySnapshot, cityCaptures,
@@ -240,6 +256,7 @@ internal sealed class P12DDailyV1OwnerPackage
             failure = P12DDailyV1OwnerPackageFailure.InvalidRelation;
             return false;
         }
+        stageObserver?.Invoke(P12GDailyV1RestoreStage.DRelationsValidated);
 
         if (!P12DNpcRootOwnerSnapshot.TryStage(
                 sourceRuntime, token, dProjection, fProjection, cityLinkers, stagedPersons,
@@ -251,6 +268,7 @@ internal sealed class P12DDailyV1OwnerPackage
             failure = P12DDailyV1OwnerPackageFailure.StageFailed;
             return false;
         }
+        stageObserver?.Invoke(P12GDailyV1RestoreStage.DNpcsStaged);
 
         foreach (NpcRuntime stagedNpc in stagedNpcRoster)
         {
@@ -275,6 +293,7 @@ internal sealed class P12DDailyV1OwnerPackage
             failure = P12DDailyV1OwnerPackageFailure.InvalidRelation;
             return false;
         }
+        stageObserver?.Invoke(P12GDailyV1RestoreStage.DFinalGraphValidated);
 
         if (!stagingAttempt.IsCurrentFor(sourceRuntime, token, exactOwnerSectionVector))
         {

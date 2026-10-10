@@ -168,6 +168,31 @@ internal static class P12CContinuationRootStager
         out P12CStagedContinuationRoot staged,
         out string diagnostic)
     {
+        return TryStageForRestore(
+            stagingAttempt,
+            worldIdentitySnapshot,
+            allocatorSnapshot,
+            recordSequenceSnapshot,
+            spatialSnapshot,
+            genesisManifestSnapshot,
+            randomRootSnapshot,
+            out staged,
+            out diagnostic,
+            null);
+    }
+
+    internal static bool TryStageForRestore(
+        DailyCaptureStagingAttempt stagingAttempt,
+        P12CWorldIdentitySnapshot worldIdentitySnapshot,
+        RuntimeIdAllocatorSnapshot allocatorSnapshot,
+        SimulationRecordSequenceSnapshot recordSequenceSnapshot,
+        P12CSpatialAuthoritySnapshot spatialSnapshot,
+        P12CP9GenesisManifestSnapshot genesisManifestSnapshot,
+        DeterministicRandomRootSnapshot randomRootSnapshot,
+        out P12CStagedContinuationRoot staged,
+        out string diagnostic,
+        Action<P12GDailyV1RestoreStage> stageObserver)
+    {
         staged = null;
         diagnostic = null;
 
@@ -187,6 +212,7 @@ internal static class P12CContinuationRootStager
 
             if (!worldIdentitySnapshot.TryStage(out WorldId stagedWorldIdentity, out diagnostic))
                 return false;
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.CWorldIdentityStaged);
 
             if (genesisManifestSnapshot == null)
             {
@@ -200,6 +226,7 @@ internal static class P12CContinuationRootStager
             {
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.CGenesisManifestStaged);
 
             if (spatialSnapshot == null)
             {
@@ -247,6 +274,7 @@ internal static class P12CContinuationRootStager
             {
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.CSpatialAuthorityStaged);
 
             if (!DeterministicRandomSource.TryCreateStagedFromSnapshot(
                 randomRootSnapshot,
@@ -261,6 +289,7 @@ internal static class P12CContinuationRootStager
                 diagnostic = "P12-C deterministic-random seed does not match the retained P9-B effective seed.";
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.CDeterministicRandomStaged);
 
             if (!RuntimeIdAllocator.TryCreateStagedFromSnapshot(
                 allocatorSnapshot,
@@ -269,6 +298,7 @@ internal static class P12CContinuationRootStager
             {
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.CRuntimeIdAllocatorStaged);
 
             if (!SimulationRecordSequence.TryCreateStagedFromSnapshot(
                 recordSequenceSnapshot,
@@ -277,6 +307,7 @@ internal static class P12CContinuationRootStager
             {
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.CRecordSequenceStaged);
 
             P12CStagedContinuationRoot candidate = new P12CStagedContinuationRoot(
                 stagingAttempt,

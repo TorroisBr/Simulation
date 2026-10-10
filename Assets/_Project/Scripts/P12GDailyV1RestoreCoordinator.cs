@@ -32,7 +32,48 @@ internal enum P12GDailyV1RestoreStage
     CandidateGuardBound,
     TargetOwnerVectorRecaptured,
     BoundaryAdmitted,
-    BeforePublication
+    BeforePublication,
+    CWorldIdentityStaged,
+    CGenesisManifestStaged,
+    CSpatialAuthorityStaged,
+    CDeterministicRandomStaged,
+    CRuntimeIdAllocatorStaged,
+    CRecordSequenceStaged,
+    DSnapshotsCaptured,
+    DSpatialNetworkStaged,
+    DPersonsStaged,
+    DGenealogyStaged,
+    DCitiesStaged,
+    DRelationsValidated,
+    DNpcsStaged,
+    DFinalGraphValidated,
+    EOwnerSnapshotsCaptured,
+    EInstitutionOfficeOwnersStaged,
+    EPropertyEstateOwnersStaged,
+    EFactionOwnerStaged,
+    EPoliticalClaimsOwnerStaged,
+    EPoliticalSupportOwnerStaged,
+    EPoliticalDecisionsOwnerStaged,
+    EMilitaryOwnersStaged,
+    EConflictOwnerStaged,
+    EWarOwnerStaged,
+    EBattleOwnerStaged,
+    EJusticeOwnerStaged,
+    ECrimeSocialOwnerStaged,
+    EUnresolvedBindingsValidated,
+    FOwnerSnapshotsCaptured,
+    FPoliticalKnowledgeStaged,
+    FScheduledDirectivesStaged,
+    FActorChoicesStaged,
+    FTravelPartiesStaged,
+    FExpeditionsStaged,
+    TargetPersonNpcGenealogyBindingsValidated,
+    TargetOwnerVectorValidated,
+    TargetSentinelsValidated,
+    TargetPoliticalKnowledgeBindingsValidated,
+    TargetSpatialInvariantsValidated,
+    TargetNpcCensusValidated,
+    TargetTravelPartyBindingsValidated
 }
 
 /// <summary>
@@ -104,7 +145,8 @@ internal static class P12GDailyV1RestoreCoordinator
                     sourceToken,
                     sourceOwnerSections,
                     out P12FDailyV1OwnerCapture capturedF,
-                    out P12FDailyV1OwnerPackageFailure fCaptureFailure))
+                    out P12FDailyV1OwnerPackageFailure fCaptureFailure,
+                    stageObserver))
             {
                 failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
                 diagnostic = "P12-F source capture rejected the completed boundary: " + fCaptureFailure + ".";
@@ -158,7 +200,7 @@ internal static class P12GDailyV1RestoreCoordinator
             RuntimeIdAllocatorSnapshot allocatorSnapshot = sourceComposition.RuntimeIdAllocator.CaptureSnapshot();
             SimulationRecordSequenceSnapshot recordSequenceSnapshot = sourceComposition.RecordSequence.CaptureSnapshot();
             DeterministicRandomRootSnapshot randomSnapshot = sourceRandom.CaptureSnapshot();
-            if (!P12CContinuationRootStager.TryStage(
+            if (!P12CContinuationRootStager.TryStageForRestore(
                     stagingAttempt,
                     worldIdentitySnapshot,
                     allocatorSnapshot,
@@ -167,7 +209,8 @@ internal static class P12GDailyV1RestoreCoordinator
                     manifestSnapshot,
                     randomSnapshot,
                     out P12CStagedContinuationRoot stagedC,
-                    out string cDiagnostic))
+                    out string cDiagnostic,
+                    stageObserver))
             {
                 failure = P12GDailyV1RestoreFailure.RootStageFailed;
                 diagnostic = "P12-C could not stage the captured roots: " + cDiagnostic;
@@ -206,7 +249,8 @@ internal static class P12GDailyV1RestoreCoordinator
                     Array.Empty<ExplorableSiteData>(),
                     capturedF.TravelPartyIds,
                     out P12DDailyV1OwnerPackage stagedD,
-                    out P12DDailyV1OwnerPackageFailure dFailure))
+                    out P12DDailyV1OwnerPackageFailure dFailure,
+                    stageObserver))
             {
                 failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
                 diagnostic = "P12-D could not stage the factual roots: " + dFailure + ".";
@@ -242,7 +286,8 @@ internal static class P12GDailyV1RestoreCoordinator
                     sourceOwnerSections,
                     eContext,
                     out P12EDailyV1OwnerPackage stagedE,
-                    out P12EDailyV1OwnerPackageFailure eFailure))
+                    out P12EDailyV1OwnerPackageFailure eFailure,
+                    stageObserver))
             {
                 failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
                 diagnostic = "P12-E could not stage the configured domain owners: " + eFailure + ".";
@@ -258,7 +303,8 @@ internal static class P12GDailyV1RestoreCoordinator
                     stagedE,
                     sourceSession.Configuration.Actions,
                     out P12FDailyV1OwnerPackage stagedF,
-                    out P12FDailyV1OwnerPackageFailure fStageFailure))
+                    out P12FDailyV1OwnerPackageFailure fStageFailure,
+                    stageObserver))
             {
                 failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
                 diagnostic = "P12-F could not stage the retained owner capture: " + fStageFailure + ".";
@@ -308,6 +354,7 @@ internal static class P12GDailyV1RestoreCoordinator
                 diagnostic = personBindingDiagnostic;
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetPersonNpcGenealogyBindingsValidated);
 
             if (!targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
                     out IReadOnlyList<OwnerSectionCensusSnapshot> targetOwnerSections,
@@ -347,6 +394,7 @@ internal static class P12GDailyV1RestoreCoordinator
                 diagnostic = vectorDiagnostic ?? vectorFailure.ToString();
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorValidated);
 
             if (!TryValidateTargetSentinels(candidate.Composition, targetOwnerSections, out string sentinelDiagnostic))
             {
@@ -354,6 +402,7 @@ internal static class P12GDailyV1RestoreCoordinator
                 diagnostic = sentinelDiagnostic;
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetSentinelsValidated);
 
             if (!TryValidatePoliticalKnowledgeBindings(
                     stagedE.UnresolvedPoliticalKnowledgeBindings,
@@ -364,6 +413,7 @@ internal static class P12GDailyV1RestoreCoordinator
                 diagnostic = bindingDiagnostic;
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetPoliticalKnowledgeBindingsValidated);
 
             SimulationRuntimeSpatialInvariantReport spatialReport = targetRuntime.ValidateSpatialInvariants();
             if (spatialReport == null || !spatialReport.IsValid)
@@ -372,6 +422,7 @@ internal static class P12GDailyV1RestoreCoordinator
                 diagnostic = "The private target failed spatial invariant validation.";
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetSpatialInvariantsValidated);
 
             if (!targetRuntime.TryAssessNpcRosterCensus(out ContinuationCensusFailure targetAssessFailure))
             {
@@ -379,6 +430,7 @@ internal static class P12GDailyV1RestoreCoordinator
                 diagnostic = "The private target failed NPC roster census validation: " + targetAssessFailure + ".";
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetNpcCensusValidated);
 
             if (!TryValidateTravelPartyBindings(candidate, out string travelPartyDiagnostic))
             {
@@ -386,6 +438,7 @@ internal static class P12GDailyV1RestoreCoordinator
                 diagnostic = travelPartyDiagnostic;
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetTravelPartyBindingsValidated);
 
             if (!stagingAttempt.IsCurrentFor(sourceRuntime, sourceToken, sourceOwnerSections)
                 || !sourceRuntime.TryValidateCompletedDailyCaptureToken(sourceToken, out _))

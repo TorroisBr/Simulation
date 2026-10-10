@@ -64,7 +64,8 @@ internal sealed class P12FDailyV1OwnerCapture
         DailyCaptureEligibilityToken token,
         IReadOnlyList<OwnerSectionCensusSnapshot> exactOwnerSectionVector,
         out P12FDailyV1OwnerCapture capture,
-        out P12FDailyV1OwnerPackageFailure failure)
+        out P12FDailyV1OwnerPackageFailure failure,
+        Action<P12GDailyV1RestoreStage> stageObserver = null)
     {
         capture = null;
         failure = P12FDailyV1OwnerPackageFailure.InvalidCaptureContext;
@@ -110,6 +111,7 @@ internal sealed class P12FDailyV1OwnerCapture
                 failure = P12FDailyV1OwnerPackageFailure.CaptureFailed;
                 return false;
             }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.FOwnerSnapshotsCaptured);
 
             if (!sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _))
             {
@@ -146,7 +148,8 @@ internal sealed class P12FDailyV1OwnerCapture
         P12EDailyV1OwnerPackage stagedE,
         IReadOnlyList<NpcActionData> admittedActionDefinitions,
         out P12FDailyV1OwnerPackage package,
-        out P12FDailyV1OwnerPackageFailure failure)
+        out P12FDailyV1OwnerPackageFailure failure,
+        Action<P12GDailyV1RestoreStage> stageObserver = null)
     {
         package = null;
         failure = P12FDailyV1OwnerPackageFailure.InvalidStagingContext;
@@ -196,18 +199,42 @@ internal sealed class P12FDailyV1OwnerCapture
                 stagedD.Persons, stagedE.Institutions, stagedE.PoliticalClaims,
                 stagedE.Factions, stagedE.Offices, stagedE.PropertyOwnership,
                 exactCompletedToken.AbsoluteDay,
-                out PoliticalKnowledgeStore stagedPoliticalKnowledge, out _)
-            || !directives.TryStage(
+                out PoliticalKnowledgeStore stagedPoliticalKnowledge, out _))
+        {
+            failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+            return false;
+        }
+        stageObserver?.Invoke(P12GDailyV1RestoreStage.FPoliticalKnowledgeStaged);
+
+        if (!directives.TryStage(
                 exactCompletedToken, exactOwnerSectionVector, context.StagedSimulationTime,
                 BuildNpcMap(stagedD.Npcs), actionsById,
-                out ScheduledDirectiveStore stagedDirectives, out _)
-            || !P12FActorChoiceSnapshot.TryStage(
+                out ScheduledDirectiveStore stagedDirectives, out _))
+        {
+            failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+            return false;
+        }
+        stageObserver?.Invoke(P12GDailyV1RestoreStage.FScheduledDirectivesStaged);
+
+        if (!P12FActorChoiceSnapshot.TryStage(
                 actorChoices, stagedD.Persons,
-                out ActorChoiceStore stagedActorChoices, out _)
-            || !P12FTravelPartyOwnerSnapshot.TryStage(
+                out ActorChoiceStore stagedActorChoices, out _))
+        {
+            failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+            return false;
+        }
+        stageObserver?.Invoke(P12GDailyV1RestoreStage.FActorChoicesStaged);
+
+        if (!P12FTravelPartyOwnerSnapshot.TryStage(
                 travelParties, stagedD.Npcs, stagedD.NpcFRows,
-                stagedD.RuntimeIdentities, out TravelPartyStore stagedTravelParties, out _)
-            || !P12FExpeditionOwnerSnapshot.TryStage(
+                stagedD.RuntimeIdentities, out TravelPartyStore stagedTravelParties, out _))
+        {
+            failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+            return false;
+        }
+        stageObserver?.Invoke(P12GDailyV1RestoreStage.FTravelPartiesStaged);
+
+        if (!P12FExpeditionOwnerSnapshot.TryStage(
                 expeditions, stagedD.Npcs, stagedD.NpcFRows,
                 stagedD.RuntimeIdentities, stagedTravelParties,
                 out ExpeditionStore stagedExpeditions, out _))
@@ -215,6 +242,7 @@ internal sealed class P12FDailyV1OwnerCapture
             failure = P12FDailyV1OwnerPackageFailure.StageFailed;
             return false;
         }
+        stageObserver?.Invoke(P12GDailyV1RestoreStage.FExpeditionsStaged);
 
         if (!context.StagingAttempt.IsCurrentFor(sourceRuntime, exactCompletedToken, exactOwnerSectionVector))
         {

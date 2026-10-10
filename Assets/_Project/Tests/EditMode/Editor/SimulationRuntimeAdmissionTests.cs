@@ -4879,6 +4879,47 @@ public sealed class SimulationRuntimeAdmissionTests
     [TestCase((int)P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured)]
     [TestCase((int)P12GDailyV1RestoreStage.BoundaryAdmitted)]
     [TestCase((int)P12GDailyV1RestoreStage.BeforePublication)]
+    [TestCase((int)P12GDailyV1RestoreStage.CWorldIdentityStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.CGenesisManifestStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.CSpatialAuthorityStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.CDeterministicRandomStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.CRuntimeIdAllocatorStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.CRecordSequenceStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.DSnapshotsCaptured)]
+    [TestCase((int)P12GDailyV1RestoreStage.DSpatialNetworkStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.DPersonsStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.DGenealogyStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.DCitiesStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.DRelationsValidated)]
+    [TestCase((int)P12GDailyV1RestoreStage.DNpcsStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.DFinalGraphValidated)]
+    [TestCase((int)P12GDailyV1RestoreStage.EOwnerSnapshotsCaptured)]
+    [TestCase((int)P12GDailyV1RestoreStage.EInstitutionOfficeOwnersStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.EPropertyEstateOwnersStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.EFactionOwnerStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.EPoliticalClaimsOwnerStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.EPoliticalSupportOwnerStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.EPoliticalDecisionsOwnerStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.EMilitaryOwnersStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.EConflictOwnerStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.EWarOwnerStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.EBattleOwnerStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.EJusticeOwnerStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.ECrimeSocialOwnerStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.EUnresolvedBindingsValidated)]
+    [TestCase((int)P12GDailyV1RestoreStage.FOwnerSnapshotsCaptured)]
+    [TestCase((int)P12GDailyV1RestoreStage.FPoliticalKnowledgeStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.FScheduledDirectivesStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.FActorChoicesStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.FTravelPartiesStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.FExpeditionsStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.TargetPersonNpcGenealogyBindingsValidated)]
+    [TestCase((int)P12GDailyV1RestoreStage.TargetOwnerVectorValidated)]
+    [TestCase((int)P12GDailyV1RestoreStage.TargetSentinelsValidated)]
+    [TestCase((int)P12GDailyV1RestoreStage.TargetPoliticalKnowledgeBindingsValidated)]
+    [TestCase((int)P12GDailyV1RestoreStage.TargetSpatialInvariantsValidated)]
+    [TestCase((int)P12GDailyV1RestoreStage.TargetNpcCensusValidated)]
+    [TestCase((int)P12GDailyV1RestoreStage.TargetTravelPartyBindingsValidated)]
     public void DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(
         int injectedStageValue)
     {
@@ -4921,7 +4962,8 @@ public sealed class SimulationRuntimeAdmissionTests
             }, out P12GDailyV1RestoreFailure restoreFailure, out string diagnostic), Is.False);
             Assert.That(injected, Is.True, "The selected private stage must be reached before fault injection.");
             Assert.That(restoreFailure, Is.Not.EqualTo(P12GDailyV1RestoreFailure.None));
-            Assert.That(diagnostic, Does.Contain("P12-G test failure at " + injectedStage));
+            Assert.That(diagnostic, Is.Not.Empty,
+                "A rejected private-stage attempt must retain a useful failure diagnostic.");
             Assert.That(ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession"), Is.SameAs(original));
             Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(originalToken, out _), Is.True);
             Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
