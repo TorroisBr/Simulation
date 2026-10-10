@@ -3156,7 +3156,7 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
-    public void DailyV1RestoreRejectsCorruptedP9LineageBeforeRootStagingAtomicallyAndAllowsRetry()
+    public void DailyV1RestoreRejectsMalformedOrInconsistentP9FingerprintBeforeRootStagingAtomicallyAndAllowsRetry()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
@@ -3186,41 +3186,62 @@ public sealed class SimulationRuntimeAdmissionTests
             string originalSelectedP9Fingerprint = manifest.SelectedP9ProfileFingerprint;
             Assert.That(originalSelectedP9Fingerprint, Is.EqualTo(manifest.Fingerprint));
 
-            // Corrupt only the retained selected-P9 lineage field. The coordinator
-            // must reject it during P9 root capture, before staging candidate roots.
-            WritePrivateField(
-                manifest,
-                "<SelectedP9ProfileFingerprint>k__BackingField",
-                "invalid-selected-p9-fingerprint");
-            bool sourceCaptured = false;
-            bool rootsStaged = false;
-            try
+            string validButInconsistentFingerprint = string.Equals(
+                originalSelectedP9Fingerprint.Substring(0, 1), "a", StringComparison.Ordinal)
+                ? "b" + originalSelectedP9Fingerprint.Substring(1)
+                : "a" + originalSelectedP9Fingerprint.Substring(1);
+            Assert.That(validButInconsistentFingerprint, Has.Length.EqualTo(64));
+            Assert.That(validButInconsistentFingerprint, Does.Match("^[0-9a-f]{64}$"));
+            Assert.That(validButInconsistentFingerprint, Is.Not.EqualTo(originalSelectedP9Fingerprint));
+
+            string[] corruptedFingerprints =
             {
-                Assert.That(source.TryRestoreDailyContinuation(stage =>
-                {
-                    sourceCaptured |= stage == P12GDailyV1RestoreStage.SourceCaptured;
-                    rootsStaged |= stage == P12GDailyV1RestoreStage.RootsStaged;
-                }, out P12GDailyV1RestoreFailure restoreFailure, out string diagnostic), Is.False);
-                Assert.That(restoreFailure, Is.EqualTo(P12GDailyV1RestoreFailure.SourceCaptureFailed), diagnostic);
-                Assert.That(diagnostic, Does.Contain("P12-C P9 manifest capture failed"));
-                Assert.That(sourceCaptured, Is.True,
-                    "The selected-profile source census is completed before retained P9 lineage is validated.");
-                Assert.That(rootsStaged, Is.False,
-                    "Invalid P9 lineage must reject before P12-C candidate roots are staged.");
-                Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
-                Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(originalToken, out _), Is.True);
-                Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
-            }
-            finally
+                "invalid-selected-p9-fingerprint",
+                validButInconsistentFingerprint
+            };
+            foreach (string corruptedFingerprint in corruptedFingerprints)
             {
+                // Reject both malformed format and a well-formed but inconsistent
+                // selected-P9 fingerprint before staging candidate roots.
                 WritePrivateField(
                     manifest,
                     "<SelectedP9ProfileFingerprint>k__BackingField",
-                    originalSelectedP9Fingerprint);
-            }
+                    corruptedFingerprint);
+                bool sourceCaptured = false;
+                bool rootsStaged = false;
+                try
+                {
+                    Assert.That(source.TryRestoreDailyContinuation(stage =>
+                    {
+                        sourceCaptured |= stage == P12GDailyV1RestoreStage.SourceCaptured;
+                        rootsStaged |= stage == P12GDailyV1RestoreStage.RootsStaged;
+                    }, out P12GDailyV1RestoreFailure restoreFailure, out string diagnostic), Is.False);
+                    Assert.That(restoreFailure, Is.EqualTo(P12GDailyV1RestoreFailure.SourceCaptureFailed), diagnostic);
+                    Assert.That(diagnostic, Does.Contain("P12-C P9 manifest capture failed"));
+                    if (string.Equals(corruptedFingerprint, validButInconsistentFingerprint, StringComparison.Ordinal))
+                    {
+                        Assert.That(diagnostic,
+                            Does.Contain("P9-B full-profile and selected-P9 fingerprints must be equal."));
+                    }
+                    Assert.That(sourceCaptured, Is.True,
+                        "The selected-profile source census is completed before retained P9 lineage is validated.");
+                    Assert.That(rootsStaged, Is.False,
+                        "Invalid P9 lineage must reject before P12-C candidate roots are staged.");
+                    Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+                    Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(originalToken, out _), Is.True);
+                    Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+                }
+                finally
+                {
+                    WritePrivateField(
+                        manifest,
+                        "<SelectedP9ProfileFingerprint>k__BackingField",
+                        originalSelectedP9Fingerprint);
+                }
 
-            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, originalToken), Is.EqualTo(originalGraph),
-                "Rejected P9 lineage must leave the active source owner graph unchanged.");
+                Assert.That(CaptureCompleteDailyV1OwnerProjection(original, originalToken), Is.EqualTo(originalGraph),
+                    "Rejected P9 lineage must leave the active source owner graph unchanged.");
+            }
 
             Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retainedAdvance),
                 Is.True, retainedAdvance.ToString());
