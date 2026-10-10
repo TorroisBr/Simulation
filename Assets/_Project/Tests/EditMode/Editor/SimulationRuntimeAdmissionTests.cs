@@ -3979,6 +3979,7 @@ public sealed class SimulationRuntimeAdmissionTests
     [TestCase("p12f-expedition-owner")]
     [TestCase("p12f-decision-occurrence-receipt-owner")]
     [TestCase("p12e-economy-keyed-sale-receipt-owner")]
+    [TestCase("p12f-actor-choice-temporal-owner")]
     [TestCase("wrong-family-identity-key")]
     public void DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(string corruptionKind)
     {
@@ -4019,6 +4020,10 @@ public sealed class SimulationRuntimeAdmissionTests
             EconomyTransactionService economyReceiptReplacementOwner = null;
             bool economyReceiptCompositionOwnerReplaced = false;
             bool economyReceiptVectorStillIdentifiesRuntimeOwner = false;
+            IOwnerSectionCensusProvider sourceActorChoiceTemporalProvider = null;
+            bool actorChoiceTemporalCompositionProviderReplaced = false;
+            bool actorChoiceTemporalVectorStillIdentifiesRuntimeOwner = false;
+            long actorChoiceTemporalCapturedRevision = -1L;
             Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
                 Is.True, sourceAdvance.ToString());
             Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
@@ -4237,6 +4242,59 @@ public sealed class SimulationRuntimeAdmissionTests
                             && economyTargetRow.Revision == 0L;
                         break;
                     }
+                    case "p12f-actor-choice-temporal-owner":
+                    {
+                        sourceActorChoiceTemporalProvider =
+                            original.Composition.ActorChoiceTemporalCensusProvider;
+                        OwnerSectionCensusWitness sourceTemporal =
+                            sourceActorChoiceTemporalProvider.GetCurrentCensus();
+                        Assert.That(sourceTemporal.Cardinality, Is.Zero);
+
+                        OwnerSectionCensusWitness candidateTemporal =
+                            candidate.Composition.ActorChoiceTemporalCensusProvider.GetCurrentCensus();
+                        Assert.That(candidateTemporal.Cardinality, Is.Zero);
+                        Assert.That(candidateTemporal.Revision, Is.EqualTo(sourceTemporal.Revision));
+                        Assert.That(candidateTemporal.OwnerInstanceIdentity,
+                            Is.Not.SameAs(sourceTemporal.OwnerInstanceIdentity));
+
+                        OwnerSectionCensusWitness candidateP11Owner =
+                            candidate.Composition.ActorChoiceInputCensusProvider.GetCurrentCensus();
+                        Assert.That(candidateP11Owner.Cardinality, Is.Zero);
+                        Assert.That(candidateP11Owner.OwnerInstanceIdentity,
+                            Is.SameAs(candidateTemporal.OwnerInstanceIdentity));
+                        Assert.That(candidateP11Owner.Revision, Is.EqualTo(candidateTemporal.Revision));
+
+                        WritePrivateField(
+                            candidate.Composition,
+                            "<ActorChoiceTemporalCensusProvider>k__BackingField",
+                            sourceActorChoiceTemporalProvider);
+                        actorChoiceTemporalCompositionProviderReplaced = ReferenceEquals(
+                            candidate.Composition.ActorChoiceTemporalCensusProvider,
+                            sourceActorChoiceTemporalProvider);
+
+                        Assert.That(candidate.Runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                            out IReadOnlyList<OwnerSectionCensusSnapshot> actorChoiceTargetRows,
+                            out _,
+                            out ContinuationCensusFailure actorChoiceTargetFailure), Is.True,
+                            actorChoiceTargetFailure.ToString());
+                        OwnerSectionCensusSnapshot p11TargetRow = actorChoiceTargetRows.Single(
+                            row => string.Equals(
+                                row.SectionId,
+                                ActorChoiceP11CensusProvider.SectionId,
+                                StringComparison.Ordinal));
+                        actorChoiceTemporalVectorStillIdentifiesRuntimeOwner =
+                            p11TargetRow.Role == OwnerSectionRole.Required
+                            && p11TargetRow.Cardinality == 0
+                            && p11TargetRow.Revision == candidateTemporal.Revision
+                            && ReferenceEquals(
+                                p11TargetRow.OwnerInstanceIdentity,
+                                candidateTemporal.OwnerInstanceIdentity)
+                            && !ReferenceEquals(
+                                p11TargetRow.OwnerInstanceIdentity,
+                                sourceTemporal.OwnerInstanceIdentity);
+                        actorChoiceTemporalCapturedRevision = candidateTemporal.Revision;
+                        break;
+                    }
                     case "wrong-family-identity-key":
                         Dictionary<string, CityRuntime> cities = ReadPrivateField<Dictionary<string, CityRuntime>>(
                             candidate.IdentityRegistry, "citiesByRuntimeId");
@@ -4307,6 +4365,20 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(originalEconomyReceiptOwner.GetKeyedSaleReceiptCensus().Revision, Is.Zero);
                 Assert.That(economyReceiptReplacementOwner.GetKeyedSaleReceiptCensus().Cardinality, Is.Zero);
                 Assert.That(economyReceiptReplacementOwner.GetKeyedSaleReceiptCensus().Revision, Is.Zero);
+            }
+            if (corruptionKind == "p12f-actor-choice-temporal-owner")
+            {
+                Assert.That(sourceActorChoiceTemporalProvider, Is.Not.Null);
+                Assert.That(actorChoiceTemporalCompositionProviderReplaced, Is.True);
+                Assert.That(actorChoiceTemporalVectorStillIdentifiesRuntimeOwner, Is.True,
+                    "The target P11 row must remain bound to the target ActorChoice store.");
+                OwnerSectionCensusWitness sourceTemporal =
+                    sourceActorChoiceTemporalProvider.GetCurrentCensus();
+                Assert.That(sourceTemporal.Cardinality, Is.Zero);
+                Assert.That(sourceTemporal.Revision, Is.EqualTo(actorChoiceTemporalCapturedRevision));
+                StringAssert.Contains(
+                    "The non-serialized ActorChoice temporal input count must be zero on the required P11 owner at its captured census revision.",
+                    diagnostic);
             }
             Assert.That(restoreSucceeded, Is.False, diagnostic);
             Assert.That(diagnostic, Is.Not.Null.And.Not.Empty);
