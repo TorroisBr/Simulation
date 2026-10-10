@@ -3812,3 +3812,27 @@ This completes P12-E only within its accepted selected-profile owner-set export/
 - P12-F's documented dependency on P12-C/D/E is now satisfied. Its existing technical design remains a proposal and requires current-base owner-inventory and shared-`NpcRuntime` seam revalidation plus independent design review before implementation. This promotion does not claim P12-F readiness or implementation.
 - P12-G remains WAIT_DEPENDENCY on P12-B through P12-F and the validated live-profile inventory. P12-A remains WAIT_DEPENDENCY on complete included-owner exports/hydration, validated live inventory, and its separate implementation authorization. P13 remains BLOCKED on its supported continuation/recoverable-causal-history requirements.
 - No other numbered-phase dependency edge changes. No closed Phase is reopened.
+## P12-G registered Crime receipt source-owner witness — exact-tip review PASS
+
+The test-only candidate `eb416674393d4811eca1fc9065e33d0a86bc9054` is based
+on canonical `b516a0e977954c823bf23a074e6d962b6b7346d2`, with commit tree
+`33bdb4ea7f717d9d2bdbc43ee0e4cb670fc68eea` and `Assets` tree
+`0dd621c5b5071f22d75676cb12ca14cd0a8b602e`. Independent exact-tip review
+PASS is recorded in
+[`design/PHASE12_G_EXACT_CRIME_RECEIPT_REGISTRATION_REVIEW_EB41667.md`](design/PHASE12_G_EXACT_CRIME_RECEIPT_REGISTRATION_REVIEW_EB41667.md).
+Validation artifacts and hashes are recorded in
+[`validation/P12GExactCrimeReceiptRegistration/VALIDATION.md`](validation/P12GExactCrimeReceiptRegistration/VALIDATION.md).
+
+The selected Daily-v1 composition test now verifies that the sealed
+`p12b.crime-p18-receipts` registration reads from the exact installed
+`CrimeSystem`, with its fixed Required role, schema, cardinality 1, and local
+revision 0. Focused validation passed 1/1, ALL EditMode 2740/2740, official
+Smoke 5/5, and `git diff --check`.
+
+This closes the registered source-owner identity check for this Crime
+sentinel only. P12-G remains `WAIT_DEPENDENCY` on the remaining complete live
+owner/cardinality/transition and writer/epoch inventory, exact target-owner
+checks, and integrated restored-graph validation, rejection, failure
+atomicity, no-replay, and deterministic continuation parity. P12-A remains
+`WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`. No capture,
+export, hydration, or broader census readiness is implied.

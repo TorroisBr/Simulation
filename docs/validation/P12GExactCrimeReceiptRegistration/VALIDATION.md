@@ -21,6 +21,13 @@ no-replay or continuation parity, or change readiness. P12-G and P12-A remain
 
 Validation ran on the isolated candidate based on P12 canonical
 `b516a0e977954c823bf23a074e6d962b6b7346d2` using Unity `6000.3.9f1`.
+The exact code candidate is commit
+`eb416674393d4811eca1fc9065e33d0a86bc9054` (parent
+`b516a0e977954c823bf23a074e6d962b6b7346d2`), with commit tree
+`33bdb4ea7f717d9d2bdbc43ee0e4cb670fc68eea` and `Assets` tree
+`0dd621c5b5071f22d75676cb12ca14cd0a8b602e`. The test diff was reviewed at
+that exact commit; see
+[`design/PHASE12_G_EXACT_CRIME_RECEIPT_REGISTRATION_REVIEW_EB41667.md`](../../design/PHASE12_G_EXACT_CRIME_RECEIPT_REGISTRATION_REVIEW_EB41667.md).
 Each XML is the Unity Test Framework result artifact. The raw Unity logs are
 stored together in `UnityLogs.zip` (SHA-256
 `7C9BFE22C03A9CCC6EE0F53610E47BDA6759607535125AD7D717E6F2374CDE7F`).
