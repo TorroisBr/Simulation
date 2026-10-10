@@ -2523,8 +2523,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 FactionStoreCensusProvider.AffiliationsSectionId
             };
             int[] cardinalities = { factionStore.Count, factionStore.AffiliationCount };
+            bool requireEmptyBootstrapState = runtimeAdmissionContext?.IsRestoredContinuation != true;
             if (providers == null || providers.Count != sectionIds.Length
-                || cardinalities[0] != 0 || cardinalities[1] != 0)
+                || (requireEmptyBootstrapState && (cardinalities[0] != 0 || cardinalities[1] != 0)))
             {
                 protocol.FaultClosed();
                 return false;
