@@ -812,6 +812,50 @@ public sealed class SimulationBootstrapCompositionTests
             GetRuntimeOwner(runtime, "crimeSystem"),
             expectedCardinality: 1,
             expectedRevision: 0L);
+        JusticeSystem expectedJusticeSystem =
+            (JusticeSystem)GetRuntimeOwner(runtime, "justiceSystem");
+        AssertRegisteredOwnerProvider(
+            registeredSections,
+            P12CrimeJusticeCensusProvider.JusticeRecordsSectionId,
+            P12CrimeJusticeCensusProvider.SchemaVersion,
+            OwnerSectionRole.Required,
+            expectedJusticeSystem,
+            expectedCardinality:
+                ReadNonPublicIntProperty(expectedJusticeSystem, "P12WantedRecordCount")
+                + ReadNonPublicIntProperty(expectedJusticeSystem, "P12PrisonSentenceCount"),
+            expectedRevision: ReadNonPublicLongProperty(expectedJusticeSystem, "P12CrimeJusticeRevision"));
+        AssertRegisteredOwnerProvider(
+            registeredSections,
+            P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId,
+            P12CrimeJusticeCensusProvider.SchemaVersion,
+            OwnerSectionRole.Required,
+            expectedJusticeSystem,
+            expectedCardinality: 1,
+            expectedRevision: ReadNonPublicLongProperty(expectedJusticeSystem, "P12P18ReceiptCensusRevision"));
+        NpcDecisionRecorder registeredDecisionRecorder =
+            (NpcDecisionRecorder)GetRuntimeOwner(runtime, "decisionRecorder");
+        OwnerSectionCensusWitness expectedOccurrenceReceipts =
+            registeredDecisionRecorder.GetOccurrenceReceiptCensus();
+        AssertRegisteredOwnerProvider(
+            registeredSections,
+            NpcDecisionRecorder.OccurrenceReceiptSectionId,
+            NpcDecisionRecorder.OccurrenceReceiptSectionSchemaVersion,
+            OwnerSectionRole.ExplicitlyEmpty,
+            expectedOccurrenceReceipts.OwnerInstanceIdentity,
+            expectedCardinality: 0,
+            expectedRevision: expectedOccurrenceReceipts.Revision);
+        EconomyTransactionService registeredEconomyTransactionService =
+            (EconomyTransactionService)GetRuntimeOwner(runtime, "economyTransactionService");
+        OwnerSectionCensusWitness expectedKeyedSaleReceipts =
+            registeredEconomyTransactionService.GetKeyedSaleReceiptCensus();
+        AssertRegisteredOwnerProvider(
+            registeredSections,
+            EconomyTransactionService.KeyedSaleReceiptSectionId,
+            EconomyTransactionService.KeyedSaleReceiptSectionSchemaVersion,
+            OwnerSectionRole.ExplicitlyEmpty,
+            expectedKeyedSaleReceipts.OwnerInstanceIdentity,
+            expectedCardinality: 0,
+            expectedRevision: expectedKeyedSaleReceipts.Revision);
         AssertRegisteredOwnerProvider(
             registeredSections,
             ExpeditionCensusProvider.SectionId,
@@ -3180,6 +3224,13 @@ public sealed class SimulationBootstrapCompositionTests
         object value = ReadNonPublicProperty(target, propertyName);
         Assert.That(value, Is.TypeOf<long>(), "Expected long property " + propertyName + ".");
         return (long)value;
+    }
+
+    private static int ReadNonPublicIntProperty(object target, string propertyName)
+    {
+        object value = ReadNonPublicProperty(target, propertyName);
+        Assert.That(value, Is.TypeOf<int>(), "Expected int property " + propertyName + ".");
+        return (int)value;
     }
 
     private static void InvokeBootstrapInitialize(TesteSimulacao simulation, System.Action<string> stageCompleted)
