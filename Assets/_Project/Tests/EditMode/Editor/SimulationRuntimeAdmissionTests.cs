@@ -5095,6 +5095,7 @@ public sealed class SimulationRuntimeAdmissionTests
     [TestCase((int)P12GDailyV1RestoreStage.TargetNpcCensusValidated)]
     [TestCase((int)P12GDailyV1RestoreStage.TargetTravelPartyBindingsValidated)]
     [TestCase((int)P12GDailyV1RestoreStage.DGenealogyHydratorEntry)]
+    [TestCase((int)P12GDailyV1RestoreStage.DGenealogyEdgeStaged)]
     public void DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(
         int injectedStageValue)
     {
@@ -5116,6 +5117,44 @@ public sealed class SimulationRuntimeAdmissionTests
             SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
             Assert.That(original, Is.Not.Null);
             Assert.That(controlSession, Is.Not.Null);
+            if (injectedStage == P12GDailyV1RestoreStage.DGenealogyEdgeStaged)
+            {
+                PersonId parentId = new PersonId("p12g-genealogy-partial-stage-parent");
+                PersonId firstChildId = new PersonId("p12g-genealogy-partial-stage-first-child");
+                PersonId secondChildId = new PersonId("p12g-genealogy-partial-stage-second-child");
+                Assert.That(original.Runtime.TryRegisterPerson(
+                    new PersonRuntime(parentId, 0L), out PersonStoreFailure sourceParentFailure),
+                    Is.True, sourceParentFailure.ToString());
+                Assert.That(original.Runtime.TryRegisterPerson(
+                    new PersonRuntime(firstChildId, 0L), out PersonStoreFailure sourceFirstChildFailure),
+                    Is.True, sourceFirstChildFailure.ToString());
+                Assert.That(original.Runtime.TryRegisterPerson(
+                    new PersonRuntime(secondChildId, 0L), out PersonStoreFailure sourceSecondChildFailure),
+                    Is.True, sourceSecondChildFailure.ToString());
+                Assert.That(controlSession.Runtime.TryRegisterPerson(
+                    new PersonRuntime(parentId, 0L), out PersonStoreFailure controlParentFailure),
+                    Is.True, controlParentFailure.ToString());
+                Assert.That(controlSession.Runtime.TryRegisterPerson(
+                    new PersonRuntime(firstChildId, 0L), out PersonStoreFailure controlFirstChildFailure),
+                    Is.True, controlFirstChildFailure.ToString());
+                Assert.That(controlSession.Runtime.TryRegisterPerson(
+                    new PersonRuntime(secondChildId, 0L), out PersonStoreFailure controlSecondChildFailure),
+                    Is.True, controlSecondChildFailure.ToString());
+                Assert.That(original.Runtime.TryAddParentage(
+                    parentId, firstChildId, out PersonGenealogyFailure sourceFirstEdgeFailure),
+                    Is.True, sourceFirstEdgeFailure.ToString());
+                Assert.That(original.Runtime.TryAddParentage(
+                    parentId, secondChildId, out PersonGenealogyFailure sourceSecondEdgeFailure),
+                    Is.True, sourceSecondEdgeFailure.ToString());
+                Assert.That(controlSession.Runtime.TryAddParentage(
+                    parentId, firstChildId, out PersonGenealogyFailure controlFirstEdgeFailure),
+                    Is.True, controlFirstEdgeFailure.ToString());
+                Assert.That(controlSession.Runtime.TryAddParentage(
+                    parentId, secondChildId, out PersonGenealogyFailure controlSecondEdgeFailure),
+                    Is.True, controlSecondEdgeFailure.ToString());
+                Assert.That(original.Runtime.GenealogyStoreForWorldBoundary.Count, Is.EqualTo(2));
+                Assert.That(controlSession.Runtime.GenealogyStoreForWorldBoundary.Count, Is.EqualTo(2));
+            }
             Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstAdvanceFailure),
                 Is.True, firstAdvanceFailure.ToString());
             Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFirstFailure),

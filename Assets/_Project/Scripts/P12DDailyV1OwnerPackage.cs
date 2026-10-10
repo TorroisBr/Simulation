@@ -84,7 +84,8 @@ internal sealed class P12DDailyV1OwnerPackage
         IReadOnlyList<string> stagedTravelPartyIds,
         out P12DDailyV1OwnerPackage package,
         out P12DDailyV1OwnerPackageFailure failure,
-        Action<P12GDailyV1RestoreStage> stageObserver = null)
+        Action<P12GDailyV1RestoreStage> stageObserver = null,
+        Action afterGenealogyRecordStagedForTest = null)
     {
         package = null;
         failure = P12DDailyV1OwnerPackageFailure.InvalidCaptureContext;
@@ -195,7 +196,8 @@ internal sealed class P12DDailyV1OwnerPackage
 
         stageObserver?.Invoke(P12GDailyV1RestoreStage.DGenealogyHydratorEntry);
         if (!GenealogyStore.TryCreateFromOwnerSnapshot(
-                genealogySnapshot, out GenealogyStore stagedGenealogy, out _)
+                genealogySnapshot, out GenealogyStore stagedGenealogy, out _,
+                afterGenealogyRecordStagedForTest)
             || stagedGenealogy == null)
         {
             failure = P12DDailyV1OwnerPackageFailure.StageFailed;

@@ -74,7 +74,8 @@ internal enum P12GDailyV1RestoreStage
     TargetSpatialInvariantsValidated,
     TargetNpcCensusValidated,
     TargetTravelPartyBindingsValidated,
-    DGenealogyHydratorEntry
+    DGenealogyHydratorEntry,
+    DGenealogyEdgeStaged
 }
 
 /// <summary>
@@ -251,7 +252,10 @@ internal static class P12GDailyV1RestoreCoordinator
                     capturedF.TravelPartyIds,
                     out P12DDailyV1OwnerPackage stagedD,
                     out P12DDailyV1OwnerPackageFailure dFailure,
-                    stageObserver))
+                    stageObserver,
+                    stageObserver == null
+                        ? null
+                        : (Action)(() => stageObserver(P12GDailyV1RestoreStage.DGenealogyEdgeStaged))))
             {
                 failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
                 diagnostic = "P12-D could not stage the factual roots: " + dFailure + ".";

@@ -55,7 +55,8 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
     internal static bool TryCreateFromOwnerSnapshot(
         GenealogyOwnerSnapshot snapshot,
         out GenealogyStore stagedStore,
-        out GenealogyFailure failure)
+        out GenealogyFailure failure,
+        Action afterRecordStagedForTest = null)
     {
         stagedStore = null;
         if (snapshot == null)
@@ -137,6 +138,7 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
             staged.records.Add(record);
             AddAdjacency(staged.childrenByParent, record.ParentId, record.ChildId);
             AddAdjacency(staged.parentsByChild, record.ChildId, record.ParentId);
+            afterRecordStagedForTest?.Invoke();
         }
 
         // Replaying ordinary mutations would change the exact owner revision
