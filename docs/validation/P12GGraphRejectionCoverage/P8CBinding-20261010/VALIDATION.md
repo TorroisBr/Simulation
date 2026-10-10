@@ -9,7 +9,7 @@ This proves only the selected Daily-v1 P8-C binding target-owner check. It does 
 ## Exact source baseline and tree
 
 - Canonical base: `c57fd22bb058e43672c01d8f5755d5d29eaa40b0`
-- Validated code tree (Git tree): `60b01f7af2608a71cf50195f646aba79af478da7`
+- Candidate evidence commit Git tree: `83e7c6be65026625baad9d5780aaf1ec19050657`
 - Validated `Assets` tree: `8d3f75eb85588b8a1bf4e5b90054d1214831955b`
 - Changed production file: `Assets/_Project/Scripts/P12GDailyV1RestoreCoordinator.cs`
 - Changed test file: `Assets/_Project/Tests/EditMode/Editor/SimulationRuntimeAdmissionTests.cs`
