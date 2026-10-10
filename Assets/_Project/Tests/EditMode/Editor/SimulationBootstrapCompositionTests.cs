@@ -2313,7 +2313,7 @@ public sealed class SimulationBootstrapCompositionTests
         return expected;
     }
 
-    private static Dictionary<string, object> BuildSelectedDailyV1RegisteredOwnerIdentityMap(
+    internal static Dictionary<string, object> BuildSelectedDailyV1RegisteredOwnerIdentityMap(
         SimulationRuntime runtime,
         SimulationBootstrapComposition bootstrap)
     {

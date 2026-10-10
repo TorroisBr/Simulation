@@ -2825,6 +2825,24 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(CaptureSelectedDailyFacts(sourceSession.Runtime), Is.EqualTo(sourceFactsBeforeRestore));
             AssertOwnerVectorFactsMatch(sourceToken.OwnerSections, restoredToken.OwnerSections,
                 requireFreshOwners: true);
+            Dictionary<string, object> expectedTargetOwners =
+                SimulationBootstrapCompositionTests.BuildSelectedDailyV1RegisteredOwnerIdentityMap(
+                    targetSession.Runtime, targetSession.Composition);
+            Dictionary<string, OwnerSectionCensusSnapshot> actualTargetRows = restoredToken.OwnerSections
+                .ToDictionary(section => section.SectionId, StringComparer.Ordinal);
+            Assert.That(expectedTargetOwners.Count, Is.EqualTo(sourceToken.OwnerSections.Count),
+                "The target identity map must follow the exact completed-boundary vector, including supported dynamic rows.");
+            Assert.That(actualTargetRows.Count, Is.EqualTo(expectedTargetOwners.Count),
+                "The restored target vector must contain each expected section exactly once.");
+            Assert.That(actualTargetRows.Keys.OrderBy(sectionId => sectionId, StringComparer.Ordinal),
+                Is.EqualTo(expectedTargetOwners.Keys.OrderBy(sectionId => sectionId, StringComparer.Ordinal)));
+            foreach (KeyValuePair<string, object> expectedTargetOwner in expectedTargetOwners)
+            {
+                Assert.That(actualTargetRows[expectedTargetOwner.Key].OwnerInstanceIdentity,
+                    Is.SameAs(expectedTargetOwner.Value),
+                    "The restored row must identify the exact C/D/E/F-produced target authority: "
+                    + expectedTargetOwner.Key + ".");
+            }
 
             for (int boundary = 0; boundary < 2; boundary++)
             {
@@ -3958,6 +3976,7 @@ public sealed class SimulationRuntimeAdmissionTests
     [TestCase("p8c-person-position-owner")]
     [TestCase("p8d-route-observation-owner")]
     [TestCase("p8d-person-route-plan-owner")]
+    [TestCase("p12f-expedition-owner")]
     [TestCase("wrong-family-identity-key")]
     public void DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(string corruptionKind)
     {
@@ -3986,6 +4005,10 @@ public sealed class SimulationRuntimeAdmissionTests
             bool p8DRouteKnowledgeStoreReplaced = false;
             PersonRoutePlanStore p8DRoutePlanReplacementStore = null;
             bool p8DRoutePlanStoreReplaced = false;
+            ExpeditionStore originalExpeditionStore = null;
+            ExpeditionStore expeditionReplacementStore = null;
+            bool expeditionCompositionOwnerReplaced = false;
+            bool expeditionVectorStillIdentifiesRuntimeOwner = false;
             Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
                 Is.True, sourceAdvance.ToString());
             Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
@@ -4081,6 +4104,39 @@ public sealed class SimulationRuntimeAdmissionTests
                                 p8DRoutePlanReplacementStore);
                         }
                         break;
+                    case "p12f-expedition-owner":
+                    {
+                        originalExpeditionStore = candidate.Composition.Expeditions;
+                        expeditionReplacementStore = new ExpeditionStore();
+                        WritePrivateField(
+                            candidate.Composition,
+                            "<Expeditions>k__BackingField",
+                            expeditionReplacementStore);
+                        expeditionCompositionOwnerReplaced = ReferenceEquals(
+                            candidate.Composition.Expeditions,
+                            expeditionReplacementStore);
+                        Assert.That(originalExpeditionStore, Is.Not.Null);
+                        Assert.That(expeditionCompositionOwnerReplaced, Is.True);
+                        Assert.That(expeditionReplacementStore.ActiveExpeditions, Is.Empty);
+                        Assert.That(expeditionReplacementStore.Revision, Is.Zero);
+                        Assert.That(candidate.Runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                            out IReadOnlyList<OwnerSectionCensusSnapshot> preValidationTargetRows,
+                            out _,
+                            out ContinuationCensusFailure targetCensusFailure), Is.True,
+                            targetCensusFailure.ToString());
+                        OwnerSectionCensusSnapshot expeditionRow = preValidationTargetRows.Single(
+                            row => string.Equals(
+                                row.SectionId,
+                                ExpeditionCensusProvider.SectionId,
+                                StringComparison.Ordinal));
+                        expeditionVectorStillIdentifiesRuntimeOwner = ReferenceEquals(
+                            expeditionRow.OwnerInstanceIdentity,
+                            originalExpeditionStore)
+                            && !ReferenceEquals(
+                                expeditionRow.OwnerInstanceIdentity,
+                                expeditionReplacementStore);
+                        break;
+                    }
                     case "wrong-family-identity-key":
                         Dictionary<string, CityRuntime> cities = ReadPrivateField<Dictionary<string, CityRuntime>>(
                             candidate.IdentityRegistry, "citiesByRuntimeId");
@@ -4122,6 +4178,15 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(p8DRoutePlanReplacementStore, Is.Not.Null);
                 Assert.That(p8DRoutePlanReplacementStore.PlanCount, Is.Zero);
                 Assert.That(p8DRoutePlanReplacementStore.Revision, Is.Zero);
+            }
+            if (corruptionKind == "p12f-expedition-owner")
+            {
+                Assert.That(expeditionCompositionOwnerReplaced, Is.True);
+                Assert.That(expeditionVectorStillIdentifiesRuntimeOwner, Is.True,
+                    "The runtime's target census must remain bound to its installed ExpeditionStore.");
+                Assert.That(expeditionReplacementStore, Is.Not.Null);
+                Assert.That(expeditionReplacementStore.ActiveExpeditions, Is.Empty);
+                Assert.That(expeditionReplacementStore.Revision, Is.Zero);
             }
             Assert.That(restoreSucceeded, Is.False, diagnostic);
             Assert.That(diagnostic, Is.Not.Null.And.Not.Empty);
