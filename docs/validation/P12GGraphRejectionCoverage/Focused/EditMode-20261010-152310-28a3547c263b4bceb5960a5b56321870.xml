@@ -1,0 +1,2488 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="109" result="Passed" total="109" passed="109" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-10 15:24:49Z" end-time="2026-10-10 15:24:56Z" duration="6,3817728">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2783" result="Passed" start-time="2026-10-10 15:24:49Z" end-time="2026-10-10 15:24:56Z" duration="6.381773" total="109" passed="109" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="4051" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12g-graph-rejection-coverage/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2783" result="Passed" start-time="2026-10-10 15:24:49Z" end-time="2026-10-10 15:24:56Z" duration="6.327163" total="109" passed="109" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="156180" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3632" name="SimulationRuntimeAdmissionTests" fullname="SimulationRuntimeAdmissionTests" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="109" result="Passed" start-time="2026-10-10 15:24:49Z" end-time="2026-10-10 15:24:56Z" duration="6.308791" total="109" passed="109" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3715" name="BootstrapScopesValidationThroughPublicationAndRevokesFailedPublication" fullname="SimulationRuntimeAdmissionTests.BootstrapScopesValidationThroughPublicationAndRevokesFailedPublication" methodname="BootstrapScopesValidationThroughPublicationAndRevokesFailedPublication" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="688914088" result="Passed" start-time="2026-10-10 15:24:49Z" end-time="2026-10-10 15:24:49Z" duration="0.157713" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3651" name="CompletedDailyTokenBindsOwnerRevisionAndMutationEpochWitnesses" fullname="SimulationRuntimeAdmissionTests.CompletedDailyTokenBindsOwnerRevisionAndMutationEpochWitnesses" methodname="CompletedDailyTokenBindsOwnerRevisionAndMutationEpochWitnesses" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="121930295" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.007245" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3650" name="CompletedDailyTokenIsNotPublishedAfterOperationScopeDisposalFault" fullname="SimulationRuntimeAdmissionTests.CompletedDailyTokenIsNotPublishedAfterOperationScopeDisposalFault" methodname="CompletedDailyTokenIsNotPublishedAfterOperationScopeDisposalFault" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="958508480" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.006919" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3643" name="CompletedDailyTokenIsUnavailableDuringCallbacksAndBatchPublishesOnlyOnceAtReturn" fullname="SimulationRuntimeAdmissionTests.CompletedDailyTokenIsUnavailableDuringCallbacksAndBatchPublishesOnlyOnceAtReturn" methodname="CompletedDailyTokenIsUnavailableDuringCallbacksAndBatchPublishesOnlyOnceAtReturn" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1288798879" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.005092" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3652" name="CompletedDailyTokenIsUnavailableInsideEveryRegisteredOperationScope" fullname="SimulationRuntimeAdmissionTests.CompletedDailyTokenIsUnavailableInsideEveryRegisteredOperationScope" methodname="CompletedDailyTokenIsUnavailableInsideEveryRegisteredOperationScope" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1846623623" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.051065" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="3649" name="CompletedDailyTokenRejectsFinalCensusMismatchAfterCompletedBatchCores" fullname="SimulationRuntimeAdmissionTests.CompletedDailyTokenRejectsFinalCensusMismatchAfterCompletedBatchCores" methodname="CompletedDailyTokenRejectsFinalCensusMismatchAfterCompletedBatchCores" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="302388184" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.002220" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3634" name="CompletedDailyTokenRequiresSuccessfulPositiveAdvanceAndNoOpsPreserveIt" fullname="SimulationRuntimeAdmissionTests.CompletedDailyTokenRequiresSuccessfulPositiveAdvanceAndNoOpsPreserveIt" methodname="CompletedDailyTokenRequiresSuccessfulPositiveAdvanceAndNoOpsPreserveIt" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="973970843" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.002121" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3648" name="DailyCapturePartialBatchAtAbsoluteDayOverflowPublishesNoToken" fullname="SimulationRuntimeAdmissionTests.DailyCapturePartialBatchAtAbsoluteDayOverflowPublishesNoToken" methodname="DailyCapturePartialBatchAtAbsoluteDayOverflowPublishesNoToken" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="123440101" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.000412" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3647" name="DailyCaptureTokenSurvivesCleanAbsoluteDayOverflowPreflight" fullname="SimulationRuntimeAdmissionTests.DailyCaptureTokenSurvivesCleanAbsoluteDayOverflowPreflight" methodname="DailyCaptureTokenSurvivesCleanAbsoluteDayOverflowPreflight" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="729665025" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.000539" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3679" name="DailyKnowledgeWritersRefreshOwnerBaselinesBeforeMerchantRosterCall" fullname="SimulationRuntimeAdmissionTests.DailyKnowledgeWritersRefreshOwnerBaselinesBeforeMerchantRosterCall" methodname="DailyKnowledgeWritersRefreshOwnerBaselinesBeforeMerchantRosterCall" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1770083651" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.005081" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3653" name="DailyProfileAdmissionAcceptsExactInitialSpatialIdentityAndLegacyNetworkCardinalities" fullname="SimulationRuntimeAdmissionTests.DailyProfileAdmissionAcceptsExactInitialSpatialIdentityAndLegacyNetworkCardinalities" methodname="DailyProfileAdmissionAcceptsExactInitialSpatialIdentityAndLegacyNetworkCardinalities" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="787638286" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.003632" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3655" name="DailyProfileAdmissionRejectsExtraRequiredP8AHex" fullname="SimulationRuntimeAdmissionTests.DailyProfileAdmissionRejectsExtraRequiredP8AHex" methodname="DailyProfileAdmissionRejectsExtraRequiredP8AHex" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1531246852" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.002053" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3660" name="DailyProfileAdmissionRejectsWrongRequiredLegacySpatialNetworkRouteCardinality" fullname="SimulationRuntimeAdmissionTests.DailyProfileAdmissionRejectsWrongRequiredLegacySpatialNetworkRouteCardinality" methodname="DailyProfileAdmissionRejectsWrongRequiredLegacySpatialNetworkRouteCardinality" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="745431515" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.001229" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="3658" name="DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality" fullname="SimulationRuntimeAdmissionTests.DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.003095" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="3656" name="DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality(0)" fullname="SimulationRuntimeAdmissionTests.DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality(0)" methodname="DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="55592693" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.000429" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3657" name="DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality(9)" fullname="SimulationRuntimeAdmissionTests.DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality(9)" methodname="DailyProfileAdmissionRejectsWrongRequiredRuntimeIdentityNpcCardinality" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1509986728" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.000898" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="3659" name="DailyProfileAdmissionRejectsZeroForRequiredLegacySpatialNetworkSection" fullname="SimulationRuntimeAdmissionTests.DailyProfileAdmissionRejectsZeroForRequiredLegacySpatialNetworkSection" methodname="DailyProfileAdmissionRejectsZeroForRequiredLegacySpatialNetworkSection" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="2115779320" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.000987" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3654" name="DailyProfileAdmissionRejectsZeroForRequiredP8AGeography" fullname="SimulationRuntimeAdmissionTests.DailyProfileAdmissionRejectsZeroForRequiredP8AGeography" methodname="DailyProfileAdmissionRejectsZeroForRequiredP8AGeography" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1088621919" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.001090" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="3706" name="DailyProfileFaultsAdmissionAfterInterruptedAdvance" fullname="SimulationRuntimeAdmissionTests.DailyProfileFaultsAdmissionAfterInterruptedAdvance" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.002104" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="3704" name="DailyProfileFaultsAdmissionAfterInterruptedAdvance(False)" fullname="SimulationRuntimeAdmissionTests.DailyProfileFaultsAdmissionAfterInterruptedAdvance(False)" methodname="DailyProfileFaultsAdmissionAfterInterruptedAdvance" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1822182625" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.001234" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3705" name="DailyProfileFaultsAdmissionAfterInterruptedAdvance(True)" fullname="SimulationRuntimeAdmissionTests.DailyProfileFaultsAdmissionAfterInterruptedAdvance(True)" methodname="DailyProfileFaultsAdmissionAfterInterruptedAdvance" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="712493549" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.000419" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="3707" name="DailyProfileRejectsMismatchedConstructionThreadAndP18Composition" fullname="SimulationRuntimeAdmissionTests.DailyProfileRejectsMismatchedConstructionThreadAndP18Composition" methodname="DailyProfileRejectsMismatchedConstructionThreadAndP18Composition" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="36637677" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.001139" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3702" name="DailyProfileRejectsWrongThreadWithoutAdvancingAndFaultsPartialProtocol" fullname="SimulationRuntimeAdmissionTests.DailyProfileRejectsWrongThreadWithoutAdvancingAndFaultsPartialProtocol" methodname="DailyProfileRejectsWrongThreadWithoutAdvancingAndFaultsPartialProtocol" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="836632748" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.000702" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3633" name="DailyProfileScopesAdvancesAndRoutesOwnedClockThroughRuntime" fullname="SimulationRuntimeAdmissionTests.DailyProfileScopesAdvancesAndRoutesOwnedClockThroughRuntime" methodname="DailyProfileScopesAdvancesAndRoutesOwnedClockThroughRuntime" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1767668955" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.001621" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3724" name="DailyV1ExpeditionZeroWitnessRequiresExactRequiredOwnerAndMatchingRevision" fullname="SimulationRuntimeAdmissionTests.DailyV1ExpeditionZeroWitnessRequiresExactRequiredOwnerAndMatchingRevision" methodname="DailyV1ExpeditionZeroWitnessRequiresExactRequiredOwnerAndMatchingRevision" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="2085368628" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.006058" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3725" name="DailyV1PopulatedExpeditionCannotProduceCompletedBoundaryForRestore" fullname="SimulationRuntimeAdmissionTests.DailyV1PopulatedExpeditionCannotProduceCompletedBoundaryForRestore" methodname="DailyV1PopulatedExpeditionCannotProduceCompletedBoundaryForRestore" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1043158159" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.010204" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="3727" name="DailyV1RestoreChecksOpaqueActorAndPartyDecisionReferencesAgainstAllocatorHighWater" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreChecksOpaqueActorAndPartyDecisionReferencesAgainstAllocatorHighWater" methodname="DailyV1RestoreChecksOpaqueActorAndPartyDecisionReferencesAgainstAllocatorHighWater" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1894815336" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.324043" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="3721" name="DailyV1RestoreDoesNotReplayFutureScheduledDirectiveAndItsFirstDueAdvanceMatches" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreDoesNotReplayFutureScheduledDirectiveAndItsFirstDueAdvanceMatches" methodname="DailyV1RestoreDoesNotReplayFutureScheduledDirectiveAndItsFirstDueAdvanceMatches" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1376064179" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.345831" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+Ana passeou pela cidade.
+Arthur passeou pela cidade.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Pedro.
+Marcus descansou.
+Maria foi a taverna.
+Pedro foi a taverna.
+Afonso esta viajando. Restam 2 dias.
+Helena esta viajando. Resta 1 dia.
+Jorge esta viajando. Restam 2 dias.
+Ana passeou pela cidade.
+Arthur passeou pela cidade.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Pedro.
+Marcus descansou.
+Maria foi a taverna.
+Pedro foi a taverna.
+Afonso esta viajando. Restam 2 dias.
+Helena esta viajando. Resta 1 dia.
+Jorge esta viajando. Restam 2 dias.
+Ana descansou.
+Arthur passeou pela cidade.
+Carlos descansou.
+Jobson passeou pela cidade.
+Scheduled directive 'directive-000001' was skipped: Actor is not in a compatible state for the requested action.
+Marcus passeou pela cidade.
+Maria foi a taverna.
+Pedro descansou.
+Afonso esta viajando. Resta 1 dia.
+Helena chegou em Campo Verde
+Jorge esta viajando. Resta 1 dia.
+Ana descansou.
+Arthur passeou pela cidade.
+Carlos descansou.
+Jobson passeou pela cidade.
+Scheduled directive 'directive-000001' was skipped: Actor is not in a compatible state for the requested action.
+Marcus passeou pela cidade.
+Maria foi a taverna.
+Pedro descansou.
+Afonso esta viajando. Resta 1 dia.
+Helena chegou em Campo Verde
+Jorge esta viajando. Resta 1 dia.
+]]></output>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="3747" name="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="13" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:53Z" duration="2.565479" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="3734" name="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(1)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(1)" methodname="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1934567763" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:50Z" duration="0.152780" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+]]></output>
+          </test-case>
+          <test-case id="3735" name="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(2)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(2)" methodname="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1576392686" result="Passed" start-time="2026-10-10 15:24:50Z" end-time="2026-10-10 15:24:51Z" duration="0.222216" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+]]></output>
+          </test-case>
+          <test-case id="3736" name="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(3)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(3)" methodname="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="660657574" result="Passed" start-time="2026-10-10 15:24:51Z" end-time="2026-10-10 15:24:51Z" duration="0.166356" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+]]></output>
+          </test-case>
+          <test-case id="3737" name="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(4)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(4)" methodname="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="864611241" result="Passed" start-time="2026-10-10 15:24:51Z" end-time="2026-10-10 15:24:51Z" duration="0.168753" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+]]></output>
+          </test-case>
+          <test-case id="3738" name="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(5)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(5)" methodname="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1050585963" result="Passed" start-time="2026-10-10 15:24:51Z" end-time="2026-10-10 15:24:51Z" duration="0.250528" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+]]></output>
+          </test-case>
+          <test-case id="3739" name="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(6)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(6)" methodname="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1629981650" result="Passed" start-time="2026-10-10 15:24:51Z" end-time="2026-10-10 15:24:51Z" duration="0.183681" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+]]></output>
+          </test-case>
+          <test-case id="3740" name="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(7)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(7)" methodname="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1404687785" result="Passed" start-time="2026-10-10 15:24:51Z" end-time="2026-10-10 15:24:52Z" duration="0.209816" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+]]></output>
+          </test-case>
+          <test-case id="3741" name="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(8)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(8)" methodname="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1924739129" result="Passed" start-time="2026-10-10 15:24:52Z" end-time="2026-10-10 15:24:52Z" duration="0.205032" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+]]></output>
+          </test-case>
+          <test-case id="3742" name="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(9)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(9)" methodname="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1473689254" result="Passed" start-time="2026-10-10 15:24:52Z" end-time="2026-10-10 15:24:52Z" duration="0.176254" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+]]></output>
+          </test-case>
+          <test-case id="3743" name="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(10)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(10)" methodname="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="236928981" result="Passed" start-time="2026-10-10 15:24:52Z" end-time="2026-10-10 15:24:52Z" duration="0.238452" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+]]></output>
+          </test-case>
+          <test-case id="3744" name="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(11)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(11)" methodname="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="2001367274" result="Passed" start-time="2026-10-10 15:24:52Z" end-time="2026-10-10 15:24:52Z" duration="0.172856" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+]]></output>
+          </test-case>
+          <test-case id="3745" name="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(12)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(12)" methodname="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="485965717" result="Passed" start-time="2026-10-10 15:24:52Z" end-time="2026-10-10 15:24:53Z" duration="0.240437" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+]]></output>
+          </test-case>
+          <test-case id="3746" name="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(13)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(13)" methodname="DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="442226219" result="Passed" start-time="2026-10-10 15:24:53Z" end-time="2026-10-10 15:24:53Z" duration="0.175577" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+]]></output>
+          </test-case>
+        </test-suite>
+        <test-case id="3722" name="DailyV1RestorePreservesActiveTravelPartyWithoutReplayingEffects" fullname="SimulationRuntimeAdmissionTests.DailyV1RestorePreservesActiveTravelPartyWithoutReplayingEffects" methodname="DailyV1RestorePreservesActiveTravelPartyWithoutReplayingEffects" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1471350316" result="Passed" start-time="2026-10-10 15:24:53Z" end-time="2026-10-10 15:24:53Z" duration="0.332224" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Arthur descansou.
+Carlos foi a taverna.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Arthur descansou.
+Carlos foi a taverna.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+Arthur passeou pela cidade.
+Carlos foi a taverna.
+Marcus descansou.
+Maria foi a taverna.
+Pedro foi a taverna.
+Afonso esta viajando. Restam 2 dias.
+Helena esta viajando. Resta 1 dia.
+Jorge esta viajando. Restam 2 dias.
+Arthur passeou pela cidade.
+Carlos foi a taverna.
+Marcus descansou.
+Maria foi a taverna.
+Pedro foi a taverna.
+Afonso esta viajando. Restam 2 dias.
+Helena esta viajando. Resta 1 dia.
+Jorge esta viajando. Restam 2 dias.
+Ana descansou.
+Arthur passeou pela cidade.
+Carlos descansou.
+Jobson passeou pela cidade.
+Marcus passeou pela cidade.
+Maria foi a taverna.
+Pedro descansou.
+Afonso esta viajando. Resta 1 dia.
+Helena chegou em Campo Verde
+Jorge esta viajando. Resta 1 dia.
+Ana descansou.
+Arthur passeou pela cidade.
+Carlos descansou.
+Jobson passeou pela cidade.
+Marcus passeou pela cidade.
+Maria foi a taverna.
+Pedro descansou.
+Afonso esta viajando. Resta 1 dia.
+Helena chegou em Campo Verde
+Jorge esta viajando. Resta 1 dia.
+]]></output>
+        </test-case>
+        <test-case id="3719" name="DailyV1RestorePreservesDynamicNpcRosterTransitionAndContinuesDeterministically" fullname="SimulationRuntimeAdmissionTests.DailyV1RestorePreservesDynamicNpcRosterTransitionAndContinuesDeterministically" methodname="DailyV1RestorePreservesDynamicNpcRosterTransitionAndContinuesDeterministically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="2120894020" result="Passed" start-time="2026-10-10 15:24:53Z" end-time="2026-10-10 15:24:53Z" duration="0.164768" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+]]></output>
+        </test-case>
+        <test-case id="3720" name="DailyV1RestoreRejectsBeforeBoundaryWithoutChangingActiveSession" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsBeforeBoundaryWithoutChangingActiveSession" methodname="DailyV1RestoreRejectsBeforeBoundaryWithoutChangingActiveSession" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1454066943" result="Passed" start-time="2026-10-10 15:24:53Z" end-time="2026-10-10 15:24:53Z" duration="0.010773" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="3733" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-10-10 15:24:53Z" end-time="2026-10-10 15:24:54Z" duration="0.788897" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="3729" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;allocator-high-water&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;allocator-high-water&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1772585043" result="Passed" start-time="2026-10-10 15:24:53Z" end-time="2026-10-10 15:24:54Z" duration="0.168674" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3730" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;record-sequence&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;record-sequence&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1870283559" result="Passed" start-time="2026-10-10 15:24:54Z" end-time="2026-10-10 15:24:54Z" duration="0.227906" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3731" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;owner-revision&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;owner-revision&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1020975326" result="Passed" start-time="2026-10-10 15:24:54Z" end-time="2026-10-10 15:24:54Z" duration="0.160030" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3732" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p8-location-cardinality&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p8-location-cardinality&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="265671556" result="Passed" start-time="2026-10-10 15:24:54Z" end-time="2026-10-10 15:24:54Z" duration="0.231027" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+        </test-suite>
+        <test-case id="3723" name="DailyV1RestoreRejectsCorruptedTravelPartyCrossOwnerBindingAtomically" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedTravelPartyCrossOwnerBindingAtomically" methodname="DailyV1RestoreRejectsCorruptedTravelPartyCrossOwnerBindingAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="2087065384" result="Passed" start-time="2026-10-10 15:24:54Z" end-time="2026-10-10 15:24:54Z" duration="0.164178" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+        </test-case>
+        <test-case id="3749" name="DailyV1RestoreRejectsMutationGuardBindFailureBeforeBoundaryAdmissionAndKeepsSourceRetryable" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsMutationGuardBindFailureBeforeBoundaryAdmissionAndKeepsSourceRetryable" methodname="DailyV1RestoreRejectsMutationGuardBindFailureBeforeBoundaryAdmissionAndKeepsSourceRetryable" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="533362927" result="Passed" start-time="2026-10-10 15:24:54Z" end-time="2026-10-10 15:24:54Z" duration="0.110759" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="3728" name="DailyV1RestoreRejectsPrivateTargetExpeditionBeforePublicationAndKeepsOldSessionRetryable" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsPrivateTargetExpeditionBeforePublicationAndKeepsOldSessionRetryable" methodname="DailyV1RestoreRejectsPrivateTargetExpeditionBeforePublicationAndKeepsOldSessionRetryable" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="999348802" result="Passed" start-time="2026-10-10 15:24:54Z" end-time="2026-10-10 15:24:55Z" duration="0.176655" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="3748" name="DailyV1RestoreRejectsPrivateTargetMutationAfterGraphChecksAndKeepsSourceRetryable" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsPrivateTargetMutationAfterGraphChecksAndKeepsSourceRetryable" methodname="DailyV1RestoreRejectsPrivateTargetMutationAfterGraphChecksAndKeepsSourceRetryable" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1014503171" result="Passed" start-time="2026-10-10 15:24:55Z" end-time="2026-10-10 15:24:55Z" duration="0.116304" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="3726" name="DailyV1RestoreRejectsTargetExpeditionAddedAfterOwnerCensusAndKeepsSourceRetryable" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsTargetExpeditionAddedAfterOwnerCensusAndKeepsSourceRetryable" methodname="DailyV1RestoreRejectsTargetExpeditionAddedAfterOwnerCensusAndKeepsSourceRetryable" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1223212403" result="Passed" start-time="2026-10-10 15:24:55Z" end-time="2026-10-10 15:24:55Z" duration="0.111168" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="3718" name="DailyV1RestoreStagesFreshGraphPublishesOnceAndContinuesDeterministically" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreStagesFreshGraphPublishesOnceAndContinuesDeterministically" methodname="DailyV1RestoreStagesFreshGraphPublishesOnceAndContinuesDeterministically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="919279404" result="Passed" start-time="2026-10-10 15:24:55Z" end-time="2026-10-10 15:24:56Z" duration="0.707347" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Ana descansou.
+Arthur descansou.
+Carlos foi a taverna.
+Jobson escolheu ROUBAR Jorge.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+]]></output>
+        </test-case>
+        <test-case id="3680" name="DirectPlanOwnerCommitsOutsideMerchantOperationRefreshTheirBaselinesImmediately" fullname="SimulationRuntimeAdmissionTests.DirectPlanOwnerCommitsOutsideMerchantOperationRefreshTheirBaselinesImmediately" methodname="DirectPlanOwnerCommitsOutsideMerchantOperationRefreshTheirBaselinesImmediately" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1623690383" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001289" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="3672" name="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.002629" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="3668" name="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(&quot;decision&quot;,&quot;revision&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(&quot;decision&quot;,&quot;revision&quot;)" methodname="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1002898098" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000813" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3669" name="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(&quot;economy&quot;,&quot;revision&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(&quot;economy&quot;,&quot;revision&quot;)" methodname="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1333261662" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000226" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3670" name="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(&quot;decision&quot;,&quot;cardinality&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(&quot;decision&quot;,&quot;cardinality&quot;)" methodname="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="2124923049" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000382" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3671" name="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(&quot;economy&quot;,&quot;cardinality&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(&quot;economy&quot;,&quot;cardinality&quot;)" methodname="ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="793257412" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000286" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="3678" name="ExactZeroReceiptRegistrationRejectsMalformedProviders" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptRegistrationRejectsMalformedProviders" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001564" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="3673" name="ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;wrong-section&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;wrong-section&quot;)" methodname="ExactZeroReceiptRegistrationRejectsMalformedProviders" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1486635319" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000654" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3674" name="ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;wrong-schema&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;wrong-schema&quot;)" methodname="ExactZeroReceiptRegistrationRejectsMalformedProviders" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1590253753" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000092" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3675" name="ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;unstable-owner&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;unstable-owner&quot;)" methodname="ExactZeroReceiptRegistrationRejectsMalformedProviders" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1296338418" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000077" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3676" name="ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;populated&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;populated&quot;)" methodname="ExactZeroReceiptRegistrationRejectsMalformedProviders" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="76611851" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000100" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3677" name="ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;missing-witness&quot;)" fullname="SimulationRuntimeAdmissionTests.ExactZeroReceiptRegistrationRejectsMalformedProviders(&quot;missing-witness&quot;)" methodname="ExactZeroReceiptRegistrationRejectsMalformedProviders" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1659331408" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000090" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="3714" name="FiniteSourceProfileRejectsAdditionalCityBeforeConstruction" fullname="SimulationRuntimeAdmissionTests.FiniteSourceProfileRejectsAdditionalCityBeforeConstruction" methodname="FiniteSourceProfileRejectsAdditionalCityBeforeConstruction" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1071485595" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.002761" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3711" name="FiniteSourceProfileRunsOutsideP12Daily" fullname="SimulationRuntimeAdmissionTests.FiniteSourceProfileRunsOutsideP12Daily" methodname="FiniteSourceProfileRunsOutsideP12Daily" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1848598355" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.005051" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3712" name="FiniteSourceProfileWithP10AIsDeferredBeforeIdentityOrOwnerConstruction" fullname="SimulationRuntimeAdmissionTests.FiniteSourceProfileWithP10AIsDeferredBeforeIdentityOrOwnerConstruction" methodname="FiniteSourceProfileWithP10AIsDeferredBeforeIdentityOrOwnerConstruction" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="424435673" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001171" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3713" name="FiniteSourceProfileWithP10BIsDeferredBeforeIdentityOrOwnerConstruction" fullname="SimulationRuntimeAdmissionTests.FiniteSourceProfileWithP10BIsDeferredBeforeIdentityOrOwnerConstruction" methodname="FiniteSourceProfileWithP10BIsDeferredBeforeIdentityOrOwnerConstruction" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="157700965" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000366" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3661" name="FixedOwnerAdmissionRejectsPopulatedExplicitlyEmptyP8BAndP8CSections" fullname="SimulationRuntimeAdmissionTests.FixedOwnerAdmissionRejectsPopulatedExplicitlyEmptyP8BAndP8CSections" methodname="FixedOwnerAdmissionRejectsPopulatedExplicitlyEmptyP8BAndP8CSections" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="60488365" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.005254" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="3664" name="FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing" fullname="SimulationRuntimeAdmissionTests.FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001612" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="3662" name="FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing(False,True)" fullname="SimulationRuntimeAdmissionTests.FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing(False,True)" methodname="FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="2032007040" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000490" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3663" name="FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing(True,False)" fullname="SimulationRuntimeAdmissionTests.FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing(True,False)" methodname="FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="478735963" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000234" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-suite type="ParameterizedMethod" id="3667" name="FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated" fullname="SimulationRuntimeAdmissionTests.FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001134" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="3665" name="FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated(&quot;decision&quot;)" fullname="SimulationRuntimeAdmissionTests.FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated(&quot;decision&quot;)" methodname="FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="522895606" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000483" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="3666" name="FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated(&quot;economy&quot;)" fullname="SimulationRuntimeAdmissionTests.FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated(&quot;economy&quot;)" methodname="FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1117280251" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000159" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="3681" name="MerchantOperationBatchesChangedOwnerSectionsOnceAndHoldsScopeThroughCommit" fullname="SimulationRuntimeAdmissionTests.MerchantOperationBatchesChangedOwnerSectionsOnceAndHoldsScopeThroughCommit" methodname="MerchantOperationBatchesChangedOwnerSectionsOnceAndHoldsScopeThroughCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="634758020" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001632" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3695" name="P12DailyChangedPriceRefresh_ReportsMarketCommitInsideAdvance" fullname="SimulationRuntimeAdmissionTests.P12DailyChangedPriceRefresh_ReportsMarketCommitInsideAdvance" methodname="P12DailyChangedPriceRefresh_ReportsMarketCommitInsideAdvance" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="249228764" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001480" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[p12-daily-price-refresh-city display atualizou os precos do mercado.
+]]></output>
+        </test-case>
+        <test-case id="3694" name="P12DailyFreeConsumption_ReportsMarketCommitInsideAdvance" fullname="SimulationRuntimeAdmissionTests.P12DailyFreeConsumption_ReportsMarketCommitInsideAdvance" methodname="P12DailyFreeConsumption_ReportsMarketCommitInsideAdvance" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1205839843" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001443" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[p12-daily-free-consumption-city display consumiu 1 p12-daily-free-consumption display
+p12-daily-free-consumption-city display atualizou os precos do mercado.
+]]></output>
+        </test-case>
+        <test-case id="3693" name="P12DailyMarketProduction_ReportsMarketCommitInsideAdvance" fullname="SimulationRuntimeAdmissionTests.P12DailyMarketProduction_ReportsMarketCommitInsideAdvance" methodname="P12DailyMarketProduction_ReportsMarketCommitInsideAdvance" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="125824339" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001318" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[p12-daily-market-production-city-data display produziu 2 p12-daily-market-production display
+p12-daily-market-production-city-data display atualizou os precos do mercado.
+]]></output>
+        </test-case>
+        <test-case id="3692" name="P12MarketDirectMutation_UpdatesLiveMarketWitnessAndSkipsNoOps" fullname="SimulationRuntimeAdmissionTests.P12MarketDirectMutation_UpdatesLiveMarketWitnessAndSkipsNoOps" methodname="P12MarketDirectMutation_UpdatesLiveMarketWitnessAndSkipsNoOps" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1301677400" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000885" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3689" name="P12MarketPurchase_ExhaustedMarketRevisionRejectsBeforeAnyOwnerCommit" fullname="SimulationRuntimeAdmissionTests.P12MarketPurchase_ExhaustedMarketRevisionRejectsBeforeAnyOwnerCommit" methodname="P12MarketPurchase_ExhaustedMarketRevisionRejectsBeforeAnyOwnerCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="640765953" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001263" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3690" name="P12MarketPurchase_StaleMarketRevisionRejectsBeforeAnyOwnerCommit" fullname="SimulationRuntimeAdmissionTests.P12MarketPurchase_StaleMarketRevisionRejectsBeforeAnyOwnerCommit" methodname="P12MarketPurchase_StaleMarketRevisionRejectsBeforeAnyOwnerCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="741117995" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000723" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3691" name="P12MarketPurchase_WrongThreadRejectsBeforeAnyOwnerCommit" fullname="SimulationRuntimeAdmissionTests.P12MarketPurchase_WrongThreadRejectsBeforeAnyOwnerCommit" methodname="P12MarketPurchase_WrongThreadRejectsBeforeAnyOwnerCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="211383873" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001445" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3688" name="P12MarketSale_ExhaustedMarketRevisionRejectsBeforeAnyOwnerCommit" fullname="SimulationRuntimeAdmissionTests.P12MarketSale_ExhaustedMarketRevisionRejectsBeforeAnyOwnerCommit" methodname="P12MarketSale_ExhaustedMarketRevisionRejectsBeforeAnyOwnerCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1238187074" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000915" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3687" name="P12MarketSale_ReportsAccountCommitAndSuccessfulCompensationWhenInventoryCannotCommit" fullname="SimulationRuntimeAdmissionTests.P12MarketSale_ReportsAccountCommitAndSuccessfulCompensationWhenInventoryCannotCommit" methodname="P12MarketSale_ReportsAccountCommitAndSuccessfulCompensationWhenInventoryCannotCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="425612570" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000874" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3686" name="P12MarketWrappers_UseSharedServiceAndNotifyEveryCommittedOwner" fullname="SimulationRuntimeAdmissionTests.P12MarketWrappers_UseSharedServiceAndNotifyEveryCommittedOwner" methodname="P12MarketWrappers_UseSharedServiceAndNotifyEveryCommittedOwner" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="699723175" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001037" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3684" name="P12MoneyTransfer_CompensationCommitsSourceRevisionWithinOneOperation" fullname="SimulationRuntimeAdmissionTests.P12MoneyTransfer_CompensationCommitsSourceRevisionWithinOneOperation" methodname="P12MoneyTransfer_CompensationCommitsSourceRevisionWithinOneOperation" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1113985148" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.002170" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3685" name="P12MoneyTransfer_RejectsStaleOrReplacedOwnersAndWrongThreadBeforeWrites" fullname="SimulationRuntimeAdmissionTests.P12MoneyTransfer_RejectsStaleOrReplacedOwnersAndWrongThreadBeforeWrites" methodname="P12MoneyTransfer_RejectsStaleOrReplacedOwnersAndWrongThreadBeforeWrites" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1736320612" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.002435" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3683" name="P12MoneyTransfer_ScopesExactAccountCommitsAndKeepsZeroValueAsNoOp" fullname="SimulationRuntimeAdmissionTests.P12MoneyTransfer_ScopesExactAccountCommitsAndKeepsZeroValueAsNoOp" methodname="P12MoneyTransfer_ScopesExactAccountCommitsAndKeepsZeroValueAsNoOp" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1800047060" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001560" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3682" name="P12NpcTrade_NotifiesEachCommittedAccountAndInventoryOwner" fullname="SimulationRuntimeAdmissionTests.P12NpcTrade_NotifiesEachCommittedAccountAndInventoryOwner" methodname="P12NpcTrade_NotifiesEachCommittedAccountAndInventoryOwner" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1069503306" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001728" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3698" name="P12NpcTrade_PreexistingUnnotifiedOwnerDriftRejectsBeforeAnyTradeCommit" fullname="SimulationRuntimeAdmissionTests.P12NpcTrade_PreexistingUnnotifiedOwnerDriftRejectsBeforeAnyTradeCommit" methodname="P12NpcTrade_PreexistingUnnotifiedOwnerDriftRejectsBeforeAnyTradeCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="837925798" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001620" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3697" name="P12NpcTrade_ReportsBothSuccessfulAccountCompensationsWhenSellerInventoryCannotCommit" fullname="SimulationRuntimeAdmissionTests.P12NpcTrade_ReportsBothSuccessfulAccountCompensationsWhenSellerInventoryCannotCommit" methodname="P12NpcTrade_ReportsBothSuccessfulAccountCompensationsWhenSellerInventoryCannotCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1987042720" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001531" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3696" name="P12NpcTrade_ReportsBuyerDebitAndSuccessfulCompensationWhenSellerCreditCannotCommit" fullname="SimulationRuntimeAdmissionTests.P12NpcTrade_ReportsBuyerDebitAndSuccessfulCompensationWhenSellerCreditCannotCommit" methodname="P12NpcTrade_ReportsBuyerDebitAndSuccessfulCompensationWhenSellerCreditCannotCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="412688412" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000997" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3701" name="P12NpcTrade_SaturationAfterFirstCommitPreservesCommittedLeafAndFaultsProtocol" fullname="SimulationRuntimeAdmissionTests.P12NpcTrade_SaturationAfterFirstCommitPreservesCommittedLeafAndFaultsProtocol" methodname="P12NpcTrade_SaturationAfterFirstCommitPreservesCommittedLeafAndFaultsProtocol" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="2135115190" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001335" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3699" name="P12NpcTrade_UnregisteredParticipantIsRejectedBeforeAnyOwnerCommit" fullname="SimulationRuntimeAdmissionTests.P12NpcTrade_UnregisteredParticipantIsRejectedBeforeAnyOwnerCommit" methodname="P12NpcTrade_UnregisteredParticipantIsRejectedBeforeAnyOwnerCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1989295738" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000665" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3700" name="P12NpcTrade_WrongThreadAdmissionRejectsBeforeAnyOwnerCommit" fullname="SimulationRuntimeAdmissionTests.P12NpcTrade_WrongThreadAdmissionRejectsBeforeAnyOwnerCommit" methodname="P12NpcTrade_WrongThreadAdmissionRejectsBeforeAnyOwnerCommit" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="128469299" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001493" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3710" name="P14AExogenousMaterialFlowRunsInItsSingleCityProvingProfile" fullname="SimulationRuntimeAdmissionTests.P14AExogenousMaterialFlowRunsInItsSingleCityProvingProfile" methodname="P14AExogenousMaterialFlowRunsInItsSingleCityProvingProfile" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1973482221" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001466" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3644" name="PartialBatchExceptionKeepsOnlyNormallyCompletedCoreSequenceAndIssuesNoToken" fullname="SimulationRuntimeAdmissionTests.PartialBatchExceptionKeepsOnlyNormallyCompletedCoreSequenceAndIssuesNoToken" methodname="PartialBatchExceptionKeepsOnlyNormallyCompletedCoreSequenceAndIssuesNoToken" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1790349712" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000905" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3638" name="RestoredDailyBoundaryAdmissionIssuesFreshTokenAndResumesSequence" fullname="SimulationRuntimeAdmissionTests.RestoredDailyBoundaryAdmissionIssuesFreshTokenAndResumesSequence" methodname="RestoredDailyBoundaryAdmissionIssuesFreshTokenAndResumesSequence" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1721489654" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001310" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3641" name="RestoredDailyBoundaryAdmissionRejectsActiveOperationAndWrongThreadWithoutMutation" fullname="SimulationRuntimeAdmissionTests.RestoredDailyBoundaryAdmissionRejectsActiveOperationAndWrongThreadWithoutMutation" methodname="RestoredDailyBoundaryAdmissionRejectsActiveOperationAndWrongThreadWithoutMutation" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1845244457" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001209" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3640" name="RestoredDailyBoundaryAdmissionRejectsAlreadyPublishedOrAdvancedCandidateWithoutReplacement" fullname="SimulationRuntimeAdmissionTests.RestoredDailyBoundaryAdmissionRejectsAlreadyPublishedOrAdvancedCandidateWithoutReplacement" methodname="RestoredDailyBoundaryAdmissionRejectsAlreadyPublishedOrAdvancedCandidateWithoutReplacement" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1242959651" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000623" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3642" name="RestoredDailyBoundaryAdmissionRejectsNonDailyProfile" fullname="SimulationRuntimeAdmissionTests.RestoredDailyBoundaryAdmissionRejectsNonDailyProfile" methodname="RestoredDailyBoundaryAdmissionRejectsNonDailyProfile" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="933851188" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000419" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3639" name="RestoredDailyBoundaryAdmissionRejectsWrongIdentityDayAndSequenceWithoutPartialPublication" fullname="SimulationRuntimeAdmissionTests.RestoredDailyBoundaryAdmissionRejectsWrongIdentityDayAndSequenceWithoutPartialPublication" methodname="RestoredDailyBoundaryAdmissionRejectsWrongIdentityDayAndSequenceWithoutPartialPublication" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="962218915" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001054" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3717" name="RestoredSessionExchangeWaitsForIdleWindowAndSwitchesActiveAliases" fullname="SimulationRuntimeAdmissionTests.RestoredSessionExchangeWaitsForIdleWindowAndSwitchesActiveAliases" methodname="RestoredSessionExchangeWaitsForIdleWindowAndSwitchesActiveAliases" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="471748090" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.018216" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="3703" name="RuntimeOwnedClockApisRejectWrongThreadWithoutAdvancing" fullname="SimulationRuntimeAdmissionTests.RuntimeOwnedClockApisRejectWrongThreadWithoutAdvancing" methodname="RuntimeOwnedClockApisRejectWrongThreadWithoutAdvancing" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1518269179" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001252" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3716" name="StartCapturesAndPassesTheSelectedProfileOwnerThread" fullname="SimulationRuntimeAdmissionTests.StartCapturesAndPassesTheSelectedProfileOwnerThread" methodname="StartCapturesAndPassesTheSelectedProfileOwnerThread" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="718974770" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.013893" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="3645" name="SupportedSameDayRosterMutationInvalidatesTokenAndTokensCannotCrossRuntimes" fullname="SimulationRuntimeAdmissionTests.SupportedSameDayRosterMutationInvalidatesTokenAndTokensCannotCrossRuntimes" methodname="SupportedSameDayRosterMutationInvalidatesTokenAndTokensCannotCrossRuntimes" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1736997305" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001624" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3635" name="UnadmittedRestoredOwnerVectorCaptureIsReadOnlyAndQuiescent" fullname="SimulationRuntimeAdmissionTests.UnadmittedRestoredOwnerVectorCaptureIsReadOnlyAndQuiescent" methodname="UnadmittedRestoredOwnerVectorCaptureIsReadOnlyAndQuiescent" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="71540956" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000886" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3636" name="UnadmittedRestoredOwnerVectorCaptureRejectsActiveAdvanceAndWrongThread" fullname="SimulationRuntimeAdmissionTests.UnadmittedRestoredOwnerVectorCaptureRejectsActiveAdvanceAndWrongThread" methodname="UnadmittedRestoredOwnerVectorCaptureRejectsActiveAdvanceAndWrongThread" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="525058750" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001683" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3637" name="UnadmittedRestoredOwnerVectorCaptureRejectsPublishedCandidate" fullname="SimulationRuntimeAdmissionTests.UnadmittedRestoredOwnerVectorCaptureRejectsPublishedCandidate" methodname="UnadmittedRestoredOwnerVectorCaptureRejectsPublishedCandidate" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1471422473" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000375" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3709" name="UnityBootstrapDailyRejectsExogenousMaterialFlowBeforeIdentityOrOwnerConstruction" fullname="SimulationRuntimeAdmissionTests.UnityBootstrapDailyRejectsExogenousMaterialFlowBeforeIdentityOrOwnerConstruction" methodname="UnityBootstrapDailyRejectsExogenousMaterialFlowBeforeIdentityOrOwnerConstruction" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1907998394" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001050" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3708" name="UnityBootstrapDailyRejectsFiniteSourceBeforeIdentityOrOwnerConstruction" fullname="SimulationRuntimeAdmissionTests.UnityBootstrapDailyRejectsFiniteSourceBeforeIdentityOrOwnerConstruction" methodname="UnityBootstrapDailyRejectsFiniteSourceBeforeIdentityOrOwnerConstruction" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="477117161" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.000742" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3646" name="WrongThreadTokenValidationFaultsAdmissionAndSequenceOverflowRejectsBeforeClockWrite" fullname="SimulationRuntimeAdmissionTests.WrongThreadTokenValidationFaultsAdmissionAndSequenceOverflowRejectsBeforeClockWrite" methodname="WrongThreadTokenValidationFaultsAdmissionAndSequenceOverflowRejectsBeforeClockWrite" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1999065668" result="Passed" start-time="2026-10-10 15:24:56Z" end-time="2026-10-10 15:24:56Z" duration="0.001193" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
