@@ -1,12 +1,19 @@
 # P12-G PoliticalSupport partial-stage false return — exact-tip independent review
 
-**Verdict:** PASS — bounded implementation candidate  
-**Review date:** 2026-10-10  
-**Candidate branch:** `codex/phase12/P12GPoliticalSupportFalseReturn`  
-**Candidate tip:** `195139ba2ad08d3e6db18ec517fd807f5ed241e6`  
-**Base and current P12 canonical at review:** `3fa9966cf3e00ee135f79144635821ad118e8171`  
-**Implementation commit:** `f64ab8416c9dcbaa11a0dae6b4daa6453451d920`  
-**Implementation Git tree:** `91fa860bfda96f1c616d580b3bdd5ef8a2bceee7`  
+**Verdict:** PASS — bounded implementation candidate
+
+**Review date:** 2026-10-10
+
+**Candidate branch:** `codex/phase12/P12GPoliticalSupportFalseReturn`
+
+**Candidate tip:** `195139ba2ad08d3e6db18ec517fd807f5ed241e6`
+
+**Base and current P12 canonical at review:** `3fa9966cf3e00ee135f79144635821ad118e8171`
+
+**Implementation commit:** `f64ab8416c9dcbaa11a0dae6b4daa6453451d920`
+
+**Implementation Git tree:** `91fa860bfda96f1c616d580b3bdd5ef8a2bceee7`
+
 **Validated Assets tree:** `021853f5314fb6a0377c76008f4199e97e1eccea`
 
 ## Review findings
