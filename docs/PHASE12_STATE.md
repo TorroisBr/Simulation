@@ -3865,3 +3865,10 @@ pre-allocation rejection, graph references, failure atomicity, no replay,
 and continuation parity. No Phase dependency edge or readiness label
 changes: P12-B through P12-F remain promoted within scope; P12-G and P12-A
 remain `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`.
+
+Independent exact-tip documentation review passed for candidate
+`bc8b4ebc106d502552f5a1bfce5ab04e0060462e` against canonical base
+`38334ad55ce1ad467d2119ac968f52cc3aad055a`. The durable review is
+[`design/PHASE12_G_CURRENT_SOURCE_LEDGER_REFRESH_REVIEW_BC8B4EB.md`](design/PHASE12_G_CURRENT_SOURCE_LEDGER_REFRESH_REVIEW_BC8B4EB.md).
+The review confirms the source/epoch dispositions and remaining live-inventory
+and same-attempt target-census blockers without changing code or readiness.
