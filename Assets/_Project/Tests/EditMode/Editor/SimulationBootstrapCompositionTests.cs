@@ -2637,6 +2637,61 @@ public sealed class SimulationBootstrapCompositionTests
     }
 
     [Test]
+    public void SelectedDailyV1ExistingNpcPersonBindingReconcilesDynamicOwnerManifest()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject simulationObject = new GameObject("selected-daily-v1-existing-npc-person-binding-census-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+
+        simulation.Start();
+
+        SimulationRuntime runtime = simulation.Bootstrap.Runtime;
+        CityRuntime city = runtime.Cities
+            .OrderBy(candidate => candidate.RuntimeId, System.StringComparer.Ordinal)
+            .First();
+        NpcRuntime npc = city.ImportantNpcs
+            .OrderBy(candidate => candidate.RuntimeId, System.StringComparer.Ordinal)
+            .First();
+        int initialNpcCount = runtime.NpcRuntimes.Count;
+        int initialCityPresenceCount = city.ImportantNpcs.Count;
+        long initialCityPresenceRevision = city.ImportantNpcRevision;
+
+        AssertSelectedDailyNpcOwnerFamilies(runtime);
+        Assert.That(runtime.PersonStore.Persons, Is.Empty);
+
+        PersonId personId = new PersonId("daily-existing-npc-bound-person");
+        PersonRuntime person = new PersonRuntime(personId, runtime.CurrentDay);
+        Assert.That(runtime.TryRegisterPerson(person, out PersonStoreFailure registrationFailure), Is.True,
+            registrationFailure.ToString());
+
+        Assert.That(runtime.PersonStore.Persons, Has.Count.EqualTo(1));
+        Assert.That(runtime.NpcRuntimes, Has.Count.EqualTo(initialNpcCount));
+        Assert.That(city.ImportantNpcs, Has.Count.EqualTo(initialCityPresenceCount));
+        Assert.That(city.ImportantNpcRevision, Is.EqualTo(initialCityPresenceRevision));
+        AssertSelectedDailyNpcOwnerFamilies(runtime);
+
+        Assert.That(runtime.TryBindExistingNpcToPerson(personId, npc.RuntimeId,
+            out PersonMaterializationFailure bindingFailure), Is.True, bindingFailure.ToString());
+
+        Assert.That(runtime.PersonStore.Persons, Has.Count.EqualTo(1));
+        Assert.That(runtime.NpcRuntimes, Has.Count.EqualTo(initialNpcCount));
+        Assert.That(npc.CurrentCity, Is.SameAs(city));
+        Assert.That(ReadNonPublicProperty(npc, "BoundPersonRuntime"), Is.SameAs(person));
+        Assert.That(city.ImportantNpcs, Has.Count.EqualTo(initialCityPresenceCount));
+        Assert.That(city.ImportantNpcRevision, Is.EqualTo(initialCityPresenceRevision));
+        AssertSelectedDailyNpcOwnerFamilies(runtime);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure), Is.True,
+            censusFailure.ToString());
+    }
+
+    [Test]
     public void SelectedDailyProfileCompositionRejectsNpcMissingFromIdentityRegistry()
     {
         RuntimeIdentityRegistry identityRegistry = new RuntimeIdentityRegistry();
