@@ -2,11 +2,11 @@
 
 **Scope:** test-only proof that the selected Daily-v1 restore coordinator rejects a populated explicitly-empty `p8d.spatial-route-observations` target row before publication. The fixture registers the same stable Person in the source/control runtimes, records one valid direct observation about the existing staged P8-A Location in the private candidate, and verifies exact target owner identity, cardinality `1`, revision `1`, and the coordinator's `OwnerCoverageIncomplete` rejection. Existing assertions verify the active source/session/token/health/graph are preserved, the next normal continuation matches the uninterrupted control, and a later valid restore succeeds. This does not claim that populated P8-D route observations are eligible for hydration.
 
-**Base canonical:** `cabf47185bf4b5d157157a4cb48b4f897db25127`  
-**Code commit:** `5a36ba5a3d1d27201e52156428ef2da32bbfacbd`  
-**Code Git tree:** `59fbb4406a7248e371a768b2aa73b7ada8f1369b`  
-**Tested Assets tree:** `fb53856cec5ed6ca36c170aab7eb6dee90ca3d46`  
-**Changed test blob:** `27d1be30ba8aa02d02f476c8f737021e20c80b78`  
+**Base canonical:** `cabf47185bf4b5d157157a4cb48b4f897db25127`
+**Code commit:** `5a36ba5a3d1d27201e52156428ef2da32bbfacbd`
+**Code Git tree:** `59fbb4406a7248e371a768b2aa73b7ada8f1369b`
+**Tested Assets tree:** `fb53856cec5ed6ca36c170aab7eb6dee90ca3d46`
+**Changed test blob:** `27d1be30ba8aa02d02f476c8f737021e20c80b78`
 **Unity:** `6000.3.9f1`; runner: `Tools/UnityValidation/Invoke-UnityValidation.ps1`.
 
 | Gate | Result | XML artifact | XML SHA-256 | Compressed log SHA-256 | Uncompressed log SHA-256 |
