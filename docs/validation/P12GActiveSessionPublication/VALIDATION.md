@@ -1,8 +1,8 @@
 # P12-G Active-Session Publication Validation
 
-Implementation candidate: `02d2d40d197985085c2d2370ebc1b26d9b0dbec5`  
-Candidate Git tree: `26625801b8df7e097f52db1ccd4ac39633ee3e5c`  
-Candidate `Assets` tree: `51551080fe397606acea273787f4e515ff756db3`  
+Implementation candidate: `02d2d40d197985085c2d2370ebc1b26d9b0dbec5`
+Candidate Git tree: `26625801b8df7e097f52db1ccd4ac39633ee3e5c`
+Candidate `Assets` tree: `51551080fe397606acea273787f4e515ff756db3`
 Base canonical: `8f5ec2cb9211a6520f31e65e83450d5bd9bfb039`
 
 Every run below used `Tools/UnityValidation/Invoke-UnityValidation.ps1` in
