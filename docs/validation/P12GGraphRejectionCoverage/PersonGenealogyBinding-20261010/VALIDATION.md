@@ -17,7 +17,7 @@ After the private restored candidate is composed, the coordinator validates the 
 
 `RestoredDailyOwnerBaselineAcceptsPopulatedPoliticalKnowledgeAndDecisionOwners` creates valid non-empty Person/Genealogy, PoliticalKnowledge, and PoliticalDecision owners before composing a runtime with a restored-continuation context. It verifies exact owner-section cardinality/revisions and retained knowledge/decision facts in the unadmitted restored baseline. This is a baseline/admission witness; it does not claim source-session-to-target PoliticalKnowledge/Decision roundtrip parity or add a live gameplay write path.
 
-The prior exact-code review of `fdc9ac26` returned `NEEDS_CHANGES` because its new restoration fixture left PoliticalKnowledge and PoliticalDecision empty. The current candidate adds the populated restored-baseline witness and the reciprocal Person/NPC rejection test. Independent review of `e9a6ba6` is pending.
+The prior exact-code review of `fdc9ac26` returned `NEEDS_CHANGES` because its new restoration fixture left PoliticalKnowledge and PoliticalDecision empty. The current candidate adds the populated restored-baseline witness and the reciprocal Person/NPC rejection test. Independent exact-tip review of `e9a6ba6` passed for this bounded increment; the durable review is [`PHASE12_G_PERSON_NPC_GRAPH_VALIDATION_REVIEW_E9A6BA6.md`](../../../design/PHASE12_G_PERSON_NPC_GRAPH_VALIDATION_REVIEW_E9A6BA6.md). P12-G remains incomplete with the limits listed below.
 
 ## Validation
 
