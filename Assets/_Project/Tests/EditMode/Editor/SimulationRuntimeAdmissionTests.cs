@@ -3935,6 +3935,8 @@ public sealed class SimulationRuntimeAdmissionTests
     [TestCase("p8-authoritative-location-cardinality")]
     [TestCase("p8c-city-location-binding-owner")]
     [TestCase("p8c-person-position-owner")]
+    [TestCase("p8d-route-observation-owner")]
+    [TestCase("p8d-person-route-plan-owner")]
     [TestCase("wrong-family-identity-key")]
     public void DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(string corruptionKind)
     {
@@ -3959,6 +3961,10 @@ public sealed class SimulationRuntimeAdmissionTests
             bool p8CStoreReplaced = false;
             PersonSpatialPositionStore p8CPositionReplacementStore = null;
             bool p8CPositionStoreReplaced = false;
+            SpatialRouteKnowledgeStore p8DRouteKnowledgeReplacementStore = null;
+            bool p8DRouteKnowledgeStoreReplaced = false;
+            PersonRoutePlanStore p8DRoutePlanReplacementStore = null;
+            bool p8DRoutePlanStoreReplaced = false;
             Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
                 Is.True, sourceAdvance.ToString());
             Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
@@ -4025,6 +4031,35 @@ public sealed class SimulationRuntimeAdmissionTests
                                 p8CPositionReplacementStore);
                         }
                         break;
+                    case "p8d-route-observation-owner":
+                        p8DRouteKnowledgeReplacementStore = new SpatialRouteKnowledgeStore(
+                            candidate.Runtime.PersonStore);
+                        FieldInfo p8DRouteKnowledgeField = candidate.Runtime.GetType().GetField(
+                            "spatialRouteKnowledgeStore",
+                            BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (p8DRouteKnowledgeField != null)
+                        {
+                            p8DRouteKnowledgeField.SetValue(candidate.Runtime, p8DRouteKnowledgeReplacementStore);
+                            p8DRouteKnowledgeStoreReplaced = ReferenceEquals(
+                                candidate.Runtime.SpatialRouteKnowledgeStore,
+                                p8DRouteKnowledgeReplacementStore);
+                        }
+                        break;
+                    case "p8d-person-route-plan-owner":
+                        p8DRoutePlanReplacementStore = new PersonRoutePlanStore(
+                            candidate.Runtime.PersonStore,
+                            candidate.Runtime.SpatialRouteKnowledgeStore);
+                        FieldInfo p8DRoutePlanField = candidate.Runtime.GetType().GetField(
+                            "personRoutePlanStore",
+                            BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (p8DRoutePlanField != null)
+                        {
+                            p8DRoutePlanField.SetValue(candidate.Runtime, p8DRoutePlanReplacementStore);
+                            p8DRoutePlanStoreReplaced = ReferenceEquals(
+                                candidate.Runtime.PersonRoutePlanStore,
+                                p8DRoutePlanReplacementStore);
+                        }
+                        break;
                     case "wrong-family-identity-key":
                         Dictionary<string, CityRuntime> cities = ReadPrivateField<Dictionary<string, CityRuntime>>(
                             candidate.IdentityRegistry, "citiesByRuntimeId");
@@ -4052,6 +4087,20 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(p8CPositionStoreReplaced, Is.True);
                 Assert.That(p8CPositionReplacementStore, Is.Not.Null);
                 Assert.That(p8CPositionReplacementStore.Count, Is.Zero);
+            }
+            if (corruptionKind == "p8d-route-observation-owner")
+            {
+                Assert.That(p8DRouteKnowledgeStoreReplaced, Is.True);
+                Assert.That(p8DRouteKnowledgeReplacementStore, Is.Not.Null);
+                Assert.That(p8DRouteKnowledgeReplacementStore.ObservationCount, Is.Zero);
+                Assert.That(p8DRouteKnowledgeReplacementStore.Revision, Is.Zero);
+            }
+            if (corruptionKind == "p8d-person-route-plan-owner")
+            {
+                Assert.That(p8DRoutePlanStoreReplaced, Is.True);
+                Assert.That(p8DRoutePlanReplacementStore, Is.Not.Null);
+                Assert.That(p8DRoutePlanReplacementStore.PlanCount, Is.Zero);
+                Assert.That(p8DRoutePlanReplacementStore.Revision, Is.Zero);
             }
             Assert.That(restoreSucceeded, Is.False, diagnostic);
             Assert.That(diagnostic, Is.Not.Null.And.Not.Empty);

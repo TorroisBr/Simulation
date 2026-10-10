@@ -955,6 +955,20 @@ internal static class P12GDailyV1RestoreCoordinator
                 out diagnostic)
             || !TryValidateWitness(
                 sections,
+                new SpatialRouteObservationCensusProvider(
+                    composition.Runtime.SpatialRouteKnowledgeStore).GetCurrentCensus(),
+                0,
+                0L,
+                out diagnostic)
+            || !TryValidateWitness(
+                sections,
+                new PersonRoutePlanHistoryCensusProvider(
+                    composition.Runtime.PersonRoutePlanStore).GetCurrentCensus(),
+                0,
+                0L,
+                out diagnostic)
+            || !TryValidateWitness(
+                sections,
                 composition.GetNpcDecisionOccurrenceReceiptCensus(),
                 0,
                 0L,
