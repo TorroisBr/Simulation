@@ -31,7 +31,7 @@ The validation manifest and exact artifacts are in `docs/validation/P12GRegister
 | Run | Result | XML SHA-256 | Compressed log SHA-256 |
 |---|---:|---|---|
 | Focused `SimulationBootstrapCompositionTests` | 27/27 PASS | `E6046EA05ACB337C4D86010741DAA2DBC94D6C437AC49692F1A8E6C003EA5FF6` | `5DF1F5D904F600B16D1F0FE7864189F40EDC4A85EEC6C6B8ADF21EDD3449302E` |
-| ALL EditMode | 2740/2740 PASS | `F67B27ADC1DEC19BBC8C6557076A5E0B42BD110CE70C8BAAB9060FE11A747EFA` | `BFEC3873E0D914C5C9FF91BBD7AFEB33AC06C9FE49928D23226E712A56C6194` |
+| ALL EditMode | 2740/2740 PASS | `F67B27ADC1DEC19BBC8C6557076A5E0B42BD110CE70C8BAAB9060FE11A747EFA` | `BFEC3873E0D914C5B9CFF91BBD7AFEB33AC06C9FE49928D23226E712A56C6194` |
 | Official Smoke | 5/5 PASS | `0742C6AE7E3F976192739AB5D1464D0B0BA5990EF2844A115D1C9E773B0870A7` | `F50EAC6F0056797249E26A1E22B659641B6AADB127EC0240E6F9FC3C9A222551` |
 
 `git diff --check` from the base through the candidate passed with exit code 0. The Assets tree is unchanged after validation artifacts were recorded. No tests were rerun during review.
@@ -43,3 +43,4 @@ The current Architecture General baseline is `47eff220c7ce00f6e7c759bdc2b76780bb
 This closes the four registered source-owner identity checks only. It does not close the full 299-row live owner/cardinality/transition and writer/epoch join, same-attempt target census, restored-graph coordinator, whole-graph rejection, failure atomicity, no-replay, deterministic continuation parity, or any capture/export/hydration readiness. P12-B through P12-F remain promoted within scope; P12-G and P12-A remain `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`.
 
 **Reviewer:** independent P12-G exact-tip reviewer (`/root/p12g_source_witness_exact_review`). The reviewer did not modify the candidate or rerun tests.
+
