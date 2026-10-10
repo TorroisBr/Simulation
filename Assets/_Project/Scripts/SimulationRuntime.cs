@@ -306,6 +306,46 @@ public sealed class SimulationRuntimeSpatialInvariantReport
 
 public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 {
+    [ThreadStatic]
+    private static DailyGameplayExecutionProbeForTest activeDailyGameplayExecutionProbeForTest;
+
+    /// <summary>
+    /// Scoped test witness for entry into the normal daily gameplay callback
+    /// pipeline. It observes calls only and does not alter day execution.
+    /// </summary>
+    internal sealed class DailyGameplayExecutionProbeForTest : IDisposable
+    {
+        private bool disposed;
+
+        internal int AdvanceDayAfterClockAdvanceInvocationCount { get; private set; }
+
+        internal DailyGameplayExecutionProbeForTest()
+        {
+            if (activeDailyGameplayExecutionProbeForTest != null)
+                throw new InvalidOperationException("A daily gameplay execution probe is already active on this thread.");
+            activeDailyGameplayExecutionProbeForTest = this;
+        }
+
+        internal void RecordAdvanceDayAfterClockAdvanceInvocation()
+        {
+            AdvanceDayAfterClockAdvanceInvocationCount++;
+        }
+
+        public void Dispose()
+        {
+            if (disposed) return;
+            if (!ReferenceEquals(activeDailyGameplayExecutionProbeForTest, this))
+                throw new InvalidOperationException("The daily gameplay execution probe is not the active probe on this thread.");
+            activeDailyGameplayExecutionProbeForTest = null;
+            disposed = true;
+        }
+    }
+
+    internal static DailyGameplayExecutionProbeForTest BeginDailyGameplayExecutionProbeForTest()
+    {
+        return new DailyGameplayExecutionProbeForTest();
+    }
+
     private static readonly string[] P12GenealogyOwnerSectionIds =
     {
         GenealogyCensusProvider.SectionId
@@ -9075,6 +9115,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
     private void AdvanceDayAfterClockAdvance()
     {
+        activeDailyGameplayExecutionProbeForTest?.RecordAdvanceDayAfterClockAdvanceInvocation();
         placeContentStore?.AdvanceDays(1);
         logger?.BeginDay(CurrentDay);
         lastDailyDemographyReport = DailyDemographicSystem.Advance(

@@ -2822,6 +2822,8 @@ public sealed class SimulationRuntimeAdmissionTests
             string restoreDiagnostic;
             SimulationGenesisPipeline.ExecutionProbeForTest genesisExecutionProbe =
                 SimulationGenesisPipeline.BeginExecutionProbeForTest();
+            SimulationRuntime.DailyGameplayExecutionProbeForTest gameplayExecutionProbe =
+                SimulationRuntime.BeginDailyGameplayExecutionProbeForTest();
             try
             {
                 Assert.That(restored.TryRestoreDailyContinuation(
@@ -2831,10 +2833,13 @@ public sealed class SimulationRuntimeAdmissionTests
             }
             finally
             {
+                gameplayExecutionProbe.Dispose();
                 genesisExecutionProbe.Dispose();
             }
             Assert.That(genesisExecutionProbe.ExecuteStagesInvocationCount, Is.Zero,
                 "Daily-v1 restoration stages the captured P9 manifest and must not enter the P9 genesis pipeline.");
+            Assert.That(gameplayExecutionProbe.AdvanceDayAfterClockAdvanceInvocationCount, Is.Zero,
+                "Daily-v1 restoration must not enter the normal daily gameplay callback pipeline.");
 
             SimulationActiveSession targetSession = ReadPrivateField<SimulationActiveSession>(restored, "activeSession");
             Assert.That(targetSession, Is.Not.Null.And.Not.SameAs(sourceSession),
