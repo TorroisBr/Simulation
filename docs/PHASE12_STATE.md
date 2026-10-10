@@ -3886,10 +3886,27 @@ candidate refs were synchronized at promotion.
 The dependency graph did not change: P12-B through P12-F remain promoted in
 their recorded scopes; P12-G remains `WAIT_DEPENDENCY`; P12-A remains
 `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`. The next
-bounded source-evidence slice is to bind the registered Justice record and
-Justice receipt providers, plus both global receipt-cache providers, to their
-exact installed runtime owner instances in the selected Daily-v1 composition.
-The read-only row-family audit identified this as a concrete source
-registration gap; owner-package tests already establish the underlying
-cardinality/revision semantics. This test-only slice will not close the same-
-attempt target census or the whole live 299-row inventory.
+bounded source-evidence slice identified at that refresh was to bind the
+registered Justice record and Justice receipt providers, plus both global
+receipt-cache providers, to their exact installed runtime owner instances in
+the selected Daily-v1 composition. The validated candidate below implements
+those checks. It does not close the same-attempt target census or the whole
+live 299-row inventory.
+
+### P12-G registered source-owner witnesses — validated candidate
+
+On canonical base `7ad325b7fe5f9003be0947d18798182496eace31`, the test-only
+candidate code commit `a5af39f3323be8a8de4e01eb81161d200b7f0e53` adds exact
+selected-composition source-owner checks for Justice records, Justice P18
+receipts, NPC decision occurrence receipts, and economy keyed-sale receipts.
+Justice owner-local cardinality/revisions and direct receipt-owner witnesses
+are compared with the actual registered providers. The code `Assets` tree is
+`480136d37053888910a54c134154ce9a4c105256`.
+
+Exact-tree validation passed `SimulationBootstrapCompositionTests` 27/27, ALL
+EditMode 2740/2740, official Smoke 5/5, and `git diff --check`. XML and
+compressed-log SHA-256 values are in
+[`validation/P12GRegisteredOwnerSourceWitness/VALIDATION.md`](validation/P12GRegisteredOwnerSourceWitness/VALIDATION.md).
+This test-only candidate is not yet independently reviewed or promoted.
+P12-G remains `WAIT_DEPENDENCY`; P12-A remains `WAIT_DEPENDENCY`; P13 remains
+`BLOCKED`; Phase 12 remains `OPEN`.
