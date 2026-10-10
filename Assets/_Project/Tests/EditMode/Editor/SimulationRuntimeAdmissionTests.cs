@@ -3977,6 +3977,8 @@ public sealed class SimulationRuntimeAdmissionTests
     [TestCase("p8d-route-observation-owner")]
     [TestCase("p8d-person-route-plan-owner")]
     [TestCase("p12f-expedition-owner")]
+    [TestCase("p12f-decision-occurrence-receipt-owner")]
+    [TestCase("p12e-economy-keyed-sale-receipt-owner")]
     [TestCase("wrong-family-identity-key")]
     public void DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(string corruptionKind)
     {
@@ -4009,6 +4011,14 @@ public sealed class SimulationRuntimeAdmissionTests
             ExpeditionStore expeditionReplacementStore = null;
             bool expeditionCompositionOwnerReplaced = false;
             bool expeditionVectorStillIdentifiesRuntimeOwner = false;
+            NpcDecisionRecorder originalDecisionRecorderOwner = null;
+            NpcDecisionRecorder decisionRecorderReplacementOwner = null;
+            bool decisionRecorderCompositionOwnerReplaced = false;
+            bool decisionRecorderVectorStillIdentifiesRuntimeOwner = false;
+            EconomyTransactionService originalEconomyReceiptOwner = null;
+            EconomyTransactionService economyReceiptReplacementOwner = null;
+            bool economyReceiptCompositionOwnerReplaced = false;
+            bool economyReceiptVectorStillIdentifiesRuntimeOwner = false;
             Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
                 Is.True, sourceAdvance.ToString());
             Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
@@ -4137,6 +4147,96 @@ public sealed class SimulationRuntimeAdmissionTests
                                 expeditionReplacementStore);
                         break;
                     }
+                    case "p12f-decision-occurrence-receipt-owner":
+                    {
+                        OwnerSectionCensusWitness sourceReceipt =
+                            original.Composition.GetNpcDecisionOccurrenceReceiptCensus();
+                        Assert.That(sourceReceipt.Cardinality, Is.Zero);
+                        Assert.That(sourceReceipt.Revision, Is.Zero);
+                        originalDecisionRecorderOwner = ReadPrivateField<NpcDecisionRecorder>(
+                            original.Composition, "decisionRecorder");
+
+                        OwnerSectionCensusWitness candidateReceipt =
+                            candidate.Composition.GetNpcDecisionOccurrenceReceiptCensus();
+                        Assert.That(candidateReceipt.Cardinality, Is.Zero);
+                        Assert.That(candidateReceipt.Revision, Is.Zero);
+                        decisionRecorderReplacementOwner = ReadPrivateField<NpcDecisionRecorder>(
+                            candidate.Composition, "decisionRecorder");
+                        Assert.That(decisionRecorderReplacementOwner,
+                            Is.Not.SameAs(originalDecisionRecorderOwner));
+                        WritePrivateField(
+                            candidate.Composition,
+                            "decisionRecorder",
+                            originalDecisionRecorderOwner);
+                        decisionRecorderCompositionOwnerReplaced = ReferenceEquals(
+                            candidate.Composition.GetNpcDecisionOccurrenceReceiptCensus().OwnerInstanceIdentity,
+                            sourceReceipt.OwnerInstanceIdentity);
+
+                        Assert.That(candidate.Runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                            out IReadOnlyList<OwnerSectionCensusSnapshot> decisionTargetRows,
+                            out _,
+                            out ContinuationCensusFailure decisionTargetFailure), Is.True,
+                            decisionTargetFailure.ToString());
+                        OwnerSectionCensusSnapshot decisionTargetRow = decisionTargetRows.Single(
+                            row => string.Equals(
+                                row.SectionId,
+                                NpcDecisionRecorder.OccurrenceReceiptSectionId,
+                                StringComparison.Ordinal));
+                        decisionRecorderVectorStillIdentifiesRuntimeOwner = ReferenceEquals(
+                            decisionTargetRow.OwnerInstanceIdentity,
+                            candidateReceipt.OwnerInstanceIdentity)
+                            && !ReferenceEquals(
+                                decisionTargetRow.OwnerInstanceIdentity,
+                                sourceReceipt.OwnerInstanceIdentity)
+                            && decisionTargetRow.Cardinality == 0
+                            && decisionTargetRow.Revision == 0L;
+                        break;
+                    }
+                    case "p12e-economy-keyed-sale-receipt-owner":
+                    {
+                        OwnerSectionCensusWitness sourceReceipt =
+                            original.Composition.GetEconomyKeyedSaleReceiptCensus();
+                        Assert.That(sourceReceipt.Cardinality, Is.Zero);
+                        Assert.That(sourceReceipt.Revision, Is.Zero);
+                        originalEconomyReceiptOwner = ReadPrivateField<EconomyTransactionService>(
+                            original.Composition, "economyTransactionService");
+
+                        OwnerSectionCensusWitness candidateReceipt =
+                            candidate.Composition.GetEconomyKeyedSaleReceiptCensus();
+                        Assert.That(candidateReceipt.Cardinality, Is.Zero);
+                        Assert.That(candidateReceipt.Revision, Is.Zero);
+                        economyReceiptReplacementOwner = ReadPrivateField<EconomyTransactionService>(
+                            candidate.Composition, "economyTransactionService");
+                        Assert.That(economyReceiptReplacementOwner,
+                            Is.Not.SameAs(originalEconomyReceiptOwner));
+                        WritePrivateField(
+                            candidate.Composition,
+                            "economyTransactionService",
+                            originalEconomyReceiptOwner);
+                        economyReceiptCompositionOwnerReplaced = ReferenceEquals(
+                            candidate.Composition.GetEconomyKeyedSaleReceiptCensus().OwnerInstanceIdentity,
+                            sourceReceipt.OwnerInstanceIdentity);
+
+                        Assert.That(candidate.Runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                            out IReadOnlyList<OwnerSectionCensusSnapshot> economyTargetRows,
+                            out _,
+                            out ContinuationCensusFailure economyTargetFailure), Is.True,
+                            economyTargetFailure.ToString());
+                        OwnerSectionCensusSnapshot economyTargetRow = economyTargetRows.Single(
+                            row => string.Equals(
+                                row.SectionId,
+                                EconomyTransactionService.KeyedSaleReceiptSectionId,
+                                StringComparison.Ordinal));
+                        economyReceiptVectorStillIdentifiesRuntimeOwner = ReferenceEquals(
+                            economyTargetRow.OwnerInstanceIdentity,
+                            candidateReceipt.OwnerInstanceIdentity)
+                            && !ReferenceEquals(
+                                economyTargetRow.OwnerInstanceIdentity,
+                                sourceReceipt.OwnerInstanceIdentity)
+                            && economyTargetRow.Cardinality == 0
+                            && economyTargetRow.Revision == 0L;
+                        break;
+                    }
                     case "wrong-family-identity-key":
                         Dictionary<string, CityRuntime> cities = ReadPrivateField<Dictionary<string, CityRuntime>>(
                             candidate.IdentityRegistry, "citiesByRuntimeId");
@@ -4187,6 +4287,26 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(expeditionReplacementStore, Is.Not.Null);
                 Assert.That(expeditionReplacementStore.ActiveExpeditions, Is.Empty);
                 Assert.That(expeditionReplacementStore.Revision, Is.Zero);
+            }
+            if (corruptionKind == "p12f-decision-occurrence-receipt-owner")
+            {
+                Assert.That(decisionRecorderCompositionOwnerReplaced, Is.True);
+                Assert.That(decisionRecorderVectorStillIdentifiesRuntimeOwner, Is.True,
+                    "The candidate runtime target row must remain bound to its installed decision recorder.");
+                Assert.That(originalDecisionRecorderOwner.GetOccurrenceReceiptCensus().Cardinality, Is.Zero);
+                Assert.That(originalDecisionRecorderOwner.GetOccurrenceReceiptCensus().Revision, Is.Zero);
+                Assert.That(decisionRecorderReplacementOwner.GetOccurrenceReceiptCensus().Cardinality, Is.Zero);
+                Assert.That(decisionRecorderReplacementOwner.GetOccurrenceReceiptCensus().Revision, Is.Zero);
+            }
+            if (corruptionKind == "p12e-economy-keyed-sale-receipt-owner")
+            {
+                Assert.That(economyReceiptCompositionOwnerReplaced, Is.True);
+                Assert.That(economyReceiptVectorStillIdentifiesRuntimeOwner, Is.True,
+                    "The candidate runtime target row must remain bound to its installed economy receipt owner.");
+                Assert.That(originalEconomyReceiptOwner.GetKeyedSaleReceiptCensus().Cardinality, Is.Zero);
+                Assert.That(originalEconomyReceiptOwner.GetKeyedSaleReceiptCensus().Revision, Is.Zero);
+                Assert.That(economyReceiptReplacementOwner.GetKeyedSaleReceiptCensus().Cardinality, Is.Zero);
+                Assert.That(economyReceiptReplacementOwner.GetKeyedSaleReceiptCensus().Revision, Is.Zero);
             }
             Assert.That(restoreSucceeded, Is.False, diagnostic);
             Assert.That(diagnostic, Is.Not.Null.And.Not.Empty);
