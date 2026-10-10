@@ -1,3 +1,36 @@
+## P12-G registered-owner inventory and same-attempt row evidence candidate — 2026-10-10
+
+Candidate code commit `e60cbed0832ba6861cdaa31f1332208e5f215eb4` is based on
+P12 canonical `a39bbd49ef8755f5eaa6613594e143de4f9d6c3e`; its `Assets` tree is
+`85f1ff86e02e3fe25d947c42584f5bf8b6364705`. The selected Daily-v1 bootstrap
+test now constructs an independent expected source-owner map for all 299
+section IDs and compares each registered provider's owner identity by
+reference. The dynamic-family assertion repeats this registered-owner check
+after covered NPC roster, Person materialization, and existing-NPC binding
+transitions.
+
+The same-attempt C/D/E/F package test also checks P12-F's detached NPC rows
+against staged P12-D rows by exact count, unique RuntimeId, order, and object
+identity. No production behavior, owner, operation, profile row, or gameplay
+scope changed. The reviewable evidence and validation artifacts are in
+[`design/PHASE12_G_SAME_ATTEMPT_C_D_F_ROW_VECTOR_EVIDENCE_A39BBD4.md`](design/PHASE12_G_SAME_ATTEMPT_C_D_F_ROW_VECTOR_EVIDENCE_A39BBD4.md)
+and [`validation/P12GSameAttemptOwnerVectorEvidence/VALIDATION.md`](validation/P12GSameAttemptOwnerVectorEvidence/VALIDATION.md).
+Focused suites passed 27/27 and 53/53, ALL EditMode passed 2740/2740, official
+Smoke passed 5/5, and `git diff --check` passed. Independent exact-tip review
+is pending.
+
+The combined 299-row owner/cardinality/revision, writer/operation/epoch,
+transition, and B-F consumer inventory still requires independent closure
+review against the source ledger, 24-operation matrix, and specialized owner
+tests. The current-base audit found no concrete missing supported Daily-v1
+writer/epoch edge or uncovered supported membership/binding transition. This
+candidate does not complete that review and does not provide the same-attempt
+target census or P12-G restore coordinator. P12-G remains
+`WAIT_DEPENDENCY`; P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase
+12 remains `OPEN`. No capture, export/hydration, or downstream readiness is
+implied. Protected ProjectSettings edits and unrelated untracked `.meta` files
+remain outside the candidate.
+
 ## P12-G existing-NPC Person-binding inventory witness — 2026-10-10
 
 This State entry records the reviewed test-only witness promoted from P12
