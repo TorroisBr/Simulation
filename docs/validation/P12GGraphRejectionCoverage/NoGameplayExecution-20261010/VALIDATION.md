@@ -2,11 +2,11 @@
 
 **Scope:** add a thread-local, test-only observer at entry to `SimulationRuntime.AdvanceDayAfterClockAdvance` and assert that a successful P12-G restore does not enter the normal daily gameplay callback pipeline. The observer is inactive outside the scoped test. The existing P9 genesis probe remains separately asserted as zero. This proves no entry to the day-level gameplay pipeline during this successful restore fixture; it does not prove absence of every direct domain callback, every failure path, or all possible execution threads.
 
-**Base P12 canonical:** `76dbe90838c2ea020e7c9cd5286752fb701df032`  
-**Code candidate:** `f2c54e66c22a4528cef2edd411c1f6e8bf92cbdd`  
-**Code tree:** `d167791a91905e6206098373e6481d2b045320f9`  
-**Assets tree:** `a406235024c991e986e98749c1b0736306d250c1`  
-**Changed code:** `SimulationRuntime.cs` and `SimulationRuntimeAdmissionTests.cs`  
+**Base P12 canonical:** `76dbe90838c2ea020e7c9cd5286752fb701df032`<br>
+**Code candidate:** `f2c54e66c22a4528cef2edd411c1f6e8bf92cbdd`<br>
+**Code tree:** `d167791a91905e6206098373e6481d2b045320f9`<br>
+**Assets tree:** `a406235024c991e986e98749c1b0736306d250c1`<br>
+**Changed code:** `SimulationRuntime.cs` and `SimulationRuntimeAdmissionTests.cs`<br>
 **Unity project version:** `6000.3.9f1`; runner: `Tools/UnityValidation/Invoke-UnityValidation.ps1`.
 
 | Gate | Result | XML artifact | XML SHA-256 | Compressed log | Compressed SHA-256 | Uncompressed log SHA-256 |
