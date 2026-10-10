@@ -2109,6 +2109,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             || politicalDecisionStore == null)
             return false;
 
+        // Bootstrap admission proves that these required owner sections start
+        // empty. A restored continuation instead registers the reconstructed
+        // owner state as its fresh baseline; requiring zero here would reject
+        // valid non-empty Genealogy/PoliticalKnowledge/PoliticalDecision data.
+        bool requireEmptyBootstrapState = runtimeAdmissionContext?.IsRestoredContinuation != true;
+
         return TryRegisterP12FixedOwnerSection(
                 protocol,
                 new GenealogyCensusProvider(genealogyStore),
@@ -2116,8 +2122,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 GenealogyCensusProvider.SchemaVersion,
                 OwnerSectionRole.Required,
                 genealogyStore,
-                requireZeroRevision: true,
-                expectedInitialCardinality: 0)
+                requireZeroRevision: requireEmptyBootstrapState,
+                expectedInitialCardinality: requireEmptyBootstrapState ? 0 : (int?)null)
             && TryRegisterP12FixedOwnerSection(
                 protocol,
                 new PoliticalKnowledgeStoreCensusProvider(politicalKnowledgeStore),
@@ -2125,8 +2131,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 PoliticalKnowledgeStoreCensusProvider.SchemaVersion,
                 OwnerSectionRole.Required,
                 politicalKnowledgeStore,
-                requireZeroRevision: true,
-                expectedInitialCardinality: 0)
+                requireZeroRevision: requireEmptyBootstrapState,
+                expectedInitialCardinality: requireEmptyBootstrapState ? 0 : (int?)null)
             && TryRegisterP12FixedOwnerSection(
                 protocol,
                 new PoliticalDecisionStoreCensusProvider(politicalDecisionStore),
@@ -2134,8 +2140,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 PoliticalDecisionStoreCensusProvider.SchemaVersion,
                 OwnerSectionRole.Required,
                 politicalDecisionStore,
-                requireZeroRevision: true,
-                expectedInitialCardinality: 0);
+                requireZeroRevision: requireEmptyBootstrapState,
+                expectedInitialCardinality: requireEmptyBootstrapState ? 0 : (int?)null);
     }
 
     private void InitializeNpcRosterCensusProtocol()

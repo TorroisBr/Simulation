@@ -2944,6 +2944,136 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestoreHydratesNonemptyPersonAndGenealogyGraphAndContinuesDeterministically()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G Person and Genealogy restore source");
+        GameObject controlObject = new GameObject("P12-G Person and Genealogy restore control");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            ConfigureSelectedBootstrap(control, config);
+            InvokeInitializeSimulation(source, null);
+            InvokeInitializeSimulation(control, null);
+            SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(sourceSession, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
+
+            PersonId parentId = new PersonId("p12g-evolved-genealogy-parent");
+            PersonId childId = new PersonId("p12g-evolved-genealogy-child");
+            Assert.That(sourceSession.Runtime.TryRegisterPerson(
+                new PersonRuntime(parentId, 0L), out PersonStoreFailure sourceParentFailure),
+                Is.True, sourceParentFailure.ToString());
+            Assert.That(sourceSession.Runtime.TryRegisterPerson(
+                new PersonRuntime(childId, 0L), out PersonStoreFailure sourceChildFailure),
+                Is.True, sourceChildFailure.ToString());
+            Assert.That(controlSession.Runtime.TryRegisterPerson(
+                new PersonRuntime(parentId, 0L), out PersonStoreFailure controlParentFailure),
+                Is.True, controlParentFailure.ToString());
+            Assert.That(controlSession.Runtime.TryRegisterPerson(
+                new PersonRuntime(childId, 0L), out PersonStoreFailure controlChildFailure),
+                Is.True, controlChildFailure.ToString());
+
+            NpcRuntime sourceNpc = sourceSession.Runtime.NpcRuntimes
+                .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal).First();
+            NpcRuntime controlNpc = controlSession.Runtime.NpcRuntimes
+                .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal).First();
+            Assert.That(sourceNpc.RuntimeId, Is.EqualTo(controlNpc.RuntimeId));
+            Assert.That(sourceNpc.PersonId, Is.Null);
+            Assert.That(controlNpc.PersonId, Is.Null);
+            Assert.That(sourceSession.Runtime.TryBindExistingNpcToPerson(
+                childId, sourceNpc.RuntimeId, out PersonMaterializationFailure sourceBindFailure),
+                Is.True, sourceBindFailure.ToString());
+            Assert.That(controlSession.Runtime.TryBindExistingNpcToPerson(
+                childId, controlNpc.RuntimeId, out PersonMaterializationFailure controlBindFailure),
+                Is.True, controlBindFailure.ToString());
+            Assert.That(sourceSession.Runtime.TryAddParentage(
+                parentId, childId, out PersonGenealogyFailure sourceGenealogyFailure),
+                Is.True, sourceGenealogyFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAddParentage(
+                parentId, childId, out PersonGenealogyFailure controlGenealogyFailure),
+                Is.True, controlGenealogyFailure.ToString());
+
+            Assert.That(sourceSession.Runtime.PersonStore.Persons.Count, Is.EqualTo(2));
+            Assert.That(sourceSession.Runtime.ContainsParentage(parentId, childId), Is.True);
+            Assert.That(sourceSession.Runtime.NpcRuntimes.Count(npc => npc.PersonId != null), Is.EqualTo(1));
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
+                Is.True, sourceAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
+                Is.True, controlAdvance.ToString());
+
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(sourceSession.Runtime);
+            DailyCaptureEligibilityToken controlToken = GetCompletedDailyToken(controlSession.Runtime);
+            string sourceGraph = CaptureCompleteDailyV1OwnerProjection(sourceSession, sourceToken);
+            Assert.That(sourceGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, controlToken)),
+                "Equivalent Person bindings and genealogy edges must produce the same included owner graph.");
+            OwnerSectionCensusSnapshot[] sourcePersonSections = sourceToken.OwnerSections
+                .Where(section => section.SectionId.StartsWith(
+                    PersonLifeResidenceCensusProvider.SectionPrefix, StringComparison.Ordinal))
+                .OrderBy(section => section.SectionId, StringComparer.Ordinal).ToArray();
+            Assert.That(sourcePersonSections.Length, Is.EqualTo(2));
+            Assert.That(sourcePersonSections.All(section => section.Cardinality == 1), Is.True);
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic), Is.True,
+                restoreFailure + ": " + restoreDiagnostic);
+            SimulationActiveSession restoredSession = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restoredSession.Runtime);
+            Assert.That(restoredSession.Runtime.PersonStore.Persons.Count, Is.EqualTo(2));
+            Assert.That(restoredSession.Runtime.PersonStore.TryGet(parentId, out PersonRuntime restoredParent), Is.True);
+            Assert.That(restoredSession.Runtime.PersonStore.TryGet(childId, out PersonRuntime restoredChild), Is.True);
+            Assert.That(restoredParent, Is.Not.SameAs(sourceSession.Runtime.PersonStore.Persons.Single(
+                person => person.PersonId == parentId)));
+            Assert.That(restoredChild, Is.Not.SameAs(sourceSession.Runtime.PersonStore.Persons.Single(
+                person => person.PersonId == childId)));
+            Assert.That(restoredChild.MaterializedNpcRuntimeId, Is.EqualTo(sourceNpc.RuntimeId));
+            Assert.That(restoredSession.Runtime.NpcRuntimes.Count(npc => npc.PersonId != null), Is.EqualTo(1));
+            Assert.That(restoredSession.Runtime.NpcRuntimes.Single(npc => npc.PersonId == childId).RuntimeId,
+                Is.EqualTo(sourceNpc.RuntimeId));
+            Assert.That(restoredSession.Runtime.ContainsParentage(parentId, childId), Is.True);
+            Assert.That(restoredSession.Runtime.GetGenealogyParents(childId).Single(), Is.EqualTo(parentId));
+            Assert.That(restoredSession.Runtime.GetGenealogyChildren(parentId).Single(), Is.EqualTo(childId));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredToken), Is.EqualTo(sourceGraph),
+                "The restored D owner package must preserve exact Person identities, bindings and genealogy relations.");
+            OwnerSectionCensusSnapshot[] restoredPersonSections = restoredToken.OwnerSections
+                .Where(section => section.SectionId.StartsWith(
+                    PersonLifeResidenceCensusProvider.SectionPrefix, StringComparison.Ordinal))
+                .OrderBy(section => section.SectionId, StringComparer.Ordinal).ToArray();
+            Assert.That(restoredPersonSections.Length, Is.EqualTo(2));
+            Assert.That(restoredPersonSections.All(section => section.Cardinality == 1), Is.True);
+            Assert.That(restoredPersonSections.Select(section => section.SectionId),
+                Is.EqualTo(sourcePersonSections.Select(section => section.SectionId)));
+            Assert.That(restoredPersonSections.Single(section => section.SectionId == PersonLifeResidenceCensusProvider.SectionIdFor(parentId)).OwnerInstanceIdentity,
+                Is.SameAs(restoredParent));
+            Assert.That(restoredPersonSections.Single(section => section.SectionId == PersonLifeResidenceCensusProvider.SectionIdFor(childId)).OwnerInstanceIdentity,
+                Is.SameAs(restoredChild));
+
+            for (int boundary = 0; boundary < 2; boundary++)
+            {
+                Assert.That(restoredSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredAdvance),
+                    Is.True, restoredAdvance.ToString());
+                Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlNext),
+                    Is.True, controlNext.ToString());
+                DailyCaptureEligibilityToken nextRestoredToken = GetCompletedDailyToken(restoredSession.Runtime);
+                DailyCaptureEligibilityToken nextControlToken = GetCompletedDailyToken(controlSession.Runtime);
+                Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, nextRestoredToken),
+                    Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, nextControlToken)),
+                    "The evolved Person/Genealogy graph must preserve exact owner parity on every subsequent boundary.");
+            }
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(controlObject);
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreRejectsBeforeBoundaryWithoutChangingActiveSession()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
