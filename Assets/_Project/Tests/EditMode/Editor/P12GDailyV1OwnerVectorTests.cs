@@ -195,6 +195,31 @@ public sealed class P12GDailyV1OwnerVectorTests
     }
 
     [Test]
+    public void AllocatorHighWaterChecksCanonicalOpaqueDecisionReferencesWithoutResolvingOrDeduplicatingThem()
+    {
+        RuntimeIdAllocatorSnapshot allocator = Allocator(
+            new RuntimeIdAllocatorCounterSnapshot("decision", 3L));
+        string[] references =
+        {
+            "decision-000002",
+            "decision-000002",
+            "opaque-decision-reference",
+            "decision-not-numeric",
+            "decision-2"
+        };
+
+        Assert.That(P12GDailyV1RestoreCoordinator.TryValidateAllocatorHighWater(
+            allocator, System.Array.Empty<KeyValuePair<string, string>>(), references,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(P12GDailyV1RestoreCoordinator.TryValidateAllocatorHighWater(
+            Allocator(new RuntimeIdAllocatorCounterSnapshot("decision", 2L)),
+            System.Array.Empty<KeyValuePair<string, string>>(), references,
+            out diagnostic), Is.False);
+        Assert.That(diagnostic, Does.Contain("decision-000002"));
+    }
+
+    [Test]
     public void AllocatorHighWaterRejectsStaleCountersAndMalformedOrUnownedIdentityValues()
     {
         AssertAllocatorHighWaterFailure(

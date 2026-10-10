@@ -3172,6 +3172,178 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
 
+    [Test]
+    public void DailyV1ExpeditionZeroWitnessRequiresExactRequiredOwnerAndMatchingRevision()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject bootstrapObject = new GameObject("P12-G Expedition census witness");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(bootstrap, config);
+            InvokeInitializeSimulation(bootstrap, null);
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            ExpeditionStore store = session.Composition.Expeditions;
+
+            OwnerSectionCensusWitness witness = new ExpeditionCensusProvider(store).GetCurrentCensus();
+            OwnerSectionCensusSnapshot requiredRow = new OwnerSectionCensusSnapshot(
+                witness.SectionId, witness.SchemaVersion, OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision);
+            Assert.That(P12GDailyV1RestoreCoordinator.TryValidateDailyV1ExpeditionExactZero(
+                session.Composition, new[] { requiredRow }, out string diagnostic), Is.True, diagnostic);
+
+            OwnerSectionCensusSnapshot wrongRole = new OwnerSectionCensusSnapshot(
+                witness.SectionId, witness.SchemaVersion, OwnerSectionRole.ExplicitlyEmpty,
+                witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision);
+            Assert.That(P12GDailyV1RestoreCoordinator.TryValidateDailyV1ExpeditionExactZero(
+                session.Composition, new[] { wrongRole }, out diagnostic), Is.False);
+
+            OwnerSectionCensusSnapshot wrongOwner = new OwnerSectionCensusSnapshot(
+                witness.SectionId, witness.SchemaVersion, OwnerSectionRole.Required,
+                new object(), witness.Cardinality, witness.Revision);
+            Assert.That(P12GDailyV1RestoreCoordinator.TryValidateDailyV1ExpeditionExactZero(
+                session.Composition, new[] { wrongOwner }, out diagnostic), Is.False);
+
+            Assert.That(store.Add(CreateUnsupportedDailyV1Expedition()), Is.True);
+            witness = new ExpeditionCensusProvider(store).GetCurrentCensus();
+            OwnerSectionCensusSnapshot populatedRow = new OwnerSectionCensusSnapshot(
+                witness.SectionId, witness.SchemaVersion, OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision);
+            Assert.That(P12GDailyV1RestoreCoordinator.TryValidateDailyV1ExpeditionExactZero(
+                session.Composition, new[] { populatedRow }, out diagnostic), Is.False);
+            Assert.That(diagnostic, Does.Contain("cardinality zero"));
+            Assert.That(store.Remove("expedition-000001"), Is.True);
+
+            witness = new ExpeditionCensusProvider(store).GetCurrentCensus();
+            Assert.That(witness.Cardinality, Is.Zero);
+            Assert.That(witness.Revision, Is.EqualTo(2L));
+            OwnerSectionCensusSnapshot emptyAfterRemoval = new OwnerSectionCensusSnapshot(
+                witness.SectionId, witness.SchemaVersion, OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision);
+            Assert.That(P12GDailyV1RestoreCoordinator.TryValidateDailyV1ExpeditionExactZero(
+                session.Composition, new[] { emptyAfterRemoval }, out diagnostic), Is.True, diagnostic);
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+        }
+    }
+
+    [Test]
+    public void DailyV1RestoreChecksOpaqueActorAndPartyDecisionReferencesAgainstAllocatorHighWater()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G opaque decision references");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            InvokeInitializeSimulation(source, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            CaptureTerminalP11HistoryWithDecisionReference(
+                original.Runtime, "p12g-opaque-decision", "opaque-decision-reference");
+            Assert.That(original.Runtime.TryStartTravelParty(CreateDailyTravelPartyContext(original)), Is.True);
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+            DailyCaptureEligibilityToken token = GetCompletedDailyToken(original.Runtime);
+            string graph = CaptureCompleteDailyV1OwnerProjection(original, token);
+
+            Assert.That(source.TryRestoreDailyContinuationForTest(candidate =>
+            {
+                List<ActorChoiceInput> storedInputs = ReadPrivateField<List<ActorChoiceInput>>(
+                    candidate.Runtime.ActorChoiceStore, "inputs");
+                ActorChoiceDisposition disposition = storedInputs
+                    .Single(input => input.WorldCommandId == "p12g-opaque-decision")
+                    .Dispositions.Single(value => !string.IsNullOrWhiteSpace(value.DecisionRecordId));
+                WritePrivateField(disposition, "<DecisionRecordId>k__BackingField", "decision-999999");
+            }, out P12GDailyV1RestoreFailure actorFailure, out string actorDiagnostic), Is.False);
+            Assert.That(actorFailure, Is.EqualTo(P12GDailyV1RestoreFailure.BindingValidationFailed));
+            Assert.That(actorDiagnostic, Does.Contain("retained opaque decision reference"));
+
+            Assert.That(source.TryRestoreDailyContinuationForTest(candidate =>
+            {
+                TravelPartyRuntime party = candidate.Composition.TravelParties.ActiveParties.Single();
+                WritePrivateField(party, "originDecisionId", "decision-999999");
+            }, out P12GDailyV1RestoreFailure partyFailure, out string partyDiagnostic), Is.False);
+            Assert.That(partyFailure, Is.EqualTo(P12GDailyV1RestoreFailure.BindingValidationFailed));
+            Assert.That(partyDiagnostic, Does.Contain("retained opaque decision reference"));
+
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(token, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, token), Is.EqualTo(graph));
+            ActorChoiceInput retainedInput = original.Runtime.ActorChoiceStore.Inputs
+                .Single(input => input.WorldCommandId == "p12g-opaque-decision");
+            Assert.That(retainedInput.Dispositions.Single(value => value.DecisionRecordId != null).DecisionRecordId,
+                Is.EqualTo("opaque-decision-reference"));
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            ActorChoiceInput restoredInput = restored.Runtime.ActorChoiceStore.Inputs
+                .Single(input => input.WorldCommandId == "p12g-opaque-decision");
+            Assert.That(restoredInput.Dispositions.Single(value => value.DecisionRecordId != null).DecisionRecordId,
+                Is.EqualTo("opaque-decision-reference"), "Opaque references must be retained without a decision-record lookup.");
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, GetCompletedDailyToken(restored.Runtime)),
+                Is.EqualTo(graph));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+        }
+    }
+
+    [Test]
+    public void DailyV1RestoreRejectsPrivateTargetExpeditionBeforePublicationAndKeepsOldSessionRetryable()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G Expedition target source");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            InvokeInitializeSimulation(source, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+            DailyCaptureEligibilityToken token = GetCompletedDailyToken(original.Runtime);
+            string graph = CaptureCompleteDailyV1OwnerProjection(original, token);
+
+            Assert.That(source.TryRestoreDailyContinuationForTest(candidate =>
+            {
+                Assert.That(candidate.Composition.Expeditions.Add(CreateUnsupportedDailyV1Expedition()), Is.True);
+            }, out P12GDailyV1RestoreFailure failure, out string diagnostic), Is.False);
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.TargetOwnerVectorFailed));
+            Assert.That(diagnostic, Does.Contain("OwnerCoverageIncomplete"));
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(token, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, token), Is.EqualTo(graph));
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(restored, Is.Not.SameAs(original));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, GetCompletedDailyToken(restored.Runtime)),
+                Is.EqualTo(graph), "A valid retry must reconstruct the unchanged old completed boundary.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+        }
+    }
+
     [TestCase((int)P12GDailyV1RestoreStage.SourceCaptured)]
     [TestCase((int)P12GDailyV1RestoreStage.RootsStaged)]
     [TestCase((int)P12GDailyV1RestoreStage.DStaged)]
@@ -3559,6 +3731,28 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
 
+    private static void CaptureTerminalP11HistoryWithDecisionReference(
+        SimulationRuntime runtime,
+        string commandId,
+        string decisionReference)
+    {
+        Assert.That(runtime, Is.Not.Null);
+        PersonId personId = new PersonId("p12g-terminal-actor-" + commandId);
+        Assert.That(runtime.TryRegisterPerson(new PersonRuntime(personId), out PersonStoreFailure personFailure),
+            Is.True, personFailure.ToString());
+        Assert.That(runtime.TryCaptureActorChoiceInput(
+            commandId, personId, "sell-goods", WorldCommandOrigin.System,
+            WorldCommandAuthorityMode.Request, out ActorChoiceStoreFailureCode captureFailure),
+            Is.True, captureFailure.ToString());
+        ActorChoiceInput input = runtime.ActorChoiceStore.Inputs.Single(value => value.WorldCommandId == commandId);
+        Assert.That(runtime.ActorChoiceStore.TryMarkDispatchStarted(
+            input.InputId, runtime.CurrentDay, 0, decisionReference,
+            out ActorChoiceStoreFailureCode dispatchFailure), Is.True, dispatchFailure.ToString());
+        Assert.That(runtime.ActorChoiceStore.TryRecordAttemptReturned(
+            input.InputId, runtime.CurrentDay, 0, null,
+            out ActorChoiceStoreFailureCode attemptFailure), Is.True, attemptFailure.ToString());
+    }
+
     private static void CaptureTerminalP11History(SimulationRuntime runtime, string commandId)
     {
         Assert.That(runtime, Is.Not.Null);
@@ -3669,6 +3863,22 @@ public sealed class SimulationRuntimeAdmissionTests
         }
 
         return facts.ToString();
+    }
+
+    private static ExpeditionRuntime CreateUnsupportedDailyV1Expedition()
+    {
+        const string memberId = "npc-unsupported-expedition-member";
+        return new ExpeditionRuntime(
+            "expedition-000001",
+            "site-unsupported-by-daily-v1",
+            "location-unsupported-origin",
+            "location-unsupported-target",
+            "route-unsupported-by-daily-v1",
+            new[] { memberId },
+            new[] { memberId },
+            Array.Empty<string>(),
+            "decision-000001",
+            ExpeditionObjectiveRuntime.Explore());
     }
 
     private static ActionExecutionContext CreateDailyTravelPartyContext(SimulationActiveSession session)

@@ -70,6 +70,15 @@ internal static class P12GDailyV1RestoreCoordinator
         }
 
         IReadOnlyList<OwnerSectionCensusSnapshot> sourceOwnerSections = sourceToken.OwnerSections;
+        if (!TryValidateDailyV1ExpeditionExactZero(
+                sourceComposition, sourceOwnerSections, out string sourceExpeditionDiagnostic))
+        {
+            failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+            diagnostic = "The selected Daily-v1 source must have an exact-empty Expedition owner: "
+                + sourceExpeditionDiagnostic;
+            return false;
+        }
+
         if (!DailyCaptureStagingAttempt.TryBegin(
                 sourceRuntime,
                 sourceToken,
@@ -290,12 +299,6 @@ internal static class P12GDailyV1RestoreCoordinator
             privateCandidateObserver?.Invoke(candidate);
 
             SimulationRuntime targetRuntime = candidate.Runtime;
-            if (!TryValidateAllocatorHighWater(candidate, out string allocatorDiagnostic))
-            {
-                failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
-                diagnostic = allocatorDiagnostic;
-                return false;
-            }
             if (!targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
                     out IReadOnlyList<OwnerSectionCensusSnapshot> targetOwnerSections,
                     out long targetMutationEpoch,
@@ -304,6 +307,22 @@ internal static class P12GDailyV1RestoreCoordinator
                 failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
                 diagnostic = "The private target did not produce a quiescent, complete Daily-v1 owner vector: "
                     + targetCensusFailure + ".";
+                return false;
+            }
+
+            if (!TryValidateDailyV1ExpeditionExactZero(
+                    candidate.Composition, targetOwnerSections, out string targetExpeditionDiagnostic))
+            {
+                failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                diagnostic = "The selected Daily-v1 target must have an exact-empty Expedition owner: "
+                    + targetExpeditionDiagnostic;
+                return false;
+            }
+
+            if (!TryValidateAllocatorHighWater(candidate, out string allocatorDiagnostic))
+            {
+                failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
+                diagnostic = allocatorDiagnostic;
                 return false;
             }
 
@@ -825,6 +844,62 @@ internal static class P12GDailyV1RestoreCoordinator
         return true;
     }
 
+    internal static bool TryValidateDailyV1ExpeditionExactZero(
+        SimulationBootstrapComposition composition,
+        IReadOnlyList<OwnerSectionCensusSnapshot> sections,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (composition?.Expeditions == null || sections == null)
+        {
+            diagnostic = "The selected profile's Expedition owner or census is unavailable.";
+            return false;
+        }
+
+        OwnerSectionCensusWitness witness;
+        try
+        {
+            witness = new ExpeditionCensusProvider(composition.Expeditions).GetCurrentCensus();
+        }
+        catch (InvalidOperationException exception)
+        {
+            diagnostic = "The selected profile's Expedition census is inconsistent: " + exception.Message;
+            return false;
+        }
+
+        OwnerSectionCensusSnapshot match = null;
+        foreach (OwnerSectionCensusSnapshot section in sections)
+        {
+            if (!string.Equals(section?.SectionId, ExpeditionCensusProvider.SectionId, StringComparison.Ordinal))
+                continue;
+            if (match != null)
+            {
+                diagnostic = "The owner vector duplicates the selected profile's Expedition section.";
+                return false;
+            }
+            match = section;
+        }
+
+        if (witness == null
+            || witness.SchemaVersion != ExpeditionCensusProvider.SchemaVersion
+            || witness.Cardinality != 0
+            || witness.Revision < 0L
+            || !ReferenceEquals(witness.OwnerInstanceIdentity, composition.Expeditions)
+            || match == null
+            || match.Role != OwnerSectionRole.Required
+            || match.SchemaVersion != witness.SchemaVersion
+            || match.Cardinality != 0
+            || match.Revision < 0L
+            || match.Revision != witness.Revision
+            || !ReferenceEquals(match.OwnerInstanceIdentity, witness.OwnerInstanceIdentity))
+        {
+            diagnostic = "The required p12f.expeditions row must identify the exact live ExpeditionStore at a matching revision and cardinality zero.";
+            return false;
+        }
+
+        return true;
+    }
+
     internal static bool TryValidateAllocatorHighWater(
         SimulationActiveSession candidate,
         out string diagnostic)
@@ -838,6 +913,7 @@ internal static class P12GDailyV1RestoreCoordinator
             || candidate.Composition.ScheduledDirectives == null
             || candidate.Composition.DomainEventStore == null
             || candidate.Composition.Decisions == null
+            || candidate.Runtime.ActorChoiceStore == null
             || candidate.Composition.TravelParties == null
             || candidate.Composition.Expeditions == null)
         {
@@ -859,7 +935,21 @@ internal static class P12GDailyV1RestoreCoordinator
         foreach (ExpeditionRuntime expedition in candidate.Composition.Expeditions.ActiveExpeditions)
             allocatedIdentityValues.Add(new KeyValuePair<string, string>("expedition", expedition?.ExpeditionId));
 
-        return TryValidateAllocatorHighWater(allocator, allocatedIdentityValues, out diagnostic);
+        List<string> retainedDecisionReferences = new List<string>();
+        foreach (ActorChoiceInput input in candidate.Runtime.ActorChoiceStore.Inputs)
+        {
+            if (input?.Dispositions == null) continue;
+            foreach (ActorChoiceDisposition disposition in input.Dispositions)
+                if (disposition != null)
+                    retainedDecisionReferences.Add(disposition.DecisionRecordId);
+        }
+        foreach (TravelPartyRuntime party in candidate.Composition.TravelParties.ActiveParties)
+            retainedDecisionReferences.Add(party?.OriginDecisionId);
+        foreach (ExpeditionRuntime expedition in candidate.Composition.Expeditions.ActiveExpeditions)
+            retainedDecisionReferences.Add(expedition?.OriginDecisionId);
+
+        return TryValidateAllocatorHighWater(
+            allocator, allocatedIdentityValues, retainedDecisionReferences, out diagnostic);
     }
 
     internal static bool TryValidateAllocatorHighWater(
@@ -867,8 +957,18 @@ internal static class P12GDailyV1RestoreCoordinator
         IReadOnlyList<KeyValuePair<string, string>> allocatedIdentityValues,
         out string diagnostic)
     {
+        return TryValidateAllocatorHighWater(
+            allocator, allocatedIdentityValues, Array.Empty<string>(), out diagnostic);
+    }
+
+    internal static bool TryValidateAllocatorHighWater(
+        RuntimeIdAllocatorSnapshot allocator,
+        IReadOnlyList<KeyValuePair<string, string>> allocatedIdentityValues,
+        IReadOnlyList<string> retainedDecisionReferences,
+        out string diagnostic)
+    {
         diagnostic = null;
-        if (allocator?.Counters == null || allocatedIdentityValues == null)
+        if (allocator?.Counters == null || allocatedIdentityValues == null || retainedDecisionReferences == null)
         {
             diagnostic = "A staged RuntimeIdAllocator and retained identity inventory are required.";
             return false;
@@ -900,6 +1000,35 @@ internal static class P12GDailyV1RestoreCoordinator
             {
                 diagnostic = "The staged RuntimeIdAllocator next/high-water mark does not continue past every retained "
                     + identity.Key + " identity ('" + identity.Value + "').";
+                return false;
+            }
+        }
+
+        const string decisionPrefix = "decision-";
+        foreach (string decisionReference in retainedDecisionReferences)
+        {
+            // These are retained opaque facts, not lookup keys. Only exact values the
+            // allocator can emit contribute a high-water requirement; do not resolve
+            // them through the intentionally omitted NpcDecisionStore.
+            if (string.IsNullOrWhiteSpace(decisionReference)
+                || !decisionReference.StartsWith(decisionPrefix, StringComparison.Ordinal)
+                || !long.TryParse(
+                    decisionReference.Substring(decisionPrefix.Length),
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out long allocatedSequence)
+                || allocatedSequence <= 0L
+                || !string.Equals(
+                    decisionReference,
+                    decisionPrefix + allocatedSequence.ToString("D6", CultureInfo.InvariantCulture),
+                    StringComparison.Ordinal))
+                continue;
+
+            if (!nextSequenceByFamily.TryGetValue("decision", out long nextSequence)
+                || allocatedSequence >= nextSequence)
+            {
+                diagnostic = "The staged RuntimeIdAllocator next/high-water mark does not continue past a retained opaque decision reference ('"
+                    + decisionReference + "').";
                 return false;
             }
         }
