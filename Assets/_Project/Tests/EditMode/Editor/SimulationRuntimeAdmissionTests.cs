@@ -5089,6 +5089,7 @@ public sealed class SimulationRuntimeAdmissionTests
     [TestCase((int)P12GDailyV1RestoreStage.TargetSpatialInvariantsValidated)]
     [TestCase((int)P12GDailyV1RestoreStage.TargetNpcCensusValidated)]
     [TestCase((int)P12GDailyV1RestoreStage.TargetTravelPartyBindingsValidated)]
+    [TestCase((int)P12GDailyV1RestoreStage.DGenealogyHydratorEntry)]
     public void DailyV1RestoreInjectedPrivateFailureKeepsOldSessionHealthyAndAllowsLaterRestore(
         int injectedStageValue)
     {

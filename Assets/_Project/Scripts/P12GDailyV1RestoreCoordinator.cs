@@ -73,7 +73,8 @@ internal enum P12GDailyV1RestoreStage
     TargetPoliticalKnowledgeBindingsValidated,
     TargetSpatialInvariantsValidated,
     TargetNpcCensusValidated,
-    TargetTravelPartyBindingsValidated
+    TargetTravelPartyBindingsValidated,
+    DGenealogyHydratorEntry
 }
 
 /// <summary>

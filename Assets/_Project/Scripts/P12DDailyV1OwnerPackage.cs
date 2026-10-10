@@ -193,6 +193,7 @@ internal sealed class P12DDailyV1OwnerPackage
         }
         stageObserver?.Invoke(P12GDailyV1RestoreStage.DPersonsStaged);
 
+        stageObserver?.Invoke(P12GDailyV1RestoreStage.DGenealogyHydratorEntry);
         if (!GenealogyStore.TryCreateFromOwnerSnapshot(
                 genealogySnapshot, out GenealogyStore stagedGenealogy, out _)
             || stagedGenealogy == null)
