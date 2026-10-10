@@ -1,0 +1,1157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="18" result="Passed" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-10 18:18:05Z" end-time="2026-10-10 18:18:09Z" duration="3,4617589">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2803" result="Passed" start-time="2026-10-10 18:18:05Z" end-time="2026-10-10 18:18:09Z" duration="3.461759" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="4071" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12g-graph-rejection-coverage/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2803" result="Passed" start-time="2026-10-10 18:18:05Z" end-time="2026-10-10 18:18:09Z" duration="3.444251" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="104780" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3632" name="SimulationRuntimeAdmissionTests" fullname="SimulationRuntimeAdmissionTests" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="129" result="Passed" start-time="2026-10-10 18:18:05Z" end-time="2026-10-10 18:18:09Z" duration="3.428028" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="ParameterizedMethod" id="3751" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="18" result="Passed" start-time="2026-10-10 18:18:05Z" end-time="2026-10-10 18:18:09Z" duration="3.423070" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="3733" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;allocator-high-water&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;allocator-high-water&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1274380304" result="Passed" start-time="2026-10-10 18:18:05Z" end-time="2026-10-10 18:18:06Z" duration="0.465258" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3734" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;record-sequence&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;record-sequence&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="752618921" result="Passed" start-time="2026-10-10 18:18:06Z" end-time="2026-10-10 18:18:06Z" duration="0.196637" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3735" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;owner-revision&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;owner-revision&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1304295538" result="Passed" start-time="2026-10-10 18:18:06Z" end-time="2026-10-10 18:18:06Z" duration="0.158189" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3736" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p8-location-cardinality&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p8-location-cardinality&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="74467410" result="Passed" start-time="2026-10-10 18:18:06Z" end-time="2026-10-10 18:18:06Z" duration="0.193390" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3737" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p8-authoritative-location-cardinality&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p8-authoritative-location-cardinality&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1238505842" result="Passed" start-time="2026-10-10 18:18:06Z" end-time="2026-10-10 18:18:06Z" duration="0.164492" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3738" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p8c-city-location-binding-owner&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p8c-city-location-binding-owner&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="528253928" result="Passed" start-time="2026-10-10 18:18:06Z" end-time="2026-10-10 18:18:07Z" duration="0.201193" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3739" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p8c-person-position-owner&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p8c-person-position-owner&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="490208335" result="Passed" start-time="2026-10-10 18:18:07Z" end-time="2026-10-10 18:18:07Z" duration="0.160789" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3740" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p8d-route-observation-owner&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p8d-route-observation-owner&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="642364701" result="Passed" start-time="2026-10-10 18:18:07Z" end-time="2026-10-10 18:18:07Z" duration="0.203728" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3741" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p8d-person-route-plan-owner&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p8d-person-route-plan-owner&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="223038049" result="Passed" start-time="2026-10-10 18:18:07Z" end-time="2026-10-10 18:18:07Z" duration="0.165902" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3742" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p12f-expedition-owner&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p12f-expedition-owner&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="2121094315" result="Passed" start-time="2026-10-10 18:18:07Z" end-time="2026-10-10 18:18:07Z" duration="0.158003" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3743" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p12f-decision-occurrence-receipt-owner&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p12f-decision-occurrence-receipt-owner&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="2081260491" result="Passed" start-time="2026-10-10 18:18:07Z" end-time="2026-10-10 18:18:07Z" duration="0.179462" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3744" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p12e-economy-keyed-sale-receipt-owner&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p12e-economy-keyed-sale-receipt-owner&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1367394211" result="Passed" start-time="2026-10-10 18:18:07Z" end-time="2026-10-10 18:18:08Z" duration="0.157811" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3745" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p12f-actor-choice-temporal-owner&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p12f-actor-choice-temporal-owner&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="433149046" result="Passed" start-time="2026-10-10 18:18:08Z" end-time="2026-10-10 18:18:08Z" duration="0.184318" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3746" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p18-crime-receipt-owner&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p18-crime-receipt-owner&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="606219738" result="Passed" start-time="2026-10-10 18:18:08Z" end-time="2026-10-10 18:18:08Z" duration="0.153408" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3747" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p18-justice-receipt-owner&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p18-justice-receipt-owner&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="434221046" result="Passed" start-time="2026-10-10 18:18:08Z" end-time="2026-10-10 18:18:08Z" duration="0.184130" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3748" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p18-npc-local-observation-receipt-owner&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p18-npc-local-observation-receipt-owner&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="594638774" result="Passed" start-time="2026-10-10 18:18:08Z" end-time="2026-10-10 18:18:08Z" duration="0.154612" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3749" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p18-npc-merchant-trade-state-receipt-owner&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;p18-npc-merchant-trade-state-receipt-owner&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1941340759" result="Passed" start-time="2026-10-10 18:18:08Z" end-time="2026-10-10 18:18:08Z" duration="0.182578" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+]]></output>
+          </test-case>
+          <test-case id="3750" name="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;wrong-family-identity-key&quot;)" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically(&quot;wrong-family-identity-key&quot;)" methodname="DailyV1RestoreRejectsCorruptedRootOrOwnerVectorAtomically" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1398625086" result="Passed" start-time="2026-10-10 18:18:08Z" end-time="2026-10-10 18:18:09Z" duration="0.149168" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+            <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Ana foi a taverna.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jobson foi a taverna.
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+          </test-case>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
