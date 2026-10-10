@@ -1,3 +1,30 @@
+## P12-G current-source ledger refresh — 2026-10-10
+
+At P12 canonical `a88cc7386fa89aa1354dea2a160a4705092657fe`, the source-linked
+ledger refresh is recorded in
+[`design/PHASE12_G_CURRENT_SOURCE_LEDGER_REFRESH_A88CC73.md`](design/PHASE12_G_CURRENT_SOURCE_LEDGER_REFRESH_A88CC73.md).
+It reconciles the older 299-row/24-operation table with the later exact
+Crime/Social ingress and epoch reviews, the selected-profile
+Expedition/Military ingress review, and the promoted restored-boundary and
+active-session seams.
+
+The selected Daily-v1 Steal path is mapped to the registered
+`runtime.advance-day` operation and has an exact `+1` composite epoch witness.
+The `TheftAcceptance` and `KnowledgeAndAppraisal` contexts remain internal
+stages, not new operation IDs. This closes that normal ingress case only; it
+does not certify all direct calls, all owner writers, or runtime-wide
+quiescence. Expedition and the eight base Military/Conflict/War/Battle owners
+remain Required with the reviewed selected-profile dispositions.
+
+The restored-boundary admission and serialized active-session publication
+prerequisites are promoted. The G coordinator remains blocked on exhaustive
+live owner/cardinality/transition and writer coverage, integrated target-owner
+checks, and whole-graph validation/rejection, failure atomicity, no-replay and
+continuation-parity proof. P12-B through P12-F remain promoted within scope;
+P12-G and P12-A remain `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12
+remains `OPEN`. This refresh adds no implementation readiness or broader
+continuation claim.
+
 ## P12-G active-session publication prerequisite promotion — 2026-10-10
 
 `codex/phase12/canonical` advanced by clean fast-forward from
