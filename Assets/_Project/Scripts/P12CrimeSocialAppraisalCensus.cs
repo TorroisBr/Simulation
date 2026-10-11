@@ -67,7 +67,8 @@ public static class P12CrimeSocialAppraisalCensusProvider
 
     internal static bool TryRegister(
         ContinuationCensusProtocol protocol,
-        CrimeSocialAppraisalWorldState world)
+        CrimeSocialAppraisalWorldState world,
+        bool requireEmptyBootstrapState = true)
     {
         if (protocol == null || world == null
             || world.TheftOutcomes == null || world.CrimeKnowledge == null
@@ -87,8 +88,10 @@ public static class P12CrimeSocialAppraisalCensusProvider
                     || !string.Equals(witness.SectionId, requiredIds[i], StringComparison.Ordinal)
                     || witness.SchemaVersion != SchemaVersion
                     || !ReferenceEquals(witness.OwnerInstanceIdentity, GetExpectedOwner(world, i))
-                    || witness.Cardinality != 0
-                    || witness.Revision != 0L)
+                    || witness.Cardinality < 0
+                    || witness.Revision < 0L
+                    || (requireEmptyBootstrapState
+                        && (witness.Cardinality != 0 || witness.Revision != 0L)))
                     return false;
 
                 OwnerSectionContract contract = new OwnerSectionContract(
@@ -441,7 +444,10 @@ public sealed partial class SimulationRuntime
 
     private bool TryRegisterP12CrimeSocialAppraisalOwnerSections(ContinuationCensusProtocol protocol)
     {
-        return P12CrimeSocialAppraisalCensusProvider.TryRegister(protocol, crimeSocialAppraisalWorldState);
+        return P12CrimeSocialAppraisalCensusProvider.TryRegister(
+            protocol,
+            crimeSocialAppraisalWorldState,
+            requireEmptyBootstrapState: runtimeAdmissionContext?.IsRestoredContinuation != true);
     }
 
     private bool TryBindP12CrimeSocialAppraisalMutationBoundaries()
