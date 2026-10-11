@@ -1,10 +1,15 @@
 # P12-G current B–F package interface revalidation — independent review
 
-**Result: PASS**  
-**Reviewed candidate:** `76bcb2a6bca527253ed5b1441b707a64a80cca0b`  
-**Candidate tree:** `0669c4150021e935d82b52d51f186cfdeabaaa16`  
-**Reviewed base:** `3840aa70fdd88ad344e23327182d1825b644fdbd`  
-**Base tree:** `065720adfbdfcca0d9e86f2da405d789136cc8b3`  
+**Result: PASS**
+
+**Reviewed candidate:** `76bcb2a6bca527253ed5b1441b707a64a80cca0b`
+
+**Candidate tree:** `0669c4150021e935d82b52d51f186cfdeabaaa16`
+
+**Reviewed base:** `3840aa70fdd88ad344e23327182d1825b644fdbd`
+
+**Base tree:** `065720adfbdfcca0d9e86f2da405d789136cc8b3`
+
 **Remote:** `https://github.com/TorroisBr/Simulation`
 
 The fetched `origin/codex/phase12/canonical` matched the reviewed base. Candidate commit `071902b60885b754099c4b8291ce15855130fff3` is a direct child of that base, and the reviewed tip descends from it. The report identifies the remote baseline precisely and does not use the separately named local canonical branch as the baseline.
