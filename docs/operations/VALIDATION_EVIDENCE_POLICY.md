@@ -264,7 +264,8 @@ Reuse a clean suitable idle worktree. Create another only for actual concurrent
 writers/incompatible checkout needs. Review can inspect Git objects read-only.
 When a workstream ends, ordinary authorized cleanup may remove its disposable
 worktree ONLY after proving ownership, no active work, all commits and required
-untracked evidence safely retained, and ignored diagnostics copied if needed.
+untracked evidence safely retained, and needed ignored diagnostics safely retained
+where permitted under section 3.
 Use the managed archive workflow for managed worktrees. Never remove another
 thread's checkout or discard ProjectSettings/.meta/user changes.
 
@@ -332,7 +333,10 @@ generic registry, security bypass or automatic deletion.
 Closure contract:
 
 1. Capture the complete validation-input manifest and invocation facts; copy
-   originals to owned diagnostic retention before Temp cleanup.
+   originals to protected diagnostic retention before Temp cleanup where
+   permitted under section 3. If raw retention is prohibited, independently
+   compare before permitted discard and preserve minimum safe complete evidence;
+   required evidence that cannot be safely retained cannot earn a passed gate.
 2. Produce one manifest and deterministic result-only ZIP (stable entry names,
    ordinal order, fixed archive metadata/encoding, pinned packer runtime/toolchain).
    The deterministic-byte promise applies within that identified toolchain; a

@@ -83,4 +83,5 @@ by this documentation; until validated, use the original-XML transition path.
 Retain necessary diagnostics safely; inspect actual outgoing objects/archives.
 Do not bypass external publication restrictions or create routine human gates.
 Preserve historical evidence and active candidates; do not bulk prune refs or
-worktrees. Copy needed ignored originals before any authorized cleanup.
+worktrees. Preserve needed ignored evidence before authorized cleanup, subject
+to the policy's security/privacy limits and safe-evidence requirements.

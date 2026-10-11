@@ -17,4 +17,4 @@ Escalate only an unrecoverable repository state, required runtime permission, or
 
 ## Evidence retention and reuse
 
-Before reuse, verify accessible actual result bytes, manifest hashes, complete input/toolchain/profile/scope identity and independent applicability under docs/operations/VALIDATION_EVIDENCE_POLICY.md. Never infer PASS from expired paths or assembly metadata. Pin originals for unresolved failures/security decisions; preserve the last recoverable candidate/ref and needed ignored diagnostics. Do not reset another writer or rerun an unchanged validated tree solely to repackage evidence.
+Before reuse, verify accessible actual result bytes, manifest hashes, complete input/toolchain/profile/scope identity and independent applicability under docs/operations/VALIDATION_EVIDENCE_POLICY.md. Never infer PASS from expired paths or assembly metadata. Pin originals for unresolved failures/security decisions where permitted by the policy's security/privacy limits; preserve the last recoverable candidate/ref and needed ignored diagnostics. Do not reset another writer or rerun an unchanged validated tree solely to repackage evidence.

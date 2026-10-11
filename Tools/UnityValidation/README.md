@@ -67,7 +67,10 @@ implementation and independent verification handoff.
 
 Until that tool passes review, retain final original-XML evidence in one
 reviewed bundle plus manifest where appropriate; inspect embedded output.
-Copy originals/diagnostics to an owned off-Git location before Temp cleanup.
+Copy originals/diagnostics to a protected off-Git location before Temp cleanup
+where permitted by policy section 3. If raw retention is prohibited, compare
+before permitted discard and preserve minimum safe complete evidence; required
+evidence that cannot safely be retained cannot earn a passed evidence gate.
 Keep any diagnostics needed by the claim or an existing binding Phase contract.
 Reusing a run requires full input/toolchain/profile/scope equality and independent
 exact-tip applicability, not merely an unchanged Assets subtree.
