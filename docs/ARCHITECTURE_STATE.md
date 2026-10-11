@@ -241,3 +241,37 @@ C; deeper Knowledge/Expedition stays F. No Daily-v1 widening, runtime code,
 save/hydration capability or closed-phase reopening is implied. The Master
 uses current source, discards no durable history, and does not replay stale
 ActorChoice branches. No product/architecture decision remains open.
+
+## Validation evidence policy adoption — 2026-10-11
+
+Scope: prospective operational documentation/diagnostic ignore rule only.
+Canonical branch: `codex/architecture/world-identity-projection`.
+Previous architecture SHA: `47eff220c7ce00f6e7c759bdc2b76780bb46f628`.
+Independently reviewed substantive content SHA:
+`a41b000b58b2b69d6412bf810948ea59b586e476`, from
+`codex/architecture/validation-evidence-retention`.
+
+The current user task authorizes compatible independently reviewed operational
+documentation promotion without a routine approval stop. The [PASS review](reviews/VALIDATION_EVIDENCE_POLICY_REVIEW.md)
+covers the full substantive diff and bounded retention corrections. Promotion
+requires final independent metadata applicability, refreshed fast-forward
+preflight, diff-check and local/remote synchronization. This entry becomes the
+adoption record when present on canonical; the containing canonical commit and
+durable orchestration record identify the final metadata/promotion tip.
+
+The [policy](operations/VALIDATION_EVIDENCE_POLICY.md) contains the measured
+assessment, permanent evidence contract, security/storage classes, full-input
+reuse rules, workflow comparison, historical-preserving migration and bounded
+Master handoff (section 9). AGENTS, seven workflow Skills, Execution Model and
+validation README apply it prospectively. Complete retrievable result evidence,
+required suites, independent exact-tip review and owning Phase State remain
+mandatory. Existing P12 autonomous bounded-promotion rules are reconciled; no
+new routine human gate is introduced.
+
+The normalized result packer remains **NOT IMPLEMENTED**; section 9 defines an
+isolated Tools implementation/review window, with original-XML transition
+evidence until it closes. This adds no P12-G dependency. P12 continues under
+its own current State; no Phase scope/profile, domain semantics, executable
+tree, active implementation checkout or numbered-phase canonical ref changes.
+Historical evidence is preserved; no cleanup, history rewrite or bulk ref/
+worktree deletion was performed. No product or architecture decision remains.
