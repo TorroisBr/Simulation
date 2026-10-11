@@ -1,3 +1,40 @@
+## P12-G same-epoch owner-vector row-facts witness — promoted — 2026-10-11
+
+`codex/phase12/canonical` was fast-forwarded from
+`23d8defcc050903d6b68354c61ccb0e00ee0c051` through the independently reviewed
+candidate `21da5468826b4388c4492646bcc27153d31eec8f`. The code-bearing commit is
+`7a606759c9a115cf4708de9efcdcf15a96524edf` (tree
+`b8db9a512d67d850f240a6289dd72586c46b160a`); its parent is the recorded
+canonical base. The sanitized evidence package is `11c30e9800c5ef30b8504c65f975d751677b7f98`
+(tree `64698c8ba765a3d36c6fe06e4cfa258214192769`), and the durable independent
+review record is `21da5468826b4388c4492646bcc27153d31eec8f`.
+
+The test-only change adds five cases to
+`P12GDailyV1OwnerVectorTests`: final-vector comparison detects changed
+cardinality, local revision, schema, role, and section set while the mutation
+epoch remains unchanged, returning `OwnerVectorChanged`. It exercises the
+comparer in isolation; no production behavior or profile contract changed.
+
+Exact-code-tree validation passed: focused 15/15, ALL EditMode 2873/2873,
+official Smoke 5/5, and `git diff --check`. There were zero failures, skips,
+or inconclusive tests. The sanitized XML/log package retains result structure,
+attributes, counts, URLs, and diagnostic suffixes after 288 exact local-root
+substitutions; its manifest hashes and byte counts match the committed blobs.
+No drive-root/private-root paths or credential patterns remain. Unity was not
+rerun for path-only sanitation because executable/test source and validation
+semantics are unchanged.
+
+This promotes only same-epoch owner-vector fact-comparison evidence. It does
+not prove target-provider recapture for the seven exact-empty owner rows,
+complete same-attempt census coverage, complete owner/epoch coverage,
+runtime-wide quiescence, universal rejection/atomicity/no-replay, complete
+continuation parity, capture eligibility, export, or hydration. P12-G remains
+`WAIT_DEPENDENCY`; P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase
+12 remains `OPEN`. The seven post-graph exact-empty owner-row recapture
+obligations and the other State-listed P12-G gaps remain open.
+
+Unrelated local `ProjectSettings` edits and untracked `.meta` files were not
+included or modified.
 ## P12-G bounded restore-parity and target-vector evidence promotion — 2026-10-11
 
 After refreshed preflight, `codex/phase12/canonical` fast-forwarded from
