@@ -6632,6 +6632,193 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestoreRejectsPoliticalClaimDanglingPersonAfterEarlierEOwnersStageAtomically()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject bootstrapObject = new GameObject("P12-G PoliticalClaim Person-target false-return atomicity");
+        GameObject controlObject = new GameObject("P12-G PoliticalClaim Person-target control");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(bootstrap, config);
+            ConfigureSelectedBootstrap(control, config);
+            InvokeInitializeSimulation(bootstrap, null);
+            InvokeInitializeSimulation(control, null);
+
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
+
+            PersonId claimant = new PersonId("p12g-claim-person-failure-claimant");
+            PersonId targetPersonId = new PersonId("p12g-claim-person-failure-target");
+            PoliticalClaimId claimId = new PoliticalClaimId("p12g-claim-person-failure-claim");
+            Action<SimulationRuntime> registerFixture = runtime =>
+            {
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(claimant, runtime.CurrentDay), out PersonStoreFailure claimantFailure),
+                    Is.True, claimantFailure.ToString());
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(targetPersonId, runtime.CurrentDay), out PersonStoreFailure targetFailure),
+                    Is.True, targetFailure.ToString());
+                PoliticalClaimRecord claim = new PoliticalClaimRecord(
+                    claimId, claimant, PoliticalClaimType.StatusRecognition,
+                    PoliticalClaimTarget.ForPerson(targetPersonId), PoliticalClaimBasis.Other,
+                    "P12-G integrated PoliticalClaim Person-target fixture", runtime.CurrentDay, Array.Empty<string>());
+                Assert.That(runtime.TryRegisterPoliticalClaim(claim, out PoliticalClaimFailure claimFailure),
+                    Is.True, claimFailure.ToString());
+            };
+            registerFixture(original.Runtime);
+            registerFixture(controlSession.Runtime);
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstAdvanceFailure),
+                Is.True, firstAdvanceFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFirstFailure),
+                Is.True, controlFirstFailure.ToString());
+            DailyCaptureEligibilityToken originalToken = GetCompletedDailyToken(original.Runtime);
+            string beforeFacts = CaptureSelectedDailyFacts(original.Runtime);
+            string beforeRoots = CaptureContinuationRootFacts(original);
+            string beforeOwnerGraph = CaptureCompleteDailyV1OwnerProjection(original, originalToken);
+
+            PersonId missingStagedPersonId = new PersonId("p12g-claim-person-failure-missing-target");
+            bool snapshotsCaptured = false;
+            bool institutionOfficeStaged = false;
+            bool propertyEstateStaged = false;
+            bool factionStaged = false;
+            bool claimStaged = false;
+            bool supportStaged = false;
+            bool replacementApplied = false;
+            Assert.That(bootstrap.TryRestoreDailyContinuationWithPoliticalClaimSnapshotForTest(
+                snapshot =>
+                {
+                    Assert.That(snapshotsCaptured, Is.True);
+                    Assert.That(institutionOfficeStaged, Is.True);
+                    Assert.That(propertyEstateStaged, Is.True);
+                    Assert.That(factionStaged, Is.True,
+                        "The exact staged Person roots and earlier E owners must exist before claim target validation.");
+                    Assert.That(claimStaged, Is.False,
+                        "The corrupted PoliticalClaim snapshot must be rejected before its owner stage event.");
+                    Assert.That(snapshot, Is.Not.Null);
+                    Assert.That(snapshot.Claims.SectionId, Is.EqualTo(PoliticalClaimStoreCensusProvider.ClaimsSectionId));
+                    Assert.That(snapshot.Claims.SchemaVersion, Is.EqualTo(P12EPoliticalClaimOwnerSnapshot.CurrentSchemaVersion));
+                    Assert.That(snapshot.Claims.RecordCount, Is.EqualTo(1));
+                    Assert.That(snapshot.Claims.Revision, Is.GreaterThan(0L));
+                    Assert.That(snapshot.Claims.Records, Has.Count.EqualTo(1));
+                    Assert.That(snapshot.Recognitions.SectionId,
+                        Is.EqualTo(PoliticalClaimStoreCensusProvider.RecognitionsSectionId));
+                    Assert.That(snapshot.Recognitions.SchemaVersion,
+                        Is.EqualTo(P12EPoliticalClaimOwnerSnapshot.CurrentSchemaVersion));
+                    Assert.That(snapshot.Recognitions.RecordCount, Is.EqualTo(0));
+                    Assert.That(snapshot.Recognitions.Revision, Is.EqualTo(snapshot.Claims.Revision));
+                    Assert.That(snapshot.Recognitions.Records, Is.Empty);
+                    P12EPoliticalClaimRow current = snapshot.Claims.Records[0];
+                    Assert.That(current.ClaimId, Is.EqualTo(claimId.Value));
+                    Assert.That(current.ClaimantPersonId, Is.EqualTo(claimant.Value));
+                    Assert.That(current.ClaimType, Is.EqualTo((int)PoliticalClaimType.StatusRecognition));
+                    Assert.That(current.TargetKind, Is.EqualTo((int)PoliticalClaimTargetKind.Person));
+                    Assert.That(current.TargetId, Is.EqualTo(targetPersonId.Value));
+                    replacementApplied = true;
+                    P12EPoliticalClaimRow corrupted = new P12EPoliticalClaimRow(
+                        current.ClaimId,
+                        current.ClaimantPersonId,
+                        current.ClaimType,
+                        current.TargetKind,
+                        missingStagedPersonId.Value,
+                        current.Basis,
+                        current.BasisDescription,
+                        current.CreatedAbsoluteDay,
+                        current.Status,
+                        current.ResolutionAbsoluteDay,
+                        current.EvidenceReferences);
+                    return new P12EPoliticalClaimOwnerSnapshot(
+                        new P12EPoliticalClaimSnapshotSection<P12EPoliticalClaimRow>(
+                            snapshot.Claims.SectionId,
+                            snapshot.Claims.SchemaVersion,
+                            snapshot.Claims.RecordCount,
+                            snapshot.Claims.Revision,
+                            new[] { corrupted },
+                            row => row?.Copy()),
+                        snapshot.Recognitions);
+                },
+                stage =>
+                {
+                    if (stage == P12GDailyV1RestoreStage.EOwnerSnapshotsCaptured)
+                        snapshotsCaptured = true;
+                    if (stage == P12GDailyV1RestoreStage.EInstitutionOfficeOwnersStaged)
+                        institutionOfficeStaged = true;
+                    if (stage == P12GDailyV1RestoreStage.EPropertyEstateOwnersStaged)
+                        propertyEstateStaged = true;
+                    if (stage == P12GDailyV1RestoreStage.EFactionOwnerStaged)
+                        factionStaged = true;
+                    if (stage == P12GDailyV1RestoreStage.EPoliticalClaimsOwnerStaged)
+                        claimStaged = true;
+                    if (stage == P12GDailyV1RestoreStage.EPoliticalSupportOwnerStaged)
+                        supportStaged = true;
+                },
+                out P12GDailyV1RestoreFailure restoreFailure,
+                out string diagnostic), Is.False);
+
+            Assert.That(replacementApplied, Is.True);
+            Assert.That(claimStaged, Is.False);
+            Assert.That(supportStaged, Is.False);
+            Assert.That(restoreFailure, Is.EqualTo(P12GDailyV1RestoreFailure.OwnerStageFailed));
+            Assert.That(diagnostic, Does.Contain("P12-E could not stage the configured domain owners"));
+            Assert.That(ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(originalToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureSelectedDailyFacts(original.Runtime), Is.EqualTo(beforeFacts));
+            Assert.That(CaptureContinuationRootFacts(original), Is.EqualTo(beforeRoots));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, originalToken), Is.EqualTo(beforeOwnerGraph));
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retainedFailure),
+                Is.True, retainedFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlRetainedFailure),
+                Is.True, controlRetainedFailure.ToString());
+            DailyCaptureEligibilityToken continuedToken = GetCompletedDailyToken(original.Runtime);
+            DailyCaptureEligibilityToken continuedControlToken = GetCompletedDailyToken(controlSession.Runtime);
+            string continuedOwnerGraph = CaptureCompleteDailyV1OwnerProjection(original, continuedToken);
+            Assert.That(continuedOwnerGraph,
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, continuedControlToken)),
+                "After rejection, source and uninterrupted runtimes must continue identically.");
+
+            Assert.That(bootstrap.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            Assert.That(restored, Is.Not.SameAs(original));
+            DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restored.Runtime);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, restoredToken), Is.EqualTo(continuedOwnerGraph));
+            Assert.That(restored.Runtime.PoliticalClaimRecords, Has.Count.EqualTo(1));
+            PoliticalClaimRecord restoredClaim = null;
+            foreach (PoliticalClaimRecord record in restored.Runtime.PoliticalClaimRecords)
+            {
+                if (string.Equals(record.ClaimId.Value, claimId.Value, StringComparison.Ordinal))
+                    restoredClaim = record;
+            }
+            Assert.That(restoredClaim, Is.Not.Null);
+            Assert.That(restoredClaim.Target.Kind, Is.EqualTo(PoliticalClaimTargetKind.Person));
+            Assert.That(restoredClaim.Target.TargetId, Is.EqualTo(targetPersonId.Value));
+
+            Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextAdvanceFailure),
+                Is.True, nextAdvanceFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlNextFailure),
+                Is.True, controlNextFailure.ToString());
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, GetCompletedDailyToken(restored.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    controlSession, GetCompletedDailyToken(controlSession.Runtime))),
+                "The restored runtime and uninterrupted control must remain in parity after another boundary.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+            UnityEngine.Object.DestroyImmediate(controlObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreRejectsPrivateTargetMutationAfterGraphChecksAndKeepsSourceRetryable()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
