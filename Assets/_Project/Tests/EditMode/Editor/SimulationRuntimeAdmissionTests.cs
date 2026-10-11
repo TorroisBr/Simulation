@@ -3074,70 +3074,83 @@ public sealed class SimulationRuntimeAdmissionTests
             bool beforePublication = false;
             bool overrideApplied = false;
             ActorChoiceInput transformedInFlightInput = null;
+            P12GDailyV1RestoreFailure restoreFailure;
+            string restoreDiagnostic;
 
-            Assert.That(source.TryRestoreDailyContinuationWithActorChoiceSnapshotForTest(
-                snapshot =>
-                {
-                    Assert.That(fOwnerSnapshotsCaptured, Is.True,
-                        "The supported source snapshot must be captured and validated before the detached override.");
-                    Assert.That(snapshot, Is.Not.Null);
-                    Assert.That(snapshot.SchemaVersion, Is.EqualTo(P12FActorChoiceSnapshot.CurrentSchemaVersion));
-                    Assert.That(snapshot.CensusRevision, Is.EqualTo(original.Runtime.ActorChoiceStore.CensusRevision));
-                    Assert.That(snapshot.NextInputSequence, Is.EqualTo(original.Runtime.ActorChoiceStore.NextInputSequence));
-                    ActorChoiceInput captured = snapshot.Inputs.Single(input => input.WorldCommandId == commandId);
-                    Assert.That(captured.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
-                    Assert.That(captured.Dispositions, Has.Count.EqualTo(2));
-
-                    IReadOnlyList<ActorChoiceDisposition> inFlightDispositions;
-                    if (rejectedStatus == ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt)
+            SimulationRuntime.DailyGameplayExecutionProbeForTest gameplayExecutionProbe =
+                SimulationRuntime.BeginDailyGameplayExecutionProbeForTest();
+            try
+            {
+                Assert.That(source.TryRestoreDailyContinuationWithActorChoiceSnapshotForTest(
+                    snapshot =>
                     {
-                        Assert.That(captured.Dispositions[0].Kind,
-                            Is.EqualTo(ActorChoiceDispositionKind.DispatchStarted));
-                        inFlightDispositions = new[] { captured.Dispositions[0] };
-                    }
-                    else
+                        Assert.That(fOwnerSnapshotsCaptured, Is.True,
+                            "The supported source snapshot must be captured and validated before the detached override.");
+                        Assert.That(snapshot, Is.Not.Null);
+                        Assert.That(snapshot.SchemaVersion, Is.EqualTo(P12FActorChoiceSnapshot.CurrentSchemaVersion));
+                        Assert.That(snapshot.CensusRevision, Is.EqualTo(original.Runtime.ActorChoiceStore.CensusRevision));
+                        Assert.That(snapshot.NextInputSequence, Is.EqualTo(original.Runtime.ActorChoiceStore.NextInputSequence));
+                        ActorChoiceInput captured = snapshot.Inputs.Single(input => input.WorldCommandId == commandId);
+                        Assert.That(captured.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
+                        Assert.That(captured.Dispositions, Has.Count.EqualTo(2));
+
+                        IReadOnlyList<ActorChoiceDisposition> inFlightDispositions;
+                        if (rejectedStatus == ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt)
+                        {
+                            Assert.That(captured.Dispositions[0].Kind,
+                                Is.EqualTo(ActorChoiceDispositionKind.DispatchStarted));
+                            inFlightDispositions = new[] { captured.Dispositions[0] };
+                        }
+                        else
+                        {
+                            Assert.That(rejectedStatus, Is.EqualTo(ActorChoiceInputStatus.Pending));
+                            inFlightDispositions = Array.Empty<ActorChoiceDisposition>();
+                        }
+
+                        transformedInFlightInput = new ActorChoiceInput(
+                            captured.InputId,
+                            captured.WorldCommandId,
+                            captured.InputSequence,
+                            captured.PersonId,
+                            captured.ActionDefinitionId,
+                            captured.Origin,
+                            captured.Authority,
+                            captured.CapturedAbsoluteDay,
+                            rejectedStatus,
+                            inFlightDispositions,
+                            null,
+                            Array.Empty<ActorChoiceTemporalDisposition>());
+                        Assert.That(transformedInFlightInput.InputId, Is.EqualTo(captured.InputId));
+                        Assert.That(transformedInFlightInput.WorldCommandId, Is.EqualTo(captured.WorldCommandId));
+                        Assert.That(transformedInFlightInput.InputSequence, Is.EqualTo(captured.InputSequence));
+                        Assert.That(transformedInFlightInput.PersonId, Is.EqualTo(captured.PersonId));
+                        Assert.That(transformedInFlightInput.Status, Is.EqualTo(rejectedStatus));
+                        Assert.That(transformedInFlightInput.Dispositions, Has.Count.EqualTo(inFlightDispositions.Count));
+                        overrideApplied = true;
+
+                        return snapshot.WithInputsForTest(snapshot.Inputs.Select(input =>
+                            input.WorldCommandId == commandId ? transformedInFlightInput : input));
+                    },
+                    stage =>
                     {
-                        Assert.That(rejectedStatus, Is.EqualTo(ActorChoiceInputStatus.Pending));
-                        inFlightDispositions = Array.Empty<ActorChoiceDisposition>();
-                    }
-
-                    transformedInFlightInput = new ActorChoiceInput(
-                        captured.InputId,
-                        captured.WorldCommandId,
-                        captured.InputSequence,
-                        captured.PersonId,
-                        captured.ActionDefinitionId,
-                        captured.Origin,
-                        captured.Authority,
-                        captured.CapturedAbsoluteDay,
-                        rejectedStatus,
-                        inFlightDispositions,
-                        null,
-                        Array.Empty<ActorChoiceTemporalDisposition>());
-                    Assert.That(transformedInFlightInput.InputId, Is.EqualTo(captured.InputId));
-                    Assert.That(transformedInFlightInput.WorldCommandId, Is.EqualTo(captured.WorldCommandId));
-                    Assert.That(transformedInFlightInput.InputSequence, Is.EqualTo(captured.InputSequence));
-                    Assert.That(transformedInFlightInput.PersonId, Is.EqualTo(captured.PersonId));
-                    Assert.That(transformedInFlightInput.Status, Is.EqualTo(rejectedStatus));
-                    Assert.That(transformedInFlightInput.Dispositions, Has.Count.EqualTo(inFlightDispositions.Count));
-                    overrideApplied = true;
-
-                    return snapshot.WithInputsForTest(snapshot.Inputs.Select(input =>
-                        input.WorldCommandId == commandId ? transformedInFlightInput : input));
-                },
-                stage =>
-                {
-                    if (stage == P12GDailyV1RestoreStage.FOwnerSnapshotsCaptured)
-                        fOwnerSnapshotsCaptured = true;
-                    else if (stage == P12GDailyV1RestoreStage.FActorChoicesStaged)
-                        actorChoicesStaged = true;
-                    else if (stage == P12GDailyV1RestoreStage.FStaged)
-                        fStaged = true;
-                    else if (stage == P12GDailyV1RestoreStage.BeforePublication)
-                        beforePublication = true;
-                },
-                out P12GDailyV1RestoreFailure restoreFailure,
-                out string restoreDiagnostic), Is.False);
+                        if (stage == P12GDailyV1RestoreStage.FOwnerSnapshotsCaptured)
+                            fOwnerSnapshotsCaptured = true;
+                        else if (stage == P12GDailyV1RestoreStage.FActorChoicesStaged)
+                            actorChoicesStaged = true;
+                        else if (stage == P12GDailyV1RestoreStage.FStaged)
+                            fStaged = true;
+                        else if (stage == P12GDailyV1RestoreStage.BeforePublication)
+                            beforePublication = true;
+                    },
+                    out restoreFailure,
+                    out restoreDiagnostic), Is.False);
+            }
+            finally
+            {
+                gameplayExecutionProbe.Dispose();
+            }
+            Assert.That(gameplayExecutionProbe.AdvanceDayAfterClockAdvanceInvocationCount, Is.Zero,
+                "A rejected restore must not enter the normal daily gameplay callback pipeline.");
 
             Assert.That(overrideApplied, Is.True);
             Assert.That(restoreFailure, Is.EqualTo(P12GDailyV1RestoreFailure.OwnerStageFailed));
