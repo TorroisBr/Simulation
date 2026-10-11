@@ -1,7 +1,7 @@
 # P12-G ActorChoice and TravelParty continuation parity — independent review
 
-**Verdict: `VALIDATED_CANDIDATE` (PASS)**  
-**Review date:** 2026-10-11  
+**Verdict: `VALIDATED_CANDIDATE` (PASS)**
+**Review date:** 2026-10-11
 **Reviewer:** independent P12-G review agent
 
 ## Exact candidate and base
