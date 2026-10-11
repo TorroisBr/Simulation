@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="7" result="Passed" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-11 01:28:36Z" end-time="2026-10-11 01:28:36Z" duration="0,0607241">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2861" result="Passed" start-time="2026-10-11 01:28:36Z" end-time="2026-10-11 01:28:36Z" duration="0.060724" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="4130" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12g-political-claim-target-20261010/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2861" result="Passed" start-time="2026-10-11 01:28:36Z" end-time="2026-10-11 01:28:36Z" duration="0.047598" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="158328" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2769" name="P12FActorChoiceSnapshotTests" fullname="P12FActorChoiceSnapshotTests" classname="P12FActorChoiceSnapshotTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-11 01:28:36Z" end-time="2026-10-11 01:28:36Z" duration="0.031622" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2770" name="EmptyOwnerCapturesAndStagesWithExactRevisionAndSequence" fullname="P12FActorChoiceSnapshotTests.EmptyOwnerCapturesAndStagesWithExactRevisionAndSequence" methodname="EmptyOwnerCapturesAndStagesWithExactRevisionAndSequence" classname="P12FActorChoiceSnapshotTests" runstate="Runnable" seed="1920761511" result="Passed" start-time="2026-10-11 01:28:36Z" end-time="2026-10-11 01:28:36Z" duration="0.013579" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2771" name="PopulatedTerminalHistoryIsDetachedAndDuplicateCommandRemainsIdempotentlyRejected" fullname="P12FActorChoiceSnapshotTests.PopulatedTerminalHistoryIsDetachedAndDuplicateCommandRemainsIdempotentlyRejected" methodname="PopulatedTerminalHistoryIsDetachedAndDuplicateCommandRemainsIdempotentlyRejected" classname="P12FActorChoiceSnapshotTests" runstate="Runnable" seed="1183309971" result="Passed" start-time="2026-10-11 01:28:36Z" end-time="2026-10-11 01:28:36Z" duration="0.005405" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2775" name="RejectsDeferredAndP18TemporalHistory" fullname="P12FActorChoiceSnapshotTests.RejectsDeferredAndP18TemporalHistory" methodname="RejectsDeferredAndP18TemporalHistory" classname="P12FActorChoiceSnapshotTests" runstate="Runnable" seed="561118837" result="Passed" start-time="2026-10-11 01:28:36Z" end-time="2026-10-11 01:28:36Z" duration="0.001170" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="2774" name="RejectsPendingAndConsumedAwaitingTerminalHistory" fullname="P12FActorChoiceSnapshotTests.RejectsPendingAndConsumedAwaitingTerminalHistory" classname="P12FActorChoiceSnapshotTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-11 01:28:36Z" end-time="2026-10-11 01:28:36Z" duration="0.001963" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2772" name="RejectsPendingAndConsumedAwaitingTerminalHistory(False)" fullname="P12FActorChoiceSnapshotTests.RejectsPendingAndConsumedAwaitingTerminalHistory(False)" methodname="RejectsPendingAndConsumedAwaitingTerminalHistory" classname="P12FActorChoiceSnapshotTests" runstate="Runnable" seed="1942709536" result="Passed" start-time="2026-10-11 01:28:36Z" end-time="2026-10-11 01:28:36Z" duration="0.000281" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2773" name="RejectsPendingAndConsumedAwaitingTerminalHistory(True)" fullname="P12FActorChoiceSnapshotTests.RejectsPendingAndConsumedAwaitingTerminalHistory(True)" methodname="RejectsPendingAndConsumedAwaitingTerminalHistory" classname="P12FActorChoiceSnapshotTests" runstate="Runnable" seed="232479684" result="Passed" start-time="2026-10-11 01:28:36Z" end-time="2026-10-11 01:28:36Z" duration="0.000067" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="2776" name="RequiresExactTokenVectorAndMatchingOwnerCardinalityRevisionAndIdentity" fullname="P12FActorChoiceSnapshotTests.RequiresExactTokenVectorAndMatchingOwnerCardinalityRevisionAndIdentity" methodname="RequiresExactTokenVectorAndMatchingOwnerCardinalityRevisionAndIdentity" classname="P12FActorChoiceSnapshotTests" runstate="Runnable" seed="1087211572" result="Passed" start-time="2026-10-11 01:28:36Z" end-time="2026-10-11 01:28:36Z" duration="0.000357" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2777" name="StagingRequiresPersonBindingInTheExactTargetStore" fullname="P12FActorChoiceSnapshotTests.StagingRequiresPersonBindingInTheExactTargetStore" methodname="StagingRequiresPersonBindingInTheExactTargetStore" classname="P12FActorChoiceSnapshotTests" runstate="Runnable" seed="2077097483" result="Passed" start-time="2026-10-11 01:28:36Z" end-time="2026-10-11 01:28:36Z" duration="0.000218" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
