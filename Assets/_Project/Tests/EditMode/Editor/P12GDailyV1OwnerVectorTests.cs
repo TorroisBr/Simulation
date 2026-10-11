@@ -172,6 +172,50 @@ public sealed class P12GDailyV1OwnerVectorTests
         Assert.That(failure, Is.EqualTo(P12GDailyV1OwnerVectorFailure.MutationEpochChanged));
     }
 
+    [TestCase("cardinality")]
+    [TestCase("revision")]
+    [TestCase("schema")]
+    [TestCase("role")]
+    [TestCase("section-set")]
+    public void FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged(string changedFact)
+    {
+        object owner = new object();
+        OwnerSectionCensusSnapshot[] validated =
+        {
+            Row("owner.a", OwnerSectionRole.Required, owner, 2, 5L)
+        };
+        OwnerSectionCensusSnapshot changed;
+        switch (changedFact)
+        {
+            case "cardinality":
+                changed = Row("owner.a", OwnerSectionRole.Required, owner, 3, 5L);
+                break;
+            case "revision":
+                changed = Row("owner.a", OwnerSectionRole.Required, owner, 2, 6L);
+                break;
+            case "schema":
+                changed = new OwnerSectionCensusSnapshot(
+                    "owner.a", 3, OwnerSectionRole.Required, owner, 2, 5L);
+                break;
+            case "role":
+                validated = new[] { Row("owner.a", OwnerSectionRole.ExplicitlyEmpty, owner, 0, 0L) };
+                changed = Row("owner.a", OwnerSectionRole.Excluded, owner, 0, 0L);
+                break;
+            case "section-set":
+                changed = Row("owner.b", OwnerSectionRole.Required, owner, 2, 5L);
+                break;
+            default:
+                Assert.Fail("Unknown owner fact: " + changedFact);
+                return;
+        }
+
+        Assert.That(P12GDailyV1OwnerVector.TryMatchCurrentTargetSnapshot(
+            validated, 9L, new[] { changed }, 9L,
+            out P12GDailyV1OwnerVectorFailure failure,
+            out string diagnostic), Is.False, diagnostic);
+        Assert.That(failure, Is.EqualTo(P12GDailyV1OwnerVectorFailure.OwnerVectorChanged));
+    }
+
     [Test]
     public void AllocatorHighWaterMustContinuePastEveryRetainedTypedIdentity()
     {
