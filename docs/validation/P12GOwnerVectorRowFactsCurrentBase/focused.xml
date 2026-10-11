@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="15" result="Passed" total="15" passed="15" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0,104996">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2873" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.104996" total="15" passed="15" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="4144" name="Assembly-CSharp-Editor.dll" fullname="SANITIZED_LOCAL_WORKTREE_FS/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2873" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.047198" total="15" passed="15" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="97836" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2788" name="P12GDailyV1OwnerVectorTests" fullname="P12GDailyV1OwnerVectorTests" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" testcasecount="15" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.026986" total="15" passed="15" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2803" name="AllocatorHighWaterChecksCanonicalOpaqueDecisionReferencesWithoutResolvingOrDeduplicatingThem" fullname="P12GDailyV1OwnerVectorTests.AllocatorHighWaterChecksCanonicalOpaqueDecisionReferencesWithoutResolvingOrDeduplicatingThem" methodname="AllocatorHighWaterChecksCanonicalOpaqueDecisionReferencesWithoutResolvingOrDeduplicatingThem" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" seed="858707624" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.009214" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2802" name="AllocatorHighWaterMustContinuePastEveryRetainedTypedIdentity" fullname="P12GDailyV1OwnerVectorTests.AllocatorHighWaterMustContinuePastEveryRetainedTypedIdentity" methodname="AllocatorHighWaterMustContinuePastEveryRetainedTypedIdentity" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" seed="87812132" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.000574" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2804" name="AllocatorHighWaterRejectsStaleCountersAndMalformedOrUnownedIdentityValues" fullname="P12GDailyV1OwnerVectorTests.AllocatorHighWaterRejectsStaleCountersAndMalformedOrUnownedIdentityValues" methodname="AllocatorHighWaterRejectsStaleCountersAndMalformedOrUnownedIdentityValues" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" seed="758405759" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.000293" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="2801" name="FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged" fullname="P12GDailyV1OwnerVectorTests.FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.005128" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2796" name="FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged(&quot;cardinality&quot;)" fullname="P12GDailyV1OwnerVectorTests.FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged(&quot;cardinality&quot;)" methodname="FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" seed="2055519829" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.003248" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2797" name="FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged(&quot;revision&quot;)" fullname="P12GDailyV1OwnerVectorTests.FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged(&quot;revision&quot;)" methodname="FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" seed="1650956095" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.000070" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2798" name="FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged(&quot;schema&quot;)" fullname="P12GDailyV1OwnerVectorTests.FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged(&quot;schema&quot;)" methodname="FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" seed="131872589" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.000037" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2799" name="FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged(&quot;role&quot;)" fullname="P12GDailyV1OwnerVectorTests.FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged(&quot;role&quot;)" methodname="FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" seed="2135329445" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.000032" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2800" name="FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged(&quot;section-set&quot;)" fullname="P12GDailyV1OwnerVectorTests.FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged(&quot;section-set&quot;)" methodname="FinalAdmissionRejectsChangedOwnerFactsWhenEpochIsUnchanged" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" seed="189969607" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.000029" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="2795" name="RestoredAdmissionSnapshotMustRemainIdenticalThroughFinalAdmission" fullname="P12GDailyV1OwnerVectorTests.RestoredAdmissionSnapshotMustRemainIdenticalThroughFinalAdmission" methodname="RestoredAdmissionSnapshotMustRemainIdenticalThroughFinalAdmission" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" seed="1791511160" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.000253" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2789" name="RestoredCandidateVectorAcceptsExactRowsIndependentOfRegistrationOrder" fullname="P12GDailyV1OwnerVectorTests.RestoredCandidateVectorAcceptsExactRowsIndependentOfRegistrationOrder" methodname="RestoredCandidateVectorAcceptsExactRowsIndependentOfRegistrationOrder" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" seed="1530248969" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.000851" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2794" name="RestoredCandidateVectorPreservesOwnerAliasRelationships" fullname="P12GDailyV1OwnerVectorTests.RestoredCandidateVectorPreservesOwnerAliasRelationships" methodname="RestoredCandidateVectorPreservesOwnerAliasRelationships" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" seed="723957844" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.000223" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2792" name="RestoredCandidateVectorRejectsContractCardinalityRevisionAndIdentityDrift" fullname="P12GDailyV1OwnerVectorTests.RestoredCandidateVectorRejectsContractCardinalityRevisionAndIdentityDrift" methodname="RestoredCandidateVectorRejectsContractCardinalityRevisionAndIdentityDrift" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" seed="666524718" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.000142" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2791" name="RestoredCandidateVectorRejectsMissingBlankAndDuplicateSectionIdentities" fullname="P12GDailyV1OwnerVectorTests.RestoredCandidateVectorRejectsMissingBlankAndDuplicateSectionIdentities" methodname="RestoredCandidateVectorRejectsMissingBlankAndDuplicateSectionIdentities" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" seed="369230990" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.000167" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2790" name="RestoredCandidateVectorRejectsMissingVectorsAndCountMismatch" fullname="P12GDailyV1OwnerVectorTests.RestoredCandidateVectorRejectsMissingVectorsAndCountMismatch" methodname="RestoredCandidateVectorRejectsMissingVectorsAndCountMismatch" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" seed="703885413" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.000085" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2793" name="RestoredCandidateVectorRejectsPopulatedEmptyOrExcludedRows" fullname="P12GDailyV1OwnerVectorTests.RestoredCandidateVectorRejectsPopulatedEmptyOrExcludedRows" methodname="RestoredCandidateVectorRejectsPopulatedEmptyOrExcludedRows" classname="P12GDailyV1OwnerVectorTests" runstate="Runnable" seed="694161714" result="Passed" start-time="2026-10-11 19:09:09Z" end-time="2026-10-11 19:09:09Z" duration="0.000103" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: SANITIZED_LOCAL_USER_FS/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
