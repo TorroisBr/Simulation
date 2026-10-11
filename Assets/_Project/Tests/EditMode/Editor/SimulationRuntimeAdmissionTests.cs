@@ -3295,6 +3295,12 @@ public sealed class SimulationRuntimeAdmissionTests
             long sourceSequenceBeforeRequest = sourceSession.Runtime.ActorChoiceStore.NextInputSequence;
             int sourceCountBeforeRequest = sourceSession.Runtime.ActorChoiceStore.Count;
             Assert.That(sourceCountBeforeRequest, Is.Zero);
+            OwnerSectionCensusSnapshot p11AtCompletedBoundary = sourceCompletedBoundary.OwnerSections.Single(
+                section => section.SectionId == ActorChoiceP11CensusProvider.SectionId);
+            Assert.That(p11AtCompletedBoundary.Cardinality, Is.Zero);
+            Assert.That(p11AtCompletedBoundary.Revision, Is.EqualTo(sourceRevisionBeforeRequest));
+            Assert.That(p11AtCompletedBoundary.OwnerInstanceIdentity,
+                Is.SameAs(sourceSession.Runtime.ActorChoiceStore.CensusOwnerIdentity));
             WorldCommand request = new WorldCommand(
                 WorldCommandKind.ActorActionChoice,
                 WorldCommandOrigin.LocalPlayer,
@@ -3324,6 +3330,15 @@ public sealed class SimulationRuntimeAdmissionTests
                 Is.EqualTo(sourceRevisionBeforeRequest + 1L));
             Assert.That(sourceSession.Runtime.ActorChoiceStore.NextInputSequence,
                 Is.EqualTo(sourceSequenceBeforeRequest + 1L));
+            OwnerSectionCensusWitness p11WitnessAfterRequest =
+                sourceSession.Composition.ActorChoiceInputCensusProvider.GetCurrentCensus();
+            Assert.That(p11WitnessAfterRequest.SectionId, Is.EqualTo(ActorChoiceP11CensusProvider.SectionId));
+            Assert.That(p11WitnessAfterRequest.SchemaVersion, Is.EqualTo(ActorChoiceP11CensusProvider.SchemaVersion));
+            Assert.That(p11WitnessAfterRequest.Cardinality, Is.EqualTo(1));
+            Assert.That(p11WitnessAfterRequest.Revision,
+                Is.EqualTo(sourceSession.Runtime.ActorChoiceStore.CensusRevision));
+            Assert.That(p11WitnessAfterRequest.OwnerInstanceIdentity,
+                Is.SameAs(sourceSession.Runtime.ActorChoiceStore.CensusOwnerIdentity));
             Assert.That(sourceSession.Runtime.TryValidateCompletedDailyCaptureToken(
                     sourceCompletedBoundary, out DailyCaptureEligibilityFailure staleBoundaryFailure),
                 Is.False, "The normal P11 owner mutation after T must invalidate the prior completed boundary.");
@@ -3338,7 +3353,7 @@ public sealed class SimulationRuntimeAdmissionTests
             long sourceSequenceBeforeRestore = sourceSession.Runtime.ActorChoiceStore.NextInputSequence;
             int sourceCountBeforeRestore = sourceSession.Runtime.ActorChoiceStore.Count;
             OwnerSectionCensusWitness p11WitnessBeforeRestore =
-                sourceSession.Composition.ActorChoiceTemporalCensusProvider.GetCurrentCensus();
+                sourceSession.Composition.ActorChoiceInputCensusProvider.GetCurrentCensus();
             List<P12GDailyV1RestoreStage> restoreStages = new List<P12GDailyV1RestoreStage>();
             P12GDailyV1RestoreFailure restoreFailure;
             string restoreDiagnostic;
@@ -3385,7 +3400,7 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(pendingAfterRestore.Status, Is.EqualTo(ActorChoiceInputStatus.Pending));
             Assert.That(pendingAfterRestore.Dispositions, Is.Empty);
             OwnerSectionCensusWitness p11WitnessAfterRestore =
-                sourceSession.Composition.ActorChoiceTemporalCensusProvider.GetCurrentCensus();
+                sourceSession.Composition.ActorChoiceInputCensusProvider.GetCurrentCensus();
             Assert.That(p11WitnessAfterRestore.SectionId, Is.EqualTo(p11WitnessBeforeRestore.SectionId));
             Assert.That(p11WitnessAfterRestore.SchemaVersion, Is.EqualTo(p11WitnessBeforeRestore.SchemaVersion));
             Assert.That(p11WitnessAfterRestore.Cardinality, Is.EqualTo(p11WitnessBeforeRestore.Cardinality));
