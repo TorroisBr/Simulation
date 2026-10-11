@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="1" result="Passed" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-11 02:38:40Z" end-time="2026-10-11 02:38:41Z" duration="0,6781463">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2864" result="Passed" start-time="2026-10-11 02:38:40Z" end-time="2026-10-11 02:38:41Z" duration="0.678146" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="4134" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12g-political-claim-target-20261010/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2864" result="Passed" start-time="2026-10-11 02:38:40Z" end-time="2026-10-11 02:38:41Z" duration="0.660015" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="30368" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3632" name="SimulationRuntimeAdmissionTests" fullname="SimulationRuntimeAdmissionTests" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="190" result="Passed" start-time="2026-10-11 02:38:40Z" end-time="2026-10-11 02:38:41Z" duration="0.643242" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3733" name="DailyV1RestorePreservesScheduledDirectiveAndActiveTravelPartyTogether" fullname="SimulationRuntimeAdmissionTests.DailyV1RestorePreservesScheduledDirectiveAndActiveTravelPartyTogether" methodname="DailyV1RestorePreservesScheduledDirectiveAndActiveTravelPartyTogether" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="1082082471" result="Passed" start-time="2026-10-11 02:38:40Z" end-time="2026-10-11 02:38:41Z" duration="0.630910" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Afonso passeou pela cidade.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso passeou pela cidade.
+Arthur passeou pela cidade.
+Carlos passeou pela cidade.
+Helena escolheu VIAJAR Campo Verde.
+Helena iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Jorge escolheu COMPRAR_MERCADORIA Serra de Ferro.
+Jorge comprou 5 VINHO em Campo Verde por 13,33 cada para vender em Serra de Ferro
+Marcus passeou pela cidade.
+Maria escolheu VENDER_MERCADORIA Serra de Ferro.
+Maria vendeu 4 FERRO ao mercado de Serra de Ferro por 10 cada
+Lucro aproximado: 8
+Pedro descansou.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Arthur descansou.
+Carlos foi a taverna.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+Afonso escolheu VIAJAR Campo Verde.
+Afonso iniciou viagem de Serra de Ferro para Campo Verde
+Custo de viagem: 30
+Arthur descansou.
+Carlos foi a taverna.
+Jorge escolheu VIAJAR Serra de Ferro.
+Jorge iniciou viagem de Campo Verde para Serra de Ferro
+Custo de viagem: 30
+Marcus foi a taverna.
+Maria descansou.
+Pedro escolheu VENDER_MERCADORIA Campo Verde.
+Pedro vendeu 4 TECIDO ao mercado de Campo Verde por 12,9 cada
+Lucro aproximado: 27,61
+Helena esta viajando. Restam 2 dias.
+Arthur passeou pela cidade.
+Carlos foi a taverna.
+Marcus descansou.
+Maria foi a taverna.
+Pedro foi a taverna.
+Afonso esta viajando. Restam 2 dias.
+Helena esta viajando. Resta 1 dia.
+Jorge esta viajando. Restam 2 dias.
+Arthur passeou pela cidade.
+Carlos foi a taverna.
+Marcus descansou.
+Maria foi a taverna.
+Pedro foi a taverna.
+Afonso esta viajando. Restam 2 dias.
+Helena esta viajando. Resta 1 dia.
+Jorge esta viajando. Restam 2 dias.
+Ana descansou.
+Arthur passeou pela cidade.
+Carlos descansou.
+Jobson passeou pela cidade.
+Scheduled directive 'directive-000001' was skipped: Actor is not in a compatible state for the requested action.
+Marcus passeou pela cidade.
+Maria foi a taverna.
+Pedro descansou.
+Afonso esta viajando. Resta 1 dia.
+Helena chegou em Campo Verde
+Jorge esta viajando. Resta 1 dia.
+Ana descansou.
+Arthur passeou pela cidade.
+Carlos descansou.
+Jobson passeou pela cidade.
+Scheduled directive 'directive-000001' was skipped: Actor is not in a compatible state for the requested action.
+Marcus passeou pela cidade.
+Maria foi a taverna.
+Pedro descansou.
+Afonso esta viajando. Resta 1 dia.
+Helena chegou em Campo Verde
+Jorge esta viajando. Resta 1 dia.
+Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
