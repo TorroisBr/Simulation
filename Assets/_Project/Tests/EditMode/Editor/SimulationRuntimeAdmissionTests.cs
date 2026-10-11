@@ -4345,6 +4345,179 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
     [Test]
+    public void DailyV1RestoreRetainsTerminalSuccessfulActorChoiceWithActiveTravelParty()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        string actionDefinitionId = config.Actions.Single(
+            action => action != null && action.actionType == NpcActionType.SellGoods).DefinitionId;
+        const string commandId = "p12g-successful-actor-choice-active-party";
+        PersonId personId = new PersonId("p12g-terminal-actor-" + commandId);
+
+        GameObject uninterruptedObject = new GameObject("P12-G ActorChoice-party uninterrupted");
+        GameObject restoredObject = new GameObject("P12-G ActorChoice-party restored");
+        try
+        {
+            TesteSimulacao uninterrupted = uninterruptedObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao restored = restoredObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(uninterrupted, config);
+            ConfigureSelectedBootstrap(restored, config);
+            InvokeInitializeSimulation(uninterrupted, null);
+            InvokeInitializeSimulation(restored, null);
+
+            SimulationActiveSession uninterruptedSession = ReadPrivateField<SimulationActiveSession>(
+                uninterrupted, "activeSession");
+            SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(
+                restored, "activeSession");
+            Assert.That(uninterruptedSession, Is.Not.Null);
+            Assert.That(sourceSession, Is.Not.Null);
+
+            CaptureTerminalP11History(uninterruptedSession.Runtime, commandId, actionDefinitionId,
+                bindDailyMerchant: true);
+            CaptureTerminalP11History(sourceSession.Runtime, commandId, actionDefinitionId,
+                bindDailyMerchant: true);
+            NpcRuntime uninterruptedMerchant = uninterruptedSession.Runtime.NpcRuntimes.Single(
+                npc => npc != null && npc.PersonId == personId);
+            NpcRuntime sourceMerchant = sourceSession.Runtime.NpcRuntimes.Single(
+                npc => npc != null && npc.PersonId == personId);
+
+            Assert.That(uninterrupted.Runtime.TryStartTravelParty(
+                    CreateDailyTravelPartyContext(uninterruptedSession, uninterruptedMerchant.RuntimeId)),
+                Is.True, "A distinct pair of authored NPCs should form a normal active party.");
+            Assert.That(sourceSession.Runtime.TryStartTravelParty(
+                    CreateDailyTravelPartyContext(sourceSession, sourceMerchant.RuntimeId)), Is.True);
+
+            Assert.That(uninterrupted.Runtime.TryAdvanceDay(
+                    out SimulationRuntimeAdvanceFailure controlFirstFailure),
+                Is.True, controlFirstFailure.ToString());
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(
+                    out SimulationRuntimeAdvanceFailure sourceFirstFailure),
+                Is.True, sourceFirstFailure.ToString());
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(sourceSession.Runtime);
+            DailyCaptureEligibilityToken controlToken = GetCompletedDailyToken(uninterruptedSession.Runtime);
+
+            ActorChoiceInput sourceChoice = sourceSession.Runtime.ActorChoiceStore.Inputs.Single(
+                input => input.WorldCommandId == commandId);
+            ActorChoiceInput controlChoice = uninterruptedSession.Runtime.ActorChoiceStore.Inputs.Single(
+                input => input.WorldCommandId == commandId);
+            Assert.That(sourceChoice.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
+            Assert.That(sourceChoice.Dispositions, Has.Count.EqualTo(2));
+            Assert.That(sourceChoice.Dispositions[1].AttemptOutcome,
+                Is.EqualTo(ActorChoiceAttemptOutcome.Succeeded));
+            Assert.That(controlChoice.Status, Is.EqualTo(sourceChoice.Status));
+            Assert.That(sourceChoice.PersonId, Is.EqualTo(personId));
+
+            TravelPartyRuntime sourceParty = sourceSession.Composition.TravelParties.ActiveParties.Single();
+            TravelPartyRuntime controlParty = uninterruptedSession.Composition.TravelParties.ActiveParties.Single();
+            Assert.That(sourceParty.IsActive, Is.True);
+            Assert.That(sourceParty.MemberRuntimeIds, Does.Not.Contain(sourceMerchant.RuntimeId),
+                "The proving party is independent from the merchant performing SellGoods.");
+            Assert.That(sourceParty.TravelPartyId, Is.EqualTo(controlParty.TravelPartyId));
+            Assert.That(sourceParty.MemberRuntimeIds, Is.EqualTo(controlParty.MemberRuntimeIds));
+
+            string sourceGraph = CaptureCompleteDailyV1OwnerProjection(sourceSession, sourceToken);
+            string sourceRoots = CaptureContinuationRootFacts(sourceSession, includeWorldIdentity: false);
+            Assert.That(sourceGraph, Is.EqualTo(
+                CaptureCompleteDailyV1OwnerProjection(uninterruptedSession, controlToken)));
+            Assert.That(sourceRoots, Is.EqualTo(
+                CaptureContinuationRootFacts(uninterruptedSession, includeWorldIdentity: false)));
+
+            Assert.That(restored.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure restoreFailure,
+                    out string restoreDiagnostic), Is.True,
+                restoreFailure + ": " + restoreDiagnostic);
+            SimulationActiveSession restoredSession = ReadPrivateField<SimulationActiveSession>(
+                restored, "activeSession");
+            DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restoredSession.Runtime);
+            Assert.That(restoredSession, Is.Not.SameAs(sourceSession));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredToken),
+                Is.EqualTo(sourceGraph),
+                "Restoring both owners must preserve the successful terminal choice and active-party graph without replay.");
+            Assert.That(CaptureContinuationRootFacts(restoredSession, includeWorldIdentity: false),
+                Is.EqualTo(sourceRoots));
+            AssertOwnerVectorFactsMatch(sourceToken.OwnerSections, restoredToken.OwnerSections,
+                requireFreshOwners: true);
+
+            ActorChoiceInput restoredChoice = restoredSession.Runtime.ActorChoiceStore.Inputs.Single(
+                input => input.WorldCommandId == commandId);
+            Assert.That(restoredChoice.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
+            Assert.That(restoredChoice.Dispositions[1].AttemptOutcome,
+                Is.EqualTo(ActorChoiceAttemptOutcome.Succeeded));
+            TravelPartyRuntime restoredParty = restoredSession.Composition.TravelParties.ActiveParties.Single();
+            Assert.That(restoredParty.TravelPartyId, Is.EqualTo(sourceParty.TravelPartyId));
+            Assert.That(restoredParty.MemberRuntimeIds, Is.EqualTo(sourceParty.MemberRuntimeIds));
+            Assert.That(restoredParty.TravelerRuntimeIds, Is.EqualTo(sourceParty.TravelerRuntimeIds));
+            Assert.That(restoredParty.OriginDecisionId, Is.EqualTo(sourceParty.OriginDecisionId));
+
+            long choiceRevisionBeforeDuplicate = restoredSession.Runtime.ActorChoiceStore.CensusRevision;
+            long choiceSequenceBeforeDuplicate = restoredSession.Runtime.ActorChoiceStore.NextInputSequence;
+            int choiceCountBeforeDuplicate = restoredSession.Runtime.ActorChoiceStore.Count;
+            string graphBeforeDuplicate = CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredToken);
+            string rootsBeforeDuplicate = CaptureContinuationRootFacts(restoredSession);
+            WorldCommandHandlerResult duplicateResult = new ActorActionChoiceWorldCommandHandler(
+                    restoredSession.Runtime)
+                .Execute(
+                    new WorldCommand(
+                        WorldCommandKind.ActorActionChoice,
+                        WorldCommandOrigin.LocalPlayer,
+                        WorldCommandAuthorityMode.Request,
+                        new ActorActionChoiceWorldCommandPayload(personId, actionDefinitionId)),
+                    new WorldCommandExecutionContext(commandId));
+            Assert.That(duplicateResult.Success, Is.False);
+            Assert.That(duplicateResult.Diagnostic,
+                Does.Contain(ActorChoiceStoreFailureCode.DuplicateWorldCommandId.ToString()));
+            Assert.That(restoredSession.Runtime.ActorChoiceStore.CensusRevision,
+                Is.EqualTo(choiceRevisionBeforeDuplicate));
+            Assert.That(restoredSession.Runtime.ActorChoiceStore.NextInputSequence,
+                Is.EqualTo(choiceSequenceBeforeDuplicate));
+            Assert.That(restoredSession.Runtime.ActorChoiceStore.Count, Is.EqualTo(choiceCountBeforeDuplicate));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredToken),
+                Is.EqualTo(graphBeforeDuplicate),
+                "A duplicate terminal command must not repeat SellGoods or alter the active party.");
+            Assert.That(CaptureContinuationRootFacts(restoredSession), Is.EqualTo(rootsBeforeDuplicate));
+
+            for (int boundary = 0; boundary < 4; boundary++)
+            {
+                Assert.That(uninterrupted.Runtime.TryAdvanceDay(
+                        out SimulationRuntimeAdvanceFailure controlFailure),
+                    Is.True, controlFailure.ToString());
+                Assert.That(restored.Runtime.TryAdvanceDay(
+                        out SimulationRuntimeAdvanceFailure restoredFailure),
+                    Is.True, restoredFailure.ToString());
+                DailyCaptureEligibilityToken nextControlToken = GetCompletedDailyToken(
+                    uninterruptedSession.Runtime);
+                restoredSession = ReadPrivateField<SimulationActiveSession>(restored, "activeSession");
+                DailyCaptureEligibilityToken nextRestoredToken = GetCompletedDailyToken(restoredSession.Runtime);
+                Assert.That(nextRestoredToken.AbsoluteDay, Is.EqualTo(nextControlToken.AbsoluteDay));
+                if (boundary < 2)
+                {
+                    Assert.That(uninterruptedSession.Composition.TravelParties.ActiveParties,
+                        Has.Count.EqualTo(1),
+                        "The authored route must remain active across multiple post-restore boundaries.");
+                    Assert.That(restoredSession.Composition.TravelParties.ActiveParties,
+                        Has.Count.EqualTo(1));
+                }
+                Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, nextRestoredToken),
+                    Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                        uninterruptedSession, nextControlToken)),
+                    "All included owners must remain in parity through active-party travel and arrival.");
+                Assert.That(CaptureContinuationRootFacts(restoredSession, includeWorldIdentity: false),
+                    Is.EqualTo(CaptureContinuationRootFacts(
+                        uninterruptedSession, includeWorldIdentity: false)));
+            }
+
+            Assert.That(uninterruptedSession.Composition.TravelParties.ActiveParties, Is.Empty);
+            Assert.That(restoredSession.Composition.TravelParties.ActiveParties, Is.Empty);
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(uninterruptedObject);
+            UnityEngine.Object.DestroyImmediate(restoredObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreRejectsCorruptedTravelPartyCrossOwnerBindingAtomically()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
@@ -8052,7 +8225,9 @@ public sealed class SimulationRuntimeAdmissionTests
             ExpeditionObjectiveRuntime.Explore());
     }
 
-    private static ActionExecutionContext CreateDailyTravelPartyContext(SimulationActiveSession session)
+    private static ActionExecutionContext CreateDailyTravelPartyContext(
+        SimulationActiveSession session,
+        string excludedRuntimeId = null)
     {
         Assert.That(session?.Runtime, Is.Not.Null);
         Assert.That(session.SpatialNetwork, Is.Not.Null);
@@ -8066,6 +8241,8 @@ public sealed class SimulationRuntimeAdmissionTests
                     && npc.CurrentLocation == route.Origin
                     && !npc.IsTraveling
                     && string.IsNullOrWhiteSpace(npc.ActiveTravelPartyId)
+                    && (string.IsNullOrWhiteSpace(excludedRuntimeId)
+                        || !string.Equals(npc.RuntimeId, excludedRuntimeId, StringComparison.Ordinal))
                     && npc.MoneyAccount != null
                     && npc.MoneyAccount.Balance >= memberCost)
                 .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal)
