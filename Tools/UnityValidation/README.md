@@ -56,3 +56,18 @@ pwsh -NoProfile -File .\Tools\UnityValidation\tests\Invoke-UnityValidationTests.
 ```
 
 They cover path normalization, command construction, filter forwarding, unique artifacts, XML authority, timeout/retry semantics, exact project locking, owned-process cleanup, Unity discovery, result summaries, and the no-global-kill invariant.
+
+## Evidence retention and publication
+
+Follow [the prospective evidence policy](../../docs/operations/VALIDATION_EVIDENCE_POLICY.md).
+The current runner still emits original XML/logs under its existing paths and
+uses original XML to decide the run result. No normalized packer or new CLI
+flag is implemented by this README update. Policy section 9 defines its bounded
+implementation and independent verification handoff.
+
+Until that tool passes review, retain final original-XML evidence in one
+reviewed bundle plus manifest where appropriate; inspect embedded output.
+Copy originals/diagnostics to an owned off-Git location before Temp cleanup.
+Keep any diagnostics needed by the claim or an existing binding Phase contract.
+Reusing a run requires full input/toolchain/profile/scope equality and independent
+exact-tip applicability, not merely an unchanged Assets subtree.

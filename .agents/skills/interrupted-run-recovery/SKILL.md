@@ -14,3 +14,7 @@ Use when orchestration stops before its intended objective is complete. Reposito
 5. Record the recovered baseline, retained evidence, interrupted work, and next actions when the Execution Model or active workflow requires a durable status update.
 
 Escalate only an unrecoverable repository state, required runtime permission, or genuine unresolved product/canonical architecture decision. Routine branch, worktree, commit, push, and validation recovery is autonomous within standing authority.
+
+## Evidence retention and reuse
+
+Before reuse, verify accessible actual result bytes, manifest hashes, complete input/toolchain/profile/scope identity and independent applicability under docs/operations/VALIDATION_EVIDENCE_POLICY.md. Never infer PASS from expired paths or assembly metadata. Pin originals for unresolved failures/security decisions; preserve the last recoverable candidate/ref and needed ignored diagnostics. Do not reset another writer or rerun an unchanged validated tree solely to repackage evidence.

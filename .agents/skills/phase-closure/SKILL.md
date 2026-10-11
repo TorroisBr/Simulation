@@ -13,3 +13,7 @@ Use when a Phase appears to have delivered its mandatory checkpoints. Prepare a 
 4. After approval, record formal `COMPLETED` status and closure SHA/evidence, run `git diff --check`, commit/push under the approved workflow, verify synchronization, and refresh the DAG. Closure does not itself authorize unrelated roadmap implementation.
 
 Output closure verdict, remaining REQUIRED versus OPTIONAL/DEFERRED items, review evidence, files changed, final SHA, and refreshed readiness. Stop on any unmet required checkpoint, unresolved blocking mismatch, or missing approval.
+
+## Evidence retention and reuse
+
+Confirm that required historical results and review/provenance remain retrievable under docs/operations/VALIDATION_EVIDENCE_POLICY.md. An expiring artifact URL, hash alone, or transient local path cannot establish closure evidence. Preserve every required suite, independent closure review and formal closure gate; do not retroactively rewrite promoted evidence or missing-evidence outcomes.

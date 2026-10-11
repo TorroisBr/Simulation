@@ -13,3 +13,7 @@ Use when a checkpoint has approved semantic scope and closure but lacks an imple
 4. Obtain independent technical review proportionate to risk. Only a reviewed design with still-valid architecture assumptions may be marked ready for implementation.
 
 If a durable semantic answer is missing, output `BLOCKED_ARCHITECTURE`; if user intent is missing, output `BLOCKED_PRODUCT_DECISION`. If canonical advances, classify the design's freshness before handoff. Report design location or reviewed plan, base, review verdict, implementation readiness and remaining gates. Never implement merely because design passed.
+
+## Evidence retention and reuse
+
+Use docs/operations/VALIDATION_EVIDENCE_POLICY.md to avoid unnecessary artifact splitting. A bounded design may contain its contract, validation and Master handoff in one durable artifact, with independent review recorded separately. Pure documentation changes need diff/link and independent review checks, not Unity reruns. A proposed tool handoff does not establish an implemented capability or waive an existing evidence contract.

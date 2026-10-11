@@ -14,3 +14,7 @@ Use for a read-only readiness audit, after an architecture/Roadmap/Execution Mod
 5. Compute ready sets for architecture entry, design, implementation, review, and integration. Classify concurrency as `MUST WAIT`, `PARALLEL WITH ISOLATION`, or `PARALLEL SAFE` using semantic and file/hotspot conflicts. If the active user objective authorizes execution, launch all safely parallel READY work under the repository's Luna-first policy; otherwise report readiness without starting work. A blocker pauses only dependent tracks.
 
 Output baseline SHA, impact classification per active/delivered candidate, ready work and gates, blocked tracks with precise reasons, and any docs/history mismatch. Record the refresh when the active workflow requires durable evidence. Continue independent READY work only when the active objective authorizes orchestration; escalate only an unresolved authority mismatch or material product/architecture decision not determined by repository evidence.
+
+## Evidence retention and reuse
+
+Assess result applicability using the full input/toolchain/profile/scope identity and current contracts in docs/operations/VALIDATION_EVIDENCE_POLICY.md. A proven docs-only successor can reuse retained runs after independent exact-tip applicability verification. Changed executable inputs or contracts require the affected validation/review. Evidence packaging introduces no new domain capability or P12 dependency.
