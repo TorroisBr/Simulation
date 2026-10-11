@@ -1,13 +1,13 @@
 # P12-G post-graph P8-C Person position — independent review
 
-**Verdict:** VALIDATED_CANDIDATE  
-**Review:** PASS — exact-tip implementation and sanitized-artifact review  
-**Reviewed evidence tip:** 9ac08f4c1f22eec5aa090f4ab1e98655141f624d  
-**Code commit:** b1a854cf2d2b621240cb3fab4bcce5d4bce5d72d  
-**Code tree:** 67efac7bb24d3109178578a647e6d69161a0313f  
-**Assets tree:** 2a0d93e07898deecca2600db8b93a13ae7ffb4da  
-**Test source blob:** 42e08eef6f470f2c86ec7e2009405c6122072f52  
-**Canonical base:** 6d334011ed428873c92cc66f492ee94c2cf2152b  
+**Verdict:** VALIDATED_CANDIDATE
+**Review:** PASS — exact-tip implementation and sanitized-artifact review
+**Reviewed evidence tip:** 9ac08f4c1f22eec5aa090f4ab1e98655141f624d
+**Code commit:** b1a854cf2d2b621240cb3fab4bcce5d4bce5d72d
+**Code tree:** 67efac7bb24d3109178578a647e6d69161a0313f
+**Assets tree:** 2a0d93e07898deecca2600db8b93a13ae7ffb4da
+**Test source blob:** 42e08eef6f470f2c86ec7e2009405c6122072f52
+**Canonical base:** 6d334011ed428873c92cc66f492ee94c2cf2152b
 **Candidate branch:** codex/phase12/P12GPostGuardP8CPersonPositionCurrentBase
 
 ## Scope and review
