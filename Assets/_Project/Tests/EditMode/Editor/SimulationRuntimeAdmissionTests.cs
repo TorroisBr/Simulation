@@ -3018,6 +3018,187 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestoreRejectsPendingActorChoiceSnapshotInsideFHydratorAtomically()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        string actionDefinitionId = config.Actions.Single(
+            action => action != null && action.actionType == NpcActionType.SellGoods).DefinitionId;
+        const string commandId = "p12g-pending-actor-choice";
+        GameObject sourceObject = new GameObject("P12-G Pending ActorChoice failure source");
+        GameObject controlObject = new GameObject("P12-G Pending ActorChoice failure control");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            ConfigureSelectedBootstrap(control, config);
+            InvokeInitializeSimulation(source, null);
+            InvokeInitializeSimulation(control, null);
+
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
+            CaptureTerminalP11History(original.Runtime, commandId, actionDefinitionId, bindDailyMerchant: true);
+            CaptureTerminalP11History(controlSession.Runtime, commandId, actionDefinitionId, bindDailyMerchant: true);
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
+                Is.True, sourceAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
+                Is.True, controlAdvance.ToString());
+
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(original.Runtime);
+            DailyCaptureEligibilityToken controlToken = GetCompletedDailyToken(controlSession.Runtime);
+            ActorChoiceInput terminalInput = original.Runtime.ActorChoiceStore.Inputs
+                .Single(input => input.WorldCommandId == commandId);
+            Assert.That(terminalInput.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
+            Assert.That(terminalInput.Dispositions, Has.Count.EqualTo(2));
+            Assert.That(terminalInput.Dispositions[1].Kind, Is.EqualTo(ActorChoiceDispositionKind.AttemptReturned));
+            Assert.That(terminalInput.Dispositions[1].AttemptOutcome, Is.EqualTo(ActorChoiceAttemptOutcome.Succeeded));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, sourceToken),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, controlToken)),
+                "The source and uninterrupted control must begin from equivalent successful SellGoods boundaries.");
+
+            string sourceFactsBeforeRestore = CaptureSelectedDailyFacts(original.Runtime);
+            string sourceRootsBeforeRestore = CaptureContinuationRootFacts(original);
+            string sourceGraphBeforeRestore = CaptureCompleteDailyV1OwnerProjection(original, sourceToken);
+            long sourceDayBeforeRestore = sourceToken.AbsoluteDay;
+            long sourceSequenceBeforeRestore = sourceToken.CompletedCoreSequence;
+            bool fOwnerSnapshotsCaptured = false;
+            bool actorChoicesStaged = false;
+            bool fStaged = false;
+            bool beforePublication = false;
+            bool overrideApplied = false;
+            ActorChoiceInput transformedPendingInput = null;
+
+            Assert.That(source.TryRestoreDailyContinuationWithActorChoiceSnapshotForTest(
+                snapshot =>
+                {
+                    Assert.That(fOwnerSnapshotsCaptured, Is.True,
+                        "The supported source snapshot must be captured and validated before the detached override.");
+                    Assert.That(snapshot, Is.Not.Null);
+                    Assert.That(snapshot.SchemaVersion, Is.EqualTo(P12FActorChoiceSnapshot.CurrentSchemaVersion));
+                    Assert.That(snapshot.CensusRevision, Is.EqualTo(original.Runtime.ActorChoiceStore.CensusRevision));
+                    Assert.That(snapshot.NextInputSequence, Is.EqualTo(original.Runtime.ActorChoiceStore.NextInputSequence));
+                    ActorChoiceInput captured = snapshot.Inputs.Single(input => input.WorldCommandId == commandId);
+                    Assert.That(captured.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
+                    Assert.That(captured.Dispositions, Has.Count.EqualTo(2));
+
+                    transformedPendingInput = new ActorChoiceInput(
+                        captured.InputId,
+                        captured.WorldCommandId,
+                        captured.InputSequence,
+                        captured.PersonId,
+                        captured.ActionDefinitionId,
+                        captured.Origin,
+                        captured.Authority,
+                        captured.CapturedAbsoluteDay,
+                        ActorChoiceInputStatus.Pending,
+                        Array.Empty<ActorChoiceDisposition>(),
+                        null,
+                        Array.Empty<ActorChoiceTemporalDisposition>());
+                    Assert.That(transformedPendingInput.InputId, Is.EqualTo(captured.InputId));
+                    Assert.That(transformedPendingInput.WorldCommandId, Is.EqualTo(captured.WorldCommandId));
+                    Assert.That(transformedPendingInput.InputSequence, Is.EqualTo(captured.InputSequence));
+                    Assert.That(transformedPendingInput.PersonId, Is.EqualTo(captured.PersonId));
+                    Assert.That(transformedPendingInput.Status, Is.EqualTo(ActorChoiceInputStatus.Pending));
+                    Assert.That(transformedPendingInput.Dispositions, Is.Empty);
+                    overrideApplied = true;
+
+                    return snapshot.WithInputsForTest(snapshot.Inputs.Select(input =>
+                        input.WorldCommandId == commandId ? transformedPendingInput : input));
+                },
+                stage =>
+                {
+                    if (stage == P12GDailyV1RestoreStage.FOwnerSnapshotsCaptured)
+                        fOwnerSnapshotsCaptured = true;
+                    else if (stage == P12GDailyV1RestoreStage.FActorChoicesStaged)
+                        actorChoicesStaged = true;
+                    else if (stage == P12GDailyV1RestoreStage.FStaged)
+                        fStaged = true;
+                    else if (stage == P12GDailyV1RestoreStage.BeforePublication)
+                        beforePublication = true;
+                },
+                out P12GDailyV1RestoreFailure restoreFailure,
+                out string restoreDiagnostic), Is.False);
+
+            Assert.That(overrideApplied, Is.True);
+            Assert.That(restoreFailure, Is.EqualTo(P12GDailyV1RestoreFailure.OwnerStageFailed));
+            Assert.That(restoreDiagnostic, Does.Contain("P12-F could not stage the retained owner capture"));
+            Assert.That(actorChoicesStaged, Is.False,
+                "Pending history must fail inside TryCreateP12FStaged before the ActorChoice stage event.");
+            Assert.That(fStaged, Is.False);
+            Assert.That(beforePublication, Is.False);
+            Assert.That(transformedPendingInput, Is.Not.Null);
+            Assert.That(transformedPendingInput.Status, Is.EqualTo(ActorChoiceInputStatus.Pending));
+            Assert.That(transformedPendingInput.Dispositions, Is.Empty);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(source.Bootstrap, Is.SameAs(original.Composition));
+            Assert.That(source.Runtime, Is.SameAs(original.Runtime));
+            Assert.That(original.Runtime.CurrentDay, Is.EqualTo(sourceDayBeforeRestore));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True,
+                "Rejecting the detached Pending snapshot must preserve the exact source boundary token.");
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureSelectedDailyFacts(original.Runtime), Is.EqualTo(sourceFactsBeforeRestore));
+            Assert.That(CaptureContinuationRootFacts(original), Is.EqualTo(sourceRootsBeforeRestore));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, sourceToken), Is.EqualTo(sourceGraphBeforeRestore));
+            Assert.That(sourceToken.CompletedCoreSequence, Is.EqualTo(sourceSequenceBeforeRestore));
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAfterReject),
+                Is.True, sourceAfterReject.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAfterReject),
+                Is.True, controlAfterReject.ToString());
+            DailyCaptureEligibilityToken sourceRetryToken = GetCompletedDailyToken(original.Runtime);
+            DailyCaptureEligibilityToken controlRetryToken = GetCompletedDailyToken(controlSession.Runtime);
+            string retrySourceGraph = CaptureCompleteDailyV1OwnerProjection(original, sourceRetryToken);
+            Assert.That(retrySourceGraph,
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, controlRetryToken)),
+                "After rejected staging, the original runtime must continue with identical authoritative results.");
+            Assert.That(CaptureContinuationRootFacts(original, includeWorldIdentity: false),
+                Is.EqualTo(CaptureContinuationRootFacts(controlSession, includeWorldIdentity: false)));
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(restored, Is.Not.SameAs(original));
+            DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restored.Runtime);
+            Assert.That(restoredToken.AbsoluteDay, Is.EqualTo(sourceRetryToken.AbsoluteDay));
+            Assert.That(restoredToken.CompletedCoreSequence, Is.EqualTo(sourceRetryToken.CompletedCoreSequence));
+            Assert.That(restoredToken.BoundaryProvenance,
+                Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, restoredToken), Is.EqualTo(retrySourceGraph));
+            ActorChoiceInput restoredInput = restored.Runtime.ActorChoiceStore.Inputs
+                .Single(input => input.WorldCommandId == commandId);
+            Assert.That(restoredInput.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
+            Assert.That(restoredInput.Dispositions, Has.Count.EqualTo(2));
+            Assert.That(restoredInput.Dispositions[1].AttemptOutcome, Is.EqualTo(ActorChoiceAttemptOutcome.Succeeded));
+
+            Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredNext),
+                Is.True, restoredNext.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlNext),
+                Is.True, controlNext.ToString());
+            DailyCaptureEligibilityToken restoredNextToken = GetCompletedDailyToken(restored.Runtime);
+            DailyCaptureEligibilityToken controlNextToken = GetCompletedDailyToken(controlSession.Runtime);
+            Assert.That(restoredNextToken.AbsoluteDay, Is.EqualTo(controlNextToken.AbsoluteDay));
+            Assert.That(restoredNextToken.CompletedCoreSequence, Is.EqualTo(controlNextToken.CompletedCoreSequence));
+            Assert.That(CaptureSelectedDailyFacts(restored.Runtime),
+                Is.EqualTo(CaptureSelectedDailyFacts(controlSession.Runtime)));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, restoredNextToken),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, controlNextToken)),
+                "A valid retry and subsequent boundary must preserve exact deterministic continuation parity.");
+            Assert.That(CaptureContinuationRootFacts(restored, includeWorldIdentity: false),
+                Is.EqualTo(CaptureContinuationRootFacts(controlSession, includeWorldIdentity: false)));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+            UnityEngine.Object.DestroyImmediate(controlObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestorePreservesDynamicNpcRosterTransitionAndContinuesDeterministically()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(

@@ -149,7 +149,8 @@ internal sealed class P12FDailyV1OwnerCapture
         IReadOnlyList<NpcActionData> admittedActionDefinitions,
         out P12FDailyV1OwnerPackage package,
         out P12FDailyV1OwnerPackageFailure failure,
-        Action<P12GDailyV1RestoreStage> stageObserver = null)
+        Action<P12GDailyV1RestoreStage> stageObserver = null,
+        Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null)
     {
         package = null;
         failure = P12FDailyV1OwnerPackageFailure.InvalidStagingContext;
@@ -216,8 +217,11 @@ internal sealed class P12FDailyV1OwnerCapture
         }
         stageObserver?.Invoke(P12GDailyV1RestoreStage.FScheduledDirectivesStaged);
 
+        P12FActorChoiceSnapshot actorChoiceSnapshot = actorChoiceSnapshotOverrideForTest == null
+            ? actorChoices
+            : actorChoiceSnapshotOverrideForTest(actorChoices);
         if (!P12FActorChoiceSnapshot.TryStage(
-                actorChoices, stagedD.Persons,
+                actorChoiceSnapshot, stagedD.Persons,
                 out ActorChoiceStore stagedActorChoices, out _))
         {
             failure = P12FDailyV1OwnerPackageFailure.StageFailed;

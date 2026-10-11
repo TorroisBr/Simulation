@@ -692,6 +692,17 @@ public class TesteSimulacao : MonoBehaviour
             stageObserver, null, out failure, out diagnostic, null, null, snapshotOverride);
     }
 
+    internal bool TryRestoreDailyContinuationWithActorChoiceSnapshotForTest(
+        System.Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> snapshotOverride,
+        System.Action<P12GDailyV1RestoreStage> stageObserver,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic)
+    {
+        return TryRestoreDailyContinuationCore(
+            stageObserver, null, out failure, out diagnostic,
+            actorChoiceSnapshotOverrideForTest: snapshotOverride);
+    }
+
     private bool TryRestoreDailyContinuationCore(
         System.Action<P12GDailyV1RestoreStage> stageObserver,
         System.Action<SimulationActiveSession> privateCandidateObserver,
@@ -701,7 +712,8 @@ public class TesteSimulacao : MonoBehaviour
         System.Func<PropertyEstateOwnerSnapshot, PropertyEstateOwnerSnapshot> propertyEstateSnapshotOverrideForTest = null,
         System.Func<P12EPoliticalClaimOwnerSnapshot, P12EPoliticalClaimOwnerSnapshot> politicalClaimSnapshotOverrideForTest = null,
         System.Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest = null,
-        System.Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null)
+        System.Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null,
+        System.Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null)
     {
         lock (activeSessionGate)
         {
@@ -730,7 +742,8 @@ public class TesteSimulacao : MonoBehaviour
                     propertyEstateSnapshotOverrideForTest,
                     politicalClaimSnapshotOverrideForTest,
                     politicalSupportSnapshotOverrideForTest,
-                    factionSnapshotOverrideForTest))
+                    factionSnapshotOverrideForTest,
+                    actorChoiceSnapshotOverrideForTest))
                 return false;
 
             try

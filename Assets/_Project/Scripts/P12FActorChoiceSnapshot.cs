@@ -41,6 +41,13 @@ internal sealed class P12FActorChoiceSnapshot
     internal long NextInputSequence { get; }
     internal long CensusRevision { get; }
 
+    internal P12FActorChoiceSnapshot WithInputsForTest(IEnumerable<ActorChoiceInput> replacementInputs)
+    {
+        if (replacementInputs == null) throw new ArgumentNullException(nameof(replacementInputs));
+        return new P12FActorChoiceSnapshot(
+            SchemaVersion, replacementInputs, NextInputSequence, CensusRevision);
+    }
+
     internal static bool TryCapture(
         ActorChoiceStore source,
         DailyCaptureEligibilityToken token,
