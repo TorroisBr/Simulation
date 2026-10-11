@@ -2730,12 +2730,17 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
 
-    [Test]
-    public void DailyV1RestoreRetainsTerminalActorChoiceAndRejectsDuplicateTrustedCommandBeforeContinuing()
+    [TestCase(false)]
+    [TestCase(true)]
+    public void DailyV1RestoreRetainsTerminalActorChoiceAndRejectsDuplicateTrustedCommandBeforeContinuing(
+        bool successfulSellGoodsAttempt)
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
         Assert.That(config, Is.Not.Null);
+        string actionDefinitionId = successfulSellGoodsAttempt
+            ? config.Actions.Single(action => action != null && action.actionType == NpcActionType.SellGoods).DefinitionId
+            : "sell-goods";
 
         GameObject uninterruptedObject = new GameObject("P12-G uninterrupted continuation");
         GameObject restoredObject = new GameObject("P12-G restored continuation");
@@ -2755,8 +2760,12 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(uninterruptedSession, Is.Not.Null);
             Assert.That(sourceSession, Is.Not.Null);
 
-            CaptureTerminalP11History(uninterruptedSession.Runtime, "p12g-terminal-input");
-            CaptureTerminalP11History(sourceSession.Runtime, "p12g-terminal-input");
+            CaptureTerminalP11History(
+                uninterruptedSession.Runtime, "p12g-terminal-input", actionDefinitionId,
+                successfulSellGoodsAttempt);
+            CaptureTerminalP11History(
+                sourceSession.Runtime, "p12g-terminal-input", actionDefinitionId,
+                successfulSellGoodsAttempt);
 
             Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure uninterruptedFirst),
                 Is.True, uninterruptedFirst.ToString());
@@ -2909,14 +2918,31 @@ public sealed class SimulationRuntimeAdmissionTests
                 .Single(input => input.WorldCommandId == "p12g-terminal-input");
             ActorChoiceInput restoredTerminalChoice = targetSession.Runtime.ActorChoiceStore.Inputs
                 .Single(input => input.WorldCommandId == expectedTerminalChoice.WorldCommandId);
-            Assert.That(expectedTerminalChoice.Status, Is.EqualTo(ActorChoiceInputStatus.Rejected));
-            Assert.That(expectedTerminalChoice.Dispositions, Has.Count.EqualTo(1));
-            Assert.That(expectedTerminalChoice.Dispositions[0].Failure,
-                Is.EqualTo(ActorChoiceFailure.ActionUnavailable));
+            if (successfulSellGoodsAttempt)
+            {
+                Assert.That(expectedTerminalChoice.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
+                Assert.That(expectedTerminalChoice.Dispositions, Has.Count.EqualTo(2));
+                Assert.That(expectedTerminalChoice.Dispositions[0].Kind,
+                    Is.EqualTo(ActorChoiceDispositionKind.DispatchStarted));
+                Assert.That(expectedTerminalChoice.Dispositions[1].Kind,
+                    Is.EqualTo(ActorChoiceDispositionKind.AttemptReturned));
+                Assert.That(expectedTerminalChoice.Dispositions[1].AttemptOutcome,
+                    Is.EqualTo(ActorChoiceAttemptOutcome.Succeeded));
+
+                NpcRuntime sourceMerchant = sourceSession.Runtime.NpcRuntimes.Single(
+                    npc => npc != null && npc.PersonId == expectedTerminalChoice.PersonId);
+                Assert.That(sourceMerchant.NpcData?.DefinitionId, Is.EqualTo("PEDRO"),
+                    "The success path must use the authored Daily-v1 merchant rather than introducing a new NPC.");
+            }
+            else
+            {
+                Assert.That(expectedTerminalChoice.Status, Is.EqualTo(ActorChoiceInputStatus.Rejected));
+                Assert.That(expectedTerminalChoice.Dispositions, Has.Count.EqualTo(1));
+                Assert.That(expectedTerminalChoice.Dispositions[0].Failure,
+                    Is.EqualTo(ActorChoiceFailure.ActionUnavailable));
+            }
             Assert.That(restoredTerminalChoice.InputId, Is.EqualTo(expectedTerminalChoice.InputId));
             Assert.That(restoredTerminalChoice.Status, Is.EqualTo(expectedTerminalChoice.Status));
-            Assert.That(restoredTerminalChoice.Dispositions[0].Failure,
-                Is.EqualTo(expectedTerminalChoice.Dispositions[0].Failure));
 
             long targetChoiceRevisionBeforeDuplicate = targetSession.Runtime.ActorChoiceStore.CensusRevision;
             long targetChoiceSequenceBeforeDuplicate = targetSession.Runtime.ActorChoiceStore.NextInputSequence;
@@ -7303,7 +7329,11 @@ public sealed class SimulationRuntimeAdmissionTests
             out ActorChoiceStoreFailureCode attemptFailure), Is.True, attemptFailure.ToString());
     }
 
-    private static void CaptureTerminalP11History(SimulationRuntime runtime, string commandId)
+    private static void CaptureTerminalP11History(
+        SimulationRuntime runtime,
+        string commandId,
+        string actionDefinitionId,
+        bool bindDailyMerchant)
     {
         Assert.That(runtime, Is.Not.Null);
         PersonId personId = new PersonId("p12g-terminal-actor-" + commandId);
@@ -7311,25 +7341,39 @@ public sealed class SimulationRuntimeAdmissionTests
                 new PersonRuntime(personId), out PersonStoreFailure personFailure), Is.True,
             personFailure.ToString());
 
+        if (bindDailyMerchant)
+        {
+            NpcRuntime dailyMerchant = runtime.NpcRuntimes.Single(
+                npc => npc?.NpcData?.DefinitionId == "PEDRO");
+            Assert.That(runtime.TryBindExistingNpcToPerson(
+                    personId,
+                    dailyMerchant.RuntimeId,
+                    out PersonMaterializationFailure bindingFailure), Is.True,
+                bindingFailure.ToString());
+        }
+
         ActorActionChoiceWorldCommandHandler handler = new ActorActionChoiceWorldCommandHandler(runtime);
         WorldCommandHandlerResult queued = handler.Execute(
             new WorldCommand(
                 WorldCommandKind.ActorActionChoice,
                 WorldCommandOrigin.LocalPlayer,
                 WorldCommandAuthorityMode.Request,
-                new ActorActionChoiceWorldCommandPayload(personId, "sell-goods")),
+                new ActorActionChoiceWorldCommandPayload(personId, actionDefinitionId)),
             new WorldCommandExecutionContext(commandId));
         Assert.That(queued.Success, Is.True, queued.Diagnostic);
 
-        ActorChoiceInput pending = runtime.ActorChoiceStore.Inputs.Single(
-            input => input.WorldCommandId == commandId);
-        Assert.That(runtime.ActorChoiceStore.TryReject(
-                pending.InputId,
-                runtime.CurrentDay,
-                0,
-                ActorChoiceFailure.ActionUnavailable,
-                out ActorChoiceStoreFailureCode rejectFailure), Is.True,
-            rejectFailure.ToString());
+        if (!bindDailyMerchant)
+        {
+            ActorChoiceInput pending = runtime.ActorChoiceStore.Inputs.Single(
+                input => input.WorldCommandId == commandId);
+            Assert.That(runtime.ActorChoiceStore.TryReject(
+                    pending.InputId,
+                    runtime.CurrentDay,
+                    0,
+                    ActorChoiceFailure.ActionUnavailable,
+                    out ActorChoiceStoreFailureCode rejectFailure), Is.True,
+                rejectFailure.ToString());
+        }
     }
 
     private static string CaptureSelectedDailyFacts(SimulationRuntime runtime)
