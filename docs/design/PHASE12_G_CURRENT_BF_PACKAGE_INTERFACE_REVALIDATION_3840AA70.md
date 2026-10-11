@@ -4,7 +4,7 @@
 
 ## Exact baseline and authorities
 
-- At audit time, `origin` was `https://github.com/TorroisBr/Simulation`; the fetched `origin/codex/phase12/canonical` ref and this candidate's exact baseline were `3840aa70fdd88ad344e23327182d1825b644fdbd`. That SHA is the candidate's sole parent. The separately named local `codex/phase12/canonical` branch was not used as the baseline.
+- At audit time, `origin` was `https://github.com/TorroisBr/Simulation`; the fetched `origin/codex/phase12/canonical` ref and this candidate branch's exact baseline were `3840aa70fdd88ad344e23327182d1825b644fdbd`. The candidate branch descends from that baseline; its first audit commit is a direct child. The separately named local `codex/phase12/canonical` branch was not used as the baseline.
 - `SIMULATION_ARCHITECTURE.md`: blob `4a3c73c4428ba7bc43c28f617e243e4cd54078fa`.
 - `EXECUTION_MODEL.md`: blob `9d007aa93e602a2f8242000d3c60864614b049f3`.
 - `ROADMAP.md`: blob `f9bb445880948b5e493fbf7f5682c38a33d18589`.
