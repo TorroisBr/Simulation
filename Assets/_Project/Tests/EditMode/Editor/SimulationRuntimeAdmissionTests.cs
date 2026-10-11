@@ -3017,17 +3017,19 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
 
-    [Test]
-    public void DailyV1RestoreRejectsPendingActorChoiceSnapshotInsideFHydratorAtomically()
+    [TestCase(ActorChoiceInputStatus.Pending)]
+    [TestCase(ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt)]
+    public void DailyV1RestoreRejectsInFlightActorChoiceSnapshotInsideFHydratorAtomically(
+        ActorChoiceInputStatus rejectedStatus)
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
         Assert.That(config, Is.Not.Null);
         string actionDefinitionId = config.Actions.Single(
             action => action != null && action.actionType == NpcActionType.SellGoods).DefinitionId;
-        const string commandId = "p12g-pending-actor-choice";
-        GameObject sourceObject = new GameObject("P12-G Pending ActorChoice failure source");
-        GameObject controlObject = new GameObject("P12-G Pending ActorChoice failure control");
+        string commandId = "p12g-inflight-actor-choice-" + rejectedStatus;
+        GameObject sourceObject = new GameObject("P12-G in-flight ActorChoice failure source " + rejectedStatus);
+        GameObject controlObject = new GameObject("P12-G in-flight ActorChoice failure control " + rejectedStatus);
         try
         {
             TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
@@ -3054,6 +3056,7 @@ public sealed class SimulationRuntimeAdmissionTests
                 .Single(input => input.WorldCommandId == commandId);
             Assert.That(terminalInput.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
             Assert.That(terminalInput.Dispositions, Has.Count.EqualTo(2));
+            Assert.That(terminalInput.Dispositions[0].Kind, Is.EqualTo(ActorChoiceDispositionKind.DispatchStarted));
             Assert.That(terminalInput.Dispositions[1].Kind, Is.EqualTo(ActorChoiceDispositionKind.AttemptReturned));
             Assert.That(terminalInput.Dispositions[1].AttemptOutcome, Is.EqualTo(ActorChoiceAttemptOutcome.Succeeded));
             Assert.That(CaptureCompleteDailyV1OwnerProjection(original, sourceToken),
@@ -3070,7 +3073,7 @@ public sealed class SimulationRuntimeAdmissionTests
             bool fStaged = false;
             bool beforePublication = false;
             bool overrideApplied = false;
-            ActorChoiceInput transformedPendingInput = null;
+            ActorChoiceInput transformedInFlightInput = null;
 
             Assert.That(source.TryRestoreDailyContinuationWithActorChoiceSnapshotForTest(
                 snapshot =>
@@ -3085,7 +3088,20 @@ public sealed class SimulationRuntimeAdmissionTests
                     Assert.That(captured.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
                     Assert.That(captured.Dispositions, Has.Count.EqualTo(2));
 
-                    transformedPendingInput = new ActorChoiceInput(
+                    IReadOnlyList<ActorChoiceDisposition> inFlightDispositions;
+                    if (rejectedStatus == ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt)
+                    {
+                        Assert.That(captured.Dispositions[0].Kind,
+                            Is.EqualTo(ActorChoiceDispositionKind.DispatchStarted));
+                        inFlightDispositions = new[] { captured.Dispositions[0] };
+                    }
+                    else
+                    {
+                        Assert.That(rejectedStatus, Is.EqualTo(ActorChoiceInputStatus.Pending));
+                        inFlightDispositions = Array.Empty<ActorChoiceDisposition>();
+                    }
+
+                    transformedInFlightInput = new ActorChoiceInput(
                         captured.InputId,
                         captured.WorldCommandId,
                         captured.InputSequence,
@@ -3094,20 +3110,20 @@ public sealed class SimulationRuntimeAdmissionTests
                         captured.Origin,
                         captured.Authority,
                         captured.CapturedAbsoluteDay,
-                        ActorChoiceInputStatus.Pending,
-                        Array.Empty<ActorChoiceDisposition>(),
+                        rejectedStatus,
+                        inFlightDispositions,
                         null,
                         Array.Empty<ActorChoiceTemporalDisposition>());
-                    Assert.That(transformedPendingInput.InputId, Is.EqualTo(captured.InputId));
-                    Assert.That(transformedPendingInput.WorldCommandId, Is.EqualTo(captured.WorldCommandId));
-                    Assert.That(transformedPendingInput.InputSequence, Is.EqualTo(captured.InputSequence));
-                    Assert.That(transformedPendingInput.PersonId, Is.EqualTo(captured.PersonId));
-                    Assert.That(transformedPendingInput.Status, Is.EqualTo(ActorChoiceInputStatus.Pending));
-                    Assert.That(transformedPendingInput.Dispositions, Is.Empty);
+                    Assert.That(transformedInFlightInput.InputId, Is.EqualTo(captured.InputId));
+                    Assert.That(transformedInFlightInput.WorldCommandId, Is.EqualTo(captured.WorldCommandId));
+                    Assert.That(transformedInFlightInput.InputSequence, Is.EqualTo(captured.InputSequence));
+                    Assert.That(transformedInFlightInput.PersonId, Is.EqualTo(captured.PersonId));
+                    Assert.That(transformedInFlightInput.Status, Is.EqualTo(rejectedStatus));
+                    Assert.That(transformedInFlightInput.Dispositions, Has.Count.EqualTo(inFlightDispositions.Count));
                     overrideApplied = true;
 
                     return snapshot.WithInputsForTest(snapshot.Inputs.Select(input =>
-                        input.WorldCommandId == commandId ? transformedPendingInput : input));
+                        input.WorldCommandId == commandId ? transformedInFlightInput : input));
                 },
                 stage =>
                 {
@@ -3127,18 +3143,27 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(restoreFailure, Is.EqualTo(P12GDailyV1RestoreFailure.OwnerStageFailed));
             Assert.That(restoreDiagnostic, Does.Contain("P12-F could not stage the retained owner capture"));
             Assert.That(actorChoicesStaged, Is.False,
-                "Pending history must fail inside TryCreateP12FStaged before the ActorChoice stage event.");
+                rejectedStatus + " history must fail inside TryCreateP12FStaged before the ActorChoice stage event.");
             Assert.That(fStaged, Is.False);
             Assert.That(beforePublication, Is.False);
-            Assert.That(transformedPendingInput, Is.Not.Null);
-            Assert.That(transformedPendingInput.Status, Is.EqualTo(ActorChoiceInputStatus.Pending));
-            Assert.That(transformedPendingInput.Dispositions, Is.Empty);
+            Assert.That(transformedInFlightInput, Is.Not.Null);
+            Assert.That(transformedInFlightInput.Status, Is.EqualTo(rejectedStatus));
+            if (rejectedStatus == ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt)
+            {
+                Assert.That(transformedInFlightInput.Dispositions, Has.Count.EqualTo(1));
+                Assert.That(transformedInFlightInput.Dispositions[0].Kind,
+                    Is.EqualTo(ActorChoiceDispositionKind.DispatchStarted));
+            }
+            else
+            {
+                Assert.That(transformedInFlightInput.Dispositions, Is.Empty);
+            }
             Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
             Assert.That(source.Bootstrap, Is.SameAs(original.Composition));
             Assert.That(source.Runtime, Is.SameAs(original.Runtime));
             Assert.That(original.Runtime.CurrentDay, Is.EqualTo(sourceDayBeforeRestore));
             Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True,
-                "Rejecting the detached Pending snapshot must preserve the exact source boundary token.");
+                "Rejecting the detached " + rejectedStatus + " snapshot must preserve the exact source boundary token.");
             Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
             Assert.That(CaptureSelectedDailyFacts(original.Runtime), Is.EqualTo(sourceFactsBeforeRestore));
             Assert.That(CaptureContinuationRootFacts(original), Is.EqualTo(sourceRootsBeforeRestore));
