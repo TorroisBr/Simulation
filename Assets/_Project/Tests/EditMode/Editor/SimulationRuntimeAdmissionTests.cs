@@ -5237,6 +5237,146 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestoreRejectsPostGraphPersonPositionMutationAfterGuardBindingAndKeepsSourceRetryable()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G post-graph Person position target mutation");
+        GameObject controlObject = new GameObject("P12-G post-graph Person position control");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            ConfigureSelectedBootstrap(control, config);
+            InvokeInitializeSimulation(source, null);
+            InvokeInitializeSimulation(control, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
+
+            PersonId personId = new PersonId("p12g-post-graph-person-position");
+            Assert.That(original.Runtime.TryRegisterPerson(new PersonRuntime(personId, 0L),
+                    out PersonStoreFailure sourcePersonFailure),
+                Is.True, sourcePersonFailure.ToString());
+            Assert.That(controlSession.Runtime.TryRegisterPerson(new PersonRuntime(personId, 0L),
+                    out PersonStoreFailure controlPersonFailure),
+                Is.True, controlPersonFailure.ToString());
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
+                Is.True, sourceAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
+                Is.True, controlAdvance.ToString());
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(original.Runtime);
+            string sourceGraph = CaptureCompleteDailyV1OwnerProjection(original, sourceToken);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                    controlSession, GetCompletedDailyToken(controlSession.Runtime)),
+                Is.EqualTo(sourceGraph));
+
+            SimulationActiveSession privateCandidate = null;
+            bool mutationInjected = false;
+            bool targetPositionApplied = false;
+            long targetPositionRevisionBefore = -1L;
+            long targetPositionRevisionAfter = -1L;
+            long targetMutationEpochBefore = -1L;
+            long targetMutationEpochAfter = -1L;
+            bool targetVectorRecaptured = false;
+            bool targetBoundaryAdmitted = false;
+            bool publicationReached = false;
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSession(
+                    original,
+                    out SimulationActiveSession restored,
+                    out P12GDailyV1RestoreFailure failure,
+                    out string diagnostic,
+                    stage =>
+                    {
+                        if (stage == P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured)
+                            targetVectorRecaptured = true;
+                        if (stage == P12GDailyV1RestoreStage.BoundaryAdmitted)
+                            targetBoundaryAdmitted = true;
+                        if (stage == P12GDailyV1RestoreStage.BeforePublication)
+                            publicationReached = true;
+                        if (stage != P12GDailyV1RestoreStage.CandidateGuardBound) return;
+                        mutationInjected = true;
+                        Assert.That(privateCandidate, Is.Not.Null);
+                        Assert.That(privateCandidate.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.True,
+                            "This mutation must occur after the candidate has completed cross-owner graph checks and guard binding.");
+                        PersonSpatialPositionStore positions = privateCandidate.Runtime.PersonSpatialPositionStore;
+                        Assert.That(positions, Is.Not.Null);
+                        Assert.That(positions.Count, Is.Zero,
+                            "Daily-v1 starts with an exact-empty P8-C Person position owner.");
+                        PersonSpatialPositionCensusProvider provider =
+                            new PersonSpatialPositionCensusProvider(positions);
+                        OwnerSectionCensusWitness beforeWitness = provider.GetCurrentCensus();
+                        Assert.That(beforeWitness.SectionId, Is.EqualTo(PersonSpatialPositionCensusProvider.SectionId));
+                        Assert.That(beforeWitness.Cardinality, Is.Zero);
+                        targetPositionRevisionBefore = positions.Revision;
+                        Assert.That(privateCandidate.Runtime.TryReadNpcRosterCensusMutationEpoch(
+                                out targetMutationEpochBefore, out ContinuationCensusFailure epochBeforeFailure),
+                            Is.True, epochBeforeFailure.ToString());
+                        LocationId locationId = privateCandidate.Runtime.SpatialAuthorityStore.Locations.Single().Id;
+                        targetPositionApplied = positions.TrySetAt(
+                            personId,
+                            StablePositionReference.ForLocation(locationId),
+                            out PersonSpatialPositionFailure positionFailure);
+                        Assert.That(targetPositionApplied, Is.True, positionFailure.ToString());
+                        targetPositionRevisionAfter = positions.Revision;
+                        OwnerSectionCensusWitness afterWitness = provider.GetCurrentCensus();
+                        Assert.That(afterWitness.SectionId, Is.EqualTo(beforeWitness.SectionId));
+                        Assert.That(afterWitness.SchemaVersion, Is.EqualTo(beforeWitness.SchemaVersion));
+                        Assert.That(afterWitness.OwnerInstanceIdentity, Is.SameAs(beforeWitness.OwnerInstanceIdentity));
+                        Assert.That(afterWitness.Cardinality, Is.EqualTo(beforeWitness.Cardinality + 1));
+                        Assert.That(afterWitness.Revision, Is.EqualTo(beforeWitness.Revision + 1L));
+                        Assert.That(privateCandidate.Runtime.TryReadNpcRosterCensusMutationEpoch(
+                                out targetMutationEpochAfter, out ContinuationCensusFailure epochAfterFailure),
+                            Is.True, epochAfterFailure.ToString());
+                    },
+                    candidate => privateCandidate = candidate), Is.False);
+
+            Assert.That(mutationInjected, Is.True);
+            Assert.That(targetPositionApplied, Is.True);
+            Assert.That(targetPositionRevisionAfter, Is.EqualTo(targetPositionRevisionBefore + 1L));
+            Assert.That(targetMutationEpochAfter, Is.EqualTo(targetMutationEpochBefore),
+                "This P8-C local owner write changes its revision without changing the observed shared census epoch.");
+            Assert.That(privateCandidate.Runtime.PersonSpatialPositionStore.Count, Is.EqualTo(1));
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.TargetOwnerVectorFailed), diagnostic);
+            Assert.That(diagnostic, Does.Contain("OwnerCoverageIncomplete"));
+            Assert.That(targetVectorRecaptured, Is.False,
+                "The final census must reject the populated exact-empty owner before vector recapture completes.");
+            Assert.That(targetBoundaryAdmitted, Is.False);
+            Assert.That(publicationReached, Is.False);
+            Assert.That(restored, Is.Null,
+                "A valid P8-C writer after guard binding must be rejected by final target-owner recapture before publication.");
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, sourceToken), Is.EqualTo(sourceGraph));
+
+            Assert.That(original.Runtime.TryAdvanceDay(out sourceAdvance), Is.True, sourceAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out controlAdvance), Is.True, controlAdvance.ToString());
+            string continuedGraph = CaptureCompleteDailyV1OwnerProjection(
+                original, GetCompletedDailyToken(original.Runtime));
+            Assert.That(continuedGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                controlSession, GetCompletedDailyToken(controlSession.Runtime))));
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession retried = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                    retried, GetCompletedDailyToken(retried.Runtime)),
+                Is.EqualTo(continuedGraph),
+                "The rejected private target mutation must not affect a later valid restore.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+            UnityEngine.Object.DestroyImmediate(controlObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreRejectsTargetExpeditionAddedAfterOwnerCensusAndKeepsSourceRetryable()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
