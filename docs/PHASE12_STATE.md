@@ -4558,3 +4558,52 @@ The selected successful Daily-v1 restore fixture now observes a thread-local, te
 This proves only that the exercised successful restore fixture does not enter the normal day-level callback pipeline on its test thread. It does not prove absence of direct callbacks that bypass `AdvanceDayAfterClockAdvance`, behavior on other threads, or behavior on failed restore paths. The earlier P9 witness proves zero entry to `SimulationGenesisPipeline.ExecuteStages`; together these are bounded invocation observations, not universal no-gameplay claims.
 
 P12-G remains `WAIT_DEPENDENCY`; P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`. P12-B through P12-F remain delivered within their recorded scopes. This promotion does not complete the compatibility/graph-rejection matrix, internal owner-hydrator/validator failure coverage, causal no-replay proof, or full included-owner multi-boundary continuation parity, and does not imply complete owner/epoch coverage, capture eligibility, export/hydration readiness, P12-A/P13 readiness, or Phase closure. The next distinct, bounded failure-atomicity gap is a failure originating inside Genealogy hydration; the promoted `DGenealogyHydratorEntry` fault fires immediately before the call and duplicates the adjacent `DPersonsStaged` cutpoint, so it is not evidence of an internal false/throw/partial-mutation path.
+
+## P12-G bounded restore-parity and target-vector evidence promotion — 2026-10-11
+
+After refreshed preflight, `codex/phase12/canonical` fast-forwarded from
+`ab7c4b4e8347546c6bd8f4353d98353176b99807` through the published sanitized
+candidate to `ebd24641514940aaa25a0f017f0ade771a0eb134`. The code/test-bearing
+sanitized payload commit is `5d4cd4c7686e588e6c8599d7fb2eb0e923e17ccc`, tree
+`7ff202ea71f889a588cff0916033fc4ce14c4881`; its `Assets` tree is
+`d27f432cabffe4f0fd446ee56d60e198534df8d0`. The exact-tip independent
+sanitized-payload review is recorded at `ebd24641514940aaa25a0f017f0ade771a0eb134`.
+The publication branch is
+`codex/phase12/P12GSuccessfulDirectiveTravelPartyParitySanitizedPayload`.
+
+The test-only change adds two bounded P12-G proofs in
+`SimulationRuntimeAdmissionTests`: successful due EscapePrison effect with an
+active TravelParty across restored and uninterrupted continuation, including
+next-boundary no-replay; and a supported NPC roster mutation after target
+vector capture that is rejected on final vector recapture while preserving the
+source session/token/health and permitting a later valid retry. No production
+code, profile contract, or gameplay behavior changed.
+
+Exact retained validation evidence covers the final test-bearing tree:
+focused test 1/1, `SimulationRuntimeAdmissionTests` 194/194, ALL EditMode
+2868/2868, official Smoke 5/5, and `git diff --check`; all reports have zero
+failures, skips, or inconclusive tests. The preceding parity-only candidate
+also retained its focused 1/1, admission 193/193, ALL EditMode 2867/2867, and
+Smoke 5/5 results. XML and compressed-log hashes are retained in the two
+validation manifests and were recomputed after path sanitation. Unity was not
+rerun for path-only sanitation because executable/test sources and validation
+semantics were unchanged.
+
+This promotion records only bounded parity and target-vector evidence. It does
+not claim whole-graph restore, universal rejection/atomicity, exhaustive
+owner/epoch coverage, runtime-wide quiescence, capture eligibility, P12-A or
+P13 readiness, or Phase closure. The P12 checkpoint table above remains
+unchanged: P12-B is `INCOMPLETE`; P12-C waits on B; P12-D/E wait on B and C;
+P12-F waits on C/D/E; P12-G remains blocked on P12-B through P12-F and the
+validated live-profile inventory; P12-A remains `WAIT_DEPENDENCY`; P13 remains
+`BLOCKED`; Phase 12 remains open. This evidence slice unlocks no downstream
+checkpoint.
+
+### Refreshed P12 dependency DAG
+
+No dependency edge or readiness label changed. Continue P12-G blocker
+resolution with the remaining accepted owner census, writer/epoch coverage,
+restored-graph rejection/failure atomicity, and exact continuation-parity
+obligations. Do not infer P12-B completion from earlier partial-promotion
+wording in candidate evidence; the current canonical State and its documented
+blocker matrix still record P12-B as incomplete.
