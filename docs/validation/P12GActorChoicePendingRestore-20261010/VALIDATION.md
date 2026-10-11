@@ -28,5 +28,3 @@ Unity Editor: `6000.3.9f1` (`7a9955a4f2fa`). Unity validation used `Tools/UnityV
 | Official Smoke (`-TestFilter Smoke`) | 5/5 PASS | [`XML`](results/smoke/EditMode-20261011-013000-01b3790a619440e094b25854aa420ce7.xml) | `DE536840F0264BBC3586A4229E4DC0E9886624501B6BBBCCE790E8DAC156FA54` | [`log.gz`](results/smoke/EditMode-20261011-013000-01b3790a619440e094b25854aa420ce7.log.gz) | `68A822C93D624B4213474E05F0A39BE38069C01D6BA32BFF83084DE96A0D7C1E` | `E5027774F06E696D780C2293E4FBE8368C39D05F06FCB780AA64BF0C768B049E` |
 
 `git diff --check 104e437a9407fe61374abbd7d0ed88f5fd1c7bdd..93dd4ddb` passed. No long-run validation was required because the change adds no daily-loop/domain behavior. Protected ProjectSettings changes, unrelated untracked `.meta` files, and previously retained diagnostics were not staged.
-
-
