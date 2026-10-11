@@ -4334,6 +4334,258 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestorePreservesSuccessfulScheduledDirectiveEffectWithActiveTravelPartyAcrossBoundaries()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        NpcActionData steal = AssetDatabase.LoadAssetAtPath<NpcActionData>(
+            "Assets/_Project/Data/Actions/Action-Roubar.asset");
+        NpcActionData arrest = AssetDatabase.LoadAssetAtPath<NpcActionData>(
+            "Assets/_Project/Data/Actions/Action-Prender.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        Assert.That(steal, Is.Not.Null);
+        Assert.That(arrest, Is.Not.Null);
+
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        NpcSimulationConfig actorConfig = config.Npcs.Single(entry =>
+            entry?.npc != null && string.Equals(entry.npc.id, "JOBSON", StringComparison.Ordinal));
+        NpcData actorDefinition = actorConfig.npc;
+        NpcActionData escape = SimulationTestFactory.CreateAction(
+            "p12g-successful-party-directive-escape", NpcActionType.EscapePrison, NpcActionCategory.Justice);
+        escape.canFail = false;
+        escape.crimeSettings.escapeBountyPenalty = 7f;
+        config.Actions.Add(escape);
+        config.ScheduledDirectives.Add(new ScheduledDirectiveConfig
+        {
+            absoluteDay = 3L,
+            mode = ScheduledDirectiveMode.RequestAction,
+            operation = ScheduledDirectiveOperation.EscapePrison,
+            actor = actorDefinition,
+            action = escape
+        });
+
+        bool originalStealCanFail = steal.canFail;
+        bool originalArrestCanFail = arrest.canFail;
+        GameObject uninterruptedObject = new GameObject("P12-G successful directive-party uninterrupted");
+        GameObject restoredObject = new GameObject("P12-G successful directive-party restored");
+        try
+        {
+            TesteSimulacao uninterrupted = uninterruptedObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao restored = restoredObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(uninterrupted, config);
+            ConfigureSelectedBootstrap(restored, config);
+            InvokeInitializeSimulation(uninterrupted, null);
+            InvokeInitializeSimulation(restored, null);
+
+            SimulationActiveSession uninterruptedSession = ReadPrivateField<SimulationActiveSession>(
+                uninterrupted, "activeSession");
+            SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(restored, "activeSession");
+            Assert.That(uninterruptedSession, Is.Not.Null);
+            Assert.That(sourceSession, Is.Not.Null);
+
+            NpcRuntime controlActor = uninterruptedSession.Runtime.NpcRuntimes.Single(
+                npc => npc?.NpcData != null && string.Equals(npc.NpcData.id, actorDefinition.id, StringComparison.Ordinal));
+            NpcRuntime sourceActor = sourceSession.Runtime.NpcRuntimes.Single(
+                npc => npc?.NpcData != null && string.Equals(npc.NpcData.id, actorDefinition.id, StringComparison.Ordinal));
+            Assert.That(controlActor.RuntimeId, Is.EqualTo(sourceActor.RuntimeId));
+            Assert.That(controlActor.CurrentCity, Is.Not.Null);
+            Assert.That(sourceActor.CurrentCity.RuntimeId, Is.EqualTo(controlActor.CurrentCity.RuntimeId));
+
+            NpcRuntime controlGuard = uninterruptedSession.Runtime.NpcRuntimes.Single(
+                npc => npc?.NpcData?.job != null && npc.NpcData.job.jobType == NpcJobType.Guard
+                    && ReferenceEquals(npc.CurrentCity, controlActor.CurrentCity));
+            NpcRuntime sourceGuard = sourceSession.Runtime.NpcRuntimes.Single(
+                npc => npc?.NpcData?.job != null && npc.NpcData.job.jobType == NpcJobType.Guard
+                    && ReferenceEquals(npc.CurrentCity, sourceActor.CurrentCity));
+            Assert.That(sourceGuard.RuntimeId, Is.EqualTo(controlGuard.RuntimeId));
+
+            foreach (SimulationActiveSession session in new[] { uninterruptedSession, sourceSession })
+            {
+                foreach (NpcRuntime participant in session.Runtime.Cities
+                             .Single(city => city.RuntimeId == controlActor.CurrentCity.RuntimeId).ImportantNpcs)
+                {
+                    Assert.That(participant?.NpcData, Is.Not.Null);
+                    PersonId personId = new PersonId("p12g-party-directive-person-" + participant.NpcData.id);
+                    Assert.That(session.Runtime.TryRegisterPerson(
+                            new PersonRuntime(personId, session.Runtime.CurrentDay),
+                            out PersonStoreFailure registrationFailure), Is.True, registrationFailure.ToString());
+                    Assert.That(session.Runtime.TryBindExistingNpcToPerson(
+                            personId, participant.RuntimeId,
+                            out PersonMaterializationFailure bindingFailure), Is.True, bindingFailure.ToString());
+                }
+                Assert.That(session.Runtime.TryAssessNpcRosterCensus(
+                        out ContinuationCensusFailure censusFailure), Is.True, censusFailure.ToString());
+            }
+
+            void SelectOnly(SimulationRuntime runtime, NpcActionData action)
+            {
+                List<NpcActionData> configuredActions = ReadPrivateField<List<NpcActionData>>(runtime, "configuredActions");
+                Assert.That(configuredActions, Is.Not.Null);
+                configuredActions.Clear();
+                configuredActions.Add(action);
+            }
+
+            JusticeSystem controlJustice = ReadPrivateField<JusticeSystem>(uninterruptedSession.Runtime, "justiceSystem");
+            JusticeSystem sourceJustice = ReadPrivateField<JusticeSystem>(sourceSession.Runtime, "justiceSystem");
+            Assert.That(controlJustice, Is.Not.Null);
+            Assert.That(sourceJustice, Is.Not.Null);
+
+            Assert.That(uninterrupted.Runtime.TryStartTravelParty(
+                    CreateDailyTravelPartyContext(uninterruptedSession, controlActor.RuntimeId, controlGuard.RuntimeId)), Is.True,
+                "The arrested actor and its local Guard stay available while two other NPCs travel.");
+            Assert.That(sourceSession.Runtime.TryStartTravelParty(
+                    CreateDailyTravelPartyContext(sourceSession, sourceActor.RuntimeId, sourceGuard.RuntimeId)), Is.True);
+            TravelPartyRuntime controlParty = uninterruptedSession.Composition.TravelParties.ActiveParties.Single();
+            TravelPartyRuntime sourceParty = sourceSession.Composition.TravelParties.ActiveParties.Single();
+            Assert.That(controlParty.MemberRuntimeIds, Does.Not.Contain(controlActor.RuntimeId));
+            Assert.That(controlParty.MemberRuntimeIds, Does.Not.Contain(controlGuard.RuntimeId));
+            Assert.That(sourceParty.MemberRuntimeIds, Does.Not.Contain(sourceActor.RuntimeId));
+            Assert.That(sourceParty.MemberRuntimeIds, Does.Not.Contain(sourceGuard.RuntimeId));
+            Assert.That(sourceParty.TravelPartyId, Is.EqualTo(controlParty.TravelPartyId));
+
+            SelectOnly(uninterruptedSession.Runtime, steal);
+            SelectOnly(sourceSession.Runtime, steal);
+            steal.canFail = false;
+            Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlTheftFailure),
+                Is.True, controlTheftFailure.ToString());
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceTheftFailure),
+                Is.True, sourceTheftFailure.ToString());
+            Assert.That(uninterruptedSession.Runtime.CrimeSocialAppraisal.TheftOutcomes.Count, Is.GreaterThan(0));
+            Assert.That(uninterruptedSession.Runtime.CrimeSocialAppraisal.CrimeKnowledge.Count, Is.GreaterThan(0));
+            Assert.That(uninterruptedSession.Runtime.CrimeSocialAppraisal.SocialReactions.Count, Is.GreaterThan(0));
+            Assert.That(controlJustice.HasActiveWarrantInCity(controlActor, controlActor.CurrentCity), Is.True);
+            Assert.That(sourceJustice.HasActiveWarrantInCity(sourceActor, sourceActor.CurrentCity), Is.True);
+
+            SelectOnly(uninterruptedSession.Runtime, arrest);
+            SelectOnly(sourceSession.Runtime, arrest);
+            arrest.canFail = false;
+            Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlArrestFailure),
+                Is.True, controlArrestFailure.ToString());
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceArrestFailure),
+                Is.True, sourceArrestFailure.ToString());
+            Assert.That(controlJustice.IsArrested(controlActor), Is.True);
+            Assert.That(sourceJustice.IsArrested(sourceActor), Is.True);
+            Assert.That(sourceJustice.GetRemainingSentenceDays(sourceActor), Is.GreaterThan(1));
+
+            // Restore at the completed day-2 boundary, with both the sentence and active commitment present.
+            Assert.That(controlParty.IsActive, Is.True);
+            Assert.That(sourceParty.IsActive, Is.True);
+            ScheduledDirective sourceDirective = sourceSession.Composition.ScheduledDirectives.Directives.Single();
+            Assert.That(sourceDirective.AbsoluteDay, Is.EqualTo(3L));
+            Assert.That(sourceDirective.State, Is.EqualTo(ScheduledDirectiveState.Pending));
+            long sourceDirectiveRevision = sourceSession.Composition.ScheduledDirectives.Revision;
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(sourceSession.Runtime);
+            string sourceOwnerGraph = CaptureCompleteDailyV1OwnerProjection(sourceSession, sourceToken);
+            string sourceRoots = CaptureContinuationRootFacts(sourceSession, includeWorldIdentity: false);
+            Assert.That(sourceOwnerGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                uninterruptedSession, GetCompletedDailyToken(uninterruptedSession.Runtime))));
+            Assert.That(sourceRoots, Is.EqualTo(CaptureContinuationRootFacts(
+                uninterruptedSession, includeWorldIdentity: false)));
+
+            float[] memberBalances = sourceParty.MemberRuntimeIds
+                .Select(runtimeId => sourceSession.IdentityRegistry.TryGetNpc(runtimeId, out NpcRuntime npc)
+                    ? npc.MoneyAccount.Balance : float.NaN)
+                .ToArray();
+            int[] memberProgress = sourceParty.MemberRuntimeIds
+                .Select(runtimeId => sourceSession.IdentityRegistry.TryGetNpc(runtimeId, out NpcRuntime npc)
+                    ? npc.TravelDaysRemaining : -1)
+                .ToArray();
+            Assert.That(restored.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure restoreFailure,
+                    out string restoreDiagnostic), Is.True,
+                restoreFailure + ": " + restoreDiagnostic);
+            SimulationActiveSession restoredSession = ReadPrivateField<SimulationActiveSession>(restored, "activeSession");
+            Assert.That(restoredSession, Is.Not.SameAs(sourceSession));
+            DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restoredSession.Runtime);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredToken), Is.EqualTo(sourceOwnerGraph));
+            Assert.That(CaptureContinuationRootFacts(restoredSession, includeWorldIdentity: false), Is.EqualTo(sourceRoots));
+
+            NpcRuntime restoredActor = restoredSession.Runtime.NpcRuntimes.Single(
+                npc => npc?.NpcData != null && string.Equals(npc.NpcData.id, actorDefinition.id, StringComparison.Ordinal));
+            JusticeSystem restoredJustice = ReadPrivateField<JusticeSystem>(restoredSession.Runtime, "justiceSystem");
+            Assert.That(restoredJustice.IsArrested(restoredActor), Is.True);
+            Assert.That(restoredJustice.GetRemainingSentenceDays(restoredActor),
+                Is.EqualTo(controlJustice.GetRemainingSentenceDays(controlActor)));
+            ScheduledDirective restoredDirective = restoredSession.Composition.ScheduledDirectives.Directives.Single();
+            Assert.That(restoredDirective.DirectiveId, Is.EqualTo(sourceDirective.DirectiveId));
+            Assert.That(restoredDirective.State, Is.EqualTo(ScheduledDirectiveState.Pending));
+            Assert.That(restoredSession.Composition.ScheduledDirectives.Revision, Is.EqualTo(sourceDirectiveRevision));
+            TravelPartyRuntime restoredParty = restoredSession.Composition.TravelParties.ActiveParties.Single();
+            Assert.That(restoredParty.IsActive, Is.True);
+            Assert.That(restoredParty.TravelPartyId, Is.EqualTo(sourceParty.TravelPartyId));
+            Assert.That(restoredParty.TravelerRuntimeIds, Is.EqualTo(sourceParty.TravelerRuntimeIds));
+            Assert.That(restoredParty.EscortRuntimeIds, Is.EqualTo(sourceParty.EscortRuntimeIds));
+            Assert.That(restoredParty.OriginDecisionId, Is.EqualTo(sourceParty.OriginDecisionId));
+            Assert.That(restoredParty.MemberRuntimeIds.Select(runtimeId =>
+                    restoredSession.IdentityRegistry.TryGetNpc(runtimeId, out NpcRuntime npc)
+                        ? npc.MoneyAccount.Balance : float.NaN), Is.EqualTo(memberBalances));
+            Assert.That(restoredParty.MemberRuntimeIds.Select(runtimeId =>
+                    restoredSession.IdentityRegistry.TryGetNpc(runtimeId, out NpcRuntime npc)
+                        ? npc.TravelDaysRemaining : -1), Is.EqualTo(memberProgress));
+
+            SelectOnly(uninterruptedSession.Runtime, escape);
+            SelectOnly(restoredSession.Runtime, escape);
+            float bountyBeforeEscape = controlJustice.GetBounty(controlActor, controlActor.CurrentCity);
+            Assert.That(controlParty.IsActive, Is.True);
+            Assert.That(restoredParty.IsActive, Is.True);
+            Assert.That(uninterrupted.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlEscapeFailure),
+                Is.True, controlEscapeFailure.ToString());
+            Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredEscapeFailure),
+                Is.True, restoredEscapeFailure.ToString());
+
+            ScheduledDirective controlDirective = uninterruptedSession.Composition.ScheduledDirectives.Directives.Single();
+            restoredDirective = restoredSession.Composition.ScheduledDirectives.Directives.Single();
+            Assert.That(controlDirective.State, Is.EqualTo(ScheduledDirectiveState.Succeeded));
+            Assert.That(restoredDirective.State, Is.EqualTo(ScheduledDirectiveState.Succeeded));
+            Assert.That(controlDirective.ProcessedDay, Is.EqualTo(3L));
+            Assert.That(restoredDirective.ProcessedDay, Is.EqualTo(controlDirective.ProcessedDay));
+            Assert.That(uninterruptedSession.Composition.ScheduledDirectives.Revision,
+                Is.EqualTo(sourceDirectiveRevision + 1L));
+            Assert.That(restoredSession.Composition.ScheduledDirectives.Revision,
+                Is.EqualTo(uninterruptedSession.Composition.ScheduledDirectives.Revision));
+            Assert.That(controlJustice.IsArrested(controlActor), Is.False);
+            Assert.That(restoredJustice.IsArrested(restoredActor), Is.False);
+            Assert.That(controlJustice.GetBounty(controlActor, controlActor.CurrentCity),
+                Is.EqualTo(bountyBeforeEscape + escape.crimeSettings.escapeBountyPenalty));
+            Assert.That(restoredJustice.GetBounty(restoredActor, restoredActor.CurrentCity),
+                Is.EqualTo(controlJustice.GetBounty(controlActor, controlActor.CurrentCity)));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                    restoredSession, GetCompletedDailyToken(restoredSession.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    uninterruptedSession, GetCompletedDailyToken(uninterruptedSession.Runtime))));
+            Assert.That(CaptureContinuationRootFacts(restoredSession, includeWorldIdentity: false),
+                Is.EqualTo(CaptureContinuationRootFacts(uninterruptedSession, includeWorldIdentity: false)));
+
+            Assert.That(uninterrupted.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlNextFailure),
+                Is.True, controlNextFailure.ToString());
+            Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredNextFailure),
+                Is.True, restoredNextFailure.ToString());
+            Assert.That(controlJustice.GetBounty(controlActor, controlActor.CurrentCity),
+                Is.EqualTo(bountyBeforeEscape + escape.crimeSettings.escapeBountyPenalty),
+                "A terminal successful directive must not replay its effect on the next boundary.");
+            Assert.That(restoredJustice.GetBounty(restoredActor, restoredActor.CurrentCity),
+                Is.EqualTo(controlJustice.GetBounty(controlActor, controlActor.CurrentCity)));
+            Assert.That(uninterruptedSession.Composition.ScheduledDirectives.Revision,
+                Is.EqualTo(sourceDirectiveRevision + 1L));
+            Assert.That(restoredSession.Composition.ScheduledDirectives.Revision,
+                Is.EqualTo(uninterruptedSession.Composition.ScheduledDirectives.Revision));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                    restoredSession, GetCompletedDailyToken(restoredSession.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    uninterruptedSession, GetCompletedDailyToken(uninterruptedSession.Runtime))));
+            Assert.That(CaptureContinuationRootFacts(restoredSession, includeWorldIdentity: false),
+                Is.EqualTo(CaptureContinuationRootFacts(uninterruptedSession, includeWorldIdentity: false)));
+        }
+        finally
+        {
+            steal.canFail = originalStealCanFail;
+            arrest.canFail = originalArrestCanFail;
+            UnityEngine.Object.DestroyImmediate(uninterruptedObject);
+            UnityEngine.Object.DestroyImmediate(restoredObject);
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+    [Test]
     public void DailyV1RestorePreservesActiveTravelPartyWithoutReplayingEffects()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
@@ -4905,6 +5157,78 @@ public sealed class SimulationRuntimeAdmissionTests
                 new ExpeditionCensusProvider(original.Composition.Expeditions).GetCurrentCensus();
             Assert.That(expeditionWitness.Cardinality, Is.EqualTo(1));
             Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+        }
+    }
+
+    [Test]
+    public void DailyV1RestoreRejectsPrivateTargetRosterMutationAfterOwnerVectorCaptureAndKeepsSourceRetryable()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G target roster mutation after initial census");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            InvokeInitializeSimulation(source, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(original.Runtime);
+            string sourceGraph = CaptureCompleteDailyV1OwnerProjection(original, sourceToken);
+
+            SimulationActiveSession privateCandidate = null;
+            bool mutationInjected = false;
+            bool targetRosterMutationApplied = false;
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSession(
+                    original,
+                    out SimulationActiveSession restored,
+                    out P12GDailyV1RestoreFailure failure,
+                    out string diagnostic,
+                    stage =>
+                    {
+                        if (stage != P12GDailyV1RestoreStage.TargetOwnerVectorCaptured) return;
+                        mutationInjected = true;
+                        Assert.That(privateCandidate, Is.Not.Null,
+                            "The private candidate must exist before the initial target-vector checks.");
+                        Assert.That(privateCandidate.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.False,
+                            "The candidate remains private and unbound while target validation runs.");
+                        string lateNpcId = privateCandidate.Composition.RuntimeIdAllocator.AllocateNpcId();
+                        NpcRuntime lateNpc = new NpcRuntime(
+                            lateNpcId,
+                            SimulationTestFactory.CreateNpc("p12g-private-target-precheck-late-npc"));
+                        Assert.That(privateCandidate.Runtime.TryRegisterNpc(
+                                lateNpc, out WorldNpcRegistryFailure registerFailure),
+                            Is.True, registerFailure.ToString());
+                        targetRosterMutationApplied = true;
+                    },
+                    candidate => privateCandidate = candidate), Is.False);
+
+            Assert.That(mutationInjected, Is.True);
+            Assert.That(targetRosterMutationApplied, Is.True);
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.TargetOwnerVectorFailed), diagnostic);
+            Assert.That(diagnostic, Does.Contain("owner vector changed during mutation-guard binding"));
+            Assert.That(restored, Is.Null,
+                "A target roster change after initial census must not be admitted or published.");
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, sourceToken), Is.EqualTo(sourceGraph));
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession retried = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(retried, Is.Not.SameAs(original));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(retried, GetCompletedDailyToken(retried.Runtime)),
+                Is.EqualTo(sourceGraph),
+                "A rejected target-census mutation must not affect a later valid restore.");
         }
         finally
         {
@@ -8462,7 +8786,7 @@ public sealed class SimulationRuntimeAdmissionTests
 
     private static ActionExecutionContext CreateDailyTravelPartyContext(
         SimulationActiveSession session,
-        string excludedRuntimeId = null)
+        params string[] excludedRuntimeIds)
     {
         Assert.That(session?.Runtime, Is.Not.Null);
         Assert.That(session.SpatialNetwork, Is.Not.Null);
@@ -8476,8 +8800,8 @@ public sealed class SimulationRuntimeAdmissionTests
                     && npc.CurrentLocation == route.Origin
                     && !npc.IsTraveling
                     && string.IsNullOrWhiteSpace(npc.ActiveTravelPartyId)
-                    && (string.IsNullOrWhiteSpace(excludedRuntimeId)
-                        || !string.Equals(npc.RuntimeId, excludedRuntimeId, StringComparison.Ordinal))
+                    && (excludedRuntimeIds == null
+                        || !excludedRuntimeIds.Contains(npc.RuntimeId, StringComparer.Ordinal))
                     && npc.MoneyAccount != null
                     && npc.MoneyAccount.Balance >= memberCost)
                 .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal)

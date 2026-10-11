@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="1" result="Passed" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-11 16:56:44Z" end-time="2026-10-11 16:56:44Z" duration="0,4076315">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2868" result="Passed" start-time="2026-10-11 16:56:44Z" end-time="2026-10-11 16:56:44Z" duration="0.407632" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="4138" name="Assembly-CSharp-Editor.dll" fullname="PROJECT_ROOT/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2868" result="Passed" start-time="2026-10-11 16:56:44Z" end-time="2026-10-11 16:56:44Z" duration="0.390504" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="84080" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3632" name="SimulationRuntimeAdmissionTests" fullname="SimulationRuntimeAdmissionTests" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" testcasecount="194" result="Passed" start-time="2026-10-11 16:56:44Z" end-time="2026-10-11 16:56:44Z" duration="0.373795" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3740" name="DailyV1RestoreRejectsPrivateTargetRosterMutationAfterOwnerVectorCaptureAndKeepsSourceRetryable" fullname="SimulationRuntimeAdmissionTests.DailyV1RestoreRejectsPrivateTargetRosterMutationAfterOwnerVectorCaptureAndKeepsSourceRetryable" methodname="DailyV1RestoreRejectsPrivateTargetRosterMutationAfterOwnerVectorCaptureAndKeepsSourceRetryable" classname="SimulationRuntimeAdmissionTests" runstate="Runnable" seed="2112927307" result="Passed" start-time="2026-10-11 16:56:44Z" end-time="2026-10-11 16:56:44Z" duration="0.362324" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+Saving results to: LOCAL_PATH_REDACTED
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
