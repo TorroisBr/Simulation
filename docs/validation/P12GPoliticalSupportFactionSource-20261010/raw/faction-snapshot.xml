@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="12" result="Passed" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-10 23:53:37Z" end-time="2026-10-10 23:53:37Z" duration="0,2380572">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2857" result="Passed" start-time="2026-10-10 23:53:37Z" end-time="2026-10-10 23:53:37Z" duration="0.238057" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="4125" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12g-political-claim-target-20261010/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2857" result="Passed" start-time="2026-10-10 23:53:37Z" end-time="2026-10-10 23:53:37Z" duration="0.224343" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="136880" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2706" name="P12EFactionOwnerSnapshotTests" fullname="P12EFactionOwnerSnapshotTests" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" testcasecount="12" result="Passed" start-time="2026-10-10 23:53:37Z" end-time="2026-10-10 23:53:37Z" duration="0.206513" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2712" name="ActiveIndexIsRebuiltAndDuplicateActiveTypedPairRejectsStage" fullname="P12EFactionOwnerSnapshotTests.ActiveIndexIsRebuiltAndDuplicateActiveTypedPairRejectsStage" methodname="ActiveIndexIsRebuiltAndDuplicateActiveTypedPairRejectsStage" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="157198285" result="Passed" start-time="2026-10-10 23:53:37Z" end-time="2026-10-10 23:53:37Z" duration="0.018382" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2716" name="CaptureUsesExactCompletedBoundaryOwnerVectorAndRejectsStaleOrMismatchedEvidence" fullname="P12EFactionOwnerSnapshotTests.CaptureUsesExactCompletedBoundaryOwnerVectorAndRejectsStaleOrMismatchedEvidence" methodname="CaptureUsesExactCompletedBoundaryOwnerVectorAndRejectsStaleOrMismatchedEvidence" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="782300435" result="Passed" start-time="2026-10-10 23:53:37Z" end-time="2026-10-10 23:53:37Z" duration="0.166864" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Afonso escolheu COMPRAR_MERCADORIA Campo Verde.
+Afonso comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Ana passeou pela cidade.
+Arthur foi a taverna.
+Carlos foi a taverna.
+Helena escolheu COMPRAR_MERCADORIA Campo Verde.
+Helena comprou 5 FERRO em Serra de Ferro por 10 cada para vender em Campo Verde
+Jobson escolheu ROUBAR Marcus.
+Jobson tentou ROUBAR Marcus, mas falhou.
+Jorge descansou.
+Marcus passeou pela cidade.
+Maria descansou.
+Pedro passeou pela cidade.
+]]></output>
+        </test-case>
+        <test-case id="2717" name="DelimiterInsideOneTypedIdentityRoundTripsExactly" fullname="P12EFactionOwnerSnapshotTests.DelimiterInsideOneTypedIdentityRoundTripsExactly" methodname="DelimiterInsideOneTypedIdentityRoundTripsExactly" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1381642833" result="Passed" start-time="2026-10-10 23:53:37Z" end-time="2026-10-10 23:53:37Z" duration="0.000395" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2718" name="DistinctActiveTypedPairsWithSameLegacyKeyRejectWholeStage" fullname="P12EFactionOwnerSnapshotTests.DistinctActiveTypedPairsWithSameLegacyKeyRejectWholeStage" methodname="DistinctActiveTypedPairsWithSameLegacyKeyRejectWholeStage" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1008627620" result="Passed" start-time="2026-10-10 23:53:37Z" end-time="2026-10-10 23:53:37Z" duration="0.000216" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2707" name="EmptySectionsPreserveRequiredIdsAndSharedRevisionThroughStage" fullname="P12EFactionOwnerSnapshotTests.EmptySectionsPreserveRequiredIdsAndSharedRevisionThroughStage" methodname="EmptySectionsPreserveRequiredIdsAndSharedRevisionThroughStage" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1521151879" result="Passed" start-time="2026-10-10 23:53:37Z" end-time="2026-10-10 23:53:37Z" duration="0.000383" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2709" name="LeaveAndRejoinHistoryRestoresNextSequenceDerivedIdAndLeaveNoRejoinStillRejects" fullname="P12EFactionOwnerSnapshotTests.LeaveAndRejoinHistoryRestoresNextSequenceDerivedIdAndLeaveNoRejoinStillRejects" methodname="LeaveAndRejoinHistoryRestoresNextSequenceDerivedIdAndLeaveNoRejoinStillRejects" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="23103630" result="Passed" start-time="2026-10-10 23:53:37Z" end-time="2026-10-10 23:53:37Z" duration="0.003186" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2715" name="MetadataCountsDuplicatesNullRowsAndLateFailureRejectWholeCandidate" fullname="P12EFactionOwnerSnapshotTests.MetadataCountsDuplicatesNullRowsAndLateFailureRejectWholeCandidate" methodname="MetadataCountsDuplicatesNullRowsAndLateFailureRejectWholeCandidate" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="94727805" result="Passed" start-time="2026-10-10 23:53:37Z" end-time="2026-10-10 23:53:37Z" duration="0.002280" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2710" name="RestoresExactRevisionAfterTerminalWritesAndMaxRevisionRejectsNextMutationWithoutChange" fullname="P12EFactionOwnerSnapshotTests.RestoresExactRevisionAfterTerminalWritesAndMaxRevisionRejectsNextMutationWithoutChange" methodname="RestoresExactRevisionAfterTerminalWritesAndMaxRevisionRejectsNextMutationWithoutChange" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1373168373" result="Passed" start-time="2026-10-10 23:53:37Z" end-time="2026-10-10 23:53:37Z" duration="0.000404" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2708" name="RoundTripPreservesEveryFactionFieldAndCurrentAndTerminalTenures" fullname="P12EFactionOwnerSnapshotTests.RoundTripPreservesEveryFactionFieldAndCurrentAndTerminalTenures" methodname="RoundTripPreservesEveryFactionFieldAndCurrentAndTerminalTenures" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1746291307" result="Passed" start-time="2026-10-10 23:53:37Z" end-time="2026-10-10 23:53:37Z" duration="0.001388" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2711" name="SourceInsertionOrderAndRepeatedStageProduceDeterministicSectionOrderAndValues" fullname="P12EFactionOwnerSnapshotTests.SourceInsertionOrderAndRepeatedStageProduceDeterministicSectionOrderAndValues" methodname="SourceInsertionOrderAndRepeatedStageProduceDeterministicSectionOrderAndValues" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1839511419" result="Passed" start-time="2026-10-10 23:53:37Z" end-time="2026-10-10 23:53:37Z" duration="0.001280" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2714" name="StagingRejectsInvalidPolicyAndEndEnumsButKeepsNullableTerminalReason" fullname="P12EFactionOwnerSnapshotTests.StagingRejectsInvalidPolicyAndEndEnumsButKeepsNullableTerminalReason" methodname="StagingRejectsInvalidPolicyAndEndEnumsButKeepsNullableTerminalReason" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="131206318" result="Passed" start-time="2026-10-10 23:53:37Z" end-time="2026-10-10 23:53:37Z" duration="0.000277" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2713" name="StagingRejectsMissingRootsAndInvalidDatesOrTypedIdentities" fullname="P12EFactionOwnerSnapshotTests.StagingRejectsMissingRootsAndInvalidDatesOrTypedIdentities" methodname="StagingRejectsMissingRootsAndInvalidDatesOrTypedIdentities" classname="P12EFactionOwnerSnapshotTests" runstate="Runnable" seed="1795656384" result="Passed" start-time="2026-10-10 23:53:37Z" end-time="2026-10-10 23:53:37Z" duration="0.000388" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
