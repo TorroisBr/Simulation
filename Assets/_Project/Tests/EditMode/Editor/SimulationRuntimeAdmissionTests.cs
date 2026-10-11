@@ -2731,7 +2731,7 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
-    public void DailyV1RestoreStagesFreshGraphPublishesOnceAndContinuesDeterministically()
+    public void DailyV1RestoreRetainsTerminalActorChoiceAndRejectsDuplicateTrustedCommandBeforeContinuing()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
@@ -2905,6 +2905,51 @@ public sealed class SimulationRuntimeAdmissionTests
                     + expectedTargetOwner.Key + ".");
             }
 
+            ActorChoiceInput expectedTerminalChoice = sourceSession.Runtime.ActorChoiceStore.Inputs
+                .Single(input => input.WorldCommandId == "p12g-terminal-input");
+            ActorChoiceInput restoredTerminalChoice = targetSession.Runtime.ActorChoiceStore.Inputs
+                .Single(input => input.WorldCommandId == expectedTerminalChoice.WorldCommandId);
+            Assert.That(expectedTerminalChoice.Status, Is.EqualTo(ActorChoiceInputStatus.Rejected));
+            Assert.That(expectedTerminalChoice.Dispositions, Has.Count.EqualTo(1));
+            Assert.That(expectedTerminalChoice.Dispositions[0].Failure,
+                Is.EqualTo(ActorChoiceFailure.ActionUnavailable));
+            Assert.That(restoredTerminalChoice.InputId, Is.EqualTo(expectedTerminalChoice.InputId));
+            Assert.That(restoredTerminalChoice.Status, Is.EqualTo(expectedTerminalChoice.Status));
+            Assert.That(restoredTerminalChoice.Dispositions[0].Failure,
+                Is.EqualTo(expectedTerminalChoice.Dispositions[0].Failure));
+
+            long targetChoiceRevisionBeforeDuplicate = targetSession.Runtime.ActorChoiceStore.CensusRevision;
+            long targetChoiceSequenceBeforeDuplicate = targetSession.Runtime.ActorChoiceStore.NextInputSequence;
+            int targetChoiceCountBeforeDuplicate = targetSession.Runtime.ActorChoiceStore.Count;
+            string targetFactsBeforeDuplicate = CaptureSelectedDailyFacts(targetSession.Runtime);
+            string targetGraphBeforeDuplicate = CaptureCompleteDailyV1OwnerProjection(targetSession, restoredToken);
+            string targetRootsBeforeDuplicate = CaptureContinuationRootFacts(targetSession);
+            ActorActionChoiceWorldCommandHandler duplicateHandler =
+                new ActorActionChoiceWorldCommandHandler(targetSession.Runtime);
+            WorldCommandHandlerResult duplicateResult = duplicateHandler.Execute(
+                new WorldCommand(
+                    WorldCommandKind.ActorActionChoice,
+                    WorldCommandOrigin.LocalPlayer,
+                    WorldCommandAuthorityMode.Request,
+                    new ActorActionChoiceWorldCommandPayload(
+                        expectedTerminalChoice.PersonId,
+                        expectedTerminalChoice.ActionDefinitionId)),
+                new WorldCommandExecutionContext(expectedTerminalChoice.WorldCommandId));
+            Assert.That(duplicateResult.Success, Is.False);
+            Assert.That(duplicateResult.Diagnostic,
+                Does.Contain(ActorChoiceStoreFailureCode.DuplicateWorldCommandId.ToString()));
+            Assert.That(targetSession.Runtime.ActorChoiceStore.Count, Is.EqualTo(targetChoiceCountBeforeDuplicate));
+            Assert.That(targetSession.Runtime.ActorChoiceStore.CensusRevision,
+                Is.EqualTo(targetChoiceRevisionBeforeDuplicate));
+            Assert.That(targetSession.Runtime.ActorChoiceStore.NextInputSequence,
+                Is.EqualTo(targetChoiceSequenceBeforeDuplicate));
+            Assert.That(CaptureSelectedDailyFacts(targetSession.Runtime), Is.EqualTo(targetFactsBeforeDuplicate),
+                "Retrying a terminal command must not create another ActorChoice input or alter terminal history.");
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(targetSession, restoredToken),
+                Is.EqualTo(targetGraphBeforeDuplicate),
+                "A duplicate request must not repeat domain effects or change any included owner value.");
+            Assert.That(CaptureContinuationRootFacts(targetSession), Is.EqualTo(targetRootsBeforeDuplicate),
+                "A duplicate request must not allocate another identity or shared record sequence.");
             for (int boundary = 0; boundary < 2; boundary++)
             {
                 Assert.That(uninterrupted.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFailure),
@@ -7265,14 +7310,16 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(runtime.TryRegisterPerson(
                 new PersonRuntime(personId), out PersonStoreFailure personFailure), Is.True,
             personFailure.ToString());
-        Assert.That(runtime.TryCaptureActorChoiceInput(
-                commandId,
-                personId,
-                "sell-goods",
-                WorldCommandOrigin.System,
+
+        ActorActionChoiceWorldCommandHandler handler = new ActorActionChoiceWorldCommandHandler(runtime);
+        WorldCommandHandlerResult queued = handler.Execute(
+            new WorldCommand(
+                WorldCommandKind.ActorActionChoice,
+                WorldCommandOrigin.LocalPlayer,
                 WorldCommandAuthorityMode.Request,
-                out ActorChoiceStoreFailureCode captureFailure), Is.True,
-            captureFailure.ToString());
+                new ActorActionChoiceWorldCommandPayload(personId, "sell-goods")),
+            new WorldCommandExecutionContext(commandId));
+        Assert.That(queued.Success, Is.True, queued.Diagnostic);
 
         ActorChoiceInput pending = runtime.ActorChoiceStore.Inputs.Single(
             input => input.WorldCommandId == commandId);
