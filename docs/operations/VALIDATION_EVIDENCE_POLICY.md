@@ -123,7 +123,9 @@ decision-bearing fields listed in §2. They may remove arbitrary stdout/stderr,
 environment dumps and local command/machine paths only when those fields are
 not needed by the claim. Manifest records removed field categories. Case
 identity, outcome, skip/failure reason, selection, count, seed or relevant
-diagnostic evidence must not be lost. Unknown result-bearing nodes/schema
+diagnostic evidence must not be lost. Path-like stack traces or failure reasons
+may need reviewed redaction; preserve the failure meaning, identity and needed
+claim evidence, with protected originals where required and permitted. Unknown result-bearing nodes/schema
 changes fail packaging closed until supported; no silent successful extraction.
 
 Do not rewrite Passed/Failed/Skipped/Ignored/Inconclusive states, omit failed
@@ -134,13 +136,19 @@ review then verifies every retained case/result and suite/root count against
 the original. Declared dispositions for permitted skips remain required;
 Phase-specific zero-skip gates are unchanged. A valid failed run stays failed.
 
-Retain original XML and raw logs outside Git in an owned
+Retain original XML and raw logs outside Git in an owned, access-controlled
 `.validation-evidence/<run-id>/original` directory (or an equivalent explicitly
-recorded local diagnostic location) before Temp cleanup/worktree removal.
-Preserve them through all review/promotion activity and at least 30 days after
-promotion. Unresolved failures, security decisions and claimed diagnostic facts
-remain pinned beyond that interval until resolved and their required evidence
-is durably retained. No automated deletion is introduced by this policy.
+recorded protected diagnostic location) before Temp cleanup/worktree removal.
+Default diagnostic retention covers review/promotion and up to 30 days after
+promotion, subject to applicable privacy/security requirements. This is neither
+a minimum security-retention mandate nor authority to keep sensitive data beyond
+a binding limit. Unresolved failures and necessary diagnostic claims may justify
+longer protected retention where permitted; record the reason and disposition.
+If a binding rule forbids retaining originals, independently compare them before
+permitted discard and retain the minimum safe complete decision evidence. Never
+publish originals to satisfy this rule. If required claim evidence cannot safely
+be preserved, do not claim that evidence gate passed. No automated deletion is
+introduced by this policy.
 
 Keep full originals/selected diagnostics permanently when a contract or
 specific claim needs them (for example a measured long-run metric present only
@@ -326,7 +334,9 @@ Closure contract:
 1. Capture the complete validation-input manifest and invocation facts; copy
    originals to owned diagnostic retention before Temp cleanup.
 2. Produce one manifest and deterministic result-only ZIP (stable entry names,
-   ordinal order, fixed archive metadata/encoding). Retain original XML hashes
+   ordinal order, fixed archive metadata/encoding, pinned packer runtime/toolchain).
+   The deterministic-byte promise applies within that identified toolchain; a
+   different compression implementation requires a newly identified bundle. Retain original XML hashes
    and lengths plus normalized entry and archive hashes. No arbitrary logs.
 3. Independently verify original XML against retained reports: exact case
    multiset/hierarchy/outcomes/labels/reasons/counts/required fields, selection
