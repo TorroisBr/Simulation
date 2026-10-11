@@ -4210,6 +4210,141 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestorePreservesScheduledDirectiveAndActiveTravelPartyTogether()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        NpcActionData escapeAction = SimulationTestFactory.CreateAction(
+            "p12g-joint-continuation-escape", NpcActionType.EscapePrison, NpcActionCategory.Justice);
+        config.Actions.Add(escapeAction);
+        config.ScheduledDirectives.Add(new ScheduledDirectiveConfig
+        {
+            absoluteDay = 5L,
+            mode = ScheduledDirectiveMode.RequestAction,
+            operation = ScheduledDirectiveOperation.EscapePrison,
+            actor = config.Npcs[0].npc,
+            action = escapeAction
+        });
+
+        GameObject uninterruptedObject = new GameObject("P12-G joint directive-party uninterrupted");
+        GameObject restoredObject = new GameObject("P12-G joint directive-party restored");
+        try
+        {
+            TesteSimulacao uninterrupted = uninterruptedObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao restored = restoredObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(uninterrupted, config);
+            ConfigureSelectedBootstrap(restored, config);
+            InvokeInitializeSimulation(uninterrupted, null);
+            InvokeInitializeSimulation(restored, null);
+
+            SimulationActiveSession uninterruptedSession = ReadPrivateField<SimulationActiveSession>(
+                uninterrupted, "activeSession");
+            SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(
+                restored, "activeSession");
+            Assert.That(uninterruptedSession, Is.Not.Null);
+            Assert.That(sourceSession, Is.Not.Null);
+
+            Assert.That(uninterrupted.Runtime.TryStartTravelParty(
+                CreateDailyTravelPartyContext(uninterruptedSession)), Is.True);
+            Assert.That(sourceSession.Runtime.TryStartTravelParty(
+                CreateDailyTravelPartyContext(sourceSession)), Is.True);
+            Assert.That(uninterruptedSession.Composition.TravelParties.ActiveParties, Has.Count.EqualTo(1));
+            Assert.That(sourceSession.Composition.TravelParties.ActiveParties, Has.Count.EqualTo(1));
+
+            Assert.That(uninterrupted.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFirst),
+                Is.True, controlFirst.ToString());
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceFirst),
+                Is.True, sourceFirst.ToString());
+
+            ScheduledDirective sourceDirective = sourceSession.Composition.ScheduledDirectives.Directives.Single();
+            TravelPartyRuntime sourceParty = sourceSession.Composition.TravelParties.ActiveParties.Single();
+            Assert.That(sourceDirective.AbsoluteDay, Is.EqualTo(5L));
+            Assert.That(sourceDirective.State, Is.EqualTo(ScheduledDirectiveState.Pending));
+            Assert.That(sourceParty.IsActive, Is.True);
+            long sourceDirectiveRevision = sourceSession.Composition.ScheduledDirectives.Revision;
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(sourceSession.Runtime);
+            string sourceGraph = CaptureCompleteDailyV1OwnerProjection(sourceSession, sourceToken);
+            Assert.That(sourceGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                uninterruptedSession, GetCompletedDailyToken(uninterruptedSession.Runtime))));
+
+            string sourceRoots = CaptureContinuationRootFacts(sourceSession, includeWorldIdentity: false);
+            float[] memberBalances = sourceParty.MemberRuntimeIds
+                .Select(runtimeId => sourceSession.IdentityRegistry.TryGetNpc(runtimeId, out NpcRuntime npc)
+                    ? npc.MoneyAccount.Balance : float.NaN)
+                .ToArray();
+            int[] memberProgress = sourceParty.MemberRuntimeIds
+                .Select(runtimeId => sourceSession.IdentityRegistry.TryGetNpc(runtimeId, out NpcRuntime npc)
+                    ? npc.TravelDaysRemaining : -1)
+                .ToArray();
+
+            Assert.That(restored.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure restoreFailure,
+                    out string restoreDiagnostic), Is.True,
+                restoreFailure + ": " + restoreDiagnostic);
+            SimulationActiveSession restoredSession = ReadPrivateField<SimulationActiveSession>(
+                restored, "activeSession");
+            DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restoredSession.Runtime);
+            Assert.That(restoredSession, Is.Not.SameAs(sourceSession));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredToken), Is.EqualTo(sourceGraph));
+            Assert.That(CaptureContinuationRootFacts(restoredSession, includeWorldIdentity: false), Is.EqualTo(sourceRoots));
+
+            ScheduledDirective restoredDirective = restoredSession.Composition.ScheduledDirectives.Directives.Single();
+            TravelPartyRuntime restoredParty = restoredSession.Composition.TravelParties.ActiveParties.Single();
+            Assert.That(restoredDirective.DirectiveId, Is.EqualTo(sourceDirective.DirectiveId));
+            Assert.That(restoredDirective.State, Is.EqualTo(ScheduledDirectiveState.Pending),
+                "Restoring the future directive must not dispatch or consume it.");
+            Assert.That(restoredSession.Composition.ScheduledDirectives.Revision, Is.EqualTo(sourceDirectiveRevision));
+            Assert.That(restoredParty.TravelPartyId, Is.EqualTo(sourceParty.TravelPartyId));
+            Assert.That(restoredParty.TravelerRuntimeIds, Is.EqualTo(sourceParty.TravelerRuntimeIds));
+            Assert.That(restoredParty.EscortRuntimeIds, Is.EqualTo(sourceParty.EscortRuntimeIds));
+            Assert.That(restoredParty.OriginDecisionId, Is.EqualTo(sourceParty.OriginDecisionId));
+            Assert.That(restoredParty.IsActive, Is.True,
+                "Restoring the active commitment must not complete or replay its travel effects.");
+            Assert.That(restoredParty.MemberRuntimeIds.Select(runtimeId =>
+                    restoredSession.IdentityRegistry.TryGetNpc(runtimeId, out NpcRuntime npc)
+                        ? npc.MoneyAccount.Balance : float.NaN), Is.EqualTo(memberBalances));
+            Assert.That(restoredParty.MemberRuntimeIds.Select(runtimeId =>
+                    restoredSession.IdentityRegistry.TryGetNpc(runtimeId, out NpcRuntime npc)
+                        ? npc.TravelDaysRemaining : -1), Is.EqualTo(memberProgress));
+
+            for (int day = 2; day <= 5; day++)
+            {
+                Assert.That(uninterrupted.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFailure),
+                    Is.True, controlFailure.ToString());
+                Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredFailure),
+                    Is.True, restoredFailure.ToString());
+                DailyCaptureEligibilityToken controlToken = GetCompletedDailyToken(uninterruptedSession.Runtime);
+                restoredSession = ReadPrivateField<SimulationActiveSession>(restored, "activeSession");
+                restoredToken = GetCompletedDailyToken(restoredSession.Runtime);
+                Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredToken),
+                    Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(uninterruptedSession, controlToken)),
+                    "Directive dispatch and active-party progress must match at every completed boundary.");
+            }
+
+            ScheduledDirective controlDirective = uninterruptedSession.Composition.ScheduledDirectives.Directives.Single();
+            restoredDirective = restoredSession.Composition.ScheduledDirectives.Directives.Single();
+            Assert.That(controlDirective.State, Is.Not.EqualTo(ScheduledDirectiveState.Pending));
+            Assert.That(restoredDirective.State, Is.EqualTo(controlDirective.State));
+            Assert.That(restoredDirective.ProcessedDay, Is.EqualTo(5L));
+            Assert.That(restoredDirective.ProcessedDay, Is.EqualTo(controlDirective.ProcessedDay));
+            Assert.That(restoredSession.Composition.ScheduledDirectives.Revision,
+                Is.EqualTo(uninterruptedSession.Composition.ScheduledDirectives.Revision));
+            Assert.That(uninterruptedSession.Composition.TravelParties.ActiveParties, Is.Empty,
+                "The active TravelParty must arrive on the same boundary as the uninterrupted control.");
+            Assert.That(restoredSession.Composition.TravelParties.ActiveParties, Is.Empty);
+            Assert.That(CaptureContinuationRootFacts(restoredSession, includeWorldIdentity: false),
+                Is.EqualTo(CaptureContinuationRootFacts(uninterruptedSession, includeWorldIdentity: false)));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(uninterruptedObject);
+            UnityEngine.Object.DestroyImmediate(restoredObject);
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+    [Test]
     public void DailyV1RestoreRejectsCorruptedTravelPartyCrossOwnerBindingAtomically()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
