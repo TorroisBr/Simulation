@@ -651,6 +651,17 @@ public class TesteSimulacao : MonoBehaviour
             stageObserver, null, out failure, out diagnostic, snapshotOverride);
     }
 
+    internal bool TryRestoreDailyContinuationWithFactionSnapshotForTest(
+        System.Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> snapshotOverride,
+        System.Action<P12GDailyV1RestoreStage> stageObserver,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic)
+    {
+        return TryRestoreDailyContinuationCore(
+            stageObserver, null, out failure, out diagnostic,
+            factionSnapshotOverrideForTest: snapshotOverride);
+    }
+
     internal bool TryRestoreDailyContinuationWithPropertyEstateSnapshotForTest(
         System.Func<PropertyEstateOwnerSnapshot, PropertyEstateOwnerSnapshot> snapshotOverride,
         System.Action<P12GDailyV1RestoreStage> stageObserver,
@@ -689,7 +700,8 @@ public class TesteSimulacao : MonoBehaviour
         System.Func<GenealogyOwnerSnapshot, GenealogyOwnerSnapshot> genealogySnapshotOverrideForTest = null,
         System.Func<PropertyEstateOwnerSnapshot, PropertyEstateOwnerSnapshot> propertyEstateSnapshotOverrideForTest = null,
         System.Func<P12EPoliticalClaimOwnerSnapshot, P12EPoliticalClaimOwnerSnapshot> politicalClaimSnapshotOverrideForTest = null,
-        System.Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest = null)
+        System.Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest = null,
+        System.Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null)
     {
         lock (activeSessionGate)
         {
@@ -717,7 +729,8 @@ public class TesteSimulacao : MonoBehaviour
                     genealogySnapshotOverrideForTest,
                     propertyEstateSnapshotOverrideForTest,
                     politicalClaimSnapshotOverrideForTest,
-                    politicalSupportSnapshotOverrideForTest))
+                    politicalSupportSnapshotOverrideForTest,
+                    factionSnapshotOverrideForTest))
                 return false;
 
             try

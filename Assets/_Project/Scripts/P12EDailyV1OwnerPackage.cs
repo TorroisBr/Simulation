@@ -154,7 +154,8 @@ internal sealed class P12EDailyV1OwnerPackage
         Action<P12GDailyV1RestoreStage> stageObserver = null,
         Func<PropertyEstateOwnerSnapshot, PropertyEstateOwnerSnapshot> propertyEstateSnapshotOverrideForTest = null,
         Func<P12EPoliticalClaimOwnerSnapshot, P12EPoliticalClaimOwnerSnapshot> politicalClaimSnapshotOverrideForTest = null,
-        Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest = null)
+        Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest = null,
+        Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null)
     {
         package = null;
         failure = P12EDailyV1OwnerPackageFailure.InvalidCaptureContext;
@@ -279,7 +280,10 @@ internal sealed class P12EDailyV1OwnerPackage
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.EPropertyEstateOwnersStaged);
 
-            if (!factionSnapshot.TryCreateStagedOwner(
+            P12EFactionOwnerSnapshot factionSnapshotForStage = factionSnapshotOverrideForTest != null
+                ? factionSnapshotOverrideForTest(factionSnapshot)
+                : factionSnapshot;
+            if (!factionSnapshotForStage.TryCreateStagedOwner(
                     stagedD.Persons, exactCompletedToken.AbsoluteDay,
                     out FactionStore stagedFactions, out _))
             {

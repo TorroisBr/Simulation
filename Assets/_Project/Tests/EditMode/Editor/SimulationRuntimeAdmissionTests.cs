@@ -5881,6 +5881,201 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
     [Test]
+    public void DailyV1RestoreRejectsFactionAffiliationMissingPersonAfterEarlierEOwnersStageAtomically()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject bootstrapObject = new GameObject("P12-G Faction affiliation missing-Person atomicity");
+        GameObject controlObject = new GameObject("P12-G Faction affiliation missing-Person control");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(bootstrap, config);
+            ConfigureSelectedBootstrap(control, config);
+            InvokeInitializeSimulation(bootstrap, null);
+            InvokeInitializeSimulation(control, null);
+
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
+
+            PersonId member = new PersonId("p12g-faction-affiliation-member");
+            FactionId factionId = new FactionId("p12g-faction-affiliation-faction");
+            Action<SimulationRuntime> registerAffiliationFixture = runtime =>
+            {
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(member, runtime.CurrentDay), out PersonStoreFailure personFailure),
+                    Is.True, personFailure.ToString());
+                Assert.That(runtime.TryRegisterFaction(
+                    new FactionRecord(factionId, "P12-G affiliation fixture", runtime.CurrentDay),
+                    out FactionFoundationFailure factionFailure), Is.True, factionFailure.ToString());
+                Assert.That(runtime.TryProposeFactionAffiliation(
+                    factionId, member,
+                    out FactionAffiliationAddTransition proposal,
+                    out FactionFoundationFailure proposalFailure), Is.True, proposalFailure.ToString());
+                Assert.That(runtime.TryApplyFactionAffiliation(
+                    proposal, out FactionFoundationFailure applyFailure), Is.True, applyFailure.ToString());
+            };
+            registerAffiliationFixture(original.Runtime);
+            registerAffiliationFixture(controlSession.Runtime);
+
+            Assert.That(original.Runtime.FactionRecords, Has.Count.EqualTo(1));
+            Assert.That(original.Runtime.FactionAffiliationRecords, Has.Count.EqualTo(1));
+            FactionAffiliationRecord sourceAffiliation = original.Runtime.FactionAffiliationRecords[0];
+            Assert.That(sourceAffiliation.FactionId, Is.EqualTo(factionId));
+            Assert.That(sourceAffiliation.PersonId, Is.EqualTo(member));
+            Assert.That(sourceAffiliation.IsActive, Is.True);
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstAdvanceFailure),
+                Is.True, firstAdvanceFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFirstFailure),
+                Is.True, controlFirstFailure.ToString());
+            DailyCaptureEligibilityToken originalToken = GetCompletedDailyToken(original.Runtime);
+            string beforeFacts = CaptureSelectedDailyFacts(original.Runtime);
+            string beforeRoots = CaptureContinuationRootFacts(original);
+            string beforeOwnerGraph = CaptureCompleteDailyV1OwnerProjection(original, originalToken);
+
+            PersonId missingStagedPersonId = new PersonId("p12g-faction-affiliation-missing-person");
+            PersonStore sourcePersons = ReadPrivateField<PersonStore>(original.Runtime, "personStore");
+            Assert.That(sourcePersons.TryGet(member, out _), Is.True);
+            Assert.That(sourcePersons.TryGet(missingStagedPersonId, out _), Is.False);
+            bool snapshotsCaptured = false;
+            bool institutionOfficeStaged = false;
+            bool propertyEstateStaged = false;
+            bool factionStaged = false;
+            bool replacementApplied = false;
+            Assert.That(bootstrap.TryRestoreDailyContinuationWithFactionSnapshotForTest(
+                snapshot =>
+                {
+                    Assert.That(snapshotsCaptured, Is.True,
+                        "The detached Faction snapshot is replaced only after all E snapshots were captured.");
+                    Assert.That(institutionOfficeStaged, Is.True);
+                    Assert.That(propertyEstateStaged, Is.True);
+                    Assert.That(factionStaged, Is.False);
+                    Assert.That(snapshot, Is.Not.Null);
+                    Assert.That(snapshot.Factions, Is.Not.Null);
+                    Assert.That(snapshot.Factions.SectionId,
+                        Is.EqualTo(FactionStoreCensusProvider.FactionsSectionId));
+                    Assert.That(snapshot.Factions.SchemaVersion,
+                        Is.EqualTo(P12EFactionOwnerSnapshot.CurrentSchemaVersion));
+                    Assert.That(snapshot.Factions.RecordCount, Is.EqualTo(1));
+                    Assert.That(snapshot.Factions.Records, Has.Count.EqualTo(1));
+                    Assert.That(snapshot.Factions.Revision, Is.GreaterThan(0L));
+                    Assert.That(snapshot.Factions.Records[0].Id, Is.EqualTo(factionId.Value));
+                    Assert.That(snapshot.Affiliations, Is.Not.Null);
+                    Assert.That(snapshot.Affiliations.SectionId,
+                        Is.EqualTo(FactionStoreCensusProvider.AffiliationsSectionId));
+                    Assert.That(snapshot.Affiliations.SchemaVersion,
+                        Is.EqualTo(P12EFactionOwnerSnapshot.CurrentSchemaVersion));
+                    Assert.That(snapshot.Affiliations.RecordCount, Is.EqualTo(1));
+                    Assert.That(snapshot.Affiliations.Records, Has.Count.EqualTo(1));
+                    Assert.That(snapshot.Affiliations.Revision, Is.EqualTo(snapshot.Factions.Revision));
+                    P12EFactionAffiliationSnapshotRecord current = snapshot.Affiliations.Records[0];
+                    Assert.That(current.AffiliationId, Is.EqualTo(sourceAffiliation.AffiliationId.Value));
+                    Assert.That(current.FactionId, Is.EqualTo(factionId.Value));
+                    Assert.That(current.PersonId, Is.EqualTo(member.Value));
+                    Assert.That(current.JoinedAbsoluteDay, Is.EqualTo(sourceAffiliation.JoinedAbsoluteDay));
+                    Assert.That(current.EndedAbsoluteDay, Is.EqualTo(sourceAffiliation.EndedAbsoluteDay));
+                    Assert.That(current.EndReason, Is.EqualTo(sourceAffiliation.EndReason.HasValue
+                        ? (int?)sourceAffiliation.EndReason.Value
+                        : null));
+                    Assert.That(current.IsActive, Is.EqualTo(sourceAffiliation.IsActive));
+                    replacementApplied = true;
+                    return new P12EFactionOwnerSnapshot(
+                        snapshot.Factions,
+                        new P12EFactionSnapshotSection<P12EFactionAffiliationSnapshotRecord>(
+                            snapshot.Affiliations.SectionId,
+                            snapshot.Affiliations.SchemaVersion,
+                            snapshot.Affiliations.RecordCount,
+                            snapshot.Affiliations.Revision,
+                            new[]
+                            {
+                                new P12EFactionAffiliationSnapshotRecord(
+                                    current.AffiliationId,
+                                    current.FactionId,
+                                    missingStagedPersonId.Value,
+                                    current.JoinedAbsoluteDay,
+                                    current.EndedAbsoluteDay,
+                                    current.EndReason,
+                                    current.IsActive)
+                            },
+                            row => row?.Copy()));
+                },
+                stage =>
+                {
+                    if (stage == P12GDailyV1RestoreStage.EOwnerSnapshotsCaptured)
+                        snapshotsCaptured = true;
+                    if (stage == P12GDailyV1RestoreStage.EInstitutionOfficeOwnersStaged)
+                    {
+                        Assert.That(snapshotsCaptured, Is.True);
+                        institutionOfficeStaged = true;
+                    }
+                    if (stage == P12GDailyV1RestoreStage.EPropertyEstateOwnersStaged)
+                        propertyEstateStaged = true;
+                    if (stage == P12GDailyV1RestoreStage.EFactionOwnerStaged)
+                        factionStaged = true;
+                },
+                out P12GDailyV1RestoreFailure restoreFailure,
+                out string diagnostic), Is.False);
+
+            Assert.That(replacementApplied, Is.True);
+            Assert.That(factionStaged, Is.False,
+                "The missing Person endpoint must reject before a Faction owner is staged.");
+            Assert.That(restoreFailure, Is.EqualTo(P12GDailyV1RestoreFailure.OwnerStageFailed));
+            Assert.That(diagnostic, Does.Contain("P12-E could not stage the configured domain owners"));
+            Assert.That(ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(originalToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureSelectedDailyFacts(original.Runtime), Is.EqualTo(beforeFacts));
+            Assert.That(CaptureContinuationRootFacts(original), Is.EqualTo(beforeRoots));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, originalToken), Is.EqualTo(beforeOwnerGraph));
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retainedFailure),
+                Is.True, retainedFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlRetainedFailure),
+                Is.True, controlRetainedFailure.ToString());
+            DailyCaptureEligibilityToken continuedToken = GetCompletedDailyToken(original.Runtime);
+            DailyCaptureEligibilityToken continuedControlToken = GetCompletedDailyToken(controlSession.Runtime);
+            string continuedOwnerGraph = CaptureCompleteDailyV1OwnerProjection(original, continuedToken);
+            Assert.That(continuedOwnerGraph,
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, continuedControlToken)),
+                "After rejection, source and uninterrupted runtimes must continue identically.");
+
+            Assert.That(bootstrap.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            Assert.That(restored, Is.Not.SameAs(original));
+            FactionStore restoredFactions = ReadPrivateField<FactionStore>(restored.Runtime, "factionStore");
+            Assert.That(restoredFactions.Count, Is.EqualTo(1));
+            Assert.That(restoredFactions.AffiliationCount, Is.EqualTo(1));
+            Assert.That(restoredFactions.TryGet(factionId, out FactionRecord restoredFaction), Is.True);
+            Assert.That(restoredFaction.Id, Is.EqualTo(factionId));
+            Assert.That(restoredFactions.TryGetAffiliation(
+                sourceAffiliation.AffiliationId, out FactionAffiliationRecord restoredAffiliation), Is.True);
+            Assert.That(restoredAffiliation.PersonId, Is.EqualTo(member));
+            DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restored.Runtime);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, restoredToken), Is.EqualTo(continuedOwnerGraph));
+
+            Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextAdvanceFailure),
+                Is.True, nextAdvanceFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlNextFailure),
+                Is.True, controlNextFailure.ToString());
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored, GetCompletedDailyToken(restored.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    controlSession, GetCompletedDailyToken(controlSession.Runtime))),
+                "The restored runtime and uninterrupted control must remain in parity after another boundary.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+            UnityEngine.Object.DestroyImmediate(controlObject);
+        }
+    }
+    [Test]
     public void DailyV1RestoreRejectsPoliticalClaimDanglingOfficeAfterEarlierEOwnersStageAtomically()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(

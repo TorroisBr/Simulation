@@ -97,7 +97,8 @@ internal static class P12GDailyV1RestoreCoordinator
         Func<GenealogyOwnerSnapshot, GenealogyOwnerSnapshot> genealogySnapshotOverrideForTest = null,
         Func<PropertyEstateOwnerSnapshot, PropertyEstateOwnerSnapshot> propertyEstateSnapshotOverrideForTest = null,
         Func<P12EPoliticalClaimOwnerSnapshot, P12EPoliticalClaimOwnerSnapshot> politicalClaimSnapshotOverrideForTest = null,
-        Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest = null)
+        Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest = null,
+        Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null)
     {
         restoredSession = null;
         failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
@@ -300,7 +301,8 @@ internal static class P12GDailyV1RestoreCoordinator
                     stageObserver,
                     propertyEstateSnapshotOverrideForTest,
                     politicalClaimSnapshotOverrideForTest,
-                    politicalSupportSnapshotOverrideForTest))
+                    politicalSupportSnapshotOverrideForTest,
+                    factionSnapshotOverrideForTest))
             {
                 failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
                 diagnostic = "P12-E could not stage the configured domain owners: " + eFailure + ".";
