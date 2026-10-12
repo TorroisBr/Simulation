@@ -157,6 +157,8 @@ try {
     try { & $module { param($text) Test-PublicEvidenceText $text } '{"path":"Assets/_Project/Scripts/work/root/agent/Invariant.cs"}' } catch { $relativeRepositoryPathAccepted = $false }
     Assert-True $relativeRepositoryPathAccepted 'privacy scanning accepts repository-relative file paths even when a directory is named like a Unix root'
     Assert-Throws { & $module { param($text) Test-PublicEvidenceText $text } '{"path":"/home/fixture/private.xml"}' } 'privacy scanning still rejects absolute Unix paths'
+    Assert-Throws { & $module { param($text) Test-PublicEvidenceText $text } '{"message":"(/home/runner/test.cs)"}' } 'privacy scanning rejects parenthesized absolute Unix paths in retained failure text'
+    Assert-Throws { & $module { param($text) Test-PublicEvidenceText $text } 'FileNotFoundException(/home/runner/test.cs)' } 'privacy scanning rejects exception-style absolute Unix paths'
 
     $localAssemblyPath = 'C:\Users\fixture\project\Library\ScriptAssemblies\assembly-CSharp-Editor.dll'
     $assemblyPathXml = (New-TestXml -Outcomes @('Passed')).Replace('fullname="Fixture"', ('fullname="' + $localAssemblyPath + '"'))
