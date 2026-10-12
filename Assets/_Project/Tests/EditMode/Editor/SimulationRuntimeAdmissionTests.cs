@@ -8975,6 +8975,221 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestoreRejectsFactionAddedAfterTargetChecksAndKeepsSourceRetryable()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G P12-E Faction post-check target recapture source");
+        GameObject controlObject = new GameObject("P12-G P12-E Faction post-check target recapture control");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            ConfigureSelectedBootstrap(control, config);
+            InvokeInitializeSimulation(source, null);
+            InvokeInitializeSimulation(control, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
+
+            FactionStore sourceStore = ReadPrivateField<FactionStore>(original.Runtime, "factionStore");
+            IReadOnlyList<IOwnerSectionCensusProvider> sourceProviders =
+                FactionStoreCensusProvider.CreateProviders(sourceStore);
+            OwnerSectionCensusWitness sourceFactionRow = sourceProviders[0].GetCurrentCensus();
+            OwnerSectionCensusWitness sourceAffiliationRow = sourceProviders[1].GetCurrentCensus();
+            Assert.That(sourceFactionRow.SectionId, Is.EqualTo(FactionStoreCensusProvider.FactionsSectionId));
+            Assert.That(sourceAffiliationRow.SectionId, Is.EqualTo(FactionStoreCensusProvider.AffiliationsSectionId));
+            Assert.That(sourceFactionRow.SchemaVersion, Is.EqualTo(FactionStoreCensusProvider.SchemaVersion));
+            Assert.That(sourceAffiliationRow.SchemaVersion, Is.EqualTo(FactionStoreCensusProvider.SchemaVersion));
+            Assert.That(sourceFactionRow.OwnerInstanceIdentity, Is.SameAs(sourceStore));
+            Assert.That(sourceAffiliationRow.OwnerInstanceIdentity, Is.SameAs(sourceStore));
+            Assert.That(sourceFactionRow.Cardinality, Is.Zero);
+            Assert.That(sourceAffiliationRow.Cardinality, Is.Zero);
+            Assert.That(sourceFactionRow.Revision, Is.Zero);
+            Assert.That(sourceAffiliationRow.Revision, Is.Zero);
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
+                Is.True, sourceAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
+                Is.True, controlAdvance.ToString());
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(original.Runtime);
+            string sourceGraph = CaptureCompleteDailyV1OwnerProjection(original, sourceToken);
+            Assert.That(sourceGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                controlSession, GetCompletedDailyToken(controlSession.Runtime))));
+            OwnerSectionCensusSnapshot sourceTokenFaction = sourceToken.OwnerSections.Single(section =>
+                section.SectionId == FactionStoreCensusProvider.FactionsSectionId);
+            OwnerSectionCensusSnapshot sourceTokenAffiliation = sourceToken.OwnerSections.Single(section =>
+                section.SectionId == FactionStoreCensusProvider.AffiliationsSectionId);
+            Assert.That(sourceTokenFaction.Cardinality, Is.Zero);
+            Assert.That(sourceTokenAffiliation.Cardinality, Is.Zero);
+            Assert.That(sourceTokenFaction.Revision, Is.Zero);
+            Assert.That(sourceTokenAffiliation.Revision, Is.Zero);
+
+            SimulationActiveSession privateCandidate = null;
+            FactionStore targetStore = null;
+            OwnerSectionCensusWitness targetFactionBefore = null;
+            OwnerSectionCensusWitness targetAffiliationBefore = null;
+            OwnerSectionCensusWitness targetFactionAfter = null;
+            OwnerSectionCensusWitness targetAffiliationAfter = null;
+            long targetMutationEpochBefore = -1L;
+            long targetMutationEpochAfter = -1L;
+            bool targetChecksCompleted = false;
+            bool candidateGuardBound = false;
+            bool mutationInjected = false;
+            bool targetVectorRecaptured = false;
+            bool boundaryAdmitted = false;
+            FactionId injectedFactionId = new FactionId("p12g-faction-post-guard-recapture");
+
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSession(
+                    original,
+                    out SimulationActiveSession restored,
+                    out P12GDailyV1RestoreFailure failure,
+                    out string diagnostic,
+                    stage =>
+                    {
+                        if (stage == P12GDailyV1RestoreStage.TargetChecksCompleted)
+                        {
+                            targetChecksCompleted = true;
+                        }
+                        else if (stage == P12GDailyV1RestoreStage.CandidateGuardBound)
+                        {
+                            Assert.That(privateCandidate, Is.Not.Null);
+                            Assert.That(privateCandidate.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.True,
+                                "The supported runtime operation is injected after graph checks and guard binding.");
+                            targetStore = ReadPrivateField<FactionStore>(
+                                privateCandidate.Runtime, "factionStore");
+                            Assert.That(targetStore, Is.Not.Null);
+                            IReadOnlyList<IOwnerSectionCensusProvider> targetProviders =
+                                FactionStoreCensusProvider.CreateProviders(targetStore);
+                            targetFactionBefore = targetProviders[0].GetCurrentCensus();
+                            targetAffiliationBefore = targetProviders[1].GetCurrentCensus();
+                            Assert.That(targetFactionBefore.SectionId,
+                                Is.EqualTo(FactionStoreCensusProvider.FactionsSectionId));
+                            Assert.That(targetAffiliationBefore.SectionId,
+                                Is.EqualTo(FactionStoreCensusProvider.AffiliationsSectionId));
+                            Assert.That(targetFactionBefore.SchemaVersion,
+                                Is.EqualTo(FactionStoreCensusProvider.SchemaVersion));
+                            Assert.That(targetAffiliationBefore.SchemaVersion,
+                                Is.EqualTo(FactionStoreCensusProvider.SchemaVersion));
+                            Assert.That(targetFactionBefore.OwnerInstanceIdentity, Is.SameAs(targetStore));
+                            Assert.That(targetAffiliationBefore.OwnerInstanceIdentity, Is.SameAs(targetStore));
+                            Assert.That(targetFactionBefore.OwnerInstanceIdentity,
+                                Is.Not.SameAs(sourceFactionRow.OwnerInstanceIdentity));
+                            Assert.That(targetAffiliationBefore.OwnerInstanceIdentity,
+                                Is.Not.SameAs(sourceAffiliationRow.OwnerInstanceIdentity));
+                            Assert.That(targetFactionBefore.Cardinality, Is.Zero);
+                            Assert.That(targetAffiliationBefore.Cardinality, Is.Zero);
+                            Assert.That(targetFactionBefore.Revision, Is.Zero);
+                            Assert.That(targetAffiliationBefore.Revision, Is.Zero);
+                            Assert.That(privateCandidate.Runtime.TryReadNpcRosterCensusMutationEpoch(
+                                out targetMutationEpochBefore,
+                                out ContinuationCensusFailure censusBeforeFailure), Is.True,
+                                censusBeforeFailure.ToString());
+
+                            Assert.That(privateCandidate.Runtime.TryRegisterFaction(
+                                new FactionRecord(
+                                    injectedFactionId,
+                                    "P12-G post-guard Faction",
+                                    privateCandidate.Runtime.CurrentDay),
+                                out FactionFoundationFailure factionFailure), Is.True,
+                                factionFailure.ToString());
+                            Assert.That(targetStore.Factions.Single().Id, Is.EqualTo(injectedFactionId));
+                            targetFactionAfter = targetProviders[0].GetCurrentCensus();
+                            targetAffiliationAfter = targetProviders[1].GetCurrentCensus();
+                            Assert.That(privateCandidate.Runtime.TryReadNpcRosterCensusMutationEpoch(
+                                out targetMutationEpochAfter,
+                                out ContinuationCensusFailure censusAfterFailure), Is.True,
+                                censusAfterFailure.ToString());
+                            mutationInjected = true;
+                            candidateGuardBound = true;
+                        }
+                        else if (stage == P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured)
+                        {
+                            targetVectorRecaptured = true;
+                        }
+                        else if (stage == P12GDailyV1RestoreStage.BoundaryAdmitted)
+                        {
+                            boundaryAdmitted = true;
+                        }
+                    },
+                    candidate => privateCandidate = candidate), Is.False);
+
+            Assert.That(targetChecksCompleted, Is.True);
+            Assert.That(candidateGuardBound, Is.True);
+            Assert.That(mutationInjected, Is.True);
+            Assert.That(targetVectorRecaptured, Is.False,
+                "A changed required Faction owner must reject before final owner-vector recapture.");
+            Assert.That(boundaryAdmitted, Is.False);
+            Assert.That(targetFactionBefore, Is.Not.Null);
+            Assert.That(targetAffiliationBefore, Is.Not.Null);
+            Assert.That(targetFactionAfter, Is.Not.Null);
+            Assert.That(targetAffiliationAfter, Is.Not.Null);
+            Assert.That(targetFactionAfter.SectionId, Is.EqualTo(targetFactionBefore.SectionId));
+            Assert.That(targetAffiliationAfter.SectionId, Is.EqualTo(targetAffiliationBefore.SectionId));
+            Assert.That(targetFactionAfter.SchemaVersion, Is.EqualTo(targetFactionBefore.SchemaVersion));
+            Assert.That(targetAffiliationAfter.SchemaVersion, Is.EqualTo(targetAffiliationBefore.SchemaVersion));
+            Assert.That(targetFactionAfter.OwnerInstanceIdentity, Is.SameAs(targetStore));
+            Assert.That(targetAffiliationAfter.OwnerInstanceIdentity, Is.SameAs(targetStore));
+            Assert.That(targetFactionAfter.Cardinality, Is.EqualTo(1));
+            Assert.That(targetAffiliationAfter.Cardinality, Is.Zero);
+            Assert.That(targetFactionAfter.Revision, Is.EqualTo(1L));
+            Assert.That(targetAffiliationAfter.Revision, Is.EqualTo(1L));
+            Assert.That(targetStore.Count, Is.EqualTo(1));
+            Assert.That(targetStore.AffiliationCount, Is.Zero);
+            Assert.That(targetStore.Revision, Is.EqualTo(1L));
+            Assert.That(targetMutationEpochBefore, Is.GreaterThanOrEqualTo(0L));
+            Assert.That(targetMutationEpochAfter, Is.EqualTo(targetMutationEpochBefore + 1L),
+                "The committed Faction owner operation must invalidate the shared epoch exactly once.");
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.TargetOwnerVectorFailed));
+            Assert.That(diagnostic, Does.Contain("target mutation epoch changed after whole-graph validation"));
+            Assert.That(restored, Is.Null,
+                "A private target whose required Faction owner changed must not reach publication.");
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, sourceToken), Is.EqualTo(sourceGraph));
+            Assert.That(sourceStore.Count, Is.Zero);
+            Assert.That(sourceStore.AffiliationCount, Is.Zero);
+            Assert.That(sourceStore.Revision, Is.Zero);
+            Assert.That(original.Runtime.FactionRecords.Any(record => record.Id == injectedFactionId), Is.False);
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession retried = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(retried, Is.Not.SameAs(original));
+            FactionStore retriedStore = ReadPrivateField<FactionStore>(retried.Runtime, "factionStore");
+            Assert.That(retriedStore.Count, Is.Zero);
+            Assert.That(retriedStore.AffiliationCount, Is.Zero);
+            Assert.That(retriedStore.Revision, Is.Zero);
+            Assert.That(retried.Runtime.FactionRecords.Any(record => record.Id == injectedFactionId), Is.False);
+            string retriedGraph = CaptureCompleteDailyV1OwnerProjection(
+                retried, GetCompletedDailyToken(retried.Runtime));
+            Assert.That(retriedGraph, Is.EqualTo(sourceGraph));
+            Assert.That(retriedGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                controlSession, GetCompletedDailyToken(controlSession.Runtime))));
+
+            Assert.That(retried.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retryAdvance),
+                Is.True, retryAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlNextAdvance),
+                Is.True, controlNextAdvance.ToString());
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                    retried, GetCompletedDailyToken(retried.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    controlSession, GetCompletedDailyToken(controlSession.Runtime))),
+                "The rejected private Faction mutation must not change retry or later continuation parity.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+            UnityEngine.Object.DestroyImmediate(controlObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreRejectsExplorableSiteAddedAfterTargetChecksAndKeepsSourceRetryable()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
