@@ -1,3 +1,53 @@
+## P12-G post-guard P8-C Person-position recapture witness — promoted — 2026-10-11
+
+After refreshed preflight, `codex/phase12/canonical` advanced from
+`6d334011ed428873c92cc66f492ee94c2cf2152b` through the independently reviewed
+sanitized candidate. The code/test commit is
+`b1a854cf2d2b621240cb3fab4bcce5d4bce5d72d`, with Git tree
+`67efac7bb24d3109178578a647e6d69161a0313f`, `Assets` tree
+`2a0d93e07898deecca2600db8b93a13ae7ffb4da`, and test source blob
+`42e08eef6f470f2c86ec7e2009405c6122072f52`. The publication branch is
+`codex/phase12/P12GPostGuardP8CPersonPositionCurrentBase`; the candidate,
+including its sanitized evidence package and exact-tip review record, was
+`35b37137b3f67b46fe8ce645c24260de2fb9336f`.
+
+The test-only addition to `SimulationRuntimeAdmissionTests` writes through the
+supported `PersonSpatialPositionStore.TrySetAt` path after restored-graph
+checks and guard binding, but before final target-owner recapture. It changes
+the exact-empty P8-C Person-position row from cardinality/revision 0/0 to 1/1
+without changing the observed shared census epoch. The final recapture rejects
+the private candidate with `TargetOwnerVectorFailed` /
+`OwnerCoverageIncomplete` before successful recapture, boundary admission,
+or publication. The test also preserves the source session, completed-boundary
+token, health, and owner projection; checks uninterrupted continuation parity;
+and verifies a later valid restore retry. It changes no production code,
+profile configuration, runtime behavior, or domain semantics.
+
+Independent exact-tip review PASS is recorded in
+[`P12GPostGraphP8CPersonPosition-20261011-INDEPENDENT-REVIEW.md`](reviews/P12GPostGraphP8CPersonPosition-20261011-INDEPENDENT-REVIEW.md).
+The sanitized validation package is in
+[`P12GPostGraphP8CPersonPosition-20261011`](validation/P12GPostGraphP8CPersonPosition-20261011/):
+focused 1/1, `SimulationRuntimeAdmissionTests` 195/195, ALL EditMode 2874/2874,
+official Smoke 5/5, zero failures/skips/inconclusive, and `git diff --check`
+PASS. SHA-256, Git blob IDs, and byte counts were independently recomputed for
+all ten artifacts. Sanitized XML/log outputs preserve test-result structure
+and reverse exactly to the retained raw outputs under the recorded root-only
+substitution map. The production and test source trees match the reviewed and
+validated tree; Unity was not rerun for path-only artifact sanitation.
+
+This closes only the named late-recapture witness for the P8-C
+Person-position owner row. Of the previously listed seven exact-empty target
+owner rows, six remain without this post-guard recapture proof. Other P12-G
+inventory, writer/epoch, rejection, failure-atomicity, no-replay, and
+continuation obligations remain open. No dependency edge or readiness label
+changes: P12-G remains `WAIT_DEPENDENCY`; P12-A remains `WAIT_DEPENDENCY`;
+P13 remains `BLOCKED`; Phase 12 remains `OPEN`. This does not establish
+complete owner/shared-epoch coverage, runtime-wide quiescence, capture
+eligibility, export/hydration, downstream readiness, or Phase closure.
+Unrelated ProjectSettings edits and untracked `.meta` files were not included
+or modified.
+
+---
 ## P12-G same-epoch owner-vector row-facts witness — promoted — 2026-10-11
 
 `codex/phase12/canonical` was fast-forwarded from
