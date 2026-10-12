@@ -56,3 +56,47 @@ pwsh -NoProfile -File .\Tools\UnityValidation\tests\Invoke-UnityValidationTests.
 ```
 
 They cover path normalization, command construction, filter forwarding, unique artifacts, XML authority, timeout/retry semantics, exact project locking, owned-process cleanup, Unity discovery, result summaries, and the no-global-kill invariant.
+
+## Evidence capture and packaging
+
+Use the evidence wrapper for new runs while the evidence tool is being adopted. The existing `Invoke-UnityValidation.ps1` runner remains the result authority and keeps its current timeout, retry, and owned-process behavior.
+
+The packager is pinned to Windows PowerShell Core 7.6.5 and .NET 10.0.11, including the recorded `System.IO.Compression` assembly version. Capture and package commands refuse a different runtime. Revalidate the tool and update its pinned identity through review before adopting a new runtime.
+
+```powershell
+$runManifest = .\Tools\UnityValidation\Invoke-UnityValidationWithEvidence.ps1 `
+    -ProjectPath . `
+    -Mode EditMode
+
+.\Tools\UnityValidation\Package-UnityValidationEvidence.ps1 `
+    -Action Package `
+    -RunManifestPath $runManifest `
+    -OutputDirectory .\artifacts\validation `
+    -BundleId p12-editmode-final
+```
+
+The wrapper retains original XML, raw logs, the complete before/after validation-input inventory, and invocation facts under the current user's `%LOCALAPPDATA%\Simulation\ValidationEvidence` directory on a fixed local drive. It disables inherited ACLs, grants access only to the current Windows account, and checks the retained directory and file ACLs before packaging. It records each retry attempt and the effective Unity argument vector with project/result/log paths replaced in the public manifest. If any file under `Assets`, `Packages`, `ProjectSettings`, or `Tools/UnityValidation` changes while Unity runs, or those roots contain unsupported reparse points or nested Git repositories, packaging refuses the run.
+
+The package is a UTF-8 manifest and a deterministic ZIP containing only normalized NUnit result XML. XML entries are ordered, use fixed ZIP timestamps and metadata, and have stable names. The manifest records repository commit/tree identity, the SHA-256 and byte length of every captured validation input, Unity and PowerShell/.NET versions, invocation settings, every attempt's gate outcome, original XML SHA-256/length, normalized XML SHA-256/length, and archive SHA-256/length. Raw logs remain in the protected local evidence directory and are never put in the ZIP.
+
+The packager rejects malformed, truncated, DTD/entity-bearing, incomplete, count-inconsistent, unknown-outcome, or duplicate run/test-identity evidence. It checks every suite and case count and preserves case hierarchy, labels, reasons, and locale-formatted duration fields. It removes XML `<output>` elements because output can contain private paths or credentials. If the evidence claim depends on output, pass `-ClaimRequiresOutput`; non-empty output then causes a fail-closed rejection. Retained report and manifest content are checked for absolute local paths and credential-like values. Archive verification rejects tampering, missing/unexpected entries, duplicate names, unsafe traversal names, and symbolic links. Verification does not extract files.
+
+```powershell
+.\Tools\UnityValidation\Package-UnityValidationEvidence.ps1 `
+    -Action Verify `
+    -ManifestPath .\artifacts\validation\p12-editmode-final.manifest.json `
+    -ArchivePath .\artifacts\validation\p12-editmode-final.zip `
+    -VerifyRunManifestPath $runManifest
+
+.\Tools\UnityValidation\Package-UnityValidationEvidence.ps1 `
+    -Action Read `
+    -ManifestPath .\artifacts\validation\p12-editmode-final.manifest.json
+```
+
+Packaging never uploads or publishes evidence and never deletes protected originals. Choose an output directory and bundle ID that do not overwrite existing evidence. Until this tool's independent review and canonical adoption are complete, use the existing XML workflow for validation records. Historical evidence is not rewritten retroactively.
+
+Evidence tool self-tests use synthetic XML only:
+
+```powershell
+pwsh -NoProfile -File .\Tools\UnityValidation\tests\Package-UnityValidationEvidenceTests.ps1
+```
