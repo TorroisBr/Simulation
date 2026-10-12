@@ -1,13 +1,14 @@
 # P12-G post-guard P8-C City-binding recapture — independent review
 
-**Disposition:** VALIDATED_CANDIDATE  
-**Review:** PASS — exact-tip code and sanitized-artifact review  
-**Reviewed evidence tip:** `4e8c602e3fa94898153676c2521988f15c822556`  
-**Code commit:** `73a9763b2f17075eb6fe2de1aa7a3dd95d35a2c8`  
-**Code tree:** `b218c60bddab88d45709f3e12b3f04e07b200cef`  
-**Assets tree:** `71d4f6a5716f3e7eabb3cc36a01822b412f5d009`  
-**Test-source blob:** `ea16a734b9f7b85bdeeea1832bb7c3b5e86997b6`  
-**Canonical base:** `309b2e592cdc39224e256a992bb92cec819ebfa7`  
+**Disposition:** VALIDATED_CANDIDATE
+**Review:** PASS — exact-tip code and sanitized-artifact review
+**Independent reviewer:** separate reviewer agent `/root/p8d_sanitized_review`
+**Reviewed evidence tip:** `4e8c602e3fa94898153676c2521988f15c822556`
+**Code commit:** `73a9763b2f17075eb6fe2de1aa7a3dd95d35a2c8`
+**Code tree:** `b218c60bddab88d45709f3e12b3f04e07b200cef`
+**Assets tree:** `71d4f6a5716f3e7eabb3cc36a01822b412f5d009`
+**Test-source blob:** `ea16a734b9f7b85bdeeea1832bb7c3b5e86997b6`
+**Canonical base:** `309b2e592cdc39224e256a992bb92cec819ebfa7`
 **Candidate branch:** `codex/phase12/P12GP8CCityBindingLateRecapture`
 
 ## Review findings
