@@ -1,13 +1,13 @@
 # P12-G P12-D ExplorableSite late recapture — independent review
 
-**Verdict:** VALIDATED_CANDIDATE  
-**Review:** PASS — exact-tip implementation and sanitized-artifact review  
-**Reviewed evidence tip:** ed1f122cbb95ad9b9a4181027f020e749b37ba4c  
-**Code commit:** 3707f5593fd9480b00957402f37e039ea3ffc71c  
-**Code tree:** f577bce3393d719e9e1f9234d9e3bc8e2e3c0b06  
-**Assets tree:** fbb9ad14489530ab126db075bedc01d04a6d7907  
-**Test source blob:** 8ab47743932d04787f7f15505cc60ec497077c1a  
-**Canonical base:** 4ab594d35e0d8a02fe29335e696d69aeb1f2daef  
+**Verdict:** VALIDATED_CANDIDATE
+**Review:** PASS — exact-tip implementation and sanitized-artifact review
+**Reviewed evidence tip:** ed1f122cbb95ad9b9a4181027f020e749b37ba4c
+**Code commit:** 3707f5593fd9480b00957402f37e039ea3ffc71c
+**Code tree:** f577bce3393d719e9e1f9234d9e3bc8e2e3c0b06
+**Assets tree:** fbb9ad14489530ab126db075bedc01d04a6d7907
+**Test source blob:** 8ab47743932d04787f7f15505cc60ec497077c1a
+**Canonical base:** 4ab594d35e0d8a02fe29335e696d69aeb1f2daef
 **Candidate branch:** codex/phase12/P12GP12DExplorableSiteLateRecapture
 
 ## Scope and review
