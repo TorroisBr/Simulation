@@ -17,7 +17,7 @@ Tool entry points:
 - `Tools/UnityValidation/Package-UnityValidationEvidence.ps1`
 - `Tools/UnityValidation/UnityValidationEvidence.psm1`
 
-Each run's private capture manifest is written under `%LOCALAPPDATA%\Simulation\ValidationEvidence`. To create a public package, choose a per-run output directory and bundle ID, for example:
+By default, each run's private capture manifest is written under `%LOCALAPPDATA%\Simulation\ValidationEvidence`; `-EvidenceRoot` can select another retained evidence root. To create a public package, choose a per-run output directory and bundle ID, for example:
 
 ```powershell
 $runManifest = .\Tools\UnityValidation\Invoke-UnityValidationWithEvidence.ps1 `
@@ -31,6 +31,6 @@ $runManifest = .\Tools\UnityValidation\Invoke-UnityValidationWithEvidence.ps1 `
     -BundleId p12-editmode-final
 ```
 
-The command prints the resulting manifest and archive paths. The caller records those exact paths as the package locator for the candidate's validation record. Package output is local and caller-selected; the tool does not upload, publish, register, or delete evidence.
+The command prints the resulting manifest and archive paths. The caller records those exact paths as the package locator for the candidate's validation record. The package is written to the caller-selected output path. The tool does not itself upload, publish, register, or delete evidence. Choose a permitted local destination when the package should remain local; the tool does not guarantee that the selected path is local or private.
 
 Use `-Action Verify` with the printed manifest and archive paths before relying on a package. Follow the tool README for output-dependent claims, runtime pinning, retention, and safe handling of original diagnostics.
