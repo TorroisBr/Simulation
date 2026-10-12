@@ -1,6 +1,6 @@
 # Sanitization record
 
-The four XML reports and four compressed Unity logs were sanitized by exact local-root substitutions and replacement of local account labels embedded in Unity licensing identifiers. Original account values are not retained. XML result attributes were compared before and after sanitation; sanitized XML and decompressed logs reverse byte-for-byte in memory to the raw outputs and match their original SHA-256 values.
+The four XML reports and four compressed Unity logs were sanitized by exact local-root substitutions and replacement of local account labels embedded in Unity licensing identifiers. Original account values are not retained. XML result attributes were compared before and after sanitation. Inverse token substitution reconstructs the raw XML/log bytes in memory. Git stores XML as text and normalizes CRLF line endings to LF; published XML hashes are recorded in `VALIDATION.md`. This line-ending normalization does not change XML content or test results. Compressed logs are binary and retain their exact sanitized bytes.
 
 | Replacement token | Occurrences across XML and logs |
 |---|---:|
