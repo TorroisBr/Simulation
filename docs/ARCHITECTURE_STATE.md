@@ -275,3 +275,43 @@ its own current State; no Phase scope/profile, domain semantics, executable
 tree, active implementation checkout or numbered-phase canonical ref changes.
 Historical evidence is preserved; no cleanup, history rewrite or bulk ref/
 worktree deletion was performed. No product or architecture decision remains.
+
+## P12-G political binding decision and completion handoff — 2026-10-12
+
+Scope: reviewed technical/evidence decision and planning only.
+Canonical branch: `codex/architecture/world-identity-projection`.
+Previous architecture SHA: `58157f9ac7bf573e9a4ed1b2d485a2db190e7c4f`.
+Reviewed substantive content: `b71fc066aab46784a3ebc25e25cd718845b4ef03`,
+from `codex/architecture/p12g-political-binding-closure`.
+Current P12 source inspected: `eef376d51f36641918a13b2e937e704051814820`.
+
+The [decision and Master handoff](architecture/P12G_POLITICAL_BINDING_AND_COMPLETION_HANDOFF.md)
+accepts option A for a test-only populated political source constructed before
+census, obtaining its token through a real successful positive outer advance.
+Authentic E/F capture and production G graph/vector/guard/admission checks are
+mandatory. One internal test-only context factory addresses the existing
+restored-source context derivation limit without enabling that production route.
+No new Daily political writer/epoch capability is required solely for this
+evidence. The named political round-trip/rejection/no-effect/parity proofs
+may count toward their mapped G requirements; ordinary producer end-to-end
+and production repeated-restore claims remain excluded and visibly limited.
+
+Independent [review](architecture/P12G_POLITICAL_BINDING_AND_COMPLETION_REVIEW.md):
+**PASS / READY_FOR_IMPLEMENTATION** for this bounded fixture/seam.
+Final metadata applicability, current-source compatibility and fast-forward
+preflight remain mandatory. When present on canonical, this entry records
+adoption; the containing canonical commit and durable orchestration record
+identify the exact final metadata/promotion tip.
+
+The finite completion plan consolidates a current coverage matrix, batches
+residual graph/failure evidence, then requires an integrated no-replay/parity
+and original-contract completion audit. Covered B–F/inventory/package seams
+are not reopened; Required base owners are not excluded for lack of a normal
+producer. Production repeated-restored-context support remains a separate
+capability limitation; the factory is not its implementation.
+
+No numbered-phase code, active implementation checkout or P12 canonical ref
+was changed by this architecture stream. Historical evidence remains intact.
+P12 owning State remains authoritative: G partially delivered / WAIT_DEPENDENCY,
+A WAIT_DEPENDENCY, P13 BLOCKED, Phase 12 OPEN. No new profile, Phase closure,
+save/fork readiness, domain semantics or product choice follows.
