@@ -8774,6 +8774,207 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestoreRejectsGenealogyParentageAddedAfterTargetChecksAndKeepsSourceRetryable()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G P12-D Genealogy post-check target recapture source");
+        GameObject controlObject = new GameObject("P12-G P12-D Genealogy post-check target recapture control");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            ConfigureSelectedBootstrap(control, config);
+            InvokeInitializeSimulation(source, null);
+            InvokeInitializeSimulation(control, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
+
+            PersonId parentId = new PersonId("p12g-genealogy-post-check-parent");
+            PersonId childId = new PersonId("p12g-genealogy-post-check-child");
+            Assert.That(original.Runtime.TryRegisterPerson(
+                new PersonRuntime(parentId, 0L), out PersonStoreFailure sourceParentFailure),
+                Is.True, sourceParentFailure.ToString());
+            Assert.That(original.Runtime.TryRegisterPerson(
+                new PersonRuntime(childId, 0L), out PersonStoreFailure sourceChildFailure),
+                Is.True, sourceChildFailure.ToString());
+            Assert.That(controlSession.Runtime.TryRegisterPerson(
+                new PersonRuntime(parentId, 0L), out PersonStoreFailure controlParentFailure),
+                Is.True, controlParentFailure.ToString());
+            Assert.That(controlSession.Runtime.TryRegisterPerson(
+                new PersonRuntime(childId, 0L), out PersonStoreFailure controlChildFailure),
+                Is.True, controlChildFailure.ToString());
+
+            NpcRuntime sourceNpc = original.Runtime.NpcRuntimes
+                .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal).First();
+            NpcRuntime controlNpc = controlSession.Runtime.NpcRuntimes
+                .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal).First();
+            Assert.That(sourceNpc.RuntimeId, Is.EqualTo(controlNpc.RuntimeId));
+            Assert.That(sourceNpc.PersonId, Is.Null);
+            Assert.That(controlNpc.PersonId, Is.Null);
+            Assert.That(original.Runtime.TryBindExistingNpcToPerson(
+                childId, sourceNpc.RuntimeId, out PersonMaterializationFailure sourceBindFailure),
+                Is.True, sourceBindFailure.ToString());
+            Assert.That(controlSession.Runtime.TryBindExistingNpcToPerson(
+                childId, controlNpc.RuntimeId, out PersonMaterializationFailure controlBindFailure),
+                Is.True, controlBindFailure.ToString());
+            Assert.That(original.Runtime.ContainsParentage(parentId, childId), Is.False);
+            Assert.That(controlSession.Runtime.ContainsParentage(parentId, childId), Is.False);
+
+            GenealogyStore sourceStore = original.Runtime.GenealogyStoreForWorldBoundary;
+            OwnerSectionCensusWitness sourceRow = new GenealogyCensusProvider(sourceStore).GetCurrentCensus();
+            Assert.That(sourceRow.SectionId, Is.EqualTo(GenealogyCensusProvider.SectionId));
+            Assert.That(sourceRow.SchemaVersion, Is.EqualTo(GenealogyCensusProvider.SchemaVersion));
+            Assert.That(sourceRow.OwnerInstanceIdentity, Is.SameAs(sourceStore));
+            Assert.That(sourceRow.Cardinality, Is.Zero);
+            Assert.That(sourceRow.Revision, Is.Zero);
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
+                Is.True, sourceAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
+                Is.True, controlAdvance.ToString());
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(original.Runtime);
+            string sourceGraph = CaptureCompleteDailyV1OwnerProjection(original, sourceToken);
+            Assert.That(sourceGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                controlSession, GetCompletedDailyToken(controlSession.Runtime))));
+            OwnerSectionCensusSnapshot sourceTokenRow = sourceToken.OwnerSections.Single(section =>
+                section.SectionId == GenealogyCensusProvider.SectionId);
+            Assert.That(sourceTokenRow.Cardinality, Is.Zero);
+            Assert.That(sourceTokenRow.Revision, Is.Zero);
+
+            SimulationActiveSession privateCandidate = null;
+            GenealogyStore targetStore = null;
+            OwnerSectionCensusWitness targetRowBeforeMutation = null;
+            OwnerSectionCensusWitness targetRowAfterMutation = null;
+            long targetMutationEpochBefore = -1L;
+            long targetMutationEpochAfter = -1L;
+            bool targetChecksCompleted = false;
+            bool candidateGuardBound = false;
+            bool mutationInjected = false;
+            bool targetVectorRecaptured = false;
+            bool boundaryAdmitted = false;
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSession(
+                    original,
+                    out SimulationActiveSession restored,
+                    out P12GDailyV1RestoreFailure failure,
+                    out string diagnostic,
+                    stage =>
+                    {
+                        if (stage == P12GDailyV1RestoreStage.TargetChecksCompleted)
+                        {
+                            targetChecksCompleted = true;
+                        }
+                        else if (stage == P12GDailyV1RestoreStage.CandidateGuardBound)
+                        {
+                            Assert.That(privateCandidate, Is.Not.Null);
+                            Assert.That(privateCandidate.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.True,
+                                "The supported runtime operation is injected after graph checks and guard binding.");
+                            targetStore = privateCandidate.Runtime.GenealogyStoreForWorldBoundary;
+                            targetRowBeforeMutation = new GenealogyCensusProvider(targetStore).GetCurrentCensus();
+                            Assert.That(targetRowBeforeMutation.SectionId,
+                                Is.EqualTo(GenealogyCensusProvider.SectionId));
+                            Assert.That(targetRowBeforeMutation.SchemaVersion,
+                                Is.EqualTo(GenealogyCensusProvider.SchemaVersion));
+                            Assert.That(targetRowBeforeMutation.OwnerInstanceIdentity, Is.SameAs(targetStore));
+                            Assert.That(targetRowBeforeMutation.OwnerInstanceIdentity,
+                                Is.Not.SameAs(sourceRow.OwnerInstanceIdentity));
+                            Assert.That(targetRowBeforeMutation.Cardinality, Is.Zero);
+                            Assert.That(targetRowBeforeMutation.Revision, Is.Zero);
+                            Assert.That(privateCandidate.Runtime.TryReadNpcRosterCensusMutationEpoch(
+                                out targetMutationEpochBefore,
+                                out ContinuationCensusFailure censusBeforeFailure), Is.True,
+                                censusBeforeFailure.ToString());
+
+                            Assert.That(privateCandidate.Runtime.TryAddParentage(
+                                parentId, childId, out PersonGenealogyFailure genealogyFailure), Is.True,
+                                genealogyFailure.ToString());
+                            Assert.That(privateCandidate.Runtime.ContainsParentage(parentId, childId), Is.True);
+                            targetRowAfterMutation = new GenealogyCensusProvider(targetStore).GetCurrentCensus();
+                            Assert.That(privateCandidate.Runtime.TryReadNpcRosterCensusMutationEpoch(
+                                out targetMutationEpochAfter,
+                                out ContinuationCensusFailure censusAfterFailure), Is.True,
+                                censusAfterFailure.ToString());
+                            mutationInjected = true;
+                            candidateGuardBound = true;
+                        }
+                        else if (stage == P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured)
+                        {
+                            targetVectorRecaptured = true;
+                        }
+                        else if (stage == P12GDailyV1RestoreStage.BoundaryAdmitted)
+                        {
+                            boundaryAdmitted = true;
+                        }
+                    },
+                    candidate => privateCandidate = candidate), Is.False);
+
+            Assert.That(targetChecksCompleted, Is.True);
+            Assert.That(candidateGuardBound, Is.True);
+            Assert.That(mutationInjected, Is.True);
+            Assert.That(targetVectorRecaptured, Is.False,
+                "A changed required Genealogy row must reject before final owner-vector recapture.");
+            Assert.That(boundaryAdmitted, Is.False);
+            Assert.That(targetRowBeforeMutation, Is.Not.Null);
+            Assert.That(targetRowAfterMutation, Is.Not.Null);
+            Assert.That(targetRowAfterMutation.SectionId, Is.EqualTo(targetRowBeforeMutation.SectionId));
+            Assert.That(targetRowAfterMutation.SchemaVersion, Is.EqualTo(targetRowBeforeMutation.SchemaVersion));
+            Assert.That(targetRowAfterMutation.OwnerInstanceIdentity, Is.SameAs(targetStore));
+            Assert.That(targetRowAfterMutation.Cardinality, Is.EqualTo(1));
+            Assert.That(targetRowAfterMutation.Revision, Is.EqualTo(1L));
+            Assert.That(targetStore.Count, Is.EqualTo(1));
+            Assert.That(targetStore.Revision, Is.EqualTo(1L));
+            Assert.That(targetStore.ContainsParentage(parentId, childId), Is.True);
+            Assert.That(targetMutationEpochBefore, Is.GreaterThanOrEqualTo(0L));
+            Assert.That(targetMutationEpochAfter, Is.EqualTo(targetMutationEpochBefore + 1L),
+                "The committed P12-B parentage operation must invalidate the shared epoch exactly once.");
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.TargetOwnerVectorFailed));
+            Assert.That(diagnostic, Does.Contain("target mutation epoch changed after whole-graph validation"));
+            Assert.That(restored, Is.Null,
+                "A private target whose required Genealogy row changed must not reach publication.");
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, sourceToken), Is.EqualTo(sourceGraph));
+            Assert.That(sourceStore.Count, Is.Zero);
+            Assert.That(sourceStore.Revision, Is.Zero);
+            Assert.That(original.Runtime.ContainsParentage(parentId, childId), Is.False);
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession retried = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(retried, Is.Not.SameAs(original));
+            Assert.That(retried.Runtime.GenealogyStoreForWorldBoundary.Count, Is.Zero);
+            Assert.That(retried.Runtime.GenealogyStoreForWorldBoundary.Revision, Is.Zero);
+            Assert.That(retried.Runtime.ContainsParentage(parentId, childId), Is.False);
+            string retriedGraph = CaptureCompleteDailyV1OwnerProjection(
+                retried, GetCompletedDailyToken(retried.Runtime));
+            Assert.That(retriedGraph, Is.EqualTo(sourceGraph));
+            Assert.That(retriedGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                controlSession, GetCompletedDailyToken(controlSession.Runtime))));
+
+            Assert.That(retried.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retryAdvance),
+                Is.True, retryAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlNextAdvance),
+                Is.True, controlNextAdvance.ToString());
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                    retried, GetCompletedDailyToken(retried.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    controlSession, GetCompletedDailyToken(controlSession.Runtime))),
+                "The rejected private Genealogy mutation must not change retry or later continuation parity.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+            UnityEngine.Object.DestroyImmediate(controlObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreRejectsExplorableSiteAddedAfterTargetChecksAndKeepsSourceRetryable()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
