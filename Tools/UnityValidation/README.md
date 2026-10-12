@@ -59,7 +59,7 @@ They cover path normalization, command construction, filter forwarding, unique a
 
 ## Evidence capture and packaging
 
-Use the evidence wrapper for new runs while the evidence tool is being adopted. The existing `Invoke-UnityValidation.ps1` runner remains the result authority and keeps its current timeout, retry, and owned-process behavior.
+For new authorized validation candidates, use the evidence wrapper and packager. The existing `Invoke-UnityValidation.ps1` runner remains the result authority and keeps its current timeout, retry, and owned-process behavior.
 
 The packager is pinned to Windows PowerShell Core 7.6.5 and .NET 10.0.11, including the recorded `System.IO.Compression` assembly version. Capture and package commands refuse a different runtime. Revalidate the tool and update its pinned identity through review before adopting a new runtime.
 
@@ -93,7 +93,7 @@ The packager rejects malformed, truncated, DTD/entity-bearing, incomplete, count
     -ManifestPath .\artifacts\validation\p12-editmode-final.manifest.json
 ```
 
-Packaging never uploads or publishes evidence and never deletes protected originals. Choose an output directory and bundle ID that do not overwrite existing evidence. Until this tool's independent review and canonical adoption are complete, use the existing XML workflow for validation records. Historical evidence is not rewritten retroactively.
+Packaging never uploads or publishes evidence and never deletes protected originals. Choose an output directory and bundle ID that do not overwrite existing evidence. The evidence packager is canonically adopted for new authorized validation candidates. Keep historical evidence in its original form; it is not rewritten retroactively.
 
 Evidence tool self-tests use synthetic XML only:
 
