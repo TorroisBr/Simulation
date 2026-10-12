@@ -888,7 +888,13 @@ function Invoke-UnityValidation {
                 }
             }.GetNewClosure()
 
-            $startAction = { Start-UnityValidationProcess -Command $command }.GetNewClosure()
+            # GetNewClosure() moves the action into a dynamic module and can
+            # lose this module's private function lookup when UnityValidation
+            # is imported by the evidence wrapper. Capture the FunctionInfo
+            # so invocation remains bound to the module that owns the process
+            # lifecycle implementation.
+            $startProcessCommand = Get-Command -Name Start-UnityValidationProcess -CommandType Function -ErrorAction Stop
+            $startAction = { & $startProcessCommand -Command $command }.GetNewClosure()
             $cleanupAction = { param([System.Diagnostics.Process]$ownedProcess) Invoke-UnityOwnedCleanupIfAlive -Process $ownedProcess }.GetNewClosure()
             $attemptOutcome = Invoke-UnityValidationAttempt -StartAction $startAction -RunAction $runAction -CleanupAction $cleanupAction
             if ($attemptOutcome.Succeeded) {
