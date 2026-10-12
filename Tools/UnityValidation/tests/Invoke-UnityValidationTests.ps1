@@ -365,6 +365,15 @@ try {
         Assert-Equal $before.Hash $after.Hash 'ProjectVersion.txt was modified.'
     }
 
+    Invoke-Case 'NestedModuleRunClosureResolvesProcessLifecycleFunctions' {
+        $smokeProjectPath = Join-Path $testRoot 'NestedClosureProject'
+        New-Item -ItemType Directory -Path $smokeProjectPath -Force | Out-Null
+        $pwshPath = (Get-Command pwsh -ErrorAction Stop).Source
+        $result = Invoke-UnityValidation -ProjectPath $smokeProjectPath -Mode EditMode -UnityPath $pwshPath -TimeoutMinutes 1 -ResultsDirectory $resultsRoot
+        Assert-Equal 'NoResultXml' $result.Status 'A launched helper without Unity XML did not return the expected NoResultXml result.'
+        Assert-True ($null -ne $result.ProcessId) 'The fake helper process did not start.'
+    }
+
     Invoke-Case 'ResultSummaryContainsCounts' {
         $result = New-UnityValidationResult -ProjectPath $projectPath -Mode EditMode -Status Failed -TotalTests 5 -PassedTests 3 -FailedTests 2 -SkippedTests 0 -Duration ([TimeSpan]::FromSeconds(2))
         $summary = Format-UnityValidationSummary -Result $result

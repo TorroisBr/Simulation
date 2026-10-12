@@ -865,14 +865,19 @@ function Invoke-UnityValidation {
         }
         else {
             $command = Build-UnityValidationCommand -UnityPath $resolvedUnityPath -ProjectPath $normalizedProjectPath -Mode $Mode -ResultXmlPath $runPaths.XmlPath -LogPath $runPaths.LogPath -TestFilter $TestFilter -TestCategory $TestCategory
+            $waitProcessCommand = Get-Command -Name Wait-UnityValidationProcess -CommandType Function -ErrorAction Stop
+            $readResultCommand = Get-Command -Name Read-UnityTestResultXml -CommandType Function -ErrorAction Stop
+            $resolveStatusCommand = Get-Command -Name Resolve-UnityValidationStatus -CommandType Function -ErrorAction Stop
+            $stopProcessTreeCommand = Get-Command -Name Stop-UnityOwnedProcessTree -CommandType Function -ErrorAction Stop
+            $newResultCommand = Get-Command -Name New-UnityValidationResult -CommandType Function -ErrorAction Stop
             $runAction = {
                 param([System.Diagnostics.Process]$ownedProcess)
 
-                $wait = Wait-UnityValidationProcess -Process $ownedProcess -TimeoutMinutes $TimeoutMinutes
-                $xmlResult = if (Test-Path -LiteralPath $runPaths.XmlPath -PathType Leaf) { Read-UnityTestResultXml -XmlPath $runPaths.XmlPath } else { $null }
-                $status = Resolve-UnityValidationStatus -XmlResult $xmlResult -TimedOut:$wait.TimedOut
+                $wait = & $waitProcessCommand -Process $ownedProcess -TimeoutMinutes $TimeoutMinutes
+                $xmlResult = if (Test-Path -LiteralPath $runPaths.XmlPath -PathType Leaf) { & $readResultCommand -XmlPath $runPaths.XmlPath } else { $null }
+                $status = & $resolveStatusCommand -XmlResult $xmlResult -TimedOut:$wait.TimedOut
                 if ($wait.TimedOut) {
-                    [void](Stop-UnityOwnedProcessTree -RootProcess $ownedProcess)
+                    [void](& $stopProcessTreeCommand -RootProcess $ownedProcess)
                 }
                 elseif ($null -eq $xmlResult) {
                     $status = 'NoResultXml'
@@ -881,7 +886,7 @@ function Invoke-UnityValidation {
                     $status = 'InvalidResultXml'
                 }
 
-                $attemptResult = New-UnityValidationResult -ProjectPath $normalizedProjectPath -UnityPath $resolvedUnityPath -Mode $Mode -TestFilter $TestFilter -TestCategory $TestCategory -StartedAt $runStartedAt -Duration $runWatch.Elapsed -ProcessId $ownedProcess.Id -ExitCode $(if ($wait.TimedOut) { $null } else { $wait.ExitCode }) -XmlPath $runPaths.XmlPath -LogPath $runPaths.LogPath -Status $status -TotalTests $(if ($null -ne $xmlResult) { $xmlResult.TotalTests } else { 0 }) -PassedTests $(if ($null -ne $xmlResult) { $xmlResult.PassedTests } else { 0 }) -FailedTests $(if ($null -ne $xmlResult) { $xmlResult.FailedTests } else { 0 }) -SkippedTests $(if ($null -ne $xmlResult) { $xmlResult.SkippedTests } else { 0 }) -InconclusiveTests $(if ($null -ne $xmlResult) { $xmlResult.InconclusiveTests } else { 0 }) -FrameworkResult $(if ($null -ne $xmlResult) { $xmlResult.FrameworkResult } else { $null }) -CountsCoherent $(if ($null -ne $xmlResult) { $xmlResult.CountsCoherent } else { $false }) -ErrorMessage $(if ($wait.TimedOut) { 'UNITY_TIMEOUT: Unity did not finish within TimeoutMinutes; owned process cleanup was attempted.' } elseif ($null -ne $xmlResult -and $null -ne $xmlResult.ErrorMessage) { $xmlResult.ErrorMessage } else { $null }) -AttemptCount $attempt
+                $attemptResult = & $newResultCommand -ProjectPath $normalizedProjectPath -UnityPath $resolvedUnityPath -Mode $Mode -TestFilter $TestFilter -TestCategory $TestCategory -StartedAt $runStartedAt -Duration $runWatch.Elapsed -ProcessId $ownedProcess.Id -ExitCode $(if ($wait.TimedOut) { $null } else { $wait.ExitCode }) -XmlPath $runPaths.XmlPath -LogPath $runPaths.LogPath -Status $status -TotalTests $(if ($null -ne $xmlResult) { $xmlResult.TotalTests } else { 0 }) -PassedTests $(if ($null -ne $xmlResult) { $xmlResult.PassedTests } else { 0 }) -FailedTests $(if ($null -ne $xmlResult) { $xmlResult.FailedTests } else { 0 }) -SkippedTests $(if ($null -ne $xmlResult) { $xmlResult.SkippedTests } else { 0 }) -InconclusiveTests $(if ($null -ne $xmlResult) { $xmlResult.InconclusiveTests } else { 0 }) -FrameworkResult $(if ($null -ne $xmlResult) { $xmlResult.FrameworkResult } else { $null }) -CountsCoherent $(if ($null -ne $xmlResult) { $xmlResult.CountsCoherent } else { $false }) -ErrorMessage $(if ($wait.TimedOut) { 'UNITY_TIMEOUT: Unity did not finish within TimeoutMinutes; owned process cleanup was attempted.' } elseif ($null -ne $xmlResult -and $null -ne $xmlResult.ErrorMessage) { $xmlResult.ErrorMessage } else { $null }) -AttemptCount $attempt
                 return [pscustomobject]@{
                     Result = $attemptResult
                     Status = $status
@@ -895,7 +900,8 @@ function Invoke-UnityValidation {
             # lifecycle implementation.
             $startProcessCommand = Get-Command -Name Start-UnityValidationProcess -CommandType Function -ErrorAction Stop
             $startAction = { & $startProcessCommand -Command $command }.GetNewClosure()
-            $cleanupAction = { param([System.Diagnostics.Process]$ownedProcess) Invoke-UnityOwnedCleanupIfAlive -Process $ownedProcess }.GetNewClosure()
+            $cleanupProcessCommand = Get-Command -Name Invoke-UnityOwnedCleanupIfAlive -CommandType Function -ErrorAction Stop
+            $cleanupAction = { param([System.Diagnostics.Process]$ownedProcess) & $cleanupProcessCommand -Process $ownedProcess }.GetNewClosure()
             $attemptOutcome = Invoke-UnityValidationAttempt -StartAction $startAction -RunAction $runAction -CleanupAction $cleanupAction
             if ($attemptOutcome.Succeeded) {
                 $lastResult = $attemptOutcome.Outcome.Result
