@@ -421,6 +421,20 @@ public sealed class P12GPoliticalBindingRestoreTests
             out P12DDailyV1OwnerPackage stagedD,
             out P12DDailyV1OwnerPackageFailure dFailure), Is.True, dFailure.ToString());
 
+        if (seedPoliticalOwners)
+        {
+            // The accepted authored Daily-v1 bootstrap is intentionally empty
+            // of Persons. Seed this proving fixture into the detached D graph
+            // before E/F owner staging and before runtime census/admission.
+            Assert.That(stagedD.Persons.TryRegister(
+                new PersonRuntime(new PersonId("p12g-political-holder")),
+                out PersonStoreFailure holderPersonFailure), Is.True, holderPersonFailure.ToString());
+            Assert.That(stagedD.Persons.TryRegister(
+                new PersonRuntime(new PersonId("p12g-political-observer")),
+                out PersonStoreFailure observerPersonFailure), Is.True, observerPersonFailure.ToString());
+            Assert.That(stagedD.Persons.Persons.Count, Is.EqualTo(2));
+        }
+
         SimulationTime stagedTime = new SimulationTime(anchorToken.AbsoluteDay);
         // PoliticalWorldRevision is a constructor seed for this unpublished
         // runtime root; no registered-owner write is needed after census.
