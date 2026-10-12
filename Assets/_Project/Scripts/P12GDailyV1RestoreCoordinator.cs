@@ -99,7 +99,8 @@ internal static class P12GDailyV1RestoreCoordinator
         Func<P12EPoliticalClaimOwnerSnapshot, P12EPoliticalClaimOwnerSnapshot> politicalClaimSnapshotOverrideForTest = null,
         Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest = null,
         Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null,
-        Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null)
+        Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null,
+        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest = null)
     {
         restoredSession = null;
         failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
@@ -353,6 +354,7 @@ internal static class P12GDailyV1RestoreCoordinator
                     eventRecorder,
                     economyTransactions,
                     logger,
+                    restoredAdmissionContextFactoryForTest,
                     out SimulationActiveSession candidate,
                     out diagnostic))
             {
@@ -817,6 +819,7 @@ internal static class P12GDailyV1RestoreCoordinator
         DomainEventRecorder eventRecorder,
         EconomyTransactionService economyTransactions,
         SimulationLogger logger,
+        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest,
         out SimulationActiveSession candidate,
         out string diagnostic)
     {
@@ -904,8 +907,12 @@ internal static class P12GDailyV1RestoreCoordinator
         if (effective.GuardCrime.Enabled == true)
             actionProviders.Add(new GuardSystem(stagedE.Justice, config.hiddenStatus, effective.GuardCrime));
         NpcDecisionSystem decisionsSystem = new NpcDecisionSystem(actionProviders, stagedC.DeterministicRandom);
-        SimulationRuntimeAdmissionContext restoredAdmissionContext =
-            sourceSession.AdmissionContext.CreateRestoredContinuationContext();
+        if (!TryCreateRestoredAdmissionContext(
+                sourceSession.AdmissionContext,
+                restoredAdmissionContextFactoryForTest,
+                out SimulationRuntimeAdmissionContext restoredAdmissionContext,
+                out diagnostic))
+            return false;
 
         SimulationRuntime runtime = new SimulationRuntime(
             simulationTime: time,
@@ -1002,6 +1009,66 @@ internal static class P12GDailyV1RestoreCoordinator
             restoredAdmissionContext,
             stagedC.DeterministicRandom,
             new SimulationSessionReportState(sourceSession.ReportState.LastEconomySnapshotDay));
+        return true;
+    }
+
+    private static bool TryCreateRestoredAdmissionContext(
+        SimulationRuntimeAdmissionContext sourceContext,
+        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> factoryForTest,
+        out SimulationRuntimeAdmissionContext restoredContext,
+        out string diagnostic)
+    {
+        restoredContext = null;
+        diagnostic = null;
+        if (sourceContext == null
+            || sourceContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
+        {
+            diagnostic = "A selected Daily-v1 source context is required for the restored candidate.";
+            return false;
+        }
+
+        try
+        {
+            if (factoryForTest == null)
+            {
+                // Preserve the production path exactly: normal callers derive
+                // the fresh target context from their current admission context.
+                restoredContext = sourceContext.CreateRestoredContinuationContext();
+            }
+            else
+            {
+                // This seam exists only for the bounded nested-source fixture.
+                // It is not a production repeated-restore capability.
+                if (!sourceContext.IsRestoredContinuation)
+                {
+                    diagnostic = "The test context factory is available only for a restored-context source.";
+                    return false;
+                }
+                restoredContext = factoryForTest(sourceContext);
+            }
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+            || exception is InvalidOperationException)
+        {
+            diagnostic = "The restored admission-context factory failed: " + exception.Message;
+            restoredContext = null;
+            return false;
+        }
+
+        if (restoredContext == null
+            || ReferenceEquals(restoredContext, sourceContext)
+            || restoredContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !restoredContext.IsRestoredContinuation
+            || !ReferenceEquals(restoredContext.ExpectedOwnerThread, sourceContext.ExpectedOwnerThread)
+            || restoredContext.ExpectedOwnerThreadId != sourceContext.ExpectedOwnerThreadId
+            || !restoredContext.IsOwnedByCurrentThread())
+        {
+            diagnostic = "The private restored admission context must be a fresh, current-thread Daily-v1 continuation context.";
+            restoredContext = null;
+            return false;
+        }
+
         return true;
     }
 
