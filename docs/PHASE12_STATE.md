@@ -1,3 +1,47 @@
+## P12-G post-guard P8-C City-binding recapture witness — promoted — 2026-10-11
+
+After refreshed preflight, `codex/phase12/canonical` advanced by a clean
+fast-forward from `309b2e592cdc39224e256a992bb92cec819ebfa7` to
+`4ee045f605e58bc0da6712e76f9d95d28493fd94`. The candidate branch is
+`codex/phase12/P12GP8CCityBindingLateRecapture`. Its code/test commit is
+`73a9763b2f17075eb6fe2de1aa7a3dd95d35a2c8` (tree
+`b218c60bddab88d45709f3e12b3f04e07b200cef`, `Assets` tree
+`71d4f6a5716f3e7eabb3cc36a01822b412f5d009`, and test-source blob
+`ea16a734b9f7b85bdeeea1832bb7c3b5e86997b6`). The sanitized validation package
+is at `4e8c602e3fa94898153676c2521988f15c822556`; the durable independent
+exact-tip code/artifact review is recorded in
+[`P12GP8CCityBindingLateRecapture-20261011-INDEPENDENT-REVIEW.md`](reviews/P12GP8CCityBindingLateRecapture-20261011-INDEPENDENT-REVIEW.md).
+
+The test-only addition to `SimulationRuntimeAdmissionTests` binds a valid
+staged City to the sole staged Location at `CandidateGuardBound`, after target
+checks and before final target-owner recapture. The exact P8-C owner row moves
+from cardinality/revision 0/0 to 1/1 while the observed shared census epoch
+remains unchanged. Normal recapture rejects before target-vector admission or
+publication. The test preserves source session/token/health/projection,
+verifies retry, and compares continuation with the uninterrupted control. No
+production behavior, profile configuration, or domain semantics changed.
+
+Exact-tree validation passed the focused case 1/1,
+`SimulationRuntimeAdmissionTests` 197/197, ALL EditMode 2876/2876, and official
+Smoke 5/5, with zero failures, skips, or inconclusive results; `git diff --check`
+passed. The ten manifest-listed artifacts match their committed
+SHA-256, Git blob IDs, and byte counts. The sanitized XML and logs preserve
+test-result structure and passed the path/account/credential scan. Unity was
+not rerun after artifact-only sanitation because the production and test
+source trees remain unchanged from validation.
+
+This closes only the named post-guard P8-C City-binding recapture witness.
+It does not establish complete target-owner or owner/shared-epoch coverage,
+runtime-wide quiescence, universal rejection/atomicity, causal no-replay,
+all-owner continuation parity, capture eligibility, export/hydration, P12-G
+completion, P12-A or P13 readiness, or Phase closure. No dependency edge
+changes: P12-G and P12-A remain `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase
+12 remains `OPEN`. The previously recorded remaining graph, failure-boundary,
+no-replay, and continuation obligations remain open. Protected ProjectSettings
+edits and unrelated untracked `.meta` files remain untouched.
+
+---
+
 ## P12-G post-guard P8-D observation recapture witness — promoted — 2026-10-11
 
 After refreshed preflight, `codex/phase12/canonical` advanced from
