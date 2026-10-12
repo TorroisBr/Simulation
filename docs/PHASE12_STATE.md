@@ -1,3 +1,49 @@
+## P12-G post-guard P8-D observation recapture witness — promoted — 2026-10-11
+
+After refreshed preflight, `codex/phase12/canonical` advanced from
+`baf3ca2cbe09f0e568b9066644593ac4d98a849f` through the bounded P8-D
+late-recapture candidate. The test/code commit is
+`d09c0e3cb2cca908b9b4bb44c70c74d36a32f93a` (Git tree
+`756e06f191f484e3b4e304c7ba35e6179c6b65a6`, `Assets` tree
+`bf9155bd4165aaf89c4bbac3cc0f94e6920bbfcf`, test-source blob
+`fff1258a1977f9c640d5ff07028b09463889a099`). The sanitized validation package
+is `1339c9b4b8df7f67def2d4518a4d86f72813e2a8`; the durable exact-tip review
+record is `96ad5fe76bc7cf98b8d3a0926ea9d15760d8a2bb` at
+[`P12GP8DPostGuardRecapture-20261011-INDEPENDENT-REVIEW.md`](reviews/P12GP8DPostGuardRecapture-20261011-INDEPENDENT-REVIEW.md).
+
+The test-only addition to `SimulationRuntimeAdmissionTests` writes a valid
+P8-D `SpatialRouteKnowledgeStore.TryRecordObservation` after `CandidateGuardBound`
+and before final target-owner recapture. The exact-empty P8-D row changes from
+cardinality/revision 0/0 to 1/1 without changing the observed shared census
+epoch. Normal recapture rejects the private candidate before successful
+recapture, boundary admission, or publication. The test also verifies source
+session/token/health/owner projection preservation, continuation parity, and a
+later valid retry. No production behavior, profile configuration, or domain
+semantics changed.
+
+Exact-tree validation passed focused 1/1, `SimulationRuntimeAdmissionTests`
+196/196, ALL EditMode 2875/2875, official Smoke 5/5, and `git diff --check`;
+all reports had zero failures, skips, or inconclusive tests. The sanitized
+package in
+[`P12GP8DPostGuardRecapture-20261011`](validation/P12GP8DPostGuardRecapture-20261011/)
+contains ten manifest-listed artifacts whose SHA-256, Git blob IDs and byte
+counts match the committed blobs. Its XML/log results preserve the validated
+semantics and contain no local paths, account labels, or credential patterns.
+The code, Assets and test-source identities remained unchanged through
+artifact sanitation. Unity was not rerun for artifact-only sanitation.
+
+This promotes one bounded post-guard P8-D target-owner recapture witness only.
+It does not establish complete target-owner coverage, complete owner/shared-epoch
+coverage, runtime-wide quiescence, universal rejection/atomicity, causal
+no-replay, all-owner continuation parity, capture eligibility, export/hydration,
+P12-A or P13 readiness, or Phase closure. The next audited post-guard target
+row is the P8-C City-to-Location binding; the remaining P12-G graph,
+failure-boundary, no-replay and continuation obligations remain open. P12-G
+and P12-A remain `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains
+`OPEN`. Protected ProjectSettings edits and unrelated untracked `.meta` files
+remain outside this candidate.
+
+---
 ## P12-G post-guard P8-C Person-position recapture witness — promoted — 2026-10-11
 
 After refreshed preflight, `codex/phase12/canonical` advanced from
