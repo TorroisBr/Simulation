@@ -152,6 +152,11 @@ try {
     Assert-True $verify.IsValid "package and retained raw XML verify: $($verify.Error)"
     $ordinaryManifest = Get-Content -LiteralPath $bundleA.ManifestPath -Raw | ConvertFrom-Json -AsHashtable
     Assert-True ($ordinaryManifest.pathPolicy -eq 'none' -and $ordinaryManifest.runs[0].attempts[0].normalizedXml.pathPolicy -eq 'none') 'ordinary report package declares that no local Assembly path was removed'
+    $module = Get-Module UnityValidationEvidence
+    $relativeRepositoryPathAccepted = $true
+    try { & $module { param($text) Test-PublicEvidenceText $text } '{"path":"Assets/_Project/Scripts/work/root/agent/Invariant.cs"}' } catch { $relativeRepositoryPathAccepted = $false }
+    Assert-True $relativeRepositoryPathAccepted 'privacy scanning accepts repository-relative file paths even when a directory is named like a Unix root'
+    Assert-Throws { & $module { param($text) Test-PublicEvidenceText $text } '{"path":"/home/fixture/private.xml"}' } 'privacy scanning still rejects absolute Unix paths'
 
     $localAssemblyPath = 'C:\Users\fixture\project\Library\ScriptAssemblies\assembly-CSharp-Editor.dll'
     $assemblyPathXml = (New-TestXml -Outcomes @('Passed')).Replace('fullname="Fixture"', ('fullname="' + $localAssemblyPath + '"'))
