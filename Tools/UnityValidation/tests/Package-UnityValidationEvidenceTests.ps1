@@ -162,6 +162,30 @@ try {
     [System.IO.File]::WriteAllText($statusTamperedManifestPath, (ConvertTo-Json -InputObject $statusTamperedManifest -Depth 40), [System.Text.UTF8Encoding]::new($false))
     $statusTamperedVerify = Test-UnityValidationEvidencePackage -ManifestPath $statusTamperedManifestPath -ArchivePath $bundleA.ArchivePath
     Assert-True (-not $statusTamperedVerify.IsValid) 'archive-only verification rejects run status that disagrees with the final attempt'
+    $retryTamperedManifestPath = Join-Path $outDir 'retry-tampered.manifest.json'
+    $retryTamperedManifest = Get-Content $bundleA.ManifestPath -Raw | ConvertFrom-Json -AsHashtable
+    $retryOriginalAttempt = $retryTamperedManifest.runs[0].attempts[0]
+    $retryTamperedManifest.runs[0].invocation.retryOperationalFailure = $true
+    $retryTamperedManifest.runs[0].attempts = @($retryOriginalAttempt.Clone(), $retryOriginalAttempt)
+    [System.IO.File]::WriteAllText($retryTamperedManifestPath, (ConvertTo-Json -InputObject $retryTamperedManifest -Depth 40), [System.Text.UTF8Encoding]::new($false))
+    $retryTamperedVerify = Test-UnityValidationEvidencePackage -ManifestPath $retryTamperedManifestPath -ArchivePath $bundleA.ArchivePath
+    Assert-True (-not $retryTamperedVerify.IsValid -and $retryTamperedVerify.Error -like '*retry transition is not eligible*') 'archive-only verification rejects retries after a valid failed test result'
+    $noXmlTamperedManifestPath = Join-Path $outDir 'no-xml-status-tampered.manifest.json'
+    $noXmlTamperedManifest = Get-Content $bundleA.ManifestPath -Raw | ConvertFrom-Json -AsHashtable
+    $noXmlAttempt = $noXmlTamperedManifest.runs[0].attempts[0]
+    $noXmlAttempt.status = 'Failed'
+    $noXmlAttempt.normalizedXml = $null
+    $noXmlAttempt.originalXml = $null
+    $noXmlAttempt.reportResult = $null
+    $noXmlAttempt.caseCount = $null
+    $noXmlAttempt.total = 0
+    $noXmlAttempt.passed = 0
+    $noXmlAttempt.failed = 0
+    $noXmlAttempt.skipped = 0
+    $noXmlAttempt.inconclusive = 0
+    [System.IO.File]::WriteAllText($noXmlTamperedManifestPath, (ConvertTo-Json -InputObject $noXmlTamperedManifest -Depth 40), [System.Text.UTF8Encoding]::new($false))
+    $noXmlTamperedVerify = Test-UnityValidationEvidencePackage -ManifestPath $noXmlTamperedManifestPath -ArchivePath $bundleA.ArchivePath
+    Assert-True (-not $noXmlTamperedVerify.IsValid -and $noXmlTamperedVerify.Error -like '*unsupported result claims for an attempt without XML*') 'archive-only verification rejects a failed attempt without XML'
 
     $ordinalArchive = Join-Path $outDir 'ordinal-order.zip'
     $savedCulture = [System.Globalization.CultureInfo]::CurrentCulture
@@ -186,6 +210,19 @@ try {
     }
     finally { [System.Globalization.CultureInfo]::CurrentCulture = $savedCulture }
     $manifestJson = Get-Content $bundleA.ManifestPath -Raw
+    $publicManifest = $manifestJson | ConvertFrom-Json -AsHashtable
+    Assert-True ($publicManifest.packerRuntime.Contains('culture')) 'manifest records the capture culture as provenance'
+    $crossCultureBundle = $null
+    $savedCulture = [System.Globalization.CultureInfo]::CurrentCulture
+    try {
+        [System.Globalization.CultureInfo]::CurrentCulture = [System.Globalization.CultureInfo]::GetCultureInfo('pt-BR')
+        $crossCultureBundle = New-UnityValidationEvidencePackage -RunManifestPath $mixedRun -OutputDirectory $outDir -BundleId 'deterministic-ptbr'
+        Assert-True ((Get-FileHash $bundleA.ArchivePath -Algorithm SHA256).Hash -eq (Get-FileHash $crossCultureBundle.ArchivePath -Algorithm SHA256).Hash) 'result archive bytes are culture-independent'
+        [System.Globalization.CultureInfo]::CurrentCulture = [System.Globalization.CultureInfo]::GetCultureInfo('en-US')
+        $crossCultureVerify = Test-UnityValidationEvidencePackage -ManifestPath $crossCultureBundle.ManifestPath -ArchivePath $crossCultureBundle.ArchivePath
+        Assert-True $crossCultureVerify.IsValid "package verifies under a different culture: $($crossCultureVerify.Error)"
+    }
+    finally { [System.Globalization.CultureInfo]::CurrentCulture = $savedCulture }
     $zipStream = [System.IO.File]::OpenRead($bundleA.ArchivePath)
     try {
         $zip = [System.IO.Compression.ZipArchive]::new($zipStream, [System.IO.Compression.ZipArchiveMode]::Read)

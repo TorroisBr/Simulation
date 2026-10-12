@@ -613,25 +613,30 @@ function Assert-PublicRunAttemptEnvelope {
     if ([string]$Run.status -notin $allowedStatuses) { throw "Run $($Run.runId) has an unknown final gate status." }
     if ([string]$Run.status -cne [string]$attempts[-1].status) { throw "Run $($Run.runId) status does not match its final attempt." }
     if ($attempts.Count -gt 1 -and -not [bool]$Run.invocation.retryOperationalFailure) { throw "Run $($Run.runId) contains a retry not authorized by its invocation." }
-    if ($null -eq $attempts[-1].normalizedXml) { throw "Run $($Run.runId) final attempt has no result XML." }
+    if ($attempts.Count -gt 1) {
+        Import-Module (Join-Path $PSScriptRoot 'UnityValidation.psm1') -Force
+        if (-not (Test-UnityOperationalRetryEligible -Status ([string]$attempts[0].status))) { throw "Run $($Run.runId) retry transition is not eligible under the validation runner contract." }
+    }
     foreach ($attempt in $attempts) {
         if ([string]$attempt.status -notin $allowedStatuses) { throw "Run $($Run.runId) contains an unknown attempt status." }
         foreach ($field in @('total', 'passed', 'failed', 'skipped', 'inconclusive')) {
             if (-not $attempt.Contains($field) -or [long]$attempt[$field] -lt 0) { throw "Run $($Run.runId) attempt has an invalid $field result claim." }
         }
         if ($null -eq $attempt.normalizedXml) {
-            if ($null -ne $attempt.originalXml -or [string]$attempt.status -eq 'Passed' -or [long]$attempt.total -ne 0 -or [long]$attempt.passed -ne 0 -or [long]$attempt.failed -ne 0 -or [long]$attempt.skipped -ne 0 -or [long]$attempt.inconclusive -ne 0) {
+            if ([string]$attempt.status -notin @('UnityLaunchFailed', 'NoResultXml', 'OperationalFailure', 'ProjectAlreadyOpen') -or $null -ne $attempt.originalXml -or [long]$attempt.total -ne 0 -or [long]$attempt.passed -ne 0 -or [long]$attempt.failed -ne 0 -or [long]$attempt.skipped -ne 0 -or [long]$attempt.inconclusive -ne 0) {
                 throw "Run $($Run.runId) has unsupported result claims for an attempt without XML."
             }
             if ($attempt.Contains('reportResult') -or $attempt.Contains('caseCount')) { throw "Run $($Run.runId) has report claims without XML." }
         }
         else {
+            if ([string]$attempt.status -notin @('Passed', 'Failed', 'TimedOut')) { throw "Run $($Run.runId) attempt status is incompatible with a valid XML report." }
             foreach ($field in @('reportResult', 'caseCount', 'countsCoherent', 'frameworkResult', 'exitCode', 'originalXml')) {
                 if (-not $attempt.Contains($field)) { throw "Run $($Run.runId) XML attempt is missing its $field claim." }
             }
             if ($null -eq $attempt.originalXml -or $null -eq $attempt.originalXml.sha256 -or $null -eq $attempt.originalXml.bytes) { throw "Run $($Run.runId) XML attempt is missing its original-report identity." }
         }
     }
+    if ($null -eq $attempts[-1].normalizedXml) { throw "Run $($Run.runId) final attempt has no result XML." }
 }
 
 function Assert-PublicAttemptReportConsistency {
