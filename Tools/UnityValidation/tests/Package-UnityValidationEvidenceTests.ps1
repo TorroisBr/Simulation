@@ -159,6 +159,7 @@ try {
     Assert-Throws { & $module { param($text) Test-PublicEvidenceText $text } '{"path":"/home/fixture/private.xml"}' } 'privacy scanning still rejects absolute Unix paths'
     Assert-Throws { & $module { param($text) Test-PublicEvidenceText $text } '{"message":"(/home/runner/test.cs)"}' } 'privacy scanning rejects parenthesized absolute Unix paths in retained failure text'
     Assert-Throws { & $module { param($text) Test-PublicEvidenceText $text } 'FileNotFoundException(/home/runner/test.cs)' } 'privacy scanning rejects exception-style absolute Unix paths'
+    Assert-Throws { & $module { param($text) Test-PublicEvidenceText $text } '{"path":"file://localhost/home/runner/test.cs"}' } 'privacy scanning rejects localhost file URIs in retained public evidence'
 
     $localAssemblyPath = 'C:\Users\fixture\project\Library\ScriptAssemblies\assembly-CSharp-Editor.dll'
     $assemblyPathXml = (New-TestXml -Outcomes @('Passed')).Replace('fullname="Fixture"', ('fullname="' + $localAssemblyPath + '"'))
@@ -200,6 +201,10 @@ try {
     $unsupportedAssemblyXml = (New-TestXml -Outcomes @('Passed')).Replace('fullname="Fixture"', 'fullname="C:\Users\fixture\project\Library\ScriptAssemblies\Other.dll"')
     $unsupportedAssemblyRun = New-PrivateRunFixture -RunId '77777777777777777777777777777777' -XmlText $unsupportedAssemblyXml -Status 'Passed'
     Assert-Throws { New-UnityValidationEvidencePackage -RunManifestPath $unsupportedAssemblyRun -OutputDirectory $outDir -BundleId 'reject-unsupported-assembly-path' } 'unapproved Assembly path suffixes fail closed'
+    $fileUriAssemblyXml = (New-TestXml -Outcomes @('Passed')).Replace('fullname="Fixture"', 'fullname="file://localhost/home/runner/project/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll"')
+    Assert-Throws { & $module { param($xmlText) $document = [System.Xml.XmlDocument]::new(); $document.LoadXml($xmlText); Get-UnityReportPathPolicy -Document $document } $fileUriAssemblyXml } 'file URI Assembly identities are not misclassified as a report with no absolute path'
+    $fileUriAssemblyRun = New-PrivateRunFixture -RunId '77777777777777777777777777777778' -XmlText $fileUriAssemblyXml -Status 'Passed'
+    Assert-Throws { New-UnityValidationEvidencePackage -RunManifestPath $fileUriAssemblyRun -OutputDirectory $outDir -BundleId 'reject-file-uri-assembly-path' } 'file URI Assembly paths are recognized as absolute and fail closed'
     $ambiguousAssemblyXml = $assemblyPathXml.Replace('</test-run>', '<test-suite id="second" type="Assembly" name="Other" fullname="D:\fixture\Library\ScriptAssemblies\Assembly-CSharp-Editor.dll" result="Passed" runstate="Runnable" testcasecount="0"></test-suite></test-run>')
     $ambiguousAssemblyRun = New-PrivateRunFixture -RunId '88888888888888888888888888888888' -XmlText $ambiguousAssemblyXml -Status 'Passed'
     Assert-Throws { New-UnityValidationEvidencePackage -RunManifestPath $ambiguousAssemblyRun -OutputDirectory $outDir -BundleId 'reject-ambiguous-assembly-path' } 'multiple absolute Assembly paths fail closed as ambiguous'

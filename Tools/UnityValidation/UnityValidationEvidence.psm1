@@ -412,7 +412,7 @@ function Get-UnityReportPathPolicy {
     $absoluteAssemblySuites = [System.Collections.Generic.List[System.Xml.XmlElement]]::new()
     foreach ($suite in $Document.SelectNodes("//*[local-name()='test-suite' and @type='Assembly']")) {
         $fullname = [string]$suite.GetAttribute('fullname')
-        if ($fullname -match '^(?:[A-Za-z]:[\\/]|\\\\[^\\]+\\|/)') { $absoluteAssemblySuites.Add([System.Xml.XmlElement]$suite) }
+        if ($fullname -match '(?i)^(?:[A-Za-z]:[\\/]|\\\\[^\\]+\\|/|file:)') { $absoluteAssemblySuites.Add([System.Xml.XmlElement]$suite) }
     }
     if ($absoluteAssemblySuites.Count -eq 0) { return 'none' }
     if ($absoluteAssemblySuites.Count -ne 1) { throw 'Result contains multiple absolute Assembly suite paths; path sanitization is ambiguous.' }
@@ -489,7 +489,7 @@ function ConvertTo-NormalizedUnityReport {
 
 function Test-PublicEvidenceText {
     param([Parameter(Mandatory)][string]$Text)
-    if ($Text -match '(?i)(?:\b[A-Z]:[\\/]|\\\\[^\s\\]+\\|(?<!:)//[^/\s]+/|(?:^|[\s:=\x22\x27(\[{<])/(?:Users|home|private|tmp|mnt|var|opt|root|workspace|builds|agent|work|app|repo|src|code|github|actions|etc)/)') { throw 'Public evidence contains an absolute local filesystem path.' }
+    if ($Text -match '(?i)(?:\bfile:|\b[A-Z]:[\\/]|\\\\[^\s\\]+\\|(?<!:)//[^/\s]+/|(?:^|[\s:=\x22\x27(\[{<])/(?:Users|home|private|tmp|mnt|var|opt|root|workspace|builds|agent|work|app|repo|src|code|github|actions|etc)/)') { throw 'Public evidence contains an absolute local filesystem path.' }
     if ($Text -match '(?i)\b(?:password|passwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|bearer)\b\s*[:= ]\s*(?:Bearer\s+)?[^\s,;]+') { throw 'Public evidence contains a credential-like value.' }
 }
 
