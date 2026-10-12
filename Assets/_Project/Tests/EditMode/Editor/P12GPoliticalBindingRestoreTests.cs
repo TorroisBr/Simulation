@@ -186,8 +186,8 @@ public sealed class P12GPoliticalBindingRestoreTests
             Assert.That(stages, Does.Contain(P12GDailyV1RestoreStage.TargetOwnerVectorCaptured));
             Assert.That(stages, Does.Contain(P12GDailyV1RestoreStage.TargetOwnerVectorValidated));
             Assert.That(stages, Does.Contain(P12GDailyV1RestoreStage.TargetSentinelsValidated));
-            Assert.That(stages, Does.Not.Contain(P12GDailyV1RestoreStage.TargetPoliticalKnowledgeBindingsValidated));
-            Assert.That(stages, Does.Not.Contain(P12GDailyV1RestoreStage.BoundaryAdmitted));
+            Assert.That(stages.Contains(P12GDailyV1RestoreStage.TargetPoliticalKnowledgeBindingsValidated), Is.False);
+            Assert.That(stages.Contains(P12GDailyV1RestoreStage.BoundaryAdmitted), Is.False);
             Assert.That(gameplayProbe.AdvanceDayAfterClockAdvanceInvocationCount, Is.Zero);
         }
 
@@ -238,10 +238,10 @@ public sealed class P12GPoliticalBindingRestoreTests
         Assert.That(candidate, Is.Null);
         Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.TargetCompositionFailed));
         Assert.That(diagnostic, Is.Not.Empty);
-        Assert.That(stages, Does.Not.Contain(P12GDailyV1RestoreStage.CandidateComposed),
+        Assert.That(stages.Contains(P12GDailyV1RestoreStage.CandidateComposed), Is.False,
             "Invalid context must reject before candidate runtime composition.");
-        Assert.That(stages, Does.Not.Contain(P12GDailyV1RestoreStage.TargetOwnerVectorCaptured));
-        Assert.That(stages, Does.Not.Contain(P12GDailyV1RestoreStage.BoundaryAdmitted));
+        Assert.That(stages.Contains(P12GDailyV1RestoreStage.TargetOwnerVectorCaptured), Is.False);
+        Assert.That(stages.Contains(P12GDailyV1RestoreStage.BoundaryAdmitted), Is.False);
         Assert.That(source.Session.Runtime.TryValidateCompletedDailyCaptureToken(token, out _), Is.True);
     }
 
@@ -272,8 +272,8 @@ public sealed class P12GPoliticalBindingRestoreTests
         Assert.That(candidate, Is.Null);
         Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.TargetCompositionFailed));
         Assert.That(diagnostic, Does.Contain("restored-context source"));
-        Assert.That(stages, Does.Not.Contain(P12GDailyV1RestoreStage.CandidateComposed));
-        Assert.That(stages, Does.Not.Contain(P12GDailyV1RestoreStage.BoundaryAdmitted));
+        Assert.That(stages.Contains(P12GDailyV1RestoreStage.CandidateComposed), Is.False);
+        Assert.That(stages.Contains(P12GDailyV1RestoreStage.BoundaryAdmitted), Is.False);
         Assert.That(normalSource.Runtime.TryValidateCompletedDailyCaptureToken(token, out _), Is.True);
     }
 
@@ -931,7 +931,7 @@ public sealed class P12GPoliticalBindingRestoreTests
         SimulationDate date = session.Runtime.Calendar.GetDate(session.Composition.SimulationTime.AbsoluteDay);
         AppendValue(signature, "C/calendar-date-year", date.Year);
         AppendValue(signature, "C/calendar-date-month", date.Month);
-        AppendValue(signature, "C/calendar-date-day", date.Day);
+        AppendValue(signature, "C/calendar-date-day", date.DayOfMonth);
 
         Assert.That(P12CWorldIdentitySnapshot.TryCapture(
             session.Composition.WorldId,
