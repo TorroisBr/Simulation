@@ -2219,6 +2219,7 @@ public sealed class P12GPoliticalBindingRestoreTests
         string key,
         P12ECrimeOwnerSnapshotSection<T> section,
         Action<string, T> appendRow)
+        where T : class
     {
         AppendValue(signature, key + "/section-id", section.SectionId);
         AppendValue(signature, key + "/schema", section.SchemaVersion);
