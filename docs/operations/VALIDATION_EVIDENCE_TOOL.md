@@ -9,6 +9,8 @@ The standalone validation evidence packager is part of the canonical repository 
 - `Package-UnityValidationEvidence.ps1` creates and verifies a deterministic manifest plus result-only ZIP. Verification checks archive integrity and binds reported results and gate facts to the XML in the package.
 - New authorized validation candidates should use the wrapper and packager. Historical evidence remains unchanged and is not retroactively repackaged.
 
+The package removes NUnit `<output>` elements under the declared output policy. It may also replace the machine-specific root in exactly one absolute Assembly suite `fullname` when that value ends in `Library/ScriptAssemblies/Assembly-CSharp-Editor.dll`. The retained suite identity and relative suffix are preserved; the package and affected result entry declare `redact-absolute-local-assembly-suite-fullnames`. No match uses `none`. Duplicate or unsupported Assembly paths, and local paths in all other result fields, fail closed. The manifest retains the hash and length of the original protected XML and separately hashes the normalized result bytes.
+
 ## Tool and package locator
 
 Tool entry points:

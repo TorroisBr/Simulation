@@ -1,6 +1,7 @@
 Set-StrictMode -Version Latest
 
-$script:EvidenceToolVersion = '1.0.0'
+$script:EvidenceToolVersion = '1.1.0'
+$script:LocalAssemblySuitePathPolicy = 'redact-absolute-local-assembly-suite-fullnames'
 $script:MaximumXmlBytes = 268435456
 $script:MaximumArchiveExpandedBytes = 536870912
 $script:MaximumManifestBytes = 67108864
@@ -322,18 +323,22 @@ function Get-UnityEvidenceReportFacts {
 }
 
 function ConvertTo-UnityXmlSemanticNode {
-    param([Parameter(Mandatory)][System.Xml.XmlNode]$Node)
+    param(
+        [Parameter(Mandatory)][System.Xml.XmlNode]$Node,
+        [switch]$RedactLocalAssemblyPaths
+    )
     switch ($Node.NodeType) {
         ([System.Xml.XmlNodeType]::Element) {
             $element = [System.Xml.XmlElement]$Node
             if ($element.LocalName -eq 'output') { return $null }
             $attributes = [System.Collections.Generic.List[object]]::new()
             foreach ($attribute in Get-OrdinalSortedXmlAttributes -Attributes @($element.Attributes)) {
-                $attributes.Add([ordered]@{ namespaceUri = $attribute.NamespaceURI; localName = $attribute.LocalName; prefix = $attribute.Prefix; value = $attribute.Value })
+                $value = ConvertTo-PortableAssemblySuiteAttributeValue -Element $element -Attribute $attribute -RedactLocalAssemblyPaths:$RedactLocalAssemblyPaths
+                $attributes.Add([ordered]@{ namespaceUri = $attribute.NamespaceURI; localName = $attribute.LocalName; prefix = $attribute.Prefix; value = $value })
             }
             $children = [System.Collections.Generic.List[object]]::new()
             foreach ($child in $element.ChildNodes) {
-                $projected = ConvertTo-UnityXmlSemanticNode $child
+                $projected = ConvertTo-UnityXmlSemanticNode -Node $child -RedactLocalAssemblyPaths:$RedactLocalAssemblyPaths
                 if ($null -eq $projected) { continue }
                 if ($projected.type -eq 'text' -and $children.Count -gt 0 -and $children[$children.Count - 1].type -eq 'text') {
                     $children[$children.Count - 1].value = [string]$children[$children.Count - 1].value + [string]$projected.value
@@ -363,8 +368,11 @@ function Get-OrdinalSortedXmlAttributes {
 }
 
 function Get-UnityXmlSemanticHash {
-    param([Parameter(Mandatory)][System.Xml.XmlDocument]$Document)
-    $projection = ConvertTo-UnityXmlSemanticNode $Document.DocumentElement
+    param(
+        [Parameter(Mandatory)][System.Xml.XmlDocument]$Document,
+        [switch]$RedactLocalAssemblyPaths
+    )
+    $projection = ConvertTo-UnityXmlSemanticNode -Node $Document.DocumentElement -RedactLocalAssemblyPaths:$RedactLocalAssemblyPaths
     return Get-BytesSha256 (ConvertTo-EvidenceJsonBytes $projection)
 }
 
@@ -382,8 +390,53 @@ function Assert-PublicInputSnapshot {
     if ($Snapshot.repository.origin -match '://[^/]*@') { throw 'Input manifest contains remote credentials.' }
 }
 
+function ConvertTo-PortableAssemblySuiteAttributeValue {
+    param(
+        [Parameter(Mandatory)][System.Xml.XmlElement]$Element,
+        [Parameter(Mandatory)][System.Xml.XmlAttribute]$Attribute,
+        [switch]$RedactLocalAssemblyPaths
+    )
+    $value = [string]$Attribute.Value
+    $isAssemblyFullname = $Element.LocalName -eq 'test-suite' -and $Element.GetAttribute('type') -eq 'Assembly' -and $Attribute.LocalName -eq 'fullname'
+    if (-not $RedactLocalAssemblyPaths -or -not $isAssemblyFullname) {
+        return $value
+    }
+
+    $assemblyMatch = [regex]::Match($value, '(?i)(?<relative>Library[\\/]ScriptAssemblies[\\/]Assembly-CSharp-Editor\.dll)$')
+    if (-not $assemblyMatch.Success) { return $value }
+    return '<PROJECT_ROOT>/' + $assemblyMatch.Groups['relative'].Value.Replace('\', '/')
+}
+
+function Get-UnityReportPathPolicy {
+    param([Parameter(Mandatory)][System.Xml.XmlDocument]$Document)
+    $absoluteAssemblySuites = [System.Collections.Generic.List[System.Xml.XmlElement]]::new()
+    foreach ($suite in $Document.SelectNodes("//*[local-name()='test-suite' and @type='Assembly']")) {
+        $fullname = [string]$suite.GetAttribute('fullname')
+        if ($fullname -match '^(?:[A-Za-z]:[\\/]|\\\\[^\\]+\\|/)') { $absoluteAssemblySuites.Add([System.Xml.XmlElement]$suite) }
+    }
+    if ($absoluteAssemblySuites.Count -eq 0) { return 'none' }
+    if ($absoluteAssemblySuites.Count -ne 1) { throw 'Result contains multiple absolute Assembly suite paths; path sanitization is ambiguous.' }
+    $fullname = [string]$absoluteAssemblySuites[0].GetAttribute('fullname')
+    if ($fullname -notmatch '(?i)^[A-Z]:[\\/].*[\\/]Library[\\/]ScriptAssemblies[\\/]Assembly-CSharp-Editor\.dll$') {
+        throw 'Result contains an absolute Assembly suite path outside the explicitly supported Unity editor assembly pattern.'
+    }
+    return $script:LocalAssemblySuitePathPolicy
+}
+
+function Assert-PortableAssemblySuitePathProjection {
+    param([Parameter(Mandatory)][System.Xml.XmlDocument]$Document)
+    $portableSuites = @($Document.SelectNodes("//*[local-name()='test-suite' and @type='Assembly']") | Where-Object {
+        [string]$_.GetAttribute('fullname') -match '^<PROJECT_ROOT>/Library/ScriptAssemblies/Assembly-CSharp-Editor\.dll$'
+    })
+    if ($portableSuites.Count -ne 1) { throw 'Sanitized result does not contain exactly one declared portable Assembly suite identity.' }
+}
+
 function Write-NormalizedXmlNode {
-    param([Parameter(Mandatory)][System.Xml.XmlNode]$Node, [Parameter(Mandatory)][System.Xml.XmlWriter]$Writer)
+    param(
+        [Parameter(Mandatory)][System.Xml.XmlNode]$Node,
+        [Parameter(Mandatory)][System.Xml.XmlWriter]$Writer,
+        [switch]$RedactLocalAssemblyPaths
+    )
     switch ($Node.NodeType) {
         ([System.Xml.XmlNodeType]::Element) {
             $element = [System.Xml.XmlElement]$Node
@@ -391,9 +444,12 @@ function Write-NormalizedXmlNode {
             $Writer.WriteStartElement($element.Prefix, $element.LocalName, $element.NamespaceURI)
             foreach ($attribute in Get-OrdinalSortedXmlAttributes -Attributes @($element.Attributes)) {
                 if ($attribute.Prefix -eq 'xmlns' -or $attribute.Name -eq 'xmlns') { $Writer.WriteAttributeString($attribute.Prefix, $attribute.LocalName, 'http://www.w3.org/2000/xmlns/', $attribute.Value) }
-                else { $Writer.WriteAttributeString($attribute.Prefix, $attribute.LocalName, $attribute.NamespaceURI, $attribute.Value) }
+                else {
+                    $value = ConvertTo-PortableAssemblySuiteAttributeValue -Element $element -Attribute $attribute -RedactLocalAssemblyPaths:$RedactLocalAssemblyPaths
+                    $Writer.WriteAttributeString($attribute.Prefix, $attribute.LocalName, $attribute.NamespaceURI, $value)
+                }
             }
-            foreach ($child in $element.ChildNodes) { Write-NormalizedXmlNode $child $Writer }
+            foreach ($child in $element.ChildNodes) { Write-NormalizedXmlNode -Node $child -Writer $Writer -RedactLocalAssemblyPaths:$RedactLocalAssemblyPaths }
             $Writer.WriteEndElement()
         }
         ([System.Xml.XmlNodeType]::Text) { $Writer.WriteString($Node.Value) }
@@ -406,7 +462,11 @@ function Write-NormalizedXmlNode {
 }
 
 function ConvertTo-NormalizedUnityReport {
-    param([Parameter(Mandatory)][System.Xml.XmlDocument]$Document, [switch]$ClaimRequiresOutput)
+    param(
+        [Parameter(Mandatory)][System.Xml.XmlDocument]$Document,
+        [switch]$ClaimRequiresOutput,
+        [switch]$RedactLocalAssemblyPaths
+    )
     $outputs = @($Document.SelectNodes("//*[local-name()='output']"))
     if ($ClaimRequiresOutput) {
         foreach ($output in $outputs) { if (-not [string]::IsNullOrWhiteSpace($output.InnerText)) { throw 'The requested claim requires output that privacy policy strips; no package was written.' } }
@@ -420,7 +480,7 @@ function ConvertTo-NormalizedUnityReport {
     $writer = [System.Xml.XmlWriter]::Create($buffer, $writerSettings)
     try {
         if ($null -ne $Document.FirstChild -and $Document.FirstChild.NodeType -eq [System.Xml.XmlNodeType]::XmlDeclaration) { $writer.WriteStartDocument() }
-        foreach ($child in $Document.ChildNodes) { Write-NormalizedXmlNode $child $writer }
+        foreach ($child in $Document.ChildNodes) { Write-NormalizedXmlNode -Node $child -Writer $writer -RedactLocalAssemblyPaths:$RedactLocalAssemblyPaths }
         $writer.Flush()
         return ,$buffer.ToArray()
     }
@@ -543,18 +603,20 @@ function Get-RunManifestPublicRecord {
             $facts = Get-UnityEvidenceReportFacts $originalPath
             if (-not $attempt.countsCoherent -or $facts.counts.total -ne [int]$attempt.total -or $facts.counts.passed -ne [int]$attempt.passed -or $facts.counts.failed -ne [int]$attempt.failed -or $facts.counts.skipped -ne [int]$attempt.skipped -or $facts.counts.inconclusive -ne [int]$attempt.inconclusive) { throw "Original XML does not agree with the harness result for run $($private.runId)." }
             Assert-OriginalGateOutcome -XmlPath $originalPath -Attempt $attempt
-            $normalized = ConvertTo-NormalizedUnityReport -Document $facts.document -ClaimRequiresOutput:$ClaimRequiresOutput
+            $reportPathPolicy = Get-UnityReportPathPolicy -Document $facts.document
+            $redactLocalAssemblyPaths = $reportPathPolicy -eq $script:LocalAssemblySuitePathPolicy
+            $normalized = ConvertTo-NormalizedUnityReport -Document $facts.document -ClaimRequiresOutput:$ClaimRequiresOutput -RedactLocalAssemblyPaths:$redactLocalAssemblyPaths
             $normalizedText = [System.Text.UTF8Encoding]::new($false, $true).GetString($normalized)
             Test-PublicEvidenceText $normalizedText
             $normalizedTemp = [System.IO.Path]::GetTempFileName()
             try {
                 [System.IO.File]::WriteAllBytes($normalizedTemp, $normalized)
                 $normalizedFacts = Get-UnityEvidenceReportFacts -XmlPath $normalizedTemp
-                if ((Get-UnityXmlSemanticHash $facts.document) -cne (Get-UnityXmlSemanticHash $normalizedFacts.document)) { throw "Normalized XML changed required report semantics for run $($private.runId)." }
+                if ((Get-UnityXmlSemanticHash -Document $facts.document -RedactLocalAssemblyPaths:$redactLocalAssemblyPaths) -cne (Get-UnityXmlSemanticHash -Document $normalizedFacts.document -RedactLocalAssemblyPaths:$redactLocalAssemblyPaths)) { throw "Normalized XML changed required report semantics for run $($private.runId)." }
             }
             finally { Remove-Item -LiteralPath $normalizedTemp -Force -ErrorAction SilentlyContinue }
             $entryName = 'results/{0}/attempt-{1:D2}.xml' -f $private.runId, $attemptRecords.Count
-            $record.normalizedXml = [ordered]@{ entry = $entryName; bytes = [long]$normalized.Length; sha256 = (Get-BytesSha256 $normalized) }
+            $record.normalizedXml = [ordered]@{ entry = $entryName; bytes = [long]$normalized.Length; sha256 = (Get-BytesSha256 $normalized); pathPolicy = $reportPathPolicy }
             $normalizedEntries.Add([ordered]@{ name = $entryName; bytes = $normalized })
             $record.reportResult = $facts.result
             $record.caseCount = $facts.cases
@@ -681,6 +743,12 @@ function New-UnityValidationEvidencePackage {
     }
     if ($records.Count -eq 0) { throw 'At least one run manifest is required.' }
     if ($records.Count -gt 1000) { throw 'Package exceeds the run-count limit.' }
+    $pathPolicy = 'none'
+    foreach ($run in $records) {
+        foreach ($attempt in @($run.attempts)) {
+            if ($null -ne $attempt.normalizedXml -and $attempt.normalizedXml.pathPolicy -eq $script:LocalAssemblySuitePathPolicy) { $pathPolicy = $script:LocalAssemblySuitePathPolicy }
+        }
+    }
     $expandedBytes = 0L
     foreach ($entry in $entries) {
         $expandedBytes += ([byte[]]$entry.bytes).LongLength
@@ -700,6 +768,7 @@ function New-UnityValidationEvidencePackage {
         $manifest = [ordered]@{
             schema = 'unity-validation-evidence-package-v1'; toolVersion = $script:EvidenceToolVersion; bundleId = $BundleId; packerRuntime = $packerRuntime
             claimRequiresOutput = [bool]$ClaimRequiresOutput; outputPolicy = 'remove-output-elements'
+            pathPolicy = $pathPolicy
             archive = [ordered]@{ file = "$BundleId.zip"; bytes = $archiveRecord.bytes; sha256 = $archiveRecord.sha256; format = 'zip-deflate-fixed-1980-01-01'; entryPolicy = 'normalized-test-result-xml-only' }
             runs = @($records.ToArray())
         }
@@ -731,6 +800,8 @@ function Test-UnityValidationEvidencePackage {
         $manifest = $manifestText | ConvertFrom-Json -AsHashtable -DateKind String
         if ($manifest.schema -ne 'unity-validation-evidence-package-v1') { throw 'Unsupported package manifest schema.' }
         if ($manifest.outputPolicy -ne 'remove-output-elements') { throw 'Unsupported result-output privacy policy.' }
+        $pathPolicy = if ($manifest.Contains('pathPolicy')) { [string]$manifest.pathPolicy } else { 'none' }
+        if ($pathPolicy -notin @('none', $script:LocalAssemblySuitePathPolicy)) { throw 'Unsupported result path privacy policy.' }
         foreach ($key in @('powershellEdition', 'powershellVersion', 'dotnetVersion', 'compressionAssemblyVersion')) { if ([string]$manifest.packerRuntime[$key] -cne [string]$currentRuntime[$key]) { throw 'Package was produced with a different pinned packer toolchain.' } }
         $archiveFile = Get-Item -LiteralPath $ArchivePath -ErrorAction Stop
         if ($archiveFile.Length -gt 2147483648) { throw 'Archive exceeds the size limit.' }
@@ -755,11 +826,16 @@ function Test-UnityValidationEvidencePackage {
                         if ($null -ne $attempt.normalizedXml) {
                             $entryName = [string]$attempt.normalizedXml.entry
                             if ($entryName -notmatch ('^results/' + [regex]::Escape([string]$run.runId) + '/attempt-\d{2,}\.xml$')) { throw 'Manifest contains a result entry outside the required package namespace.' }
+                            $attemptPathPolicy = if ($attempt.normalizedXml.Contains('pathPolicy')) { [string]$attempt.normalizedXml.pathPolicy } elseif ($pathPolicy -eq 'none') { 'none' } else { throw 'Redacted path policy requires a per-result declaration.' }
+                            if ($attemptPathPolicy -notin @('none', $script:LocalAssemblySuitePathPolicy)) { throw 'Unsupported per-result path privacy policy.' }
+                            if ($attemptPathPolicy -eq $script:LocalAssemblySuitePathPolicy -and $pathPolicy -ne $script:LocalAssemblySuitePathPolicy) { throw 'Manifest omits a path policy used by a result entry.' }
                             $expected.Add($entryName, $attempt.normalizedXml)
-                            $attemptClaims.Add($entryName, [ordered]@{ runId = [string]$run.runId; attempt = $attempt })
+                            $attemptClaims.Add($entryName, [ordered]@{ runId = [string]$run.runId; attempt = $attempt; pathPolicy = $attemptPathPolicy })
                         }
                     }
                 }
+                $usesAssemblyPathRedaction = @($attemptClaims.Values | Where-Object pathPolicy -eq $script:LocalAssemblySuitePathPolicy).Count -gt 0
+                if (($pathPolicy -eq $script:LocalAssemblySuitePathPolicy) -ne $usesAssemblyPathRedaction) { throw 'Package-level path policy does not match its result-entry declarations.' }
                 if ($archive.Entries.Count -gt 10000 -or $archive.Entries.Count -ne $expected.Count) { throw 'Archive entry count does not match the manifest or exceeds the limit.' }
                 $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
                 $actualEntryBytes = [System.Collections.Generic.Dictionary[string, byte[]]]::new([StringComparer]::OrdinalIgnoreCase)
@@ -791,9 +867,11 @@ function Test-UnityValidationEvidencePackage {
                     try {
                         [System.IO.File]::WriteAllBytes($tempXml, $bytes)
                         $facts = Get-UnityEvidenceReportFacts $tempXml
-                        $normalized = ConvertTo-NormalizedUnityReport -Document $facts.document
-                        if ((Get-BytesSha256 $normalized) -cne $record.sha256) { throw "Entry '$name' is not in normalized deterministic form." }
                         $claim = $attemptClaims[$name]
+                        $redactLocalAssemblyPaths = $claim.pathPolicy -eq $script:LocalAssemblySuitePathPolicy
+                        if ($redactLocalAssemblyPaths) { Assert-PortableAssemblySuitePathProjection -Document $facts.document }
+                        $normalized = ConvertTo-NormalizedUnityReport -Document $facts.document -RedactLocalAssemblyPaths:$redactLocalAssemblyPaths
+                        if ((Get-BytesSha256 $normalized) -cne $record.sha256) { throw "Entry '$name' is not in normalized deterministic form." }
                         Assert-PublicAttemptReportConsistency -XmlPath $tempXml -Attempt $claim.attempt -Facts $facts -RunId $claim.runId
                     }
                     finally { Remove-Item -LiteralPath $tempXml -Force -ErrorAction SilentlyContinue }
@@ -852,14 +930,18 @@ function Test-UnityValidationEvidencePackage {
                         $facts = Get-UnityEvidenceReportFacts ([string]$privateAttempt.xmlPath)
                         if ($facts.counts.total -ne [int]$publicAttempt.total -or $facts.counts.passed -ne [int]$publicAttempt.passed -or $facts.counts.failed -ne [int]$publicAttempt.failed -or $facts.counts.skipped -ne [int]$publicAttempt.skipped -or $facts.counts.inconclusive -ne [int]$publicAttempt.inconclusive) { throw "Retained source report outcome mismatch for run $($run.runId)." }
                         Assert-OriginalGateOutcome -XmlPath ([string]$privateAttempt.xmlPath) -Attempt $privateAttempt
-                $normalizedSource = ConvertTo-NormalizedUnityReport -Document $facts.document -ClaimRequiresOutput:([bool]$manifest.claimRequiresOutput)
                         $normalizedRecord = $publicAttempt.normalizedXml
+                        $attemptPathPolicy = if ($null -ne $normalizedRecord -and $normalizedRecord.Contains('pathPolicy')) { [string]$normalizedRecord.pathPolicy } elseif ($pathPolicy -eq 'none') { 'none' } else { throw 'Retained result lacks its path-policy declaration.' }
+                        if ($attemptPathPolicy -notin @('none', $script:LocalAssemblySuitePathPolicy)) { throw 'Unsupported retained result path privacy policy.' }
+                        $redactLocalAssemblyPaths = $attemptPathPolicy -eq $script:LocalAssemblySuitePathPolicy
+                        if ((Get-UnityReportPathPolicy -Document $facts.document) -cne $attemptPathPolicy) { throw "Retained source path policy mismatch for run $($run.runId)." }
+                        $normalizedSource = ConvertTo-NormalizedUnityReport -Document $facts.document -ClaimRequiresOutput:([bool]$manifest.claimRequiresOutput) -RedactLocalAssemblyPaths:$redactLocalAssemblyPaths
                         if ($null -eq $normalizedRecord -or $normalizedSource.Length -ne [long]$normalizedRecord.bytes -or (Get-BytesSha256 $normalizedSource) -cne $normalizedRecord.sha256) { throw "Retained source report normalization mismatch for run $($run.runId)." }
                 $normalizedTemp = [System.IO.Path]::GetTempFileName()
                 try {
                     [System.IO.File]::WriteAllBytes($normalizedTemp, $normalizedSource)
                     $normalizedFacts = Get-UnityEvidenceReportFacts -XmlPath $normalizedTemp
-                    if ((Get-UnityXmlSemanticHash $facts.document) -cne (Get-UnityXmlSemanticHash $normalizedFacts.document)) { throw "Retained report semantics changed for run $($run.runId)." }
+                    if ((Get-UnityXmlSemanticHash -Document $facts.document -RedactLocalAssemblyPaths:$redactLocalAssemblyPaths) -cne (Get-UnityXmlSemanticHash -Document $normalizedFacts.document -RedactLocalAssemblyPaths:$redactLocalAssemblyPaths)) { throw "Retained report semantics changed for run $($run.runId)." }
                 }
                 finally { Remove-Item -LiteralPath $normalizedTemp -Force -ErrorAction SilentlyContinue }
                         $archivedSource = $actualEntryBytes[[string]$normalizedRecord.entry]
@@ -883,12 +965,14 @@ function Read-UnityValidationEvidencePackage {
     $manifest = $manifestText | ConvertFrom-Json -AsHashtable -DateKind String
     if ($manifest.schema -ne 'unity-validation-evidence-package-v1') { throw 'Unsupported package manifest schema.' }
     if ($manifest.outputPolicy -ne 'remove-output-elements') { throw 'Unsupported result-output privacy policy.' }
+    $pathPolicy = if ($manifest.Contains('pathPolicy')) { [string]$manifest.pathPolicy } else { 'none' }
+    if ($pathPolicy -notin @('none', $script:LocalAssemblySuitePathPolicy)) { throw 'Unsupported result path privacy policy.' }
     foreach ($run in @($manifest.runs)) {
         $attemptSummary = [System.Collections.Generic.List[object]]::new()
         foreach ($attempt in @($run.attempts)) {
             $attemptSummary.Add([pscustomobject]@{ Status = $attempt.status; Total = $attempt.total; Passed = $attempt.passed; Failed = $attempt.failed; Skipped = $attempt.skipped; Inconclusive = $attempt.inconclusive; HasReport = ($null -ne $attempt.normalizedXml) })
         }
-        [pscustomobject]@{ RunId = $run.runId; GateStatus = $run.status; Mode = $run.invocation.mode; StartedAtUtc = $run.startedAtUtc; Attempts = @($attemptSummary.ToArray()); InputSha256 = $run.inputSnapshot.sha256 }
+        [pscustomobject]@{ RunId = $run.runId; GateStatus = $run.status; Mode = $run.invocation.mode; StartedAtUtc = $run.startedAtUtc; Attempts = @($attemptSummary.ToArray()); InputSha256 = $run.inputSnapshot.sha256; PathPolicy = $pathPolicy }
     }
 }
 

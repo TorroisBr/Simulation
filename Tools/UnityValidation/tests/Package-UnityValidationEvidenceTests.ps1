@@ -150,6 +150,52 @@ try {
     Assert-True ((Get-FileHash $bundleA.ArchivePath -Algorithm SHA256).Hash -eq (Get-FileHash $bundleB.ArchivePath -Algorithm SHA256).Hash) 'identical source run produces byte-identical ZIP bytes'
     $verify = Test-UnityValidationEvidencePackage -ManifestPath $bundleA.ManifestPath -ArchivePath $bundleA.ArchivePath -RunManifestPath $mixedRun
     Assert-True $verify.IsValid "package and retained raw XML verify: $($verify.Error)"
+    $ordinaryManifest = Get-Content -LiteralPath $bundleA.ManifestPath -Raw | ConvertFrom-Json -AsHashtable
+    Assert-True ($ordinaryManifest.pathPolicy -eq 'none' -and $ordinaryManifest.runs[0].attempts[0].normalizedXml.pathPolicy -eq 'none') 'ordinary report package declares that no local Assembly path was removed'
+
+    $localAssemblyPath = 'C:\Users\fixture\project\Library\ScriptAssemblies\assembly-CSharp-Editor.dll'
+    $assemblyPathXml = (New-TestXml -Outcomes @('Passed')).Replace('fullname="Fixture"', ('fullname="' + $localAssemblyPath + '"'))
+    $assemblyPathRun = New-PrivateRunFixture -RunId '55555555555555555555555555555555' -XmlText $assemblyPathXml -Status 'Passed'
+    $assemblyPathBundle = New-UnityValidationEvidencePackage -RunManifestPath $assemblyPathRun -OutputDirectory $outDir -BundleId 'assembly-path-redaction'
+    $assemblyPathManifest = Get-Content -LiteralPath $assemblyPathBundle.ManifestPath -Raw | ConvertFrom-Json -AsHashtable
+    Assert-True ($assemblyPathManifest.pathPolicy -eq 'redact-absolute-local-assembly-suite-fullnames') 'manifest declares the exact Assembly suite path field category that was removed'
+    Assert-True ($assemblyPathManifest.runs[0].attempts[0].normalizedXml.pathPolicy -eq $assemblyPathManifest.pathPolicy) 'result entry binds its normalization to the declared path policy'
+    $assemblyStream = [System.IO.File]::OpenRead($assemblyPathBundle.ArchivePath)
+    try {
+        $assemblyZip = [System.IO.Compression.ZipArchive]::new($assemblyStream, [System.IO.Compression.ZipArchiveMode]::Read)
+        try {
+            $assemblyReader = [System.IO.StreamReader]::new($assemblyZip.Entries[0].Open())
+            try { $portableAssemblyXml = $assemblyReader.ReadToEnd() } finally { $assemblyReader.Dispose() }
+        }
+        finally { $assemblyZip.Dispose() }
+    }
+    finally { $assemblyStream.Dispose() }
+    Assert-True (-not $portableAssemblyXml.Contains('C:\Users\fixture')) 'published result contains no incidental local Windows home path'
+    Assert-True ($portableAssemblyXml.Contains('fullname="&lt;PROJECT_ROOT&gt;/Library/ScriptAssemblies/assembly-CSharp-Editor.dll"')) 'only the local root is replaced and the assembly-relative identity casing is retained'
+    $assemblySourcePath = Join-Path (Split-Path $assemblyPathRun) 'result.xml'
+    $assemblySourceFacts = Get-UnityEvidenceReportFacts -XmlPath $assemblySourcePath
+    $portablePath = Join-Path $root 'portable-assembly-result.xml'
+    [System.IO.File]::WriteAllText($portablePath, $portableAssemblyXml, [System.Text.UTF8Encoding]::new($false))
+    $portableFacts = Get-UnityEvidenceReportFacts -XmlPath $portablePath
+    $sourceAssembly = $assemblySourceFacts.document.SelectSingleNode("//*[local-name()='test-suite' and @type='Assembly']")
+    $portableAssembly = $portableFacts.document.SelectSingleNode("//*[local-name()='test-suite' and @type='Assembly']")
+    foreach ($attributeName in @('id', 'type', 'name', 'result', 'runstate', 'testcasecount')) {
+        Assert-True ($sourceAssembly.GetAttribute($attributeName) -ceq $portableAssembly.GetAttribute($attributeName)) "Assembly suite $attributeName remains unchanged"
+    }
+    $sourceSemanticHash = Get-UnityXmlSemanticHash -Document $assemblySourceFacts.document -RedactLocalAssemblyPaths
+    $portableSemanticHash = Get-UnityXmlSemanticHash -Document $portableFacts.document -RedactLocalAssemblyPaths
+    Assert-True ($sourceSemanticHash -ceq $portableSemanticHash) 'declared path projection preserves the full result hierarchy, identities, outcomes, counts, and decision-bearing fields'
+    Assert-True ((Test-UnityValidationEvidencePackage -ManifestPath $assemblyPathBundle.ManifestPath -ArchivePath $assemblyPathBundle.ArchivePath -RunManifestPath $assemblyPathRun).IsValid) 'sanitized package verifies against its protected original report'
+
+    $casePathXml = (New-TestXml -Outcomes @('Passed')).Replace('fullname="Fixture.duplicate display name.1"', 'fullname="C:\Users\fixture\private\case.cs"')
+    $casePathRun = New-PrivateRunFixture -RunId '66666666666666666666666666666666' -XmlText $casePathXml -Status 'Passed'
+    Assert-Throws { New-UnityValidationEvidencePackage -RunManifestPath $casePathRun -OutputDirectory $outDir -BundleId 'reject-case-path' } 'path-like test-case identities remain protected and are not covered by the Assembly-only redaction'
+    $unsupportedAssemblyXml = (New-TestXml -Outcomes @('Passed')).Replace('fullname="Fixture"', 'fullname="C:\Users\fixture\project\Library\ScriptAssemblies\Other.dll"')
+    $unsupportedAssemblyRun = New-PrivateRunFixture -RunId '77777777777777777777777777777777' -XmlText $unsupportedAssemblyXml -Status 'Passed'
+    Assert-Throws { New-UnityValidationEvidencePackage -RunManifestPath $unsupportedAssemblyRun -OutputDirectory $outDir -BundleId 'reject-unsupported-assembly-path' } 'unapproved Assembly path suffixes fail closed'
+    $ambiguousAssemblyXml = $assemblyPathXml.Replace('</test-run>', '<test-suite id="second" type="Assembly" name="Other" fullname="D:\fixture\Library\ScriptAssemblies\Assembly-CSharp-Editor.dll" result="Passed" runstate="Runnable" testcasecount="0"></test-suite></test-run>')
+    $ambiguousAssemblyRun = New-PrivateRunFixture -RunId '88888888888888888888888888888888' -XmlText $ambiguousAssemblyXml -Status 'Passed'
+    Assert-Throws { New-UnityValidationEvidencePackage -RunManifestPath $ambiguousAssemblyRun -OutputDirectory $outDir -BundleId 'reject-ambiguous-assembly-path' } 'multiple absolute Assembly paths fail closed as ambiguous'
     $resultTamperedManifestPath = Join-Path $outDir 'result-tampered.manifest.json'
     $resultTamperedManifest = Get-Content $bundleA.ManifestPath -Raw | ConvertFrom-Json -AsHashtable
     $resultTamperedManifest.runs[0].attempts[0].passed++
