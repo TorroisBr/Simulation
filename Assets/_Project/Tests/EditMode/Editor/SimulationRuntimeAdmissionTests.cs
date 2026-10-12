@@ -8774,6 +8774,169 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestoreRejectsExplorableSiteAddedAfterTargetChecksAndKeepsSourceRetryable()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G P12-D site post-check target recapture source");
+        GameObject controlObject = new GameObject("P12-G P12-D site post-check target recapture control");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            ConfigureSelectedBootstrap(control, config);
+            InvokeInitializeSimulation(source, null);
+            InvokeInitializeSimulation(control, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
+
+            ExplorableSiteStore sourceStore = original.ExplorableSites;
+            OwnerSectionCensusWitness sourceSiteRow = new ExplorableSiteCensusProvider(sourceStore)
+                .GetCurrentCensus();
+            Assert.That(sourceSiteRow.SectionId, Is.EqualTo(ExplorableSiteCensusProvider.SectionId));
+            Assert.That(sourceSiteRow.SchemaVersion, Is.EqualTo(ExplorableSiteCensusProvider.SchemaVersion));
+            Assert.That(sourceSiteRow.OwnerInstanceIdentity, Is.SameAs(sourceStore));
+            Assert.That(sourceSiteRow.Cardinality, Is.Zero);
+            Assert.That(sourceSiteRow.Revision, Is.Zero);
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
+                Is.True, sourceAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
+                Is.True, controlAdvance.ToString());
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(original.Runtime);
+            string sourceGraph = CaptureCompleteDailyV1OwnerProjection(original, sourceToken);
+            Assert.That(sourceGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                controlSession, GetCompletedDailyToken(controlSession.Runtime))));
+
+            SimulationActiveSession privateCandidate = null;
+            ExplorableSiteStore targetStore = null;
+            ExplorableSiteRuntime injectedSite = null;
+            OwnerSectionCensusWitness targetRowBeforeMutation = null;
+            OwnerSectionCensusWitness targetRowAfterMutation = null;
+            bool targetChecksCompleted = false;
+            bool mutationInjected = false;
+            bool targetVectorRecaptured = false;
+            bool boundaryAdmitted = false;
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSession(
+                    original,
+                    out SimulationActiveSession restored,
+                    out P12GDailyV1RestoreFailure failure,
+                    out string diagnostic,
+                    stage =>
+                    {
+                        if (stage == P12GDailyV1RestoreStage.TargetChecksCompleted)
+                        {
+                            targetChecksCompleted = true;
+                        }
+                        else if (stage == P12GDailyV1RestoreStage.CandidateGuardBound)
+                        {
+                            Assert.That(privateCandidate, Is.Not.Null);
+                            Assert.That(privateCandidate.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.True,
+                                "The site mutation is injected after restored-graph checks and candidate guard binding.");
+                            targetStore = privateCandidate.ExplorableSites;
+                            targetRowBeforeMutation = new ExplorableSiteCensusProvider(targetStore)
+                                .GetCurrentCensus();
+                            Assert.That(targetRowBeforeMutation.SectionId,
+                                Is.EqualTo(ExplorableSiteCensusProvider.SectionId));
+                            Assert.That(targetRowBeforeMutation.SchemaVersion,
+                                Is.EqualTo(ExplorableSiteCensusProvider.SchemaVersion));
+                            Assert.That(targetRowBeforeMutation.OwnerInstanceIdentity, Is.SameAs(targetStore));
+                            Assert.That(targetRowBeforeMutation.OwnerInstanceIdentity,
+                                Is.Not.SameAs(sourceSiteRow.OwnerInstanceIdentity));
+                            Assert.That(targetRowBeforeMutation.Cardinality, Is.Zero);
+                            Assert.That(targetRowBeforeMutation.Revision, Is.Zero);
+
+                            SpatialLocationRuntime targetLocation = privateCandidate.SpatialNetwork.Locations
+                                .OrderBy(location => location.RuntimeId, StringComparer.Ordinal)
+                                .FirstOrDefault();
+                            Assert.That(targetLocation, Is.Not.Null,
+                                "The synthetic site must bind to an already-staged legacy location.");
+                            ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite(
+                                "p12g-private-target-late-site-definition",
+                                ExplorableSiteKind.Generic);
+                            injectedSite = new ExplorableSiteRuntime(
+                                "p12g-private-target-late-site",
+                                definition,
+                                targetLocation);
+                            Assert.That(targetStore.Add(injectedSite), Is.True,
+                                "The supported ExplorableSiteStore writer must change the private target after guard binding.");
+                            targetRowAfterMutation = new ExplorableSiteCensusProvider(targetStore)
+                                .GetCurrentCensus();
+                            mutationInjected = true;
+                        }
+                        else if (stage == P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured)
+                        {
+                            targetVectorRecaptured = true;
+                        }
+                        else if (stage == P12GDailyV1RestoreStage.BoundaryAdmitted)
+                        {
+                            boundaryAdmitted = true;
+                        }
+                    },
+                    candidate => privateCandidate = candidate), Is.False);
+
+            Assert.That(targetChecksCompleted, Is.True);
+            Assert.That(mutationInjected, Is.True);
+            Assert.That(targetVectorRecaptured, Is.False,
+                "A populated exact-empty target row must reject before final owner-vector recapture.");
+            Assert.That(boundaryAdmitted, Is.False);
+            Assert.That(targetRowBeforeMutation, Is.Not.Null);
+            Assert.That(targetRowAfterMutation, Is.Not.Null);
+            Assert.That(targetRowAfterMutation.SectionId, Is.EqualTo(targetRowBeforeMutation.SectionId));
+            Assert.That(targetRowAfterMutation.SchemaVersion, Is.EqualTo(targetRowBeforeMutation.SchemaVersion));
+            Assert.That(targetRowAfterMutation.OwnerInstanceIdentity, Is.SameAs(targetStore));
+            Assert.That(targetRowAfterMutation.Cardinality, Is.EqualTo(1));
+            Assert.That(targetRowAfterMutation.Revision, Is.EqualTo(1L));
+            Assert.That(targetStore.Count, Is.EqualTo(1));
+            Assert.That(targetStore.Revision, Is.EqualTo(1L));
+            Assert.That(targetStore.GetByRuntimeId("p12g-private-target-late-site"), Is.SameAs(injectedSite));
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.TargetOwnerVectorFailed));
+            Assert.That(diagnostic, Does.Contain("could not recapture its owner vector after mutation-guard binding"));
+            Assert.That(diagnostic, Does.Contain("OwnerCoverageIncomplete"));
+            Assert.That(restored, Is.Null,
+                "A private target with a populated profile-excluded site owner must not reach publication.");
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, sourceToken), Is.EqualTo(sourceGraph));
+            Assert.That(sourceStore.Count, Is.Zero);
+            Assert.That(sourceStore.Revision, Is.Zero);
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession retried = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(retried, Is.Not.SameAs(original));
+            string retriedGraph = CaptureCompleteDailyV1OwnerProjection(
+                retried, GetCompletedDailyToken(retried.Runtime));
+            Assert.That(retriedGraph, Is.EqualTo(sourceGraph));
+            Assert.That(retriedGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                controlSession, GetCompletedDailyToken(controlSession.Runtime))));
+            Assert.That(retried.ExplorableSites.Count, Is.Zero);
+            Assert.That(retried.ExplorableSites.Revision, Is.Zero);
+
+            Assert.That(retried.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retryAdvance),
+                Is.True, retryAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlNextAdvance),
+                Is.True, controlNextAdvance.ToString());
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                    retried, GetCompletedDailyToken(retried.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    controlSession, GetCompletedDailyToken(controlSession.Runtime))),
+                "The rejected private site must not change source retry or later deterministic continuation.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+            UnityEngine.Object.DestroyImmediate(controlObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreRejectsMutationGuardBindFailureBeforeBoundaryAdmissionAndKeepsSourceRetryable()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
