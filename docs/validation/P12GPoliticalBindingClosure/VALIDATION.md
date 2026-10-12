@@ -8,9 +8,9 @@ Date: 2026-10-12
 - Candidate branch: `codex/phase12/P12GPoliticalBindingCompletion`
 - Validated code commit: `a01d73297228c6ee466bb01a636ca0bcdecc9f68`
 - Candidate Git tree: `de049a4ff5efb78845ce643080ee056787f2cf20`
-- Validated `Assets` tree: `e1ccf80c05fc3e3b8e2ec739376bd78b1f208ea2`
-- Coordinator source blob: `2960505666ce4e1451120c9ef1d010059bb0a217`
-- Political fixture test blob: `a61dad9e1755c28c87fc3f7e01e6e30bb1f9964f`
+- Validated `Assets` tree: `a61dad9e1755c28c87fc3f7e01e6e30bb1f9964f`
+- Coordinator source blob: `e1ccf80c05fc3e3b8e2ec739376bd78b1f208ea2`
+- Political fixture test blob: `2960505666ce4e1451120c9ef1d010059bb0a217`
 - Every Unity run below records candidate `a01d7329`, Git tree `de049a4`, and input snapshot `56d5c53bc6b8f9a30a6c9f3b2054a3929dcfcbade36abde6fcef17753b4b7196`.
 - Unity Editor: `6000.3.9f1`
 
