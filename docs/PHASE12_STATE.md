@@ -4823,3 +4823,42 @@ The selected successful Daily-v1 restore fixture now observes a thread-local, te
 This proves only that the exercised successful restore fixture does not enter the normal day-level callback pipeline on its test thread. It does not prove absence of direct callbacks that bypass `AdvanceDayAfterClockAdvance`, behavior on other threads, or behavior on failed restore paths. The earlier P9 witness proves zero entry to `SimulationGenesisPipeline.ExecuteStages`; together these are bounded invocation observations, not universal no-gameplay claims.
 
 P12-G remains `WAIT_DEPENDENCY`; P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains `OPEN`. P12-B through P12-F remain delivered within their recorded scopes. This promotion does not complete the compatibility/graph-rejection matrix, internal owner-hydrator/validator failure coverage, causal no-replay proof, or full included-owner multi-boundary continuation parity, and does not imply complete owner/epoch coverage, capture eligibility, export/hydration readiness, P12-A/P13 readiness, or Phase closure. The next distinct, bounded failure-atomicity gap is a failure originating inside Genealogy hydration; the promoted `DGenealogyHydratorEntry` fault fires immediately before the call and duplicates the adjacent `DPersonsStaged` cutpoint, so it is not evidence of an internal false/throw/partial-mutation path.
+
+## P12-G Faction post-guard target recapture witness promotion — 2026-10-12
+
+The P12-G test-only candidate was integrated by clean fast-forward from canonical
+`e1190fb127cc74a98169f1c07f357cd8a487e186` through sanitized evidence tip
+`cd1e01c2ddbf445f59d3fb57e744fc14a4696d2c` and its independent exact-tip
+review record `da48aee0d5acf6af04ffaa618e5fd9b87d4f3113`. The code commit is
+`d89aabb64b29d0cb750766b54b1c1c41da03e2b0`, Git tree
+`484544c20617dab14a93f7cff1f231fa63b9749d`, and `Assets` tree
+`8f79c02e8c032aa2036e8a314ed34598f9b38cda`; the test source blob is
+`0376885edf6dc3083e3c6f0ef8ee4d065cae1cc0`. The durable review is
+[`P12GFactionPostGuardRecapture-20261012-INDEPENDENT-REVIEW.md`](reviews/P12GFactionPostGuardRecapture-20261012-INDEPENDENT-REVIEW.md).
+
+`DailyV1RestoreRejectsFactionAddedAfterTargetChecksAndKeepsSourceRetryable`
+uses the existing candidate-guard seam and a supported Faction registration to
+mutate the private target after whole-graph checks. It verifies changed census
+cardinality/revision and one shared-epoch advance, then verifies target-vector
+recapture rejects before admission or publication. The active source boundary,
+owners, and health remain intact; a later retry succeeds and matches the
+uninterrupted next-boundary projection. Production code is unchanged.
+
+Exact-tree validation passed: focused 1/1, `SimulationRuntimeAdmissionTests`
+200/200, ALL EditMode 2879/2879, official Smoke 5/5, and `git diff --check`.
+The sanitized XML, compressed logs, result projections, and manifests are
+retained under
+[`P12GFactionPostGuardRecapture-20261012`](validation/P12GFactionPostGuardRecapture-20261012/).
+The independent review rechecked counts and hashes and found no local absolute
+paths, account identifiers, or credential patterns. Only sanitized artifacts
+and documentation followed the original validation; the test source and
+production code did not change, so Unity was not rerun. The original
+unredacted candidate `15bba2ee` was preserved and excluded from publication.
+
+This is one bounded post-guard Faction target-recapture rejection witness. It
+does not complete P12-G or establish complete target-owner, owner, or
+shared-epoch coverage; runtime-wide quiescence; full rejection/failure
+atomicity; causal no-replay; or full included-owner multi-boundary parity.
+P12-G remains `WAIT_DEPENDENCY`; P12-A remains `WAIT_DEPENDENCY`; P13 remains
+`BLOCKED`; Phase 12 remains open. No capture eligibility, export/hydration,
+P12-A/P13 readiness, or Phase closure is implied. No dependency edge changes.
