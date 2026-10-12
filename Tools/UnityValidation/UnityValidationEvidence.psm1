@@ -580,12 +580,14 @@ function Get-RunManifestPublicRecord {
 function Write-DeterministicEvidenceArchive {
     param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][object[]]$Entries)
     Add-Type -AssemblyName System.IO.Compression
+    $ordinalEntries = [System.Collections.Generic.SortedDictionary[string, object]]::new([StringComparer]::Ordinal)
+    foreach ($item in $Entries) { $ordinalEntries.Add([string]$item.name, $item) }
     $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
     $completed = $false
     try {
         $archive = [System.IO.Compression.ZipArchive]::new($stream, [System.IO.Compression.ZipArchiveMode]::Create, $true)
         try {
-            foreach ($item in @($Entries | Sort-Object name -CaseSensitive)) {
+            foreach ($item in $ordinalEntries.Values) {
                 $entry = $archive.CreateEntry([string]$item.name, [System.IO.Compression.CompressionLevel]::Optimal)
                 $entry.LastWriteTime = [DateTimeOffset]::new(1980, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
                 $entry.ExternalAttributes = 0
@@ -601,6 +603,50 @@ function Write-DeterministicEvidenceArchive {
         $stream.Dispose()
         if (-not $completed -and (Test-Path -LiteralPath $Path)) { Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue }
     }
+}
+
+function Assert-PublicRunAttemptEnvelope {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Run)
+    $allowedStatuses = @('Passed', 'Failed', 'TimedOut', 'NoResultXml', 'InvalidResultXml', 'UnityLaunchFailed', 'OperationalFailure', 'ProjectAlreadyOpen')
+    $attempts = @($Run.attempts)
+    if ($attempts.Count -lt 1 -or $attempts.Count -gt 2) { throw "Run $($Run.runId) has an invalid attempt count." }
+    if ([string]$Run.status -notin $allowedStatuses) { throw "Run $($Run.runId) has an unknown final gate status." }
+    if ([string]$Run.status -cne [string]$attempts[-1].status) { throw "Run $($Run.runId) status does not match its final attempt." }
+    if ($attempts.Count -gt 1 -and -not [bool]$Run.invocation.retryOperationalFailure) { throw "Run $($Run.runId) contains a retry not authorized by its invocation." }
+    if ($null -eq $attempts[-1].normalizedXml) { throw "Run $($Run.runId) final attempt has no result XML." }
+    foreach ($attempt in $attempts) {
+        if ([string]$attempt.status -notin $allowedStatuses) { throw "Run $($Run.runId) contains an unknown attempt status." }
+        foreach ($field in @('total', 'passed', 'failed', 'skipped', 'inconclusive')) {
+            if (-not $attempt.Contains($field) -or [long]$attempt[$field] -lt 0) { throw "Run $($Run.runId) attempt has an invalid $field result claim." }
+        }
+        if ($null -eq $attempt.normalizedXml) {
+            if ($null -ne $attempt.originalXml -or [string]$attempt.status -eq 'Passed' -or [long]$attempt.total -ne 0 -or [long]$attempt.passed -ne 0 -or [long]$attempt.failed -ne 0 -or [long]$attempt.skipped -ne 0 -or [long]$attempt.inconclusive -ne 0) {
+                throw "Run $($Run.runId) has unsupported result claims for an attempt without XML."
+            }
+            if ($attempt.Contains('reportResult') -or $attempt.Contains('caseCount')) { throw "Run $($Run.runId) has report claims without XML." }
+        }
+        else {
+            foreach ($field in @('reportResult', 'caseCount', 'countsCoherent', 'frameworkResult', 'exitCode', 'originalXml')) {
+                if (-not $attempt.Contains($field)) { throw "Run $($Run.runId) XML attempt is missing its $field claim." }
+            }
+            if ($null -eq $attempt.originalXml -or $null -eq $attempt.originalXml.sha256 -or $null -eq $attempt.originalXml.bytes) { throw "Run $($Run.runId) XML attempt is missing its original-report identity." }
+        }
+    }
+}
+
+function Assert-PublicAttemptReportConsistency {
+    param(
+        [Parameter(Mandatory)][string]$XmlPath,
+        [Parameter(Mandatory)][System.Collections.IDictionary]$Attempt,
+        [Parameter(Mandatory)][System.Collections.IDictionary]$Facts,
+        [Parameter(Mandatory)][string]$RunId
+    )
+    foreach ($field in @('total', 'passed', 'failed', 'skipped', 'inconclusive')) {
+        if ([long]$Facts.counts[$field] -ne [long]$Attempt[$field]) { throw "Archived XML $field count disagrees with the manifest for run $RunId." }
+    }
+    if ([string]$Facts.result -cne [string]$Attempt.reportResult) { throw "Archived XML report result disagrees with the manifest for run $RunId." }
+    if ([long]$Facts.cases -ne [long]$Attempt.caseCount) { throw "Archived XML case count disagrees with the manifest for run $RunId." }
+    Assert-OriginalGateOutcome -XmlPath $XmlPath -Attempt $Attempt
 }
 
 function New-UnityValidationEvidencePackage {
@@ -691,10 +737,12 @@ function Test-UnityValidationEvidencePackage {
             $archive = [System.IO.Compression.ZipArchive]::new($stream, [System.IO.Compression.ZipArchiveMode]::Read, $true)
             try {
                 $expected = [System.Collections.Generic.Dictionary[string, object]]::new([StringComparer]::OrdinalIgnoreCase)
+                $attemptClaims = [System.Collections.Generic.Dictionary[string, object]]::new([StringComparer]::OrdinalIgnoreCase)
                 $runIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
                 foreach ($run in @($manifest.runs)) {
                     if ([string]$run.runId -notmatch '^[a-fA-F0-9]{32}$') { throw 'Manifest contains an invalid run id.' }
                     if (-not $runIds.Add([string]$run.runId)) { throw 'Manifest contains duplicate run entries.' }
+                    Assert-PublicRunAttemptEnvelope -Run $run
                     Assert-PublicInputSnapshot -Snapshot $run.inputSnapshot
                     $snapshotCore = [ordered]@{ schema = $run.inputSnapshot.schema; repository = $run.inputSnapshot.repository; unityEditorVersion = $run.inputSnapshot.unityEditorVersion; files = @($run.inputSnapshot.files) }
                     if ((Get-BytesSha256 (ConvertTo-EvidenceJsonBytes $snapshotCore)) -cne $run.inputSnapshot.sha256) { throw "Input inventory integrity mismatch for run $($run.runId)." }
@@ -703,6 +751,7 @@ function Test-UnityValidationEvidencePackage {
                             $entryName = [string]$attempt.normalizedXml.entry
                             if ($entryName -notmatch ('^results/' + [regex]::Escape([string]$run.runId) + '/attempt-\d{2,}\.xml$')) { throw 'Manifest contains a result entry outside the required package namespace.' }
                             $expected.Add($entryName, $attempt.normalizedXml)
+                            $attemptClaims.Add($entryName, [ordered]@{ runId = [string]$run.runId; attempt = $attempt })
                         }
                     }
                 }
@@ -739,6 +788,8 @@ function Test-UnityValidationEvidencePackage {
                         $facts = Get-UnityEvidenceReportFacts $tempXml
                         $normalized = ConvertTo-NormalizedUnityReport -Document $facts.document
                         if ((Get-BytesSha256 $normalized) -cne $record.sha256) { throw "Entry '$name' is not in normalized deterministic form." }
+                        $claim = $attemptClaims[$name]
+                        Assert-PublicAttemptReportConsistency -XmlPath $tempXml -Attempt $claim.attempt -Facts $facts -RunId $claim.runId
                     }
                     finally { Remove-Item -LiteralPath $tempXml -Force -ErrorAction SilentlyContinue }
                     Test-PublicEvidenceText ([System.Text.UTF8Encoding]::new($false, $true).GetString($bytes))

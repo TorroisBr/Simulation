@@ -150,6 +150,41 @@ try {
     Assert-True ((Get-FileHash $bundleA.ArchivePath -Algorithm SHA256).Hash -eq (Get-FileHash $bundleB.ArchivePath -Algorithm SHA256).Hash) 'identical source run produces byte-identical ZIP bytes'
     $verify = Test-UnityValidationEvidencePackage -ManifestPath $bundleA.ManifestPath -ArchivePath $bundleA.ArchivePath -RunManifestPath $mixedRun
     Assert-True $verify.IsValid "package and retained raw XML verify: $($verify.Error)"
+    $resultTamperedManifestPath = Join-Path $outDir 'result-tampered.manifest.json'
+    $resultTamperedManifest = Get-Content $bundleA.ManifestPath -Raw | ConvertFrom-Json -AsHashtable
+    $resultTamperedManifest.runs[0].attempts[0].passed++
+    [System.IO.File]::WriteAllText($resultTamperedManifestPath, (ConvertTo-Json -InputObject $resultTamperedManifest -Depth 40), [System.Text.UTF8Encoding]::new($false))
+    $resultTamperedVerify = Test-UnityValidationEvidencePackage -ManifestPath $resultTamperedManifestPath -ArchivePath $bundleA.ArchivePath
+    Assert-True (-not $resultTamperedVerify.IsValid) 'archive-only verification rejects public result counts that disagree with XML'
+    $statusTamperedManifestPath = Join-Path $outDir 'status-tampered.manifest.json'
+    $statusTamperedManifest = Get-Content $bundleA.ManifestPath -Raw | ConvertFrom-Json -AsHashtable
+    $statusTamperedManifest.runs[0].status = 'Passed'
+    [System.IO.File]::WriteAllText($statusTamperedManifestPath, (ConvertTo-Json -InputObject $statusTamperedManifest -Depth 40), [System.Text.UTF8Encoding]::new($false))
+    $statusTamperedVerify = Test-UnityValidationEvidencePackage -ManifestPath $statusTamperedManifestPath -ArchivePath $bundleA.ArchivePath
+    Assert-True (-not $statusTamperedVerify.IsValid) 'archive-only verification rejects run status that disagrees with the final attempt'
+
+    $ordinalArchive = Join-Path $outDir 'ordinal-order.zip'
+    $savedCulture = [System.Globalization.CultureInfo]::CurrentCulture
+    try {
+        [System.Globalization.CultureInfo]::CurrentCulture = [System.Globalization.CultureInfo]::GetCultureInfo('en-US')
+        $module = Get-Module UnityValidationEvidence
+        & $module {
+            param($path)
+            $items = @(
+                [pscustomobject]@{ name = 'results/z.xml'; bytes = [byte[]]@(1) },
+                [pscustomobject]@{ name = 'results/ä.xml'; bytes = [byte[]]@(2) },
+                [pscustomobject]@{ name = 'results/a.xml'; bytes = [byte[]]@(3) }
+            )
+            Write-DeterministicEvidenceArchive -Path $path -Entries $items
+        } $ordinalArchive
+        $ordinalStream = [System.IO.File]::OpenRead($ordinalArchive)
+        try {
+            $ordinalZip = [System.IO.Compression.ZipArchive]::new($ordinalStream, [System.IO.Compression.ZipArchiveMode]::Read)
+            try { $ordinalNames = @($ordinalZip.Entries | ForEach-Object FullName) } finally { $ordinalZip.Dispose() }
+        } finally { $ordinalStream.Dispose() }
+        Assert-True (($ordinalNames -join '|') -eq 'results/a.xml|results/z.xml|results/ä.xml') 'ZIP entry ordering is ordinal under an English collation that sorts ä near a'
+    }
+    finally { [System.Globalization.CultureInfo]::CurrentCulture = $savedCulture }
     $manifestJson = Get-Content $bundleA.ManifestPath -Raw
     $zipStream = [System.IO.File]::OpenRead($bundleA.ArchivePath)
     try {
