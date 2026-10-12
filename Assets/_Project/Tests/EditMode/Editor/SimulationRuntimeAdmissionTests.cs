@@ -8591,6 +8591,189 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestoreRejectsP8CCityBindingAddedAfterTargetChecksAndKeepsSourceRetryable()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G P8-C City binding post-check target recapture source");
+        GameObject controlObject = new GameObject("P12-G P8-C City binding post-check target recapture control");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            ConfigureSelectedBootstrap(control, config);
+            InvokeInitializeSimulation(source, null);
+            InvokeInitializeSimulation(control, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(controlSession, Is.Not.Null);
+
+            CityRuntime stagedCity = original.Runtime.Cities
+                .OrderBy(city => city.RuntimeId, StringComparer.Ordinal)
+                .First();
+            string stagedCityId = stagedCity.RuntimeId;
+            LegacySpatialAnchorBindingStore sourceStore = original.Runtime.LegacySpatialAnchorBindingStore;
+            Assert.That(sourceStore, Is.Not.Null);
+            OwnerSectionCensusWitness sourceP8CRow = new LegacySpatialAnchorBindingCensusProvider(sourceStore)
+                .GetCurrentCensus();
+            Assert.That(sourceP8CRow.SectionId, Is.EqualTo(LegacySpatialAnchorBindingCensusProvider.SectionId));
+            Assert.That(sourceP8CRow.SchemaVersion, Is.EqualTo(LegacySpatialAnchorBindingCensusProvider.SchemaVersion));
+            Assert.That(sourceP8CRow.OwnerInstanceIdentity, Is.SameAs(sourceStore));
+            Assert.That(sourceP8CRow.Cardinality, Is.Zero);
+            Assert.That(sourceP8CRow.Revision, Is.Zero);
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
+                Is.True, sourceAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAdvance),
+                Is.True, controlAdvance.ToString());
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(original.Runtime);
+            string sourceGraph = CaptureCompleteDailyV1OwnerProjection(original, sourceToken);
+            Assert.That(sourceGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                controlSession, GetCompletedDailyToken(controlSession.Runtime))));
+
+            SimulationActiveSession privateCandidate = null;
+            LegacySpatialAnchorBindingStore targetStore = null;
+            LocationId targetLocationId = null;
+            OwnerSectionCensusWitness targetRowBeforeMutation = null;
+            OwnerSectionCensusWitness targetRowAfterMutation = null;
+            long targetMutationEpochBefore = -1L;
+            long targetMutationEpochAfter = -1L;
+            bool mutationInjected = false;
+            bool candidateGuardBound = false;
+            bool targetChecksCompleted = false;
+            bool targetVectorRecaptured = false;
+            bool boundaryAdmitted = false;
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSession(
+                    original,
+                    out SimulationActiveSession restored,
+                    out P12GDailyV1RestoreFailure failure,
+                    out string diagnostic,
+                    stage =>
+                    {
+                        if (stage == P12GDailyV1RestoreStage.TargetChecksCompleted)
+                        {
+                            targetChecksCompleted = true;
+                        }
+                        else if (stage == P12GDailyV1RestoreStage.CandidateGuardBound)
+                        {
+                            Assert.That(privateCandidate, Is.Not.Null);
+                            Assert.That(privateCandidate.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.True,
+                                "The supported store mutation is injected after the candidate guard binds and before recapture.");
+                            CityRuntime candidateCity = privateCandidate.Runtime.Cities.Single(
+                                city => string.Equals(city.RuntimeId, stagedCityId, StringComparison.Ordinal));
+                            Assert.That(candidateCity, Is.Not.Null);
+                            Assert.That(privateCandidate.Runtime.TryReadNpcRosterCensusMutationEpoch(
+                                out targetMutationEpochBefore,
+                                out ContinuationCensusFailure censusBeforeFailure), Is.True,
+                                censusBeforeFailure.ToString());
+
+                            targetStore = privateCandidate.Runtime.LegacySpatialAnchorBindingStore;
+                            Assert.That(targetStore, Is.Not.Null);
+                            targetRowBeforeMutation = new LegacySpatialAnchorBindingCensusProvider(targetStore)
+                                .GetCurrentCensus();
+                            Assert.That(targetRowBeforeMutation.SectionId,
+                                Is.EqualTo(LegacySpatialAnchorBindingCensusProvider.SectionId));
+                            Assert.That(targetRowBeforeMutation.SchemaVersion,
+                                Is.EqualTo(LegacySpatialAnchorBindingCensusProvider.SchemaVersion));
+                            Assert.That(targetRowBeforeMutation.OwnerInstanceIdentity, Is.SameAs(targetStore));
+                            Assert.That(targetRowBeforeMutation.OwnerInstanceIdentity,
+                                Is.Not.SameAs(sourceP8CRow.OwnerInstanceIdentity));
+                            Assert.That(targetRowBeforeMutation.Cardinality, Is.Zero);
+                            Assert.That(targetRowBeforeMutation.Revision, Is.Zero);
+                            targetLocationId = privateCandidate.Runtime.SpatialAuthorityStore.Locations.Single().Id;
+                            Assert.That(targetStore.TryBindCity(
+                                stagedCityId,
+                                targetLocationId,
+                                out SpatialAnchorBindingFailure bindingFailure), Is.True,
+                                bindingFailure.ToString());
+                            targetRowAfterMutation = new LegacySpatialAnchorBindingCensusProvider(targetStore)
+                                .GetCurrentCensus();
+                            Assert.That(privateCandidate.Runtime.TryReadNpcRosterCensusMutationEpoch(
+                                out targetMutationEpochAfter,
+                                out ContinuationCensusFailure censusAfterFailure), Is.True,
+                                censusAfterFailure.ToString());
+                            mutationInjected = true;
+                            candidateGuardBound = true;
+                        }
+                        else if (stage == P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured)
+                        {
+                            targetVectorRecaptured = true;
+                        }
+                        else if (stage == P12GDailyV1RestoreStage.BoundaryAdmitted)
+                        {
+                            boundaryAdmitted = true;
+                        }
+                    },
+                    candidate => privateCandidate = candidate), Is.False);
+
+            Assert.That(mutationInjected, Is.True);
+            Assert.That(targetChecksCompleted, Is.True);
+            Assert.That(candidateGuardBound, Is.True);
+            Assert.That(targetVectorRecaptured, Is.False,
+                "The post-binding owner recapture must reject the row change before it becomes the admitted vector.");
+            Assert.That(boundaryAdmitted, Is.False);
+            Assert.That(targetRowBeforeMutation, Is.Not.Null);
+            Assert.That(targetRowAfterMutation, Is.Not.Null);
+            Assert.That(targetRowAfterMutation.SectionId, Is.EqualTo(targetRowBeforeMutation.SectionId));
+            Assert.That(targetRowAfterMutation.SchemaVersion, Is.EqualTo(targetRowBeforeMutation.SchemaVersion));
+            Assert.That(targetRowAfterMutation.OwnerInstanceIdentity, Is.SameAs(targetStore));
+            Assert.That(targetRowAfterMutation.Cardinality, Is.EqualTo(1));
+            Assert.That(targetRowAfterMutation.Revision, Is.EqualTo(1L));
+            Assert.That(targetStore.Count, Is.EqualTo(1));
+            Assert.That(targetStore.Revision, Is.EqualTo(1L));
+            Assert.That(targetStore.TryGet(
+                    new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.City, stagedCityId),
+                    out LocationId retainedLocationId), Is.True);
+            Assert.That(retainedLocationId, Is.EqualTo(targetLocationId));
+            Assert.That(targetMutationEpochBefore, Is.GreaterThanOrEqualTo(0L));
+            Assert.That(targetMutationEpochAfter, Is.EqualTo(targetMutationEpochBefore),
+                "This direct P8-C owner write changes its local revision without claiming shared-epoch coverage.");
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.TargetOwnerVectorFailed));
+            Assert.That(diagnostic, Does.Contain("could not recapture its owner vector after mutation-guard binding"));
+            Assert.That(diagnostic, Does.Contain("OwnerCoverageIncomplete"));
+            Assert.That(restored, Is.Null,
+                "A target changed after its checked exact-zero vector must not be returned for publication.");
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(original, sourceToken), Is.EqualTo(sourceGraph));
+            Assert.That(sourceStore.Count, Is.Zero);
+            Assert.That(sourceStore.Revision, Is.Zero);
+
+            Assert.That(source.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure retryFailure, out string retryDiagnostic), Is.True,
+                retryFailure + ": " + retryDiagnostic);
+            SimulationActiveSession retried = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(retried, Is.Not.SameAs(original));
+            string retriedGraph = CaptureCompleteDailyV1OwnerProjection(
+                retried, GetCompletedDailyToken(retried.Runtime));
+            Assert.That(retriedGraph, Is.EqualTo(sourceGraph));
+            Assert.That(retriedGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                controlSession, GetCompletedDailyToken(controlSession.Runtime))));
+            Assert.That(retried.Runtime.LegacySpatialAnchorBindingStore.Count, Is.Zero);
+            Assert.That(retried.Runtime.LegacySpatialAnchorBindingStore.Revision, Is.Zero);
+
+            Assert.That(retried.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retryAdvance),
+                Is.True, retryAdvance.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlNextAdvance),
+                Is.True, controlNextAdvance.ToString());
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                    retried, GetCompletedDailyToken(retried.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    controlSession, GetCompletedDailyToken(controlSession.Runtime))),
+                "The rejected target binding must not affect source retry or later deterministic continuation parity.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+            UnityEngine.Object.DestroyImmediate(controlObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreRejectsMutationGuardBindFailureBeforeBoundaryAdmissionAndKeepsSourceRetryable()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
