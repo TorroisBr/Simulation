@@ -14,3 +14,10 @@ The original hashes below are the SHA-256 values captured from the validation ar
 | Official Smoke | 5/5 passed | F11A90D0C1A6A38B46F4CB193C899A8FE120148E7ED4AC254B0B28D9F8D32122 | A208B6068FD0E540068E3C0798D1DCB36480B62C8DC150ACAC49AAFEF126EFF5 | D1D52DC419B72F49877E58858AC9762A988E9CBB3FDBAFB3F61F3C4D86FA9E9D | 4F718D299309747FCC09832CFBFD6427047B5E61F931651508354E5656792EB0 | 6A26C9E38C241653F9050658983B40E3E31A7BFACF6DB394DBEA010E2D2AA165 | DB5E87FF13ADF107309212DA9BF07725EEFA623CB558BEA9968F98526A8B45B6 |
 
 The focused test, full admission suite, ALL EditMode suite, official Smoke, and diff-check results retain their original counts and outcomes. This sanitation record changes artifact presentation only and does not substitute for independent review of the new test.
+## Reproduce the XML projection hashes
+
+Parse each report as XML. Read the document element attributes in this fixed order, including a field only when present: total, passed, failed, inconclusive, skipped, asserts, result, duration. Render each as name=value and join those fields with semicolons.
+
+Then visit every test-case element in document order. For each case, sort its XML attributes by attribute name, render each as name=value, and join the fields with vertical bars. Join the case strings with LF characters. The hash input is the root-field string, one LF, then the joined case strings. Encode that string as UTF-8 without a byte-order mark and compute SHA-256, rendered as uppercase hexadecimal.
+
+This projection intentionally excludes path-bearing report metadata while retaining root outcome/count fields and every test-case attribute. It can be recomputed from the sanitized XML; the pre/post equality check during sanitation used the same procedure.
