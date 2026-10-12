@@ -34,7 +34,7 @@ commit, not necessarily the executable contents of the older architecture tree.
 |---|---|
 | Selected reachability | `docs/design/PHASE12_B_DAILY_V1_REACHABILITY_AUDIT.md`: installed PoliticalKnowledge and PoliticalDecision owners are Required, with no configured successful Daily political writer. Three public facades are not supported ingress merely by being public. |
 | Census | `Assets/_Project/Scripts/P12DeferredOwnerCensusProviders.cs`: exact installed store Count/Revision witnesses, schema 1; IDs `p12f.political-knowledge.holders` and `p12f.political-decisions.records`. The latter remains E-owned despite its historical prefix. |
-| Writes | `SimulationRuntime.cs`, `PoliticalDecision.cs`, `PoliticalKnowledgeStore.cs`: runtime facades delegate without political P12 operation/census refresh. Owner methods increment local revisions. A post-construction write can stale census/token; this decision repairs none of those writer semantics. |
+| Writes | `SimulationRuntime.cs`, `PoliticalDecision.cs`, `PoliticalKnowledgeStore.cs`: runtime facades delegate without political P12 operation/census refresh. Owner methods increment local revisions. An unnotified post-baseline write can fault the census protocol, not merely stale a recoverable token; this decision repairs none of those writer semantics. |
 | Initial versus restored census | `SimulationRuntime.TryRegisterP12DeferredOwnerSections`: ordinary bootstrap requires zero; restored context registers the reconstructed populated baseline. The existing `RestoredDailyOwnerBaselineAcceptsPopulatedPoliticalKnowledgeAndDecisionOwners` test proves only that baseline. |
 | B token | `SimulationRuntime.TryAdvanceDay`, `TryPublishCompletedDailyCaptureToken`, `TryGetCompletedDailyCaptureToken`: positive successful outer advance, closed scopes, healthy owner-thread, exact census and epoch; provenance `CompletedAdvance`. No idle/unadmitted state substitutes. |
 | E capture | `P12EPoliticalDecisionOwnerSnapshot.cs`, `P12EDailyV1OwnerPackage.cs`: token/vector identity, exact owner, count/revision, immutable record fields and typed D/E links. E emits unresolved Knowledge bindings when KnowledgeReferences is nonempty. |
@@ -112,7 +112,9 @@ contexts, time and owner identities must be private and distinct.
    advances; it does not attest the construction baseline's past.
 9. Freeze source political data after that boundary. Ordinary later supported
    daily advances are allowed. Post-token direct political writes must fail
-   capture eligibility under current rules; include that negative control.
+   capture eligibility under current rules, potentially faulting that fixture
+   protocol; include the negative control in a separate disposable fixture.
+   A later advance is not a recovery path for a faulted source.
    Never force capture of a stale source to manufacture a green round trip.
 
 Authentic capture is mandatory: the positive G call must use ordinary
@@ -174,11 +176,25 @@ promotion per assertion. Required outcomes:
   Source/control/target exact facts agree; mutable target identities and
   PersonStore bindings are fresh. Source token cannot be the target token.
 - **Binding rejection:** corrupt the still-private candidate to exercise
-  holder-resolution failure and future expected-revision failure with a
+  holder-resolution failure and future **world**-revision failure with a
   nonempty reference list. Require `BindingValidationFailed` at the actual
   political validator, before target admission/publication. Avoid an earlier
   unrelated census failure masking the intended branch.
-  Retained E binding metadata versus reconstructed record must also match.
+  Exact recipes using the existing private-candidate observer:
+  (a) replace only the target decision's Decider backing value with another
+  valid staged Person holder that has no staged PoliticalKnowledge holder;
+  (b) seed ExpectedWorldRevision/current politicalWorldRevision at 1, then
+  lower only the private target runtime's politicalWorldRevision to 0.
+  The latter leaves the captured E binding and record equal, and neither recipe
+  changes owner count/revision or census row values. Assert vector/sentinel
+  stages were reached, political binding success/admission were not reached,
+  and the appropriate failing lookup/fence is the rejecting condition.
+  Reflection is permitted only for these explicitly invalid private-target
+  values, never for source state, census, token, sequence or positive setup.
+  Changing only ExpectedKnowledgeRevision would first break retained E
+  metadata or its owner census; do not claim it proves the future fence.
+  Also cover retained E metadata versus reconstructed reference-list mismatch
+  as a distinct negative class without another production hook.
   Do not invent a reference-string parser or observation-key schema.
 - **Failure preservation:** rejected attempt returns no candidate, preserves
   source session/context/token/health and every included owner fact/revision;
