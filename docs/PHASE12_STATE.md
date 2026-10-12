@@ -2,7 +2,9 @@
 
 After refreshed preflight, `codex/phase12/canonical` advanced from
 `baf3ca2cbe09f0e568b9066644593ac4d98a849f` through the bounded P8-D
-late-recapture candidate. The test/code commit is
+late-recapture candidate. The exact State-bearing promotion tip is
+`addbe1d2cd92bdac4d8e9171cd9a98c6dc22093b`; both the canonical branch and
+the published candidate branch were verified at that SHA. The test/code commit is
 `d09c0e3cb2cca908b9b4bb44c70c74d36a32f93a` (Git tree
 `756e06f191f484e3b4e304c7ba35e6179c6b65a6`, `Assets` tree
 `bf9155bd4165aaf89c4bbac3cc0f94e6920bbfcf`, test-source blob
