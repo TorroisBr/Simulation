@@ -78,8 +78,9 @@ independent exact-tip review and normal State provenance. Hashes alone cannot
 replace inaccessible reports. Mandatory focused/full/Smoke/LongRun gates remain.
 Use one final package and cumulative review where safe; independently verify
 docs-only successors and input equality before reusing runs. Original XML remains
-run authority. The result-only packer is a bounded Tools handoff, not implemented
-by this documentation; until validated, use the original-XML transition path.
+run authority. Use the reviewed result-only packer where delivered at the selected execution
+ref and within its supported report/input scope; otherwise use the complete
+original-report transition path. This documentation alone implements no tool.
 Retain necessary diagnostics safely; inspect actual outgoing objects/archives.
 Do not bypass external publication restrictions or create routine human gates.
 Preserve historical evidence and active candidates; do not bulk prune refs or

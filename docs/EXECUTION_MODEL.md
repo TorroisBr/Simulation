@@ -203,8 +203,9 @@ full EditMode, official Smoke, LongRun and demonstration gates remain intact.
 Proven docs/metadata-only successors may reuse runs after independent exact-tip
 applicability verification; changed source, tests, configuration, toolchain or
 scope requires the corresponding validation. Original XML remains run authority.
-Normalized result packaging awaits the reviewed Tools implementation in policy
-section 9; until then, keep original-XML result evidence under its transition rule.
+Use normalized result packaging where the reviewed Tools capability is delivered
+at the selected execution ref and supports the report/input scope; otherwise keep
+complete original-report evidence under the policy transition rule.
 
 Review actual outgoing objects and archive contents, retain necessary diagnostics
 safely, preserve historical promotions and never evade a publication rejection.

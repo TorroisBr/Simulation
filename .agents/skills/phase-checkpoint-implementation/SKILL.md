@@ -18,7 +18,7 @@ Diagnose failed tests and ordinary conflicts from repository evidence. Escalate 
 
 ## Evidence retention and reuse
 
-Follow docs/operations/VALIDATION_EVIDENCE_POLICY.md. Use early focused runs and one final cumulative mandatory gate set where safe. Test changes invalidate old full-suite applicability even when runtime source is unchanged. Retain a minimal complete result package and independent cumulative review; raw originals remain available for comparison/diagnostics. The normalized packer is a future Tools task; use the original-XML transition path meanwhile. Keep diagnostics required by a binding contract or claimed result.
+Follow docs/operations/VALIDATION_EVIDENCE_POLICY.md. Use early focused runs and one final cumulative mandatory gate set where safe. Test changes invalidate old full-suite applicability even when runtime source is unchanged. Retain a minimal complete result package and independent cumulative review; raw originals remain available for comparison/diagnostics. Use the reviewed packer where it is delivered at the selected execution ref and supports the report/input scope; otherwise use the original-report transition path. Keep diagnostics required by a binding contract or claimed result.
 
 ## Core/host migration
 
