@@ -1,10 +1,11 @@
 # Phase 12 — Save & Deterministic Continuation
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P12-A scope is accepted after independent review at `5264f0c`; the refreshed acceptance record is documentation-only. The full design review passed at `9fde12a`, scoped reference refresh at `d1a8414`, and P18/P11 current-canonical refresh at `5264f0c`. Implementation remains `WAIT_DEPENDENCY` until complete included-owner exact export and staged hydration, a live profile inventory, and separate implementation authorization are established.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Historical planning readiness (superseded by the closure refresh below):** P12-A scope is accepted after independent review at `5264f0c`; the refreshed acceptance record is documentation-only. The full design review passed at `9fde12a`, scoped reference refresh at `d1a8414`, and P18/P11 current-canonical refresh at `5264f0c`. Implementation remains `WAIT_DEPENDENCY` until complete included-owner exact export and staged hydration, a live profile inventory, and separate implementation authorization are established.
 
 ## Current production closure refresh — 2026-10-13
 
-The readiness paragraph above and dated planning entries below are historical.
+**Current readiness: CLOSED within the accepted profile.**
+The planning paragraph above and dated entries below are historical.
 Current owning P12 canonical `4cc31073f0ec6ba5c718084e4cebd6e914931d5d`
 records CLOSED at formal marker `fbf06fa887a29b92be004d864f4ee98d90926d4a`:
 P12-A–G are promoted within same-build/current-host UnityBootstrap-Daily-v1.
