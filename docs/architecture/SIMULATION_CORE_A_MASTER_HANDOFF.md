@@ -7,6 +7,13 @@
 **Readiness:** READY_FOR_IMPLEMENTATION only after the independent PASS in
 [review](SIMULATION_CORE_EXTRACTION_REVIEW.md) and this architecture promotion.
 **Owner:** General Orchestrator; independent implementation worker/reviewer.
+**Implementation candidate branch:** `codex/core/CORE-A-calendar`.
+**Intended infrastructure canonical:** `codex/core/canonical`, initialized by Master
+from the current reviewed integrated production base at dispatch (initial evidence
+base `4cc31073...`). Do not move numbered-phase canonical refs as a side effect.
+Future consumers integrate this capability by explicit reviewed delta; branch
+existence alone is not delivery. Owning implementation record: `docs/CORE_STATE.md`
+(created by implementation, not a fictional Phase State).
 **Architecture:** [Core extraction](SIMULATION_CORE_EXTRACTION.md), §§2/12/85A
 of the constitution; no production implementation delivered in this design.
 

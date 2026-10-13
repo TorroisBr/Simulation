@@ -17,7 +17,9 @@ implementation. Lab and approved external execution hosts consume the same
 application/domain authority; presentation and scenario orchestration own no
 alternative simulation rules. This makes the existing architecture §2 direction
 an incremental engineering commitment, not a claim that the current runtime is
-portable. No numbered Phase, new world model, public mod loader, universal DI
+portable. The implementation front uses `codex/core/canonical` and one owning `docs/CORE_STATE.md`
+after actual implementation; architecture stays on its architecture branch.
+No numbered Phase, new world model, public mod loader, universal DI
 container, remote transport or second runtime is introduced.
 
 The current runtime cannot simply be moved into an SDK project. Its definition

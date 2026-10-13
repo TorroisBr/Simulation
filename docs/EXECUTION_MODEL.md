@@ -236,3 +236,10 @@ It changes no numbered-phase branch. First code implementation goes through the
 normal independent implementation/promotion gates from current production, with
 only the reviewed documentation delta imported; never merge the architecture
 branch's older executable tree into a newer numbered-phase canonical.
+
+For this user-authorized unnumbered Core workstream, apply the same bounded
+implementation/candidate/promotion conditions to `codex/core/canonical`, including
+independent exact-tip review, the handoff's two-host gates, safe ancestry and
+current input identity. Record delivery in `docs/CORE_STATE.md`, not a new Phase
+or parallel world authority. This adds no automatic numbered-phase merge or
+formal Phase-closure permission. Architecture remains on its own canonical branch.
