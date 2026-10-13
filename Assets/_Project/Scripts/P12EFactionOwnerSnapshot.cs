@@ -172,10 +172,16 @@ internal sealed class P12EFactionOwnerSnapshot
         if (Factions.Records == null || Affiliations.Records == null || Factions.RecordCount < 0 || Affiliations.RecordCount < 0
             || Factions.Records.Count != Factions.RecordCount || Affiliations.Records.Count != Affiliations.RecordCount)
             return Fail(P12EFactionSnapshotFailureCode.InvalidCardinality, "Section row counts must match their declared cardinalities.", out failure);
+        long retainedRows = (long)Factions.RecordCount + Affiliations.RecordCount;
+        if ((retainedRows == 0L && Factions.Revision != 0L)
+            || (retainedRows > 0L && retainedRows > Factions.Revision))
+            return Fail(P12EFactionSnapshotFailureCode.InvalidRevision,
+                "The shared Faction revision cannot be older than the retained Faction and Affiliation rows.", out failure);
         HashSet<string> factionIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (P12EFactionSnapshotRecord row in Factions.Records)
         {
-            if (row == null || string.IsNullOrWhiteSpace(row.Id)) return Fail(P12EFactionSnapshotFailureCode.InvalidIdentity, "Faction ID is missing.", out failure);
+            if (row == null || string.IsNullOrWhiteSpace(row.Id) || row.DisplayName == null)
+                return Fail(P12EFactionSnapshotFailureCode.InvalidIdentity, "Faction identity or display name is missing.", out failure);
             if (!factionIds.Add(row.Id)) return Fail(P12EFactionSnapshotFailureCode.DuplicateIdentity, "Faction ID is duplicated.", out failure);
             if (!Enum.IsDefined(typeof(FactionMembershipPolicy), row.MembershipPolicy)) return Fail(P12EFactionSnapshotFailureCode.InvalidPolicy, "Faction membership policy is undefined.", out failure);
             if (row.CreatedAbsoluteDay < 0L || row.CreatedAbsoluteDay > currentDay) return Fail(P12EFactionSnapshotFailureCode.InvalidTenure, "Faction creation day is outside captured time.", out failure);

@@ -169,7 +169,7 @@ public sealed class P12EPoliticalSupportOwnerSnapshotTests
         Assert.That(staged.Count, Is.Zero);
         Assert.That(staged.Revision, Is.Zero);
 
-        P12EPoliticalSupportOwnerSnapshot futureRow = Snapshot(1L, 0L, new[]
+        P12EPoliticalSupportOwnerSnapshot futureRow = Snapshot(1L, 1L, new[]
         {
             Row("future", (int)PoliticalSupportSourceKind.Person, "person.source",
                 (int)PoliticalSupportTargetKind.SuccessionCandidate, "person.candidate",
@@ -346,31 +346,31 @@ public sealed class P12EPoliticalSupportOwnerSnapshotTests
     public void StageChecksTypedReferencesAndLengthPrefixedPairIdentity()
     {
         Roots roots = new Roots();
-        AssertStageFails(roots, Snapshot(0L, 0L, new[]
+        AssertStageFails(roots, Snapshot(0L, 1L, new[]
         {
             Row("dangling-person", (int)PoliticalSupportSourceKind.Person, "missing-person",
                 (int)PoliticalSupportTargetKind.SuccessionCandidate, "person.candidate",
                 (int)PoliticalSupportDisposition.Support, 0L, null)
         }), P12EPoliticalSupportSnapshotFailureCode.InvalidReference);
-        AssertStageFails(roots, Snapshot(0L, 0L, new[]
+        AssertStageFails(roots, Snapshot(0L, 1L, new[]
         {
             Row("dangling-faction", (int)PoliticalSupportSourceKind.Faction, "missing-faction",
                 (int)PoliticalSupportTargetKind.PoliticalClaim, "claim.target",
                 (int)PoliticalSupportDisposition.Support, 0L, null)
         }), P12EPoliticalSupportSnapshotFailureCode.InvalidReference);
-        AssertStageFails(roots, Snapshot(0L, 0L, new[]
+        AssertStageFails(roots, Snapshot(0L, 1L, new[]
         {
             Row("dangling-claim", (int)PoliticalSupportSourceKind.Person, "person.source",
                 (int)PoliticalSupportTargetKind.PoliticalClaim, "missing-claim",
                 (int)PoliticalSupportDisposition.Support, 0L, null)
         }), P12EPoliticalSupportSnapshotFailureCode.InvalidReference);
-        AssertStageFails(roots, Snapshot(0L, 0L, new[]
+        AssertStageFails(roots, Snapshot(0L, 1L, new[]
         {
             Row("ended-before-start", (int)PoliticalSupportSourceKind.Person, "person.source",
                 (int)PoliticalSupportTargetKind.SuccessionCandidate, "person.candidate",
                 (int)PoliticalSupportDisposition.Support, 2L, 1L)
         }), P12EPoliticalSupportSnapshotFailureCode.InvalidTimeline);
-        AssertStageFails(roots, Snapshot(0L, 0L, new[]
+        AssertStageFails(roots, Snapshot(0L, 1L, new[]
         {
             Row("ended-after-capture", (int)PoliticalSupportSourceKind.Person, "person.source",
                 (int)PoliticalSupportTargetKind.SuccessionCandidate, "person.candidate",
@@ -385,7 +385,7 @@ public sealed class P12EPoliticalSupportOwnerSnapshotTests
         roots.RegisterClaim("1:b");
         roots.RegisterClaim("claim:shared");
         roots.RegisterFaction("shared");
-        P12EPoliticalSupportOwnerSnapshot collisionSafe = Snapshot(0L, 0L, new[]
+        P12EPoliticalSupportOwnerSnapshot collisionSafe = Snapshot(0L, 4L, new[]
         {
             Row("separator-b", (int)PoliticalSupportSourceKind.Person, "a",
                 (int)PoliticalSupportTargetKind.PoliticalClaim, "1:b",

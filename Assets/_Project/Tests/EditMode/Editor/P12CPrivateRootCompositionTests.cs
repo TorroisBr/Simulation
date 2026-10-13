@@ -142,6 +142,33 @@ public sealed class P12CPrivateRootCompositionTests
     }
 
     [Test]
+    public void TypedImageStagesCausalRootsWithoutSourceCaptureAttempt()
+    {
+        Assert.That(P12CContinuationRootStager.TryStageForImage(
+            (P12CWorldIdentitySnapshot)worldIdentitySnapshot,
+            allocatorSnapshot,
+            recordSequenceSnapshot,
+            (P12CSpatialAuthoritySnapshot)spatialSnapshot,
+            manifestSnapshot,
+            randomRootSnapshot,
+            out P12CStagedContinuationRoot staged,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(staged, Is.Not.Null);
+        Assert.That(staged.IsDetached, Is.True);
+        Assert.That(staged.StagingAttempt, Is.Null);
+        Assert.That(staged.WorldIdentity.Value, Is.EqualTo(sourceWorldIdentity.Value));
+        Assert.That(staged.WorldIdentity, Is.Not.SameAs(sourceWorldIdentity));
+        Assert.That(staged.RuntimeIdAllocator.CaptureSnapshot().Counters,
+            Has.Count.EqualTo(allocatorSnapshot.Counters.Count));
+        Assert.That(staged.RecordSequence.CaptureSnapshot().NextSequence,
+            Is.EqualTo(recordSequenceSnapshot.NextSequence));
+        Assert.That(staged.GenesisManifest.Fingerprint, Is.EqualTo(manifestSnapshot.Fingerprint));
+        Assert.That(staged.DeterministicRandom.Seed, Is.EqualTo(manifestSnapshot.Seed));
+        Assert.That(staged.SpatialAuthority.Revision, Is.EqualTo(1L));
+    }
+
+    [Test]
     public void P12FOwnerPackageCapturesAndStagesAllCurrentOwnersOnTheSamePrivateAttempt()
     {
         Assert.That(sourceBootstrap, Is.Not.Null);

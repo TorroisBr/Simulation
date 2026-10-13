@@ -30,6 +30,12 @@ internal sealed class P12DDailyV1OwnerPackage
     internal IReadOnlyList<CityRuntime> Cities { get; }
     internal IReadOnlyList<NpcRuntime> Npcs { get; }
     internal IReadOnlyList<P12DNpcFRow> NpcFRows { get; }
+    internal IReadOnlyList<P12DNpcDRow> NpcDRows { get; }
+    internal IReadOnlyList<P12DCityRootOwnerSnapshot> CitySnapshots { get; }
+    internal SpatialNetworkOwnerSnapshot SpatialNetworkSnapshot { get; }
+    internal PersonStoreOwnerSnapshot PersonSnapshot { get; }
+    internal GenealogyOwnerSnapshot GenealogySnapshot { get; }
+    internal ExplorableSiteOwnerSnapshot ExplorableSiteSnapshot { get; }
     internal PersonStore Persons { get; }
     internal GenealogyStore Genealogy { get; }
     internal ExplorableSiteStore EmptyExplorableSites { get; }
@@ -41,7 +47,13 @@ internal sealed class P12DDailyV1OwnerPackage
         SpatialNetworkRuntime spatialNetwork,
         IReadOnlyList<CityRuntime> cities,
         IReadOnlyList<NpcRuntime> npcs,
+        IReadOnlyList<P12DCityRootOwnerSnapshot> citySnapshots,
+        IReadOnlyList<P12DNpcDRow> npcDRows,
         IReadOnlyList<P12DNpcFRow> npcFRows,
+        SpatialNetworkOwnerSnapshot spatialNetworkSnapshot,
+        PersonStoreOwnerSnapshot personSnapshot,
+        GenealogyOwnerSnapshot genealogySnapshot,
+        ExplorableSiteOwnerSnapshot explorableSiteSnapshot,
         PersonStore persons,
         GenealogyStore genealogy,
         ExplorableSiteStore emptyExplorableSites)
@@ -52,7 +64,13 @@ internal sealed class P12DDailyV1OwnerPackage
         SpatialNetwork = spatialNetwork;
         Cities = new ReadOnlyCollection<CityRuntime>(new List<CityRuntime>(cities));
         Npcs = new ReadOnlyCollection<NpcRuntime>(new List<NpcRuntime>(npcs));
+        CitySnapshots = new ReadOnlyCollection<P12DCityRootOwnerSnapshot>(new List<P12DCityRootOwnerSnapshot>(citySnapshots));
+        NpcDRows = new ReadOnlyCollection<P12DNpcDRow>(new List<P12DNpcDRow>(npcDRows));
         NpcFRows = new ReadOnlyCollection<P12DNpcFRow>(new List<P12DNpcFRow>(npcFRows));
+        SpatialNetworkSnapshot = spatialNetworkSnapshot;
+        PersonSnapshot = personSnapshot;
+        GenealogySnapshot = genealogySnapshot;
+        ExplorableSiteSnapshot = explorableSiteSnapshot;
         Persons = persons;
         Genealogy = genealogy;
         EmptyExplorableSites = emptyExplorableSites;
@@ -257,7 +275,7 @@ internal sealed class P12DDailyV1OwnerPackage
         stageObserver?.Invoke(P12GDailyV1RestoreStage.DCitiesStaged);
 
         if (!TryPreflightRelations(
-                personSnapshot, genealogySnapshot, cityCaptures,
+                personSnapshot, genealogySnapshot, cityCaptures.Select(capture => capture.Snapshot).ToArray(),
                 dProjection.Rows, locationsById, stagedCityLocationIds))
         {
             failure = P12DDailyV1OwnerPackageFailure.InvalidRelation;
@@ -295,7 +313,8 @@ internal sealed class P12DDailyV1OwnerPackage
             || !sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _)
             || !TryValidateFinalGraph(
                 stagedCities, stagedNpcRoster, stagedPersons, stagedGenealogy,
-                stagedLocations, stagedSpatialNetwork, cityCaptures, dProjection.Rows))
+                stagedLocations, stagedSpatialNetwork,
+                cityCaptures.Select(capture => capture.Snapshot).ToArray(), dProjection.Rows))
         {
             failure = P12DDailyV1OwnerPackageFailure.InvalidRelation;
             return false;
@@ -311,7 +330,115 @@ internal sealed class P12DDailyV1OwnerPackage
         package = new P12DDailyV1OwnerPackage(
             stagingAttempt,
             stagedWorldId, stagedRuntimeIdentities, stagedSpatialNetwork,
-            stagedCities, stagedNpcRoster, fProjection.Rows,
+            stagedCities, stagedNpcRoster,
+            cityCaptures.Select(capture => capture.Snapshot).ToArray(),
+            dProjection.Rows, fProjection.Rows,
+            spatialSnapshot, personSnapshot, genealogySnapshot, siteSnapshot,
+            stagedPersons, stagedGenealogy, stagedSites);
+        failure = P12DDailyV1OwnerPackageFailure.None;
+        return true;
+    }
+
+    internal static bool TryStageFromImage(
+        IReadOnlyList<P12AOwnerSection> ownerSections,
+        IReadOnlyList<P12DCityRootOwnerSnapshot> citySnapshots,
+        IReadOnlyList<P12DNpcDRow> npcDRows,
+        IReadOnlyList<P12DNpcFRow> npcFRows,
+        SpatialNetworkOwnerSnapshot spatialSnapshot,
+        PersonStoreOwnerSnapshot personSnapshot,
+        GenealogyOwnerSnapshot genealogySnapshot,
+        ExplorableSiteOwnerSnapshot siteSnapshot,
+        RuntimeIdentityRegistry stagedRuntimeIdentities,
+        WorldId stagedWorldId,
+        IReadOnlyList<CityData> cityDefinitions,
+        IReadOnlyList<ItemData> itemDefinitions,
+        IReadOnlyList<NpcData> npcDefinitions,
+        IReadOnlyList<NpcActionData> actionDefinitions,
+        IReadOnlyList<NpcStatusData> statusDefinitions,
+        IReadOnlyList<ExplorableSiteData> admittedDailySiteDefinitions,
+        IReadOnlyList<string> stagedTravelPartyIds,
+        out P12DDailyV1OwnerPackage package,
+        out P12DDailyV1OwnerPackageFailure failure)
+    {
+        package = null;
+        failure = P12DDailyV1OwnerPackageFailure.InvalidCaptureContext;
+        if (ownerSections == null || citySnapshots == null || citySnapshots.Count == 0
+            || npcDRows == null || npcFRows == null || spatialSnapshot == null
+            || personSnapshot == null || genealogySnapshot == null || siteSnapshot == null
+            || stagedRuntimeIdentities == null || stagedWorldId == null
+            || cityDefinitions == null || itemDefinitions == null || npcDefinitions == null
+            || actionDefinitions == null || statusDefinitions == null || admittedDailySiteDefinitions == null
+            || admittedDailySiteDefinitions.Count != 0 || stagedTravelPartyIds == null
+            || !TryValidateStagedIdentityRegistryIsEmpty(stagedRuntimeIdentities)
+            || siteSnapshot.Sites == null || siteSnapshot.Sites.Count != 0 || siteSnapshot.Revision != 0L
+            || npcDRows.Count != npcFRows.Count)
+            return false;
+
+        if (!SpatialNetworkRuntime.TryCreateFromOwnerSnapshot(spatialSnapshot,
+                stagedRuntimeIdentities, out SpatialNetworkRuntime stagedSpatialNetwork, out _)
+            || stagedSpatialNetwork == null
+            || !PersonStore.TryCreateFromOwnerSnapshot(personSnapshot,
+                out PersonStore stagedPersons, out _) || stagedPersons == null
+            || !GenealogyStore.TryCreateFromOwnerSnapshot(genealogySnapshot,
+                out GenealogyStore stagedGenealogy, out _) || stagedGenealogy == null)
+        { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
+
+        SpatialLocationRuntime[] stagedLocations = stagedSpatialNetwork.Locations.ToArray();
+        string[] stagedRouteIds = stagedSpatialNetwork.Routes.Select(route => route?.RuntimeId).ToArray();
+        Dictionary<string, SpatialLocationRuntime> locationsById =
+            stagedLocations.ToDictionary(location => location.RuntimeId, StringComparer.Ordinal);
+        if (!TryBuildUniqueMap(cityDefinitions, definition => definition?.DefinitionId, out _)
+            || !TryBuildUniqueMap(itemDefinitions, definition => definition?.DefinitionId, out _))
+        { failure = P12DDailyV1OwnerPackageFailure.InvalidDefinition; return false; }
+
+        List<CityRuntime> stagedCities = new List<CityRuntime>(citySnapshots.Count);
+        List<P12DCityMembershipLinker> cityLinkers = new List<P12DCityMembershipLinker>(citySnapshots.Count);
+        Dictionary<string, string> cityLocationIds = new Dictionary<string, string>(StringComparer.Ordinal);
+        HashSet<string> cityIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (P12DCityRootOwnerSnapshot snapshot in citySnapshots)
+        {
+            if (snapshot == null || !cityIds.Add(snapshot.CityRuntimeId)
+                || !locationsById.ContainsKey(snapshot.LegacyLocationRuntimeId)
+                || !stagedRuntimeIdentities.IsRuntimeIdAvailable(snapshot.CityRuntimeId))
+            { failure = P12DDailyV1OwnerPackageFailure.InvalidIdentityRoot; return false; }
+            cityLocationIds.Add(snapshot.CityRuntimeId, snapshot.LegacyLocationRuntimeId);
+        }
+
+        foreach (P12DCityRootOwnerSnapshot snapshot in citySnapshots)
+        {
+            if (!snapshot.TryStageForImage(cityDefinitions, itemDefinitions, stagedLocations,
+                    out CityRuntime city, out P12DCityMembershipLinker linker, out _)
+                || city == null || linker == null || !stagedRuntimeIdentities.RegisterCity(city))
+            { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
+            stagedCities.Add(city);
+            cityLinkers.Add(linker);
+        }
+
+        if (!TryPreflightRelations(personSnapshot, genealogySnapshot, citySnapshots,
+                npcDRows, locationsById, cityLocationIds))
+        { failure = P12DDailyV1OwnerPackageFailure.InvalidRelation; return false; }
+
+        if (!P12DNpcRootOwnerSnapshot.TryStageForImage(npcDRows, npcFRows, cityLinkers,
+                stagedPersons, npcDefinitions, actionDefinitions, statusDefinitions, itemDefinitions,
+                stagedLocations, stagedRouteIds, stagedTravelPartyIds, ownerSections,
+                out IReadOnlyList<NpcRuntime> stagedNpcRoster, out _)
+            || stagedNpcRoster == null)
+        { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
+
+        foreach (NpcRuntime npc in stagedNpcRoster)
+            if (!stagedRuntimeIdentities.RegisterNpc(npc))
+            { failure = P12DDailyV1OwnerPackageFailure.InvalidIdentityRoot; return false; }
+
+        if (!ExplorableSiteStore.TryCreateFromOwnerSnapshot(siteSnapshot, admittedDailySiteDefinitions,
+                stagedLocations, out ExplorableSiteStore stagedSites, out _)
+            || stagedSites == null || stagedSites.Count != 0 || stagedSites.Revision != 0L
+            || !TryValidateFinalGraph(stagedCities, stagedNpcRoster, stagedPersons, stagedGenealogy,
+                stagedLocations, stagedSpatialNetwork, citySnapshots, npcDRows))
+        { failure = P12DDailyV1OwnerPackageFailure.InvalidRelation; return false; }
+
+        package = new P12DDailyV1OwnerPackage(null, stagedWorldId, stagedRuntimeIdentities,
+            stagedSpatialNetwork, stagedCities, stagedNpcRoster, citySnapshots, npcDRows, npcFRows,
+            spatialSnapshot, personSnapshot, genealogySnapshot, siteSnapshot,
             stagedPersons, stagedGenealogy, stagedSites);
         failure = P12DDailyV1OwnerPackageFailure.None;
         return true;
@@ -427,7 +554,21 @@ internal sealed class P12DDailyV1OwnerPackage
         IReadOnlyDictionary<string, SpatialLocationRuntime> locationsById,
         IReadOnlyDictionary<string, string> cityLocationIds)
     {
-        if (persons?.Rows == null || genealogy?.Records == null || cityCaptures == null
+        if (cityCaptures == null) return false;
+        return TryPreflightRelations(persons, genealogy,
+            cityCaptures.Select(capture => capture?.Snapshot).ToArray(), npcRows,
+            locationsById, cityLocationIds);
+    }
+
+    internal static bool TryPreflightRelations(
+        PersonStoreOwnerSnapshot persons,
+        GenealogyOwnerSnapshot genealogy,
+        IReadOnlyList<P12DCityRootOwnerSnapshot> citySnapshots,
+        IReadOnlyList<P12DNpcDRow> npcRows,
+        IReadOnlyDictionary<string, SpatialLocationRuntime> locationsById,
+        IReadOnlyDictionary<string, string> cityLocationIds)
+    {
+        if (persons?.Rows == null || genealogy?.Records == null || citySnapshots == null
             || npcRows == null || locationsById == null || cityLocationIds == null)
             return false;
 
@@ -499,9 +640,8 @@ internal sealed class P12DDailyV1OwnerPackage
         }
 
         Dictionary<string, int> expectedMemberships = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (P12DCityRootOwnerSnapshot.StagingCaptureEnvelope capture in cityCaptures)
+        foreach (P12DCityRootOwnerSnapshot city in citySnapshots)
         {
-            P12DCityRootOwnerSnapshot city = capture?.Snapshot;
             if (city?.ImportantNpcRuntimeIds == null
                 || !cityLocationIds.TryGetValue(city.CityRuntimeId, out string locationId)
                 || !string.Equals(city.LegacyLocationRuntimeId, locationId, StringComparison.Ordinal)
@@ -536,19 +676,19 @@ internal sealed class P12DDailyV1OwnerPackage
         GenealogyStore genealogy,
         IReadOnlyList<SpatialLocationRuntime> locations,
         SpatialNetworkRuntime spatial,
-        IReadOnlyList<P12DCityRootOwnerSnapshot.StagingCaptureEnvelope> cityCaptures,
+        IReadOnlyList<P12DCityRootOwnerSnapshot> citySnapshots,
         IReadOnlyList<P12DNpcDRow> dRows)
     {
         Dictionary<string, CityRuntime> citiesById = cities.ToDictionary(city => city.RuntimeId, StringComparer.Ordinal);
         Dictionary<string, NpcRuntime> npcsById = npcs.ToDictionary(npc => npc.RuntimeId, StringComparer.Ordinal);
         Dictionary<string, SpatialLocationRuntime> locationsById = locations.ToDictionary(location => location.RuntimeId, StringComparer.Ordinal);
-        if (cities.Count != cityCaptures.Count || npcs.Count != dRows.Count
+        if (cities.Count != citySnapshots.Count || npcs.Count != dRows.Count
             || spatial.Locations.Count() != locations.Count)
             return false;
 
-        for (int i = 0; i < cityCaptures.Count; i++)
+        for (int i = 0; i < citySnapshots.Count; i++)
         {
-            P12DCityRootOwnerSnapshot expected = cityCaptures[i].Snapshot;
+            P12DCityRootOwnerSnapshot expected = citySnapshots[i];
             CityRuntime actual = cities[i];
             if (expected == null || actual == null
                 || !string.Equals(expected.CityRuntimeId, actual.RuntimeId, StringComparison.Ordinal)

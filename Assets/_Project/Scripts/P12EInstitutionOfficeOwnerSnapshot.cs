@@ -379,11 +379,19 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
     }
 
     private bool TryValidate(PersonStore persons, out P12EInstitutionOfficeSnapshotFailure failure)
+        => TryValidateCore(persons, true, out failure);
+
+    /// <summary>Validates owner-local relationships while leaving PersonId resolution to detached D staging.</summary>
+    internal bool TryValidateLocal(out P12EInstitutionOfficeSnapshotFailure failure)
+        => TryValidateCore(null, false, out failure);
+
+    private bool TryValidateCore(PersonStore persons, bool requirePersonResolution,
+        out P12EInstitutionOfficeSnapshotFailure failure)
     {
         failure = P12EInstitutionOfficeSnapshotFailure.Create(
             P12EInstitutionOfficeSnapshotFailureCode.InvalidSnapshot,
             "Institution/Office snapshot is malformed.");
-        if (persons == null) return Fail(P12EInstitutionOfficeSnapshotFailureCode.InvalidRelation,
+        if (requirePersonResolution && persons == null) return Fail(P12EInstitutionOfficeSnapshotFailureCode.InvalidRelation,
             "The staged PersonStore is required for relation validation.", out failure);
         if (!ValidSection(Institutions, InstitutionOfficeCensusProvider.InstitutionsSectionId)
             || !ValidSection(Offices, InstitutionOfficeCensusProvider.OfficesSectionId)
@@ -393,9 +401,13 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
                 "The snapshot must contain exactly the four existing schema-v1 sections.", out failure);
         if (Institutions.Revision < 0L || Offices.Revision < 0L || Incumbencies.Revision < 0L
             || Tenures.Revision < 0L || Incumbencies.Revision != Offices.Revision
-            || Tenures.Revision != Offices.Revision)
+            || Tenures.Revision != Offices.Revision
+            || Institutions.Revision != Institutions.RecordCount
+            || Offices.RecordCount > Offices.Revision
+            || Incumbencies.RecordCount > Offices.Revision
+            || Tenures.RecordCount > Offices.Revision)
             return Fail(P12EInstitutionOfficeSnapshotFailureCode.InvalidRevision,
-                "Owner revisions must be nonnegative and all Office sections must share one revision.", out failure);
+                "Institution revision must equal its registration count; Office section cardinalities must be reachable from the shared revision.", out failure);
         if (Institutions.Records == null || Offices.Records == null || Incumbencies.Records == null
             || Tenures.Records == null || Institutions.RecordCount < 0 || Offices.RecordCount < 0
             || Incumbencies.RecordCount < 0 || Tenures.RecordCount < 0
@@ -406,16 +418,16 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
 
         HashSet<string> institutionIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (P12EInstitutionSnapshotRecord row in Institutions.Records)
-            if (row == null || string.IsNullOrWhiteSpace(row.InstitutionIdValue))
-                return Fail(P12EInstitutionOfficeSnapshotFailureCode.InvalidIdentity, "Institution ID is invalid.", out failure);
+            if (row == null || string.IsNullOrWhiteSpace(row.InstitutionIdValue) || row.DisplayName == null)
+                return Fail(P12EInstitutionOfficeSnapshotFailureCode.InvalidIdentity, "Institution identity or display name is invalid.", out failure);
             else if (!institutionIds.Add(row.InstitutionIdValue))
                 return Fail(P12EInstitutionOfficeSnapshotFailureCode.DuplicateIdentity, "Institution ID is duplicated.", out failure);
 
         HashSet<string> officeIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (P12EOfficeSnapshotRecord row in Offices.Records)
             if (row == null || string.IsNullOrWhiteSpace(row.OfficeIdValue)
-                || string.IsNullOrWhiteSpace(row.InstitutionIdValue))
-                return Fail(P12EInstitutionOfficeSnapshotFailureCode.InvalidIdentity, "Office identity or parent is invalid.", out failure);
+                || string.IsNullOrWhiteSpace(row.InstitutionIdValue) || row.DisplayName == null)
+                return Fail(P12EInstitutionOfficeSnapshotFailureCode.InvalidIdentity, "Office identity, parent, or display name is invalid.", out failure);
             else if (!officeIds.Add(row.OfficeIdValue))
                 return Fail(P12EInstitutionOfficeSnapshotFailureCode.DuplicateIdentity, "Office ID is duplicated.", out failure);
             else if (!institutionIds.Contains(row.InstitutionIdValue))
@@ -429,7 +441,8 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
                 || string.IsNullOrWhiteSpace(row.PersonIdValue)
                 || (row.StartAbsoluteDay.HasValue && row.StartAbsoluteDay.Value < 0L))
                 return Fail(P12EInstitutionOfficeSnapshotFailureCode.InvalidIdentity, "Incumbency identity or date is invalid.", out failure);
-            if (!officeIds.Contains(row.OfficeIdValue) || !persons.TryGet(new PersonId(row.PersonIdValue), out _))
+            if (!officeIds.Contains(row.OfficeIdValue)
+                || (requirePersonResolution && !persons.TryGet(new PersonId(row.PersonIdValue), out _)))
                 return Fail(P12EInstitutionOfficeSnapshotFailureCode.InvalidRelation, "Incumbency references a missing Office or Person.", out failure);
             if (active.ContainsKey(row.OfficeIdValue))
                 return Fail(P12EInstitutionOfficeSnapshotFailureCode.DuplicateIdentity, "Office has more than one active incumbency.", out failure);
@@ -441,7 +454,8 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
         {
             if (row == null || string.IsNullOrWhiteSpace(row.OfficeIdValue) || string.IsNullOrWhiteSpace(row.PersonIdValue))
                 return Fail(P12EInstitutionOfficeSnapshotFailureCode.InvalidIdentity, "Tenure identity is invalid.", out failure);
-            if (!officeIds.Contains(row.OfficeIdValue) || !persons.TryGet(new PersonId(row.PersonIdValue), out _))
+            if (!officeIds.Contains(row.OfficeIdValue)
+                || (requirePersonResolution && !persons.TryGet(new PersonId(row.PersonIdValue), out _)))
                 return Fail(P12EInstitutionOfficeSnapshotFailureCode.InvalidRelation, "Tenure references a missing Office or Person.", out failure);
             if ((row.StartAbsoluteDay.HasValue && row.StartAbsoluteDay.Value < 0L)
                 || (row.EndAbsoluteDay.HasValue && row.EndAbsoluteDay.Value < 0L)

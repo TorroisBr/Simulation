@@ -476,7 +476,7 @@ internal sealed class P12EMilitaryOwnerSnapshot
         }
     }
 
-    private bool TryValidateDocument(out P12EMilitaryOwnerSnapshotFailure failure)
+    internal bool TryValidateDocument(out P12EMilitaryOwnerSnapshotFailure failure)
     {
         failure = P12EMilitaryOwnerSnapshotFailure.Create(
             P12EMilitaryOwnerSnapshotFailureCode.InvalidSnapshot,

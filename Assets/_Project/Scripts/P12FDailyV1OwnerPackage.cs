@@ -28,6 +28,12 @@ internal sealed class P12FDailyV1OwnerCapture
     private readonly P12FTravelPartyOwnerSnapshot travelParties;
     private readonly P12FExpeditionOwnerSnapshot expeditions;
 
+    internal P12FPoliticalKnowledgeOwnerSnapshot PoliticalKnowledgeSnapshot => politicalKnowledge;
+    internal P12FScheduledDirectiveOwnerSnapshot DirectiveSnapshot => directives;
+    internal P12FActorChoiceSnapshot ActorChoiceSnapshot => actorChoices;
+    internal P12FTravelPartyOwnerSnapshot TravelPartySnapshot => travelParties;
+    internal P12FExpeditionOwnerSnapshot ExpeditionSnapshot => expeditions;
+
     private P12FDailyV1OwnerCapture(
         DailyCaptureEligibilityToken token,
         IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
@@ -317,7 +323,7 @@ internal sealed class P12FDailyV1OwnerPackage
         IReadOnlyList<P12DNpcFRow> detachedNpcRows,
         IReadOnlyList<P12EUnresolvedPoliticalKnowledgeBinding> unresolvedPoliticalKnowledgeBindings)
     {
-        StagingAttempt = stagingAttempt ?? throw new ArgumentNullException(nameof(stagingAttempt));
+        StagingAttempt = stagingAttempt;
         WorldId = worldId ?? throw new ArgumentNullException(nameof(worldId));
         PoliticalKnowledge = politicalKnowledge ?? throw new ArgumentNullException(nameof(politicalKnowledge));
         ScheduledDirectives = scheduledDirectives ?? throw new ArgumentNullException(nameof(scheduledDirectives));
@@ -329,5 +335,138 @@ internal sealed class P12FDailyV1OwnerPackage
         UnresolvedPoliticalKnowledgeBindings = new ReadOnlyCollection<P12EUnresolvedPoliticalKnowledgeBinding>(
             new List<P12EUnresolvedPoliticalKnowledgeBinding>(
                 unresolvedPoliticalKnowledgeBindings ?? throw new ArgumentNullException(nameof(unresolvedPoliticalKnowledgeBindings))));
+    }
+
+    /// <summary>Stages decoded F values against detached roots without a source token or owner vector.</summary>
+    internal static bool TryStageFromImage(
+        P12AContinuationImage image,
+        P12ADailyV1ImageOwnerSnapshots decoded,
+        P12EDailyV1OwnerStagingContext context,
+        P12EDailyV1OwnerPackage stagedE,
+        IReadOnlyList<NpcActionData> admittedActionDefinitions,
+        out P12FDailyV1OwnerPackage package,
+        out P12FDailyV1OwnerPackageFailure failure,
+        Action<P12GDailyV1RestoreStage> stageObserver = null)
+    {
+        package = null;
+        failure = P12FDailyV1OwnerPackageFailure.InvalidStagingContext;
+        if (image == null || decoded == null || context == null || stagedE == null
+            || context.StagingAttempt != null || context.P12CRoots?.StagingAttempt != null
+            || context.P12DPackage?.StagingAttempt != null || stagedE.StagingAttempt != null
+            || context.P12DPackage?.Npcs == null || context.P12DPackage.NpcFRows == null
+            || context.P12DPackage.RuntimeIdentities == null
+            || context.P12DPackage.Npcs.Count != context.P12DPackage.NpcFRows.Count
+            || context.StagedSimulationTime == null || context.StagedSimulationTime.AbsoluteDay != image.Header.Day
+            || stagedE.WorldId == null || stagedE.WorldId.Value != image.Header.WorldId
+            || context.P12DPackage.WorldId == null || context.P12DPackage.WorldId.Value != image.Header.WorldId
+            || admittedActionDefinitions == null || decoded.PoliticalKnowledge == null
+            || decoded.Directives == null || decoded.ActorChoices == null
+            || decoded.TravelParties == null || decoded.Expeditions == null)
+            return false;
+
+        if (!TryBuildActionMap(admittedActionDefinitions,
+                out Dictionary<string, NpcActionData> actionsById))
+        {
+            failure = P12FDailyV1OwnerPackageFailure.InvalidActionDefinitions;
+            return false;
+        }
+        Dictionary<string, NpcRuntime> stagedNpcs = BuildNpcMap(context.P12DPackage.Npcs);
+        if (stagedNpcs == null)
+        {
+            failure = P12FDailyV1OwnerPackageFailure.InvalidStagingContext;
+            return false;
+        }
+
+        try
+        {
+            long day = image.Header.Day;
+            if (!decoded.PoliticalKnowledge.TryStageForImage(context.P12DPackage.Persons,
+                    stagedE.Institutions, stagedE.PoliticalClaims, stagedE.Factions,
+                    stagedE.Offices, stagedE.PropertyOwnership, day,
+                    out PoliticalKnowledgeStore politicalKnowledge, out _))
+            {
+                failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+                return false;
+            }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.FPoliticalKnowledgeStaged);
+
+            if (!decoded.Directives.TryStageForImage(context.StagedSimulationTime,
+                    stagedNpcs, actionsById, out ScheduledDirectiveStore directives, out _))
+            {
+                failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+                return false;
+            }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.FScheduledDirectivesStaged);
+
+            if (!P12FActorChoiceSnapshot.TryStage(decoded.ActorChoices, context.P12DPackage.Persons,
+                    out ActorChoiceStore actorChoices, out _))
+            {
+                failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+                return false;
+            }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.FActorChoicesStaged);
+
+            if (!P12FTravelPartyOwnerSnapshot.TryStage(decoded.TravelParties,
+                    context.P12DPackage.Npcs, context.P12DPackage.NpcFRows,
+                    context.P12DPackage.RuntimeIdentities,
+                    out TravelPartyStore travelParties, out _))
+            {
+                failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+                return false;
+            }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.FTravelPartiesStaged);
+
+            if (!P12FExpeditionOwnerSnapshot.TryStage(decoded.Expeditions,
+                    context.P12DPackage.Npcs, context.P12DPackage.NpcFRows,
+                    context.P12DPackage.RuntimeIdentities, travelParties,
+                    out ExpeditionStore expeditions, out _))
+            {
+                failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+                return false;
+            }
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.FExpeditionsStaged);
+
+            package = new P12FDailyV1OwnerPackage(null, context.P12CRoots.WorldIdentity,
+                politicalKnowledge, directives, actorChoices, travelParties, expeditions,
+                context.P12DPackage.NpcFRows, stagedE.UnresolvedPoliticalKnowledgeBindings);
+            failure = P12FDailyV1OwnerPackageFailure.None;
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException)
+        {
+            package = null;
+            failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+            return false;
+        }
+    }
+
+    private static bool TryBuildActionMap(IReadOnlyList<NpcActionData> definitions,
+        out Dictionary<string, NpcActionData> actionsById)
+    {
+        actionsById = new Dictionary<string, NpcActionData>(System.StringComparer.Ordinal);
+        foreach (NpcActionData definition in definitions)
+        {
+            if (definition == null || string.IsNullOrWhiteSpace(definition.DefinitionId)
+                || actionsById.ContainsKey(definition.DefinitionId))
+            {
+                actionsById = null;
+                return false;
+            }
+            actionsById.Add(definition.DefinitionId, definition);
+        }
+        return true;
+    }
+
+    private static Dictionary<string, NpcRuntime> BuildNpcMap(IReadOnlyList<NpcRuntime> npcs)
+    {
+        Dictionary<string, NpcRuntime> result = new Dictionary<string, NpcRuntime>(System.StringComparer.Ordinal);
+        foreach (NpcRuntime npc in npcs)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId) || result.ContainsKey(npc.RuntimeId))
+                return null;
+            result.Add(npc.RuntimeId, npc);
+        }
+        return result;
     }
 }

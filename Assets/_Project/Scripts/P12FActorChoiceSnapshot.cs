@@ -22,7 +22,7 @@ internal sealed class P12FActorChoiceSnapshot
 
     private readonly IReadOnlyList<ActorChoiceInput> inputs;
 
-    private P12FActorChoiceSnapshot(
+    internal P12FActorChoiceSnapshot(
         int schemaVersion,
         IEnumerable<ActorChoiceInput> inputs,
         long nextInputSequence,

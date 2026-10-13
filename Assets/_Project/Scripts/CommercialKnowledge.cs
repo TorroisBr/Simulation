@@ -366,6 +366,44 @@ public sealed class CommercialKnowledgeShareReceipt
         sourceSnapshotFingerprint = batch.SourceSnapshotFingerprint;
         this.appliedObservationCount = appliedObservationCount;
     }
+
+    private CommercialKnowledgeShareReceipt(string operationIdentity, string fingerprint,
+        string boundaryOccurrenceId, string senderRuntimeId, string senderPersonId,
+        string receiverRuntimeId, string receiverPersonId, string sourceSnapshotFingerprint,
+        int appliedObservationCount)
+    {
+        this.operationIdentity = operationIdentity;
+        this.fingerprint = fingerprint;
+        this.boundaryOccurrenceId = boundaryOccurrenceId;
+        this.senderRuntimeId = senderRuntimeId;
+        this.senderPersonId = senderPersonId;
+        this.receiverRuntimeId = receiverRuntimeId;
+        this.receiverPersonId = receiverPersonId;
+        this.sourceSnapshotFingerprint = sourceSnapshotFingerprint;
+        this.appliedObservationCount = appliedObservationCount;
+    }
+
+    /// <summary>Reconstructs an immutable captured receipt without replaying its sharing operation.</summary>
+    internal static bool TryCreateFromOwnerSnapshot(string operationIdentity, string fingerprint,
+        string boundaryOccurrenceId, string senderRuntimeId, string senderPersonId,
+        string receiverRuntimeId, string receiverPersonId, string sourceSnapshotFingerprint,
+        int appliedObservationCount, out CommercialKnowledgeShareReceipt receipt)
+    {
+        receipt = null;
+        if (string.IsNullOrWhiteSpace(boundaryOccurrenceId)
+            || string.IsNullOrWhiteSpace(senderRuntimeId) || string.IsNullOrWhiteSpace(receiverRuntimeId)
+            || string.Equals(senderRuntimeId, receiverRuntimeId, StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(sourceSnapshotFingerprint)
+            || string.IsNullOrWhiteSpace(fingerprint) || appliedObservationCount < 0
+            || senderPersonId == null || receiverPersonId == null
+            || !string.Equals(operationIdentity, SpatialStableKey.Encode(
+                "commercial-sharing-edge/v1", boundaryOccurrenceId, senderRuntimeId, receiverRuntimeId),
+                StringComparison.Ordinal)) return false;
+        receipt = new CommercialKnowledgeShareReceipt(operationIdentity, fingerprint,
+            boundaryOccurrenceId, senderRuntimeId, senderPersonId, receiverRuntimeId,
+            receiverPersonId, sourceSnapshotFingerprint, appliedObservationCount);
+        return true;
+    }
 }
 
 /// <summary>Prepared recipient-owned batch. Knowledge and its edge receipt install together.</summary>

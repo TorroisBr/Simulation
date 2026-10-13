@@ -32,6 +32,7 @@ internal sealed class P12FTravelPartyOwnerSnapshotRecord
 
     internal P12FTravelPartyOwnerSnapshotRecord(TravelPartyRuntime party)
     {
+        if (party == null) throw new ArgumentNullException(nameof(party));
         TravelPartyId = party.TravelPartyId;
         OriginLocationRuntimeId = party.OriginLocationRuntimeId;
         DestinationLocationRuntimeId = party.DestinationLocationRuntimeId;
@@ -45,6 +46,26 @@ internal sealed class P12FTravelPartyOwnerSnapshotRecord
         MemberCosts = new ReadOnlyCollection<TravelPartyMemberCost>(costs);
         TravelDaysTotal = party.TravelDaysTotal;
         OriginDecisionId = party.OriginDecisionId;
+    }
+
+    internal P12FTravelPartyOwnerSnapshotRecord(string travelPartyId, string originLocationRuntimeId,
+        string destinationLocationRuntimeId, string routeRuntimeId, IEnumerable<string> travelers,
+        IEnumerable<string> escorts, IEnumerable<string> members, IEnumerable<TravelPartyMemberCost> memberCosts,
+        int travelDaysTotal, string originDecisionId)
+    {
+        TravelPartyId = travelPartyId;
+        OriginLocationRuntimeId = originLocationRuntimeId;
+        DestinationLocationRuntimeId = destinationLocationRuntimeId;
+        RouteRuntimeId = routeRuntimeId;
+        TravelerRuntimeIds = Copy(travelers);
+        EscortRuntimeIds = Copy(escorts);
+        MemberRuntimeIds = Copy(members);
+        List<TravelPartyMemberCost> costs = new List<TravelPartyMemberCost>();
+        foreach (TravelPartyMemberCost cost in memberCosts)
+            costs.Add(new TravelPartyMemberCost(cost.RuntimeId, cost.Amount));
+        MemberCosts = new ReadOnlyCollection<TravelPartyMemberCost>(costs);
+        TravelDaysTotal = travelDaysTotal;
+        OriginDecisionId = originDecisionId;
     }
 
     private static IReadOnlyList<string> Copy(IEnumerable<string> source) =>
@@ -201,7 +222,7 @@ internal sealed class P12FTravelPartyOwnerSnapshot
         return costIds.Count == ids.Count;
     }
 
-    private static bool IsValidRecord(P12FTravelPartyOwnerSnapshotRecord record)
+    internal static bool IsValidRecord(P12FTravelPartyOwnerSnapshotRecord record)
     {
         if (record == null || string.IsNullOrWhiteSpace(record.TravelPartyId)
             || string.IsNullOrWhiteSpace(record.OriginLocationRuntimeId)
@@ -369,19 +390,35 @@ internal sealed class P12FExpeditionOwnerSnapshot
         failure = P12FCommitmentSnapshotFailure.None; return true;
     }
 
-    private static bool IsValid(P12FExpeditionOwnerSnapshotRecord value)
+    internal static bool IsValid(P12FExpeditionOwnerSnapshotRecord value)
     {
         if (value == null || string.IsNullOrWhiteSpace(value.ExpeditionId)
             || string.IsNullOrWhiteSpace(value.TargetSiteRuntimeId)
             || string.IsNullOrWhiteSpace(value.OriginLocationRuntimeId)
             || string.IsNullOrWhiteSpace(value.TargetLocationRuntimeId)
             || string.IsNullOrWhiteSpace(value.OutboundRouteRuntimeId)
+            || !IsOptionalId(value.TravelPartyId) || !IsOptionalId(value.OriginDecisionId)
+            || !IsOptionalId(value.CurrentLocalPlaceRuntimeId)
+            || !IsOptionalId(value.TargetItemDefinitionId) || !IsOptionalId(value.TargetNotableItemRuntimeId)
+            || !IsOptionalId(value.TargetOppositionRuntimeId)
             || !Enum.IsDefined(typeof(ExpeditionState), value.State)
             || !Enum.IsDefined(typeof(ExpeditionObjectiveType), value.ObjectiveType)
             || value.MemberRuntimeIds == null || value.PerformerRuntimeIds == null || value.SupportRuntimeIds == null
             || value.VisitedLocalPlaceRuntimeIds == null || value.ObservedLocalConnectionRuntimeIds == null
             || value.RequiredProgress <= 0 || value.Progress < 0 || value.Progress > value.RequiredProgress
             || (value.ObjectiveCompleted != (value.Progress == value.RequiredProgress))) return false;
+        if ((value.State == ExpeditionState.TravelingToSite || value.State == ExpeditionState.Returning)
+            && string.IsNullOrWhiteSpace(value.TravelPartyId)) return false;
+        foreach (string id in value.MemberRuntimeIds)
+            if (string.IsNullOrWhiteSpace(id)) return false;
+        foreach (string id in value.PerformerRuntimeIds)
+            if (string.IsNullOrWhiteSpace(id)) return false;
+        foreach (string id in value.SupportRuntimeIds)
+            if (string.IsNullOrWhiteSpace(id)) return false;
+        foreach (string id in value.VisitedLocalPlaceRuntimeIds)
+            if (string.IsNullOrWhiteSpace(id)) return false;
+        foreach (string id in value.ObservedLocalConnectionRuntimeIds)
+            if (string.IsNullOrWhiteSpace(id)) return false;
         HashSet<string> members = new HashSet<string>(value.MemberRuntimeIds, StringComparer.Ordinal);
         if (members.Count != value.MemberRuntimeIds.Count || members.Count == 0) return false;
         HashSet<string> roles = new HashSet<string>(StringComparer.Ordinal);
@@ -389,6 +426,8 @@ internal sealed class P12FExpeditionOwnerSnapshot
         foreach (string id in value.SupportRuntimeIds) if (!members.Contains(id) || !roles.Add(id)) return false;
         return roles.Count == members.Count;
     }
+
+    private static bool IsOptionalId(string value) => value == null || !string.IsNullOrWhiteSpace(value);
 
     private static bool SameMembers(IReadOnlyList<string> left, IReadOnlyList<string> right)
     {

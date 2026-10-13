@@ -157,13 +157,13 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
         P12EInstitutionOfficeOwnerSnapshot duplicate = Snapshot(
             new[] { new P12EInstitutionSnapshotRecord("i", "A"), new P12EInstitutionSnapshotRecord("i", "B") },
             Array.Empty<P12EOfficeSnapshotRecord>(), Array.Empty<P12EOfficeIncumbencySnapshotRecord>(),
-            Array.Empty<P12EOfficeTenureSnapshotRecord>(), 0L, 0L);
+            Array.Empty<P12EOfficeTenureSnapshotRecord>(), 2L, 0L);
         AssertStageFails(duplicate, persons, P12EInstitutionOfficeSnapshotFailureCode.DuplicateIdentity);
 
         P12EInstitutionOfficeOwnerSnapshot dangling = Snapshot(
             new[] { new P12EInstitutionSnapshotRecord("i", "A") },
             new[] { new P12EOfficeSnapshotRecord("o", "missing", "Office") },
-            Array.Empty<P12EOfficeIncumbencySnapshotRecord>(), Array.Empty<P12EOfficeTenureSnapshotRecord>(), 0L, 0L);
+            Array.Empty<P12EOfficeIncumbencySnapshotRecord>(), Array.Empty<P12EOfficeTenureSnapshotRecord>(), 1L, 1L);
         AssertStageFails(dangling, persons, P12EInstitutionOfficeSnapshotFailureCode.InvalidRelation);
     }
 
@@ -252,10 +252,10 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
             Section(InstitutionOfficeCensusProvider.TenuresSectionId, 1, 0L, new[] { open })), persons,
             P12EInstitutionOfficeSnapshotFailureCode.InvalidRevision);
         AssertStageFails(new P12EInstitutionOfficeOwnerSnapshot(
-            Section(InstitutionOfficeCensusProvider.InstitutionsSectionId, 2, 0L, institution),
-            Section(InstitutionOfficeCensusProvider.OfficesSectionId, 1, 0L, office),
-            Section(InstitutionOfficeCensusProvider.IncumbenciesSectionId, 1, 0L, active),
-            Section(InstitutionOfficeCensusProvider.TenuresSectionId, 1, 0L, new[] { open })), persons,
+            Section(InstitutionOfficeCensusProvider.InstitutionsSectionId, 2, 2L, institution),
+            Section(InstitutionOfficeCensusProvider.OfficesSectionId, 1, 1L, office),
+            Section(InstitutionOfficeCensusProvider.IncumbenciesSectionId, 1, 1L, active),
+            Section(InstitutionOfficeCensusProvider.TenuresSectionId, 1, 1L, new[] { open })), persons,
             P12EInstitutionOfficeSnapshotFailureCode.InvalidCardinality);
     }
 

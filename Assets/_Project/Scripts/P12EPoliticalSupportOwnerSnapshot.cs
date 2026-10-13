@@ -327,7 +327,7 @@ internal sealed class P12EPoliticalSupportOwnerSnapshot
         }
     }
 
-    private bool TryValidate(out P12EPoliticalSupportSnapshotFailure failure)
+    internal bool TryValidate(out P12EPoliticalSupportSnapshotFailure failure)
     {
         failure = P12EPoliticalSupportSnapshotFailure.Create(
             P12EPoliticalSupportSnapshotFailureCode.InvalidRelation,
@@ -354,6 +354,12 @@ internal sealed class P12EPoliticalSupportOwnerSnapshot
         {
             return Fail(P12EPoliticalSupportSnapshotFailureCode.InvalidCardinality,
                 "Declared relation cardinality must equal the detached row count.", out failure);
+        }
+        if ((Relations.RecordCount == 0 && Relations.Revision != 0L)
+            || (Relations.RecordCount > 0 && Relations.Revision < Relations.RecordCount))
+        {
+            return Fail(P12EPoliticalSupportSnapshotFailureCode.InvalidRevision,
+                "Retained relation count cannot exceed the local revision, and an empty store has revision zero.", out failure);
         }
 
         HashSet<string> relationIds = new HashSet<string>(StringComparer.Ordinal);

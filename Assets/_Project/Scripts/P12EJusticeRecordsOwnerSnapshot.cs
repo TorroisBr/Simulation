@@ -217,7 +217,7 @@ internal sealed class P12EJusticeRecordsOwnerSnapshot
             P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId);
         if (!TryMatchesReceiptWitness(receiptWitness, owner))
             return Fail(P12EJusticeSnapshotFailureCode.InvalidOwnerSectionVector,
-                "Daily-v1 requires the exact Justice P18 receipt witness at cardinality one and revision zero.",
+                "The exact Justice P18 receipt witness must match the current owner and its current revision.",
                 out failure);
 
         if (!TryBuildInstalledMaps(runtime, out HashSet<NpcRuntime> installedNpcs,
@@ -307,7 +307,8 @@ internal sealed class P12EJusticeRecordsOwnerSnapshot
         DomainEventRecorder domainEventRecorder,
         SimulationLogger logger,
         out JusticeSystem staged,
-        out P12EJusticeSnapshotFailure failure)
+        out P12EJusticeSnapshotFailure failure,
+        P12AJusticeReceiptOwnerSnapshot p12aReceiptSnapshot = null)
     {
         staged = null;
         if (!TryValidate(out failure)) return false;
@@ -369,7 +370,7 @@ internal sealed class P12EJusticeRecordsOwnerSnapshot
             if (!JusticeSystem.TryCreateFromP12EOwnerSnapshot(
                     freeStatus, wantedStatus, arrestedStatus, hiddenStatus,
                     domainEventRecorder, logger, wanted, sentences, Records.Revision,
-                    out JusticeSystem candidate))
+                    out JusticeSystem candidate, p12aReceiptSnapshot))
                 return Fail(P12EJusticeSnapshotFailureCode.StageFailed,
                     "The private JusticeSystem factory rejected the staged rows.", out failure);
 
@@ -387,7 +388,7 @@ internal sealed class P12EJusticeRecordsOwnerSnapshot
         }
     }
 
-    private bool TryValidate(out P12EJusticeSnapshotFailure failure)
+    internal bool TryValidate(out P12EJusticeSnapshotFailure failure)
     {
         failure = P12EJusticeSnapshotFailure.Create(
             P12EJusticeSnapshotFailureCode.InvalidOwnerValues,
@@ -567,8 +568,8 @@ internal sealed class P12EJusticeRecordsOwnerSnapshot
                 && witness.SchemaVersion == P12CrimeJusticeCensusProvider.SchemaVersion
                 && witness.Role == OwnerSectionRole.Required
                 && ReferenceEquals(witness.OwnerInstanceIdentity, owner)
-                && witness.Cardinality == 1 && witness.Revision == 0L
-                && owner.P12P18ReceiptCensusRevision == 0L;
+                && witness.Cardinality == 1
+                && witness.Revision == owner.P12P18ReceiptCensusRevision;
         }
         catch (Exception exception) when (exception is InvalidOperationException || exception is OverflowException)
         {

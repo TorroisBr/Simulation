@@ -24,6 +24,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         new Dictionary<string, CrimeHiddenStatusReceipt>(StringComparer.Ordinal);
     private long hiddenStatusStepRevision;
     private bool p12DailyProfileReceiptBoundaryBound;
+    private bool p12AReceiptStateInstalled;
     private SimulationTime simulationTime;
     private ITheftOutcomeSink theftOutcomeSink;
 
@@ -81,11 +82,58 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
     internal bool TryBindP12DailyProfileReceiptBoundary()
     {
         if (p12DailyProfileReceiptBoundaryBound) return true;
-        if (hiddenStatusStepReceipts == null || hiddenStatusStepRevision != 0L
-            || hiddenStatusStepReceipts.Count != 0)
+        if (hiddenStatusStepReceipts == null
+            || (!p12AReceiptStateInstalled
+                && (hiddenStatusStepRevision != 0L || hiddenStatusStepReceipts.Count != 0)))
             return false;
         p12DailyProfileReceiptBoundaryBound = true;
         return true;
+    }
+
+    internal bool TryCaptureP12AReceiptOwnerSnapshot(out P12ACrimeReceiptOwnerSnapshot snapshot)
+    {
+        snapshot = null;
+        if (hiddenStatusStepReceipts == null || hiddenStatusStepRevision < 0L) return false;
+        List<string> identities = new List<string>(hiddenStatusStepReceipts.Keys);
+        identities.Sort(StringComparer.Ordinal);
+        List<P12AReceiptValue> values = new List<P12AReceiptValue>(identities.Count);
+        foreach (string identity in identities)
+        {
+            if (string.IsNullOrWhiteSpace(identity)
+                || !hiddenStatusStepReceipts.TryGetValue(identity, out CrimeHiddenStatusReceipt receipt)
+                || receipt == null || !string.Equals(identity, receipt.ExecutionStepIdentity, StringComparison.Ordinal))
+                return false;
+            values.Add(new P12AReceiptValue(receipt.ExecutionStepIdentity,
+                receipt.DescriptorFingerprint, receipt.OwnerRevisionBefore, receipt.OwnerRevisionAfter));
+        }
+        try
+        {
+            P12ACrimeReceiptOwnerSnapshot candidate = new P12ACrimeReceiptOwnerSnapshot(
+                hiddenStatusStepRevision, values);
+            if (!candidate.IsValid || candidate.CensusRevision != P12P18ReceiptCensusRevision) return false;
+            snapshot = candidate;
+            return true;
+        }
+        catch (OverflowException) { return false; }
+    }
+
+    internal bool TryInstallP12AReceiptOwnerSnapshot(P12ACrimeReceiptOwnerSnapshot snapshot)
+    {
+        if (snapshot == null || !snapshot.IsValid || p12AReceiptStateInstalled
+            || hiddenStatusStepReceipts == null || hiddenStatusStepRevision != 0L
+            || hiddenStatusStepReceipts.Count != 0) return false;
+        Dictionary<string, CrimeHiddenStatusReceipt> restored =
+            new Dictionary<string, CrimeHiddenStatusReceipt>(StringComparer.Ordinal);
+        foreach (P12AReceiptValue value in snapshot.Receipts)
+        {
+            if (restored.ContainsKey(value.Identity)) return false;
+            restored.Add(value.Identity, new CrimeHiddenStatusReceipt(value.Identity,
+                value.DescriptorFingerprint, value.RevisionBefore, value.RevisionAfter));
+        }
+        hiddenStatusStepReceipts = restored;
+        hiddenStatusStepRevision = snapshot.StepRevision;
+        p12AReceiptStateInstalled = true;
+        return P12P18ReceiptCensusRevision == snapshot.CensusRevision;
     }
 
     public bool TryBindSimulationTime(SimulationTime worldSimulationTime)

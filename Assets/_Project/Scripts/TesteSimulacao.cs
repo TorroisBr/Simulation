@@ -267,7 +267,164 @@ public class TesteSimulacao : MonoBehaviour
                 bootstrapStartThreadId);
         }
 
+        if (runtimeAdmissionProfile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            && TryLoadSavedDailyV1BeforeGenesis())
+            return;
+
         InitializeSimulation();
+    }
+
+    private bool TryLoadSavedDailyV1BeforeGenesis()
+        => TryLoadSavedDailyV1BeforeGenesis(UnityEngine.Application.persistentDataPath);
+
+    internal bool TryLoadSavedDailyV1ContinuationFromPathForTest(string persistentDataPath)
+        => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath);
+
+    private bool TryLoadSavedDailyV1BeforeGenesis(string persistentDataPath)
+    {
+        if (!P12AContinuationStore.TryHasSlot(persistentDataPath, out bool exists, out _))
+        {
+            bootstrapFailed = true;
+            UnityEngine.Debug.LogError("P12-A continuation slot inspection failed; genesis was not started.");
+            return true;
+        }
+        if (!exists) return false;
+
+        if (!TryCreateCurrentDailyV1CompatibilityDescriptor(
+                out P12ACompatibilityDescriptor compatibility, out string compatibilityDiagnostic))
+        {
+            bootstrapFailed = true;
+            UnityEngine.Debug.LogError("P12-A continuation is present but the current host profile cannot prove compatibility; genesis was not started. "
+                + compatibilityDiagnostic);
+            return true;
+        }
+        if (!P12AContinuationStore.TryLoad(null, compatibility, persistentDataPath,
+                out P12AContinuationImage image, out P12AResult loadResult))
+        {
+            bootstrapFailed = true;
+            UnityEngine.Debug.LogError("P12-A continuation load failed; genesis was not started. "
+                + (loadResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString()));
+            return true;
+        }
+
+        EffectiveSimulationConfiguration effective;
+        CalendarDefinition calendar;
+        try
+        {
+            SimulationGenesisPipeline.ValidateProfile(simulationConfig);
+            ValidateP14SourceAdmission(simulationConfig, runtimeAdmissionContext);
+            effective = ResolveRuntimeConfiguration();
+            calendar = ResolveCalendarDefinition();
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException)
+        {
+            bootstrapFailed = true;
+            UnityEngine.Debug.LogError("P12-A continuation host profile failed validation; genesis was not started. "
+                + exception.Message);
+            return true;
+        }
+
+        if (!P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
+                image, compatibility, simulationConfig, effective, calendar,
+                runtimeAdmissionContext, out SimulationActiveSession candidate,
+                out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic))
+        {
+            bootstrapFailed = true;
+            UnityEngine.Debug.LogError("P12-A detached continuation restoration failed; genesis was not started. "
+                + restoreFailure + ": " + restoreDiagnostic);
+            return true;
+        }
+        if (!TryPublishRestoredSession(null, candidate))
+        {
+            bootstrapFailed = true;
+            UnityEngine.Debug.LogError("P12-A detached continuation passed private validation but bootstrap publication failed; genesis was not started.");
+            return true;
+        }
+
+        ReleaseBootstrapAliases();
+
+        return true;
+    }
+
+    /// <summary>Saves the current completed Daily-v1 boundary to the single local continuation slot.</summary>
+    public bool TrySaveDailyV1Continuation(out string resultCode)
+        => TrySaveDailyV1ContinuationAtPath(UnityEngine.Application.persistentDataPath, out resultCode);
+
+    internal bool TrySaveDailyV1ContinuationToPathForTest(string persistentDataPath, out string resultCode)
+        => TrySaveDailyV1ContinuationAtPath(persistentDataPath, out resultCode);
+
+    private bool TrySaveDailyV1ContinuationAtPath(string persistentDataPath, out string resultCode)
+    {
+        resultCode = P12AResultCode.Busy.ToString();
+        if (!TryBeginActiveSessionOperation(out SimulationActiveSession session))
+            return false;
+        try
+        {
+            bool saved = TrySaveCompletedDailyV1Boundary(session, persistentDataPath, out P12AResult result);
+            resultCode = result?.Code.ToString() ?? (saved
+                ? P12AResultCode.Saved.ToString()
+                : P12AResultCode.CaptureRejected.ToString());
+            return saved;
+        }
+        finally
+        {
+            EndActiveSessionOperation();
+        }
+    }
+    private bool TrySaveCompletedDailyV1Boundary(SimulationActiveSession session, out P12AResult result)
+        => TrySaveCompletedDailyV1Boundary(session, UnityEngine.Application.persistentDataPath, out result);
+
+    private bool TrySaveCompletedDailyV1Boundary(
+        SimulationActiveSession session,
+        string persistentDataPath,
+        out P12AResult result)
+    {
+        result = new P12AResult(P12AResultCode.CaptureRejected);
+        if (session == null
+            || session.AdmissionContext == null
+            || session.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !session.AdmissionContext.IsOwnedByCurrentThread())
+        {
+            result = new P12AResult(P12AResultCode.WrongThread);
+            return false;
+        }
+        if (!session.Runtime.IsHealthyDailyOwnerThreadBoundary())
+        {
+            result = new P12AResult(P12AResultCode.CaptureRejected);
+            return false;
+        }
+
+        if (!P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+                session,
+                runtimeAdmissionContext,
+                out P12AContinuationImage image,
+                out _,
+                out _,
+                out _)
+            || image == null
+            || !P12ADailyV1Census.TryCreateForImage(
+                image,
+                out P12ADailyV1Census census,
+                out result)
+            || !P12AContinuationCodec.TryEncode(
+                image,
+                census.Manifest,
+                out byte[] bytes,
+                out result))
+        {
+            if (result == null) result = new P12AResult(P12AResultCode.CaptureRejected);
+            session.Logger.LogError("P12-A continuation save failed: " + result.Code + ".");
+            return false;
+        }
+
+        if (!P12AContinuationStore.TrySave(bytes, census.Manifest, image.Header.Compatibility, persistentDataPath, out result))
+        {
+            session.Logger.LogError("P12-A continuation save failed: " + result.Code + ".");
+            return false;
+        }
+
+        return true;
     }
 
     public void Update()
@@ -592,21 +749,37 @@ public class TesteSimulacao : MonoBehaviour
         SimulationActiveSession expectedSession,
         SimulationActiveSession candidateSession)
     {
-        if (expectedSession == null || candidateSession == null)
+        if (candidateSession == null)
             return false;
 
         lock (activeSessionGate)
         {
-            if (!ReferenceEquals(activeSession, expectedSession)
-                || activeSessionOperationCount != 0
-                || expectedSession.AdmissionContext == null
+            if (activeSessionOperationCount != 0
                 || candidateSession.AdmissionContext == null
-                || !expectedSession.AdmissionContext.IsOwnedByCurrentThread()
                 || !candidateSession.AdmissionContext.IsOwnedByCurrentThread()
+                || !candidateSession.AdmissionContext.IsRestoredContinuation
+                || !ReferenceEquals(candidateSession.Configuration, simulationConfig)
+                || !candidateSession.Runtime.IsHealthyDailyOwnerThreadBoundary()
+                || !candidateSession.Runtime.HasValidRestoredDailyBoundaryAdmission())
+                return false;
+
+            if (expectedSession == null)
+            {
+                if (activeSession != null || runtimeAdmissionContext == null
+                    || runtimeAdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                    || runtimeAdmissionContext.IsRestoredContinuation
+                    || !runtimeAdmissionContext.IsOwnedByCurrentThread())
+                    return false;
+                Interlocked.Exchange(ref activeSession, candidateSession);
+                return true;
+            }
+
+            if (!ReferenceEquals(activeSession, expectedSession)
+                || expectedSession.AdmissionContext == null
+                || !expectedSession.AdmissionContext.IsOwnedByCurrentThread()
                 || !expectedSession.IsProfileCompatibleWith(candidateSession)
                 || !expectedSession.Runtime.IsHealthyDailyOwnerThreadBoundary()
-                || !expectedSession.Runtime.HasValidCompletedDailyBoundaryAdmission()
-                || !candidateSession.Runtime.HasValidRestoredDailyBoundaryAdmission())
+                || !expectedSession.Runtime.HasValidCompletedDailyBoundaryAdmission())
                 return false;
 
             Interlocked.Exchange(ref activeSession, candidateSession);
@@ -625,6 +798,67 @@ public class TesteSimulacao : MonoBehaviour
         return TryRestoreDailyContinuation(null, out failure, out diagnostic);
     }
 
+    /// <summary>Loads and privately reconstructs the durable Daily-v1 slot.</summary>
+    public bool TryLoadDailyV1Continuation(out string resultCode)
+        => TryLoadDailyV1ContinuationAtPath(UnityEngine.Application.persistentDataPath, out resultCode);
+
+    internal bool TryLoadDailyV1ContinuationFromPathForTest(string persistentDataPath, out string resultCode)
+        => TryLoadDailyV1ContinuationAtPath(persistentDataPath, out resultCode);
+
+    private bool TryLoadDailyV1ContinuationAtPath(string persistentDataPath, out string resultCode)
+    {
+        resultCode = P12AResultCode.Busy.ToString();
+        lock (activeSessionGate)
+        {
+            SimulationActiveSession expectedSession = activeSession;
+            if (expectedSession == null || activeSessionOperationCount != 0
+                || expectedSession.AdmissionContext == null
+                || expectedSession.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || runtimeAdmissionContext == null || runtimeAdmissionContext.IsRestoredContinuation
+                || !runtimeAdmissionContext.IsOwnedByCurrentThread()
+                || !expectedSession.Runtime.IsHealthyDailyOwnerThreadBoundary()
+                || !expectedSession.Runtime.HasValidCompletedDailyBoundaryAdmission())
+            {
+                resultCode = P12AResultCode.Busy.ToString();
+                return false;
+            }
+
+            if (!TryCreateCurrentDailyV1CompatibilityDescriptor(
+                    out P12ACompatibilityDescriptor compatibility, out _))
+            {
+                resultCode = P12AResultCode.IncompatibleContentOrConfiguration.ToString();
+                return false;
+            }
+            if (!P12AContinuationStore.TryLoad(null, compatibility, persistentDataPath,
+                    out P12AContinuationImage image, out P12AResult loadResult))
+            {
+                resultCode = loadResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString();
+                return false;
+            }
+
+            if (!P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
+                    image, compatibility, expectedSession.Configuration,
+                    expectedSession.Runtime.Configuration, expectedSession.Composition.Calendar,
+                    runtimeAdmissionContext, out SimulationActiveSession candidate,
+                    out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic))
+            {
+                resultCode = P12AResultCode.OwnerGraphRejected.ToString();
+                expectedSession.Logger.LogError("P12-A detached load failed: " + restoreFailure + ": " + restoreDiagnostic);
+                return false;
+            }
+
+            if (!TryPublishRestoredSession(expectedSession, candidate))
+            {
+                resultCode = P12AResultCode.AdmissionRejected.ToString();
+                expectedSession.Logger.LogError("P12-A detached load passed private validation but publication failed.");
+                return false;
+            }
+
+            ReleaseBootstrapAliases();
+            resultCode = P12AResultCode.Loaded.ToString();
+            return true;
+        }
+    }
     internal bool TryRestoreDailyContinuation(
         System.Action<P12GDailyV1RestoreStage> stageObserver,
         out P12GDailyV1RestoreFailure failure,
@@ -733,6 +967,7 @@ public class TesteSimulacao : MonoBehaviour
 
             if (!P12GDailyV1RestoreCoordinator.TryCreateRestoredSession(
                     expectedSession,
+                    runtimeAdmissionContext,
                     out SimulationActiveSession candidateSession,
                     out failure,
                     out diagnostic,
@@ -1256,6 +1491,82 @@ public class TesteSimulacao : MonoBehaviour
             contentOverrides: simulationConfig.CreateConfigurationOverrides());
     }
 
+    private bool TryCreateCurrentDailyV1CompatibilityDescriptor(
+        out P12ACompatibilityDescriptor compatibility, out string diagnostic)
+    {
+        compatibility = null;
+        diagnostic = "The current host configuration is not an admitted Daily-v1 profile.";
+        if (runtimeAdmissionProfile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || simulationConfig == null || !simulationConfig.useAuthoredGeographyProfile
+            || P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig)
+            || SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig)
+            || !IsBootstrapStartThreadCurrent()) return false;
+
+        try
+        {
+            SimulationGenesisPipeline.ValidateProfile(simulationConfig);
+            ValidateP14SourceAdmission(simulationConfig, runtimeAdmissionContext);
+            CalendarDefinition calendar = ResolveCalendarDefinition();
+            EffectiveSimulationConfiguration effective = ResolveRuntimeConfiguration();
+            string profileFingerprint = SimulationGenesisPipeline.CreateFingerprint(
+                simulationConfig, effective, calendar,
+                out System.Collections.Generic.IReadOnlyList<string> provenance);
+            SimulationGenesisManifest genesisManifest = new SimulationGenesisManifest(
+                simulationConfig, effective, calendar, profileFingerprint, profileFingerprint,
+                provenance, false, false);
+            if (!P12CP9GenesisManifestSnapshot.TryCapture(runtimeAdmissionProfile,
+                    genesisManifest, out P12CP9GenesisManifestSnapshot p9Manifest, out _))
+            {
+                diagnostic = "The current authored P9-B profile identity is invalid.";
+                return false;
+            }
+
+            decimal distance = decimal.Parse(simulationConfig.authoredDistancePerNeighborStep,
+                NumberStyles.Number, CultureInfo.InvariantCulture);
+            P12CSpatialAuthoritySnapshot p8 = new P12CSpatialAuthoritySnapshot(
+                P12CSpatialAuthoritySnapshot.CurrentSchemaId,
+                P12CSpatialAuthoritySnapshot.CurrentSchemaVersion,
+                runtimeAdmissionProfile,
+                SimulationGenesisPipeline.GeographyProfileContractIdentity,
+                2,
+                1L,
+                HexCoordinate.ConventionVersion,
+                HexCoordinate.CanonicalOrder,
+                new[] { new P12CSpatialHexSnapshot(simulationConfig.authoredHexId,
+                    simulationConfig.authoredHexQ, simulationConfig.authoredHexR,
+                    simulationConfig.authoredTerrainDefinitionId,
+                    simulationConfig.authoredTerrainRevisionToken) },
+                new[] { new P12CSpatialLocationSnapshot(simulationConfig.authoredLocationId,
+                    simulationConfig.authoredHexId) },
+                new P12CSpatialScaleSnapshot(simulationConfig.authoredScaleConventionId,
+                    simulationConfig.authoredScaleSourceIdentity,
+                    simulationConfig.authoredScaleSourceVersion, distance,
+                    simulationConfig.authoredScaleUnit));
+            if (!P12ACSpatialAuthorityCodec.TryComputeFingerprint(p8,
+                    out string p8Fingerprint))
+            {
+                diagnostic = "The current authored P8-A geography identity is invalid.";
+                return false;
+            }
+            if (!P12ACompatibilityDescriptorFactory.TryCreate(simulationConfig, effective, calendar,
+                    profileFingerprint, p9Manifest, p8Fingerprint, out compatibility))
+            {
+                diagnostic = "The current runtime compatibility descriptor could not be formed.";
+                return false;
+            }
+            diagnostic = null;
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException
+            || exception is FormatException)
+        {
+            diagnostic = "The current Daily-v1 compatibility inputs are invalid.";
+            compatibility = null;
+            return false;
+        }
+    }
+
     private void SimulateWithSession(SimulationActiveSession expectedSession, int daysToSimulate)
     {
         if (!TryBeginActiveSessionOperation(expectedSession, out SimulationActiveSession session)) return;
@@ -1266,6 +1577,7 @@ public class TesteSimulacao : MonoBehaviour
                 session.Runtime.AdvanceDay();
                 AppendNpcStateSummary(session);
                 AppendEconomySnapshotIfNeeded(session, false);
+                TrySaveCompletedDailyV1Boundary(session, out _);
             }
 
             if (session.Configuration != null

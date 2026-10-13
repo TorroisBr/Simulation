@@ -99,6 +99,20 @@ internal sealed class P12EDailyV1OwnerPackage
     internal PersistentBattleStore Battles { get; }
     internal JusticeSystem Justice { get; }
     internal CrimeSocialAppraisalWorldState CrimeSocialAppraisal { get; }
+    internal P12ACrimeReceiptOwnerSnapshot CrimeReceiptSnapshot { get; }
+    internal P12AJusticeReceiptOwnerSnapshot JusticeReceiptSnapshot { get; }
+    internal P12EInstitutionOfficeOwnerSnapshot InstitutionOfficeSnapshot { get; }
+    internal PropertyEstateOwnerSnapshot PropertyEstateSnapshot { get; }
+    internal P12EFactionOwnerSnapshot FactionSnapshot { get; }
+    internal P12EPoliticalClaimOwnerSnapshot PoliticalClaimSnapshot { get; }
+    internal P12EPoliticalSupportOwnerSnapshot PoliticalSupportSnapshot { get; }
+    internal P12EPoliticalDecisionOwnerSnapshot PoliticalDecisionSnapshot { get; }
+    internal P12EMilitaryOwnerSnapshot MilitarySnapshot { get; }
+    internal PersistentConflictOwnerSnapshot ConflictSnapshot { get; }
+    internal PersistentWarOwnerSnapshot WarSnapshot { get; }
+    internal PersistentBattleOwnerSnapshot BattleSnapshot { get; }
+    internal P12EJusticeRecordsOwnerSnapshot JusticeSnapshot { get; }
+    internal P12ECrimeSocialAppraisalOwnerSnapshot CrimeSocialSnapshot { get; }
     internal IReadOnlyList<P12EUnresolvedPoliticalKnowledgeBinding> UnresolvedPoliticalKnowledgeBindings { get; }
 
     private P12EDailyV1OwnerPackage(
@@ -120,9 +134,23 @@ internal sealed class P12EDailyV1OwnerPackage
         PersistentBattleStore battles,
         JusticeSystem justice,
         CrimeSocialAppraisalWorldState crimeSocialAppraisal,
+        P12ACrimeReceiptOwnerSnapshot crimeReceiptSnapshot,
+        P12AJusticeReceiptOwnerSnapshot justiceReceiptSnapshot,
+        P12EInstitutionOfficeOwnerSnapshot institutionOfficeSnapshot,
+        PropertyEstateOwnerSnapshot propertyEstateSnapshot,
+        P12EFactionOwnerSnapshot factionSnapshot,
+        P12EPoliticalClaimOwnerSnapshot politicalClaimSnapshot,
+        P12EPoliticalSupportOwnerSnapshot politicalSupportSnapshot,
+        P12EPoliticalDecisionOwnerSnapshot politicalDecisionSnapshot,
+        P12EMilitaryOwnerSnapshot militarySnapshot,
+        PersistentConflictOwnerSnapshot conflictSnapshot,
+        PersistentWarOwnerSnapshot warSnapshot,
+        PersistentBattleOwnerSnapshot battleSnapshot,
+        P12EJusticeRecordsOwnerSnapshot justiceSnapshot,
+        P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialSnapshot,
         IReadOnlyList<P12EUnresolvedPoliticalKnowledgeBinding> unresolvedBindings)
     {
-        StagingAttempt = stagingAttempt ?? throw new ArgumentNullException(nameof(stagingAttempt));
+        StagingAttempt = stagingAttempt;
         WorldId = worldId;
         Institutions = institutions;
         Offices = offices;
@@ -140,6 +168,20 @@ internal sealed class P12EDailyV1OwnerPackage
         Battles = battles;
         Justice = justice;
         CrimeSocialAppraisal = crimeSocialAppraisal;
+        CrimeReceiptSnapshot = crimeReceiptSnapshot;
+        JusticeReceiptSnapshot = justiceReceiptSnapshot ?? throw new ArgumentNullException(nameof(justiceReceiptSnapshot));
+        InstitutionOfficeSnapshot = institutionOfficeSnapshot ?? throw new ArgumentNullException(nameof(institutionOfficeSnapshot));
+        PropertyEstateSnapshot = propertyEstateSnapshot ?? throw new ArgumentNullException(nameof(propertyEstateSnapshot));
+        FactionSnapshot = factionSnapshot ?? throw new ArgumentNullException(nameof(factionSnapshot));
+        PoliticalClaimSnapshot = politicalClaimSnapshot ?? throw new ArgumentNullException(nameof(politicalClaimSnapshot));
+        PoliticalSupportSnapshot = politicalSupportSnapshot ?? throw new ArgumentNullException(nameof(politicalSupportSnapshot));
+        PoliticalDecisionSnapshot = politicalDecisionSnapshot ?? throw new ArgumentNullException(nameof(politicalDecisionSnapshot));
+        MilitarySnapshot = militarySnapshot ?? throw new ArgumentNullException(nameof(militarySnapshot));
+        ConflictSnapshot = conflictSnapshot ?? throw new ArgumentNullException(nameof(conflictSnapshot));
+        WarSnapshot = warSnapshot ?? throw new ArgumentNullException(nameof(warSnapshot));
+        BattleSnapshot = battleSnapshot ?? throw new ArgumentNullException(nameof(battleSnapshot));
+        JusticeSnapshot = justiceSnapshot ?? throw new ArgumentNullException(nameof(justiceSnapshot));
+        CrimeSocialSnapshot = crimeSocialSnapshot ?? throw new ArgumentNullException(nameof(crimeSocialSnapshot));
         UnresolvedPoliticalKnowledgeBindings = new ReadOnlyCollection<P12EUnresolvedPoliticalKnowledgeBinding>(
             new List<P12EUnresolvedPoliticalKnowledgeBinding>(unresolvedBindings));
     }
@@ -164,6 +206,16 @@ internal sealed class P12EDailyV1OwnerPackage
 
         try
         {
+            if (!TryFindOptionalOwner(exactTokenOwnerSections,
+                    P12CrimeJusticeCensusProvider.CrimeP18ReceiptsSectionId,
+                    P12CrimeJusticeCensusProvider.SchemaVersion,
+                    out CrimeSystem crimeReceiptOwner,
+                    out long crimeReceiptRevision))
+            {
+                failure = P12EDailyV1OwnerPackageFailure.InvalidOwnerEvidence;
+                return false;
+            }
+
             if (!TryFindRequiredOwner(exactTokenOwnerSections,
                     PropertyOwnershipCensusProvider.OwnershipSectionId,
                     PropertyOwnershipCensusProvider.SchemaVersion,
@@ -199,9 +251,23 @@ internal sealed class P12EDailyV1OwnerPackage
                 || !TryFindRequiredOwner(exactTokenOwnerSections,
                     PersistentBattleCensusProvider.SectionId,
                     PersistentBattleCensusProvider.SchemaVersion,
-                    out PersistentBattleStore battleOwner))
+                    out PersistentBattleStore battleOwner)
+                || !TryFindRequiredOwner(exactTokenOwnerSections,
+                    P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId,
+                    P12CrimeJusticeCensusProvider.SchemaVersion,
+                    out JusticeSystem justiceOwner))
             {
                 failure = P12EDailyV1OwnerPackageFailure.InvalidOwnerEvidence;
+                return false;
+            }
+
+            P12ACrimeReceiptOwnerSnapshot crimeReceiptSnapshot = null;
+            if (crimeReceiptOwner != null
+                && (!crimeReceiptOwner.TryCaptureP12AReceiptOwnerSnapshot(
+                        out crimeReceiptSnapshot)
+                    || crimeReceiptSnapshot.CensusRevision != crimeReceiptRevision))
+            {
+                failure = P12EDailyV1OwnerPackageFailure.CaptureFailed;
                 return false;
             }
 
@@ -239,6 +305,8 @@ internal sealed class P12EDailyV1OwnerPackage
                 || !P12EJusticeRecordsOwnerSnapshot.TryCapture(
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
                     out P12EJusticeRecordsOwnerSnapshot justiceSnapshot, out _)
+                || !justiceOwner.TryCaptureP12AReceiptOwnerSnapshot(
+                    out P12AJusticeReceiptOwnerSnapshot justiceReceiptSnapshot)
                 || !P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
                     out P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialSnapshot, out _))
@@ -369,7 +437,7 @@ internal sealed class P12EDailyV1OwnerPackage
                     context.FreeStatus, context.WantedStatus,
                     context.ArrestedStatus, context.HiddenStatus,
                     context.DomainEventRecorder, context.Logger,
-                    out JusticeSystem stagedJustice, out _))
+                    out JusticeSystem stagedJustice, out _, justiceReceiptSnapshot))
             {
                 failure = P12EDailyV1OwnerPackageFailure.StageFailed;
                 return false;
@@ -420,7 +488,12 @@ internal sealed class P12EDailyV1OwnerPackage
                 stagedClaims, stagedSupport, stagedDecisions,
                 stagedArmedForces, stagedManpower, stagedPositions,
                 stagedConflicts, stagedWars, stagedBattles,
-                stagedJustice, stagedCrimeSocial, unresolvedBindings);
+                stagedJustice, stagedCrimeSocial,
+                crimeReceiptSnapshot, justiceReceiptSnapshot,
+                institutionOfficeSnapshot, propertyEstateSnapshot, factionSnapshot,
+                claimSnapshot, supportSnapshot, decisionSnapshot, militarySnapshot,
+                conflictSnapshot, warSnapshot, battleSnapshot, justiceSnapshot, crimeSocialSnapshot,
+                unresolvedBindings);
             failure = P12EDailyV1OwnerPackageFailure.None;
             return true;
         }
@@ -433,6 +506,161 @@ internal sealed class P12EDailyV1OwnerPackage
             failure = P12EDailyV1OwnerPackageFailure.StageFailed;
             return false;
         }
+    }
+
+    /// <summary>Stages decoded E owner values against detached C/D roots without a capture token or census vector.</summary>
+    internal static bool TryStageFromImage(
+        P12AContinuationImage image,
+        P12ADailyV1ImageOwnerSnapshots decoded,
+        P12EDailyV1OwnerStagingContext context,
+        out P12EDailyV1OwnerPackage package,
+        out P12EDailyV1OwnerPackageFailure failure,
+        Action<P12GDailyV1RestoreStage> stageObserver = null)
+    {
+        package = null;
+        failure = P12EDailyV1OwnerPackageFailure.InvalidCaptureContext;
+        if (image == null || decoded == null || context == null
+            || context.StagingAttempt != null || context.P12CRoots?.StagingAttempt != null
+            || context.P12DPackage?.StagingAttempt != null
+            || context.P12CRoots.WorldIdentity == null || context.P12DPackage.WorldId == null
+            || context.P12DPackage.Persons == null || context.P12DPackage.Cities == null
+            || context.P12DPackage.Npcs == null || context.P12DPackage.Genealogy == null
+            || context.P12DPackage.RuntimeIdentities == null || context.P12DPackage.SpatialNetwork == null
+            || context.StagedSimulationTime == null || context.Logger == null
+            || context.FreeStatus == null || context.WantedStatus == null
+            || context.ArrestedStatus == null || context.HiddenStatus == null
+            || context.StagedSimulationTime.AbsoluteDay != image.Header.Day
+            || context.P12CRoots.WorldIdentity.Value != image.Header.WorldId
+            || context.P12DPackage.WorldId.Value != image.Header.WorldId
+            || decoded.InstitutionOffice == null || decoded.PropertyEstate == null
+            || decoded.Faction == null || decoded.PoliticalClaims == null
+            || decoded.PoliticalSupport == null || decoded.PoliticalDecisions == null
+            || decoded.Military == null || decoded.Conflicts == null || decoded.Wars == null
+            || decoded.Battles == null || decoded.Justice == null || decoded.CrimeSocial == null
+            || decoded.CrimeReceipts == null || decoded.JusticeReceipts == null)
+            return false;
+
+        try
+        {
+            P12DDailyV1OwnerPackage stagedD = context.P12DPackage;
+            P12CStagedContinuationRoot stagedC = context.P12CRoots;
+            long day = image.Header.Day;
+            P12EInstitutionOfficeOwnerSnapshot institutionOfficeSnapshot = decoded.InstitutionOffice;
+            PropertyEstateOwnerSnapshot propertyEstateSnapshot = decoded.PropertyEstate;
+            P12EFactionOwnerSnapshot factionSnapshot = decoded.Faction;
+            P12EPoliticalClaimOwnerSnapshot claimSnapshot = decoded.PoliticalClaims;
+            P12EPoliticalSupportOwnerSnapshot supportSnapshot = decoded.PoliticalSupport;
+            P12EPoliticalDecisionOwnerSnapshot decisionSnapshot = decoded.PoliticalDecisions;
+            P12EMilitaryOwnerSnapshot militarySnapshot = decoded.Military;
+            PersistentConflictOwnerSnapshot conflictSnapshot = decoded.Conflicts;
+            PersistentWarOwnerSnapshot warSnapshot = decoded.Wars;
+            PersistentBattleOwnerSnapshot battleSnapshot = decoded.Battles;
+            P12EJusticeRecordsOwnerSnapshot justiceSnapshot = decoded.Justice;
+            P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialSnapshot = decoded.CrimeSocial;
+            P12ACrimeReceiptOwnerSnapshot crimeReceiptSnapshot = decoded.CrimeReceipts;
+            P12AJusticeReceiptOwnerSnapshot justiceReceiptSnapshot = decoded.JusticeReceipts;
+
+            if (!institutionOfficeSnapshot.TryCreateStagedOwners(stagedD.Persons,
+                    out InstitutionStore stagedInstitutions, out OfficeStore stagedOffices, out _))
+                return StageFailed(out failure);
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.EInstitutionOfficeOwnersStaged);
+
+            if (!propertyEstateSnapshot.TryStage(stagedD.Persons, day,
+                    out PropertyOwnershipStore stagedPropertyOwnership, out EstateStore stagedEstates, out _))
+                return StageFailed(out failure);
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.EPropertyEstateOwnersStaged);
+
+            if (!factionSnapshot.TryCreateStagedOwner(stagedD.Persons, day,
+                    out FactionStore stagedFactions, out _))
+                return StageFailed(out failure);
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.EFactionOwnerStaged);
+
+            if (!claimSnapshot.TryStage(stagedD.Persons, stagedPropertyOwnership,
+                    stagedInstitutions, stagedOffices, day, out PoliticalClaimStore stagedClaims, out _))
+                return StageFailed(out failure);
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.EPoliticalClaimsOwnerStaged);
+
+            if (!supportSnapshot.TryStage(stagedD.Persons, stagedFactions, stagedClaims,
+                    out PoliticalSupportStore stagedSupport, out _))
+                return StageFailed(out failure);
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.EPoliticalSupportOwnerStaged);
+
+            if (!decisionSnapshot.TryStage(stagedD.Persons, stagedInstitutions, stagedOffices,
+                    stagedClaims, out PoliticalDecisionStore stagedDecisions, out _))
+                return StageFailed(out failure);
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.EPoliticalDecisionsOwnerStaged);
+
+            if (!militarySnapshot.TryStage(stagedD.Persons, stagedC.SpatialAuthority, null,
+                    out ArmedForceStore stagedArmedForces,
+                    out ContingentManpowerStateStore stagedManpower,
+                    out ArmedForceSpatialStateStore stagedPositions, out _))
+                return StageFailed(out failure);
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.EMilitaryOwnersStaged);
+
+            if (!conflictSnapshot.TryStage(stagedArmedForces,
+                    out PersistentConflictStore stagedConflicts, out _))
+                return StageFailed(out failure);
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.EConflictOwnerStaged);
+
+            if (!warSnapshot.TryStage(stagedArmedForces, stagedConflicts,
+                    out PersistentWarStore stagedWars, out _))
+                return StageFailed(out failure);
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.EWarOwnerStaged);
+
+            if (!battleSnapshot.TryStage(stagedArmedForces, stagedConflicts, stagedWars,
+                    stagedC.SpatialAuthority, null, out PersistentBattleStore stagedBattles, out _))
+                return StageFailed(out failure);
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.EBattleOwnerStaged);
+
+            if (!justiceSnapshot.TryStage(stagedD.Cities, stagedD.Npcs, stagedD.Persons,
+                    context.FreeStatus, context.WantedStatus, context.ArrestedStatus, context.HiddenStatus,
+                    context.DomainEventRecorder, context.Logger,
+                    out JusticeSystem stagedJustice, out _, justiceReceiptSnapshot))
+                return StageFailed(out failure);
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.EJusticeOwnerStaged);
+
+            if (!crimeSocialSnapshot.TryStage(stagedD.Persons, stagedInstitutions,
+                    context.StagedSimulationTime, out CrimeSocialAppraisalWorldState stagedCrimeSocial, out _))
+                return StageFailed(out failure);
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.ECrimeSocialOwnerStaged);
+
+            if (stagedInstitutions == null || stagedOffices == null || stagedPropertyOwnership == null
+                || stagedEstates == null || stagedFactions == null || stagedClaims == null
+                || stagedSupport == null || stagedDecisions == null || stagedArmedForces == null
+                || stagedManpower == null || stagedPositions == null || stagedConflicts == null
+                || stagedWars == null || stagedBattles == null || stagedJustice == null
+                || stagedCrimeSocial == null
+                || !ReferenceEquals(stagedCrimeSocial.SimulationTime, context.StagedSimulationTime)
+                || stagedCrimeSocial.SimulationTime.AbsoluteDay != day
+                || !TryBuildUnresolvedBindings(decisionSnapshot,
+                    out IReadOnlyList<P12EUnresolvedPoliticalKnowledgeBinding> unresolvedBindings))
+                return StageFailed(out failure);
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.EUnresolvedBindingsValidated);
+
+            package = new P12EDailyV1OwnerPackage(null, stagedC.WorldIdentity,
+                stagedInstitutions, stagedOffices, stagedPropertyOwnership, stagedEstates,
+                stagedFactions, stagedClaims, stagedSupport, stagedDecisions, stagedArmedForces,
+                stagedManpower, stagedPositions, stagedConflicts, stagedWars, stagedBattles,
+                stagedJustice, stagedCrimeSocial, crimeReceiptSnapshot, justiceReceiptSnapshot,
+                institutionOfficeSnapshot, propertyEstateSnapshot, factionSnapshot, claimSnapshot,
+                supportSnapshot, decisionSnapshot, militarySnapshot, conflictSnapshot, warSnapshot,
+                battleSnapshot, justiceSnapshot, crimeSocialSnapshot, unresolvedBindings);
+            failure = P12EDailyV1OwnerPackageFailure.None;
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException)
+        {
+            package = null;
+            failure = P12EDailyV1OwnerPackageFailure.StageFailed;
+            return false;
+        }
+    }
+
+    private static bool StageFailed(out P12EDailyV1OwnerPackageFailure failure)
+    {
+        failure = P12EDailyV1OwnerPackageFailure.StageFailed;
+        return false;
     }
 
     private static bool TryValidateContext(
@@ -499,6 +727,40 @@ internal sealed class P12EDailyV1OwnerPackage
             return false;
 
         owner = typedOwner;
+        return true;
+    }
+
+    private static bool TryFindOptionalOwner<TOwner>(
+        IReadOnlyList<OwnerSectionCensusSnapshot> sections,
+        string sectionId,
+        int schemaVersion,
+        out TOwner owner,
+        out long revision)
+        where TOwner : class
+    {
+        owner = null;
+        revision = -1L;
+        if (sections == null || string.IsNullOrWhiteSpace(sectionId) || schemaVersion <= 0)
+            return false;
+
+        OwnerSectionCensusSnapshot match = null;
+        for (int i = 0; i < sections.Count; i++)
+        {
+            OwnerSectionCensusSnapshot section = sections[i];
+            if (section == null || !string.Equals(section.SectionId, sectionId, StringComparison.Ordinal))
+                continue;
+            if (match != null) return false;
+            match = section;
+        }
+
+        if (match == null) return true;
+        if (match.SchemaVersion != schemaVersion || match.Role != OwnerSectionRole.Required
+            || match.Cardinality < 0 || match.Revision < 0L
+            || !(match.OwnerInstanceIdentity is TOwner typedOwner))
+            return false;
+
+        owner = typedOwner;
+        revision = match.Revision;
         return true;
     }
 

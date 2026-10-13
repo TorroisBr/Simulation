@@ -85,7 +85,7 @@ internal enum P12GDailyV1RestoreStage
 /// single-reference exchange. This is an in-memory continuation path; it does
 /// not define or parse a persistence envelope.
 /// </summary>
-internal static class P12GDailyV1RestoreCoordinator
+internal static partial class P12GDailyV1RestoreCoordinator
 {
     internal static bool TryCreateRestoredSession(
         SimulationActiveSession sourceSession,
@@ -102,6 +102,94 @@ internal static class P12GDailyV1RestoreCoordinator
         Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null,
         Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest = null)
     {
+        return TryCreateRestoredSession(
+            sourceSession,
+            sourceSession?.AdmissionContext,
+            out restoredSession,
+            out failure,
+            out diagnostic,
+            stageObserver,
+            privateCandidateObserver,
+            genealogySnapshotOverrideForTest,
+            propertyEstateSnapshotOverrideForTest,
+            politicalClaimSnapshotOverrideForTest,
+            politicalSupportSnapshotOverrideForTest,
+            factionSnapshotOverrideForTest,
+            actorChoiceSnapshotOverrideForTest,
+            restoredAdmissionContextFactoryForTest);
+    }
+
+    internal static bool TryCreateRestoredSession(
+        SimulationActiveSession sourceSession,
+        SimulationRuntimeAdmissionContext bootstrapAdmissionContext,
+        out SimulationActiveSession restoredSession,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic,
+        Action<P12GDailyV1RestoreStage> stageObserver = null,
+        Action<SimulationActiveSession> privateCandidateObserver = null,
+        Func<GenealogyOwnerSnapshot, GenealogyOwnerSnapshot> genealogySnapshotOverrideForTest = null,
+        Func<PropertyEstateOwnerSnapshot, PropertyEstateOwnerSnapshot> propertyEstateSnapshotOverrideForTest = null,
+        Func<P12EPoliticalClaimOwnerSnapshot, P12EPoliticalClaimOwnerSnapshot> politicalClaimSnapshotOverrideForTest = null,
+        Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest = null,
+        Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null,
+        Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null,
+        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest = null)
+    {
+        return TryCreateRestoredSessionCore(sourceSession, bootstrapAdmissionContext, false, out _, out restoredSession,
+            out failure, out diagnostic, stageObserver, privateCandidateObserver,
+            genealogySnapshotOverrideForTest, propertyEstateSnapshotOverrideForTest,
+            politicalClaimSnapshotOverrideForTest, politicalSupportSnapshotOverrideForTest,
+            factionSnapshotOverrideForTest, actorChoiceSnapshotOverrideForTest,
+            restoredAdmissionContextFactoryForTest);
+    }
+
+    internal static bool TryCreateRestoredSessionAndCaptureImage(
+        SimulationActiveSession sourceSession,
+        out P12AContinuationImage image,
+        out SimulationActiveSession restoredSession,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic)
+    {
+        return TryCreateRestoredSessionAndCaptureImage(
+            sourceSession,
+            sourceSession?.AdmissionContext,
+            out image,
+            out restoredSession,
+            out failure,
+            out diagnostic);
+    }
+
+    internal static bool TryCreateRestoredSessionAndCaptureImage(
+        SimulationActiveSession sourceSession,
+        SimulationRuntimeAdmissionContext bootstrapAdmissionContext,
+        out P12AContinuationImage image,
+        out SimulationActiveSession restoredSession,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic)
+    {
+        return TryCreateRestoredSessionCore(sourceSession, bootstrapAdmissionContext, true, out image, out restoredSession,
+            out failure, out diagnostic, null, null, null, null, null, null, null, null, null);
+    }
+
+    private static bool TryCreateRestoredSessionCore(
+        SimulationActiveSession sourceSession,
+        SimulationRuntimeAdmissionContext bootstrapAdmissionContext,
+        bool captureContinuationImage,
+        out P12AContinuationImage continuationImage,
+        out SimulationActiveSession restoredSession,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic,
+        Action<P12GDailyV1RestoreStage> stageObserver,
+        Action<SimulationActiveSession> privateCandidateObserver,
+        Func<GenealogyOwnerSnapshot, GenealogyOwnerSnapshot> genealogySnapshotOverrideForTest,
+        Func<PropertyEstateOwnerSnapshot, PropertyEstateOwnerSnapshot> propertyEstateSnapshotOverrideForTest,
+        Func<P12EPoliticalClaimOwnerSnapshot, P12EPoliticalClaimOwnerSnapshot> politicalClaimSnapshotOverrideForTest,
+        Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest,
+        Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest,
+        Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest,
+        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest)
+    {
+        continuationImage = null;
         restoredSession = null;
         failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
         diagnostic = "A supported active Daily-v1 session is required.";
@@ -340,8 +428,12 @@ internal static class P12GDailyV1RestoreCoordinator
             }
 
             if (!TryBuildRestoredSession(
-                    sourceSession,
-                    sourceToken,
+                    sourceSession.Configuration,
+                    sourceRuntime.Configuration,
+                    sourceComposition.Calendar,
+                    bootstrapAdmissionContext,
+                    sourceRuntime.PoliticalWorldRevision,
+                    sourceSession.ReportState.LastEconomySnapshotDay,
                     stagedC,
                     stagedD,
                     stagedE,
@@ -527,6 +619,18 @@ internal static class P12GDailyV1RestoreCoordinator
                 return false;
             }
 
+            if (captureContinuationImage
+                && !TryComposeContinuationImage(sourceSession, sourceToken, sourceOwnerSections,
+                    worldIdentitySnapshot, allocatorSnapshot, recordSequenceSnapshot, spatialSnapshot,
+                    manifestSnapshot, randomSnapshot, stagedD, stagedE, capturedF,
+                    out continuationImage, out P12AResult imageResult))
+            {
+                failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                diagnostic = "P12-A could not seal the completed-boundary image: "
+                    + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "InvalidOwnerValue") + ".";
+                return false;
+            }
+
             restoredSession = candidate;
             failure = P12GDailyV1RestoreFailure.None;
             diagnostic = null;
@@ -544,6 +648,86 @@ internal static class P12GDailyV1RestoreCoordinator
                 + exception.Message;
             return false;
         }
+    }
+
+    private static bool TryComposeContinuationImage(
+        SimulationActiveSession sourceSession,
+        DailyCaptureEligibilityToken token,
+        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        P12CWorldIdentitySnapshot worldIdentity,
+        RuntimeIdAllocatorSnapshot allocator,
+        SimulationRecordSequenceSnapshot recordSequence,
+        P12CSpatialAuthoritySnapshot spatialAuthority,
+        P12CP9GenesisManifestSnapshot p9Manifest,
+        DeterministicRandomRootSnapshot randomRoot,
+        P12DDailyV1OwnerPackage d,
+        P12EDailyV1OwnerPackage e,
+        P12FDailyV1OwnerCapture f,
+        out P12AContinuationImage image,
+        out P12AResult result)
+    {
+        image = null;
+        result = new P12AResult(P12AResultCode.CaptureRejected);
+        if (sourceSession == null || token == null || ownerSections == null
+            || !ReferenceEquals(token.OwnerSections, ownerSections)
+            || !sourceSession.Runtime.TryValidateCompletedDailyCaptureToken(token, out _)
+            || !P12ADailyV1Census.TryCreate(ownerSections, out P12ADailyV1Census census, out result)
+            || !P12ACSpatialAuthorityCodec.TryComputeFingerprint(spatialAuthority,
+                out string p8Fingerprint)
+            || !P12ACompatibilityDescriptorFactory.TryCreate(sourceSession.Configuration,
+                sourceSession.Runtime.Configuration, sourceSession.Composition.Calendar,
+                sourceSession.Composition.ProfileFingerprint,
+                p9Manifest, p8Fingerprint,
+                out P12ACompatibilityDescriptor compatibility))
+        {
+            if (result == null) result = new P12AResult(P12AResultCode.IncompatibleContentOrConfiguration);
+            return false;
+        }
+
+        P12AContinuationHeader header = new P12AContinuationHeader(
+            token.WorldId.Value,
+            token.AbsoluteDay,
+            token.CompletedCoreSequence,
+            sourceSession.ReportState.LastEconomySnapshotDay,
+            p9Manifest.SelectedP9ContractIdentity,
+            p9Manifest.Fingerprint,
+            "P8-A",
+            p8Fingerprint,
+            sourceSession.Runtime.PoliticalWorldRevision,
+            compatibility);
+        if (!header.IsValid
+            || !P12ACausalRootImageAdapter.TryEncode(header, worldIdentity, allocator,
+                recordSequence, spatialAuthority, p9Manifest, randomRoot,
+                out P12ACausalRootPayload causalRoots,
+                out IReadOnlyList<P12AOwnerSection> causalSections, out result)
+            || !P12CRuntimeIdentityOwnerSnapshot.TryCapture(sourceSession.IdentityRegistry,
+                out P12CRuntimeIdentityOwnerSnapshot identitySnapshot)
+            || !P12ADailyV1OwnerSectionEncoder.TryEncode(ownerSections, identitySnapshot,
+                d, e, f, token.AbsoluteDay,
+                out IReadOnlyList<P12AOwnerSection> ownerSectionsEncoded, out result))
+        {
+            if (result == null) result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        List<P12AOwnerSection> encodedRequired = new List<P12AOwnerSection>(
+            causalSections.Count + ownerSectionsEncoded.Count);
+        encodedRequired.AddRange(causalSections);
+        encodedRequired.AddRange(ownerSectionsEncoded);
+        if (!P12ADailyV1ImageComposer.TryCompose(header, causalRoots, ownerSections,
+                encodedRequired, out image, out _, out result))
+        {
+            image = null;
+            return false;
+        }
+        if (!sourceSession.Runtime.TryValidateCompletedDailyCaptureToken(token, out _))
+        {
+            image = null;
+            result = new P12AResult(P12AResultCode.CaptureRejected);
+            return false;
+        }
+        result = null;
+        return true;
     }
 
     private static bool IsSupportedSource(SimulationActiveSession session)
@@ -805,8 +989,12 @@ internal static class P12GDailyV1RestoreCoordinator
     }
 
     private static bool TryBuildRestoredSession(
-        SimulationActiveSession sourceSession,
-        DailyCaptureEligibilityToken sourceToken,
+        SimulationConfigData config,
+        EffectiveSimulationConfiguration effective,
+        CalendarDefinition calendar,
+        SimulationRuntimeAdmissionContext sourceAdmissionContext,
+        long politicalWorldRevision,
+        long lastEconomySnapshotDay,
         P12CStagedContinuationRoot stagedC,
         P12DDailyV1OwnerPackage stagedD,
         P12EDailyV1OwnerPackage stagedE,
@@ -825,8 +1013,11 @@ internal static class P12GDailyV1RestoreCoordinator
     {
         candidate = null;
         diagnostic = null;
-        SimulationConfigData config = sourceSession.Configuration;
-        EffectiveSimulationConfiguration effective = sourceSession.Runtime.Configuration;
+        if (config == null || effective == null || calendar == null || sourceAdmissionContext == null)
+        {
+            diagnostic = "The selected Daily-v1 host configuration and admission roots are required.";
+            return false;
+        }
         Dictionary<SpatialLocationRuntime, CityRuntime> cityByLocation =
             new Dictionary<SpatialLocationRuntime, CityRuntime>();
         foreach (CityRuntime city in stagedD.Cities)
@@ -903,12 +1094,17 @@ internal static class P12GDailyV1RestoreCoordinator
             effective.Crime,
             stagedC.DeterministicRandom,
             time);
+        if (!crime.TryInstallP12AReceiptOwnerSnapshot(stagedE.CrimeReceiptSnapshot))
+        {
+            diagnostic = "P12-A Crime receipt history could not be installed into the private restored owner.";
+            return false;
+        }
         if (effective.Crime.Enabled == true) actionProviders.Add(crime);
         if (effective.GuardCrime.Enabled == true)
             actionProviders.Add(new GuardSystem(stagedE.Justice, config.hiddenStatus, effective.GuardCrime));
         NpcDecisionSystem decisionsSystem = new NpcDecisionSystem(actionProviders, stagedC.DeterministicRandom);
         if (!TryCreateRestoredAdmissionContext(
-                sourceSession.AdmissionContext,
+                sourceAdmissionContext,
                 restoredAdmissionContextFactoryForTest,
                 out SimulationRuntimeAdmissionContext restoredAdmissionContext,
                 out diagnostic))
@@ -938,7 +1134,7 @@ internal static class P12GDailyV1RestoreCoordinator
             genealogyStore: stagedD.Genealogy,
             institutionStore: stagedE.Institutions,
             officeStore: stagedE.Offices,
-            calendarDefinition: sourceSession.Composition.Calendar,
+            calendarDefinition: calendar,
             propertyOwnershipStore: stagedE.PropertyOwnership,
             estateStore: stagedE.Estates,
             politicalClaimStore: stagedE.PoliticalClaims,
@@ -946,7 +1142,7 @@ internal static class P12GDailyV1RestoreCoordinator
             politicalSupportStore: stagedE.PoliticalSupport,
             politicalKnowledgeStore: stagedF.PoliticalKnowledge,
             politicalDecisionStore: stagedE.PoliticalDecisions,
-            politicalWorldRevision: sourceSession.Runtime.PoliticalWorldRevision,
+            politicalWorldRevision: politicalWorldRevision,
             armedForceStore: stagedE.ArmedForces,
             conflictStore: stagedE.Conflicts,
             warStore: stagedE.Wars,
@@ -978,7 +1174,7 @@ internal static class P12GDailyV1RestoreCoordinator
             stagedC.WorldIdentity,
             stagedC.GenesisManifest,
             time,
-            sourceSession.Composition.Calendar,
+            calendar,
             stagedD.SpatialNetwork,
             eventStore,
             history,
@@ -1008,7 +1204,7 @@ internal static class P12GDailyV1RestoreCoordinator
             config,
             restoredAdmissionContext,
             stagedC.DeterministicRandom,
-            new SimulationSessionReportState(sourceSession.ReportState.LastEconomySnapshotDay));
+            new SimulationSessionReportState(lastEconomySnapshotDay));
         return true;
     }
 

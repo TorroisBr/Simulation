@@ -150,6 +150,20 @@ internal sealed class P12DNpcCommercialMarketValue
         Source = value.Source;
         SourceRuntimeId = value.SourceRuntimeId;
     }
+
+    internal P12DNpcCommercialMarketValue(string locationRuntimeId, string itemDefinitionId,
+        float observedPrice, int observedStock, long observedDay, long receivedDay,
+        CommercialKnowledgeSource source, string sourceRuntimeId)
+    {
+        LocationRuntimeId = locationRuntimeId;
+        ItemDefinitionId = itemDefinitionId;
+        ObservedPrice = observedPrice;
+        ObservedStock = observedStock;
+        ObservedDay = observedDay;
+        ReceivedDay = receivedDay;
+        Source = source;
+        SourceRuntimeId = sourceRuntimeId;
+    }
 }
 
 internal sealed class P12DNpcCommercialLiquidityValue
@@ -171,6 +185,19 @@ internal sealed class P12DNpcCommercialLiquidityValue
         ReceivedDay = value.ReceivedDay;
         Source = value.Source;
         SourceRuntimeId = value.SourceRuntimeId;
+    }
+
+    internal P12DNpcCommercialLiquidityValue(string locationRuntimeId, MarketLiquidityMode mode,
+        float purchasingPower, long observedDay, long receivedDay,
+        CommercialKnowledgeSource source, string sourceRuntimeId)
+    {
+        LocationRuntimeId = locationRuntimeId;
+        Mode = mode;
+        PurchasingPower = purchasingPower;
+        ObservedDay = observedDay;
+        ReceivedDay = receivedDay;
+        Source = source;
+        SourceRuntimeId = sourceRuntimeId;
     }
 }
 
@@ -769,23 +796,92 @@ internal static class P12DNpcRootOwnerSnapshot
         IReadOnlyList<string> stagedTravelPartyIds,
         out IReadOnlyList<NpcRuntime> stagedNpcRoster,
         out P12DNpcRootOwnerSnapshotFailure failure)
+        => TryStageCore(sourceRuntime, token, dProjection, fProjection,
+            cityMembershipLinkers, stagedPersonStore, npcDefinitions, actionDefinitions,
+            statusDefinitions, itemDefinitions, stagedLocations, stagedRouteRuntimeIds,
+            stagedTravelPartyIds, true, out stagedNpcRoster, out failure);
+
+    internal static bool TryStageForImage(
+        IReadOnlyList<P12DNpcDRow> dRows,
+        IReadOnlyList<P12DNpcFRow> fRows,
+        IReadOnlyList<P12DCityMembershipLinker> cityMembershipLinkers,
+        PersonStore stagedPersonStore,
+        IReadOnlyList<NpcData> npcDefinitions,
+        IReadOnlyList<NpcActionData> actionDefinitions,
+        IReadOnlyList<NpcStatusData> statusDefinitions,
+        IReadOnlyList<ItemData> itemDefinitions,
+        IReadOnlyList<SpatialLocationRuntime> stagedLocations,
+        IReadOnlyList<string> stagedRouteRuntimeIds,
+        IReadOnlyList<string> stagedTravelPartyIds,
+        IReadOnlyList<P12AOwnerSection> ownerSections,
+        out IReadOnlyList<NpcRuntime> stagedNpcRoster,
+        out P12DNpcRootOwnerSnapshotFailure failure)
     {
         stagedNpcRoster = null;
         failure = P12DNpcRootOwnerSnapshotFailure.InvalidCaptureEvidence;
-        if (sourceRuntime == null || token == null || dProjection == null || fProjection == null
+        if (dRows == null || fRows == null || ownerSections == null) return false;
+        Dictionary<string, P12AOwnerSection> byId = new Dictionary<string, P12AOwnerSection>(StringComparer.Ordinal);
+        foreach (P12AOwnerSection section in ownerSections)
+            if (section == null || !byId.TryAdd(section.Id, section)) return false;
+        foreach (P12DNpcDRow row in dRows)
+        {
+            if (row == null || !byId.TryGetValue(
+                    P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(row.RuntimeId),
+                    out P12AOwnerSection local)
+                || !byId.TryGetValue(
+                    P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(row.RuntimeId),
+                    out P12AOwnerSection merchant)
+                || !P12ANpcReceiptEmptyOwnerCodec.TryDecode(local, merchant, out string decodedRuntimeId, out _)
+                || !string.Equals(decodedRuntimeId, row.RuntimeId, StringComparison.Ordinal))
+                return false;
+        }
+        return TryStageCore(null, null,
+            new P12DNpcDProjection(null, null, null, null, dRows),
+            new P12DNpcFProjection(null, null, null, null, fRows),
+            cityMembershipLinkers, stagedPersonStore, npcDefinitions, actionDefinitions,
+            statusDefinitions, itemDefinitions, stagedLocations, stagedRouteRuntimeIds,
+            stagedTravelPartyIds, false, out stagedNpcRoster, out failure);
+    }
+
+    private static bool TryStageCore(
+        SimulationRuntime sourceRuntime,
+        DailyCaptureEligibilityToken token,
+        P12DNpcDProjection dProjection,
+        P12DNpcFProjection fProjection,
+        IReadOnlyList<P12DCityMembershipLinker> cityMembershipLinkers,
+        PersonStore stagedPersonStore,
+        IReadOnlyList<NpcData> npcDefinitions,
+        IReadOnlyList<NpcActionData> actionDefinitions,
+        IReadOnlyList<NpcStatusData> statusDefinitions,
+        IReadOnlyList<ItemData> itemDefinitions,
+        IReadOnlyList<SpatialLocationRuntime> stagedLocations,
+        IReadOnlyList<string> stagedRouteRuntimeIds,
+        IReadOnlyList<string> stagedTravelPartyIds,
+        bool requireCaptureEvidence,
+        out IReadOnlyList<NpcRuntime> stagedNpcRoster,
+        out P12DNpcRootOwnerSnapshotFailure failure)
+    {
+        stagedNpcRoster = null;
+        failure = P12DNpcRootOwnerSnapshotFailure.InvalidCaptureEvidence;
+        if ((requireCaptureEvidence && (sourceRuntime == null || token == null))
+            || (!requireCaptureEvidence && (sourceRuntime != null || token != null))
+            || dProjection == null || fProjection == null
             || cityMembershipLinkers == null || stagedPersonStore == null
             || npcDefinitions == null || actionDefinitions == null || statusDefinitions == null
             || itemDefinitions == null || stagedLocations == null
             || stagedRouteRuntimeIds == null || stagedTravelPartyIds == null
-            || !ReferenceEquals(dProjection.Token, token) || !ReferenceEquals(fProjection.Token, token)
-            || !ReferenceEquals(dProjection.OwnerSectionVector, token.OwnerSections)
-            || !ReferenceEquals(fProjection.OwnerSectionVector, token.OwnerSections)
-            || !ReferenceEquals(dProjection.CaptureStamp, fProjection.CaptureStamp)
-            || !ReferenceEquals(dProjection.OwnerSectionVector, fProjection.OwnerSectionVector)
-            || !dProjection.Evidence.HasSameCaptureIdentity(fProjection.Evidence)
+            || (requireCaptureEvidence && (!ReferenceEquals(dProjection.Token, token) || !ReferenceEquals(fProjection.Token, token)
+                || !ReferenceEquals(dProjection.OwnerSectionVector, token.OwnerSections)
+                || !ReferenceEquals(fProjection.OwnerSectionVector, token.OwnerSections)
+                || !ReferenceEquals(dProjection.CaptureStamp, fProjection.CaptureStamp)
+                || !ReferenceEquals(dProjection.OwnerSectionVector, fProjection.OwnerSectionVector)
+                || dProjection.Evidence == null || !dProjection.Evidence.HasSameCaptureIdentity(fProjection.Evidence)))
+            || (!requireCaptureEvidence && (dProjection.Token != null || fProjection.Token != null
+                || dProjection.OwnerSectionVector != null || fProjection.OwnerSectionVector != null
+                || dProjection.Evidence != null || fProjection.Evidence != null))
             || dProjection.Rows == null || fProjection.Rows == null
             || dProjection.Rows.Count != fProjection.Rows.Count
-            || !sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _))
+            || (requireCaptureEvidence && !sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _)))
         {
             failure = P12DNpcRootOwnerSnapshotFailure.StaleCapture;
             return false;
@@ -1060,16 +1156,20 @@ internal static class P12DNpcRootOwnerSnapshot
             }
         }
 
-        if (!sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _)
-            || !dProjection.Evidence.AreReceiptOwnersStillExactZero())
+        if (requireCaptureEvidence && (!sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _)
+            || !dProjection.Evidence.AreReceiptOwnersStillExactZero()))
         {
             failure = P12DNpcRootOwnerSnapshotFailure.StaleCapture;
             return false;
         }
 
-        if (!P12DCityNpcRelationAssembler.TryFillMembershipsOnce(
+        bool relationsFilled = requireCaptureEvidence
+            ? P12DCityNpcRelationAssembler.TryFillMembershipsOnce(
                 dProjection.Evidence, fProjection.Evidence, cityMembershipLinkers, candidates,
-                out P12DCityNpcRelationAssemblyFailure assemblyFailure))
+                out P12DCityNpcRelationAssemblyFailure assemblyFailure)
+            : P12DCityNpcRelationAssembler.TryFillMembershipsFromImage(
+                cityMembershipLinkers, candidates, out assemblyFailure);
+        if (!relationsFilled)
         {
             failure = assemblyFailure == P12DCityNpcRelationAssemblyFailure.InvalidRelation
                 || assemblyFailure == P12DCityNpcRelationAssemblyFailure.InvalidCitySet
@@ -1079,7 +1179,7 @@ internal static class P12DNpcRootOwnerSnapshot
             return false;
         }
 
-        if (!sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _))
+        if (requireCaptureEvidence && !sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _))
         {
             failure = P12DNpcRootOwnerSnapshotFailure.StaleCapture;
             return false;

@@ -26,6 +26,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     private Action<JusticeSystem> p12CrimeJusticeMutationCommitted;
     private long p12CrimeJusticeRevision;
     private bool p12DailyProfileReceiptBoundaryBound;
+    private bool p12AReceiptStateInstalled;
     private readonly List<WantedRecordRuntime> wantedRecords = new List<WantedRecordRuntime>();
     private readonly List<PrisonSentenceRuntime> prisonSentences = new List<PrisonSentenceRuntime>();
     private Dictionary<string, JusticeBeginDayReceipt> beginDayStepReceipts =
@@ -60,6 +61,72 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
                 + checked(advanceSentencesStepRevision + advanceSentencesStepReceipts.Count)
                 + checked(syncWantedStatusesStepRevision + syncWantedStatusesStepReceipts.Count));
         }
+    }
+
+    internal bool TryCaptureP12AReceiptOwnerSnapshot(out P12AJusticeReceiptOwnerSnapshot snapshot)
+    {
+        snapshot = null;
+        if (beginDayStepReceipts == null || advanceSentencesStepReceipts == null
+            || syncWantedStatusesStepReceipts == null || beginDayStepRevision < 0L
+            || advanceSentencesStepRevision < 0L || syncWantedStatusesStepRevision < 0L) return false;
+        try
+        {
+            P12AJusticeReceiptOwnerSnapshot candidate = new P12AJusticeReceiptOwnerSnapshot(
+                beginDayStepRevision, SnapshotReceipts(beginDayStepReceipts,
+                    receipt => new P12AReceiptValue(receipt.ExecutionStepIdentity, receipt.DescriptorFingerprint,
+                        receipt.OwnerRevisionBefore, receipt.OwnerRevisionAfter)),
+                advanceSentencesStepRevision, SnapshotReceipts(advanceSentencesStepReceipts,
+                    receipt => new P12AReceiptValue(receipt.ExecutionStepIdentity, receipt.DescriptorFingerprint,
+                        receipt.OwnerRevisionBefore, receipt.OwnerRevisionAfter)),
+                syncWantedStatusesStepRevision, SnapshotReceipts(syncWantedStatusesStepReceipts,
+                    receipt => new P12AReceiptValue(receipt.ExecutionStepIdentity, receipt.DescriptorFingerprint,
+                        receipt.OwnerRevisionBefore, receipt.OwnerRevisionAfter)));
+            if (!candidate.IsValid || candidate.CensusRevision != P12P18ReceiptCensusRevision) return false;
+            snapshot = candidate;
+            return true;
+        }
+        catch (OverflowException) { return false; }
+    }
+
+    internal bool TryInstallP12AReceiptOwnerSnapshot(P12AJusticeReceiptOwnerSnapshot snapshot)
+    {
+        if (snapshot == null || !snapshot.IsValid || p12AReceiptStateInstalled
+            || beginDayStepReceipts == null || advanceSentencesStepReceipts == null
+            || syncWantedStatusesStepReceipts == null || beginDayStepRevision != 0L
+            || advanceSentencesStepRevision != 0L || syncWantedStatusesStepRevision != 0L
+            || beginDayStepReceipts.Count != 0 || advanceSentencesStepReceipts.Count != 0
+            || syncWantedStatusesStepReceipts.Count != 0) return false;
+        Dictionary<string, JusticeBeginDayReceipt> begin = new Dictionary<string, JusticeBeginDayReceipt>(StringComparer.Ordinal);
+        foreach (P12AReceiptValue value in snapshot.BeginDayReceipts)
+        {
+            if (begin.ContainsKey(value.Identity)) return false;
+            begin.Add(value.Identity, new JusticeBeginDayReceipt(value.Identity, value.DescriptorFingerprint,
+                value.RevisionBefore, value.RevisionAfter));
+        }
+        Dictionary<string, JusticeAdvanceSentencesReceipt> advance =
+            new Dictionary<string, JusticeAdvanceSentencesReceipt>(StringComparer.Ordinal);
+        foreach (P12AReceiptValue value in snapshot.AdvanceSentencesReceipts)
+        {
+            if (advance.ContainsKey(value.Identity)) return false;
+            advance.Add(value.Identity, new JusticeAdvanceSentencesReceipt(value.Identity, value.DescriptorFingerprint,
+                value.RevisionBefore, value.RevisionAfter));
+        }
+        Dictionary<string, JusticeSyncWantedStatusesReceipt> sync =
+            new Dictionary<string, JusticeSyncWantedStatusesReceipt>(StringComparer.Ordinal);
+        foreach (P12AReceiptValue value in snapshot.SyncWantedStatusesReceipts)
+        {
+            if (sync.ContainsKey(value.Identity)) return false;
+            sync.Add(value.Identity, new JusticeSyncWantedStatusesReceipt(value.Identity, value.DescriptorFingerprint,
+                value.RevisionBefore, value.RevisionAfter));
+        }
+        beginDayStepReceipts = begin;
+        advanceSentencesStepReceipts = advance;
+        syncWantedStatusesStepReceipts = sync;
+        beginDayStepRevision = snapshot.BeginDayRevision;
+        advanceSentencesStepRevision = snapshot.AdvanceSentencesRevision;
+        syncWantedStatusesStepRevision = snapshot.SyncWantedStatusesRevision;
+        p12AReceiptStateInstalled = true;
+        return P12P18ReceiptCensusRevision == snapshot.CensusRevision;
     }
 
     public JusticeSystem(
@@ -2076,7 +2143,8 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         IReadOnlyList<WantedRecordRuntime> wantedRows,
         IReadOnlyList<PrisonSentenceRuntime> sentenceRows,
         long revision,
-        out JusticeSystem staged)
+        out JusticeSystem staged,
+        P12AJusticeReceiptOwnerSnapshot receiptSnapshot = null)
     {
         staged = null;
         if (freeStatus == null || wantedStatus == null || arrestedStatus == null || hiddenStatus == null
@@ -2106,7 +2174,11 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             candidate.wantedRecords.AddRange(wantedRows);
             candidate.prisonSentences.AddRange(sentenceRows);
             candidate.p12CrimeJusticeRevision = revision;
-            if (candidate.P12P18ReceiptCensusRevision != 0L) return false;
+            if (receiptSnapshot != null)
+            {
+                if (!candidate.TryInstallP12AReceiptOwnerSnapshot(receiptSnapshot)) return false;
+            }
+            else if (candidate.P12P18ReceiptCensusRevision != 0L) return false;
             staged = candidate;
             return true;
         }
@@ -2125,7 +2197,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         if (admission == null || committed == null) return false;
         if (p12CrimeJusticeMutationAdmission != null || p12CrimeJusticeMutationCommitted != null)
             return false;
-        if (P12P18ReceiptCensusRevision != 0L) return false;
+        if (!p12AReceiptStateInstalled && P12P18ReceiptCensusRevision != 0L) return false;
 
         p12CrimeJusticeMutationAdmission = admission;
         p12CrimeJusticeMutationCommitted = committed;
@@ -2139,9 +2211,28 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     internal bool TryBindP12DailyProfileReceiptBoundary()
     {
         if (p12DailyProfileReceiptBoundaryBound) return true;
-        if (P12P18ReceiptCensusRevision != 0L) return false;
+        if (!p12AReceiptStateInstalled && P12P18ReceiptCensusRevision != 0L) return false;
         p12DailyProfileReceiptBoundaryBound = true;
         return true;
+    }
+
+    private static IReadOnlyList<P12AReceiptValue> SnapshotReceipts<T>(
+        Dictionary<string, T> receipts, Func<T, P12AReceiptValue> convert)
+    {
+        if (receipts == null || convert == null) throw new ArgumentNullException();
+        List<string> identities = new List<string>(receipts.Keys);
+        identities.Sort(StringComparer.Ordinal);
+        List<P12AReceiptValue> result = new List<P12AReceiptValue>(identities.Count);
+        foreach (string identity in identities)
+        {
+            if (string.IsNullOrWhiteSpace(identity) || !receipts.TryGetValue(identity, out T receipt)
+                || ReferenceEquals(receipt, null)) throw new InvalidOperationException("Receipt owner map is invalid.");
+            P12AReceiptValue value = convert(receipt);
+            if (value == null || !string.Equals(identity, value.Identity, StringComparison.Ordinal))
+                throw new InvalidOperationException("Receipt key does not match its immutable value.");
+            result.Add(value);
+        }
+        return result.AsReadOnly();
     }
 
     private bool CanCommitP12CrimeJusticeMutation()

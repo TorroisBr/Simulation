@@ -70,10 +70,28 @@ internal sealed class P12FPoliticalKnowledgeOwnerSnapshot
         Revision = revision;
     }
 
+    /// <summary>Creates detached Political Knowledge values decoded from a continuation image.</summary>
+    internal P12FPoliticalKnowledgeOwnerSnapshot(
+        IEnumerable<PoliticalKnowledgeRuntime> runtimes,
+        long revision)
+    {
+        if (runtimes == null) throw new ArgumentNullException(nameof(runtimes));
+        token = null;
+        vector = null;
+        detachedRuntimes = new List<PoliticalKnowledgeRuntime>();
+        foreach (PoliticalKnowledgeRuntime runtime in runtimes)
+            detachedRuntimes.Add(runtime == null ? null : runtime.Clone());
+        Revision = revision;
+    }
+
     internal IReadOnlyList<PoliticalKnowledgeRuntime> CopyDetachedRuntimes()
     {
         List<PoliticalKnowledgeRuntime> copies = new List<PoliticalKnowledgeRuntime>(detachedRuntimes.Count);
-        foreach (PoliticalKnowledgeRuntime runtime in detachedRuntimes) copies.Add(runtime.Clone());
+        foreach (PoliticalKnowledgeRuntime runtime in detachedRuntimes)
+        {
+            if (runtime == null) return null;
+            copies.Add(runtime.Clone());
+        }
         return new ReadOnlyCollection<PoliticalKnowledgeRuntime>(copies);
     }
 
@@ -156,9 +174,53 @@ internal sealed class P12FPoliticalKnowledgeOwnerSnapshot
             return false;
         }
 
+        IReadOnlyList<PoliticalKnowledgeRuntime> runtimes = CopyDetachedRuntimes();
+        if (runtimes == null)
+        {
+            failure = "Political Knowledge detached values contain a null owner row.";
+            return false;
+        }
+
         if (!PoliticalKnowledgeStore.TryCreateP12FStaged(
             persons, institutions, claims, factions, offices, properties,
-            CopyDetachedRuntimes(), Revision, stagedAbsoluteDay, out staged))
+            runtimes, Revision, stagedAbsoluteDay, out staged))
+        {
+            failure = "Political Knowledge values could not be privately staged against the supplied roots and day.";
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>Stages decoded values against fresh target roots without source capture evidence.</summary>
+    internal bool TryStageForImage(
+        PersonStore persons,
+        InstitutionStore institutions,
+        PoliticalClaimStore claims,
+        FactionStore factions,
+        OfficeStore offices,
+        PropertyOwnershipStore properties,
+        long stagedAbsoluteDay,
+        out PoliticalKnowledgeStore staged,
+        out string failure)
+    {
+        staged = null;
+        failure = null;
+        if (token != null || vector != null || stagedAbsoluteDay < 0L)
+        {
+            failure = "Detached Political Knowledge staging requires image values and target roots only.";
+            return false;
+        }
+
+        IReadOnlyList<PoliticalKnowledgeRuntime> runtimes = CopyDetachedRuntimes();
+        if (runtimes == null)
+        {
+            failure = "Political Knowledge detached values contain a null owner row.";
+            return false;
+        }
+
+        if (!PoliticalKnowledgeStore.TryCreateP12FStaged(
+            persons, institutions, claims, factions, offices, properties,
+            runtimes, Revision, stagedAbsoluteDay, out staged))
         {
             failure = "Political Knowledge values could not be privately staged against the supplied roots and day.";
             return false;
@@ -169,7 +231,7 @@ internal sealed class P12FPoliticalKnowledgeOwnerSnapshot
 
 internal sealed class P12FScheduledDirectiveOwnerSnapshot
 {
-    private sealed class Row
+    internal sealed class Row
     {
         internal string Id { get; }
         internal long AbsoluteDay { get; }
@@ -192,6 +254,21 @@ internal sealed class P12FScheduledDirectiveOwnerSnapshot
             State = directive.State;
             ProcessedDay = directive.ProcessedDay;
             ResultReason = directive.ResultReason;
+        }
+
+        internal Row(string id, long absoluteDay, ScheduledDirectiveMode mode,
+            ScheduledDirectiveOperation operation, string actorRuntimeId, string actionDefinitionId,
+            ScheduledDirectiveState state, long processedDay, string resultReason)
+        {
+            Id = id;
+            AbsoluteDay = absoluteDay;
+            Mode = mode;
+            Operation = operation;
+            ActorRuntimeId = actorRuntimeId;
+            ActionDefinitionId = actionDefinitionId;
+            State = state;
+            ProcessedDay = processedDay;
+            ResultReason = resultReason;
         }
 
         internal ScheduledDirective Create(NpcActionData action)
@@ -221,6 +298,17 @@ internal sealed class P12FScheduledDirectiveOwnerSnapshot
         this.rows = rows.AsReadOnly();
         Revision = revision;
     }
+
+    internal P12FScheduledDirectiveOwnerSnapshot(IEnumerable<Row> rows, long revision)
+    {
+        if (rows == null) throw new ArgumentNullException(nameof(rows));
+        token = null;
+        vector = null;
+        this.rows = new ReadOnlyCollection<Row>(new List<Row>(rows));
+        Revision = revision;
+    }
+
+    internal IReadOnlyList<Row> Rows => rows;
 
     internal static bool TryCapture(
         ScheduledDirectiveStore owner,
@@ -296,6 +384,38 @@ internal sealed class P12FScheduledDirectiveOwnerSnapshot
             failure = "Scheduled Directive staging requires the same boundary metadata, staged SimulationTime, NPC roots, and action definitions.";
             return false;
         }
+
+        return TryStageCore(stagedTime, stagedNpcs, stagedActionDefinitions, out staged, out failure);
+    }
+
+    /// <summary>Stages detached P12-A rows without source capture evidence.</summary>
+    internal bool TryStageForImage(
+        SimulationTime stagedTime,
+        IReadOnlyDictionary<string, NpcRuntime> stagedNpcs,
+        IReadOnlyDictionary<string, NpcActionData> stagedActionDefinitions,
+        out ScheduledDirectiveStore staged,
+        out string failure)
+    {
+        staged = null;
+        failure = null;
+        if (token != null || vector != null || stagedTime == null
+            || stagedActionDefinitions == null || stagedNpcs == null)
+        {
+            failure = "Detached Scheduled Directive staging requires image values and target roots only.";
+            return false;
+        }
+        return TryStageCore(stagedTime, stagedNpcs, stagedActionDefinitions, out staged, out failure);
+    }
+
+    private bool TryStageCore(
+        SimulationTime stagedTime,
+        IReadOnlyDictionary<string, NpcRuntime> stagedNpcs,
+        IReadOnlyDictionary<string, NpcActionData> stagedActionDefinitions,
+        out ScheduledDirectiveStore staged,
+        out string failure)
+    {
+        staged = null;
+        failure = null;
 
         foreach (KeyValuePair<string, NpcRuntime> entry in stagedNpcs)
         {

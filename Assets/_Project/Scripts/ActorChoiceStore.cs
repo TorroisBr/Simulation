@@ -956,6 +956,38 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         }
     }
 
+    /// <summary>
+    /// Validates one detached value against the same Daily-v1 terminal-history
+    /// rules used by source capture and target staging, without requiring a
+    /// PersonStore or allocating an owner store.
+    /// </summary>
+    internal static bool IsValidP12FDailyTerminalInput(ActorChoiceInput input)
+    {
+        if (input == null || input.InputId == null || string.IsNullOrWhiteSpace(input.InputId.Value)
+            || string.IsNullOrWhiteSpace(input.WorldCommandId) || input.InputSequence <= 0L
+            || input.PersonId == null || string.IsNullOrWhiteSpace(input.ActionDefinitionId)
+            || input.CapturedAbsoluteDay < 0L
+            || !Enum.IsDefined(typeof(WorldCommandOrigin), input.Origin)
+            || !Enum.IsDefined(typeof(WorldCommandAuthorityMode), input.Authority)
+            || !Enum.IsDefined(typeof(ActorChoiceInputStatus), input.Status)
+            || input.Status == ActorChoiceInputStatus.Pending
+            || input.Status == ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt
+            || input.TemporalCapture != null || input.TemporalDispositions == null
+            || input.TemporalDispositions.Count != 0 || input.Dispositions == null)
+            return false;
+
+        foreach (ActorChoiceDisposition disposition in input.Dispositions)
+        {
+            if (disposition == null || disposition.Kind == ActorChoiceDispositionKind.Deferred)
+                return false;
+        }
+
+        List<string> issues = new List<string>();
+        ValidateInputLifecycle(input, issues);
+        ValidateTemporalLifecycle(input, issues);
+        return issues.Count == 0;
+    }
+
     private static bool HasResultStatusMismatch(ActorChoiceDisposition disposition)
     {
         if (disposition.AttemptOutcome == ActorChoiceAttemptOutcome.Succeeded)

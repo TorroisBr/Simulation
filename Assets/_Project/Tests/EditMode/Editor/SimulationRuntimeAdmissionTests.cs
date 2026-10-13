@@ -2625,7 +2625,6 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(config, Is.Not.Null);
 
         GameObject activeOwnerObject = new GameObject("P12 active restored-session exchange owner");
-        GameObject stagedOwnerObject = new GameObject("P12 staged restored-session candidate");
         try
         {
             TesteSimulacao activeOwner = activeOwnerObject.AddComponent<TesteSimulacao>();
@@ -2640,32 +2639,19 @@ public sealed class SimulationRuntimeAdmissionTests
                 out DailyCaptureEligibilityToken sourceToken,
                 out DailyCaptureEligibilityFailure sourceFailure), Is.True, sourceFailure.ToString());
 
-            TesteSimulacao stagedOwner = stagedOwnerObject.AddComponent<TesteSimulacao>();
-            ConfigureSelectedBootstrap(stagedOwner, config);
-            WritePrivateField(stagedOwner, "worldIdentityAllocator", new Func<WorldId>(() => sourceSession.Composition.WorldId));
-            InvokeInitializeSimulation(stagedOwner, stageId =>
-            {
-                if (stageId == "p9.genesis.resolve-profile/v1")
-                    ReadPrivateField<SimulationTime>(stagedOwner, "simulationTime").AdvanceDay();
-            });
-
-            SimulationActiveSession candidateSession = ReadPrivateField<SimulationActiveSession>(stagedOwner, "activeSession");
+            SimulationRuntimeAdmissionContext bootstrapAdmissionContext =
+                ReadPrivateField<SimulationRuntimeAdmissionContext>(activeOwner, "runtimeAdmissionContext");
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSession(
+                    sourceSession,
+                    bootstrapAdmissionContext,
+                    out SimulationActiveSession candidateSession,
+                    out P12GDailyV1RestoreFailure candidateRestoreFailure,
+                    out string candidateRestoreDiagnostic), Is.True,
+                candidateRestoreFailure + ": " + candidateRestoreDiagnostic);
             Assert.That(candidateSession, Is.Not.Null);
-            Assert.That(candidateSession.Composition.WorldId, Is.SameAs(sourceToken.WorldId));
+            Assert.That(candidateSession.Composition.WorldId.Value, Is.EqualTo(sourceToken.WorldId.Value));
             Assert.That(candidateSession.Runtime.CurrentDay, Is.EqualTo(sourceToken.AbsoluteDay));
-
-            // The bootstrap-built graph is now detached as a private restore candidate. The
-            // runtime is still fresh: give it the preserved boundary identity and let the real
-            // restored-admission protocol issue its candidate-bound token.
-            WritePrivateField(candidateSession.Runtime, "factualReadWorldPublished", false);
-            WritePrivateField<SimulationActiveSession>(stagedOwner, "activeSession", null);
-            Assert.That(stagedOwner.Bootstrap, Is.Null);
-            Assert.That(candidateSession.Runtime.TryAdmitRestoredDailyBoundary(
-                sourceToken.WorldId,
-                sourceToken.AbsoluteDay,
-                sourceToken.CompletedCoreSequence,
-                out DailyCaptureEligibilityFailure candidateAdmissionFailure), Is.True,
-                candidateAdmissionFailure.ToString());
+            Assert.That(candidateSession.AdmissionContext.IsRestoredContinuation, Is.True);
             Assert.That(candidateSession.Runtime.TryGetCompletedDailyCaptureToken(
                 out DailyCaptureEligibilityToken candidateToken,
                 out DailyCaptureEligibilityFailure candidateTokenFailure), Is.True,
@@ -2725,7 +2711,6 @@ public sealed class SimulationRuntimeAdmissionTests
         }
         finally
         {
-            UnityEngine.Object.DestroyImmediate(stagedOwnerObject);
             UnityEngine.Object.DestroyImmediate(activeOwnerObject);
         }
     }
@@ -10292,6 +10277,158 @@ public sealed class SimulationRuntimeAdmissionTests
         value = value ?? string.Empty;
         output.Append(value.Length.ToString(CultureInfo.InvariantCulture))
             .Append(':').Append(value).Append(';');
+    }
+
+    [Test]
+    public void PersistedDailyV1ImageRestoresWithoutUsingSourceSessionAndContinuesIdentically()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-A persisted source");
+        GameObject controlObject = new GameObject("P12-A uninterrupted control");
+        GameObject targetObject = new GameObject("P12-A detached target");
+        GameObject idleObject = new GameObject("P12-A idle replacement target");
+        string storageRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "P12ADetachedRestore", Guid.NewGuid().ToString("N"));
+        Guid sharedWorldGuid = Guid.Parse("a4a3c5e4-5e64-4f2f-a758-398989a8d374");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            WritePrivateField(source, "worldIdentityAllocator", (Func<WorldId>)(() => new WorldId(sharedWorldGuid)));
+            InvokeInitializeSimulation(source, null);
+            SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(sourceSession, Is.Not.Null);
+
+            TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(control, config);
+            WritePrivateField(control, "worldIdentityAllocator", (Func<WorldId>)(() => new WorldId(sharedWorldGuid)));
+            InvokeInitializeSimulation(control, null);
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
+            Assert.That(controlSession, Is.Not.Null);
+
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out advanceFailure), Is.True, advanceFailure.ToString());
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(sourceSession,
+                    GetCompletedDailyToken(sourceSession.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession,
+                    GetCompletedDailyToken(controlSession.Runtime))));
+            Assert.That(source.TrySaveDailyV1ContinuationToPathForTest(storageRoot, out string saveCode), Is.True, saveCode);
+            Assert.That(saveCode, Is.EqualTo(P12AResultCode.Saved.ToString()));
+
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+            sourceObject = null;
+            source = null;
+            sourceSession = null;
+
+            TesteSimulacao target = targetObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(target, config);
+            int genesisIdentityAllocations = 0;
+            WritePrivateField(target, "worldIdentityAllocator", (Func<WorldId>)(() =>
+            {
+                genesisIdentityAllocations++;
+                return new WorldId(Guid.NewGuid());
+            }));
+            Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(storageRoot), Is.True);
+            Assert.That(genesisIdentityAllocations, Is.Zero,
+                "Loading a persisted boundary must publish before and bypass genesis identity allocation.");
+
+            SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(target, "activeSession");
+            Assert.That(restored, Is.Not.Null);
+            Assert.That(restored.Runtime, Is.Not.SameAs(controlSession.Runtime));
+            Assert.That(restored.IdentityRegistry, Is.Not.SameAs(controlSession.IdentityRegistry));
+            Assert.That(restored.Runtime.CurrentDay, Is.EqualTo(controlSession.Runtime.CurrentDay));
+            Assert.That(restored.Runtime.PoliticalWorldRevision,
+                Is.EqualTo(controlSession.Runtime.PoliticalWorldRevision));
+            Assert.That(restored.ReportState.LastEconomySnapshotDay,
+                Is.EqualTo(controlSession.ReportState.LastEconomySnapshotDay));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restored,
+                    GetCompletedDailyToken(restored.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession,
+                    GetCompletedDailyToken(controlSession.Runtime))));
+
+            for (int boundary = 0; boundary < 2; boundary++)
+            {
+                Assert.That(controlSession.Runtime.TryAdvanceDay(out advanceFailure), Is.True, advanceFailure.ToString());
+                Assert.That(restored.Runtime.TryAdvanceDay(out advanceFailure), Is.True, advanceFailure.ToString());
+                Assert.That(restored.Runtime.CurrentDay, Is.EqualTo(controlSession.Runtime.CurrentDay));
+                Assert.That(restored.Runtime.PoliticalWorldRevision,
+                    Is.EqualTo(controlSession.Runtime.PoliticalWorldRevision));
+                Assert.That(CaptureCompleteDailyV1OwnerProjection(restored,
+                        GetCompletedDailyToken(restored.Runtime)),
+                    Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession,
+                        GetCompletedDailyToken(controlSession.Runtime))));
+            }
+
+            Assert.That(target.TrySaveDailyV1ContinuationToPathForTest(storageRoot, out saveCode), Is.True, saveCode);
+            Assert.That(saveCode, Is.EqualTo(P12AResultCode.Saved.ToString()),
+                "A restored session must be eligible for a later persisted boundary capture.");
+
+            TesteSimulacao idleTarget = idleObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(idleTarget, config);
+            InvokeInitializeSimulation(idleTarget, null);
+            SimulationActiveSession preLoadIdleSession = ReadPrivateField<SimulationActiveSession>(idleTarget, "activeSession");
+            Assert.That(preLoadIdleSession, Is.Not.Null);
+            Assert.That(preLoadIdleSession.Runtime.TryAdvanceDay(out advanceFailure), Is.True,
+                advanceFailure.ToString());
+            Assert.That(idleTarget.TryLoadDailyV1ContinuationFromPathForTest(storageRoot, out string loadCode), Is.True,
+                loadCode);
+            Assert.That(loadCode, Is.EqualTo(P12AResultCode.Loaded.ToString()));
+            SimulationActiveSession idleRestored = ReadPrivateField<SimulationActiveSession>(idleTarget, "activeSession");
+            Assert.That(idleRestored, Is.Not.SameAs(preLoadIdleSession));
+            Assert.That(idleRestored.Runtime.CurrentDay, Is.EqualTo(restored.Runtime.CurrentDay));
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(idleRestored,
+                    GetCompletedDailyToken(idleRestored.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(restored,
+                    GetCompletedDailyToken(restored.Runtime))));
+        }
+        finally
+        {
+            if (System.IO.Directory.Exists(storageRoot)) System.IO.Directory.Delete(storageRoot, true);
+            if (sourceObject != null) UnityEngine.Object.DestroyImmediate(sourceObject);
+            UnityEngine.Object.DestroyImmediate(controlObject);
+            UnityEngine.Object.DestroyImmediate(targetObject);
+            UnityEngine.Object.DestroyImmediate(idleObject);
+        }
+    }
+    [Test]
+    public void PresentInvalidDailyV1SaveFailsClosedBeforeGenesis()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject targetObject = new GameObject("P12-A corrupt slot must not trigger genesis");
+        string storageRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "P12ACorruptBootstrap", System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            TesteSimulacao target = targetObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(target, config);
+            int genesisIdentityAllocations = 0;
+            WritePrivateField(target, "worldIdentityAllocator", (Func<WorldId>)(() =>
+            {
+                genesisIdentityAllocations++;
+                return new WorldId(System.Guid.NewGuid());
+            }));
+
+            string slot = P12AContinuationStore.SlotPath(storageRoot);
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(slot));
+            System.IO.File.WriteAllBytes(slot, new byte[] { 1, 2, 3, 4 });
+            UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Error,
+                "P12-A continuation load failed; genesis was not started. CorruptOrTruncated");
+            Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(storageRoot), Is.True,
+                "A present slot is handled even when rejected, so Start cannot fall through to genesis.");
+            Assert.That(ReadPrivateField<bool>(target, "bootstrapFailed"), Is.True);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(target, "activeSession"), Is.Null);
+            Assert.That(genesisIdentityAllocations, Is.Zero);
+        }
+        finally
+        {
+            if (System.IO.Directory.Exists(storageRoot)) System.IO.Directory.Delete(storageRoot, true);
+            UnityEngine.Object.DestroyImmediate(targetObject);
+        }
     }
 
     private static void ConfigureUnscopedBootstrap(TesteSimulacao bootstrap, SimulationConfigData config)

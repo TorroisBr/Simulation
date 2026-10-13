@@ -141,6 +141,8 @@ internal sealed class P12CStagedContinuationRoot
     }
 
     internal DailyCaptureStagingAttempt StagingAttempt { get; }
+    /// <summary>True only for roots staged from a persisted typed image, without a live capture attempt.</summary>
+    internal bool IsDetached => StagingAttempt == null;
     internal WorldId WorldIdentity { get; }
     internal RuntimeIdAllocator RuntimeIdAllocator { get; }
     internal SimulationRecordSequence RecordSequence { get; }
@@ -193,12 +195,70 @@ internal static class P12CContinuationRootStager
         out string diagnostic,
         Action<P12GDailyV1RestoreStage> stageObserver)
     {
+        return TryStageCore(
+            stagingAttempt,
+            worldIdentitySnapshot,
+            allocatorSnapshot,
+            recordSequenceSnapshot,
+            spatialSnapshot,
+            genesisManifestSnapshot,
+            randomRootSnapshot,
+            true,
+            out staged,
+            out diagnostic,
+            stageObserver);
+    }
+
+    /// <summary>
+    /// Reconstructs C roots from detached typed image values. This entry has no
+    /// source runtime, token, owner vector, or capture-attempt dependency.
+    /// </summary>
+    internal static bool TryStageForImage(
+        P12CWorldIdentitySnapshot worldIdentitySnapshot,
+        RuntimeIdAllocatorSnapshot allocatorSnapshot,
+        SimulationRecordSequenceSnapshot recordSequenceSnapshot,
+        P12CSpatialAuthoritySnapshot spatialSnapshot,
+        P12CP9GenesisManifestSnapshot genesisManifestSnapshot,
+        DeterministicRandomRootSnapshot randomRootSnapshot,
+        out P12CStagedContinuationRoot staged,
+        out string diagnostic,
+        Action<P12GDailyV1RestoreStage> stageObserver = null)
+    {
+        return TryStageCore(
+            null,
+            worldIdentitySnapshot,
+            allocatorSnapshot,
+            recordSequenceSnapshot,
+            spatialSnapshot,
+            genesisManifestSnapshot,
+            randomRootSnapshot,
+            false,
+            out staged,
+            out diagnostic,
+            stageObserver);
+    }
+
+    private static bool TryStageCore(
+        DailyCaptureStagingAttempt stagingAttempt,
+        P12CWorldIdentitySnapshot worldIdentitySnapshot,
+        RuntimeIdAllocatorSnapshot allocatorSnapshot,
+        SimulationRecordSequenceSnapshot recordSequenceSnapshot,
+        P12CSpatialAuthoritySnapshot spatialSnapshot,
+        P12CP9GenesisManifestSnapshot genesisManifestSnapshot,
+        DeterministicRandomRootSnapshot randomRootSnapshot,
+        bool requireCurrentCaptureAttempt,
+        out P12CStagedContinuationRoot staged,
+        out string diagnostic,
+        Action<P12GDailyV1RestoreStage> stageObserver)
+    {
         staged = null;
         diagnostic = null;
 
         try
         {
-            if (stagingAttempt == null || !stagingAttempt.IsCurrent)
+            if (requireCurrentCaptureAttempt
+                ? stagingAttempt == null || !stagingAttempt.IsCurrent
+                : stagingAttempt != null)
             {
                 diagnostic = "P12-C staging attempt is stale or incomplete.";
                 return false;
@@ -317,7 +377,7 @@ internal static class P12CContinuationRootStager
                 stagedSpatialAuthority,
                 stagedManifest,
                 stagedRandom);
-            if (!stagingAttempt.IsCurrent)
+            if (requireCurrentCaptureAttempt && !stagingAttempt.IsCurrent)
             {
                 diagnostic = "P12-C staging attempt became stale before the continuation roots were returned.";
                 return false;

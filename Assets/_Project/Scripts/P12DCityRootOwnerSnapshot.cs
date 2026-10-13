@@ -54,7 +54,7 @@ internal sealed class P12DCityRootOwnerSnapshot
     internal long PopulationReceiptRevision { get; }
     internal IReadOnlyList<PopulationOperationReceiptSnapshot> PopulationReceipts { get; }
 
-    private P12DCityRootOwnerSnapshot(
+    internal P12DCityRootOwnerSnapshot(
         string cityRuntimeId,
         string cityDefinitionId,
         string legacyLocationRuntimeId,
@@ -91,6 +91,7 @@ internal sealed class P12DCityRootOwnerSnapshot
                 item.DesiredAmount,
                 item.CurrentPrice));
         }
+        copiedMarketItems.Sort((left, right) => StringComparer.Ordinal.Compare(left.ItemDefinitionId, right.ItemDefinitionId));
         MarketItems = new ReadOnlyCollection<P12DCityMarketItemSnapshot>(copiedMarketItems);
         PopulationEconomicRuntimeId = populationEconomicRuntimeId;
         PopulationPaymentMode = populationPaymentMode;
@@ -451,6 +452,16 @@ internal sealed class P12DCityRootOwnerSnapshot
         failure = P12DCityRootOwnerSnapshotFailure.None;
         return true;
     }
+
+    internal bool TryStageForImage(
+        IReadOnlyList<CityData> admittedCityDefinitions,
+        IReadOnlyList<ItemData> admittedItemDefinitions,
+        IReadOnlyList<SpatialLocationRuntime> stagedLocations,
+        out CityRuntime city,
+        out P12DCityMembershipLinker membershipLinker,
+        out P12DCityRootOwnerSnapshotFailure failure)
+        => TryStageCore(admittedCityDefinitions, admittedItemDefinitions, stagedLocations,
+            null, out city, out membershipLinker, out failure);
 
     private static bool MatchesUniqueSection(
         IReadOnlyList<OwnerSectionCensusSnapshot> sections,
@@ -1084,6 +1095,74 @@ internal enum P12DCityNpcRelationAssemblyFailure
 /// </summary>
 internal static class P12DCityNpcRelationAssembler
 {
+    internal static bool TryFillMembershipsFromImage(
+        IReadOnlyList<P12DCityMembershipLinker> cityMembershipLinkers,
+        IReadOnlyList<NpcRuntime> stagedNpcRoster,
+        out P12DCityNpcRelationAssemblyFailure failure)
+    {
+        failure = P12DCityNpcRelationAssemblyFailure.InvalidProjectionEvidence;
+        if (cityMembershipLinkers == null || stagedNpcRoster == null) return false;
+        foreach (P12DCityMembershipLinker detachedLinker in cityMembershipLinkers)
+            if (detachedLinker?.CaptureEnvelope != null) return false;
+
+        Dictionary<string, P12DCityMembershipLinker> linkersByCityId =
+            new Dictionary<string, P12DCityMembershipLinker>(StringComparer.Ordinal);
+        foreach (P12DCityMembershipLinker linker in cityMembershipLinkers)
+        {
+            CityRuntime city = linker?.StagedCity;
+            if (linker == null || linker.IsFilled || city == null
+                || string.IsNullOrWhiteSpace(city.RuntimeId) || city.Location == null
+                || string.IsNullOrWhiteSpace(city.Location.RuntimeId)
+                || !linkersByCityId.TryAdd(city.RuntimeId, linker))
+            { failure = P12DCityNpcRelationAssemblyFailure.InvalidCitySet; return false; }
+        }
+
+        Dictionary<string, NpcRuntime> npcsById = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        foreach (NpcRuntime npc in stagedNpcRoster)
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId) || !npcsById.TryAdd(npc.RuntimeId, npc))
+            { failure = P12DCityNpcRelationAssemblyFailure.InvalidNpcRoster; return false; }
+
+        HashSet<string> linked = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<P12DCityMembershipLinker, List<NpcRuntime>> pending =
+            new Dictionary<P12DCityMembershipLinker, List<NpcRuntime>>();
+        foreach (P12DCityMembershipLinker linker in cityMembershipLinkers)
+        {
+            CityRuntime city = linker.StagedCity;
+            List<NpcRuntime> ordered = new List<NpcRuntime>(linker.PendingNpcRuntimeIds.Count);
+            foreach (string npcId in linker.PendingNpcRuntimeIds)
+            {
+                if (string.IsNullOrWhiteSpace(npcId) || !npcsById.TryGetValue(npcId, out NpcRuntime npc)
+                    || !linked.Add(npcId) || !ReferenceEquals(npc.CurrentCity, city)
+                    || !ReferenceEquals(npc.CurrentLocation, city.Location))
+                { failure = P12DCityNpcRelationAssemblyFailure.InvalidRelation; return false; }
+                ordered.Add(npc);
+            }
+            if (!linker.CanFillOnce(ordered))
+            { failure = P12DCityNpcRelationAssemblyFailure.InvalidRelation; return false; }
+            pending.Add(linker, ordered);
+        }
+
+        foreach (NpcRuntime npc in stagedNpcRoster)
+        {
+            if (npc.CurrentCity == null)
+            {
+                if (linked.Contains(npc.RuntimeId))
+                { failure = P12DCityNpcRelationAssemblyFailure.InvalidRelation; return false; }
+                continue;
+            }
+            if (!linkersByCityId.TryGetValue(npc.CurrentCity.RuntimeId, out P12DCityMembershipLinker owner)
+                || !ReferenceEquals(owner.StagedCity, npc.CurrentCity)
+                || !ReferenceEquals(npc.CurrentLocation, npc.CurrentCity.Location)
+                || !linked.Contains(npc.RuntimeId))
+            { failure = P12DCityNpcRelationAssemblyFailure.InvalidRelation; return false; }
+        }
+
+        foreach (P12DCityMembershipLinker linker in cityMembershipLinkers)
+            linker.FillValidated(pending[linker]);
+        failure = P12DCityNpcRelationAssemblyFailure.None;
+        return true;
+    }
+
     internal static bool TryFillMembershipsOnce(
         P12DCityNpcProjectionCaptureEvidence dProjectionEvidence,
         P12DCityNpcProjectionCaptureEvidence fProjectionEvidence,

@@ -407,7 +407,7 @@ internal sealed class P12EPoliticalDecisionOwnerSnapshot
         }
     }
 
-    private bool TryValidate(out P12EPoliticalDecisionSnapshotFailure failure)
+    internal bool TryValidate(out P12EPoliticalDecisionSnapshotFailure failure)
     {
         failure = P12EPoliticalDecisionSnapshotFailure.Create(
             P12EPoliticalDecisionSnapshotFailureCode.InvalidIdentity,
