@@ -1,5 +1,59 @@
 # General Architecture State
 
+## Simulation Core extraction architecture promotion — 2026-10-13
+
+**Status:** ARCHITECTURE_PROMOTED for documentation/planning only when this
+entry is published on `codex/architecture/world-identity-projection`; while
+only on the candidate branch it is the prepared promotion record.
+**Previous canonical architecture:** `e940714bcc05c0d790e0cb9a7f614ee6b493e21a`.
+**Reviewed content:** `f4e11df2645e5c1bc91fdc09bfdfad3f34e5c12e` from
+`codex/architecture/simulation-core-extraction`. The commit introducing this
+State/review record is the promotion marker; resolve its full canonical SHA from
+Git provenance, avoiding a self-referential SHA field.
+
+The user explicitly selected genuine Unity-independent Core extraction and
+allowed compatible architecture review/promotion without routine approval.
+The [architecture and migration contract](architecture/SIMULATION_CORE_EXTRACTION.md)
+and [complete source inventory](architecture/SIMULATION_CORE_DEPENDENCY_INVENTORY.csv)
+were independently reviewed. [Review](architecture/SIMULATION_CORE_EXTRACTION_REVIEW.md):
+architecture PASS; CORE-A technical PASS / READY_FOR_IMPLEMENTATION after this
+promotion. Final metadata-tip applicability is required before publication.
+
+CORE-A extracts existing calendar/date/age semantics into one shared-source
+engine-free Core assembly, compiled by Unity and SDK projects. Its exact
+[Master handoff](architecture/SIMULATION_CORE_A_MASTER_HANDOFF.md) names source
+moves, two-host parity, Unity authoring/P12/full/Smoke gates, evidence, ownership,
+rollback and future implementation provenance. Master consumes it as an
+independently executable bounded candidate under its active implementation mandate.
+This General Architect assignment starts no code migration. CORE-B/C are
+READY_FOR_TECHNICAL_DESIGN; runtime/Lab, remaining individual domain closures
+and equivalent Daily-v1 .NET continuation keep their named WAIT_DEPENDENCY gates.
+No Core delivery, full world host or cross-host/build save promise is claimed.
+
+**Dependency refresh:** actual inspected P12 canonical
+`4cc31073f0ec6ba5c718084e4cebd6e914931d5d` records P12 CLOSED at
+`fbf06fa887a29b92be004d864f4ee98d90926d4a`, A–G promoted within accepted
+same-build/current-host Daily-v1. P13 remains WAIT_DEPENDENCY; P12 is not reopened.
+No profile expansion, gameplay or P19 loader prerequisite. Roadmap/Brief mark
+older P12 readiness as historical; other delivered phase contracts remain intact.
+
+Docs-only architecture direction is UPSTREAM_IRRELEVANT to unchanged active
+production inputs; eventual assembly/runtime moves require REVALIDATE/REINTEGRATE
+for actual consumers and build identity. Master must import bounded reviewed docs
+onto current production, not merge this architecture branch's older Assets tree.
+The implementation front is `codex/core/canonical` with future `docs/CORE_STATE.md`,
+not a new numbered Phase or a competing domain authority. Shared integration
+hotspots remain serialized; active Master worktrees and numbered-phase refs
+are untouched by this architecture promotion.
+
+Read-only measurement: 230 registered worktrees, 114 Library directories; one
+P12 Library sample 2,017,129,311 logical bytes/34,389 files. No migration saving or
+execution-time speedup measured, no cache cleanup. Current evidence packager
+support and .NET TRX/input boundaries are explicit in the operational updates.
+Documentation diff-check and independent exact-tip review are the promotion gates;
+no Unity/.NET test execution is claimed for this non-executable candidate.
+No unresolved product or architecture decision remains for CORE-A.
+
 ## P20 checkpoint identity/design promotion — 2026-10-07
 
 **Status:** ARCHITECTURE_PROMOTED for architecture/documentation only.
