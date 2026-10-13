@@ -121,8 +121,8 @@ Packages/com.simulation.core/
   Runtime/Simulation.Core.asmdef        # noEngineReferences; one source owner
   Runtime/Calendar/*.cs                 # calendar closure first; later domains
 src/Simulation.Core/Simulation.Core.csproj  # explicit Compile links to Runtime
-src/Simulation.Unity/                   # later host adapter sources only
 Assets/_Project/                        # existing Studio and integration fixtures
+  Unity/                               # later Studio adapters, Unity-imported sources
   Tests/EditMode/Editor/Calendar/       # pure shared cases + Unity-only checks
 ProjectSettings/                        # Studio settings, existing location
 Packages/com.simulation.world-exchange-producer/ # existing separate integration
