@@ -45,3 +45,28 @@ The manifest declares the packager's local-path redaction policy. It contains no
 - The user's unrelated `ProjectSettings/EditorBuildSettings.asset` and `ProjectSettings/ShaderGraphSettings.asset` edits, and three unrelated untracked `.meta` files, were not committed. Their captured input hashes remained stable during validation.
 - Scope is the accepted selected-profile, same-build/current-host Daily-v1 detached capture, durable storage, detached load, restoration, and deterministic continuation contract. This is not a P13 readiness claim and does not close Phase 12.
 - No canonical promotion is represented by this record.
+
+## Independent-review correction and recaptured validation — 2026-10-13
+
+Independent exact-tip review of candidate `4005000e293fabc1082e136c42a10a4c2f5dc8bf` against canonical base `25d2dcf1371137ceb0e158eef4ba02d2e2304612` returned `NEEDS_CHANGES`. It found that `File.Exists` could suppress access/I/O errors and let startup interpret an uninspectable continuation slot as absent, then start genesis. It also checked parity coverage and confirmed the integrated persisted-continuation test compares C roots (P9/P8, runtime identities, allocator, record sequence, random root) and D–F owners at T, restored T, both later boundaries, and idle replacement.
+
+The correction now probes the slot by opening it. Only `FileNotFoundException` and `DirectoryNotFoundException` mean `NoSave`; access and I/O failures return `StorageFailure`. The detached load path uses the same missing-versus-inspection-failure distinction. `UninspectableDailyV1SaveFailsClosedBeforeGenesis` injects an access failure and verifies that startup remains unpublished, sets `bootstrapFailed`, and allocates no genesis `WorldId`.
+
+The validated implementation was committed as `d54f0f1074f71061a9f546d4b30859f538a69e09` (`Assets` tree `f71eeaf8879b6e7bbe0ff611ada3794941d13de3`). All 1,531 captured source inputs had the same SHA-256 inventory before and after every run: `fc78a7553d296310d6b99e5b96692473d3625349ced7509039368d5ffd2a045a`; `inputStable=true` for each. After commit, every captured input file was compared with the checkout and there were zero mismatches. The unrelated ProjectSettings edits and untracked `.meta` files remained unchanged and unstaged.
+
+| Selection | Result | Run ID | Original XML SHA-256 | Private log SHA-256 |
+|---|---:|---|---|---|
+| P12A codec suites (`P12A`) | 131/131 passed | `38f558472b364d1b88ffc9d4ed1f499c` | `2f7a5c53e8c13f29f1b943659bc988d6b3329de470c187407ed1c050088ee02a` | `4d1bc3f11a55d16d3ed8436185adaeedd05dd5706b495e3f4cad36e0e1982d99` |
+| Startup inspection-failure regression | 1/1 passed | `3a0d6d98b03e48b1b6e5fdb22d873e29` | `556518a708fa43497c6ee7c738c9dfb005b00e791ecee8a7dc72279aea432a8e` | `acecd48ae9b25ee896311118c9915c6ef231cf34462cf60df4e27b8625a6ae42` |
+| Persisted continuation parity | 1/1 passed | `5e64217a2ad849368f0b6ce330052e93` | `e62a544a45c3cfe3fc4d46e6843f61c29f50055163f2aeabcfdb87363101a3c7` | `ee73088b88fed373ea478930b24060f2d9fbf42b585d8863f7be4820c640d6f2` |
+| ALL EditMode | 3060/3060 passed | `4c5d4835ef564bcca6cebb843ce09382` | `f63bedf75af61b75150f6dcb66f3328814b33a7f0bf67e693210e2143d589372` | `0cb496b65bb334c42814534a30f870ee35198fd9545a2fc9d680fe971de7207d` |
+| Official Smoke (`Smoke`) | 5/5 passed | `d56169e8cb924d498b39ff0fa75e2a82` | `2f63fa752f826a5b14391a3687ca892058aed174dfa7d89f8916a72b3c7e562d` | `5a85078f88e08989de8b1b8fc04351c4e5d9f16c56b5bbca3ff0ac882b8c8f4a` |
+
+Each run reported zero failed, skipped, or inconclusive cases. The full EditMode result is packaged with the promoted evidence tool:
+
+- Archive: `p12a-continuation-review-fix.zip` (160,019 bytes); SHA-256 `f9d62bc532bdb0aca158e37e661fa31a8b9b396654c924ba7446599e6747c46b`.
+- Package manifest: `p12a-continuation-review-fix.manifest.json`; SHA-256 `bad8ae2810a84fd2100c62aa74941e3924561130bae2c6d6a5fdec9f2e24382b`.
+- The archive contains only normalized test-result XML; normalized XML SHA-256 is `89c6829ebd0f7836e2589391ee10da71de7e0a67fee167430858a0efe6f8ae1f`. The policy is `redact-absolute-local-assembly-suite-fullnames`; package verification against the protected source run passed (`runs=1`, `entries=1`).
+- Focused XML and raw logs remain in the private local evidence store; the package contains no raw logs. The package and manifest contain no local user-root path.
+
+`git diff --check` passes from canonical base through the implementation correction. This validation update changes no executable/test inputs and does not claim Phase 12 closure or P13 readiness.
