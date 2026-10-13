@@ -6,6 +6,8 @@ profile boundary.
 The canonical baseline at audit was
 `c1cc0b0bd69e804391bab0e7d19ab6130781ed6f`; the current architecture
 canonical was `58157f9ac7bf573e9a4ed1b2d485a2db190e7c4f`.
+The formal closure marker was promoted by clean fast-forward as
+`fbf06fa887a29b92be004d864f4ee98d90926d4a`.
 The independent closure review examined candidate
 `f545c8acd9afee646007959b7df125785e4959a8`; its durable record is
 [`PHASE12_FORMAL_CLOSURE_REVIEW_20261013.md`](PHASE12_FORMAL_CLOSURE_REVIEW_20261013.md).
