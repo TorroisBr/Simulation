@@ -10,7 +10,7 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 | 9 — Initial Deterministic Genesis v1 | **Closed within approved scopes.** P9-A: promoted authored-bootstrap genesis. P9-B: promoted at `d9a62d7`; one authored P8-A Hex/Location source for P10 through the same deterministic pre-start pipeline. The approved closure record is canonical at `3bd0eb3`; no procedural generation, Ruin/topology, population/backstory, runtime expansion, or Mod API/loader scope is implied. |
 | 10 — Local Generation & Pre-start Authoring | Local content/topology generated or authored into the same initial ontology. |
 | 11 — Actor Perspective & Commands v1 | Actor-limited information/decision authority and validated external commands. |
-| 12 — Save & Deterministic Continuation | Save/load that continues with the same authoritative future under compatible inputs. |
+| 12 — Save & Deterministic Continuation | **Closed within the accepted `UnityBootstrap-Daily-v1` same-build/current-host scope.** Formal audit and deferred limits: [`PHASE12_STATE.md`](PHASE12_STATE.md) and [`PHASE12_CLOSURE_RECORD.md`](PHASE12_CLOSURE_RECORD.md). |
 | 13 — Historical Reconstruction & Fork | Reconstruct and independently continue any actually simulated boundary. |
 | 14 — Productive Sources & Material Flow v1 | Bounded productive-source and material-flow truth. |
 | 15 — Runtime Construction & Founding v1 | Factual creation of structures/settlements during simulated history. |

@@ -1,3 +1,18 @@
+## Phase 12 formal closure candidate — audit PASS — 2026-10-13
+
+The formal closure audit against P12 canonical base
+`c1cc0b0bd69e804391bab0e7d19ab6130781ed6f` and architecture canonical
+`58157f9ac7bf573e9a4ed1b2d485a2db190e7c4f` found every mandatory Phase 12
+checkpoint promoted and its accepted `UnityBootstrap-Daily-v1` continuation
+requirements evidenced. The full audit and deferred boundaries are in
+[`PHASE12_CLOSURE_RECORD.md`](PHASE12_CLOSURE_RECORD.md). This documentation
+candidate records the proposed formal `CLOSED` status, effective only after
+independent closure review and canonical promotion. P12-A through P12-G remain
+bounded to their approved scopes. P13 remains `WAIT_DEPENDENCY`; Phase 12
+closure does not satisfy historical-causality or fork requirements.
+
+---
+
 ## P12-A detached persisted continuation — PROMOTED — 2026-10-13
 
 After independent exact-tip implementation review and final remote preflight, codex/phase12/canonical advanced by clean fast-forward from 25d2dcf1371137ceb0e158eef4ba02d2e2304612 to the reviewed P12-A candidate c4bcd38ddaa7056ad490c6a3738d94cb5a5306f6. The candidate Git tree is 21abd7e7e2b507cd5a2862146c8533534302f686; tested code commit d54f0f1074f71061a9f546d4b30859f538a69e09 has the identical Assets tree f71eeaf8879b6e7bbe0ff611ada3794941d13de3. The candidate branch is codex/phase12/P12AContinuationImplementation. Independent exact-tip review and package/evidence verification passed; the durable review is [P12A_PERSISTED_CONTINUATION_IMPLEMENTATION_REVIEW.md](design/P12A_PERSISTED_CONTINUATION_IMPLEMENTATION_REVIEW.md).
