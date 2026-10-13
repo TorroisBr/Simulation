@@ -1,10 +1,14 @@
 # Phase 12 formal closure record
 
-**Disposition:** closure audit PASS; this docs-only candidate proposes formal
-Phase 12 closure after independent closure review and canonical fast-forward.
+**Disposition:** closure audit PASS; independent closure review PASS; formal
+Phase 12 closure is recorded by this canonical promotion within the stated
+profile boundary.
 The canonical baseline at audit was
 `c1cc0b0bd69e804391bab0e7d19ab6130781ed6f`; the current architecture
 canonical was `58157f9ac7bf573e9a4ed1b2d485a2db190e7c4f`.
+The independent closure review examined candidate
+`f545c8acd9afee646007959b7df125785e4959a8`; its durable record is
+[`PHASE12_FORMAL_CLOSURE_REVIEW_20261013.md`](PHASE12_FORMAL_CLOSURE_REVIEW_20261013.md).
 
 ## Closure boundary
 
@@ -94,3 +98,12 @@ continuation now supplies one required capability for the selected scope, but
 the Brief still requires recoverable initial/changed state, causal command/input
 semantics, and compatible historical reconstruction/fork integration. P12
 closure alone therefore does not make P13 implementation READY.
+
+## Governance follow-up outside this closure
+
+The reviewed architecture canonical's `docs/ROADMAP.md` retains an older
+operational paragraph that says P12-B was incomplete at `54fc23b`. The current
+Phase 12 State is the delivery record and supersedes that paragraph. This
+documentation drift does not change the closure audit or authorize edits to
+the Architecture-owned branch; the Architecture owner should reconcile that
+paragraph in its normal governance workflow.

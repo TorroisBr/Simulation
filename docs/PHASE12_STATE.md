@@ -1,15 +1,23 @@
-## Phase 12 formal closure candidate — audit PASS — 2026-10-13
+## Phase 12 — CLOSED — 2026-10-13
 
 The formal closure audit against P12 canonical base
 `c1cc0b0bd69e804391bab0e7d19ab6130781ed6f` and architecture canonical
 `58157f9ac7bf573e9a4ed1b2d485a2db190e7c4f` found every mandatory Phase 12
 checkpoint promoted and its accepted `UnityBootstrap-Daily-v1` continuation
-requirements evidenced. The full audit and deferred boundaries are in
-[`PHASE12_CLOSURE_RECORD.md`](PHASE12_CLOSURE_RECORD.md). This documentation
-candidate records the proposed formal `CLOSED` status, effective only after
-independent closure review and canonical promotion. P12-A through P12-G remain
-bounded to their approved scopes. P13 remains `WAIT_DEPENDENCY`; Phase 12
-closure does not satisfy historical-causality or fork requirements.
+requirements evidenced. Independent closure review passed for candidate
+`f545c8acd9afee646007959b7df125785e4959a8`; the durable review is
+[`PHASE12_FORMAL_CLOSURE_REVIEW_20261013.md`](PHASE12_FORMAL_CLOSURE_REVIEW_20261013.md).
+The complete audit and deferred boundaries are in
+[`PHASE12_CLOSURE_RECORD.md`](PHASE12_CLOSURE_RECORD.md). Phase 12 is formally
+closed on canonical promotion within the accepted profile. P12-A through
+P12-G remain bounded to their approved scopes. P13 remains
+`WAIT_DEPENDENCY`; Phase 12 closure does not satisfy historical-causality or
+fork requirements.
+
+**Historical status note:** Older entries below retain the status known when
+they were written. Their earlier `WAIT_DEPENDENCY`, `BLOCKED`, or `OPEN`
+wording is historical and is superseded by this formal closure record; it is
+not current P12 readiness or closure status.
 
 ---
 
