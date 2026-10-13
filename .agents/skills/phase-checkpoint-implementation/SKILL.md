@@ -19,3 +19,12 @@ Diagnose failed tests and ordinary conflicts from repository evidence. Escalate 
 ## Evidence retention and reuse
 
 Follow docs/operations/VALIDATION_EVIDENCE_POLICY.md. Use early focused runs and one final cumulative mandatory gate set where safe. Test changes invalidate old full-suite applicability even when runtime source is unchanged. Retain a minimal complete result package and independent cumulative review; raw originals remain available for comparison/diagnostics. The normalized packer is a future Tools task; use the original-XML transition path meanwhile. Keep diagnostics required by a binding contract or claimed result.
+
+## Core/host migration
+
+For an approved extraction slice, load its bounded handoff; use an explicit shared
+source closure and record SDK/CLR/Unity/build identities. .NET execution does not
+waive current Unity integration/full/Smoke or required LongRun gates. Preserve
+asset serialization and P12 descriptor/incompatibility semantics. Use the current
+production packager only for supported reports/inputs; keep complete .NET results
+and input manifests under evidence policy. No engine stubs or copied domain rules.

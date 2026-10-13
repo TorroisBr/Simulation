@@ -183,6 +183,42 @@ posterior; estes princípios não anunciam que essa plataforma já existe.
 
 # Parte II — Constituição semântica
 
+## 2A. Simulation Core independente de Unity — extração incremental
+
+**DECIDIDO — DIREÇÃO DE EXTRAÇÃO; CAPACIDADES POR CHECKPOINT**
+
+A direção escolhida é extrair uma implementação autoritativa C#/.NET que execute
+e seja testável sem Unity. Unity permanece o Simulation Studio oficial e passa
+a consumir esse Core. Lab e outros hosts aprovados consomem a mesma autoridade
+de aplicação/domínio; não existem regras alternativas por host. O Core mantém
+World Truth, identidades, decisões, sistemas de domínio, Knowledge, tempo lógico,
+aleatoriedade determinística, mutações, eventos/inputs e persistência/restauração.
+Unity mantém authoring, ScriptableObjects e conversão, lifecycle, UI/rendering,
+Scenes/prefabs, Editor e serviços ambientais específicos.
+
+Assets de authoring são resolvidos para definições efetivas puras, validadas e
+identificadas semanticamente antes da composição/publicação. Adapters não recebem
+autoridade de domínio. A extração preserva a autoridade existente de runtime,
+admissão/epochs/leases, fronteiras temporais e ordem causal; frames não governam
+a simulação. Não há novo runtime concorrente, estado paralelo ou cópia de regras.
+
+Extração de código, host não Unity equivalente e ampliação oficial de compatibilidade
+de saves são entregas distintas. O fechamento P12 no perfil same-build/current-host
+UnityBootstrap-Daily-v1 permanece válido e delimitado. Mudanças de assembly/build
+não podem ser ocultadas nos descritores; compilar fora de Unity não promete saves
+cross-host/build. Novos hosts provam equivalência nas fronteiras autoritativas para
+inputs compatíveis, conforme §12, antes de serem declarados suportados.
+
+O [contrato incremental](architecture/SIMULATION_CORE_EXTRACTION.md) registra a
+investigação atual, composição, DAG e gates. A frente é infraestrutura sem número
+de Phase; seu primeiro slice CORE-A extrai somente calendário/idade compartilhados,
+com design e revisão próprios. Não equivale à extração completa nem a um world-host.
+P19 loader não é pré-requisito. Fases encerradas permanecem encerradas e nenhum
+trabalho independente ganha um bloqueio geral de Core. Continuação de novos perfis
+exige suas próprias autoridades, cobertura e validação; o perfil P12 não cresce.
+
+---
+
 ## 3. Cadeia semântica principal
 
 **DECIDIDO**

@@ -22,6 +22,47 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
 
+## Current infrastructure and P12 refresh — 2026-10-13
+
+The user selected [Unity-independent Simulation Core extraction](architecture/SIMULATION_CORE_EXTRACTION.md)
+as an unnumbered infrastructure workstream. One source implementation is consumed
+by Unity Studio and .NET hosts. [CORE-A calendar handoff](architecture/SIMULATION_CORE_A_MASTER_HANDOFF.md)
+is READY_FOR_IMPLEMENTATION after independent PASS and architecture promotion;
+no migration code is delivered here. CORE-B deterministic/temporal closure and
+CORE-C one pure-definition/domain consumer are READY_FOR_TECHNICAL_DESIGN;
+implementation waits for their named prerequisites and reviewed designs.
+Shared runtime/Lab composition (CORE-D), remaining per-domain closures (CORE-E)
+and equivalent Daily-v1 .NET continuation host (CORE-F) retain the explicit
+WAIT_DEPENDENCY edges in that contract. Cross-host/build save compatibility
+(CORE-X) is separate. No P19 loader or blanket numbered-phase dependency.
+
+Current production `codex/phase12/canonical` at
+`4cc31073f0ec6ba5c718084e4cebd6e914931d5d` records Phase 12 CLOSED,
+formal marker `fbf06fa887a29b92be004d864f4ee98d90926d4a`, within same-build/
+current-host UnityBootstrap-Daily-v1; P12-A–G are promoted. P13 remains
+WAIT_DEPENDENCY on its historical reconstruction/causal and checkpoint contracts,
+not on a reopened P12. Dated B/A/open entries below remain historical snapshots.
+Use the owning current production States/closure evidence, not this architecture
+checkout's older executable tree. No profile growth, cross-host compatibility or
+reopening follows from extraction. CORE-A changes assembly/build identity and
+therefore requires fresh Unity/P12 integration gates before code promotion.
+
+```text
+CORE-A shared calendar -> CORE-B needed deterministic/temporal closure
+CORE-A + selected pure definitions/domain closure CORE-C -> CORE-D same-runtime Lab
+CORE-A -> CORE-E individually reviewed remaining domain closures
+CORE-D + exact Daily-v1 owners/definitions from CORE-E + closed P12 contract
+  -> CORE-F equivalent non-Unity continuation host
+CORE-F + separately approved compatibility contract -> CORE-X save interchange
+P13/P10/P14/P15/P16/P17/P18/P19/P20 -> no blanket wait on extraction
+```
+
+Existing Lab finite-source scenario remains a later real world consumer; CORE-A's
+calendar CLI is a narrower first execution proof. Closed contracts and active
+Master work remain intact; actual assembly/runtime integration uses serialized
+hotspot windows. This documentation promotion is UPSTREAM_IRRELEVANT to unchanged
+in-flight production inputs, not proof that a future source move is irrelevant.
+
 ## P17 strategic War direction and first bounded proof — proposed 2026-10-05
 
 The accepted product direction includes territorial, attrition/capability and

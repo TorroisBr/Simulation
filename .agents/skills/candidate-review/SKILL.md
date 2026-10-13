@@ -16,3 +16,12 @@ Record the review result durably, with `REJECTED`, `NEEDS_CHANGES`, or `VALIDATE
 ## Evidence retention and reuse
 
 Check the complete retained results, manifest hashes, full validation-input identity and current Phase gates under docs/operations/VALIDATION_EVIDENCE_POLICY.md. Verify original-to-retained case/hierarchy/result equivalence when normalization is used; hashes without accessible results are insufficient. Review the full candidate against its actual base. For a metadata-only successor, the same independent reviewer may attest exact final-tip applicability against the prior full review and unchanged inputs. No author self-approval or weakened suite gate.
+
+## Core/host migration review
+
+Check actual compiled/transitive dependencies, one authoritative source owner,
+SDK/asmdef integration, serialized asset linkage, exact cross-host case mapping,
+authoritative parity and P12 build/profile compatibility boundaries. Inspect
+both host gate results and their complete input/toolchain identity. The current
+Unity packager does not support arbitrary .NET TRX; use the bounded handoff's
+complete original-report path. A pure compile alone is not a portable world host.

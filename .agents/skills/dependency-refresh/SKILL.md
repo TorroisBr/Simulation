@@ -18,3 +18,11 @@ Output baseline SHA, impact classification per active/delivered candidate, ready
 ## Evidence retention and reuse
 
 Assess result applicability using the full input/toolchain/profile/scope identity and current contracts in docs/operations/VALIDATION_EVIDENCE_POLICY.md. A proven docs-only successor can reuse retained runs after independent exact-tip applicability verification. Changed executable inputs or contracts require the affected validation/review. Evidence packaging introduces no new domain capability or P12 dependency.
+
+## Core workstream impact
+
+Core extraction is not a blanket dependency of numbered phases. Classify actual
+source/assembly moves as consumer integration/build/serialization revalidation;
+docs-only direction does not reopen closed phases. Preserve P12's exact supported
+profile and identity checks. Check the actual execution canonical for delivered
+packager/closure capabilities rather than stale architecture-checkout source.

@@ -210,3 +210,29 @@ Review actual outgoing objects and archive contents, retain necessary diagnostic
 safely, preserve historical promotions and never evade a publication rejection.
 This operational policy establishes no new simulation capability, profile member,
 Phase closure or routine human approval gate.
+
+## Simulation Core extraction and host-specific validation — 2026-10-13
+
+Apply [the unnumbered extraction contract](architecture/SIMULATION_CORE_EXTRACTION.md)
+and [CORE-A handoff](architecture/SIMULATION_CORE_A_MASTER_HANDOFF.md) to this workstream.
+Name the execution host, effective profile, complete compiled dependency closure,
+source ownership and SDK/CLR/Unity/numeric/build identity in each design/review.
+One shared source implementation serves all hosts; adapters own no world rules.
+A portable compile is distinct from authoritative parity and from save compatibility.
+Documentation/Core-only worktrees need no Unity import. Existing integration,
+full EditMode/Smoke and causally required LongRun gates remain; no blanket .NET
+substitution is authorized. CORE-A needs both hosts and P12/asset regressions.
+
+Current production P12 has adopted the evidence packager; older future-implementation
+wording above describes its earlier state. Verify the selected production ref and
+Tools README before using it. It supports its declared Unity NUnit/input boundary,
+not arbitrary TRX/SDK roots. CORE-A uses a complete reviewed original-TRX bundle
+plus full .NET input manifest and a Unity input sidecar, under evidence policy.
+No unsupported normalization or inaccessible hashes-only evidence may pass.
+
+Architecture promotion uses the user's explicit extraction/autonomous-compatible-
+promotion authority, independent exact-tip review and refreshed docs-only preflight.
+It changes no numbered-phase branch. First code implementation goes through the
+normal independent implementation/promotion gates from current production, with
+only the reviewed documentation delta imported; never merge the architecture
+branch's older executable tree into a newer numbered-phase canonical.

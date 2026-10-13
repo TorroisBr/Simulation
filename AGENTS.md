@@ -85,3 +85,20 @@ Do not bypass external publication restrictions or create routine human gates.
 Preserve historical evidence and active candidates; do not bulk prune refs or
 worktrees. Preserve needed ignored evidence before authorized cleanup, subject
 to the policy's security/privacy limits and safe-evidence requirements.
+
+## Core extraction and validation hosts
+
+For the unnumbered Core extraction workstream, read
+`docs/architecture/SIMULATION_CORE_EXTRACTION.md` and the approved bounded handoff.
+Prove the actual compiled/transitive closure, one source owner, authoritative
+parity and Unity adapter/asset integration; no engine stubs, copied domain rules,
+Store exposure or implicit public mod API. .NET compilation, equivalent hosting
+and cross-host/build save compatibility are separate claims. Core/docs-only
+worktrees need no Unity import; current integration full EditMode/Smoke and
+required LongRun gates remain until explicitly replaced by a reviewed contract.
+CORE-A specifically requires .NET, Unity, serialization and P12 regression gates.
+Use the current production evidence packager where supported; its Unity NUnit
+schema/input roots do not cover arbitrary TRX/SDK inputs. Retain complete original
+.NET case results and full toolchain/input manifests under the evidence policy.
+The packager is delivered on inspected P12 canonical `4cc31073`; older prospective
+wording above is historical, not a reason to recreate the tool.

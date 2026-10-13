@@ -17,3 +17,13 @@ If a durable semantic answer is missing, output `BLOCKED_ARCHITECTURE`; if user 
 ## Evidence retention and reuse
 
 Use docs/operations/VALIDATION_EVIDENCE_POLICY.md to avoid unnecessary artifact splitting. A bounded design may contain its contract, validation and Master handoff in one durable artifact, with independent review recorded separately. Pure documentation changes need diff/link and independent review checks, not Unity reruns. A proposed tool handoff does not establish an implemented capability or waive an existing evidence contract.
+
+## Core/host migration design
+
+Name the real domain capability, full source/type dependency closure, single
+source/assembly ownership, host adapters, effective definitions and exact parity
+baseline. Distinguish code extraction, equivalent non-Unity composition and
+save-profile compatibility. Specify engine-free compile plus Unity serialization/
+consumer/P12 integration gates and complete host-specific evidence. Defer broader
+closures explicitly; do not make an implementation worker invent a host/profile
+or durable identity boundary. See the unnumbered Core extraction contract.

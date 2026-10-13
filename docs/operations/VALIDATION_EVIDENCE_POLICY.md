@@ -373,3 +373,22 @@ new authorized candidates. Lifecycle cleanup is separately bounded; this
 handoff authorizes no bulk worktree/ref/history deletion. No product or
 simulation architecture choice remains. Only a genuine external security
 restriction or incompatible accepted contract can require user input.
+
+## 10. Current packager and Core migration host evidence — 2026-10-13
+
+The §9 Tools handoff is delivered on inspected P12 canonical
+`4cc31073f0ec6ba5c718084e4cebd6e914931d5d`; its production README and independent
+review define supported behavior. Earlier future wording is historical. Existing
+NUnit normalization/path redaction and Assets/Packages/ProjectSettings/UnityValidation
+input roots remain bounded; this refresh does not extend the implemented parser.
+
+For CORE-A, use the exact [host evidence contract](../architecture/SIMULATION_CORE_A_MASTER_HANDOFF.md):
+complete original .NET TRX reports in one reviewed durable bundle, full SDK/CLR/
+project/lock/source/runner input manifest, before/after equality and nonempty
+complete per-case execution. Preserve failures/skips/counts/identity/reasons and
+protected diagnostics. Review actual report content and outgoing objects before
+publication. Do not feed unsupported TRX into the Unity packer, edit it to fit,
+or replace inaccessible results with hashes. Unity uses its delivered packer plus
+a sidecar identity manifest for new inputs beyond its roots. Any future normalized
+.NET adapter needs independent schema/losslessness review. Existing mandatory
+focused/full/Smoke/LongRun gates and historical packages remain unchanged.
