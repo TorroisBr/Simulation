@@ -280,9 +280,17 @@ public class TesteSimulacao : MonoBehaviour
     internal bool TryLoadSavedDailyV1ContinuationFromPathForTest(string persistentDataPath)
         => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath);
 
+    internal bool TryLoadSavedDailyV1ContinuationFromPathForTest(string persistentDataPath,
+        IP12AContinuationFileOperations fileOperations)
+        => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath, fileOperations);
+
     private bool TryLoadSavedDailyV1BeforeGenesis(string persistentDataPath)
+        => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath, P12AContinuationFileOperations.Instance);
+
+    private bool TryLoadSavedDailyV1BeforeGenesis(string persistentDataPath,
+        IP12AContinuationFileOperations fileOperations)
     {
-        if (!P12AContinuationStore.TryHasSlot(persistentDataPath, out bool exists, out _))
+        if (!P12AContinuationStore.TryHasSlot(persistentDataPath, fileOperations, out bool exists, out _))
         {
             bootstrapFailed = true;
             UnityEngine.Debug.LogError("P12-A continuation slot inspection failed; genesis was not started.");

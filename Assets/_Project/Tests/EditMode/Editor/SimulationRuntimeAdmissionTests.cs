@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -10431,6 +10432,41 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
 
+    [Test]
+    public void UninspectableDailyV1SaveFailsClosedBeforeGenesis()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject targetObject = new GameObject("P12-A uninspectable slot must not trigger genesis");
+        string storageRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "P12AUninspectableBootstrap", System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            TesteSimulacao target = targetObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(target, config);
+            int genesisIdentityAllocations = 0;
+            WritePrivateField(target, "worldIdentityAllocator", (Func<WorldId>)(() =>
+            {
+                genesisIdentityAllocations++;
+                return new WorldId(System.Guid.NewGuid());
+            }));
+
+            UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Error,
+                "P12-A continuation slot inspection failed; genesis was not started.");
+            Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(
+                storageRoot, new SlotInspectionFailureFileOperations()), Is.True);
+            Assert.That(ReadPrivateField<bool>(target, "bootstrapFailed"), Is.True);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(target, "activeSession"), Is.Null);
+            Assert.That(genesisIdentityAllocations, Is.Zero);
+        }
+        finally
+        {
+            if (System.IO.Directory.Exists(storageRoot)) System.IO.Directory.Delete(storageRoot, true);
+            UnityEngine.Object.DestroyImmediate(targetObject);
+        }
+    }
+
     private static void ConfigureUnscopedBootstrap(TesteSimulacao bootstrap, SimulationConfigData config)
     {
         WritePrivateField(bootstrap, "simulationConfig", config);
@@ -10513,6 +10549,18 @@ public sealed class SimulationRuntimeAdmissionTests
         FieldInfo field = target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(field, Is.Not.Null);
         field.SetValue(target, value);
+    }
+
+    private sealed class SlotInspectionFailureFileOperations : IP12AContinuationFileOperations
+    {
+        public void CreateDirectory(string path) => throw new NotSupportedException();
+        public bool Exists(string path) => throw new NotSupportedException();
+        public Stream CreateNewTemporary(string path) => throw new NotSupportedException();
+        public Stream OpenRead(string path) => throw new UnauthorizedAccessException("Injected slot inspection failure.");
+        public void FlushToDisk(Stream stream) => throw new NotSupportedException();
+        public void Replace(string source, string destination) => throw new NotSupportedException();
+        public void Move(string source, string destination) => throw new NotSupportedException();
+        public void Delete(string path) => throw new NotSupportedException();
     }
 
     private sealed class AdmissionProbeActionProvider : INpcActionProvider

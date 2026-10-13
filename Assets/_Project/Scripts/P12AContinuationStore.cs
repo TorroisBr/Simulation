@@ -63,14 +63,34 @@ internal static class P12AContinuationStore
         => TryHasSlot(UnityEngine.Application.persistentDataPath, out exists, out result);
 
     internal static bool TryHasSlot(string persistentDataPath, out bool exists, out P12AResult result)
+        => TryHasSlot(persistentDataPath, P12AContinuationFileOperations.Instance, out exists, out result);
+
+    internal static bool TryHasSlot(string persistentDataPath,
+        IP12AContinuationFileOperations fileOperations, out bool exists, out P12AResult result)
     {
         exists = false;
         result = new P12AResult(P12AResultCode.StorageFailure);
+        if (string.IsNullOrWhiteSpace(persistentDataPath) || fileOperations == null)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
         try
         {
             string slot = SlotPath(persistentDataPath);
-            exists = P12AContinuationFileOperations.Instance.Exists(slot);
-            result = new P12AResult(exists ? P12AResultCode.Loaded : P12AResultCode.NoSave);
+            using (fileOperations.OpenRead(slot)) { }
+            exists = true;
+            result = new P12AResult(P12AResultCode.Loaded);
+            return true;
+        }
+        catch (FileNotFoundException)
+        {
+            result = new P12AResult(P12AResultCode.NoSave);
+            return true;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            result = new P12AResult(P12AResultCode.NoSave);
             return true;
         }
         catch (Exception exception) when (IsStorageException(exception))
@@ -163,13 +183,24 @@ internal static class P12AContinuationStore
         {
             string slot = SlotPath(persistentDataPath);
             IP12AContinuationFileOperations fileOperations = P12AContinuationFileOperations.Instance;
-            if (!fileOperations.Exists(slot)) { result = new P12AResult(P12AResultCode.NoSave); return false; }
             if (!TryReadBounded(fileOperations, slot, out byte[] bytes))
             { result = new P12AResult(P12AResultCode.StorageFailure); return false; }
             if (!P12AContinuationCodec.TryDecode(bytes, manifest, compatibility, out image, out result))
             { image = null; return false; }
             result = new P12AResult(P12AResultCode.Loaded);
             return true;
+        }
+        catch (FileNotFoundException)
+        {
+            image = null;
+            result = new P12AResult(P12AResultCode.NoSave);
+            return false;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            image = null;
+            result = new P12AResult(P12AResultCode.NoSave);
+            return false;
         }
         catch (Exception exception) when (IsStorageException(exception))
         {
