@@ -5,7 +5,9 @@
 **Production source inspected:** `origin/codex/phase12/canonical` at
 `4cc31073f0ec6ba5c718084e4cebd6e914931d5d`.
 **Authority:** user-selected Core extraction and autonomous compatible architecture
-review/promotion. No production migration is delivered by this record.
+review/promotion. No production migration is delivered by this record. This General Architect
+assignment ends at reviewed architecture promotion and technical handoff;
+implementation readiness does not itself start migration.
 Independent verdicts and exact reviewed refs: [review](SIMULATION_CORE_EXTRACTION_REVIEW.md).
 First bounded executable contract: [CORE-A Master handoff](SIMULATION_CORE_A_MASTER_HANDOFF.md).
 
@@ -41,7 +43,12 @@ are joined to identifier occurrences in other files; breadth-first propagation
 records one shortest path to a direct engine candidate. Ambiguous identifiers,
 conditional compilation, inheritance, generated code and reflection can create
 false positives or hidden edges. No-path files are **not certified portable**.
-Each extraction must prove its actual compiled dependency closure independently.
+Displayed paths are file-level candidates: co-located types can connect edges
+without a real reference between the particular types of interest. For example,
+temporal consumers of SpatialStableKey do not thereby consume every other type
+in SpatialRouteKnowledge's file. These paths are not a call graph or certified
+type-reference chain. Each extraction must prove its actual compiled dependency
+closure independently.
 
 Reproduce against the pinned ref with `git ls-tree -r --name-only`, `git show`
 for each tracked source, whole-word engine/declaration/identifier matching and

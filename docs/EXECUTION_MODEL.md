@@ -238,9 +238,15 @@ normal independent implementation/promotion gates from current production, with
 only the reviewed documentation delta imported; never merge the architecture
 branch's older executable tree into a newer numbered-phase canonical.
 
-For this user-authorized unnumbered Core workstream, apply the same bounded
-implementation/candidate/promotion conditions to `codex/core/canonical`, including
+For the designed unnumbered Core workstream, once covered by the Master's active
+implementation mandate, apply the same bounded implementation/candidate/promotion conditions to `codex/core/canonical`, including
 independent exact-tip review, the handoff's two-host gates, safe ancestry and
 current input identity. Record delivery in `docs/CORE_STATE.md`, not a new Phase
 or parallel world authority. This adds no automatic numbered-phase merge or
 formal Phase-closure permission. Architecture remains on its own canonical branch.
+
+The present General Architect assignment authorizes investigation, reviewed design,
+architecture/documentation promotion and durable implementation handoff. It starts
+no migration implementation. READY_FOR_IMPLEMENTATION is technical readiness,
+not an automatic implementation grant or a reason to create a routine human gate;
+Master checks its existing active mandate as in every other checkpoint dispatch.

@@ -277,8 +277,12 @@ bounded design for a real unanticipated boundary. Roll back by an additive rever
 and matching old build/save, followed by regressions. No destructive reset,
 force-push, shared Library strategy or edits to active implementation worktrees.
 
-**Master next action after architecture promotion:** dispatch CORE-A implementation
-under this exact contract, then independent implementation review and existing
-canonical promotion workflow. CORE-B/C design may proceed read-only in parallel;
+**Master next task after architecture promotion:** consume CORE-A as the next
+implementation-ready bounded handoff. Under the Master's active implementation
+mandate, dispatch this exact contract, then independent implementation review and
+the canonical promotion workflow. This General Architect assignment delivers
+design/review/promotion only and starts no code migration. Readiness is not a
+substitute for implementation authority; no additional product/architecture
+choice is required. CORE-B/C design may proceed read-only in parallel;
 no CORE-D/F implementation or P13 readiness is authorized by CORE-A.
 No unresolved product/architecture choice remains for this bounded slice.
