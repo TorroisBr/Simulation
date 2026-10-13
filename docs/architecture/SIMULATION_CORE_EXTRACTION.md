@@ -53,7 +53,7 @@ The semantic checks below supplement this conservative inventory.
 | Runtime assembly | No Assets asmdef/asmref. Domain and host share `Assembly-CSharp`; internal accessibility currently hides coupling. | Introduce a pure assembly in bounded closures; never make it reference predefined Assembly-CSharp. |
 | Existing independent package | `Packages/com.simulation.world-exchange-producer/Runtime/Simulation.WorldExchangeProducer.asmdef`, `noEngineReferences: true`, `autoReferenced: true`. Only tracked asmdef. | Retain as projection integration; its purity does not make the domain portable. |
 | Tests | 238 tracked C# test sources; 67 have lexical Unity namespace/UnityTest candidates before comment filtering. The remaining 171 are not certified portable. Editor/NUnit and host-object fixtures are mixed; PlayMode needs Unity lifecycle. | Move by capability closure, retain asset/bootstrap/UI/persistence-host integration in Unity. |
-| Tools | Ten tracked Tools files, all Unity validation runner/evidence tooling. No SDK solution/project/global.json exists. | Add minimal .NET projects and host-specific evidence, preserve current Unity harness. |
+| Tools | Ten tracked Tools files, all Unity validation runner/evidence tooling. Four additional Editor C# files provide content validation/data authoring and remain Studio-side; three C# producer files are already isolated. No SDK solution/project/global.json exists. | Add minimal .NET projects and host-specific evidence, preserve current Unity harness. |
 
 ### Concrete direct and transitive boundaries
 
@@ -124,14 +124,14 @@ Assets/_Project/                        # existing Studio and integration fixtur
   Tests/EditMode/Editor/Calendar/       # pure shared cases + Unity-only checks
 ProjectSettings/                        # Studio settings, existing location
 Packages/com.simulation.world-exchange-producer/ # existing separate integration
- tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj
- tools/Simulation.Core.CalendarDemo/    # bounded CLI, same Core API
- tools/Simulation.Lab/                  # future real scenario host, own design
+tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj
+tools/Simulation.Core.CalendarDemo/    # bounded CLI, same Core API
+tools/Simulation.Lab/                  # future real scenario host, own design
 Tools/UnityValidation/                  # current accepted Unity runner/packager
 Tools/CoreValidation/                   # bounded .NET execution/evidence helper
 ```
 
-Leading whitespace in the diagram is only presentation; all paths are root-relative.
+All paths are root-relative.
 SDK outputs (`bin`, `obj`, results) stay outside Assets and imported Packages.
 Do not ship both Core source and an imported Core DLL in Unity. Keep one type
 implementation and one source owner. The SDK project uses an explicit source

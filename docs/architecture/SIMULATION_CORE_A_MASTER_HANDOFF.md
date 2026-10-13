@@ -84,7 +84,7 @@ keep them outside Unity import roots. No unrelated .gitignore cleanup.
 IsTestProject true, explicit shared test source Compile link, ProjectReference to
 Core, default Compile disabled, Nullable/ImplicitUsings disabled, LangVersion 9.0.
 Pin NUnit **3.14.0**, NUnit3TestAdapter **4.6.0**, Microsoft.NET.Test.Sdk **17.12.0**;
-lock transitive restores (`RestorePackagesWithLockFile`, checked-in lockfiles,
+lock transitive restores for test and demo projects (`RestorePackagesWithLockFile`, checked-in lockfiles,
 then `dotnet restore --locked-mode`). These versions expose the existing NUnit 3
 assertions; Unity keeps its own Test Framework dependency untouched.
 Package identities verified against the primary registry:
@@ -174,6 +174,7 @@ Normal invocations:
 ```powershell
 dotnet restore tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj --locked-mode
 dotnet test tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj --no-restore --logger trx
+dotnet restore tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj --locked-mode
 dotnet run --project tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj --no-restore
 ```
 
