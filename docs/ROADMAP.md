@@ -459,3 +459,29 @@ only where that capability is in scope.
 ## Changing the roadmap
 
 Phases may be inserted, split, merged, or reordered when the approved product scope changes. Record the revised objective and dependency impact in this roadmap and affected Briefs; preserve existing Phase State history and stable checkpoint identity or explicitly retire/supersede an ID. Re-evaluate active candidates against the new canonical context. Do not convert a soft ordering preference into a hard dependency, or a proposed scope into constitutional architecture, without review.
+
+## P12-A current entry after B–G completion — 2026-10-12
+
+At P12 remote `25d2dcf1371137ceb0e158eef4ba02d2e2304612`, B–G
+are promoted/complete within their accepted Daily-v1 contracts. The
+[current readiness assessment and Master handoff](architecture/P12A_CURRENT_READINESS_MASTER_HANDOFF.md)
+supersedes earlier dated unmet-owner, missing-inventory and G-pending blockers
+for current planning. P12-A's next work is **READY_FOR_TECHNICAL_DESIGN**,
+not READY_FOR_IMPLEMENTATION or delivered save/load.
+
+```text
+promoted B–G + validated selected inventory (satisfied)
+  → current A schema/codec, detached-input load and lifecycle design
+  → independent technical PASS + recorded bounded execution readiness
+  → A durable capture/load integration + persisted rejection/parity evidence
+  → A completion/promotion in its own State
+  → separate Phase 12 closure audit
+```
+
+No additional B–G checkpoint is required solely to unlock that design.
+The original owner capabilities remain valid; a decoded saved-image route
+must preserve them while replacing the live-source-only integration.
+P12 owning State still records A WAIT_DEPENDENCY until its refined entry
+status is recorded by the Master. The [review](architecture/P12A_CURRENT_READINESS_REVIEW.md)
+passes this assessment only. No routine approval stop, new profile, P13
+readiness or Phase closure is implied; unrelated READY work continues.

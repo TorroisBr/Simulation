@@ -315,3 +315,37 @@ was changed by this architecture stream. Historical evidence remains intact.
 P12 owning State remains authoritative: G partially delivered / WAIT_DEPENDENCY,
 A WAIT_DEPENDENCY, P13 BLOCKED, Phase 12 OPEN. No new profile, Phase closure,
 save/fork readiness, domain semantics or product choice follows.
+
+## P12-A readiness after B–G completion — 2026-10-12
+
+Scope: current-source readiness assessment and bounded Master design handoff.
+Canonical architecture branch: `codex/architecture/world-identity-projection`.
+Previous architecture SHA: `f3077ac5decbbb726a7e3ab80fc098fa4a8689fb`.
+Reviewed substantive content: `1cf3c862118da7f61995b6106f3d3bc1d59dbdc7`,
+from `codex/architecture/p12a-current-readiness`.
+P12 governing remote: `25d2dcf1371137ceb0e158eef4ba02d2e2304612`.
+The separately named local P12 ref was stale at `eef376d5` and was not used
+as the baseline or changed.
+
+[Assessment and Master handoff](architecture/P12A_CURRENT_READINESS_MASTER_HANDOFF.md):
+**upstream prerequisites SATISFIED / READY_FOR_TECHNICAL_DESIGN**.
+Independent [review](architecture/P12A_CURRENT_READINESS_REVIEW.md): **PASS**.
+Final metadata applicability, refreshed current-source compatibility and
+fast-forward preflight remain required. This becomes the planning adoption
+record when present on canonical; its containing commit and durable
+orchestration identify the final metadata/promotion tip.
+
+B–G and the live selected inventory are complete within their approved
+contracts; old unmet-owner/inventory/G blockers are historical. A still lacks
+a concrete current schema/codec, detached saved-input reconstruction route,
+production persistence lifecycle and corresponding persisted-byte evidence.
+One bounded A technical design/review is the minimum next executable work;
+then implementation readiness/authority can be recorded through the current
+workflow. No routine human gate or new upstream checkpoint is introduced.
+
+The Roadmap records the refreshed planning DAG. P12 owning State remains
+authoritative and currently labels A WAIT_DEPENDENCY; this architecture entry
+does not silently change that delivery record. No A code was dispatched or
+implemented. No active implementation checkout or numbered-phase canonical
+ref was modified; no owner/profile expansion or completed checkpoint reopening.
+P13 remains BLOCKED and Phase 12 OPEN under their separate gates.
