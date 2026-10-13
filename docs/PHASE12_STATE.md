@@ -20,11 +20,13 @@ wording is historical and is superseded by this formal closure record; it is
 not current P12 readiness or closure status.
 
 **Closure promotion:** `codex/phase12/canonical` was fast-forwarded from
-`c1cc0b0bd69e804391bab0e7d19ab6130781ed6f` to the reviewed closure marker
-`fbf06fa887a29b92be004d864f4ee98d90926d4a`. The full dependency refresh after
-closure leaves P13 at `WAIT_DEPENDENCY`: it has no approved checkpoint IDs and
-still lacks its own recoverable causal history/input ordering and historical
-reconstruction/fork integration. P12 closure supplies continuation only.
+`c1cc0b0bd69e804391bab0e7d19ab6130781ed6f` to closure marker
+`fbf06fa887a29b92be004d864f4ee98d90926d4a`, following independent PASS on
+closure candidate `f545c8acd9afee646007959b7df125785e4959a8`. The full
+dependency refresh after closure leaves P13 at `WAIT_DEPENDENCY`: it has no
+approved checkpoint IDs and still lacks its own recoverable causal
+history/input ordering and historical reconstruction/fork integration. P12
+closure supplies continuation only.
 
 ---
 
