@@ -22,7 +22,44 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
 
-## CORE-A evidence-path refresh — 2026-10-13
+## Current Simulation Core readiness — 2026-10-14
+
+At Core canonical `ad7a18899a13ec42a3d2b6b3098dff2f0a318492`, CORE-A
+through CORE-D are PROMOTED. Use owning `docs/CORE_STATE.md` at that ref and its
+review/validation records. The evidence adapter and earlier CORE-A blockers below
+are historical and superseded. D delivers the same bounded finite-source scenario
+runtime to Unity and the .NET Lab, not the complete Daily-v1 world host.
+
+The [CORE-E demographic-policy technical design/Master handoff](architecture/SIMULATION_CORE_E_MASTER_HANDOFF.md)
+defines the next individually reviewed extraction. After its independent PASS and
+architecture promotion it is READY_FOR_IMPLEMENTATION; other E closures remain
+individually gated. The [CORE-F exact owner/definition/runtime inventory and design
+handoff](architecture/SIMULATION_CORE_F_READINESS.md) is READY_FOR_TECHNICAL_DESIGN
+for its bounded work packages, while F implementation remains WAIT_DEPENDENCY on
+actual selected closure plus approved host design. CORE-X stays DEFERRED pending
+explicit compatibility scope. The [review](architecture/SIMULATION_CORE_E_F_REVIEW.md)
+records both verdicts separately. No Core production migration occurs here.
+
+```text
+PROMOTED A calendar + B deterministic/time + C finite-source kernel/price
+  -> PROMOTED D shared finite-source scenario runtime / .NET Lab
+A -> reviewed E demographic policy -> actual E promotion
+parallel F owner/definition/host design -> individually reviewed Daily-v1 closures
+selected promoted closures + closed exact P12 contract + same-runtime host design
+  -> F implementation/integration -> .NET same-build continuation proof
+F + separate approved compatibility scope/proof -> X (DEFERRED)
+```
+
+Existing .NET domain tests and Lab are delivered within their bounded scope.
+Remaining selected owners, definitions, operations/admission, effective composition
+and P12 host seams still need extraction; a successful .NET compile alone proves
+neither full authoritative runtime equivalence nor file interchange. No new P12
+profile, P13 readiness, Phase reopening or blanket dependency on Core follows.
+Read-only F design can proceed alongside isolated E implementation; shared assembly/
+source/project/runtime hotspots integrate serially. Only reviewed docs deltas from
+architecture are imported into current executable Core; no whole-tree merge.
+
+## Historical CORE-A evidence-path refresh — 2026-10-13
 
 CORE-A candidate `74677a0b5b74c7814874dd2d2b11aead2891bc42` has independent
 implementation/docs PASS and recorded Unity/.NET execution results; it is not
@@ -46,7 +83,7 @@ reviews in candidate refs; neither becomes implementation-ready merely through
 this evidence policy. Active candidates/source/tests and all P12/numbered-phase
 contracts remain untouched. This update introduces no gameplay or new Phase.
 
-## Current infrastructure and P12 refresh — 2026-10-13
+## Historical infrastructure and P12 refresh — 2026-10-13
 
 The user selected [Unity-independent Simulation Core extraction](architecture/SIMULATION_CORE_EXTRACTION.md)
 as an unnumbered infrastructure workstream. One source implementation is consumed
@@ -157,7 +194,7 @@ attach only after their own capabilities and readable facts exist:
 | Lab consumer | Human observation | Specific gate; no automatic Phase dependency |
 |---|---|---|
 | P10 generated topology | Seeded site topology and stable site identity, preferably as a graph. | P10-B is promoted; Lab still needs non-Unity composition and a supported topology read. |
-| P14 material flow | Reserve, production, stock and exhaustion. | P14-B is promoted; Lab still needs coherent reserve/stock observation and non-Unity execution. |
+| P14 material flow | Reserve, production, stock and exhaustion. | CORE-D now delivers the bounded finite-source operation/readback Lab on Core canonical ad7a188; full City daily economy and broader material flow remain separate. |
 | P15 construction | Structure absent before, present after the approved runtime mutation. | P15-A is promoted; Lab still needs a supported non-Unity operation and factual structure read. |
 | P16 movement | Force position and carried supply before/after one passage. | P16-A is promoted; Lab still needs a supported non-Unity operation and factual military/spatial reads. |
 | P20 shared activity | Independent decisions, coordinated start/lifecycle and individual effects. | P20-A synthetic shared behavior is promoted; Lab still needs a non-Unity execution/observation path. P20-B remains promoted Daily-profile census admission. P20-C joint travel follows the current-base design/handoff gate below. |

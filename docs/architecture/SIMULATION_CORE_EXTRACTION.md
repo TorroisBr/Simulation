@@ -11,6 +11,34 @@ implementation readiness does not itself start migration.
 Independent verdicts and exact reviewed refs: [review](SIMULATION_CORE_EXTRACTION_REVIEW.md).
 First bounded executable contract: [CORE-A Master handoff](SIMULATION_CORE_A_MASTER_HANDOFF.md).
 
+## Current readiness supersession — 2026-10-14
+
+Production authority is `codex/core/canonical` at
+`ad7a18899a13ec42a3d2b6b3098dff2f0a318492`; its owning `docs/CORE_STATE.md`
+and exact code/review/validation records supersede dated planning below.
+CORE-A calendar, CORE-B deterministic/temporal primitives, CORE-C bounded Market
+price/finite-source kernel and CORE-D finite-source scenario runtime/Lab are
+PROMOTED. D is not the complete SimulationRuntime or a Daily-v1 continuation host.
+The implementation/evidence packager is delivered on that Core line; old A/tooling
+WAIT wording is historical, not a remaining gate. No implementation State is
+copied into this older architecture executable tree.
+
+The next bounded CORE-E closure is the existing deterministic demographic policy
+and sampler plus their exact PersonId/value/interface dependencies. The
+[technical design/Master handoff](SIMULATION_CORE_E_MASTER_HANDOFF.md) becomes
+READY_FOR_IMPLEMENTATION only with independent PASS and architecture promotion.
+The remaining E family is not all implementation-ready. [CORE-F inventory and
+bounded design work](SIMULATION_CORE_F_READINESS.md) identify exact remaining
+Daily-v1 definition/owner/runtime/host dependencies; F implementation remains
+WAIT_DEPENDENCY. CORE-X is DEFERRED pending explicit compatibility scope, not
+an implied next implementation after F. [Independent review](SIMULATION_CORE_E_F_REVIEW.md)
+is the decision/promotion evidence for this refresh.
+
+This refresh changes architecture/planning only. Master imports the bounded docs
+delta onto current production; no active implementation worktree or numbered-phase
+canonical is changed. Original 336-file inventory and 2026-10-13 delivery figures
+below remain historical pinned evidence, not the current compiled closure.
+
 ## 1. Decision and present capability
 
 Extract one authoritative C# implementation into `Simulation.Core`, executable
@@ -31,7 +59,7 @@ not evidence of a complete executable world. CORE-A proves only the real calenda
 and age semantics; the later world-host milestone requires explicit composition,
 commands, admission, advancement and observations on a selected domain path.
 
-## 2. Current dependency inventory and its limits
+## 2. Initial dependency inventory (2026-10-13) and its limits
 
 The [file inventory](SIMULATION_CORE_DEPENDENCY_INVENTORY.csv) covers all **336**
 tracked `Assets/_Project/Scripts/**/*.cs` files at the pinned production ref,
@@ -258,52 +286,59 @@ old descriptor/save must fail closed without publishing a world or overwriting
 the slot. No save conversion is authorized. Retain binary field meanings,
 ordering, content fingerprints, allocator/RNG/record sequences and failure atomicity.
 
-Completed-boundary tokens stay immutable, ephemeral and owned by the same runtime:
-only a successful positive outer advance may issue one; reject idle/partial/
-faulted/throwing boundaries, stale epochs and active operations. Host extraction
-cannot replace this with an idle flag or manufacture a token for a test. P12
-capture, detached hydration, restoration validation and publication remain the
-same protocol. Durable filesystem adapters must preserve flush/replace behavior
+Completed-boundary tokens stay immutable, ephemeral and owned by the same runtime.
+Live issuance requires a successful positive outer advance; reject idle/partial/
+faulted/throwing boundaries, stale epochs and active operations. Preserve the
+implemented P12-G restored-continuation admission: the private validated target,
+preserved positive completed sequence/day/WorldId and freshly matched owner vector/
+epoch admit an ephemeral token with RestoredContinuation provenance. This retains
+a completed historical boundary, not a new simulated advance or mere idle/hydrated
+state. Host extraction cannot replace either protocol with an idle flag or
+manufacture a token for a test. Capture, hydration, validation/publication remain
+the same production protocol. Durable filesystem adapters must preserve flush/replace behavior
 and missing-versus-inaccessible slot semantics; inaccessible startup fails closed.
 
 ## 6. Incremental roadmap and dependency graph
 
-All rows after CORE-A are scoped design targets, not invented implementation
-readiness. Refine one real consumer at a time; closure requires working two-host
-parity, not merely moving every file in a named folder.
+Use the 2026-10-14 current production baseline and owning Core State above.
+Readiness is per actual consumed capability and individually reviewed design.
 
-| Workstream step | Entry / current readiness | Bounded outcome and gate |
+| Workstream | Current status | Bounded outcome / next gate |
 |---|---|---|
-| CORE-A Calendar shared assembly | Independently reviewed handoff -> READY_FOR_IMPLEMENTATION after architecture promotion | Real calendar/age closure, same source under Unity/.NET, portable assertions and CLI, authoring/P12 integration gates. |
-| CORE-B Deterministic primitives and temporal closure | READY_FOR_TECHNICAL_DESIGN after architecture promotion; implementation WAIT_DEPENDENCY on A and its own review | Audit/move existing deterministic streams, keys and logical-time closure; retain contexts/order. Do not move all P18 consumers by implication. |
-| CORE-C One pure-definition/domain consumer | READY_FOR_TECHNICAL_DESIGN after architecture promotion; implementation WAIT_DEPENDENCY on reviewed closure and required A/B capabilities | Select delivered P14-B finite source as recommended first useful world-path consumer; extract its actual economy/item/definition closure or choose a smaller delivered path if audit warrants. No fake adapter rules. |
-| CORE-D Shared runtime composition + Lab host | WAIT_DEPENDENCY on selected C closure and reviewed host/definition contracts | Same runtime admitted initialization/operation/advance/read path, explicit profile; first real finite-source Lab scenario when dependencies exist. No universal host framework. |
-| CORE-E Remaining domain closures + default Core workflow | WAIT_DEPENDENCY on individual reviewed closures, not all-or-nothing D | Incrementally population/NPC/economy/politics/crime/military/spatial/Knowledge, retaining one implementation; run relevant domain suites without Unity. Integration order follows actual references. |
-| CORE-F P12 equivalent .NET continuation host | WAIT_DEPENDENCY on exact selected Daily-v1 owner/definition/runtime closure and host design | Capture/durable load/restoration/continuation under a declared host/build, exact owner inventory and negative cases; no automatic cross-host interchange. |
-| CORE-X Save compatibility extension | WAIT_DEPENDENCY on explicit compatibility scope/design/evidence | A separately approved cross-host/build promise only when requested; not necessary for A or ordinary domain extraction. |
+| CORE-A | PROMOTED | Shared calendar/date/age; not world hosting. |
+| CORE-B | PROMOTED | Existing RNG/stable-key/logical timeline closure, not all temporal consumers. |
+| CORE-C | PROMOTED | Market pricing and prepared finite-source production kernel, not all economy. |
+| CORE-D | PROMOTED | One immutable finite-source scenario runtime reused by Unity and fixed .NET Lab; in-memory, no P12 host. |
+| CORE-E selected demographic policy | Reviewed design + architecture promotion gate | Exact demographic policy/sample, PersonId and input contracts; [Master handoff](SIMULATION_CORE_E_MASTER_HANDOFF.md). No ledger/coordinator move. |
+| CORE-E other domains | WAIT_DEPENDENCY on individual reviewed closures | Extract real owners/rules/definitions in measured dependency order, not every folder at once. |
+| CORE-F | Implementation WAIT_DEPENDENCY; bounded inventory/host-design preparation READY_FOR_TECHNICAL_DESIGN | Exact selected Daily-v1 owner/definition/runtime closure and independently approved host design; [design work and inventory](SIMULATION_CORE_F_READINESS.md). |
+| CORE-X | DEFERRED | Separate explicitly approved compatibility scope/design/evidence; no automatic cross-host/build save promise. |
 
 ```mermaid
 flowchart TD
-  A[CORE-A shared calendar] --> B[CORE-B required deterministic and temporal closure]
-  A --> C[CORE-C selected pure definition and domain path]
-  B --> D[CORE-D same runtime composition and Lab host]
+  A[CORE-A promoted calendar] --> B[CORE-B promoted RNG and timeline]
+  A --> C[CORE-C promoted finite-source kernel and price]
+  B --> D[CORE-D promoted shared scenario runtime and Lab]
   C --> D
-  A --> E[CORE-E individually reviewed remaining closures]
-  D -. reuse only where actually needed .-> E
-  D --> F[CORE-F exact Daily-v1 equivalent host]
-  E --> F
-  P12[Closed P12 Daily-v1 contract and exact owners] --> F
-  F --> X[Separate compatibility extension CORE-X]
-  D --> R[Approved coherent factual readers]
-  R --> WX[Separate World Exchange producer adapter]
-  WX --> EX[External Web and Obsidian read-only consumers]
+  A --> E[CORE-E reviewed demographic policy handoff]
+  E --> EP[E actual implementation promotion]
+  FD[CORE-F bounded closure and host design] --> EC[Reviewed selected Daily-v1 closures]
+  EP -. required policy and identity where consumed .-> EC
+  B --> EC
+  EC --> HC[Same application runtime and host composition]
+  P12[Closed exact Unity P12 profile and owner contract] --> HC
+  HC --> F[CORE-F same-build .NET continuation proof]
+  D -. runner and layout reuse .-> F
+  F --> X[CORE-X explicit compatibility scope DEFERRED]
 ```
 
-DAG edges mean actual consumed capability/design gates; the E -> F edge requires
-only the Daily-v1 owners, not every future domain. A/C can be prepared in parallel
-with read-only B audit. Runtime/temporal/P12/definition integration uses owned
-serial windows. P19 loader is not an edge. No Core workstream is a blanket
-prerequisite for independent numbered-phase work.
+F consumes only actual selected Daily-v1 closures, not every future E domain.
+D is reusable host/tooling precedent, not proof of F's complete world graph or a
+requirement to admit the P14 scenario to P12. F design may run now while E implements.
+A–D already supply domain .NET testing and a bounded authoritative Lab. Each further
+closure increases Unity's role as consumer; F proves the exact runtime outside Unity.
+No P19 loader edge or blanket numbered-phase extraction dependency is introduced.
+Real shared package/project/runtime/P12/definition hotspots integrate serially.
 
 ## 7. Determinism and test migration gates
 
@@ -365,8 +400,9 @@ packer is required. Its exact acceptance algorithm is in the first handoff.
 The [approved privacy-safe TRX contract](../operations/DOTNET_TRX_EVIDENCE_CONTRACT.md)
 permits a complete normalized package after its shared adapter is implemented,
 validated and independently reviewed; originals remain under verified protected
-retention and original-to-derived comparison. This is not an existing capability
-or a retroactive acceptance of prior sanitized evidence.
+retention and original-to-derived comparison. The adapter is now delivered and reviewed on the pinned Core canonical;
+use its actual supported scope and source-comparison evidence. This is not
+a retroactive acceptance of unrelated sanitized evidence.
 Unity evidence uses the delivered packager unchanged; CORE-A supplies a sidecar
 manifest for added SDK/linked-test inputs outside the Unity packer's roots.
 
@@ -464,7 +500,7 @@ through the same approved reader/producer seam; Web/Obsidian remain consumers.
   prior host/build artifacts and validate; never force-reset shared history,
   delete unrelated worktrees, mix builds/saves or silently reset user data.
 
-No unresolved product decision is needed for CORE-A. Wider definition/numeric/
+No unresolved product decision is needed for CORE-A or the selected CORE-E design. Wider definition/numeric/
 world-host/compatibility details remain named later design gates rather than
 implementation-worker inventions. This record authorizes a reviewed bounded
 first implementation handoff only; full extraction remains incremental.

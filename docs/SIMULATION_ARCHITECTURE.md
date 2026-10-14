@@ -217,6 +217,17 @@ P19 loader não é pré-requisito. Fases encerradas permanecem encerradas e nenh
 trabalho independente ganha um bloqueio geral de Core. Continuação de novos perfis
 exige suas próprias autoridades, cobertura e validação; o perfil P12 não cresce.
 
+O estado de capacidades é verificado no canônico Core, não inferido desta direção.
+Em `ad7a18899a13ec42a3d2b6b3098dff2f0a318492`, CORE-A–D estão promovidos
+nos respectivos recortes de calendário, determinismo/tempo lógico, kernel econômico
+e runtime de cenário finito compartilhado com Lab. O próximo
+[recorte CORE-E](architecture/SIMULATION_CORE_E_MASTER_HANDOFF.md) extrai a policy
+demográfica determinística; ledger e coordenador de população mantêm sua autoridade.
+O [host CORE-F](architecture/SIMULATION_CORE_F_READINESS.md) continua dependente
+do fechamento exato dos owners/definições/runtime Daily-v1 e de design de host
+aprovado. CORE-X permanece deferido por escopo explícito de compatibilidade.
+Estes estados não ampliam o perfil P12 nem reabrem fases encerradas.
+
 ---
 
 ## 3. Cadeia semântica principal

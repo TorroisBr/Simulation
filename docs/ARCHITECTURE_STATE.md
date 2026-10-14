@@ -1,5 +1,37 @@
 # General Architecture State
 
+## CORE-E domain closure / CORE-F readiness — 2026-10-14
+
+**Status:** architecture/documentation candidate; independent review and final
+promotion preflight pending. Architecture base
+`63d3b8352a450b27b9a5f593c4ea166c0343c59e`; inspected Core canonical
+`ad7a18899a13ec42a3d2b6b3098dff2f0a318492`.
+
+CORE-A–D and the shared evidence tooling are PROMOTED on the Core line. Its
+owning `docs/CORE_STATE.md` is authoritative for implementation history; earlier
+A/tooling WAIT entries below are dated snapshots, superseded by that delivery.
+D is the shared finite-source scenario runtime and .NET Lab, not the complete
+Daily-v1 coordinator or continuation host.
+
+The [CORE-E technical design/Master handoff](architecture/SIMULATION_CORE_E_MASTER_HANDOFF.md)
+defines one exact demographic-policy/sample closure with existing PersonId and
+value/interface dependencies. After independent PASS and this architecture
+promotion it is READY_FOR_IMPLEMENTATION, not production delivery or all-E closure.
+The [CORE-F assessment/design handoff](architecture/SIMULATION_CORE_F_READINESS.md)
+keeps implementation WAIT_DEPENDENCY on exact Daily-v1 owner/definition/runtime
+closure plus approved host design. Its finite design work is READY_FOR_TECHNICAL_DESIGN.
+Complete source-bound census-family and authored-input CSVs accompany it.
+CORE-X is DEFERRED pending explicit compatibility scope. P12 remains closed in
+its accepted same-build/current-host Unity scope; no profile growth/P13 claim.
+
+Review evidence: [independent E/F record](architecture/SIMULATION_CORE_E_F_REVIEW.md).
+This promotion changes documentation only; active implementation checkouts and
+all Core/numbered-phase canonical refs remain unchanged. Master imports only
+the reviewed documentation delta onto current executable canonical and refreshes
+its owning Core State at dispatch/promotion, never the older architecture Assets
+tree. No shadow implementation State is created here. No ordinary technical
+question requires a new human gate; no production code is implemented.
+
 ## Privacy-safe TRX evidence contract promotion — 2026-10-13
 
 **Status:** ARCHITECTURE_PROMOTED for operational architecture/documentation
