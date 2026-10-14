@@ -22,6 +22,26 @@ function Assert-Throws([scriptblock]$Action, [string]$Message) {
     if (-not $threw) { throw "ASSERTION FAILED: $Message" }
 }
 
+function Invoke-PackagerCli([string[]]$CliArguments) {
+    $pwshPath = (Get-Command pwsh -ErrorAction Stop).Source
+    $cliPath = (Resolve-Path (Join-Path $PSScriptRoot '..\Package-UnityValidationEvidence.ps1')).Path
+    $start = [System.Diagnostics.ProcessStartInfo]::new($pwshPath)
+    $start.UseShellExecute = $false
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    foreach ($argument in @('-NoProfile', '-File', $cliPath) + $CliArguments) {
+        [void]$start.ArgumentList.Add([string]$argument)
+    }
+    $process = [System.Diagnostics.Process]::Start($start)
+    try {
+        $output = $process.StandardOutput.ReadToEnd()
+        $errorOutput = $process.StandardError.ReadToEnd()
+        $process.WaitForExit()
+        return [pscustomobject]@{ ExitCode = $process.ExitCode; Output = $output; Error = $errorOutput }
+    }
+    finally { $process.Dispose() }
+}
+
 function New-TestXml {
     param([Parameter(Mandatory)][string[]]$Outcomes, [switch]$WithSensitiveOutput)
     $totals = [ordered]@{ Passed = 0; Failed = 0; Skipped = 0; Inconclusive = 0 }
@@ -150,6 +170,8 @@ try {
     Assert-True ((Get-FileHash $bundleA.ArchivePath -Algorithm SHA256).Hash -eq (Get-FileHash $bundleB.ArchivePath -Algorithm SHA256).Hash) 'identical source run produces byte-identical ZIP bytes'
     $verify = Test-UnityValidationEvidencePackage -ManifestPath $bundleA.ManifestPath -ArchivePath $bundleA.ArchivePath -RunManifestPath $mixedRun
     Assert-True $verify.IsValid "package and retained raw XML verify: $($verify.Error)"
+    $cliVerify = Invoke-PackagerCli @('-Action', 'Verify', '-ManifestPath', $bundleA.ManifestPath, '-ArchivePath', $bundleA.ArchivePath)
+    Assert-True ($cliVerify.ExitCode -eq 0 -and $cliVerify.Output.Contains('VALID:')) "packager CLI verifies a Unity/NUnit package after loading both adapters: $($cliVerify.Error)"
     $ordinaryManifest = Get-Content -LiteralPath $bundleA.ManifestPath -Raw | ConvertFrom-Json -AsHashtable
     Assert-True ($ordinaryManifest.pathPolicy -eq 'none' -and $ordinaryManifest.runs[0].attempts[0].normalizedXml.pathPolicy -eq 'none') 'ordinary report package declares that no local Assembly path was removed'
     $module = Get-Module UnityValidationEvidence

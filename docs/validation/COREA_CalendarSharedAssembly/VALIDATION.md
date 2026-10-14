@@ -220,15 +220,10 @@ durable report evidence. CORE-A promotion remains blocked until the required
 complete evidence can be retained without exposing private metadata under the
 current host policy. No normalized .NET TRX adapter is implemented or claimed.
 
-## Current verdict and limits
+## Current verdict and limits — 2026-10-14 refresh
 
-Implementation and execution gates passed, including the Unity P12 regressions,
-parity, authoring, ALL EditMode, official Smoke, corrected SDK runner checks and
-demo. The first exact-tip review's parser findings have been corrected, and the
-corrected SDK validation passes. Independent exact-tip implementation review
-of candidate `2062e616d5a6bc53a2f154f33e9f4887a44972fe` passed at review
-`ad4d141d0ec00dee6b776d9373187173a330f0cc`. The complete .NET report evidence is
-not publishable under the inspected privacy boundary, so the evidence gate and
-canonical promotion remain blocked. No canonical promotion has occurred. No full SimulationRuntime, full-world
-hosting, P12 .NET continuation, cross-build save compatibility, P13 historical
-fork, P19 mod persistence or broad Unity independence claim is made.
+The CORE-A implementation and all required execution gates passed on the unchanged production source and test tree. Unity validation recorded Calendar/parity/authoring 64/64, P12 compatibility/capture/restore 131/131, Daily-v1 admission/continuation 169/169, ALL EditMode 3,080/3,080, and official Smoke 5/5, with zero failures, skips or inconclusive results. The corrected SDK runner passed 45/45 cold and warm cases and the required deterministic calendar demo. The privacy-safe normalized cold/warm package preserves complete per-case results and source/tool identities; its private comparison to the unchanged original reports passed under the promoted `c68ca7a9` tool. The original reports remain unchanged and protected locally.
+
+The current-base integration corrects only the public manifest hash label to the committed UTF-8/LF blob identity and incorporates the already reviewed/promoted verifier import-order correction. The normalized TRX and Unity archives both pass CLI archive-only verification under that corrected tool. The tool-identity mismatch is handled honestly: no new source-context comparison is claimed under the newer tool; the prior `originalComparisonVerified` result remains tied to `c68ca7a9`. The CORE-A production source/test tree remains identical to the reviewed parser-corrected implementation inputs. The old-base docs review finding is resolved in the current candidate, but the refreshed exact-tip integration review is still pending, so CORE-A has not yet been promoted.
+
+No full SimulationRuntime, full-world hosting, P12 .NET continuation, cross-build save compatibility, P13 historical fork, P19 mod persistence or broad Unity independence claim is made.

@@ -12,8 +12,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-Import-Module (Join-Path $PSScriptRoot 'UnityValidationEvidence.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'TrxValidationEvidence.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'UnityValidationEvidence.psm1') -Force
 try {
     switch ($Action) {
         'Package' {
