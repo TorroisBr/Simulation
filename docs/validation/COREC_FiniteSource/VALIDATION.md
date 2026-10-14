@@ -91,5 +91,11 @@ for final candidate `114e3a7ec9f794b2996305eb1d640a8a58ab1083` and tree
 `c04ec332eef29387463937c7153387d9b8728c75` is on
 `codex/core/CORE-C-implementation-review-114e3a7`. The reviewer verified the
 recorded evidence but did not rerun the suites. This validation record alone
-does not claim CORE-C promotion; promotion remains subject to refreshed
-canonical preflight.
+does not claim CORE-C promotion by itself. The reviewed candidate was promoted
+to `codex/core/canonical` by fast-forward from
+`bb82446c279ef47cf0d18a371f4728b2be4090e3` to
+`0e400bcf333ae7bfdb2d28287d2d40929b5774cf`; the promotion-record tree is
+`cd0dbb289b21bcf6edb1782494f7e18536e93a0a`. The reviewed implementation and
+test-input trees remain unchanged. This promotion does not claim P12 or P13
+readiness, equivalent .NET P12 continuation, full world hosting, or broader
+simulation hosting.

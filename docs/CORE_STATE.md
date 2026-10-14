@@ -114,10 +114,17 @@ for candidate `114e3a7ec9f794b2996305eb1d640a8a58ab1083` and tree
 `codex/core/CORE-C-implementation-review-114e3a7`; the record commit is a direct
 child of the reviewed candidate and adds only the review document. The review
 checked the complete base-to-candidate diff and exact validation references;
-tests were not rerun during review. The candidate is a validated candidate;
-canonical promotion remains pending final refreshed preflight. No claim is made
-about P12 readiness, equivalent .NET P12 continuation, P13, full world hosting,
-or broader simulation hosting.
+tests were not rerun during review. CORE-C was promoted to `codex/core/canonical`
+on 2026-10-14 by fast-forward from `bb82446c279ef47cf0d18a371f4728b2be4090e3`
+to `0e400bcf333ae7bfdb2d28287d2d40929b5774cf` (promotion-record tree
+`cd0dbb289b21bcf6edb1782494f7e18536e93a0a`). The promoted code remains the
+reviewed candidate `114e3a7ec9f794b2996305eb1d640a8a58ab1083`; the promoted
+integration adds only the review record and factual State/validation updates.
+Remote synchronization was verified. CORE-C extracts the bounded existing
+Market price calculation and prepared finite-source production kernel; it does
+not route P14-C mixed-source production through the Core kernel. No claim is
+made about P12 readiness, equivalent .NET P12 continuation, P13, full world
+hosting, or broader simulation hosting.
 
 ## TRX-EVIDENCE-v1 — shared .NET evidence packaging
 
