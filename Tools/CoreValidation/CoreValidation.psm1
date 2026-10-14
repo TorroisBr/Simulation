@@ -67,6 +67,7 @@ function Get-CoreInputSnapshot {
         'tools/Simulation.Core.CalendarDemo/packages.lock.json',
         'Tools/CoreValidation/CoreValidation.psm1',
         'Tools/CoreValidation/Invoke-CoreValidation.ps1',
+        'Tools/CoreValidation/Invoke-LabValidation.ps1',
         'Tools/CoreValidation/tests/Invoke-CoreValidationTests.ps1',
         'Tools/CoreValidation/README.md',
         'Tools/UnityValidation/UnityValidationEvidence.psm1'
