@@ -1,5 +1,54 @@
 # General Architecture State
 
+## Privacy-safe TRX evidence contract promotion — 2026-10-13
+
+**Status:** ARCHITECTURE_PROMOTED for operational architecture/documentation
+when this entry lands on `codex/architecture/world-identity-projection`; before
+publication it is a prepared marker. The commit introducing this entry/review
+is the canonical promotion marker, resolved through Git provenance.
+**Previous canonical:** `32358d2a0faf511e098c4f295a5132a4bfb8cfb2`.
+**Reviewed content:** `1ca79d2e781dc6463ea6f0ffba50268d9d4ff3f6` from
+`codex/architecture/dotnet-trx-evidence-contract`.
+
+The user authorized architecture assessment, independent review and compatible
+documentation promotion for the .NET evidence/privacy gate. The [contract and
+exact Tools Master handoff](operations/DOTNET_TRX_EVIDENCE_CONTRACT.md) passed
+[two independent reviews](architecture/DOTNET_TRX_EVIDENCE_REVIEW.md):
+**PASS / READY_FOR_IMPLEMENTATION** for TRX-EVIDENCE-v1 after this promotion.
+This does not claim an implemented adapter or promote CORE-A.
+
+Accepted strategy: immutable originals with verified private access and complete
+normalized result reports plus reviewed provenance in a durable public package.
+Only the closed TRX metadata projection is allowed; no failure/outcome/case loss,
+no byte-identical-original claim, no hashes-only access/authenticity assertion.
+Archive verification and original comparison have distinct scopes. The public
+manifest/commands/cwd/retention handles and recovered/captured facts are explicit.
+
+Current CORE-A candidate `74677a0b5b74c7814874dd2d2b11aead2891bc42` retains
+implementation/docs PASS but remains **WAIT_DEPENDENCY for promotion** on the
+implemented/validated/reviewed shared adapter, actual ACL remediation, complete
+public package, independent original comparison and final exact-tip applicability.
+Its current local original copies have broad inherited ACLs, so their protection
+claim needs scoped correction; no disclosure is inferred. The original SDK run
+context, 27 matching inputs, generated dependency records and retained outputs
+make honest assembly/cwd recovery feasible without a normalization-only rerun.
+
+**Refreshed DAG:** promoted contract -> reviewed Tools capability -> verified
+original retention/source/assembly context -> complete cold/warm package and
+independent comparison -> CORE-A final applicability/preflight/promotion ->
+CORE-B/C actual baseline/dependency refresh. CORE-B/C existing design candidates
+are not implementation-ready merely through this policy. No source/test or active
+CORE-A worktree/ref is modified by this architecture promotion. Shared Tools
+implementation and integration remain owned/serialized under Master workflow.
+
+The original-only TRX publication clause is prospectively replaced by the
+conditional supported normalized path, not retroactively deemed satisfied.
+Existing .NET/Unity/P12/ALL/Smoke gate evidence is preserved; source/harness/input
+changes still need affected validation. This docs-only promotion requires no
+Unity/.NET rerun. Current P12 remains closed within its accepted profile; no P13
+readiness, save-profile growth, new gameplay or Phase reopening follows.
+No unresolved product/architecture decision remains for this bounded Tools slice.
+
 ## Simulation Core extraction architecture promotion — 2026-10-13
 
 **Status:** ARCHITECTURE_PROMOTED for documentation/planning only when this
