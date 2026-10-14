@@ -30,12 +30,14 @@
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceProductionKernelTests.cs" Link="Economy/FiniteSourceProductionKernelTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioParityVectors.cs" Link="Economy/FiniteSourceScenarioParityVectors.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioRuntimeTests.cs" Link="Economy/FiniteSourceScenarioRuntimeTests.cs" />
-    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/PersistenceFoundationTests.cs" Link="Persistence/PersistenceFoundationTests.cs" />
-    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/PersistenceFoundationFaultMatrixTests.cs" Link="Persistence/PersistenceFoundationFaultMatrixTests.cs" />
-    <Compile Include="DailyV1DefinitionIdentityTests.cs" Link="Definitions/DailyV1DefinitionIdentityTests.cs" />
-    <None Include="Fixtures/CORE_F_WP1_VALUES_BASELINE.txt" CopyToOutputDirectory="PreserveNewest" />
+      <Compile Include="DailyV1DefinitionIdentityTests.cs" Link="Definitions/DailyV1DefinitionIdentityTests.cs" />
       <Compile Include="DailyV1DefinitionProviderVectors.cs" Link="Definitions/DailyV1DefinitionProviderVectors.cs" />
       <Compile Include="SimulationConfigurationResolverPrecedenceTests.cs" Link="Configuration/SimulationConfigurationResolverPrecedenceTests.cs" />
       <Compile Include="DailyV1TypedDefinitionGraphTests.cs" Link="Definitions/DailyV1TypedDefinitionGraphTests.cs" />
+      <Compile Include="DailyV1SelectedMemberCoverageTests.cs" Link="Definitions/DailyV1SelectedMemberCoverageTests.cs" />
+      <None Include="../../docs/architecture/CORE_F_SELECTED_VALUE_MEMBERS.csv" Link="Fixtures/CORE_F_SELECTED_VALUE_MEMBERS.csv" CopyToOutputDirectory="PreserveNewest" />
+      <None Include="Fixtures/CORE_F_WP1_VALUES_BASELINE.txt" CopyToOutputDirectory="PreserveNewest" />
+      <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/PersistenceFoundationTests.cs" Link="Persistence/PersistenceFoundationTests.cs" />
+      <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/PersistenceFoundationFaultMatrixTests.cs" Link="Persistence/PersistenceFoundationFaultMatrixTests.cs" />
   </ItemGroup>
 </Project>
