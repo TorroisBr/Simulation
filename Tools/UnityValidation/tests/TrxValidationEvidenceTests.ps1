@@ -278,5 +278,19 @@ Chose FX version [C:\Program Files\dotnet\shared\Microsoft.NETCore.App\9.0.20]
     Assert-True $true 'package tool identity binds its commit, tree, executable files, and pinned runtime'
     $toolMutation=ConvertFrom-Json -InputObject (ConvertTo-Json -InputObject $toolIdentity -Depth 20 -Compress) -AsHashtable;$toolMutation.files[0].sha256=('0'*64)
     Assert-Throws {& $trxModule {param($tool) Assert-TrxToolManifestBinding $tool} $toolMutation} 'tool source file hash mutation rejects'
+    $contextOutputRoot=Join-Path $root 'private-context-output';$null=Set-ProtectedEvidenceDirectory $contextOutputRoot
+    $contextOutputRunner=[ordered]@{schema='simulation-core-validation/v1';inputs=[ordered]@{stable=$true;generatedDependenciesStable=$true};storage=[ordered]@{worktreeLibraryAbsent=$true}}
+    $contextOutputRunnerBytes=ConvertTo-EvidenceJsonBytes $contextOutputRunner;$contextOutputRunnerPath=Join-Path $contextOutputRoot 'runner-manifest.json';[IO.File]::WriteAllBytes($contextOutputRunnerPath,$contextOutputRunnerBytes)
+    $contextOutput=[ordered]@{schema='dotnet-trx-source-context-v1';runnerManifestPath=$contextOutputRunnerPath;runnerManifestIdentity=[ordered]@{bytes=$contextOutputRunnerBytes.Length;sha256=(Get-BytesSha256 $contextOutputRunnerBytes)};worktreeRoots=@($contextOutputRoot);commandWorkingDirectory=[ordered]@{path=$contextOutputRoot;mode='recovered';evidence=@()};retentionHandle=('evidence-'+('2'*32));publicRuns=@();reports=@();runtimeSelectionTraces=@();loggerEvidence=[ordered]@{path=$contextOutputRunnerPath;bytes=$contextOutputRunnerBytes.Length;sha256=(Get-BytesSha256 $contextOutputRunnerBytes)}}
+    $contextOutputPath=Join-Path $contextOutputRoot 'source-context.json';[IO.File]::WriteAllBytes($contextOutputPath,(ConvertTo-EvidenceJsonBytes $contextOutput))
+    $contextOutputResult=@(& $trxModule {
+        param($path)
+        function Assert-TrxCompleteRunnerManifest { param($Runner) }
+        function Assert-TrxRunnerInputInventory { param($Runner,$WorktreeRoots) return 'synthetic-source-root' }
+        function Assert-TrxRunnerArtifactEvidence { param($Context,$Runner,$ProtectedRoot) return $true }
+        function Assert-TrxLoggerEvidence { param($Record,$ProtectedRoot) return $true }
+        Read-DotNetTrxSourceContext $path
+    } $contextOutputPath)
+    Assert-True ($contextOutputResult.Count -eq 1 -and $contextOutputResult[0].PSObject.Properties.Name -contains 'Context' -and $contextOutputResult[0].Context.schema -ceq 'dotnet-trx-source-context-v1') 'successful private source-context reader returns one context object without assertion output leakage'
     Write-Output "TRX evidence synthetic tests PASS: $script:Assertions assertions."
 } finally { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }

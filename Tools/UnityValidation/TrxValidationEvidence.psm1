@@ -455,8 +455,8 @@ function Read-DotNetTrxSourceContext {
     if($runner.schema -cne 'simulation-core-validation/v1' -or -not $runner.inputs.stable -or -not $runner.inputs.generatedDependenciesStable){throw 'Original CORE Validation manifest is incomplete or unstable.'}
     Assert-TrxCompleteRunnerManifest $runner
     $sourceRoot=Assert-TrxRunnerInputInventory $runner @($context.worktreeRoots)
-    Assert-TrxRunnerArtifactEvidence $context $runner $contextRoot
-    Assert-TrxLoggerEvidence $context.loggerEvidence $contextRoot
+    $null=Assert-TrxRunnerArtifactEvidence $context $runner $contextRoot
+    $null=Assert-TrxLoggerEvidence $context.loggerEvidence $contextRoot
     return [pscustomobject]@{Path=$contextPath;Root=$contextRoot;Bytes=$contextBytes;Context=$context;RunnerPath=$runnerPath;RunnerBytes=$runnerBytes;Runner=$runner;RunnerSha256=(Get-TrxBytesSha256 $runnerBytes);SourceRoot=$sourceRoot}
 }
 
