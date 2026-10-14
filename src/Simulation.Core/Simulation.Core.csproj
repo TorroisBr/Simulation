@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>Simulation.Core</AssemblyName>
+    <LangVersion>9.0</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/CalendarDefinition.cs" Link="Calendar/CalendarDefinition.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/SimulationCalendar.cs" Link="Calendar/SimulationCalendar.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/SimulationDate.cs" Link="Calendar/SimulationDate.cs" />
+  </ItemGroup>
+</Project>

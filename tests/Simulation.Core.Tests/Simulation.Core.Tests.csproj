@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsTestProject>true</IsTestProject>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>9.0</LangVersion>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <ProjectReference Include="../../src/Simulation.Core/Simulation.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarCoreTests.cs" Link="Calendar/CalendarCoreTests.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarParityTests.cs" Link="Calendar/CalendarParityTests.cs" />
+  </ItemGroup>
+</Project>

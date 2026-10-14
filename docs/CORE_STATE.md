@@ -9,26 +9,16 @@ Production base for CORE-A: `codex/phase12/canonical` at
 
 ## CORE-A — Calendar Shared Assembly
 
-**Status:** implementation and review remediation are committed. Independent
-exact-tip review passed candidate `2062e616d5a6bc53a2f154f33e9f4887a44972fe`
-and is recorded at `ad4d141d0ec00dee6b776d9373187173a330f0cc` on
-`codex/core/CORE-A-calendar-review-2062e616`. Canonical promotion remains
-blocked by the durable .NET result-evidence/privacy gate below. The
-original cold/warm .NET TRX files are preserved byte-for-byte in protected
-local evidence, but are not published because their metadata contains a local
-account identifier and checkout paths. The required durable result-evidence
-gate is unresolved. See
-[`CORE-A validation record`](validation/COREA_CalendarSharedAssembly/VALIDATION.md).
+**Current status (2026-10-14):** the promoted TRX packager produced and privately compared the cold/warm .NET package; package integrity and privacy checks passed. The original candidate `f0bcb3e873fcf32df92c9dc3bc1a1ad20dae77d4` received exact-tip `NEEDS_CHANGES` because its validation record named a manifest hash matching neither the committed blob nor the Windows checkout. The current-base integration is being prepared on `codex/core/COREA-calendar-current-integration` from `codex/core/canonical` at `c68ca7a9a51df178ba0b889096c762c3fd7f4034`; it corrects the representation-specific hash while preserving the implementation, source identity, tests and results. A fresh exact-tip integration review is pending. The promoted packager currently fails to expose the Unity/NUnit verifier after importing its TRX adapter; this separate CLI defect must be corrected and the retained Unity package reverified before CORE-A promotion. CORE-A is not yet promoted. See the [CORE-A validation record](validation/COREA_CalendarSharedAssembly/VALIDATION.md) and [normalized TRX evidence record](validation/COREA_TRX_EVIDENCE_V1/VALIDATION.md).
 
-- Candidate branch: `codex/core/CORE-A-calendar`.
+- Preserved source candidate: `codex/core/CORE-A-calendar` at `f0bcb3e873fcf32df92c9dc3bc1a1ad20dae77d4`.
+- Current-base integration branch: `codex/core/COREA-calendar-current-integration`, based on `codex/core/canonical` at `c68ca7a9a51df178ba0b889096c762c3fd7f4034`.
 - Calendar implementation commit: `e702cdf196703ead98d8d37ff818bd1c0d0219e4`.
 - Parser remediation commit: `f725fa87c6d1259d822180b84856b747c9e02980`.
 - Parser remediation tree: `bdb6b9b63532e780661477430099a835d2b4f086`.
 - Scope: one engine-free `Simulation.Core` assembly for the existing calendar,
   date and age capability; Unity and .NET compile the same source.
-- Promotion target: `codex/core/canonical`, to be initialized from current
-  reviewed production state under the approved CORE-A handoff. It has not been
-  created or advanced by this candidate.
+- Promotion target: `codex/core/canonical`, currently at `c68ca7a9a51df178ba0b889096c762c3fd7f4034`; this integration candidate has not yet been promoted.
 - Numbered Phase canonicals were not changed.
 
 The calendar implementation and test source remain unchanged by the parser
@@ -38,9 +28,7 @@ now requires and persists those fields; focused self-tests and a clean .NET
 validation rerun pass. The first review's record is
 `c4c73bae26ecbacdb9e761821f408534610622a2`. The fresh exact-tip review of
 `2062e616` passed at `ad4d141d0ec00dee6b776d9373187173a330f0cc` and confirms
-that the parser finding is resolved. The original reports remain protected
-locally because publication would disclose private run metadata; the review
-does not resolve this separate durable-evidence gate.
+that the parser finding is resolved. The original reports remain protected locally because publication would disclose private run metadata. The normalized privacy-safe package recorded below provides complete public result evidence; its package-record hash correction remains under exact-tip review. The raw reports remain unmodified and private.
 
 ## CORE-B — Deterministic and Temporal primitives
 
@@ -99,12 +87,4 @@ separate archive-only verification reported
 This trial was made before canonical promotion and is not the final CORE-A
 evidence package.
 
-**CORE-A remains blocked at its separate durable evidence gate.** The final
-cold/warm CORE-A package must be generated and privately compared using the
-promoted tool, then recorded with its source/test identity and independent
-applicability review. The CORE-A candidate, its existing execution evidence,
-and original reports remain preserved; no CORE-A code is promoted by this Tools
-delivery. No P12, P13, CORE-B, or CORE-C readiness is implied by this
-promotion. CORE-B still requires CORE-A promotion and current-baseline
-revalidation; CORE-C still requires CORE-A and its documented P14-B
-dependency.
+**CORE-A evidence update:** the promoted TRX tool generated and privately compared the final cold/warm package. Its source identities, results and privacy boundary are recorded in `validation/COREA_TRX_EVIDENCE_V1/VALIDATION.md`. The old-base package candidate received `NEEDS_CHANGES` at `451ba62b1419a3936abcc28bc60f14eaa17eecfc` because its manifest-hash label matched neither the committed UTF-8/LF blob nor the Windows CRLF checkout. The current-base integration corrects that label; fresh exact-tip review is pending. A separate promoted-tool module-load-order defect blocks current CLI verification of the retained Unity package; the stored results remain unchanged. No CORE-A code is promoted. CORE-A makes no P12-A, P13, cross-build compatibility, or broader .NET hosting claim. CORE-B still requires CORE-A promotion and current-baseline revalidation; CORE-C still requires CORE-A and its documented P14-B dependency.

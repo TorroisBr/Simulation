@@ -1,0 +1,9 @@
+{
+  "name": "Simulation.Core",
+  "autoReferenced": true,
+  "noEngineReferences": true,
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false
+}

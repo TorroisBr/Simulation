@@ -19,6 +19,14 @@
 *.blend1
 *.blend1.meta
 
+# Bounded .NET Core validation outputs stay outside Unity import roots.
+/src/Simulation.Core/bin/
+/src/Simulation.Core/obj/
+/tests/Simulation.Core.Tests/bin/
+/tests/Simulation.Core.Tests/obj/
+/tools/Simulation.Core.CalendarDemo/bin/
+/tools/Simulation.Core.CalendarDemo/obj/
+
 # MemoryCaptures can get excessive in size.
 # They also could contain extremely sensitive data
 /[Mm]emoryCaptures/
@@ -44,6 +52,9 @@
 ExportedObj/
 .consulo/
 *.csproj
+!/src/Simulation.Core/Simulation.Core.csproj
+!/tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj
+!/tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj
 *.unityproj
 *.sln
 *.slnx
