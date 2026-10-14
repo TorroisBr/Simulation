@@ -178,6 +178,7 @@ public static class DailyV1DefinitionIdentity
             if (action.statusModifiers != null) foreach (DailyV1StatusWeightModifier weight in action.statusModifiers) AddIfPresent(selectedStatuses, weight?.status);
         }
         List<string> orderedStatuses = new List<string>(selectedStatuses);
+        orderedStatuses.RemoveAll(value => value == null);
         orderedStatuses.Sort(StringComparer.Ordinal);
         foreach (string status in orderedStatuses) Add(records, "status", status);
 
@@ -290,7 +291,7 @@ public static class DailyV1DefinitionIdentity
     private static void AddIfPresent(HashSet<string> values, string value) { if (value != null) values.Add(value); }
     private static void AddAll(HashSet<string> values, IEnumerable<string> source) { if (source != null) foreach (string value in source) AddIfPresent(values, value); }
 
-    private static void Add<T>(List<string> records, string kind, params T[] values)
+    private static void Add(List<string> records, string kind, params object[] values)
     {
         StringBuilder record = new StringBuilder(kind);
         foreach (object value in values)

@@ -3,13 +3,14 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
-using System.Security.Cryptography;
 using System.Text;
 using UnityEngine;
 
 /// <summary>Unity-only boundary converting the selected Daily-v1 profile to copied Core values.</summary>
 public static class DailyV1DefinitionAdapter
 {
+    private const int MaxSelectedAssets = 65536;
+    private const int MaxSelectedValueDepth = 64;
     public static bool TryCreate(SimulationConfigData source, EffectiveSimulationConfiguration effective,
         CalendarDefinition calendar, IReadOnlyList<string> stageOrder, string hexConvention,
         string hexCanonicalOrder, out DailyV1EffectiveDefinitions definitions, out string diagnostic)
@@ -23,35 +24,34 @@ public static class DailyV1DefinitionAdapter
             PrimeLazyDefaults(source);
             SortedDictionary<string, ScriptableObject> assets = CaptureAssets(source);
             DailyV1SimulationConfigData configValues = ConvertSimulationConfigData(source);
-            SortedDictionary<string, DailyV1ContentRecord> content = CaptureContentRecords(source, assets);
-            List<DailyV1CityDefinition> cities = new List<DailyV1CityDefinition>();
-            List<DailyV1ItemDefinition> items = new List<DailyV1ItemDefinition>();
-            List<DailyV1NpcDefinition> npcs = new List<DailyV1NpcDefinition>();
-            List<DailyV1JobDefinition> jobs = new List<DailyV1JobDefinition>();
-            List<DailyV1ActionDefinition> actions = new List<DailyV1ActionDefinition>();
-            List<DailyV1StatusDefinition> statuses = new List<DailyV1StatusDefinition>();
+            List<DailyV1CityData> cities = new List<DailyV1CityData>();
+            List<DailyV1ItemData> items = new List<DailyV1ItemData>();
+            List<DailyV1NpcData> npcs = new List<DailyV1NpcData>();
+            List<DailyV1NpcJobData> jobs = new List<DailyV1NpcJobData>();
+            List<DailyV1NpcActionData> actions = new List<DailyV1NpcActionData>();
+            List<DailyV1NpcStatusData> statuses = new List<DailyV1NpcStatusData>();
             foreach (ScriptableObject asset in assets.Values)
             {
                 string id = AssetId(asset);
-                if (asset.GetType() == typeof(CityData)) cities.Add(new DailyV1CityDefinition(asset.GetType().FullName, id, ConvertCityData(asset)));
-                else if (asset.GetType() == typeof(ItemData)) items.Add(new DailyV1ItemDefinition(asset.GetType().FullName, id, ConvertItemData(asset)));
-                else if (asset.GetType() == typeof(NpcData)) npcs.Add(new DailyV1NpcDefinition(asset.GetType().FullName, id, ConvertNpcData(asset)));
-                else if (asset.GetType() == typeof(NpcJobData)) jobs.Add(new DailyV1JobDefinition(asset.GetType().FullName, id, ConvertNpcJobData(asset)));
-                else if (asset.GetType() == typeof(NpcActionData)) actions.Add(new DailyV1ActionDefinition(asset.GetType().FullName, id, ConvertNpcActionData(asset)));
-                else if (asset.GetType() == typeof(NpcStatusData)) statuses.Add(new DailyV1StatusDefinition(asset.GetType().FullName, id, ConvertNpcStatusData(asset)));
+                if (asset.GetType() == typeof(CityData)) cities.Add(ConvertCityData(asset));
+                else if (asset.GetType() == typeof(ItemData)) items.Add(ConvertItemData(asset));
+                else if (asset.GetType() == typeof(NpcData)) npcs.Add(ConvertNpcData(asset));
+                else if (asset.GetType() == typeof(NpcJobData)) jobs.Add(ConvertNpcJobData(asset));
+                else if (asset.GetType() == typeof(NpcActionData)) actions.Add(ConvertNpcActionData(asset));
+                else if (asset.GetType() == typeof(NpcStatusData)) statuses.Add(ConvertNpcStatusData(asset));
                 else throw new InvalidOperationException("The selected Daily-v1 profile contains an unsupported populated definition family: " + asset.GetType().FullName);
             }
             DailyV1CalendarDefinition resolvedCalendar = new DailyV1CalendarDefinition(
                 calendar.MonthsPerYear, calendar.WeeksPerMonth, calendar.DaysPerWeek, calendar.monthLengths);
-            definitions = new DailyV1EffectiveDefinitions(configValues, effective, resolvedCalendar, null,
-                cities, items, npcs, jobs, actions, statuses, content, stageOrder,
-                source.GenesisProfileContractIdentity, SimulationGenesisPipeline.GeographyProfileContractIdentity,
+            definitions = DailyV1EffectiveDefinitions.CreateSelectedSchema(configValues, effective, resolvedCalendar,
+                cities, items, npcs, jobs, actions, statuses, stageOrder,
+                SimulationGenesisPipeline.ProfileContractIdentity, SimulationGenesisPipeline.GeographyProfileContractIdentity,
                 SimulationGenesisPipeline.GeographyStageId, hexConvention, hexCanonicalOrder);
             return true;
         }
         catch (Exception exception) when (exception is ArgumentException || exception is InvalidOperationException
             || exception is OverflowException || exception is TargetInvocationException
-            || exception is CryptographicException || exception is EncoderFallbackException)
+            || exception is EncoderFallbackException)
         {
             definitions = null;
             diagnostic = exception.Message;
@@ -92,14 +92,14 @@ public static class DailyV1DefinitionAdapter
             foreach (FieldInfo field in SerializableFields(asset.GetType()))
                 CollectReferences(field.GetValue(asset), assets, pending, visited, 0);
         }
-        if (assets.Count > DailyV1ContentProjection.MaxCatalogAssets) throw new InvalidOperationException("The selected content graph exceeds its asset bound.");
+        if (assets.Count > MaxSelectedAssets) throw new InvalidOperationException("The selected content graph exceeds its asset bound.");
         return assets;
     }
 
     private static void CollectReferences(object value, SortedDictionary<string, ScriptableObject> assets,
         Queue<ScriptableObject> pending, HashSet<object> visited, int depth)
     {
-        if (depth > DailyV1ContentProjection.MaxValueDepth) throw new InvalidOperationException("The selected definition graph exceeds its depth bound.");
+        if (depth > MaxSelectedValueDepth) throw new InvalidOperationException("The selected definition graph exceeds its depth bound.");
         if (value == null) return;
         if (value is UnityEngine.Object unityObject)
         {
@@ -132,56 +132,6 @@ public static class DailyV1DefinitionAdapter
     private static bool IsSelectedAssetType(Type type) => type == typeof(CityData) || type == typeof(ItemData)
         || type == typeof(NpcData) || type == typeof(NpcJobData) || type == typeof(NpcActionData)
         || type == typeof(NpcStatusData);
-
-    private static SortedDictionary<string, DailyV1ContentRecord> CaptureContentRecords(
-        SimulationConfigData root, SortedDictionary<string, ScriptableObject> assets)
-    {
-        SortedDictionary<string, DailyV1ContentRecord> records = new SortedDictionary<string, DailyV1ContentRecord>(StringComparer.Ordinal);
-        records.Add("profile-config/SimulationConfigData", CreateContentRecord(root));
-        foreach (KeyValuePair<string, ScriptableObject> asset in assets) records.Add(asset.Key, CreateContentRecord(asset.Value));
-        return records;
-    }
-
-    private static DailyV1ContentRecord CreateContentRecord(object value)
-    {
-        Type type = value.GetType();
-        List<DailyV1DefinitionField> fields = new List<DailyV1DefinitionField>();
-        foreach (FieldInfo field in SerializableFields(type))
-            fields.Add(new DailyV1DefinitionField(field.DeclaringType?.FullName ?? type.FullName, field.Name,
-                CreateContentValue(field.GetValue(value), 0)));
-        return new DailyV1ContentRecord(type.FullName ?? type.Name, fields);
-    }
-
-    private static DailyV1DefinitionValue CreateContentValue(object value, int depth)
-    {
-        if (depth > DailyV1ContentProjection.MaxValueDepth) throw new InvalidOperationException("Content value exceeds its depth bound.");
-        if (value == null) return DailyV1DefinitionValue.Null(null);
-        Type type = value.GetType();
-        string token = type.FullName ?? type.Name;
-        if (value is UnityEngine.Object unityObject)
-        {
-            if (!(unityObject is ScriptableObject asset)) throw new InvalidOperationException("Unsupported Unity reference in content catalog.");
-            return DailyV1DefinitionValue.Reference(token, AssetId(asset), AssetKey(asset));
-        }
-        if (type.IsEnum) return DailyV1DefinitionValue.Enum(token, Convert.ToInt32(value, CultureInfo.InvariantCulture), Convert.ToString(value, CultureInfo.InvariantCulture));
-        if (value is string || value is bool || value is byte || value is sbyte || value is short || value is ushort
-            || value is int || value is uint || value is long || value is ulong || value is char || value is float
-            || value is double || value is decimal || value is Guid || value is DateTime || value is TimeSpan)
-            return DailyV1DefinitionValue.ScalarValue(token, value);
-        if (value is IDictionary) throw new InvalidOperationException("Dictionary values are not admitted in the authored Daily-v1 catalog.");
-        if (value is IList list)
-        {
-            List<DailyV1DefinitionValue> items = new List<DailyV1DefinitionValue>();
-            foreach (object item in list) items.Add(CreateContentValue(item, depth + 1));
-            return DailyV1DefinitionValue.List(token, items);
-        }
-        List<DailyV1DefinitionField> fields = new List<DailyV1DefinitionField>();
-        foreach (FieldInfo field in SerializableFields(type))
-            fields.Add(new DailyV1DefinitionField(field.DeclaringType?.FullName ?? token, field.Name,
-                CreateContentValue(field.GetValue(value), depth + 1)));
-        if (fields.Count == 0) throw new InvalidOperationException("Unsupported authored content value: " + token);
-        return DailyV1DefinitionValue.Object(token, fields);
-    }
 
     private static List<FieldInfo> SerializableFields(Type type)
     {

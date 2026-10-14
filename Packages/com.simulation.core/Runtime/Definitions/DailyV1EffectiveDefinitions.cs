@@ -157,6 +157,32 @@ public sealed class DailyV1EffectiveDefinitions
     public string HexCoordinateConvention { get; }
     public string HexCoordinateCanonicalOrder { get; }
 
+    /// <summary>
+    /// Creates the selected typed Daily-v1 graph. Serialized compatibility projection is
+    /// attached separately by the selected content-capture path.
+    /// </summary>
+    public static DailyV1EffectiveDefinitions CreateSelectedSchema(
+        DailyV1SimulationConfigData configuration,
+        EffectiveSimulationConfiguration effectiveConfiguration,
+        DailyV1CalendarDefinition resolvedCalendar,
+        IEnumerable<DailyV1CityData> cities, IEnumerable<DailyV1ItemData> items,
+        IEnumerable<DailyV1NpcData> npcs, IEnumerable<DailyV1NpcJobData> jobs,
+        IEnumerable<DailyV1NpcActionData> actions, IEnumerable<DailyV1NpcStatusData> statuses,
+        IEnumerable<string> stageOrder, string profileContractIdentity,
+        string geographyProfileContractIdentity, string geographyStageIdentity,
+        string hexCoordinateConvention, string hexCoordinateCanonicalOrder)
+    {
+        return new DailyV1EffectiveDefinitions(configuration, effectiveConfiguration, resolvedCalendar, null,
+            Wrap(cities, value => new DailyV1CityDefinition("CityData", value.id, value)),
+            Wrap(items, value => new DailyV1ItemDefinition("ItemData", value.id, value)),
+            Wrap(npcs, value => new DailyV1NpcDefinition("NpcData", value.id, value)),
+            Wrap(jobs, value => new DailyV1JobDefinition("NpcJobData", value.id, value)),
+            Wrap(actions, value => new DailyV1ActionDefinition("NpcActionData", value.id, value)),
+            Wrap(statuses, value => new DailyV1StatusDefinition("NpcStatusData", value.id, value)),
+            null, stageOrder, profileContractIdentity, geographyProfileContractIdentity,
+            geographyStageIdentity, hexCoordinateConvention, hexCoordinateCanonicalOrder);
+    }
+
     internal DailyV1EffectiveDefinitions(DailyV1SimulationConfigData configuration,
         EffectiveSimulationConfiguration effectiveConfiguration,
         DailyV1CalendarDefinition resolvedCalendar,
@@ -179,7 +205,7 @@ public sealed class DailyV1EffectiveDefinitions
         this.actions = Freeze(actions);
         this.statuses = Freeze(statuses);
         this.contentRecords = FreezeContent(contentRecords);
-        ContentFingerprint = DailyV1ContentProjection.FingerprintRecords(this.contentRecords);
+        ContentFingerprint = this.contentRecords.Count == 0 ? null : DailyV1ContentProjection.FingerprintRecords(this.contentRecords);
         if (!string.IsNullOrWhiteSpace(contentFingerprint)
             && !string.Equals(ContentFingerprint, contentFingerprint, StringComparison.Ordinal))
             throw new ArgumentException("The supplied content identity does not match the copied projection.", nameof(contentFingerprint));
@@ -205,6 +231,20 @@ public sealed class DailyV1EffectiveDefinitions
             }
         }
         return new ReadOnlyDictionary<string, T>(copy);
+    }
+
+    private static IEnumerable<TWrapper> Wrap<TValue, TWrapper>(IEnumerable<TValue> values,
+        Func<TValue, TWrapper> create)
+        where TValue : class where TWrapper : DailyV1DefinitionRecord
+    {
+        if (values == null) return null;
+        List<TWrapper> result = new List<TWrapper>();
+        foreach (TValue value in values)
+        {
+            if (value == null) { result.Add(null); continue; }
+            result.Add(create(value));
+        }
+        return result;
     }
 
     private static IReadOnlyList<string> FreezeList(IEnumerable<string> values) => values == null
