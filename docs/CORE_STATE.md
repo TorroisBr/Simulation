@@ -108,3 +108,26 @@ delivery. No P12, P13, CORE-B, or CORE-C readiness is implied by this
 promotion. CORE-B still requires CORE-A promotion and current-baseline
 revalidation; CORE-C still requires CORE-A and its documented P14-B
 dependency.
+
+### Unity CLI verifier import-order correction
+
+**Status:** independently reviewed and ready for canonical promotion; the
+canonical ref remains at `c68ca7a9a51df178ba0b889096c762c3fd7f4034` until the
+separate promotion preflight completes.
+
+The exact implementation candidate is
+`2bda6341f3c5e599064e10ccda569237b9aea445` (tree
+`f1d69e18dcf52e4f686116575fceb1729f53b59b`). It loads the TRX adapter before
+the Unity adapter so the shared CLI retains both command sets, and adds a
+subprocess regression that invokes the Unity `Verify` entry point. Independent
+exact-tip review passed at `7f0aeed1a036fe07dc6cd87f91b1c1652c099e8a` on
+`codex/core/TRXUnityVerifierImportFix-review-2bda6341`.
+
+Exact-tip validation passed: TRX evidence suite 144 assertions, Unity evidence
+packager suite 65 assertions (including the real CLI regression), Unity runner
+self-tests 33/33, and `git diff --check`. Archive-only CLI verification of the
+existing TRX package passed with one run and two entries; it correctly reports
+`originalComparisonNotPerformed`. The earlier `originalComparisonVerified`
+result belongs to the promoted `c68ca7a9` tool and remains a separate preserved
+result. The candidate makes no new private-context comparison claim and does
+not alter simulation behavior or package contents.
