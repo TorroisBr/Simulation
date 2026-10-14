@@ -35,8 +35,10 @@ that the parser finding is resolved. The original reports remain protected local
 Technical design candidate `d20c2352887184ccc964d7f9586407d00a727d32` received
 independent PASS. Review record `96a7df8c2ebad6cf5ce3bfe2bde140f98c6e46dc`
 is pushed. CORE-A is promoted in `codex/core/canonical` at
-`96135eb6a87e5217d169a56414a20d21e6649af6`; current canonical is
-`c95752846a0ce0e1ebf985c4d79e0e17b02bb7af`. Current-baseline design
+`96135eb6a87e5217d169a56414a20d21e6649af6`; the canonical used for CORE-B
+current-baseline design was `c95752846a0ce0e1ebf985c4d79e0e17b02bb7af`.
+After CORE-B promotion, the current remote Core canonical advanced to
+`bb82446c279ef47cf0d18a371f4728b2be4090e3`. Current-baseline design
 revalidation passed at review record
 [`CORE_B_CURRENT_BASELINE_REVALIDATION_C957528.md`](reviews/CORE_B_CURRENT_BASELINE_REVALIDATION_C957528.md)
 (`3eb18a6a09ee430e15b2d479c02031b221443fd8`). It confirmed the CORE-A
@@ -63,9 +65,10 @@ CORE-B was promoted to `codex/core/canonical` on 2026-10-14 by fast-forward from
 
 Technical design candidate `e80ae27cdf597e9f551fe94dd22827f59636712a` received
 independent PASS after correcting the prepared-route callback count. Durable
-review record `cb98d3e99c9491ce2c34278516272763333b271e` is pushed. CORE-C
-remains design-reviewed; its bounded implementation follows the documented
-CORE-A and P14-B dependencies.
+review record `cb98d3e99c9491ce2c34278516272763333b271e` is pushed. CORE-C's
+bounded implementation follows the documented CORE-A and P14-B dependencies.
+Its candidate and exact validation are recorded in
+[`validation/COREC_FiniteSource/VALIDATION.md`](validation/COREC_FiniteSource/VALIDATION.md).
 
 ## Readiness boundary
 
@@ -82,13 +85,15 @@ hotspots; CORE-B is sequencing, not a design or dependency blocker. The older
 `WAIT_DEPENDENCY` and pending-review wording in the CORE-C design is superseded
 by its current review records and this State. CORE-A and P14-B are promoted;
 CORE-B is now promoted and the serialized integration window is clear. The
-CORE-C checkpoint is therefore `READY_FOR_IMPLEMENTATION` within the exact
-reviewed P14-B extraction boundary. The implementation must still satisfy the
-design's Unity numeric-baseline, shared Core/Unity parity, owner-adapter,
-callback-order, P14-C regression, Market/transaction, ALL EditMode, official
-Smoke, and applicable long-run gates before exact-tip code review and promotion.
-No claim is made about P12 readiness, equivalent .NET P12 continuation, P13,
-full world hosting, or broader simulation hosting.
+CORE-C checkpoint was `READY_FOR_IMPLEMENTATION` within the exact reviewed
+P14-B extraction boundary. Candidate `b33a302f9b78e8f35ba0ea94bf7168e6ee94f86f`
+is submitted against Core canonical `bb82446c279ef47cf0d18a371f4728b2be4090e3`
+with implementation tree `b5ad86fd6114db106d7223e6e70da3bd5ff2b62c` and final
+candidate tree `170d95b3fa7fc73a069a472f029261e880680415`. Focused, cold/warm
+.NET, ALL EditMode, Smoke and `git diff --check` validation passed. Independent
+exact-tip implementation review remains pending. No claim is made about P12
+readiness, equivalent .NET P12 continuation, P13, full world hosting, or
+broader simulation hosting.
 
 ## TRX-EVIDENCE-v1 — shared .NET evidence packaging
 
