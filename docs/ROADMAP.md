@@ -10,7 +10,7 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 | 9 — Initial Deterministic Genesis v1 | **Closed within approved scopes.** P9-A: promoted authored-bootstrap genesis. P9-B: promoted at `d9a62d7`; one authored P8-A Hex/Location source for P10 through the same deterministic pre-start pipeline. The approved closure record is canonical at `3bd0eb3`; no procedural generation, Ruin/topology, population/backstory, runtime expansion, or Mod API/loader scope is implied. |
 | 10 — Local Generation & Pre-start Authoring | Local content/topology generated or authored into the same initial ontology. |
 | 11 — Actor Perspective & Commands v1 | Actor-limited information/decision authority and validated external commands. |
-| 12 — Save & Deterministic Continuation | **Closed within the accepted `UnityBootstrap-Daily-v1` same-build/current-host scope.** Formal audit and deferred limits: [`PHASE12_STATE.md`](PHASE12_STATE.md) and [`PHASE12_CLOSURE_RECORD.md`](PHASE12_CLOSURE_RECORD.md). |
+| 12 — Save & Deterministic Continuation | **Closed within same-build/current-host UnityBootstrap-Daily-v1.** P12-A–G promoted; no broader profile or cross-host/build guarantee. |
 | 13 — Historical Reconstruction & Fork | Reconstruct and independently continue any actually simulated boundary. |
 | 14 — Productive Sources & Material Flow v1 | Bounded productive-source and material-flow truth. |
 | 15 — Runtime Construction & Founding v1 | Factual creation of structures/settlements during simulated history. |
@@ -21,6 +21,360 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 | 20 — Multi-participant Activities v1 | Temporary shared activity instances, independent participation decisions, future commitments and validated coordinated start/execution over the temporal foundation. |
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
+
+## CORE-A evidence-path refresh — 2026-10-13
+
+CORE-A candidate `74677a0b5b74c7814874dd2d2b11aead2891bc42` has independent
+implementation/docs PASS and recorded Unity/.NET execution results; it is not
+canonical. Its remaining delivery gate is complete durable privacy-safe .NET
+evidence, including actual access-control remediation and final applicability.
+The [TRX evidence contract and Tools handoff](operations/DOTNET_TRX_EVIDENCE_CONTRACT.md)
+is READY_FOR_IMPLEMENTATION after independent design PASS and architecture
+promotion; CORE-A promotion remains WAIT_DEPENDENCY on that delivery. The adapter
+is not implemented by this documentation.
+
+```text
+reviewed/promoted TRX contract -> implemented/validated/reviewed shared adapter
+  -> verified protected originals + recovered assembly/input binding
+  -> complete public cold/warm package + independent original comparison
+  -> final CORE-A applicability/preflight -> CORE-A canonical promotion
+  -> CORE-B/C actual dependency/baseline refresh
+```
+
+CORE-B design `d20c2352` and CORE-C design `e80ae27c` have independent design
+reviews in candidate refs; neither becomes implementation-ready merely through
+this evidence policy. Active candidates/source/tests and all P12/numbered-phase
+contracts remain untouched. This update introduces no gameplay or new Phase.
+
+## Current infrastructure and P12 refresh — 2026-10-13
+
+The user selected [Unity-independent Simulation Core extraction](architecture/SIMULATION_CORE_EXTRACTION.md)
+as an unnumbered infrastructure workstream. One source implementation is consumed
+by Unity Studio and .NET hosts. [CORE-A calendar handoff](architecture/SIMULATION_CORE_A_MASTER_HANDOFF.md)
+is READY_FOR_IMPLEMENTATION after independent PASS and architecture promotion;
+no migration code is delivered here. CORE-B deterministic/temporal closure and
+CORE-C one pure-definition/domain consumer are READY_FOR_TECHNICAL_DESIGN;
+implementation waits for their named prerequisites and reviewed designs.
+Shared runtime/Lab composition (CORE-D), remaining per-domain closures (CORE-E)
+and equivalent Daily-v1 .NET continuation host (CORE-F) retain the explicit
+WAIT_DEPENDENCY edges in that contract. Cross-host/build save compatibility
+(CORE-X) is separate. No P19 loader or blanket numbered-phase dependency.
+
+Current production `codex/phase12/canonical` at
+`4cc31073f0ec6ba5c718084e4cebd6e914931d5d` records Phase 12 CLOSED,
+formal marker `fbf06fa887a29b92be004d864f4ee98d90926d4a`, within same-build/
+current-host UnityBootstrap-Daily-v1; P12-A–G are promoted. P13 remains
+WAIT_DEPENDENCY on its historical reconstruction/causal and checkpoint contracts,
+not on a reopened P12. Dated B/A/open entries below remain historical snapshots.
+Use the owning current production States/closure evidence, not this architecture
+checkout's older executable tree. No profile growth, cross-host compatibility or
+reopening follows from extraction. CORE-A changes assembly/build identity and
+therefore requires fresh Unity/P12 integration gates before code promotion.
+
+```text
+CORE-A shared calendar -> CORE-B needed deterministic/temporal closure
+CORE-A + selected pure definitions/domain closure CORE-C -> CORE-D same-runtime Lab
+CORE-A -> CORE-E individually reviewed remaining domain closures
+CORE-D + exact Daily-v1 owners/definitions from CORE-E + closed P12 contract
+  -> CORE-F equivalent non-Unity continuation host
+CORE-F + separately approved compatibility contract -> CORE-X save interchange
+P13/P10/P14/P15/P16/P17/P18/P19/P20 -> no blanket wait on extraction
+```
+
+Existing Lab finite-source scenario remains a later real world consumer; CORE-A's
+calendar CLI is a narrower first execution proof. Closed contracts and active
+Master work remain intact; actual assembly/runtime integration uses serialized
+hotspot windows. This documentation promotion is UPSTREAM_IRRELEVANT to unchanged
+in-flight production inputs, not proof that a future source move is irrelevant.
+
+## P17 strategic War direction and first bounded proof — proposed 2026-10-05
+
+The accepted product direction includes territorial, attrition/capability and
+non-territorial/coercive War goals in one persistent strategic model. They are
+not competing definitions of War. The [P17 architecture and technical-entry
+record](architecture/P17_STRATEGIC_WAR_DIRECTION.md) establishes P17-A —
+Explicit Withdrawal Demand and Explicit War Termination — as the smallest
+first proof. P17-A is `READY_FOR_TECHNICAL_DESIGN`, not implementation. The
+direction was independently reviewed and promoted at `6a1b3ef4d0ea32c109fcfb434d3ee00d05cf589a`.
+
+P17-A starts with an existing two-sided P7 War, two Faction participants and
+one ArmedForce bound to each side. Faction A's one actual goal is for B's
+selected force to leave a specified Hex through P16-A's one validated passage
+crossing. The committed P16 receipt supplies the operational evidence. Goal
+satisfaction does not end War; a separate explicit concession input ends this
+bounded two-participant War with a recorded reason. No control, occupation,
+sovereignty, jurisdiction or ownership changes follow from the crossing or a
+Battle. The two participants and one goal are fixture limits only.
+
+```text
+P7 persistent War/force bindings + Faction identity + P8 passage truth
+  + promoted P16-A one-hop movement/receipt
+  → P17-A bounded technical design → reviewed implementation candidate
+P17-A War state + §92A owner entry + P12 selected-profile exclusion/rejection
+  → P17-A domain promotion gate (no full-P12 prerequisite)
+P17-A + explicit military-control/occupation authority
+  → later territorial War goal consumer
+P17-A + P7/P14/P16 capability facts + participant Knowledge/decisions
+  → later bounded attrition/capability consumer
+P12 exact chosen-profile continuation + recoverable War/P16 inputs
+  → supported P13 historical reconstruction/fork for that profile
+P19 loader and P20 small-group Activity → no P17-A dependency
+```
+
+P7 `PersistentWarStore` remains the only War authority; Battle, movement,
+supply and political/territorial facts remain with their own owners.
+P17-A introduces no universal War winner, exhaustion meter, diplomacy,
+government, Campaign or War AI. Its demonstrability classification is
+`FOLLOW-UP_DEMONSTRATION`: a later Lab scenario should show the goal before and
+after the real crossing, War continuing after fulfillment, then ending for an
+explicit reason. The Lab path is not a hidden gate on the domain checkpoint;
+prefer the human scenario before formal Phase 17 closure when practical.
+Implementation must serialize War/runtime/P16/P12 hotspots with active Master
+work. The earlier P17 `DEFERRED` entries below describe their dated planning
+snapshots and are superseded by this promoted direction.
+
+## Simulation Lab and human demonstrability — approved supporting direction
+
+The [Simulation Lab direction and dependency assessment](architecture/SIMULATION_LAB_DIRECTION.md)
+adds a cross-cutting demonstrability check to **future** bounded checkpoint
+designs. It establishes one cumulative, Unity-independent scenario host as an
+unnumbered supporting workstream, now `READY_FOR_TECHNICAL_DESIGN`, not
+`IMPLEMENTATION_READY` or a new numbered Phase. The host consumes existing
+Simulation authorities and read capabilities; its first executable technical
+scope requires separate design, review and implementation authorization. It
+does not make a production UI, P19 loader, whole-World exporter or full P12
+save profile a common prerequisite.
+
+The recommended first useful scenario consumes the already promoted P14-B
+finite-source capability: run a small world, advance it and observe source
+reserve, produced stock and the exhaustion boundary. The Lab scenario still
+needs a reviewed non-Unity composition/read path and is not delivered by the
+domain promotion. It adds no retroactive requirement to P14-B. A smaller
+delivered capability may be used to prove host startup and authority
+reuse without falsely demonstrating finite depletion. Subsequent consumers
+attach only after their own capabilities and readable facts exist:
+
+| Lab consumer | Human observation | Specific gate; no automatic Phase dependency |
+|---|---|---|
+| P10 generated topology | Seeded site topology and stable site identity, preferably as a graph. | P10-B is promoted; Lab still needs non-Unity composition and a supported topology read. |
+| P14 material flow | Reserve, production, stock and exhaustion. | P14-B is promoted; Lab still needs coherent reserve/stock observation and non-Unity execution. |
+| P15 construction | Structure absent before, present after the approved runtime mutation. | P15-A is promoted; Lab still needs a supported non-Unity operation and factual structure read. |
+| P16 movement | Force position and carried supply before/after one passage. | P16-A is promoted; Lab still needs a supported non-Unity operation and factual military/spatial reads. |
+| P20 shared activity | Independent decisions, coordinated start/lifecycle and individual effects. | P20-A synthetic shared behavior is promoted; Lab still needs a non-Unity execution/observation path. P20-B remains promoted Daily-profile census admission. P20-C joint travel follows the current-base design/handoff gate below. |
+| P12 continuation | Save, advance, restore and compare a supported profile. | The specific P12 save/load continuation capability and its exact owner coverage. |
+| P13 historical fork | Inspect a simulated boundary and compare source/fork continuations. | Actual P13 reconstruction/fork capability, recoverable causal history and provenance. |
+
+`Simulation-External` World Explorer can display an approved exported factual
+artifact, including one produced during a Lab run, but its World Exchange
+projection is read-only and does not provide interactive command execution.
+The Lab application host therefore remains Simulation-side; sharing a
+presentation contract is optional and does not merge execution and projection
+ownership. P19 may later consume useful stable contracts, but its general
+loader and mod lifecycle remain deferred. Closed phases and active Master
+candidates retain their existing gates and status. Demonstration classification
+for any subsequent checkpoint follows `EXECUTION_MODEL.md`; a scenario is not
+silently added to an in-flight implementation contract.
+
+## P20 checkpoint identity reconciliation — accepted 2026-10-07
+
+The accepted decision resolves the earlier Roadmap/State conflict:
+**P20-A — Synthetic Multi-participant Operation** remains promoted;
+**P20-B — Daily-profile census admission** retains its already-promoted
+scope, evidence and history; **P20-C — Two-Person Joint Civil Travel** names
+the real travel consumer. Exactly two Persons is the bounded proving fixture,
+not a universal Activity cardinality, role or interval limit.
+
+The dated 2026-10-03 proposal below used P20-B for joint travel. That historical
+label is superseded by P20-C for current planning; old decision/design/review
+records remain identifiable and are not rewritten. P20-B's admission promotion
+neither proves P20-C delivery nor provides a joint-travel Lab demonstration.
+See the [identity handoff](architecture/P20_CHECKPOINT_IDENTITY_RECONCILIATION_HANDOFF.md)
+and [P20-C Master handoff](architecture/P20C_JOINT_CIVIL_TRAVEL_MASTER_HANDOFF.md)
+for the current-base PASS / READY_FOR_IMPLEMENTATION technical verdict and
+Master integration/validation gates. Architecture promotion is complete at
+`eadfce01f44e7d0d649b2b93103abb10a21c6a37`; P20-C is technically
+READY_FOR_IMPLEMENTATION and its Master handoff is current. Existing code is
+not P20-C delivery evidence; its FailedStart reconstruction correction remains
+required before domain promotion.
+
+```text
+P18-A/B/C promoted + P20-A promoted + P8-E promoted
+  → P20-C reviewed design promoted → Master implementation/validation workflow
+P20-B promoted Daily census boundary + current P12 composition
+  → compatibility/rejection gate before P20-C domain promotion
+P20-C promoted + supported non-Unity execution/read path
+  → joint-travel Lab demonstration (follow-up, no retrospective domain gate)
+```
+
+P20-C does not require P18-D, full P12, P13, P19 or persistent Group/Party.
+P11 remains conditional on separately selected external commands. P12's
+`UnityBootstrap-Daily-v1` still admits only absent/empty P20 travel ownership
+and rejects populated state. No implementation or Phase closure is claimed
+by this architecture/planning reconciliation.
+
+## P10 / P14 / P20 promoted product direction — 2026-10-03
+
+A bounded checkpoint may prove one case without making it the universal model. The promoted [product-direction and checkpoint sequence](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) treats varied local topology, finite/multiple sources and shared-activity consumers as compatible capabilities. It preserves promoted P10-A, P14-A and P20-A within their delivered profiles. At this **2026-10-03 planning decision**, the next bounded scopes were `P10-B` deterministic procedural topology for one Ruin instance, `P14-B` finite availability for one source, and `P20-B` joint civil travel by two Persons; all three were then `READY_FOR_TECHNICAL_DESIGN`, not implementation. The status is historical: current owning Phase States record P10-B and P14-B promoted, while the historical P20-B travel label is now superseded by P20-C under the 2026-10-07 reconciliation above. Later P14-C mixed sources waits on the selected P14-B proof; P14-D inter-City transfer still needs a bounded product/transport contract.
+
+```text
+P9 ordered genesis + P8 site/Location + P10-A topology owner
+  → P10-B procedural topology (site-instance identity, scoped random context)
+P14-A source/stock + source-owned finite reserve and coherent stock commit
+  → P14-B finite availability
+P14-B + P14-A → P14-C selected mixed finite/exogenous multi-source proof
+second factual City + applicable transport/transaction contract
+  → future P14-D bounded transfer; autonomous trade is later
+P18-A/B/C + P20-A + P8-E explicit Person travel
+  → P20-C joint-travel technical design (historical 2026-10-03 label: P20-B)
+```
+
+P10-B needs a compatible site-instance/definition seam because P10-A's single-instance profile uses a definition ID as its site key. P14-B must keep its reserve and market-stock mutation coherent without changing P14-A's exogenous meaning. P20-C must coordinate two individual travel transitions without making a two-person roster, shared role or common duration a universal Activity invariant. Future content, trade AI and other multi-person work remain separately scoped. New authoritative state or selected-profile composition still passes architecture §92A and the P12 exclusion/rejection rule; P12's accepted profile does not grow automatically. No closed phase is reopened by this promotion.
+
+## Bounded next-slice planning promotion — 2026-10-03
+
+The user selected P15-A, one runtime structure at an existing canonical Location, and P16-A, one existing ArmedForce crossing one valid passage with finite carried supply. Their [P15-A](design/PHASE15A_RUNTIME_STRUCTURE_CHECKPOINT.md) and [P16-A](design/PHASE16A_SINGLE_PASSAGE_MOVEMENT_CHECKPOINT.md) planning/technical-design contracts were independently reviewed and promoted at architecture content SHA `a2788e6400251b5ce3cf8d2269ea8a5b5fdfd4a8`. They are eligible for the Master implementation workflow, not delivered runtime capabilities. They do not expand `UnityBootstrap-Daily-v1`. P15-A uses a synthetic inert proving structure without material debit because P14-A supplies no applicable generic construction-cost transaction; P16-A extends the existing military position owner with carried supply and must fail closed under the P12 profile admission rule.
+
+The [P13 retention/causal-input design](design/PHASE13_RETENTION_CAUSAL_INPUT_DESIGN.md) and [P19 public-extension-surface design](design/PHASE19_PUBLIC_EXTENSION_SURFACE_DESIGN.md) may advance independently. P13 reconstruction/fork implementation still waits on exact continuation of the chosen world/profile and recoverable causal history. P19 loader implementation remains deferred. The updated [P10/P14/P20 product direction](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) defines small next design scopes without implementing them.
+
+```text
+P8-A Location/anchor + runtime guard → P15-A bounded structure creation
+  P14 material-cost capability → later cost-bearing construction only
+P7 force/position + P8-A/B passage + P14-compatible finite-item semantics
+  → P16-A one-hop military movement and carried-supply debit
+P18 timed execution → later timed construction/military movement only
+P12 selected-profile admission/exclusion → P15-A/P16-A domain promotion gate
+P12 exact chosen-profile continuation + recoverable history + compatible execution
+  → P13 authoritative reconstruction/fork implementation
+P9 ordered genesis seam → bounded P19 public-generation-contract design
+  P19 loader and durable mod state remain separate future gates
+P10-A / P14-A / P20-A → bounded next-slice technical designs above
+```
+
+`SimulationRuntime` and P12-B composition/admission are serial integration hotspots. P15-A owns a new structure store and reads spatial truth. P16-A changes `ArmedForceSpatialStateStore` and reads spatial/passage truth; its P12 census interaction needs a negative admission test. Neither track may edit the active P12-B candidate in parallel. Existing closed phases stay closed; downstream P17 waits for broader military/territorial/War semantics, and the P15/P16 slices make no P18 or P20 capability claim.
+
+## P12 capability-level dependency refresh — 2026-10-03
+
+The [P12 capability DAG audit](architecture/P12_CAPABILITY_DAG_AUDIT.md) separates the accepted `UnityBootstrap-Daily-v1` continuation profile from entry of new authoritative domain capabilities. P12-B is still incomplete on `origin/codex/phase12/canonical` at `54fc23b`; P12-C–G and P12-A retain their accepted chain. Full P12 closure still means exact, validated deterministic continuation for every admitted owner. A newly composed unsupported owner causes profile admission to reject, never silent omission or automatic P12 scope growth. No global `PHASE 12 FOUNDATION READY` milestone is introduced. Each new owner instead passes the architecture §92A continuation-aware entry gate before its bounded checkpoint can be implemented.
+
+The earlier [P12 capability-DAG handoff](architecture/P12_CAPABILITY_DAG_MASTER_HANDOFF.md) records its historical ready set. The [current P15/P16 handoff](architecture/P15_P16_NEXT_SLICES_MASTER_HANDOFF.md) supersedes its P15/P16 product-gate entries; current owning States and code still determine delivery.
+
+While P12-B admission is incomplete, a new owner must either stay outside the selected composition by construction or prove a fail-closed admission hook and negative rejection test before its domain checkpoint is promoted. The latter is a serial P12-B integration, not an independent edit to that hotspot.
+
+| Phase / track | P12 relationship | Next gate |
+|---|---|---|
+| P10 | Pre-start authoring independent; later saved generated profile is a specific P12 integration. | P10-A promoted; P10-B procedural topology is `READY_FOR_TECHNICAL_DESIGN`. Local content remains unselected. |
+| P13 | Strategy and causal-input design independent; actual fork needs complete continuation of its chosen world/profile plus recoverable history. | Retention/causal-input design ready; reconstruction/fork implementation `WAIT_DEPENDENCY`. |
+| P14 | Domain work continuation-aware, not blocked by P12. | P14-A promoted; P14-B finite availability is `READY_FOR_TECHNICAL_DESIGN`. Mixed sources and transfer follow separate gates. |
+| P15 | Domain work continuation-aware, not blocked by P12 closure. | P15-A reviewed design promoted; `READY_FOR_MASTER_IMPLEMENTATION_HANDOFF` for one inert structure at an existing Location, with profile-safety gate before domain promotion. Broader founding remains unselected. |
+| P16 | Domain work continuation-aware, not blocked by P12 closure. | P16-A reviewed design promoted; `READY_FOR_MASTER_IMPLEMENTATION_HANDOFF` for one selected force/one passage/finite supply, with profile-safety gate before domain promotion. Broader routes remain unselected. |
+| P17 | Deferred by strategic/domain/product prerequisites, not P12. | P16, territory/political authority and War semantics; no implementation checkpoint. |
+| P18 | Bounded A–D scope closed; a future intraday save profile requires specific temporal-state coverage. | No reopening for P12. |
+| P19 | Public-surface design may use real consumers; durable mod-state support needs specific P12/P13 integration. | Bounded public-extension-surface design ready; loader scope/implementation remain deferred; no blanket P12 gate. |
+| P20 | P20-A synthetic operation and P20-B Daily-profile census admission are promoted; future shared-activity save needs specific state coverage. | P20-C joint travel uses the refreshed design/Master handoff for exact readiness; no universal two-person rule or P12 scope growth. |
+
+```text
+canonical semantics + per-owner continuation-aware gate
+  → bounded P15/P16 and other runtime designs (after their own product scope)
+P12-B → C → D/E → F → G → P12-A parity → P12 CLOSED for accepted profile
+complete continuation of chosen world/profile + causal history + compatible execution
+  → P13 authoritative reconstruction and independent fork
+```
+
+P13 retention/checkpoint and causal-input design is ready as isolated architecture work; P15-A/P16-A have approved bounded scope and reviewed technical design, so the Master may start isolated implementation workflows before P12 closure after checking current prerequisites. At this dated snapshot, P10-B/P14-B and the travel proposal then labeled P20-B were bounded design candidates, not implementation-ready capabilities. Current travel identity/readiness is P20-C as recorded above. The Master may run P15-A/P16-A in separate worktrees while P12-B continues, serializing shared `SimulationRuntime`, spatial/domain owner and persistence-composition hotspots at integration. No closed phase is reopened by this dependency clarification.
+
+WI-A, FR-B and FR-C integrations and the bounded WX-D World Exchange v2 producer have since been promoted/handed off through P12 canonical. Simulation-External `main` at `0ce8403` owns the v2 `collectionCoverage` contract. These delivered cross-cutting slices do not supply P12 capture, save/load or P13 fork. The checkpoint table below records **their planning readiness when its 2026-10-01 design was promoted**, not current delivery; use current owning States and code for delivery.
+
+## World identity and factual projection — approved direction
+
+The approved architecture study is
+[`design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md`](design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md).
+Architecture §§91A–91B establish durable WorldId semantics for one causal
+continuation branch and a bounded read-only factual projection surface. At
+the architecture approval, individual capabilities were **DESIGN PROPOSED**;
+the subsequent 2026-10-01 design promotion made WI-A and FR-B
+**READY_FOR_IMPLEMENTATION**. The bounded implementations have since been
+promoted as recorded in the 2026-10-03 refresh above and owning States.
+No new numbered phase is assigned: identity belongs at successful world composition, factual
+readers are a later bounded cross-domain capability, and the first World
+Exchange producer is a later adapter integration. Mod-defined projection
+extensions remain deferred until a real P19-compatible consumer exists.
+
+In the approved dependency direction, WorldId aligns with P9's atomic pre-start
+publication without reopening closed P9. Identity-preserving P12 save/load and
+P13 branch publication consume the approved WorldId semantics at their
+respective boundaries. P12-C identity/provenance and future P12-A save-contract
+work must revalidate against them; current P12-B work is not invalidated.
+A Faction projection port and producer do not require P12-A, P12-B, full P12,
+P13 mechanics or P19; selected P12 epoch/quiescence infrastructure may be
+reused only if it covers the projected owner set. A real producer requires a
+stable WorldId, a coherent approved Faction read and an approved external
+collection-coverage contract, with adaptation outside the Simulation domain. P13 still
+requires P12 continuation and recoverable causal history independently of
+projection. See the study's DAG and explicit remaining gates before scheduling.
+
+### Promoted bounded execution checkpoints (2026-10-01)
+
+The reviewed candidate `bd0d7979d556da12fd69046087d75d0a93b1803d`
+was fast-forwarded into this architecture branch. It refines the approved
+direction into **WI-A World Identity Foundation**,
+**FR-B Factual Read Surface Foundation**, **FR-C Faction Factual Reader**,
+and **WX-D First World Exchange Producer**. These are cross-phase
+checkpoint labels, not new numbered Phases; design promotion alone did not
+deliver capabilities. The
+bounded designs are [WI-A](design/WORLD_IDENTITY_FOUNDATION_DESIGN.md),
+[FR-B](design/FACTUAL_READ_SURFACE_FOUNDATION_DESIGN.md),
+[FR-C](design/FACTION_FACTUAL_READER_DESIGN.md), and
+[WX-D](design/WORLD_EXCHANGE_FIRST_PRODUCER_DESIGN.md). Independent review of
+the technical design at `9606263` is recorded in
+[the review record](design/WORLD_PROJECTION_CHECKPOINTS_DESIGN_REVIEW.md).
+The reviewed checkpoint contracts are canonical planning authority. Their
+then-current readiness did not assert delivered implementation or authorize a broader scope.
+
+```text
+approved architecture f27954a + promoted checkpoint contracts bd0d797
+  ├─ WI-A WorldId ────────────────────────────┐
+  └─ FR-B read foundation → FR-C Faction ────┼→ WX-D producer
+                                               ↑
+                         External coverage contract
+```
+
+At design promotion, WI-A and FR-B could be implemented independently in
+isolated worktrees with serial integration at shared P12-B hotspots. FR-C
+required promoted FR-B; WX-D required WI-A, FR-C and an External-owned
+collection-coverage contract. World Exchange v1's mandatory arrays could not
+distinguish unsupported from known-empty, so an honest bounded producer
+awaited that External contract. Simulation-External v2 subsequently supplied
+it, and bounded WX-D was promoted; this architecture branch changes no
+External files.
+
+| Checkpoint | Owner / planning readiness on 2026-10-01 | Hard prerequisites then | Then-current implementation hotspot |
+|---|---|---|---|
+| WI-A | Cross-phase world composition / READY_FOR_IMPLEMENTATION | Approved WorldId semantics | `TesteSimulacao` private-draft/publication gate, `SimulationRuntime`, P18 profile handoff; reconcile and serialize integration with active P12-B bootstrap scope. |
+| FR-B | Cross-domain factual read infrastructure / READY_FOR_IMPLEMENTATION | Approved projection semantics; explicit `UnityBootstrapDailyV1` owner-thread boundary | `SimulationRuntime` read admission plus Faction/Person Store writer guards; serialize runtime integration with active P12-B writer. |
+| FR-C | Faction factual capability / WAIT_DEPENDENCY | FR-B promoted capability | Narrow Faction registration/runtime facade; do not begin implementation before FR-B promotion. |
+| WX-D | Dedicated Simulation integration project / WAIT_DEPENDENCY | WI-A, FR-C, External coverage contract | Adapter project; no direct P12-B runtime write planned. |
+
+Relationship classification: P9 → WI-A is **ARCHITECTURAL_ALIGNMENT**
+(publication seam, no P9 reopening); P18 → WI-A/FR-B is
+**ARCHITECTURAL_ALIGNMENT** (typed identity handoff/completed boundary);
+P12-B → FR-B is **OPTIONAL_REUSE**, not a global coherence proof, while
+P12-B → WI-A is **NO DEPENDENCY** but shares implementation hotspots;
+WI-A → future P12-C/P12-A and P13 is **ARCHITECTURAL_ALIGNMENT** until those
+scopes implement continuation/fork identity, at which point WI-A's promoted
+contract is a **HARD_DEPENDENCY** for their identity-bearing work. P12-A,
+P12-C, full P12 and P13 mechanics → WX-D are **NO DEPENDENCY** for the first
+live artifact. P19 → all four is **NO DEPENDENCY**. Simulation-External
+coverage contract → WX-D is a **HARD_DEPENDENCY**; its TypeScript packages
+remain external authority and are never a Simulation domain dependency.
+
+Reconstruction-sensitive state: the published WorldId is a causal input to
+continuation/fork identity; FR-B/FR-C copy current facts and create no new
+authoritative state; WX-D is a disposable, potentially stale artifact. Future
+P12 preserves WorldId on load, while P13 creates a new one with source-world
+and fork-boundary provenance and must reconcile inherited pre-fork history with
+new post-fork namespaces. Existing closed P9/P18 delivery remains closed;
+active P12-B is not invalidated, and its `SimulationRuntime`/bootstrap
+hotspots require serial integration, not a second concurrent writer.
 
 ## Placement of temporal and extension work
 
@@ -170,3 +524,29 @@ only where that capability is in scope.
 ## Changing the roadmap
 
 Phases may be inserted, split, merged, or reordered when the approved product scope changes. Record the revised objective and dependency impact in this roadmap and affected Briefs; preserve existing Phase State history and stable checkpoint identity or explicitly retire/supersede an ID. Re-evaluate active candidates against the new canonical context. Do not convert a soft ordering preference into a hard dependency, or a proposed scope into constitutional architecture, without review.
+
+## P12-A current entry after B–G completion — 2026-10-12
+
+At P12 remote `25d2dcf1371137ceb0e158eef4ba02d2e2304612`, B–G
+are promoted/complete within their accepted Daily-v1 contracts. The
+[current readiness assessment and Master handoff](architecture/P12A_CURRENT_READINESS_MASTER_HANDOFF.md)
+supersedes earlier dated unmet-owner, missing-inventory and G-pending blockers
+for current planning. P12-A's next work is **READY_FOR_TECHNICAL_DESIGN**,
+not READY_FOR_IMPLEMENTATION or delivered save/load.
+
+```text
+promoted B–G + validated selected inventory (satisfied)
+  → current A schema/codec, detached-input load and lifecycle design
+  → independent technical PASS + recorded bounded execution readiness
+  → A durable capture/load integration + persisted rejection/parity evidence
+  → A completion/promotion in its own State
+  → separate Phase 12 closure audit
+```
+
+No additional B–G checkpoint is required solely to unlock that design.
+The original owner capabilities remain valid; a decoded saved-image route
+must preserve them while replacing the live-source-only integration.
+P12 owning State still records A WAIT_DEPENDENCY until its refined entry
+status is recorded by the Master. The [review](architecture/P12A_CURRENT_READINESS_REVIEW.md)
+passes this assessment only. No routine approval stop, new profile, P13
+readiness or Phase closure is implied; unrelated READY work continues.

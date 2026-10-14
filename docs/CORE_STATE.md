@@ -1,0 +1,97 @@
+# Simulation Core extraction state
+
+This file tracks unnumbered Core infrastructure checkpoints. It does not
+change numbered Phase State or imply Phase readiness.
+
+Architecture approval: `32358d2a0faf511e098c4f295a5132a4bfb8cfb2`.
+Production base for CORE-A: `codex/phase12/canonical` at
+`4cc31073f0ec6ba5c718084e4cebd6e914931d5d`.
+
+## CORE-A — Calendar Shared Assembly
+
+**Status:** implementation and review remediation are committed. Independent
+exact-tip review passed candidate `2062e616d5a6bc53a2f154f33e9f4887a44972fe`
+and is recorded at `ad4d141d0ec00dee6b776d9373187173a330f0cc` on
+`codex/core/CORE-A-calendar-review-2062e616`. Canonical promotion remains
+blocked by the durable .NET result-evidence/privacy gate below. The
+original cold/warm .NET TRX files are preserved byte-for-byte in protected
+local evidence, but are not published because their metadata contains a local
+account identifier and checkout paths. The required durable result-evidence
+gate is unresolved. See
+[`CORE-A validation record`](validation/COREA_CalendarSharedAssembly/VALIDATION.md).
+
+- Candidate branch: `codex/core/CORE-A-calendar`.
+- Calendar implementation commit: `e702cdf196703ead98d8d37ff818bd1c0d0219e4`.
+- Parser remediation commit: `f725fa87c6d1259d822180b84856b747c9e02980`.
+- Parser remediation tree: `bdb6b9b63532e780661477430099a835d2b4f086`.
+- Scope: one engine-free `Simulation.Core` assembly for the existing calendar,
+  date and age capability; Unity and .NET compile the same source.
+- Promotion target: `codex/core/canonical`, to be initialized from current
+  reviewed production state under the approved CORE-A handoff. It has not been
+  created or advanced by this candidate.
+- Numbered Phase canonicals were not changed.
+
+The calendar implementation and test source remain unchanged by the parser
+remediation. The first exact-tip review of `78011db2` found missing TRX run
+identity/summary binding and an absent durable raw-report bundle. The parser
+now requires and persists those fields; focused self-tests and a clean .NET
+validation rerun pass. The first review's record is
+`c4c73bae26ecbacdb9e761821f408534610622a2`. The fresh exact-tip review of
+`2062e616` passed at `ad4d141d0ec00dee6b776d9373187173a330f0cc` and confirms
+that the parser finding is resolved. The original reports remain protected
+locally because publication would disclose private run metadata; the review
+does not resolve this separate durable-evidence gate.
+
+## CORE-B — Deterministic and Temporal primitives
+
+Technical design candidate `d20c2352887184ccc964d7f9586407d00a727d32` received
+independent PASS. Review record `96a7df8c2ebad6cf5ce3bfe2bde140f98c6e46dc`
+is pushed. CORE-B remains design-reviewed, not implementation-ready, until
+CORE-A is promoted and its production-baseline refresh is reviewed.
+
+## CORE-C — Market numerical capability
+
+Technical design candidate `e80ae27cdf597e9f551fe94dd22827f59636712a` received
+independent PASS after correcting the prepared-route callback count. Durable
+review record `cb98d3e99c9491ce2c34278516272763333b271e` is pushed. CORE-C
+remains design-reviewed; its bounded implementation follows the documented
+CORE-A and P14-B dependencies.
+
+## Readiness boundary
+
+CORE-A remains the first implementation checkpoint. CORE-B implementation waits
+for CORE-A promotion and revalidation. CORE-C waits for its design corrections,
+independent PASS, and then its documented dependencies. Full world hosting,
+equivalent .NET P12 continuation, P13 and broader simulation hosting are not
+claimed by CORE-A.
+
+## TRX-EVIDENCE-v1 — shared .NET evidence packaging
+
+**Status:** promoted as shared Core infrastructure. The reviewed implementation
+commit `c555eb21c6f0f658dd851fbeda8d12ac59ddd18c` (tree
+`274cb87538ca0038fd31c35457fd3f99d29ba48d`) is included in the new
+`codex/core/canonical` front, initialized from P12 production base
+`4cc31073f0ec6ba5c718084e4cebd6e914931d5d`. The bounded architecture and
+contract documentation delta is from architecture canonical
+`63d3b8352a450b27b9a5f593c4ea166c0343c59e`; the applicable validation policy
+is the independently promoted `58157f9ac7bf573e9a4ed1b2d485a2db190e7c4f`.
+The durable exact-tip review is
+`551e68fccdd558ac0cf08afa42a937555e9bbede` on
+`codex/tools/trx-evidence-v1-review-c555eb21`.
+
+The shared packager now accepts the reviewed flat VSTest TRX profile while
+preserving the Unity/NUnit default and its existing archive behavior. Exact-tip
+validation passed: TRX synthetic tests 116 assertions, shared packager tests
+64 assertions, Unity runner self-tests 33/33, and `git diff --check`. The review
+also passed these exact-tip checks. Unity EditMode/Smoke and .NET domain runs
+were not repeated because this is an evidence-tool/documentation change with no
+domain, runner, fixture, or execution-input change.
+
+**CORE-A remains blocked at its separate durable evidence gate.** The approved
+adapter has not yet produced the actual cold/warm CORE-A package or completed
+private original-to-normalized comparison. The CORE-A candidate, its existing
+execution evidence, and its original reports remain preserved; no CORE-A code
+is promoted by this Tools delivery. No P12, P13, CORE-B, or CORE-C readiness is
+implied by the packager promotion. CORE-B still requires CORE-A promotion and
+current-baseline revalidation; CORE-C still requires CORE-A and its documented
+P14-B dependency.
