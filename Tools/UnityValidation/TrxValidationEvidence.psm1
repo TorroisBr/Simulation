@@ -1147,7 +1147,7 @@ function Assert-DotNetTrxContextBinding {
         $projected=ConvertTo-TrxProjectedDocument $facts.Document @($context.worktreeRoots);$expected=ConvertTo-TrxCanonicalXml $projected;$actual=$ArchivedEntries[[string]$attempt.normalizedReport.entry]
         if($expected.LongLength -ne $actual.LongLength -or (Get-TrxBytesSha256 $expected) -cne (Get-TrxBytesSha256 $actual)){throw "Archived $label report differs from the full authorized projection of its private original."}
         $after=[IO.File]::ReadAllBytes($path);if((Get-TrxBytesSha256 $after) -cne (Get-TrxBytesSha256 $before)){throw "Private original $label TRX changed during comparison."}
-        $null=Get-TrxRetainedAssemblyInventory $context $Private.SourceRoot $Private.Root $runner
+        $null=Get-TrxRetainedAssemblyInventory $context $Private.SourceRoot $Private.Root $runner $testAssemblyRelative
     }
     Assert-TrxToolManifestBinding $PublicManifest.tool
     $expectedRun=Copy-TrxPublicRun $PublicRun
