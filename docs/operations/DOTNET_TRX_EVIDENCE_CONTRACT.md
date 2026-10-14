@@ -186,7 +186,8 @@ Public manifest data is a **whitelisted projection**, never an unreviewed copy
 of the private runner manifest. Apply the same display-name/host/path rules to
 any corresponding manifest field, preserve result and effective command values,
 and retain only portable relative input/artifact paths and semantic versions.
-Keep raw manifest hash/length privately linked. Do not publish original scalar
+Keep raw manifest **bytes** private; publish their hash/length as the whitelist
+requires, binding the private source without exposing its content. Do not publish original scalar
 username/machine/path values, path maps, per-secret hashes, environment dumps,
 account ACL identifiers or unredacted logs. Publish safe role labels and retention
 locator handles instead; private access/recovery instructions remain private.
@@ -216,10 +217,10 @@ Each `runs[]` item has exactly:
 | runnerRunId | Original private runner manifest runId, 32 hexadecimal characters; no replacement. |
 | source | `{commit,tree,originalInputDigest,inputStable,files,generatedDependencies,influencingChanges}` from original source/input capture, verified against identified tree/context. files/generatedDependencies preserve their original ordered `{path,bytes,sha256}` entries; influencingChanges are `{path,gitStatus,bytes,sha256}` for actual dirty/untracked influencing inputs, empty for clean CORE-A. Each must be covered by the full input inventory; unresolved influence blocks. |
 | originalManifest | `{bytes,sha256}` for actual original private runner manifest; never embed its private text. |
-| producer | `{vstestVersion,sdkVersion,logger,identityMode,provenance}`. Required values 17.14.1, 9.0.315; logger `{file,fileVersion,productVersion,bytes,sha256}` has basename `Microsoft.VisualStudio.TestPlatform.Extensions.Trx.TestLogger.dll`, file version 17.1400.125.42801, product 17.14.1-release-25428-01 and the section 3 identity. identityMode is captured or recovered-validated-output, accurately labeled. provenance is the evidence-ref array below. |
+| producer | `{vstestVersion,sdkVersion,logger,identityMode,provenance}`. Required values 17.14.1, 9.0.315; logger `{file,fileVersion,productVersion,bytes,sha256}` has basename `Microsoft.VisualStudio.TestPlatform.Extensions.Trx.TestLogger.dll`, file version 17.1400.125.42801, product 17.14.1-release-25428-01 and the section 3 identity. identityMode describes the logger binary only (captured or recovered-validated-output). Field-specific provenance separately binds captured log-version facts versus recovered SDK binary identity; no global capture claim. |
 | execution | `{sdkVersion,clrVersion,targetFramework,configuration,osVersion,osArchitecture,processArchitecture,cultures,packageLocks,provenance}`. Preserve actual safe semantic values from original capture/bound evidence, not installation paths/list-runtimes text. packageLocks are original relative `{path,bytes,sha256}` records already in inputs. No environment variables, usernames or machine-name field. |
 | discovery | `{count,cases}` from original test discovery, exact ordered strings/multiset; no renaming or parameter stripping. |
-| commands[] | `{label,executable,argv,exitCode,elapsedMilliseconds,derivation,provenance}` per known original operation. Exact rules below; no invented recorded argv. |
+| commands[] | `{label,executable,workingDirectory,argv,exitCode,elapsedMilliseconds,derivation,provenance}` per known original operation. Exact rules below; no invented recorded argv. |
 | assemblies[] | `{path,fullName,mvid,bytes,sha256,identityMode,observedAtUtc,provenance}` from actual section 7 binding; safe relative output path, original full assembly identity, UUID and byte identity; observation time supplied by fixed recorded/recovery context, not packaging wall clock. |
 | attempts[] | `{label,nativeRunId,nativeRunLabel,originalReport,normalizedReport,summaryOutcome,nativeCounters,caseOutcomeCounts,resultCount,gatePassed,exitCode,elapsedMilliseconds,comparison}`. label cold/warm for current run; nativeRunLabel is `run-` plus unchanged TRX id. originalReport `{bytes,sha256}`; normalizedReport `{entry,bytes,sha256,semanticSha256}`. Counts/outcomes/IDs from independently parsed report; command facts from bound original run; comparison literal `source-projection-verified` only after actual full comparison. Complete cases/details remain in the archived TRX, not duplicated/abridged in JSON. |
 | demonstrations[] | `{label,exitCode,elapsedMilliseconds,output,derivation,provenance}` for claimed human-demo evidence, preserving complete safe original output. Current CORE-A cold/warm CalendarDemo lines are required, unmodified; sensitive/unsupported output blocks, not silently omitted. |
@@ -254,6 +255,15 @@ Command derivation is closed:
   dotnet-runtimes, restore-tests-locked, restore-demo-locked, cold-build, list-tests,
   cold-test, warm-test, cold-demo, warm-demo for current runner. Preserve original
   ordering and command labels; a different runner needs reviewed adapter support.
+- `workingDirectory` is mandatory and checked per command. Project the actual
+  verified execution directory to `<WORKTREE>/` for current CORE-A, or a safe
+  relative suffix under that root for a future reviewed runner. Bind the original
+  private absolute cwd and evidence to the source context; never infer cwd merely
+  from the input-inspection ProjectRoot argument or successful results. If not
+  captured, label it recovered and verify the relative argument -> actual resolved
+  project/output relationship through retained original command logs, recorded
+  generated dependency inputs and TRX assembly targets. Missing binding blocks.
+  No arbitrary external cwd or shell-evaluated command string is supported.
 - `argv` is a token array preserving all option names/order/case and semantic values
   (projects, target/framework, Release configuration, filters, logger filename,
   no-build/no-restore and discovery). Transform only exact token values that are
@@ -276,6 +286,13 @@ Command derivation is closed:
   from the manifest require retained log/source evidence or are left unclaimed
   (optional supporting commands may be absent; mandatory build/test/demo commands
   and their claims may not be invented).
+- CORE-A cwd recovery is feasible: all three retained project.assets.json
+  files still match their original captured hashes and bind restore.projectPath
+  to the same original SDK worktree's Core/test/demo projects. The captured runner
+  uses those explicit relative project arguments, performs no cwd change and all
+  recorded TRX targets resolve to the retained output there. Independent comparison
+  must verify this complete relation and retained logs at packaging time, not just
+  accept this document's assertion. This is recovered cwd, not capture-time cwd.
 - Future vectors actually captured by an approved runner use `derivation=captured`,
   with original manifest field pointers/log linkage and the same projection.
   Selection claims must equal the command/discovery/report multiset; fixture
@@ -556,8 +573,8 @@ producer object/version/binary identity and captured-versus-recovered provenance
 matching the public whitelist (with private source locators); one ordered record
 per gate containing safe gate label, native
 runId, original TRX hash/length and protected locator; original command exit,
-expected discovery multiset, assembly-binding record and private worktree-root
-mapping; retention owner/deadline/ACL-check result. Values must agree with actual
+expected discovery multiset, assembly-binding record, private actual command cwd
+and its recorded/recovered evidence, and private worktree-root mapping; retention owner/deadline/ACL-check result. Values must agree with actual
 sources, not merely the context's claims. Source manifest supplies source/input/
 selection/result facts; the context supplies mapping/recovery, not replacement
 results. Verify original-context-to-runner/TRX agreement before packaging.
