@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
-using System.Text;
 
 public enum SpatialSubjectKind
 {
@@ -399,15 +398,7 @@ internal static class SpatialStableKey
 {
     internal static string Encode(params string[] parts)
     {
-        StringBuilder builder = new StringBuilder();
-        foreach (string part in parts ?? Array.Empty<string>())
-        {
-            string value = part ?? string.Empty;
-            builder.Append(value.Length.ToString(CultureInfo.InvariantCulture));
-            builder.Append(':');
-            builder.Append(value);
-        }
-        return builder.ToString();
+        return StableKeyEncoding.Encode(parts);
     }
 
     internal static string OptionKey(TraversalOptionRef option)

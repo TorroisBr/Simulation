@@ -34,9 +34,30 @@ that the parser finding is resolved. The original reports remain protected local
 
 Technical design candidate `d20c2352887184ccc964d7f9586407d00a727d32` received
 independent PASS. Review record `96a7df8c2ebad6cf5ce3bfe2bde140f98c6e46dc`
-is pushed. CORE-B remains design-reviewed, not implementation-ready, until
-CORE-A is promoted and its production-baseline refresh is reviewed.
+is pushed. CORE-A is promoted in `codex/core/canonical` at
+`96135eb6a87e5217d169a56414a20d21e6649af6`; current canonical is
+`c95752846a0ce0e1ebf985c4d79e0e17b02bb7af`. Current-baseline design
+revalidation passed at review record
+[`CORE_B_CURRENT_BASELINE_REVALIDATION_C957528.md`](reviews/CORE_B_CURRENT_BASELINE_REVALIDATION_C957528.md)
+(`3eb18a6a09ee430e15b2d479c02031b221443fd8`). It confirmed the CORE-A
+calendar/date dependency and no semantic drift, and authorized bounded CORE-B
+implementation from c957. Its evidence-wording clarification is explicitly
+nonblocking: complete privacy-safe normalized public reports and immutable raw
+reports retained in protected storage satisfy the existing evidence policy.
 
+Implementation candidate `codex/core/CORE-B-deterministic-temporal-c957` is
+based on c957 and includes the durable current-baseline review record. The
+DeterministicRandom and LogicalTimeline source moves, shared stable-key encoder,
+SDK compile ownership, conserved shared tests and narrow P12 snapshot bridge are
+implemented. SDK source-closure build passed; shared .NET suite passed 97/97
+with cold/warm CoreValidation; focused Unity RNG/snapshot passed 17/17, focused
+LogicalTimeline passed 38/38, ALL EditMode 3,085/3,085 and official Smoke 5/5.
+The normalized ALL EditMode evidence package is verified. Filtered Smoke
+remains privately retained because the supported packager rejects its
+incoherent aggregate suite counts; its raw report was not modified. See
+[`validation/COREB_DeterministicTemporal/VALIDATION.md`](validation/COREB_DeterministicTemporal/VALIDATION.md).
+This candidate is awaiting independent exact-tip review. It is not promoted and
+makes no P12 readiness claim.
 ## CORE-C — Market numerical capability
 
 Technical design candidate `e80ae27cdf597e9f551fe94dd22827f59636712a` received
@@ -47,11 +68,18 @@ CORE-A and P14-B dependencies.
 
 ## Readiness boundary
 
-CORE-A remains the first implementation checkpoint. CORE-B implementation waits
-for CORE-A promotion and revalidation. CORE-C waits for its design corrections,
-independent PASS, and then its documented dependencies. Full world hosting,
-equivalent .NET P12 continuation, P13 and broader simulation hosting are not
-claimed by CORE-A.
+CORE-A is promoted. CORE-B has passed design review and current-baseline
+revalidation; its bounded implementation candidate is validated and awaiting
+independent exact-tip review.
+CORE-C has an exact design PASS and current-baseline applicability PASS at
+`8fa0408e481f457c153d7552eaed8ed5551cc612` (design PASS record
+`cb98d3e99c9491ce2c34278516272763333b271e`). It can be scheduled after CORE-B
+to serialize the shared Core package, test-project, Market and City integration
+hotspots; CORE-B is sequencing, not a design or dependency blocker. The older
+`WAIT_DEPENDENCY` and pending-review wording in the CORE-C design is superseded
+by its current review record and this State. Full world hosting, equivalent
+.NET P12 continuation, P13 and broader simulation hosting are not claimed by
+CORE-A.
 
 ## TRX-EVIDENCE-v1 — shared .NET evidence packaging
 
@@ -87,7 +115,7 @@ separate archive-only verification reported
 This trial was made before canonical promotion and is not the final CORE-A
 evidence package.
 
-**CORE-A evidence update:** the promoted TRX tool generated and privately compared the final cold/warm package. Its source identities, results and privacy boundary are recorded in `validation/COREA_TRX_EVIDENCE_V1/VALIDATION.md`. The old-base package candidate received `NEEDS_CHANGES` at `451ba62b1419a3936abcc28bc60f14eaa17eecfc` because its manifest-hash label matched neither the committed UTF-8/LF blob nor the Windows CRLF checkout. The current-base integration corrected the label to the committed blob hash and preserved the normalized report and archive bytes. Unity and TRX archive-only CLI verification passed under the promoted verifier correction. The prior private comparison under tool `c68ca7a9` remains the applicable source-comparison result; no comparison under the newer tool is claimed. Exact-tip review passed at `3edc40af75eb4c442b55c398c9cf9309f474c1de`, and the reviewed integration was promoted at `96135eb6a87e5217d169a56414a20d21e6649af6`. CORE-A makes no P12-A, P13, cross-build compatibility, or broader .NET hosting claim. CORE-B now requires current-baseline revalidation; CORE-C still requires current-baseline revalidation and its documented P14-B dependency.
+**CORE-A evidence update:** the promoted TRX tool generated and privately compared the final cold/warm package. Its source identities, results and privacy boundary are recorded in `validation/COREA_TRX_EVIDENCE_V1/VALIDATION.md`. The old-base package candidate received `NEEDS_CHANGES` at `451ba62b1419a3936abcc28bc60f14eaa17eecfc` because its manifest-hash label matched neither the committed UTF-8/LF blob nor the Windows CRLF checkout. The current-base integration corrected the label to the committed blob hash and preserved the normalized report and archive bytes. Unity and TRX archive-only CLI verification passed under the promoted verifier correction. The prior private comparison under tool `c68ca7a9` remains the applicable source-comparison result; no comparison under the newer tool is claimed. Exact-tip review passed at `3edc40af75eb4c442b55c398c9cf9309f474c1de`, and the reviewed integration was promoted at `96135eb6a87e5217d169a56414a20d21e6649af6`. CORE-A makes no P12-A, P13, cross-build compatibility, or broader .NET hosting claim. CORE-B current-baseline revalidation passed; CORE-C current-baseline applicability passed at the cited review record and it is sequenced after CORE-B for shared integration hotspots.
 
 ### Unity CLI verifier import-order correction
 

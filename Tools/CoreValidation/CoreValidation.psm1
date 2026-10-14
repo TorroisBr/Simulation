@@ -19,9 +19,23 @@ function Get-CoreInputSnapshot {
         'Packages/com.simulation.core/Runtime/Calendar/SimulationCalendar.cs.meta',
         'Packages/com.simulation.core/Runtime/Calendar/SimulationDate.cs',
         'Packages/com.simulation.core/Runtime/Calendar/SimulationDate.cs.meta',
+        'Packages/com.simulation.core/Runtime/Determinism/DeterministicRandom.cs',
+        'Packages/com.simulation.core/Runtime/Determinism/DeterministicRandom.cs.meta',
+        'Packages/com.simulation.core/Runtime/Identity/StableKeyEncoding.cs',
+        'Packages/com.simulation.core/Runtime/Identity/StableKeyEncoding.cs.meta',
+        'Packages/com.simulation.core/Runtime/Temporal/LogicalTimeline.cs',
+        'Packages/com.simulation.core/Runtime/Temporal/LogicalTimeline.cs.meta',
         'src/Simulation.Core/Simulation.Core.csproj',
         'tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj',
         'tests/Simulation.Core.Tests/packages.lock.json',
+        'Assets/_Project/Scripts/SpatialRouteKnowledge.cs',
+        'Assets/_Project/Tests/EditMode/Editor/DeterministicRandomTests.cs',
+        'Assets/_Project/Tests/EditMode/Editor/DeterministicRandomRootSnapshotTests.cs',
+        'Assets/_Project/Tests/EditMode/Editor/LogicalTimelineTests.cs',
+        'Assets/_Project/Tests/EditMode/Editor/Core/DeterministicRandomCoreTests.cs',
+        'Assets/_Project/Tests/EditMode/Editor/Core/DeterministicRandomCoreTests.cs.meta',
+        'Assets/_Project/Tests/EditMode/Editor/Core/StableKeyEncodingTests.cs',
+        'Assets/_Project/Tests/EditMode/Editor/Core/StableKeyEncodingTests.cs.meta',
         'Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarCoreTests.cs',
         'Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarCoreTests.cs.meta',
         'Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarParityTests.cs',
@@ -35,7 +49,16 @@ function Get-CoreInputSnapshot {
         'Tools/CoreValidation/README.md'
     )
 
-    $trackedConfig = @(& git -C $root ls-files | Where-Object {
+    $gitPointer = Join-Path $root '.git'
+    if (Test-Path -LiteralPath $gitPointer -PathType Container) {
+        $gitDirectory = $gitPointer
+    } else {
+        $pointerText = Get-Content -LiteralPath $gitPointer -Raw
+        if ($pointerText -notmatch '(?m)^gitdir:\s*(.+?)\s*$') { throw 'Could not resolve the worktree Git directory.' }
+        $gitDirectory = $Matches[1]
+        if (-not [IO.Path]::IsPathRooted($gitDirectory)) { $gitDirectory = [IO.Path]::GetFullPath((Join-Path $root $gitDirectory)) }
+    }
+    $trackedConfig = @(& git "--git-dir=$gitDirectory" "--work-tree=$root" ls-files | Where-Object {
         $_ -match '(^|/)(Directory\.Build\.(props|targets)|Directory\.Packages\.props|NuGet\.Config|nuget\.config|[^/]+\.runsettings)$'
     })
     if ($LASTEXITCODE -ne 0) { throw 'Could not enumerate tracked build configuration inputs.' }

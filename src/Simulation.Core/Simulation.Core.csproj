@@ -7,10 +7,14 @@
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <Deterministic>true</Deterministic>
+    <CheckForOverflowUnderflow>false</CheckForOverflowUnderflow>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/CalendarDefinition.cs" Link="Calendar/CalendarDefinition.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/SimulationCalendar.cs" Link="Calendar/SimulationCalendar.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/SimulationDate.cs" Link="Calendar/SimulationDate.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Determinism/DeterministicRandom.cs" Link="Determinism/DeterministicRandom.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/StableKeyEncoding.cs" Link="Identity/StableKeyEncoding.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Temporal/LogicalTimeline.cs" Link="Temporal/LogicalTimeline.cs" />
   </ItemGroup>
 </Project>

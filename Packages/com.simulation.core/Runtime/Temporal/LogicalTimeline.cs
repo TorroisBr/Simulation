@@ -52,7 +52,7 @@ public sealed class DailyBoundaryOperation
     public string ProfileId { get; }
     public long AbsoluteDay { get; }
     public LogicalTick DueAt { get; }
-    public string OccurrenceId => SpatialStableKey.Encode(WorldId, ProfileId,
+    public string OccurrenceId => StableKeyEncoding.Encode(WorldId, ProfileId,
         AbsoluteDay.ToString(CultureInfo.InvariantCulture));
 
     public DailyBoundaryOperation(string worldId, string profileId, long absoluteDay)
@@ -198,7 +198,7 @@ public sealed class BoundaryContinuationManifest
     {
         if (step == null || step.Ordinal >= steps.Count || !ReferenceEquals(steps[step.Ordinal], step))
             throw new ArgumentException("Step must be the frozen manifest descriptor at its ordinal.", nameof(step));
-        return SpatialStableKey.Encode(ContinuationId, step.Ordinal.ToString(CultureInfo.InvariantCulture), step.StepId);
+        return StableKeyEncoding.Encode(ContinuationId, step.Ordinal.ToString(CultureInfo.InvariantCulture), step.StepId);
     }
     public bool HasSameFrozenContent(BoundaryContinuationManifest other)
     {
@@ -235,7 +235,7 @@ public sealed class BoundaryContinuationManifest
             copy.Add(step);
         }
         BoundaryOccurrenceId = operation.OccurrenceId;
-        ContinuationId = SpatialStableKey.Encode(BoundaryOccurrenceId, subphaseKind, subphaseVersion);
+        ContinuationId = StableKeyEncoding.Encode(BoundaryOccurrenceId, subphaseKind, subphaseVersion);
         SubphaseKind = subphaseKind; SubphaseVersion = subphaseVersion;
         WorldId = operation.WorldId; ProfileId = operation.ProfileId; AbsoluteDay = operation.AbsoluteDay;
         ConfigurationIdentity = configurationIdentity ?? string.Empty;
@@ -630,7 +630,7 @@ public sealed class SimulationTimeline
                         if (activation.Manifest == null || activation.Manifest.BoundaryOccurrenceId != operation.OccurrenceId
                             || activation.Manifest.WorldId != worldId || activation.Manifest.ProfileId != profileId
                             || activation.Manifest.AbsoluteDay != operation.AbsoluteDay
-                            || activation.Manifest.ContinuationId != SpatialStableKey.Encode(operation.OccurrenceId,
+                            || activation.Manifest.ContinuationId != StableKeyEncoding.Encode(operation.OccurrenceId,
                                 activation.Manifest.SubphaseKind, activation.Manifest.SubphaseVersion))
                         { failure = TimelineFailure.ContinuationFailed; return false; }
                         dispatching = true;
@@ -809,9 +809,9 @@ public sealed class SimulationTimeline
 
     private bool IsManifestForThisTimeline(BoundaryContinuationManifest manifest) =>
         manifest != null && manifest.WorldId == worldId && manifest.ProfileId == profileId
-        && manifest.BoundaryOccurrenceId == SpatialStableKey.Encode(worldId, profileId,
+        && manifest.BoundaryOccurrenceId == StableKeyEncoding.Encode(worldId, profileId,
             manifest.AbsoluteDay.ToString(CultureInfo.InvariantCulture))
-        && manifest.ContinuationId == SpatialStableKey.Encode(manifest.BoundaryOccurrenceId,
+        && manifest.ContinuationId == StableKeyEncoding.Encode(manifest.BoundaryOccurrenceId,
             manifest.SubphaseKind, manifest.SubphaseVersion);
 
     private bool TryRestorePublishedBoundaryFacts(IReadOnlyList<BoundaryPublishedFact> facts, out TimelineFailure failure)
@@ -938,7 +938,7 @@ public sealed class SimulationTimeline
         left.OwnerId == right.OwnerId && left.DueWorkId == right.DueWorkId
         && left.OccurrenceSequence == right.OccurrenceSequence;
 
-    private static string Identity(DueWorkReference reference) => SpatialStableKey.Encode(
+    private static string Identity(DueWorkReference reference) => StableKeyEncoding.Encode(
         reference.OwnerId,
         reference.DueWorkId,
         reference.Revision.ToString(CultureInfo.InvariantCulture),

@@ -32,7 +32,7 @@ public sealed class DeterministicRandomState
     internal long ConsumeIndex()
     {
         long current = DrawIndex;
-        DrawIndex++;
+        DrawIndex = unchecked(DrawIndex + 1L);
         return current;
     }
 }
@@ -67,7 +67,7 @@ public sealed class DeterministicRandomRootSnapshot
     public int AlgorithmVersion { get; }
     public int Seed { get; }
 
-    internal DeterministicRandomRootSnapshot(
+    public DeterministicRandomRootSnapshot(
         string schemaId,
         int schemaVersion,
         string providerId,
@@ -113,7 +113,7 @@ public sealed class DeterministicRandomSource : IAuthoritativeRandomSource
             Seed);
     }
 
-    internal static bool TryCreateStagedFromSnapshot(
+    public static bool TryCreateStagedFromSnapshot(
         DeterministicRandomRootSnapshot snapshot,
         out DeterministicRandomSource source,
         out string diagnostic)
