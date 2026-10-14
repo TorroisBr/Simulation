@@ -74,33 +74,11 @@ internal static class P12ACompatibilityDescriptorFactory
 
     private static string FingerprintProviders()
     {
-        using (MemoryStream stream = new MemoryStream())
-        using (BinaryWriter writer = new BinaryWriter(stream, P12AWire.Utf8, true))
-        {
-            P12AWire.WriteString(writer, "p12a.daily-v1.provider-contract");
-            writer.Write(ProviderContractVersion);
-            WriteGroup(writer, "required", P12ADailyV1Census.FixedRequiredSectionIds);
-            WriteGroup(writer, "empty", P12ADailyV1Census.FixedEmptySectionIds);
-            WriteGroup(writer, "npc-prefix", P12ADailyV1Census.NpcSectionPrefixes);
-            WriteGroup(writer, "city-prefix", P12ADailyV1Census.CitySectionPrefixes);
-            writer.Flush();
-            return Sha256(stream.ToArray());
-        }
-    }
-
-    private static void WriteGroup(BinaryWriter writer, string group, IReadOnlyList<string> values)
-    {
-        P12AWire.WriteString(writer, group);
-        writer.Write(ProviderContractVersion);
-        writer.Write(values.Count);
-        foreach (string value in values)
-        {
-            P12AWire.WriteString(writer, value);
-            // The selected Daily-v1 manifest currently pins schema v1 for every
-            // fixed provider and dynamic provider family. A schema change must
-            // update this contract version and the image manifest validation.
-            writer.Write(1);
-        }
+        return DailyV1DefinitionIdentity.CreateProviderFingerprint(
+            P12ADailyV1Census.FixedRequiredSectionIds,
+            P12ADailyV1Census.FixedEmptySectionIds,
+            P12ADailyV1Census.NpcSectionPrefixes,
+            P12ADailyV1Census.CitySectionPrefixes);
     }
 
     private static string FingerprintContentCatalog(SimulationConfigData configuration)
@@ -371,19 +349,8 @@ internal static class P12ACompatibilityDescriptorFactory
     private static string FingerprintCalendar(CalendarDefinition calendar)
     {
         if (!calendar.TryValidate(out _)) throw new ArgumentException(nameof(calendar));
-        using (MemoryStream stream = new MemoryStream())
-        using (BinaryWriter writer = new BinaryWriter(stream, P12AWire.Utf8, true))
-        {
-            writer.Write(calendar.MonthsPerYear);
-            writer.Write(calendar.WeeksPerMonth);
-            writer.Write(calendar.DaysPerWeek);
-            IReadOnlyList<int> lengths = calendar.monthLengths;
-            writer.Write(lengths == null ? 0 : lengths.Count);
-            if (lengths != null)
-                foreach (int length in lengths) writer.Write(length);
-            writer.Flush();
-            return Sha256(stream.ToArray());
-        }
+        return DailyV1DefinitionIdentity.CreateCalendarFingerprint(new DailyV1CalendarDefinition(
+            calendar.MonthsPerYear, calendar.WeeksPerMonth, calendar.DaysPerWeek, calendar.monthLengths));
     }
 
     private static string Sha256(byte[] bytes)

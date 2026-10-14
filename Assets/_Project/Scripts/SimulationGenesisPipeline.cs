@@ -186,20 +186,7 @@ public static class SimulationGenesisPipeline
     // or re-running genesis.
     internal static string ComputeFingerprint(IEnumerable<string> fields)
     {
-        using (SHA256 sha = SHA256.Create())
-        {
-            var bytes = new List<byte>();
-            foreach (string field in fields)
-            {
-                byte[] value = Encoding.UTF8.GetBytes(field ?? "");
-                bytes.Add((byte)((value.Length >> 24) & 0xff));
-                bytes.Add((byte)((value.Length >> 16) & 0xff));
-                bytes.Add((byte)((value.Length >> 8) & 0xff));
-                bytes.Add((byte)(value.Length & 0xff));
-                bytes.AddRange(value);
-            }
-            return BitConverter.ToString(sha.ComputeHash(bytes.ToArray())).Replace("-", "").ToLowerInvariant();
-        }
+        return DailyV1DefinitionIdentity.CreateP9Fingerprint(fields);
     }
 
     public static string CreateFingerprint(

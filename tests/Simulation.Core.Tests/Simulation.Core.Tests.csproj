@@ -32,5 +32,8 @@
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioRuntimeTests.cs" Link="Economy/FiniteSourceScenarioRuntimeTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/PersistenceFoundationTests.cs" Link="Persistence/PersistenceFoundationTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/PersistenceFoundationFaultMatrixTests.cs" Link="Persistence/PersistenceFoundationFaultMatrixTests.cs" />
+    <Compile Include="DailyV1DefinitionIdentityTests.cs" Link="Definitions/DailyV1DefinitionIdentityTests.cs" />
+    <None Include="Fixtures/CORE_F_WP1_VALUES_BASELINE.txt" CopyToOutputDirectory="PreserveNewest" />
+      <Compile Include="DailyV1DefinitionProviderVectors.cs" Link="Definitions/DailyV1DefinitionProviderVectors.cs" />
   </ItemGroup>
 </Project>

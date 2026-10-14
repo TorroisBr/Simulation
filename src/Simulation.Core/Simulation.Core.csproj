@@ -10,6 +10,15 @@
     <CheckForOverflowUnderflow>false</CheckForOverflowUnderflow>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationTypes.cs" Link="Configuration/SimulationConfigurationTypes.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationDefaults.cs" Link="Configuration/SimulationConfigurationDefaults.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationResolver.cs" Link="Configuration/SimulationConfigurationResolver.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationValidator.cs" Link="Configuration/SimulationConfigurationValidator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationValidationResult.cs" Link="Configuration/SimulationConfigurationValidationResult.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1EffectiveDefinitions.cs" Link="Definitions/DailyV1EffectiveDefinitions.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1ContentProjection.cs" Link="Definitions/DailyV1ContentProjection.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1TypedDefinitionValues.cs" Link="Definitions/DailyV1TypedDefinitionValues.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1DefinitionIdentity.cs" Link="Definitions/DailyV1DefinitionIdentity.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/CalendarDefinition.cs" Link="Calendar/CalendarDefinition.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/SimulationCalendar.cs" Link="Calendar/SimulationCalendar.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/SimulationDate.cs" Link="Calendar/SimulationDate.cs" />
