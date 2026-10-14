@@ -230,12 +230,14 @@ the P12 committed-mutation hook once. The direct route therefore has three
 admission calls and one post-commit notification on success.
 
 The `CityRuntime` prepared daily route retains the same first two checks during
-`TryPrepareDaily`, followed by: (3) the outer City preparation's final
-`FiniteSourceProductionPreparation.CanInstall()`, (4) the
+`TryPrepareDaily`, followed by exactly two more admission checks: (3) the
 `CityDailyEconomyCommit.TryCommit` validation's `FiniteSource.CanInstall()`,
-and (5) the final `FiniteSource.Install()` pre-mutation `CanInstall()` check.
-This route therefore makes five admission calls before owner installation and
-one post-commit notification after both installs. Preserve the current
+and (4) the final `FiniteSource.Install()` pre-mutation `CanInstall()` check.
+The outer City preparation's `Market.CanInstall(marketRevision,
+marketIncrements)` check validates the Market revision but does not invoke the
+P12 mutation-admission callback, so it is not counted here. The prepared route
+therefore makes four admission calls before owner installation and one
+post-commit notification after both installs. Preserve the current
 admission callback exception behavior (rejected) and notification callback
 exception behavior (swallowed). No callback may be introduced between the two
 owner installs. P14-C's separate aggregate sequence below remains unchanged.
