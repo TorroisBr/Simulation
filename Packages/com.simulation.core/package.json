@@ -1,0 +1,7 @@
+{
+  "name": "com.simulation.core",
+  "version": "0.1.0",
+  "displayName": "Simulation Core",
+  "description": "Shared, engine-free authoritative simulation calendar core.",
+  "unity": "6000.3"
+}
