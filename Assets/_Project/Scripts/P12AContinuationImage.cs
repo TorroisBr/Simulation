@@ -5,14 +5,6 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
-internal enum P12AResultCode
-{
-    NoSave, Saved, Loaded, Encoded, Decoded, WrongThread, Busy, CaptureRejected, UnsupportedProfile,
-    IncompatibleBuildOrRuntime, IncompatibleContentOrConfiguration, UnsupportedSchema,
-    CorruptOrTruncated, DigestMismatch, LimitExceeded, MissingOrDuplicateSection,
-    InvalidOwnerValue, OwnerGraphRejected, AdmissionRejected, StorageFailure
-}
-
 internal sealed class P12AResult
 {
     internal P12AResult(P12AResultCode code, string sectionCode = null, string stableOwnerKey = null)
@@ -22,168 +14,6 @@ internal sealed class P12AResult
     internal string StableOwnerKey { get; }
 }
 
-internal sealed class P12ACompatibilityDescriptor
-{
-    private readonly ReadOnlyCollection<string> mvids;
-    private readonly byte[] canonicalBytes;
-    private readonly byte[] canonicalDigest;
-
-    internal P12ACompatibilityDescriptor(string profileId, int profileVersion, string configurationFingerprint,
-        string unityVersion, string runtimePlatform, string scriptingBackend, string buildGuid,
-        IEnumerable<string> assemblyMvids, string numericProfileId, int numericProfileVersion,
-        string contentFingerprint, string providerFingerprint, string calendarId, int calendarVersion,
-        string calendarFingerprint, string p9Fingerprint, string p8Fingerprint)
-    {
-        ProfileId = Need(profileId); ProfileVersion = Positive(profileVersion);
-        ConfigurationFingerprint = Need(configurationFingerprint); UnityVersion = Need(unityVersion);
-        RuntimePlatform = Need(runtimePlatform); ScriptingBackend = Need(scriptingBackend);
-        BuildGuid = buildGuid ?? ""; NumericProfileId = Need(numericProfileId);
-        NumericProfileVersion = Positive(numericProfileVersion); ContentFingerprint = Need(contentFingerprint);
-        ProviderFingerprint = Need(providerFingerprint); CalendarId = Need(calendarId);
-        CalendarVersion = Positive(calendarVersion); CalendarFingerprint = Need(calendarFingerprint);
-        P9Fingerprint = Need(p9Fingerprint); P8Fingerprint = Need(p8Fingerprint);
-        if (assemblyMvids == null) throw new ArgumentNullException(nameof(assemblyMvids));
-        List<string> sorted = new List<string>();
-        foreach (string item in assemblyMvids)
-        {
-            if (!Guid.TryParseExact(item, "D", out Guid id)) throw new ArgumentException("Invalid assembly MVID.");
-            sorted.Add(id.ToString("D").ToLowerInvariant());
-        }
-        if (sorted.Count == 0) throw new ArgumentException("At least one project assembly MVID is required.");
-        sorted.Sort(StringComparer.Ordinal);
-        for (int i = 1; i < sorted.Count; i++)
-            if (sorted[i - 1] == sorted[i]) throw new ArgumentException("Duplicate assembly MVID.");
-        mvids = new ReadOnlyCollection<string>(sorted);
-        canonicalBytes = BuildCanonicalBytes();
-        using (SHA256 sha = SHA256.Create()) canonicalDigest = sha.ComputeHash(canonicalBytes);
-    }
-    internal string ProfileId { get; }
-    internal int ProfileVersion { get; }
-    internal string ConfigurationFingerprint { get; }
-    internal string UnityVersion { get; }
-    internal string RuntimePlatform { get; }
-    internal string ScriptingBackend { get; }
-    internal string BuildGuid { get; }
-    internal IReadOnlyList<string> AssemblyMvids => mvids;
-    internal string NumericProfileId { get; }
-    internal int NumericProfileVersion { get; }
-    internal string ContentFingerprint { get; }
-    internal string ProviderFingerprint { get; }
-    internal string CalendarId { get; }
-    internal int CalendarVersion { get; }
-    internal string CalendarFingerprint { get; }
-    internal string P9Fingerprint { get; }
-    internal string P8Fingerprint { get; }
-    internal byte[] CanonicalBytes => (byte[])canonicalBytes.Clone();
-    internal byte[] CanonicalDigest => (byte[])canonicalDigest.Clone();
-    internal bool Matches(byte[] bytes) => P12AContinuationCodec.BytesEqual(canonicalBytes, bytes);
-
-    internal P12AResultCode MismatchCode(P12ACompatibilityDescriptor other)
-    {
-        if (other == null) return P12AResultCode.IncompatibleContentOrConfiguration;
-        bool runtimeMismatch = UnityVersion != other.UnityVersion || RuntimePlatform != other.RuntimePlatform
-            || ScriptingBackend != other.ScriptingBackend || BuildGuid != other.BuildGuid
-            || NumericProfileId != other.NumericProfileId || NumericProfileVersion != other.NumericProfileVersion
-            || !SameStrings(mvids, other.mvids);
-        return runtimeMismatch ? P12AResultCode.IncompatibleBuildOrRuntime
-            : P12AResultCode.IncompatibleContentOrConfiguration;
-    }
-
-    internal static bool TryReadCanonical(byte[] bytes, out P12ACompatibilityDescriptor descriptor)
-    {
-        descriptor = null;
-        if (bytes == null || bytes.Length > P12AContinuationCodec.MaxHeaderBytes) return false;
-        try
-        {
-            using (MemoryStream stream = new MemoryStream(bytes, false))
-            using (BinaryReader reader = new BinaryReader(stream, P12AWire.Utf8, true))
-            {
-                if (!P12AWire.ReadString(reader, out string profile) || profile == null) return false;
-                int profileVersion = reader.ReadInt32();
-                if (!P12AWire.ReadString(reader, out string config) || config == null
-                    || !P12AWire.ReadString(reader, out string unity) || unity == null
-                    || !P12AWire.ReadString(reader, out string platform) || platform == null
-                    || !P12AWire.ReadString(reader, out string backend) || backend == null
-                    || !P12AWire.ReadString(reader, out string buildGuid) || buildGuid == null) return false;
-                int count = reader.ReadInt32();
-                if (count < 0 || count > 4096) return false;
-                List<string> assemblies = new List<string>(count);
-                for (int i = 0; i < count; i++)
-                {
-                    if (!P12AWire.ReadString(reader, out string mvid) || mvid == null) return false;
-                    assemblies.Add(mvid);
-                }
-                if (!P12AWire.ReadString(reader, out string numericId) || numericId == null) return false;
-                int numericVersion = reader.ReadInt32();
-                if (!P12AWire.ReadString(reader, out string content) || content == null
-                    || !P12AWire.ReadString(reader, out string providers) || providers == null
-                    || !P12AWire.ReadString(reader, out string calendar) || calendar == null) return false;
-                int calendarVersion = reader.ReadInt32();
-                if (!P12AWire.ReadString(reader, out string calendarHash) || calendarHash == null
-                    || !P12AWire.ReadString(reader, out string p9) || p9 == null
-                    || !P12AWire.ReadString(reader, out string p8) || p8 == null
-                    || stream.Position != stream.Length) return false;
-                descriptor = new P12ACompatibilityDescriptor(profile, profileVersion, config, unity, platform,
-                    backend, buildGuid, assemblies, numericId, numericVersion, content, providers,
-                    calendar, calendarVersion, calendarHash, p9, p8);
-                if (!P12AContinuationCodec.BytesEqual(descriptor.canonicalBytes, bytes))
-                { descriptor = null; return false; }
-                return true;
-            }
-        }
-        catch (Exception exception) when (exception is EndOfStreamException || exception is P12ALimitException
-            || exception is ArgumentException || exception is DecoderFallbackException || exception is OverflowException)
-        { descriptor = null; return false; }
-    }
-
-    private static bool SameStrings(IReadOnlyList<string> left, IReadOnlyList<string> right)
-    {
-        if (left.Count != right.Count) return false;
-        for (int i = 0; i < left.Count; i++) if (left[i] != right[i]) return false;
-        return true;
-    }
-
-    private byte[] BuildCanonicalBytes()
-    {
-        long encodedLength = 16L
-            + StringFieldLength(ProfileId)
-            + StringFieldLength(ConfigurationFingerprint)
-            + StringFieldLength(UnityVersion)
-            + StringFieldLength(RuntimePlatform)
-            + StringFieldLength(ScriptingBackend)
-            + StringFieldLength(BuildGuid)
-            + StringFieldLength(NumericProfileId)
-            + StringFieldLength(ContentFingerprint)
-            + StringFieldLength(ProviderFingerprint)
-            + StringFieldLength(CalendarId)
-            + StringFieldLength(CalendarFingerprint)
-            + StringFieldLength(P9Fingerprint)
-            + StringFieldLength(P8Fingerprint);
-        foreach (string mvid in mvids) encodedLength = checked(encodedLength + StringFieldLength(mvid));
-        if (encodedLength > P12AContinuationCodec.MaxHeaderBytes) throw new P12ALimitException();
-        using (MemoryStream stream = new MemoryStream())
-        using (BinaryWriter writer = new BinaryWriter(stream, P12AWire.Utf8, true))
-        {
-            P12AWire.WriteString(writer, ProfileId); writer.Write(ProfileVersion);
-            P12AWire.WriteString(writer, ConfigurationFingerprint);
-            P12AWire.WriteString(writer, UnityVersion); P12AWire.WriteString(writer, RuntimePlatform);
-            P12AWire.WriteString(writer, ScriptingBackend); P12AWire.WriteString(writer, BuildGuid);
-            if (mvids.Count > 4096) throw new P12ALimitException();
-            writer.Write(mvids.Count); foreach (string id in mvids) P12AWire.WriteString(writer, id);
-            P12AWire.WriteString(writer, NumericProfileId); writer.Write(NumericProfileVersion);
-            P12AWire.WriteString(writer, ContentFingerprint); P12AWire.WriteString(writer, ProviderFingerprint);
-            P12AWire.WriteString(writer, CalendarId); writer.Write(CalendarVersion);
-            P12AWire.WriteString(writer, CalendarFingerprint);
-            P12AWire.WriteString(writer, P9Fingerprint); P12AWire.WriteString(writer, P8Fingerprint);
-            writer.Flush(); return stream.ToArray();
-        }
-    }
-    private static long StringFieldLength(string value)
-        => checked(4L + P12AWire.GetEncodedStringByteCount(value));
-    private static string Need(string value)
-    { if (string.IsNullOrWhiteSpace(value)) throw new ArgumentException("Compatibility value required."); return value; }
-    private static int Positive(int value)
-    { if (value <= 0) throw new ArgumentOutOfRangeException(nameof(value)); return value; }
 }
 
 internal sealed class P12AContinuationHeader
@@ -765,39 +595,11 @@ internal sealed class P12ADailyV1SectionManifest
         return true;
     }
 }
-
 internal static class P12AWire
 {
-    internal static readonly UTF8Encoding Utf8 = new UTF8Encoding(false, true);
-    internal static int GetEncodedStringByteCount(string value)
-    {
-        if (value == null) return 0;
-        int byteCount = Utf8.GetByteCount(value);
-        if (byteCount > P12AContinuationCodec.MaxStringBytes) throw new P12ALimitException();
-        return byteCount;
-    }
-    internal static long GetEncodedStringFieldLength(string value)
-        => checked(4L + GetEncodedStringByteCount(value));
-    internal static void WriteString(BinaryWriter writer, string value)
-    {
-        if (value == null) { writer.Write(-1); return; }
-        int byteCount = GetEncodedStringByteCount(value);
-        writer.Write(byteCount);
-        byte[] bytes = Utf8.GetBytes(value);
-        if (bytes.Length != byteCount) throw new InvalidOperationException("UTF-8 byte count changed during encoding.");
-        writer.Write(bytes);
-    }
-    internal static bool ReadString(BinaryReader reader, out string value)
-    {
-        value = null; int length;
-        try { length = reader.ReadInt32(); } catch (EndOfStreamException) { return false; }
-        if (length == -1) return true;
-        if (length < -1) return false;
-        if (length > P12AContinuationCodec.MaxStringBytes) throw new P12ALimitException();
-        byte[] bytes = reader.ReadBytes(length);
-        if (bytes.Length != length) return false;
-        try { value = Utf8.GetString(bytes); } catch (DecoderFallbackException) { return false; }
-        return true;
-    }
+    internal static readonly System.Text.UTF8Encoding Utf8 = ContinuationWire.CreateStrictUtf8Encoding() as System.Text.UTF8Encoding;
+    internal static int GetEncodedStringByteCount(string value) => ContinuationWire.GetEncodedStringByteCount(value);
+    internal static long GetEncodedStringFieldLength(string value) => ContinuationWire.GetEncodedStringFieldLength(value);
+    internal static void WriteString(BinaryWriter writer, string value) => ContinuationWire.WriteString(writer, value);
+    internal static bool ReadString(BinaryReader reader, out string value) => ContinuationWire.ReadString(reader, out value);
 }
-internal sealed class P12ALimitException : Exception { }

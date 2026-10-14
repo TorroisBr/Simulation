@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <IsTestProject>true</IsTestProject>
@@ -14,6 +14,7 @@
     <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <ProjectReference Include="../../src/Simulation.Core/Simulation.Core.csproj" />
+
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarCoreTests.cs" Link="Calendar/CalendarCoreTests.cs" />
@@ -28,5 +29,6 @@
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceProductionKernelTests.cs" Link="Economy/FiniteSourceProductionKernelTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioParityVectors.cs" Link="Economy/FiniteSourceScenarioParityVectors.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioRuntimeTests.cs" Link="Economy/FiniteSourceScenarioRuntimeTests.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/PersistenceFoundationTests.cs" Link="Persistence/PersistenceFoundationTests.cs" />
   </ItemGroup>
 </Project>

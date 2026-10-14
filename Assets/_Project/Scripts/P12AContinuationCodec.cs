@@ -6,12 +6,12 @@ using System.Text;
 
 internal static class P12AContinuationCodec
 {
-    internal const int MaxFrameBytes = 128 * 1024 * 1024;
-    internal const int MaxHeaderBytes = 64 * 1024;
-    internal const int MaxSections = 4096;
-    internal const int MaxSectionBytes = 16 * 1024 * 1024;
-    internal const int MaxStringBytes = 1024 * 1024;
-    internal const int MaxRows = 1_000_000;
+    internal const int MaxFrameBytes = ContinuationWire.MaxFrameBytes;
+    internal const int MaxHeaderBytes = ContinuationWire.MaxHeaderBytes;
+    internal const int MaxSections = ContinuationWire.MaxSections;
+    internal const int MaxSectionBytes = ContinuationWire.MaxSectionBytes;
+    internal const int MaxStringBytes = ContinuationWire.MaxStringBytes;
+    internal const int MaxRows = ContinuationWire.MaxRows;
     private static readonly byte[] Magic = { 0x53, 0x49, 0x4D, 0x44, 0x4C, 0x59, 0x31, 0x00 };
 
     internal static bool TryEncode(P12AContinuationImage image, P12ADailyV1SectionManifest manifest,
@@ -169,6 +169,7 @@ internal static class P12AContinuationCodec
             if (length < 0 || length > MaxHeaderBytes || stream.Length - stream.Position < length) return false;
             byte[] descriptor = reader.ReadBytes((int)length);
             if (descriptor.Length != length || stream.Position != stream.Length) return false;
+            if (descriptor.Length >= 4 && descriptor[0] == 0xFE && descriptor[1] == 0xFF && descriptor[2] == 0xFF && descriptor[3] == 0xFF) { result = new P12AResult(P12ACompatibilityAdmission.ClassifyUnityV2(descriptor)); return false; }
             if (!P12ACompatibilityDescriptor.TryReadCanonical(descriptor, out P12ACompatibilityDescriptor actual))
             { result = new P12AResult(P12AResultCode.CorruptOrTruncated); return false; }
             if (!expected.Matches(descriptor))
@@ -276,10 +277,5 @@ internal static class P12AContinuationCodec
         return BytesEqual(actual, supplied);
     }
 
-    internal static bool BytesEqual(byte[] left, byte[] right)
-    {
-        if (left == null || right == null || left.Length != right.Length) return false;
-        int difference = 0; for (int i = 0; i < left.Length; i++) difference |= left[i] ^ right[i];
-        return difference == 0;
-    }
+    internal static bool BytesEqual(byte[] left, byte[] right) => ContinuationWire.BytesEqual(left, right);
 }
