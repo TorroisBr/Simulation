@@ -156,7 +156,13 @@ The public manifest is a closed whitelist. Original TRX and runner-manifest byte
 stay in verified owner-only local retention and are never included in the public
 archive. `Verify` without private context checks package integrity and reports
 `originalComparisonNotPerformed`; passing a private context performs the full
-original-to-projection comparison. Verification never extracts archive entries.
+original-to-projection comparison. Private verification reconstructs every
+source, producer, execution, discovery, command, assembly, demonstration,
+measurement, retention, and review claim from the protected runner/source/tool
+evidence and compares the complete values and provenance arrays. Archive-only
+verification joins each cold/warm report's result-name multiset to the declared
+discovery selection, preserving duplicate display names and their multiplicity.
+Verification never extracts archive entries.
 Public JSON scalar types are checked before PowerShell conversion, so values such
 as `"false"` cannot satisfy boolean claims and numeric-looking strings cannot
 satisfy byte/count fields. Every supported native summary outcome is preserved;
