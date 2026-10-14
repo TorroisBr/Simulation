@@ -1,0 +1,1211 @@
+{
+  "schema": "validation-evidence-trx-package-v1",
+  "bundleId": "core-e-demography-policy-cold-warm",
+  "format": {
+    "reportProfile": "trx-vstest-flat-v1",
+    "counterProfile": "vstest-17.14.1-flat",
+    "projectionPolicy": "trx-private-metadata-v1"
+  },
+  "tool": {
+    "commit": "2dcd4933f214d797d4e064b6cea26cdbe5bd5cba",
+    "tree": "17543d1f9f318a77b5e6155f64c62d769e6b6557",
+    "version": "1.2.1",
+    "files": [
+      {
+        "path": "Tools/UnityValidation/Package-UnityValidationEvidence.ps1",
+        "bytes": 4029,
+        "sha256": "9423c3bc4623154e170e37ce2a6ae18d97e1a2765a42c2774e3d2c8ef0553f61"
+      },
+      {
+        "path": "Tools/UnityValidation/UnityValidationEvidence.psm1",
+        "bytes": 76859,
+        "sha256": "1c68f0b5c931e90c9de4e025ec8e2d15806f99988fb4f51eff1d27149899a8c2"
+      },
+      {
+        "path": "Tools/UnityValidation/TrxValidationEvidence.psm1",
+        "bytes": 149008,
+        "sha256": "55182fa44b13ffc1fee00bca4bd33e494abf210b186f072bd0685af7492b1ed7"
+      }
+    ],
+    "runtime": {
+      "powershellEdition": "Core",
+      "powershellVersion": "7.6.5",
+      "dotnetVersion": "10.0.11",
+      "compressionAssemblyVersion": "10.0.0.0"
+    }
+  },
+  "archive": {
+    "file": "core-e-demography-policy-cold-warm.zip",
+    "bytes": 55255,
+    "sha256": "4b74838a29be7fbe63eb83aaff2dc8e015e54931c6011a4cd09dae89d827628f",
+    "format": "zip-deflate-fixed-1980-01-01",
+    "entryPolicy": "normalized-trx-only"
+  },
+  "runs": [
+    {
+      "runnerRunId": "94a4b82c74494b8fa3f94f7094fa55be",
+      "source": {
+        "commit": "2dcd4933f214d797d4e064b6cea26cdbe5bd5cba",
+        "tree": "17543d1f9f318a77b5e6155f64c62d769e6b6557",
+        "originalInputDigest": "a011b76010ca6e330126fa65619c3c75ff0abf47958dd6575a7f06d3e59b9d92",
+        "inputStable": true,
+        "files": [
+          {
+            "path": "Assets/_Project/Scripts/SpatialRouteKnowledge.cs",
+            "bytes": 21919,
+            "sha256": "3545b8023da61c742af9675e0a1bbcfe2944646585b6c0809de72701b24195d0"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarCoreTests.cs",
+            "bytes": 18156,
+            "sha256": "9550e79da1b85048695da93c761c5b881f637d4bb316151bf1b32000dc6b7f80"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarCoreTests.cs.meta",
+            "bytes": 251,
+            "sha256": "fa53413aea9c4ddafeadba6fa8478f05a722f71c7aa3fae9a4db4c4f1fb6be47"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarParityTests.cs",
+            "bytes": 8360,
+            "sha256": "ee8178a82a541a5733a9d7e461400025324695d561e288417598fbb0d210473d"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarParityTests.cs.meta",
+            "bytes": 62,
+            "sha256": "dac04226ad7917ca8b2813deb80c6190fdd5a0cc2bd438c3a9016595e5599be1"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/DeterministicDemographyPolicyTests.cs",
+            "bytes": 15771,
+            "sha256": "2041496590d75807f54bc2fdc28a2740c7d164701097b0abd8c280eb82a8fd53"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/DeterministicDemographyPolicyTests.cs.meta",
+            "bytes": 62,
+            "sha256": "dfe0003389d1f639ac0150b148da0ccc9230edaf7d337d8189da6c6cdd0f0a19"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/DeterministicRandomCoreTests.cs",
+            "bytes": 1959,
+            "sha256": "7f165ac2f3bb535afc49c3a8f03664fa9111fc432f980ec2517eab0118be37d4"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/DeterministicRandomCoreTests.cs.meta",
+            "bytes": 159,
+            "sha256": "620b36db77d2e08c07adb63620709c3216360cc4fd104b847cf00dd2e1e12f91"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceProductionKernelTests.cs",
+            "bytes": 8962,
+            "sha256": "5eb68005e86173750fe5a0a9465fc4e30c672e177ee17d7fb3605a6ad458c663"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceProductionKernelTests.cs.meta",
+            "bytes": 62,
+            "sha256": "691d8d0d7a16743f95ca50e38d62253bc625e6071691a5f6a772fe8405491112"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioParityVectors.cs",
+            "bytes": 1673,
+            "sha256": "cef149d82ff87fbf8c9f7c6a559c31a8a5646d8313201180bb287bec5aea3168"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioParityVectors.cs.meta",
+            "bytes": 62,
+            "sha256": "11f0c59e9bff7dfac6bdeb313329ca0c2cc8c8749dd34ac014876719babfe953"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioRuntimeTests.cs",
+            "bytes": 17854,
+            "sha256": "27f7a74635614bdbaccd9bef98954798bb9f7db480b3cac28782a56c52cd093b"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioRuntimeTests.cs.meta",
+            "bytes": 62,
+            "sha256": "afde504459ea5377fabd2dd54c3278ef086b303ddd966b803e7f6168543068ee"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/MarketPriceCalculatorParityTests.cs",
+            "bytes": 802,
+            "sha256": "beb063b03ef5ec8b5ab133515e1f4e12974f5e958125d7e85ac4ef3c71b95c71"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/MarketPriceCalculatorParityTests.cs.meta",
+            "bytes": 62,
+            "sha256": "bbcf479b87f44b2fdb9d43ce14853a89f6ceea40d3aaad337c42eaf3f1e3bc64"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/MarketPriceParityVectors.cs",
+            "bytes": 1600,
+            "sha256": "1944e9f9e986b87b1fd4c72fe5df84ed1685f70d559f1a2d151eeae3d4153c57"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/MarketPriceParityVectors.cs.meta",
+            "bytes": 62,
+            "sha256": "e921ddda420dc9342c03ac7dbad72335945b302b56f4ef40b072ce6c96044dd4"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/StableKeyEncodingTests.cs",
+            "bytes": 1248,
+            "sha256": "11d11c63e39b626f427011aa82a6fe86478fa6afeb66efe736ecddb23ff6059a"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/StableKeyEncodingTests.cs.meta",
+            "bytes": 159,
+            "sha256": "a2a7b647e2cd144c8f14a2ce0e2cdef4435904c3b0eb1b3c043e6662ef27f59e"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/DeterministicRandomRootSnapshotTests.cs",
+            "bytes": 6774,
+            "sha256": "490b3c332db5ff7caba9231a83927fcf7ba8ded51d8dc56f1e3bf8fc7afa78f5"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/DeterministicRandomTests.cs",
+            "bytes": 2785,
+            "sha256": "811dad934854ccdb010e8ff36276b8e385d7a609533773354268aeac307800f1"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/LogicalTimelineTests.cs",
+            "bytes": 61130,
+            "sha256": "b6fc0ffbdf91b7901fab40fcee167f7157802244a5b24a58c8ed4b5fc264ae75"
+          },
+          {
+            "path": "global.json",
+            "bytes": 111,
+            "sha256": "6a177687fe58885fa8c9d2fc1d5261ed8ff5065e4c6c304c6bb81509f9e08aaf"
+          },
+          {
+            "path": "Packages/com.simulation.core/package.json",
+            "bytes": 202,
+            "sha256": "da3c84b1339815dcbbf633345dbcf0b66da19f8d49ff44c800840735ed8199b5"
+          },
+          {
+            "path": "Packages/com.simulation.core/package.json.meta",
+            "bytes": 167,
+            "sha256": "c4206b2b5ed2e707b9bee5065ef1fc8c8190c1b3825f8c6b31ac78495495d23c"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime.meta",
+            "bytes": 177,
+            "sha256": "e380857574ff4608cf7fb179c5aa83f31482b1cb35cb659ef332b66fbe940ace"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Calendar.meta",
+            "bytes": 177,
+            "sha256": "be132aa212ac2859d56c166087f789e875f77d796fbe34ac5bdcd2da34b04507"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Calendar/CalendarDefinition.cs",
+            "bytes": 6764,
+            "sha256": "6cfe18a89d3914916566f87aef94b52a114e1a3038134c0275089b1570aed5f6"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Calendar/CalendarDefinition.cs.meta",
+            "bytes": 62,
+            "sha256": "39ae710a0cc119ec5265988da7403d5f515665cb5d767d387850eb2335da3543"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Calendar/SimulationCalendar.cs",
+            "bytes": 8177,
+            "sha256": "de010c4853f65161d21044da2ca81aa6332e65ca89c6098c3772b83b2ebcede9"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Calendar/SimulationCalendar.cs.meta",
+            "bytes": 62,
+            "sha256": "0c82f484eab8a9180a8f623ddaf86ed07cbe53449e2fe2f052553fcf305a76f2"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Calendar/SimulationDate.cs",
+            "bytes": 2684,
+            "sha256": "791a56a0612cacb9076494ae7b386751884e09b13c923996320bc14bad5ae0f8"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Calendar/SimulationDate.cs.meta",
+            "bytes": 62,
+            "sha256": "144e50758593313d74ccf0801287e0cd5c1adb502d6041f49cbbe5077ef7e4a2"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Determinism/DeterministicRandom.cs",
+            "bytes": 6572,
+            "sha256": "3628d8cfa7d3ca0081a44b90bf33b3a12cfe844a66437c372cea299bcaf42b2d"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Determinism/DeterministicRandom.cs.meta",
+            "bytes": 60,
+            "sha256": "847a710dc64f24aaf1fb3775c8578555d417149e08403381cd7854485a28ac17"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy.meta",
+            "bytes": 62,
+            "sha256": "fd3b8208f8d014f99ef86f2bcc8cd8e7103c771a810ac579d13150feb44dae3b"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/FiniteSourceProductionKernel.cs",
+            "bytes": 10883,
+            "sha256": "720262083ea6a9991c7874618c0fd53edf561694b53773e91f9c0a9482186d9b"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/FiniteSourceProductionKernel.cs.meta",
+            "bytes": 62,
+            "sha256": "822721272af8e44c097ab55e770017d02315bd047ac468dd60aadf1094fea353"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/FiniteSourceScenarioRuntime.cs",
+            "bytes": 17116,
+            "sha256": "0db306d122c2c8e51088e7fc170ab577371527beeb24eeaef9eaed38f79632c4"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/FiniteSourceScenarioRuntime.cs.meta",
+            "bytes": 62,
+            "sha256": "52770ef2614db6559e3a2e0a767c86e30b3d4dbec4d9efab2b115d6b164107c1"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/MarketItemDefinition.cs",
+            "bytes": 385,
+            "sha256": "48be9d78da92149063b7c52c339632a0599d8c2cd30a48b87806ac6ed17dab9a"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/MarketItemDefinition.cs.meta",
+            "bytes": 62,
+            "sha256": "ab88bf703b1c299edc7243b26ed8809bf995a69d80851cf4a6bd58bfda6456da"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/MarketPriceCalculator.cs",
+            "bytes": 702,
+            "sha256": "4a52c77c6ee0b6132e36b7bf63d29dab8e6a78022637303b74e922c7c2175e84"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/MarketPriceCalculator.cs.meta",
+            "bytes": 62,
+            "sha256": "72a428b227d5cadc926f9f4fc15eee0c73c9e6a95e87e2ea651bd0317f918353"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Identity/PersonId.cs",
+            "bytes": 1691,
+            "sha256": "4895a295a898bc5614cda90ee002068338120f3921e607b58c1590629a99c9e5"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Identity/PersonId.cs.meta",
+            "bytes": 159,
+            "sha256": "753dcaf6fac00ef8412d14af47a65199e591441a69484f6191584254bd0b0041"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Identity/StableKeyEncoding.cs",
+            "bytes": 647,
+            "sha256": "378d9e3c388817c7f4202ad77d0ede67f652715c78960aab2d2d42496edba6f8"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Identity/StableKeyEncoding.cs.meta",
+            "bytes": 251,
+            "sha256": "bd0b1912318736a341cd5c43bb6f3f1d0d7688b5acd231d4ecf4b6f0f450330b"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population.meta",
+            "bytes": 177,
+            "sha256": "55e800902c5647db845e8e56d00b04d619a0dbb9832a752ab2af99e432e431e3"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/AggregateDemographyPolicyContracts.cs",
+            "bytes": 4169,
+            "sha256": "8fc260d99843958d6cdf8ab7f89bade5bef127f8ecb89d1b2d7342cacb2a6693"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/AggregateDemographyPolicyContracts.cs.meta",
+            "bytes": 59,
+            "sha256": "868e72fc2806b986115784a22ecdc80b82b5af5167b1ac0b948817001bb944e8"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/DemographicSampling.cs",
+            "bytes": 2422,
+            "sha256": "f98780e355aad6406690152f64808ebcce9fc25e36fbfee96b01363357e0f673"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/DemographicSampling.cs.meta",
+            "bytes": 59,
+            "sha256": "540c48a2060fc1e4693181fca093e2b9261a231e531692860a8c793db0745519"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/DeterministicAggregateDemographyProvider.cs",
+            "bytes": 2959,
+            "sha256": "f821309a93fbe4364c921ce5247384e4da3de7566ecac76b4c898c7becca5b55"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/DeterministicAggregateDemographyProvider.cs.meta",
+            "bytes": 59,
+            "sha256": "f6f621b8180070328969ae2f34815c4066ca37d86f9a036fa5705c455058933a"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Simulation.Core.asmdef",
+            "bytes": 197,
+            "sha256": "118dabd8287da82311dd19e042c7c73af8c6b33b765f25fc1a6912a9fa0e2366"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Simulation.Core.asmdef.meta",
+            "bytes": 170,
+            "sha256": "e26883d8878491eb2fd6758f093e61263f5c6e6759331c83eff762765a4efa2c"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Temporal/LogicalTimeline.cs",
+            "bytes": 57370,
+            "sha256": "9513398b6a4c8aca3692fa38f3969ec13b2b24ff3d640f8f93b57765f4fb8eaa"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Temporal/LogicalTimeline.cs.meta",
+            "bytes": 62,
+            "sha256": "d5c3c90f76064bee83e33fdb07650ba82e30865965937263d4ca4bd6d3ec7e69"
+          },
+          {
+            "path": "src/Simulation.Core/Simulation.Core.csproj",
+            "bytes": 2559,
+            "sha256": "c2c4c637f2014aa55ae08351a3ce039a2e0672e4b73c6bc4246518e617ceb263"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/packages.lock.json",
+            "bytes": 2988,
+            "sha256": "a1a77ecfe3882d92183ce53e862fc86c71f2508564c1c81ec4bfb9562cc1420d"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj",
+            "bytes": 2705,
+            "sha256": "3e68dcd3bebcc4656b5692b8886c4b796ca17a8098a21f61a38d253a0169345e"
+          },
+          {
+            "path": "Tools/CoreValidation/CoreValidation.psm1",
+            "bytes": 21588,
+            "sha256": "4933746853a206974f6d0c754f917d32e1f60913b6a296c10a1d6e7190cb48ef"
+          },
+          {
+            "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+            "bytes": 20688,
+            "sha256": "440ca7b0a3bc3a4d9a580c05e76fc77e3d9f1bc52147b39ef1b489ad2342270d"
+          },
+          {
+            "path": "Tools/CoreValidation/Invoke-LabValidation.ps1",
+            "bytes": 8798,
+            "sha256": "ed86ebfe9dd264faa1bf3e117f4d5a431f0086f9738519552e3f263407a226d5"
+          },
+          {
+            "path": "Tools/CoreValidation/README.md",
+            "bytes": 3466,
+            "sha256": "bc442aefee333f0f049581a9c2ceceb8e6f2495ed4f710933198d57d44eb3717"
+          },
+          {
+            "path": "Tools/CoreValidation/tests/Invoke-CoreValidationTests.ps1",
+            "bytes": 10959,
+            "sha256": "0e51ea581cda7cd965371feb4728e4a5e74d5a30e6e8da9b5f4d8ebc9eaac1a3"
+          },
+          {
+            "path": "tools/Simulation.Core.CalendarDemo/packages.lock.json",
+            "bytes": 135,
+            "sha256": "58972589280c8f44d0ae37e89df30ae4febb2f61f31a6a74b21d2fbaeef8a118"
+          },
+          {
+            "path": "tools/Simulation.Core.CalendarDemo/Program.cs",
+            "bytes": 1904,
+            "sha256": "73149c82b95c7d71c4cbfab6f0b91d8a03329cdde61428cb6f0f750487a9ce4f"
+          },
+          {
+            "path": "tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj",
+            "bytes": 572,
+            "sha256": "91d0dca814e802cd6c34d73d1a31167090f8bb4f772e0371b56329ce78a73084"
+          },
+          {
+            "path": "tools/Simulation.Lab/packages.lock.json",
+            "bytes": 137,
+            "sha256": "02cded6696aa5b992e2e4fb4e8ac8d97bc4f5035ef9c0d2f0817ef6898f6cb56"
+          },
+          {
+            "path": "tools/Simulation.Lab/Program.cs",
+            "bytes": 2330,
+            "sha256": "f5a35da2fac3b69ab01b1424927958cf083efcc19bbdf8b2bcf4518f6c045bfa"
+          },
+          {
+            "path": "tools/Simulation.Lab/Simulation.Lab.csproj",
+            "bytes": 737,
+            "sha256": "a380f033e4428262ba64d468d280b2f417bb31daf958e59d4e8f62732a0a5487"
+          },
+          {
+            "path": "Tools/UnityValidation/UnityValidationEvidence.psm1",
+            "bytes": 76859,
+            "sha256": "1c68f0b5c931e90c9de4e025ec8e2d15806f99988fb4f51eff1d27149899a8c2"
+          }
+        ],
+        "generatedDependencies": [
+          {
+            "path": "src/Simulation.Core/obj/project.assets.json",
+            "bytes": 2749,
+            "sha256": "d30e7a050adba8104deda23ff703488b7d7157202737eebf42b04bfa59fa36f5"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/obj/project.assets.json",
+            "bytes": 49973,
+            "sha256": "26474b05b29f0701491e2c49bf295d692d6da09e2d45684aa30463c61b42ecfd"
+          },
+          {
+            "path": "tools/Simulation.Core.CalendarDemo/obj/project.assets.json",
+            "bytes": 3702,
+            "sha256": "1cbe566c8e3d0dce9bc33625a4f3174d2a58cbef722213ece28bb33a933721f5"
+          }
+        ],
+        "influencingChanges": []
+      },
+      "originalManifest": {
+        "bytes": 194381,
+        "sha256": "15b26e4d0d5165ee55a4eb869bda7765be5a16a275c72151517218c930672b03"
+      },
+      "producer": {
+        "vstestVersion": "17.14.1",
+        "sdkVersion": "9.0.315",
+        "logger": {
+          "file": "Microsoft.VisualStudio.TestPlatform.Extensions.Trx.TestLogger.dll",
+          "fileVersion": "17.1400.125.42801",
+          "productVersion": "17.14.1-release-25428-01",
+          "bytes": 247632,
+          "sha256": "4a89511f6a3c00795e4119f4a3e192e58151c6f258e7c9b1f63aede73d76eec1"
+        },
+        "identityMode": "recovered-validated-output",
+        "provenance": [
+          {
+            "kind": "git-source",
+            "commit": "2dcd4933f214d797d4e064b6cea26cdbe5bd5cba",
+            "blob": "63c421c39a14656d8b9e1d6ff7ac5080fccffd5c",
+            "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+            "bytes": 20688,
+            "sha256": "440ca7b0a3bc3a4d9a580c05e76fc77e3d9f1bc52147b39ef1b489ad2342270d",
+            "field": "/runs/0/producer",
+            "mode": "captured"
+          },
+          {
+            "kind": "retained-command-log",
+            "path": "dotnet-info.log",
+            "bytes": 2540,
+            "sha256": "ddc3ccf46d3be6ba6995aee233b5242ebe2884d9454fa85a5d79ce82a1aefe15",
+            "field": "/runs/0/producer",
+            "mode": "captured"
+          }
+        ]
+      },
+      "execution": {
+        "sdkVersion": "9.0.315",
+        "clrVersion": "8.0.28",
+        "targetFramework": "net8.0",
+        "configuration": "Release",
+        "osVersion": "Microsoft Windows NT 10.0.26200.0",
+        "osArchitecture": "X64",
+        "processArchitecture": "X64",
+        "cultures": [
+          "en-US",
+          "pt-BR"
+        ],
+        "packageLocks": [
+          {
+            "path": "tests/Simulation.Core.Tests/packages.lock.json",
+            "bytes": 2988,
+            "sha256": "a1a77ecfe3882d92183ce53e862fc86c71f2508564c1c81ec4bfb9562cc1420d"
+          },
+          {
+            "path": "tools/Simulation.Core.CalendarDemo/packages.lock.json",
+            "bytes": 135,
+            "sha256": "58972589280c8f44d0ae37e89df30ae4febb2f61f31a6a74b21d2fbaeef8a118"
+          },
+          {
+            "path": "tools/Simulation.Lab/packages.lock.json",
+            "bytes": 137,
+            "sha256": "02cded6696aa5b992e2e4fb4e8ac8d97bc4f5035ef9c0d2f0817ef6898f6cb56"
+          }
+        ],
+        "provenance": [
+          {
+            "kind": "git-source",
+            "commit": "2dcd4933f214d797d4e064b6cea26cdbe5bd5cba",
+            "blob": "63c421c39a14656d8b9e1d6ff7ac5080fccffd5c",
+            "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+            "bytes": 20688,
+            "sha256": "440ca7b0a3bc3a4d9a580c05e76fc77e3d9f1bc52147b39ef1b489ad2342270d",
+            "field": "/runs/0/execution",
+            "mode": "captured"
+          },
+          {
+            "kind": "git-source",
+            "commit": "2dcd4933f214d797d4e064b6cea26cdbe5bd5cba",
+            "blob": "e2ae60b015c1a4ab3b290a18b8302ca6d8292b64",
+            "path": "tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj",
+            "bytes": 2705,
+            "sha256": "3e68dcd3bebcc4656b5692b8886c4b796ca17a8098a21f61a38d253a0169345e",
+            "field": "/runs/0/execution/targetFramework",
+            "mode": "captured"
+          },
+          {
+            "kind": "retained-command-log",
+            "path": "dotnet-runtimes.log",
+            "bytes": 1278,
+            "sha256": "2a184ccf85dfae8925b716c0128847839e9d7c3984174a125d82db17295da92e",
+            "field": "/runs/0/execution/clrVersion",
+            "mode": "captured"
+          }
+        ]
+      },
+      "discovery": {
+        "count": 125,
+        "cases": [
+          "AbsoluteDayToDateRoundTrips",
+          "AbsoluteDayZeroMapsToFirstCalendarDate",
+          "AfterFirstBirthdayAgeIsOne",
+          "AgeCalculationIsDeterministic",
+          "AgeCalculationIsPure",
+          "BeforeFirstBirthdayAgeIsZero",
+          "BirthDateAtCurrentDateHasAgeZero",
+          "CalendarDateEqualityIsValueBased",
+          "CalendarDefinitionRejectsNullCustomMonthLengths",
+          "CalendarDefinitionStableDuringRuntimeIsDocumented",
+          "CalendarParityVectorsAreCultureIndependent(\"en-US\")",
+          "CalendarParityVectorsAreCultureIndependent(\"pt-BR\")",
+          "CalendarRejectsNegativeConfiguration",
+          "CalendarRejectsZeroDaysPerMonth",
+          "CalendarRejectsZeroMonths",
+          "ConversionIsDeterministic",
+          "CustomCalendarSnapshotsMonthLengthsAtConstruction",
+          "CustomMonthLengthsMustBePositive",
+          "CustomMonthLengthsMustMatchMonthCount",
+          "DateToAbsoluteDayRoundTrips",
+          "DaysPerYearComesFromCalendar",
+          "FutureBirthDateRejected",
+          "InvalidDayOfMonthRejected",
+          "InvalidMonthRejected",
+          "LastDayOfMonthRollsToNextMonth",
+          "LastDayOfYearRollsToNextYear",
+          "LegacyResolverUsesSafeDefaultForNullAndInvalidDefinitions",
+          "LongAbsoluteDayDoesNotOverflowIntermediateMath",
+          "MultipleYearsCalculateCorrectAge",
+          "NonUniformCalendarDemoSequenceMatchesExpectedDatesAndAge",
+          "OneDayYearProducesBirthdayEveryAbsoluteDay",
+          "OnFirstBirthdayAgeIsOne",
+          "SemanticIdentityAndVersionReflectEffectiveCalendar",
+          "SimulationCalendarRejectsNullDefinition",
+          "SimulationDateValueSemanticsCoverEveryField",
+          "UnequalMonthLengthsConvertCorrectly",
+          "UnequalMonthYearBoundaryCorrect",
+          "UniformMonthLengthBeyondDayOfMonthRangeIsRejected",
+          "VeryLongYearDoesNotAssume365Days",
+          "VeryShortYearDoesNotAssume365Days",
+          "BirthdayVectorsMatchBeforeOnAndAfterBoundaries",
+          "ExactDateVectorsMatchExpectedFieldsAndSemanticIdentity",
+          "InvalidCalendarConfigurationIsRejected",
+          "InverseOverflowIsRejected",
+          "NegativeAbsoluteDayIsRejected",
+          "AggregatePolicyDefersRateValidationUntilAfterTheCorrespondingSample",
+          "AggregatePolicyEvaluatesSamplesInBirthThenDeathOrderAndShortCircuits",
+          "AggregatePolicyPreservesThresholdRateValidationAndDeathCap",
+          "AggregatePolicyPropagatesInjectedSampleExceptionsAtTheOriginalCallSite",
+          "AggregatePolicyRejectsInvalidRatesSamplesAndCalendarInExistingOrder",
+          "AggregatePolicySaturatesLargeEventCountsAndDoesNotNormalizeMalformedContext",
+          "AggregatePolicyUsesStrictFractionalThresholdAndPreservesIntegerAndZeroRates",
+          "DefaultAndInjectedSamplesUseTheSamePolicyAndValueContractsRetainEquality",
+          "NonBirthOutcomeValuesRetainDeathFallbackAndSamplingHasNoCallOrderState",
+          "PersonIdRetainsConstructionTryCreateAndOrdinalValueSemantics",
+          "SamplesAreIndependentOfCallOrderAndCulture",
+          "SampleVectorsMatchRecordedProductionBits",
+          "ProviderAcceptsMaximumDrawIndexAndRejectsNegativeDrawIndex",
+          "SameSeedContextAndDrawProduceTheSameValue",
+          "StreamStateMakesDrawPositionExplicitAndIndependent",
+          "UnrelatedStreamConsumptionDoesNotShiftOperationStream",
+          "CaptureSnapshotRecordsSupportedMetadataAndExactSeed",
+          "SnapshotIsDetachedImmutableAndCaptureOrStagingDoesNotAdvanceSource",
+          "StagedSourcePreservesEveryBoundarySeed(int.MinValue)",
+          "StagedSourcePreservesEveryBoundarySeed(0)",
+          "StagedSourcePreservesEveryBoundarySeed(int.MaxValue)",
+          "StagedSourcePreservesSeedAndKeyedOutputs",
+          "UnsupportedMetadataFailsWithoutChangingActiveSource",
+          "AppliedOperationPreparesBothOwnersAndPreservesOrderedUnrelatedRows",
+          "DuplicateDefinitionIdsRejectAsAmbiguousWithoutMutatingInputs",
+          "EmptyReserveIsExhaustedWithoutPreparingMarketRowsOrAdvancingRevisions",
+          "MissingTargetOrStockOverflowRejectsWithoutMutation",
+          "RequestCopiesTheOrderedRowListAndExposesItAsReadOnly",
+          "SourceMarketDayAndRevisionBoundariesKeepTheirRejectionOrder",
+          "AppliedTransitionPreservesOrderedUnrelatedMarketRowsExactly",
+          "DefinitionRejectsInvalidIdentityAndAmbiguousTargetRows",
+          "FixedP14BScenarioAdvancesAndExhaustsWithExactSharedParityValues",
+          "InvalidCurrentOwnerStateAndRevisionOverflowAreRejectedAtomically",
+          "MarketRevisionExhaustionAndWrongSourceIdentityRejectBeforeAnyNextState",
+          "OrderedMarketRowsRemainStableAndStockOverflowDoesNotProduceANextSnapshot",
+          "PreparedAdvanceCannotCrossRuntimeAndSnapshotsAreDetachedAndReadOnly",
+          "RecreatedScenarioUsesCapturedRemainingReserveAsItsStockDeltaBaseline",
+          "StaleDuplicateAndOlderDaysRejectWithoutChangingTheSnapshot",
+          "AdvanceRequiresSealedInputPrefixAndRejectsBackwardTargets",
+          "ContinuationBarrierRetainsFrozenProgressAndResumesSameStepAfterPartialCommit",
+          "ContinuationFactsArePublishedBeforeOrdinaryWorkAndSignalsWaitForOuterSuccess",
+          "CrossedDayBoundariesAreOrderedAndTypedInstanceIdentityHasNoActorCardinality",
+          "DayBoundaryOwnerCommitsAtomicallyBeforeOrdinaryWorkAndRetriesSameIdentity",
+          "DispatchLimitStopsAtFailureInstantAndStaleWorkIsDiscardedAsInert",
+          "FailedBoundaryCanBeReconstructedAsTheSamePendingOwnerOperation",
+          "FailedContinuationFactPublicationHasNoSequenceDriftAndRetryDoesNotRepeatSteps",
+          "FailedOwnerCommitRetainsWorkAndDoesNotAllocateCausalSequence",
+          "FrozenManifestValueComparisonRejectsDescriptorReorderingAndIdentityConflicts",
+          "IncompleteContinuationCanBeReconstructedWithoutChangingItsFrozenProgress",
+          "InitialInstantMayReceiveInputUntilItsFirstSeal",
+          "InputCommitPublishesTypedDueFactsOnlyWhenTheInputTransactionCommits",
+          "InputSequenceIsStableSealedAndLateOrDuplicateInputIsRejected",
+          "LengthPrefixedBoundaryIdentityKeepsDelimiterBearingWorldAndProfileDistinct",
+          "LengthPrefixedDueWorkIdentityKeepsDelimiterBearingComponentsDistinct",
+          "NextCausalInstantChoosesEarliestInputWorkBoundaryOrTarget",
+          "NextCausalInstantRetainsPendingBoundaryAndDoesNotChangeSameTickOrdering",
+          "NextCausalInstantYieldsCurrentForRestoredContinuationAndPendingHandoff",
+          "PendingContinuationReconstructionRejectsWrongWorldOrProfile(\"different-world\",\"profile:one\")",
+          "PendingContinuationReconstructionRejectsWrongWorldOrProfile(\"world|one\",\"different-profile\")",
+          "ProjectionRespectsCustomMonthLengths",
+          "ProjectionUsesLogicalDayAndCustomCalendarAtBoundariesAndMaximumDay",
+          "PublishedFactReconciliationRejectsIndexedIdentityWithDifferentDueOrCausalSequence(False)",
+          "PublishedFactReconciliationRejectsIndexedIdentityWithDifferentDueOrCausalSequence(True)",
+          "PublishedFactsAndUnhandedSignalsSurviveReconstructionAfterOuterFailure",
+          "QueriesArePureAndInputFailureRetainsUnappliedCommandForRetry",
+          "ReentrantAdvanceIsRejectedAndLegacyDailyRuntimeIsNotModifiedByThisCandidate",
+          "ReloadedContinuationRejectsChangedFrozenDescriptorContent",
+          "RestoredSignalHandoffRejectsWrongWorldOrProfile(\"different-world\",\"profile:one\")",
+          "RestoredSignalHandoffRejectsWrongWorldOrProfile(\"world|one\",\"different-profile\")",
+          "ResumableManifestPreservesZeroOneManyRosterAndInjectiveIdentities(0)",
+          "ResumableManifestPreservesZeroOneManyRosterAndInjectiveIdentities(1)",
+          "ResumableManifestPreservesZeroOneManyRosterAndInjectiveIdentities(3)",
+          "SameInstantDueWorkOrderingIsIndependentOfRegistrationOrderAndRejectsSequenceCollision",
+          "SameInstantGeneratedWorkUsesNextCausalWaveAfterCurrentWave",
+          "SealedBoundaryInputsRunBeforeAtomicDayOwnerAndOrdinaryDueWork",
+          "StaleReferenceDoesNotConsumeCommittedDispatchLimit",
+          "CoreCalculatorMatchesPinnedUnityBinary32Vectors",
+          "EncodePreservesOrderAndEscapesDelimiterBearingComponentsByLength",
+          "EncodeTreatsNullComponentsAsEmptyAndNullArrayAsNoComponents",
+          "EncodeUsesInvariantCultureForComponentLengths"
+        ]
+      },
+      "commands": [
+        {
+          "label": "cold-build",
+          "executable": "dotnet",
+          "workingDirectory": "<WORKTREE>",
+          "argv": [
+            "build",
+            "tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj",
+            "--no-restore",
+            "--configuration",
+            "Release"
+          ],
+          "exitCode": 0,
+          "elapsedMilliseconds": 2219.762,
+          "derivation": "recovered-from-bound-runner",
+          "provenance": [
+            {
+              "kind": "git-source",
+              "commit": "2dcd4933f214d797d4e064b6cea26cdbe5bd5cba",
+              "blob": "63c421c39a14656d8b9e1d6ff7ac5080fccffd5c",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 20688,
+              "sha256": "440ca7b0a3bc3a4d9a580c05e76fc77e3d9f1bc52147b39ef1b489ad2342270d",
+              "field": "/runs/0/commands/0",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "cold-build.log",
+              "bytes": 428,
+              "sha256": "c860932757c9570cb0c90fc6d6deac4ec5961991270ad95ff387ba9037bf470d",
+              "field": "/runs/0/commands/0",
+              "mode": "captured"
+            }
+          ]
+        },
+        {
+          "label": "cold-test",
+          "executable": "dotnet",
+          "workingDirectory": "<WORKTREE>",
+          "argv": [
+            "test",
+            "tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj",
+            "--no-restore",
+            "--configuration",
+            "Release",
+            "--logger",
+            "trx;LogFileName=CoreTests-cold.trx",
+            "--results-directory",
+            "<EVIDENCE>/94a4b82c74494b8fa3f94f7094fa55be"
+          ],
+          "exitCode": 0,
+          "elapsedMilliseconds": 1380.978,
+          "derivation": "recovered-from-bound-runner",
+          "provenance": [
+            {
+              "kind": "git-source",
+              "commit": "2dcd4933f214d797d4e064b6cea26cdbe5bd5cba",
+              "blob": "63c421c39a14656d8b9e1d6ff7ac5080fccffd5c",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 20688,
+              "sha256": "440ca7b0a3bc3a4d9a580c05e76fc77e3d9f1bc52147b39ef1b489ad2342270d",
+              "field": "/runs/0/commands/1",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "cold-test.log",
+              "bytes": 918,
+              "sha256": "584e912b99b731a92216ad6a7797574f012f475a6d0556119b96009b4913b3de",
+              "field": "/runs/0/commands/1",
+              "mode": "captured"
+            },
+            {
+              "kind": "original-trx",
+              "path": "CoreTests-cold.trx",
+              "bytes": 175106,
+              "sha256": "f8876468510dff386a979b24dac77b5e49ba555394ee48ef6421bb6bfda2ca95",
+              "field": "/runs/0/attempts/0/originalReport",
+              "mode": "captured"
+            }
+          ]
+        },
+        {
+          "label": "warm-test",
+          "executable": "dotnet",
+          "workingDirectory": "<WORKTREE>",
+          "argv": [
+            "test",
+            "tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj",
+            "--no-build",
+            "--no-restore",
+            "--configuration",
+            "Release",
+            "--logger",
+            "trx;LogFileName=CoreTests-warm.trx",
+            "--results-directory",
+            "<EVIDENCE>/94a4b82c74494b8fa3f94f7094fa55be"
+          ],
+          "exitCode": 0,
+          "elapsedMilliseconds": 1057.567,
+          "derivation": "recovered-from-bound-runner",
+          "provenance": [
+            {
+              "kind": "git-source",
+              "commit": "2dcd4933f214d797d4e064b6cea26cdbe5bd5cba",
+              "blob": "63c421c39a14656d8b9e1d6ff7ac5080fccffd5c",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 20688,
+              "sha256": "440ca7b0a3bc3a4d9a580c05e76fc77e3d9f1bc52147b39ef1b489ad2342270d",
+              "field": "/runs/0/commands/2",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "warm-test.log",
+              "bytes": 572,
+              "sha256": "479f2f3872c92017bc82c0a13af615c68602cdf392da8c066acd33100108c6e2",
+              "field": "/runs/0/commands/2",
+              "mode": "captured"
+            },
+            {
+              "kind": "original-trx",
+              "path": "CoreTests-warm.trx",
+              "bytes": 175106,
+              "sha256": "080929376c20d7c89b8b1167cc8b10d3f8fbd67781fe3fb5807278e835c55845",
+              "field": "/runs/0/attempts/1/originalReport",
+              "mode": "captured"
+            }
+          ]
+        },
+        {
+          "label": "cold-demo",
+          "executable": "dotnet",
+          "workingDirectory": "<WORKTREE>",
+          "argv": [
+            "run",
+            "--project",
+            "tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj",
+            "--no-restore",
+            "--configuration",
+            "Release"
+          ],
+          "exitCode": 0,
+          "elapsedMilliseconds": 1000.495,
+          "derivation": "recovered-from-bound-runner",
+          "provenance": [
+            {
+              "kind": "git-source",
+              "commit": "2dcd4933f214d797d4e064b6cea26cdbe5bd5cba",
+              "blob": "63c421c39a14656d8b9e1d6ff7ac5080fccffd5c",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 20688,
+              "sha256": "440ca7b0a3bc3a4d9a580c05e76fc77e3d9f1bc52147b39ef1b489ad2342270d",
+              "field": "/runs/0/commands/3",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "cold-demo.log",
+              "bytes": 432,
+              "sha256": "1ae98819d73f4bb27a060df204eadb3b2ac1de795de7ff1532033f38714a49db",
+              "field": "/runs/0/commands/3",
+              "mode": "captured"
+            }
+          ]
+        },
+        {
+          "label": "warm-demo",
+          "executable": "dotnet",
+          "workingDirectory": "<WORKTREE>",
+          "argv": [
+            "run",
+            "--project",
+            "tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj",
+            "--no-build",
+            "--no-restore",
+            "--configuration",
+            "Release"
+          ],
+          "exitCode": 0,
+          "elapsedMilliseconds": 402.117,
+          "derivation": "recovered-from-bound-runner",
+          "provenance": [
+            {
+              "kind": "git-source",
+              "commit": "2dcd4933f214d797d4e064b6cea26cdbe5bd5cba",
+              "blob": "63c421c39a14656d8b9e1d6ff7ac5080fccffd5c",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 20688,
+              "sha256": "440ca7b0a3bc3a4d9a580c05e76fc77e3d9f1bc52147b39ef1b489ad2342270d",
+              "field": "/runs/0/commands/4",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "warm-demo.log",
+              "bytes": 432,
+              "sha256": "1ae98819d73f4bb27a060df204eadb3b2ac1de795de7ff1532033f38714a49db",
+              "field": "/runs/0/commands/4",
+              "mode": "captured"
+            }
+          ]
+        }
+      ],
+      "assemblies": [
+        {
+          "path": "tests/Simulation.Core.Tests/bin/Release/net8.0/Simulation.Core.Tests.dll",
+          "fullName": "Simulation.Core.Tests, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+          "mvid": "e8771ca1-b87c-4d93-b44c-de4a9291a41e",
+          "bytes": 81920,
+          "sha256": "2bb9b7c5233523f5e51ee93e46f61b57dad83225f8bf8b377af2e891883dac9b",
+          "identityMode": "recovered-validated-output",
+          "observedAtUtc": "2026-10-14T21:08:23.1729360+00:00",
+          "provenance": [
+            {
+              "kind": "retained-output",
+              "path": "Simulation.Core.Tests.dll",
+              "bytes": 81920,
+              "sha256": "2bb9b7c5233523f5e51ee93e46f61b57dad83225f8bf8b377af2e891883dac9b",
+              "field": "/runs/0/assemblies/0",
+              "mode": "recovered-validated-output"
+            },
+            {
+              "kind": "git-source",
+              "commit": "2dcd4933f214d797d4e064b6cea26cdbe5bd5cba",
+              "blob": "63c421c39a14656d8b9e1d6ff7ac5080fccffd5c",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 20688,
+              "sha256": "440ca7b0a3bc3a4d9a580c05e76fc77e3d9f1bc52147b39ef1b489ad2342270d",
+              "field": "/runs/0/assemblies/0",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "cold-build.log",
+              "bytes": 428,
+              "sha256": "c860932757c9570cb0c90fc6d6deac4ec5961991270ad95ff387ba9037bf470d",
+              "field": "/runs/0/assemblies/0",
+              "mode": "captured"
+            }
+          ]
+        },
+        {
+          "path": "tests/Simulation.Core.Tests/bin/Release/net8.0/Simulation.Core.dll",
+          "fullName": "Simulation.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+          "mvid": "2a8c30a5-bf15-4014-b4e6-ff61eea391bd",
+          "bytes": 62976,
+          "sha256": "866a628e4f1a033a440874f2c7325ed336d1e4028fae6e9c17de5275cad5a511",
+          "identityMode": "recovered-validated-output",
+          "observedAtUtc": "2026-10-14T21:08:23.1729360+00:00",
+          "provenance": [
+            {
+              "kind": "retained-output",
+              "path": "Simulation.Core.dll",
+              "bytes": 62976,
+              "sha256": "866a628e4f1a033a440874f2c7325ed336d1e4028fae6e9c17de5275cad5a511",
+              "field": "/runs/0/assemblies/1",
+              "mode": "recovered-validated-output"
+            },
+            {
+              "kind": "git-source",
+              "commit": "2dcd4933f214d797d4e064b6cea26cdbe5bd5cba",
+              "blob": "63c421c39a14656d8b9e1d6ff7ac5080fccffd5c",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 20688,
+              "sha256": "440ca7b0a3bc3a4d9a580c05e76fc77e3d9f1bc52147b39ef1b489ad2342270d",
+              "field": "/runs/0/assemblies/1",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "cold-build.log",
+              "bytes": 428,
+              "sha256": "c860932757c9570cb0c90fc6d6deac4ec5961991270ad95ff387ba9037bf470d",
+              "field": "/runs/0/assemblies/1",
+              "mode": "captured"
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "label": "cold",
+          "nativeRunId": "d5e35163-ad2e-4d7a-aeea-d7eb39ddff65",
+          "nativeRunLabel": "run-d5e35163-ad2e-4d7a-aeea-d7eb39ddff65",
+          "originalReport": {
+            "bytes": 175106,
+            "sha256": "f8876468510dff386a979b24dac77b5e49ba555394ee48ef6421bb6bfda2ca95"
+          },
+          "normalizedReport": {
+            "entry": "results/94a4b82c74494b8fa3f94f7094fa55be/cold.trx",
+            "bytes": 153417,
+            "sha256": "a5d4fc604a81cd35c08e01f80147eebca9a2c40bbf151ab769cd03b4bf184df6",
+            "semanticSha256": "a5d4fc604a81cd35c08e01f80147eebca9a2c40bbf151ab769cd03b4bf184df6"
+          },
+          "summaryOutcome": "Completed",
+          "nativeCounters": {
+            "total": "125",
+            "executed": "125",
+            "passed": "125",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          },
+          "caseOutcomeCounts": {
+            "Error": 0,
+            "Failed": 0,
+            "Timeout": 0,
+            "Aborted": 0,
+            "Inconclusive": 0,
+            "PassedButRunAborted": 0,
+            "NotRunnable": 0,
+            "NotExecuted": 0,
+            "Disconnected": 0,
+            "Warning": 0,
+            "Passed": 125,
+            "Completed": 0,
+            "InProgress": 0,
+            "Pending": 0
+          },
+          "resultCount": 125,
+          "gatePassed": true,
+          "exitCode": 0,
+          "elapsedMilliseconds": 1380.978,
+          "comparison": "source-projection-verified"
+        },
+        {
+          "label": "warm",
+          "nativeRunId": "cfa03d64-7c89-4f82-ac49-0ae59d7d5107",
+          "nativeRunLabel": "run-cfa03d64-7c89-4f82-ac49-0ae59d7d5107",
+          "originalReport": {
+            "bytes": 175106,
+            "sha256": "080929376c20d7c89b8b1167cc8b10d3f8fbd67781fe3fb5807278e835c55845"
+          },
+          "normalizedReport": {
+            "entry": "results/94a4b82c74494b8fa3f94f7094fa55be/warm.trx",
+            "bytes": 153417,
+            "sha256": "c8a36ce6cbb0a4722fbc00ec8e90cc5e6f8c7b5df7cc7e915b4bb96e8f0e1953",
+            "semanticSha256": "c8a36ce6cbb0a4722fbc00ec8e90cc5e6f8c7b5df7cc7e915b4bb96e8f0e1953"
+          },
+          "summaryOutcome": "Completed",
+          "nativeCounters": {
+            "total": "125",
+            "executed": "125",
+            "passed": "125",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          },
+          "caseOutcomeCounts": {
+            "Error": 0,
+            "Failed": 0,
+            "Timeout": 0,
+            "Aborted": 0,
+            "Inconclusive": 0,
+            "PassedButRunAborted": 0,
+            "NotRunnable": 0,
+            "NotExecuted": 0,
+            "Disconnected": 0,
+            "Warning": 0,
+            "Passed": 125,
+            "Completed": 0,
+            "InProgress": 0,
+            "Pending": 0
+          },
+          "resultCount": 125,
+          "gatePassed": true,
+          "exitCode": 0,
+          "elapsedMilliseconds": 1057.567,
+          "comparison": "source-projection-verified"
+        }
+      ],
+      "demonstrations": [
+        {
+          "label": "cold-demo",
+          "exitCode": 0,
+          "elapsedMilliseconds": 1000.495,
+          "output": [
+            "Simulation.Core calendar capability demo; not a world or AdvanceDay demo.",
+            "Semantic identity: simulation-calendar",
+            "Semantic version: 3/1/35/custom:10,20,5",
+            "Absolute day 0 => Year 0 / Month 1 / Day 1",
+            "Absolute day 10 => Year 0 / Month 2 / Day 1",
+            "Absolute day 30 => Year 0 / Month 3 / Day 1",
+            "Absolute day 35 => Year 1 / Month 1 / Day 1",
+            "Completed age before birthday: 0",
+            "Completed age on birthday: 1",
+            "Negative absolute day: rejected"
+          ],
+          "derivation": "recovered-from-bound-runner",
+          "provenance": [
+            {
+              "kind": "git-source",
+              "commit": "2dcd4933f214d797d4e064b6cea26cdbe5bd5cba",
+              "blob": "63c421c39a14656d8b9e1d6ff7ac5080fccffd5c",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 20688,
+              "sha256": "440ca7b0a3bc3a4d9a580c05e76fc77e3d9f1bc52147b39ef1b489ad2342270d",
+              "field": "/runs/0/demonstrations/0",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "cold-demo.log",
+              "bytes": 432,
+              "sha256": "1ae98819d73f4bb27a060df204eadb3b2ac1de795de7ff1532033f38714a49db",
+              "field": "/runs/0/demonstrations/0",
+              "mode": "captured"
+            }
+          ]
+        },
+        {
+          "label": "warm-demo",
+          "exitCode": 0,
+          "elapsedMilliseconds": 402.117,
+          "output": [
+            "Simulation.Core calendar capability demo; not a world or AdvanceDay demo.",
+            "Semantic identity: simulation-calendar",
+            "Semantic version: 3/1/35/custom:10,20,5",
+            "Absolute day 0 => Year 0 / Month 1 / Day 1",
+            "Absolute day 10 => Year 0 / Month 2 / Day 1",
+            "Absolute day 30 => Year 0 / Month 3 / Day 1",
+            "Absolute day 35 => Year 1 / Month 1 / Day 1",
+            "Completed age before birthday: 0",
+            "Completed age on birthday: 1",
+            "Negative absolute day: rejected"
+          ],
+          "derivation": "recovered-from-bound-runner",
+          "provenance": [
+            {
+              "kind": "git-source",
+              "commit": "2dcd4933f214d797d4e064b6cea26cdbe5bd5cba",
+              "blob": "63c421c39a14656d8b9e1d6ff7ac5080fccffd5c",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 20688,
+              "sha256": "440ca7b0a3bc3a4d9a580c05e76fc77e3d9f1bc52147b39ef1b489ad2342270d",
+              "field": "/runs/0/demonstrations/1",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "warm-demo.log",
+              "bytes": 432,
+              "sha256": "1ae98819d73f4bb27a060df204eadb3b2ac1de795de7ff1532033f38714a49db",
+              "field": "/runs/0/demonstrations/1",
+              "mode": "captured"
+            }
+          ]
+        }
+      ],
+      "measurements": {
+        "worktreeLibraryAbsent": true,
+        "projectBinObjBytes": [
+          {
+            "path": "src/Simulation.Core/bin",
+            "bytes": 92839
+          },
+          {
+            "path": "src/Simulation.Core/obj",
+            "bytes": 103523
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/bin",
+            "bytes": 4712983
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/obj",
+            "bytes": 282885
+          },
+          {
+            "path": "tools/Simulation.Core.CalendarDemo/bin",
+            "bytes": 264387
+          },
+          {
+            "path": "tools/Simulation.Core.CalendarDemo/obj",
+            "bytes": 201011
+          }
+        ],
+        "resultBytes": 365125
+      },
+      "retention": {
+        "handle": "evidence-1519508c58114d90ad364e49c201e34c",
+        "ownerRole": "GeneralOrchestrator",
+        "policy": "DOTNET_TRX_EVIDENCE_CONTRACT.md",
+        "plannedPostPromotionDays": 30,
+        "aclVerification": "verified-owner-only-known-copies",
+        "provenance": [
+          {
+            "kind": "original-manifest",
+            "path": "runner-manifest.json",
+            "bytes": 194381,
+            "sha256": "15b26e4d0d5165ee55a4eb869bda7765be5a16a275c72151517218c930672b03",
+            "field": "/runs/0/originalManifest",
+            "mode": "captured"
+          },
+          {
+            "kind": "retained-output",
+            "path": "retention-receipt.json",
+            "bytes": 229,
+            "sha256": "15a50b2380220a0f9b6dbc7d958d60e587962cb85389ebe9a7a64ec9552ddcf7",
+            "field": "/runs/0/retention/aclVerification",
+            "mode": "captured"
+          }
+        ]
+      },
+      "existingReviews": {
+        "sourceImplementation": "2dcd4933f214d797d4e064b6cea26cdbe5bd5cba",
+        "toolImplementation": "2dcd4933f214d797d4e064b6cea26cdbe5bd5cba"
+      }
+    }
+  ]
+}
