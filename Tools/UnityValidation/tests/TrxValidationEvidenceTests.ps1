@@ -140,6 +140,10 @@ Chose FX version [C:\Program Files\dotnet\shared\Microsoft.NETCore.App\9.0.20]
     $trxModule=Get-Module TrxValidationEvidence
     & $trxModule {param($c,$r,$p,$protectedRoot) Assert-TrxRuntimeSelectionEvidence $c $r $p $protectedRoot} $traceContext $traceRunner $tracePublicRun $privateTraceRoot
     Assert-True $true 'test-assembly runtimeconfig selects the bound CLR despite other host runtime versions'
+    $traceRunner.gates.coldTests.exitCode=1
+    & $trxModule {param($c,$r,$p,$protectedRoot) Assert-TrxRuntimeSelectionEvidence $c $r $p $protectedRoot} $traceContext $traceRunner $tracePublicRun $privateTraceRoot
+    Assert-True $true 'complete failing test gate retains its matching runtime-selection trace'
+    $traceRunner.gates.coldTests.exitCode=0
     $tracePublicRun.assemblies[0].path='bin/Simulation.Core.Tests.exe'
     Assert-Throws { & $trxModule {param($c,$r,$p,$protectedRoot) Assert-TrxRuntimeSelectionEvidence $c $r $p $protectedRoot} $traceContext $traceRunner $tracePublicRun $privateTraceRoot } 'runtime selection evidence rejects executable substitution for the test DLL'
     $tracePublicRun.assemblies[0].path='bin/Simulation.Core.Tests.dll'
@@ -197,6 +201,8 @@ Chose FX version [C:\Program Files\dotnet\shared\Microsoft.NETCore.App\9.0.20]
     & $trxModule {param($m) Assert-TrxPublicManifest $m} $failedClaim
     Assert-True $true 'complete failing test attempt and command remain verifiable with gatePassed false'
     $projectRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\..'));$currentLocation=(Get-Location).Path
+    $gitHead=@(& $trxModule {param($r) Invoke-TrxGit $r @('rev-parse','HEAD')} $projectRoot)
+    Assert-True ($gitHead.Count -eq 1 -and $gitHead[0] -is [string] -and [string]$gitHead[0] -match '^[a-f0-9]{40,64}$') 'Git helper returns a flat exact commit string for source identity binding'
     $commonDirectory=(& $trxModule {param($r) Invoke-TrxGit $r @('rev-parse','--git-common-dir')} $projectRoot | Select-Object -First 1)
     $commonValue=[string]$commonDirectory;$commonPath=[IO.Path]::GetFullPath($(if([IO.Path]::IsPathRooted($commonValue)){$commonValue}else{Join-Path $projectRoot $commonValue}));$otherWorktree=Split-Path -Parent $commonPath
     $otherHead=@(& $trxModule {param($r) Invoke-TrxGit $r @('rev-parse','HEAD')} $otherWorktree)

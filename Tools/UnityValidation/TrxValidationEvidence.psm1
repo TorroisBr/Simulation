@@ -26,7 +26,7 @@ function Invoke-TrxGit {
     Push-Location -LiteralPath $root
     try{$output=@(& git @GitArguments 2>$null);$exitCode=$LASTEXITCODE}finally{Pop-Location}
     if($exitCode -ne 0){throw "Git command failed in the validated source worktree: git $($GitArguments -join ' ')."}
-    return ,$output
+    return $output
 }
 
 function Read-TrxDocument {
@@ -600,7 +600,7 @@ function Assert-TrxRuntimeSelectionEvidence {
         if($chosen.Count -ne 1 -or $chosen[0] -notmatch '(?i)(?:^|[\\/])shared[\\/]Microsoft\.NETCore\.App[\\/](?<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$' -or [string]$Matches.version -cne [string]$record.selectedClr){throw "Private $label runtime trace does not prove its declared selected Microsoft.NETCore.App CLR in the test-assembly config block."}
         $gate=if($label -eq 'cold'){$Runner.gates.coldTests}else{$Runner.gates.warmTests}
         $report=@($Context.reports|Where-Object label -CEQ $label)
-        if($report.Count -ne 1 -or [string]$gate.runId -notmatch '^[0-9a-fA-F-]{36}$' -or [string]$gate.runId -cne [string]$report[0].nativeRunId -or [int]$gate.exitCode -ne 0){throw "Private $label runtime trace is not bound to the successful matching runner gate."}
+        if($report.Count -ne 1 -or [string]$gate.runId -notmatch '^[0-9a-fA-F-]{36}$' -or [string]$gate.runId -cne [string]$report[0].nativeRunId){throw "Private $label runtime trace is not bound to the matching complete runner gate."}
     }
 }
 
@@ -674,6 +674,7 @@ function Get-TrxRetainedAssemblyInventory {
     foreach($claim in $claims){$observed=[DateTimeOffset]::ParseExact([string]$claim.observedAtUtc,'o',[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::AssumeUniversal);if($observed -lt $reportCompletion){throw 'Recovered assembly observation time predates completion of the original validation reports.'}}
     $retentionDir=Join-Path $ProtectedRoot ('validated-output\'+[string]$Runner.runId)
     $receiptPath=Join-Path $retentionDir 'assembly-retention.json'
+    $aclReceiptPath=Join-Path $ProtectedRoot 'retention-receipt.json'
     $retentionExists=Test-Path -LiteralPath $retentionDir
     if($Create -and -not $retentionExists){if(Test-Path -LiteralPath $aclReceiptPath){throw 'Sanitized retention receipt exists without its validated-output directory.'};$null=Set-ProtectedEvidenceDirectory -Path $retentionDir}
     elseif($Create -and $retentionExists){$null=Assert-TrxRetainedOutputShape $retentionDir $true;if(-not (Test-Path -LiteralPath $aclReceiptPath -PathType Leaf)){throw 'Existing retained outputs lack the paired owner-only retention receipt.'}}
@@ -703,7 +704,6 @@ function Get-TrxRetainedAssemblyInventory {
     $receiptBytes=[IO.File]::ReadAllBytes($receiptPath);$receiptText=[Text.UTF8Encoding]::new($false,$true).GetString($receiptBytes);$stored=$receiptText|ConvertFrom-Json -AsHashtable -DateKind String
     Assert-TrxKeys $stored @('schema','runnerRunId','sourceCommit','sourceTree','assemblies') 'protected assembly retention receipt'
     if($stored.schema -cne 'trx-validated-output-retention-v1' -or [string]$stored.runnerRunId -cne [string]$Runner.runId -or [string]$stored.sourceCommit -cne [string]$Runner.source.commit -or [string]$stored.sourceTree -cne [string]$Runner.source.committedTree -or (ConvertTo-Json -InputObject @($stored.assemblies) -Depth 10 -Compress) -cne (ConvertTo-Json -InputObject @($retained.ToArray()) -Depth 10 -Compress)){throw 'Protected assembly retention receipt does not match independently rechecked source and retained output identities.'}
-    $aclReceiptPath=Join-Path $ProtectedRoot 'retention-receipt.json'
     if($Create){
         if(-not (Test-Path -LiteralPath $aclReceiptPath)){$aclReceipt=[ordered]@{schema='trx-retention-assertion-v1';assemblyCount=2;pdbCount=2;ownerOnlyAclVerified=$true;copyHashesVerified=$true;privateLocatorsExcluded=$true;publicBinaryPayloadExcluded=$true};$aclBytes=ConvertTo-EvidenceJsonBytes $aclReceipt;$aclStream=[IO.File]::Open($aclReceiptPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None);try{$aclStream.Write($aclBytes,0,$aclBytes.Length);$aclStream.Flush($true)}finally{$aclStream.Dispose()}}
     }
