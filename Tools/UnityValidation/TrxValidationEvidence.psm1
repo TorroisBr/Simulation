@@ -857,7 +857,7 @@ function Get-TrxRetainedAssemblyInventory {
         $sourceAfter=[IO.File]::ReadAllBytes($source);$copyBytes=[IO.File]::ReadAllBytes($destination);$pdbCopyBytes=[IO.File]::ReadAllBytes($pdbDestination)
         if((Get-TrxBytesSha256 $sourceAfter) -cne $sourceHash -or (Get-TrxBytesSha256 $copyBytes) -cne $sourceHash -or $copyBytes.LongLength -ne $sourceBefore.LongLength -or (Get-TrxBytesSha256 ([IO.File]::ReadAllBytes($pdb.Path))) -cne $pdb.Sha256 -or (Get-TrxBytesSha256 $pdbCopyBytes) -cne $pdb.Sha256 -or $pdbCopyBytes.LongLength -ne [long]$pdb.Bytes){throw "Protected copy integrity check failed for '$leaf' or its matching PDB."}
         $copyIdentity=Get-TrxAssemblyIdentity $destination;$null=Assert-TrxMatchingPortablePdb $destination
-        if([string]$copyIdentity.mvid -cne [string]$fixed.mvid -or [string]$copyIdentity.fullName -cne [string]$identity.fullName){throw "Protected copy metadata changed for '$leaf'."}
+        if([string]$copyIdentity.mvid -cne [string]$identity.mvid -or [string]$copyIdentity.fullName -cne [string]$identity.fullName){throw "Protected copy metadata changed for '$leaf'."}
         $null=Assert-ProtectedEvidenceFile -Path $destination -ProtectedRoot $ProtectedRoot;$null=Assert-ProtectedEvidenceFile -Path $pdbDestination -ProtectedRoot $ProtectedRoot
         $retained.Add([ordered]@{path=$relative;file=$leaf;bytes=[long]$copyBytes.LongLength;sha256=(Get-TrxBytesSha256 $copyBytes);pdbFile=[IO.Path]::GetFileName($pdbDestination);pdbBytes=[long]$pdbCopyBytes.LongLength;pdbSha256=(Get-TrxBytesSha256 $pdbCopyBytes);fullName=$copyIdentity.fullName;mvid=$copyIdentity.mvid;observedAtUtc=[string]$claim.observedAtUtc})
     }
