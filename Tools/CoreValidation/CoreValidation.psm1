@@ -46,7 +46,8 @@ function Get-CoreInputSnapshot {
         'Tools/CoreValidation/CoreValidation.psm1',
         'Tools/CoreValidation/Invoke-CoreValidation.ps1',
         'Tools/CoreValidation/tests/Invoke-CoreValidationTests.ps1',
-        'Tools/CoreValidation/README.md'
+        'Tools/CoreValidation/README.md',
+        'Tools/UnityValidation/UnityValidationEvidence.psm1'
     )
 
     $gitPointer = Join-Path $root '.git'

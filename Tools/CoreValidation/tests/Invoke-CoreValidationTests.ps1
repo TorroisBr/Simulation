@@ -3,6 +3,7 @@ param()
 
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot '..\CoreValidation.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot '..\..\UnityValidation\UnityValidationEvidence.psm1') -Force
 
 function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
@@ -94,4 +95,22 @@ $afterChanged = @([pscustomobject]@{ path = 'input.cs'; bytes = 1; sha256 = 'b' 
 Assert-True (Compare-CoreInputSnapshots -Before $before -After $afterSame).stable 'Equal input snapshots should be stable.'
 Assert-True (-not (Compare-CoreInputSnapshots -Before $before -After $afterChanged).stable) 'Changed input snapshots must be rejected as unstable.'
 
-Write-Output 'Core validation self-tests PASS: populated/parameterized, failed, not-executed, empty discovery, malformed/missing report, run identity/summary outcome, ID/count integrity, and input stability.'
+$aclTestDirectory = Join-Path ([IO.Path]::GetTempPath()) ('core-validation-acl-' + [Guid]::NewGuid().ToString('N'))
+try {
+    $null = Set-ProtectedEvidenceDirectory -Path $aclTestDirectory
+    $null = Test-ProtectedEvidenceDirectory -Path $aclTestDirectory
+    $aclTestFile = Join-Path $aclTestDirectory 'private-evidence.txt'
+    [IO.File]::WriteAllText($aclTestFile, 'protected test evidence', [Text.UTF8Encoding]::new($false))
+    $null = Assert-ProtectedEvidenceFile -Path $aclTestFile -ProtectedRoot $aclTestDirectory
+}
+finally {
+    if (Test-Path -LiteralPath $aclTestDirectory -PathType Container) {
+        $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+        $fullAclTestDirectory = [IO.Path]::GetFullPath($aclTestDirectory)
+        if (-not $fullAclTestDirectory.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'ACL self-test cleanup escaped the unique temporary root.' }
+        if ((Get-Item -LiteralPath $fullAclTestDirectory -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'ACL self-test cleanup refused a reparse-point directory.' }
+        Remove-Item -LiteralPath $fullAclTestDirectory -Recurse -Force
+    }
+}
+
+Write-Output 'Core validation self-tests PASS: populated/parameterized, failed, not-executed, empty discovery, malformed/missing report, run identity/summary outcome, ID/count integrity, input stability, and protected evidence ACL.'

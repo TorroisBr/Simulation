@@ -12,6 +12,13 @@ Run the locked Core test and CalendarDemo gates from the repository root:
 pwsh -NoProfile -File .\Tools\CoreValidation\Invoke-CoreValidation.ps1
 ```
 
+Before writing run output, the runner creates a unique run directory with the
+shared `UnityValidationEvidence` owner-only ACL helper, verifies its exclusive
+current-account ACL, and checks each retained file. It leaves the caller's
+evidence parent untouched. Pass `-EvidenceRoot` to place the protected run
+directory under a suitable private location; the default remains the current
+user's LocalApplicationData evidence root.
+
 The runner requires the pinned SDK in `global.json`, locked NuGet restores,
 non-empty test discovery, coherent TRX run-local test IDs/entries/results and
 exact discovered-case identity. It rejects malformed or missing reports,

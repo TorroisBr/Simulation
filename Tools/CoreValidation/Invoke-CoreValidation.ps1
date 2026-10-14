@@ -17,9 +17,12 @@ $root = (Resolve-Path -LiteralPath $ProjectRoot).Path
 if (-not $EvidenceRoot) {
     $EvidenceRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Simulation\CoreValidation'
 }
+Import-Module (Join-Path $PSScriptRoot '..\UnityValidation\UnityValidationEvidence.psm1') -Force
 $runId = [Guid]::NewGuid().ToString('N')
 $runDirectory = Join-Path $EvidenceRoot $runId
-New-Item -ItemType Directory -Force -Path $runDirectory | Out-Null
+if (Test-Path -LiteralPath $runDirectory) { throw 'Unique CoreValidation run directory already exists; refusing to alter its ACL or contents.' }
+$null = Set-ProtectedEvidenceDirectory -Path $runDirectory
+$null = Test-ProtectedEvidenceDirectory -Path $runDirectory
 $testProject = 'tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj'
 $demoProject = 'tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj'
 $projectAssets = @(
@@ -181,12 +184,21 @@ try {
     $manifestPath = Join-Path $runDirectory 'manifest.json'
     $json = ConvertTo-Json -InputObject $manifest -Depth 16
     [IO.File]::WriteAllText($manifestPath, $json, [Text.UTF8Encoding]::new($false))
+    $null = Test-ProtectedEvidenceDirectory -Path $runDirectory
+    foreach ($evidenceFile in Get-ChildItem -LiteralPath $runDirectory -File -Force -Recurse) {
+        $null = Assert-ProtectedEvidenceFile -Path $evidenceFile.FullName -ProtectedRoot $runDirectory
+    }
     Write-Output "CORE validation PASS: run=$runId tests=$($coldAssessment.resultCount) coldTestMs=$($coldTest.elapsedMilliseconds) warmTestMs=$($warmTest.elapsedMilliseconds) libraryAbsent=$libraryAbsent"
     Write-Output "Private evidence manifest: <PRIVATE_EVIDENCE>/$runId/manifest.json"
     if (-not $libraryAbsent) { Write-Warning 'This checkout contains a Unity Library; run the .NET-only confirmation in a separate Library-free worktree before claiming Library independence.' }
 } catch {
     $failure = [ordered]@{ runId = $runId; status = 'Failed'; error = $_.Exception.Message; commands = @($records | ForEach-Object { [pscustomobject]@{ name = $_.name; exitCode = $_.exitCode; elapsedMilliseconds = $_.elapsedMilliseconds; logFile = [IO.Path]::GetFileName($_.logPath) } }) }
-    [IO.File]::WriteAllText((Join-Path $runDirectory 'failure.json'), (ConvertTo-Json -InputObject $failure -Depth 8), [Text.UTF8Encoding]::new($false))
+    $failurePath = Join-Path $runDirectory 'failure.json'
+    [IO.File]::WriteAllText($failurePath, (ConvertTo-Json -InputObject $failure -Depth 8), [Text.UTF8Encoding]::new($false))
+    $null = Test-ProtectedEvidenceDirectory -Path $runDirectory
+    foreach ($evidenceFile in Get-ChildItem -LiteralPath $runDirectory -File -Force -Recurse) {
+        $null = Assert-ProtectedEvidenceFile -Path $evidenceFile.FullName -ProtectedRoot $runDirectory
+    }
     Write-Error "CORE validation failed; original logs/reports remain at private run $runId. $($_.Exception.Message)"
     exit 1
 }
