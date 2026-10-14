@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>Simulation.Core</AssemblyName>
@@ -28,5 +28,6 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ACompatibilityDescriptor.cs" Link="Persistence/P12ACompatibilityDescriptor.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ContinuationDescriptorV2.cs" Link="Persistence/ContinuationDescriptorV2.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/AtomicFileSlot.cs" Link="Persistence/AtomicFileSlot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/NumericProfileIdentity.cs" Link="Persistence/NumericProfileIdentity.cs" />
   </ItemGroup>
 </Project>

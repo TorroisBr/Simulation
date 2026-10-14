@@ -17,28 +17,41 @@ public sealed class P12ACompatibilityDescriptor
         string contentFingerprint, string providerFingerprint, string calendarId, int calendarVersion,
         string calendarFingerprint, string p9Fingerprint, string p8Fingerprint)
     {
-        ProfileId = Need(profileId); ProfileVersion = Positive(profileVersion);
-        ConfigurationFingerprint = Need(configurationFingerprint); UnityVersion = Need(unityVersion);
-        RuntimePlatform = Need(runtimePlatform); ScriptingBackend = Need(scriptingBackend);
-        BuildGuid = buildGuid ?? ""; NumericProfileId = Need(numericProfileId);
-        NumericProfileVersion = Positive(numericProfileVersion); ContentFingerprint = Need(contentFingerprint);
-        ProviderFingerprint = Need(providerFingerprint); CalendarId = Need(calendarId);
-        CalendarVersion = Positive(calendarVersion); CalendarFingerprint = Need(calendarFingerprint);
-        P9Fingerprint = Need(p9Fingerprint); P8Fingerprint = Need(p8Fingerprint);
-        if (assemblyMvids == null) throw new ArgumentNullException(nameof(assemblyMvids));
+        ProfileId = Need(profileId);
+        ProfileVersion = Positive(profileVersion);
+        ConfigurationFingerprint = Need(configurationFingerprint);
+        UnityVersion = Need(unityVersion);
+        RuntimePlatform = Need(runtimePlatform);
+        ScriptingBackend = Need(scriptingBackend);
+        BuildGuid = buildGuid ?? "";
+        NumericProfileId = Need(numericProfileId);
+        NumericProfileVersion = Positive(numericProfileVersion);
+        ContentFingerprint = Need(contentFingerprint);
+        ProviderFingerprint = Need(providerFingerprint);
+        CalendarId = Need(calendarId);
+        CalendarVersion = Positive(calendarVersion);
+        CalendarFingerprint = Need(calendarFingerprint);
+        P9Fingerprint = Need(p9Fingerprint);
+        P8Fingerprint = Need(p8Fingerprint);
+        if (assemblyMvids == null)
+            throw new ArgumentNullException(nameof(assemblyMvids));
         List<string> sorted = new List<string>();
         foreach (string item in assemblyMvids)
         {
-            if (!Guid.TryParseExact(item, "D", out Guid id)) throw new ArgumentException("Invalid assembly MVID.");
+            if (!Guid.TryParseExact(item, "D", out Guid id))
+                throw new ArgumentException("Invalid assembly MVID.");
             sorted.Add(id.ToString("D").ToLowerInvariant());
         }
-        if (sorted.Count == 0) throw new ArgumentException("At least one project assembly MVID is required.");
+        if (sorted.Count == 0)
+            throw new ArgumentException("At least one project assembly MVID is required.");
         sorted.Sort(StringComparer.Ordinal);
         for (int i = 1; i < sorted.Count; i++)
-            if (sorted[i - 1] == sorted[i]) throw new ArgumentException("Duplicate assembly MVID.");
+            if (sorted[i - 1] == sorted[i])
+                throw new ArgumentException("Duplicate assembly MVID.");
         mvids = new ReadOnlyCollection<string>(sorted);
         canonicalBytes = BuildCanonicalBytes();
-        using (SHA256 sha = SHA256.Create()) canonicalDigest = sha.ComputeHash(canonicalBytes);
+        using (SHA256 sha = SHA256.Create())
+            canonicalDigest = sha.ComputeHash(canonicalBytes);
     }
     public string ProfileId { get; }
     public int ProfileVersion { get; }
@@ -63,7 +76,8 @@ public sealed class P12ACompatibilityDescriptor
 
     public P12AResultCode MismatchCode(P12ACompatibilityDescriptor other)
     {
-        if (other == null) return P12AResultCode.IncompatibleContentOrConfiguration;
+        if (other == null)
+            return P12AResultCode.IncompatibleContentOrConfiguration;
         bool runtimeMismatch = UnityVersion != other.UnityVersion || RuntimePlatform != other.RuntimePlatform
             || ScriptingBackend != other.ScriptingBackend || BuildGuid != other.BuildGuid
             || NumericProfileId != other.NumericProfileId || NumericProfileVersion != other.NumericProfileVersion
@@ -75,37 +89,45 @@ public sealed class P12ACompatibilityDescriptor
     public static bool TryReadCanonical(byte[] bytes, out P12ACompatibilityDescriptor descriptor)
     {
         descriptor = null;
-        if (bytes == null || bytes.Length > ContinuationWire.MaxHeaderBytes) return false;
+        if (bytes == null || bytes.Length > ContinuationWire.MaxHeaderBytes)
+            return false;
         try
         {
             using (MemoryStream stream = new MemoryStream(bytes, false))
             using (BinaryReader reader = new BinaryReader(stream, ContinuationWire.CreateStrictUtf8Encoding(), true))
             {
-                if (!ContinuationWire.ReadString(reader, out string profile) || profile == null) return false;
+                if (!ContinuationWire.ReadString(reader, out string profile) || profile == null)
+                    return false;
                 int profileVersion = reader.ReadInt32();
                 if (!ContinuationWire.ReadString(reader, out string config) || config == null
                     || !ContinuationWire.ReadString(reader, out string unity) || unity == null
                     || !ContinuationWire.ReadString(reader, out string platform) || platform == null
                     || !ContinuationWire.ReadString(reader, out string backend) || backend == null
-                    || !ContinuationWire.ReadString(reader, out string buildGuid) || buildGuid == null) return false;
+                    || !ContinuationWire.ReadString(reader, out string buildGuid) || buildGuid == null)
+                    return false;
                 int count = reader.ReadInt32();
-                if (count < 0 || count > 4096) return false;
+                if (count < 0 || count > 4096)
+                    return false;
                 List<string> assemblies = new List<string>(count);
                 for (int i = 0; i < count; i++)
                 {
-                    if (!ContinuationWire.ReadString(reader, out string mvid) || mvid == null) return false;
+                    if (!ContinuationWire.ReadString(reader, out string mvid) || mvid == null)
+                        return false;
                     assemblies.Add(mvid);
                 }
-                if (!ContinuationWire.ReadString(reader, out string numericId) || numericId == null) return false;
+                if (!ContinuationWire.ReadString(reader, out string numericId) || numericId == null)
+                    return false;
                 int numericVersion = reader.ReadInt32();
                 if (!ContinuationWire.ReadString(reader, out string content) || content == null
                     || !ContinuationWire.ReadString(reader, out string providers) || providers == null
-                    || !ContinuationWire.ReadString(reader, out string calendar) || calendar == null) return false;
+                    || !ContinuationWire.ReadString(reader, out string calendar) || calendar == null)
+                    return false;
                 int calendarVersion = reader.ReadInt32();
                 if (!ContinuationWire.ReadString(reader, out string calendarHash) || calendarHash == null
                     || !ContinuationWire.ReadString(reader, out string p9) || p9 == null
                     || !ContinuationWire.ReadString(reader, out string p8) || p8 == null
-                    || stream.Position != stream.Length) return false;
+                    || stream.Position != stream.Length)
+                    return false;
                 descriptor = new P12ACompatibilityDescriptor(profile, profileVersion, config, unity, platform,
                     backend, buildGuid, assemblies, numericId, numericVersion, content, providers,
                     calendar, calendarVersion, calendarHash, p9, p8);
@@ -121,8 +143,11 @@ public sealed class P12ACompatibilityDescriptor
 
     private static bool SameStrings(IReadOnlyList<string> left, IReadOnlyList<string> right)
     {
-        if (left.Count != right.Count) return false;
-        for (int i = 0; i < left.Count; i++) if (left[i] != right[i]) return false;
+        if (left.Count != right.Count)
+            return false;
+        for (int i = 0; i < left.Count; i++)
+            if (left[i] != right[i])
+                return false;
         return true;
     }
 
@@ -142,23 +167,36 @@ public sealed class P12ACompatibilityDescriptor
             + StringFieldLength(CalendarFingerprint)
             + StringFieldLength(P9Fingerprint)
             + StringFieldLength(P8Fingerprint);
-        foreach (string mvid in mvids) encodedLength = checked(encodedLength + StringFieldLength(mvid));
-        if (encodedLength > ContinuationWire.MaxHeaderBytes) throw new P12ALimitException();
+        foreach (string mvid in mvids)
+            encodedLength = checked(encodedLength + StringFieldLength(mvid));
+        if (encodedLength > ContinuationWire.MaxHeaderBytes)
+            throw new P12ALimitException();
         using (MemoryStream stream = new MemoryStream())
         using (BinaryWriter writer = new BinaryWriter(stream, ContinuationWire.CreateStrictUtf8Encoding(), true))
         {
-            ContinuationWire.WriteString(writer, ProfileId); writer.Write(ProfileVersion);
+            ContinuationWire.WriteString(writer, ProfileId);
+            writer.Write(ProfileVersion);
             ContinuationWire.WriteString(writer, ConfigurationFingerprint);
-            ContinuationWire.WriteString(writer, UnityVersion); ContinuationWire.WriteString(writer, RuntimePlatform);
-            ContinuationWire.WriteString(writer, ScriptingBackend); ContinuationWire.WriteString(writer, BuildGuid);
-            if (mvids.Count > 4096) throw new P12ALimitException();
-            writer.Write(mvids.Count); foreach (string id in mvids) ContinuationWire.WriteString(writer, id);
-            ContinuationWire.WriteString(writer, NumericProfileId); writer.Write(NumericProfileVersion);
-            ContinuationWire.WriteString(writer, ContentFingerprint); ContinuationWire.WriteString(writer, ProviderFingerprint);
-            ContinuationWire.WriteString(writer, CalendarId); writer.Write(CalendarVersion);
+            ContinuationWire.WriteString(writer, UnityVersion);
+            ContinuationWire.WriteString(writer, RuntimePlatform);
+            ContinuationWire.WriteString(writer, ScriptingBackend);
+            ContinuationWire.WriteString(writer, BuildGuid);
+            if (mvids.Count > 4096)
+                throw new P12ALimitException();
+            writer.Write(mvids.Count);
+            foreach (string id in mvids)
+                ContinuationWire.WriteString(writer, id);
+            ContinuationWire.WriteString(writer, NumericProfileId);
+            writer.Write(NumericProfileVersion);
+            ContinuationWire.WriteString(writer, ContentFingerprint);
+            ContinuationWire.WriteString(writer, ProviderFingerprint);
+            ContinuationWire.WriteString(writer, CalendarId);
+            writer.Write(CalendarVersion);
             ContinuationWire.WriteString(writer, CalendarFingerprint);
-            ContinuationWire.WriteString(writer, P9Fingerprint); ContinuationWire.WriteString(writer, P8Fingerprint);
-            writer.Flush(); return stream.ToArray();
+            ContinuationWire.WriteString(writer, P9Fingerprint);
+            ContinuationWire.WriteString(writer, P8Fingerprint);
+            writer.Flush();
+            return stream.ToArray();
         }
     }
     private static long StringFieldLength(string value)

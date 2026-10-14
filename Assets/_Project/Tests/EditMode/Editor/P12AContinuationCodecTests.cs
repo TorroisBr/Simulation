@@ -110,6 +110,110 @@ public sealed class P12AContinuationCodecTests
     }
 
     [Test]
+    public void StoreMapsInvalidArgumentsToInvalidOwnerAndInvalidPathsToStorageFailure()
+    {
+        P12ACompatibilityDescriptor descriptor = Descriptor();
+        Assert.That(P12AContinuationStore.TryHasSlot(null, out bool exists, out P12AResult result), Is.False);
+        Assert.That(exists, Is.False);
+        Assert.That(result.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
+        Assert.That(P12AContinuationStore.TryHasSlot("   ", out exists, out result), Is.False);
+        Assert.That(result.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
+
+        string invalidPath = "\0";
+        Assert.That(P12AContinuationStore.TryHasSlot(invalidPath, out exists, out result), Is.False);
+        Assert.That(result.Code, Is.EqualTo(P12AResultCode.StorageFailure));
+        Assert.That(P12AContinuationStore.TryLoad(Manifest, descriptor, invalidPath, out _, out result), Is.False);
+        Assert.That(result.Code, Is.EqualTo(P12AResultCode.StorageFailure));
+        Assert.That(P12AContinuationCodec.TryEncode(Image(descriptor, new byte[] { 1 }), Manifest, out byte[] validBytes, out _), Is.True);
+        Assert.That(P12AContinuationStore.TrySave(validBytes, Manifest, descriptor, invalidPath, out result), Is.False);
+        Assert.That(result.Code, Is.EqualTo(P12AResultCode.StorageFailure));
+    }
+
+    [Test]
+    public void UnityReadHeaderRejectsV2FrameBeforePublicationAndPreservesExistingSlot()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "P12AContinuationStoreTests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            P12ACompatibilityDescriptor expected = Descriptor();
+            Assert.That(P12AContinuationCodec.TryEncode(Image(expected, new byte[] { 1, 2, 3 }),
+                Manifest, out byte[] original, out _), Is.True);
+            Assert.That(P12AContinuationStore.TrySave(original, Manifest, expected, root, out _), Is.True);
+            string slot = P12AContinuationStore.SlotPath(root);
+            byte[] originalSlot = File.ReadAllBytes(slot);
+            P12ACompatibilityDescriptorV2 foreign = new P12ACompatibilityDescriptorV2(
+                "UnityBootstrap-Daily-v1", 1, 1, ".NET 8", "8.0.1.0", "Windows", "win-x64", "x64", "net8.0",
+                new[] { new P12AAssemblyIdentityV2("Simulation.Core", "1.0.0.0", "4b37a0ac-246b-47c5-9bbc-fd79704e0666") },
+                "numeric", 1, "config", "content", "providers", "calendar", 1, "calendar-hash", "p9", "p8");
+            byte[] validV2Frame = ReplaceCompatibilityDescriptor(original, expected.CanonicalBytes, foreign.CanonicalBytes);
+
+            Assert.That(P12AContinuationCodec.TryDecode(validV2Frame, Manifest, expected,
+                out P12AContinuationImage decoded, out P12AResult rejection), Is.False);
+            Assert.That(decoded, Is.Null);
+            Assert.That(rejection.Code, Is.EqualTo(P12AResultCode.UnsupportedSchema));
+            Assert.That(P12AContinuationStore.TrySave(validV2Frame, Manifest, expected, root,
+                out P12AResult saveRejection), Is.False);
+            Assert.That(saveRejection.Code, Is.EqualTo(P12AResultCode.UnsupportedSchema));
+            Assert.That(File.ReadAllBytes(slot), Is.EqualTo(originalSlot));
+
+            byte[] malformedV2 = (byte[])foreign.CanonicalBytes.Clone();
+            malformedV2[4] ^= 0x01;
+            byte[] malformedFrame = ReplaceCompatibilityDescriptor(original, expected.CanonicalBytes, malformedV2);
+            Assert.That(P12AContinuationCodec.TryDecode(malformedFrame, Manifest, expected,
+                out decoded, out rejection), Is.False);
+            Assert.That(decoded, Is.Null);
+            Assert.That(rejection.Code, Is.EqualTo(P12AResultCode.CorruptOrTruncated));
+            Assert.That(P12AContinuationStore.TrySave(malformedFrame, Manifest, expected, root,
+                out saveRejection), Is.False);
+            Assert.That(saveRejection.Code, Is.EqualTo(P12AResultCode.CorruptOrTruncated));
+            Assert.That(File.ReadAllBytes(slot), Is.EqualTo(originalSlot));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    private static byte[] ReplaceCompatibilityDescriptor(byte[] frame, byte[] oldDescriptor, byte[] newDescriptor)
+    {
+        int headerLength = checked((int)BitConverter.ToUInt32(frame, 12));
+        int headerStart = 20;
+        int descriptorOffset = -1;
+        for (int i = headerStart; i <= headerStart + headerLength - oldDescriptor.Length; i++)
+        {
+            bool match = true;
+            for (int j = 0; j < oldDescriptor.Length; j++)
+                if (frame[i + j] != oldDescriptor[j]) { match = false; break; }
+            if (match) { descriptorOffset = i; break; }
+        }
+        Assert.That(descriptorOffset, Is.GreaterThanOrEqualTo(headerStart), "Expected descriptor bytes in existing frame header.");
+        int oldHeaderEnd = headerStart + headerLength;
+        byte[] newHeader = new byte[headerLength - oldDescriptor.Length + newDescriptor.Length];
+        Buffer.BlockCopy(frame, headerStart, newHeader, 0, descriptorOffset - headerStart);
+        Buffer.BlockCopy(newDescriptor, 0, newHeader, descriptorOffset - headerStart, newDescriptor.Length);
+        Buffer.BlockCopy(BitConverter.GetBytes(newDescriptor.Length), 0, newHeader,
+            descriptorOffset - headerStart - sizeof(int), sizeof(int));
+        int suffixStart = descriptorOffset + oldDescriptor.Length;
+        Buffer.BlockCopy(frame, suffixStart, newHeader, descriptorOffset - headerStart + newDescriptor.Length,
+            oldHeaderEnd - suffixStart);
+        using (MemoryStream stream = new MemoryStream())
+        {
+            byte[] prefix = new byte[headerStart];
+            Buffer.BlockCopy(frame, 0, prefix, 0, prefix.Length);
+            Buffer.BlockCopy(BitConverter.GetBytes((uint)newHeader.Length), 0, prefix, 12, sizeof(uint));
+            stream.Write(prefix, 0, prefix.Length);
+            stream.Write(newHeader, 0, newHeader.Length);
+            int sectionsLength = frame.Length - 32 - oldHeaderEnd;
+            stream.Write(frame, oldHeaderEnd, sectionsLength);
+            byte[] content = stream.ToArray();
+            byte[] digest;
+            using (var sha = System.Security.Cryptography.SHA256.Create()) digest = sha.ComputeHash(content);
+            stream.Write(digest, 0, digest.Length);
+            return stream.ToArray();
+        }
+    }
+
+    [Test]
     public void DurableStore_AtomicReplaceFailurePreservesPreviousSlotAndCleansOwnTemporary()
     {
         string root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "P12AContinuationStoreTests",
