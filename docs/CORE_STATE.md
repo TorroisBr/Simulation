@@ -169,3 +169,36 @@ evidence package.
 The exact implementation candidate is `2bda6341f3c5e599064e10ccda569237b9aea445` (tree `f1d69e18dcf52e4f686116575fceb1729f53b59b`). It loads the TRX adapter before the Unity adapter so the shared CLI retains both command sets, and adds a subprocess regression that invokes the Unity `Verify` entry point. Independent exact-tip review passed at `7f0aeed1a036fe07dc6cd87f91b1c1652c099e8a` on `codex/core/TRXUnityVerifierImportFix-review-2bda6341`.
 
 Exact-tip validation passed: TRX evidence suite 144 assertions, Unity evidence packager suite 65 assertions (including the real CLI regression), Unity runner self-tests 33/33, and `git diff --check`. Archive-only CLI verification of the retained Unity package passed with archive SHA-256 `ad99dea856aac26d94fec35c970ab8e9142dc77f9f7e95a3bcc0a89ffdd0c614`. The retained TRX package also passed archive-only CLI verification with `originalComparisonNotPerformed`. The earlier `originalComparisonVerified` result belongs to the promoted `c68ca7a9` tool and remains a separate preserved result. This correction does not alter simulation behavior or package contents.
+
+## CORE-D — shared finite-source runtime and Lab host
+
+**Status:** implementation and validation candidate; independent exact-tip
+implementation review is pending. CORE canonical remains
+`af084c2028528d8588268801daaee14a905f5f5b`; this candidate has not been
+promoted.
+
+The candidate branch is `codex/core/CORE-D-implementation`, with implementation
+commit `e83ea3ba7c9cbddf76280f20e12785ce82383e43` and validation/tooling commit
+`e53857e3f157def116136001e78af97e64ff50cb` (tree
+`cf63c3db6054f749a82c631ea85c7e216001cf04`). The `Assets`, Core package,
+`src`, `tests`, and `tools/Simulation.Lab` trees remain identical between those
+commits. The implementation composes the promoted CORE-C finite-source kernel
+through one immutable Core scenario runtime, reuses it from the Unity adapter
+and fixed .NET Lab host, and keeps P12 Daily-v1 and P14-B admission boundaries
+unchanged.
+
+Exact-source validation passed .NET Core cold/warm 113/113, the combined Lab
+cold/warm deterministic scenario, the standalone locked Lab runner, focused
+Unity `FiniteSource` 41/41, ALL EditMode 3,120/3,120, official Smoke 5/5, and
+the existing Core validation self-tests. The `.NET` cold/warm reports were
+packaged and privately compared under the promoted TRX evidence tool;
+context-bound and archive-only verification passed. ALL EditMode was packaged
+and verified with the existing Unity evidence tool. Run IDs, source identities,
+hashes, and exact Lab output are recorded in
+[`CORE-D validation evidence`](validation/CORE_D_ScenarioLab/VALIDATION.md).
+The previous ALL EditMode package and manifest remain preserved unchanged.
+
+These results do not claim an equivalent P12 continuation host, P12/P13
+readiness, full P14-B City daily economy, persistence, cross-build compatibility,
+or a public extension surface. CORE-D awaits independent exact-tip review and
+the normal Core canonical promotion preflight.
