@@ -9,7 +9,9 @@ design PASS. Its old header still describes its submission; this reviewed handof
 supersedes that status only. Parent CORE-F implementation remains WAIT_DEPENDENCY.
 **Scope:** three substantial work packages inside existing CORE-F WP1/WP2, not new
 checkpoint IDs, phases or product capabilities. No runtime code is implemented here.
-**Review:** [independent record](CORE_F_PREREQUISITE_REVIEW.md).
+**Design verdict:** all three packages PASS / READY_FOR_IMPLEMENTATION on
+architecture promotion; Owners is a test/evidence implementation, not new production
+authority. **Review:** [independent record](CORE_F_PREREQUISITE_REVIEW.md).
 **Master implementation target:** `codex/core/canonical`, using isolated candidates
 and current-base dependency refresh. No numbered-phase canonical is moved.
 
@@ -56,7 +58,8 @@ SimulationConfigurationTypes.cs, SimulationConfigurationDefaults.cs,
 SimulationConfigurationResolver.cs, SimulationConfigurationValidator.cs,
 SimulationConfigurationValidationResult.cs. Their dependency closure is BCL and
 their own types. Leave SimulationCompositionValidator in Unity; it consumes
-actual domain/runtime components, not just value resolution. No new visibility
+host capability inputs. It is also BCL-only, but is not required by the selected
+configuration resolver closure and need not move in this package. No new visibility
 bridge is needed for the five-file closure: the result/resolver internal constructors
 have their callers inside that set; existing public effective-value constructors
 used by P12 remain public. Verify actual closure by explicit SDK build.
@@ -155,6 +158,18 @@ reflection/serialized-field selection and mapping; no second encoder remains in
 the factory. Baseline captured field/token/byte vectors are test data, not a second
 runtime fingerprint algorithm. P12AWire and P9 Pack are separate existing framing
 contracts; do not conflate them.
+The pure P9 builder receives the current resolved stage-order strings from the
+existing Unity ResolveStageOrder call, plus HexCoordinate convention/order strings
+and P9 profile/stage tokens as explicit value inputs. It does not import the
+P10-capable stage resolver or spatial authorities into this closure. Provider
+fingerprint encoding takes the current versioned ordered census groups supplied by
+the existing P12ADailyV1Census accessors; do not move census owners to obtain constants.
+Preserve ComputeFingerprint's existing big-endian UTF-8 record-length hash framing,
+which is distinct from P12's little-endian string framing. Baseline .NET vectors
+carry the same inputs; later migrated composition will supply them from its actual
+shared owners. Keep lazy getter evaluation order at the current P9/content-factory
+call boundaries; do not eagerly materialize compatibility fields earlier and change
+the raw null/list graph seen by the existing content fingerprint.
 
 Keep descriptor-v1 wire layout/parse/write semantics unchanged. No save conversion
 or masked build/MVID identity. New assembly moves produce a new build; save/load

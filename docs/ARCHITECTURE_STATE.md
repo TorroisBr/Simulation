@@ -1,9 +1,14 @@
 # General Architecture State
 
-## CORE-F executable prerequisite candidate — 2026-10-14
+## CORE-F executable prerequisite promotion — 2026-10-14
 
-**Status:** architecture/documentation candidate pending independent exact-tip
-review and refreshed promotion preflight. Architecture base
+**Status:** ARCHITECTURE_PROMOTED when this record is published on the canonical
+architecture branch; before publication this is the prepared adoption marker.
+**Reviewed content:** `edb04c1beb1447b90c365c5ff400d286aa0f1d2d`, three independent
+read-only PASS verdicts for all three packages. Final successor applicability and
+refreshed preflight remain required before publication. The containing canonical
+commit identifies the promotion marker through Git provenance.
+**Architecture base:**
 `7166ed088483c69d37300b4f12528ebb4b27be84`; current Core production
 `8ea3b47e9ab1be9ab3fe6261a73dc33fece8cd8f`.
 
@@ -20,8 +25,8 @@ implementation State in this older architecture checkout. The unchanged 89-famil
 39-asset provenance is refreshed against Core and a 164-field source map fixes
 Values scope. Full runtime/restore source closure and actual .NET continuation
 remain dependent downstream work, not proven by Unity tests or these handoffs.
-[Independent review](architecture/CORE_F_PREREQUISITE_REVIEW.md) determines exact
-readiness. No product/human architecture gate is required by accepted semantics.
+[Independent review](architecture/CORE_F_PREREQUISITE_REVIEW.md) records all three
+packages PASS / READY_FOR_IMPLEMENTATION on this architecture promotion. No product/human architecture gate is required by accepted semantics.
 Only docs/planning are changed; active implementation worktrees and Core/numbered-
 phase canonical refs are untouched. Master imports only these reviewed docs deltas.
 
