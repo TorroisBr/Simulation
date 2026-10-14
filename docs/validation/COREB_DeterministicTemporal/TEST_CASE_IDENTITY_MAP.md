@@ -1,0 +1,69 @@
+# CORE-B .NET test identity map
+
+This map records the identity transition for the affected deterministic-random, root-snapshot, and logical-timeline cases. It uses the TRX TestMethod.className together with UnitTestResult.testName; parameterized case arguments remain part of the name.
+
+Source comparison: canonical base c95752846a0ce0e1ebf985c4d79e0e17b02bb7af to candidate source 22ddf288789dbdff5e06640057042ef87e4a8932 (tree c5b667b251837b0977db55f6ee208755d1074f9b). This is an identity crosswalk only; it does not replace the required source-compared validation package.
+
+The affected .NET identity set contains 49 cases: three moved RNG cases, seven unchanged root-snapshot cases, 38 unchanged logical-timeline cases, and one new provider-boundary case. The cold and warm reports contain the same 49 affected identities.
+
+| Current .NET identity | Prior canonical identity | Disposition |
+|---|---|---|
+| DeterministicRandomCoreTests.ProviderAcceptsMaximumDrawIndexAndRejectsNegativeDrawIndex | — | New candidate boundary case; no prior identity |
+| DeterministicRandomCoreTests.SameSeedContextAndDrawProduceTheSameValue | DeterministicRandomTests.SameSeedContextAndDrawProduceTheSameValue | Moved from Unity-focused class to portable Core class |
+| DeterministicRandomCoreTests.StreamStateMakesDrawPositionExplicitAndIndependent | DeterministicRandomTests.StreamStateMakesDrawPositionExplicitAndIndependent | Moved from Unity-focused class to portable Core class |
+| DeterministicRandomCoreTests.UnrelatedStreamConsumptionDoesNotShiftOperationStream | DeterministicRandomTests.UnrelatedStreamConsumptionDoesNotShiftOperationStream | Moved from Unity-focused class to portable Core class |
+| DeterministicRandomRootSnapshotTests.CaptureSnapshotRecordsSupportedMetadataAndExactSeed | DeterministicRandomRootSnapshotTests.CaptureSnapshotRecordsSupportedMetadataAndExactSeed | Identity unchanged |
+| DeterministicRandomRootSnapshotTests.SnapshotIsDetachedImmutableAndCaptureOrStagingDoesNotAdvanceSource | DeterministicRandomRootSnapshotTests.SnapshotIsDetachedImmutableAndCaptureOrStagingDoesNotAdvanceSource | Identity unchanged |
+| DeterministicRandomRootSnapshotTests.StagedSourcePreservesEveryBoundarySeed(0) | DeterministicRandomRootSnapshotTests.StagedSourcePreservesEveryBoundarySeed(0) | Identity unchanged |
+| DeterministicRandomRootSnapshotTests.StagedSourcePreservesEveryBoundarySeed(int.MaxValue) | DeterministicRandomRootSnapshotTests.StagedSourcePreservesEveryBoundarySeed(int.MaxValue) | Identity unchanged |
+| DeterministicRandomRootSnapshotTests.StagedSourcePreservesEveryBoundarySeed(int.MinValue) | DeterministicRandomRootSnapshotTests.StagedSourcePreservesEveryBoundarySeed(int.MinValue) | Identity unchanged |
+| DeterministicRandomRootSnapshotTests.StagedSourcePreservesSeedAndKeyedOutputs | DeterministicRandomRootSnapshotTests.StagedSourcePreservesSeedAndKeyedOutputs | Identity unchanged |
+| DeterministicRandomRootSnapshotTests.UnsupportedMetadataFailsWithoutChangingActiveSource | DeterministicRandomRootSnapshotTests.UnsupportedMetadataFailsWithoutChangingActiveSource | Identity unchanged |
+| LogicalTimelineTests.AdvanceRequiresSealedInputPrefixAndRejectsBackwardTargets | LogicalTimelineTests.AdvanceRequiresSealedInputPrefixAndRejectsBackwardTargets | Identity unchanged |
+| LogicalTimelineTests.ContinuationBarrierRetainsFrozenProgressAndResumesSameStepAfterPartialCommit | LogicalTimelineTests.ContinuationBarrierRetainsFrozenProgressAndResumesSameStepAfterPartialCommit | Identity unchanged |
+| LogicalTimelineTests.ContinuationFactsArePublishedBeforeOrdinaryWorkAndSignalsWaitForOuterSuccess | LogicalTimelineTests.ContinuationFactsArePublishedBeforeOrdinaryWorkAndSignalsWaitForOuterSuccess | Identity unchanged |
+| LogicalTimelineTests.CrossedDayBoundariesAreOrderedAndTypedInstanceIdentityHasNoActorCardinality | LogicalTimelineTests.CrossedDayBoundariesAreOrderedAndTypedInstanceIdentityHasNoActorCardinality | Identity unchanged |
+| LogicalTimelineTests.DayBoundaryOwnerCommitsAtomicallyBeforeOrdinaryWorkAndRetriesSameIdentity | LogicalTimelineTests.DayBoundaryOwnerCommitsAtomicallyBeforeOrdinaryWorkAndRetriesSameIdentity | Identity unchanged |
+| LogicalTimelineTests.DispatchLimitStopsAtFailureInstantAndStaleWorkIsDiscardedAsInert | LogicalTimelineTests.DispatchLimitStopsAtFailureInstantAndStaleWorkIsDiscardedAsInert | Identity unchanged |
+| LogicalTimelineTests.FailedBoundaryCanBeReconstructedAsTheSamePendingOwnerOperation | LogicalTimelineTests.FailedBoundaryCanBeReconstructedAsTheSamePendingOwnerOperation | Identity unchanged |
+| LogicalTimelineTests.FailedContinuationFactPublicationHasNoSequenceDriftAndRetryDoesNotRepeatSteps | LogicalTimelineTests.FailedContinuationFactPublicationHasNoSequenceDriftAndRetryDoesNotRepeatSteps | Identity unchanged |
+| LogicalTimelineTests.FailedOwnerCommitRetainsWorkAndDoesNotAllocateCausalSequence | LogicalTimelineTests.FailedOwnerCommitRetainsWorkAndDoesNotAllocateCausalSequence | Identity unchanged |
+| LogicalTimelineTests.FrozenManifestValueComparisonRejectsDescriptorReorderingAndIdentityConflicts | LogicalTimelineTests.FrozenManifestValueComparisonRejectsDescriptorReorderingAndIdentityConflicts | Identity unchanged |
+| LogicalTimelineTests.IncompleteContinuationCanBeReconstructedWithoutChangingItsFrozenProgress | LogicalTimelineTests.IncompleteContinuationCanBeReconstructedWithoutChangingItsFrozenProgress | Identity unchanged |
+| LogicalTimelineTests.InitialInstantMayReceiveInputUntilItsFirstSeal | LogicalTimelineTests.InitialInstantMayReceiveInputUntilItsFirstSeal | Identity unchanged |
+| LogicalTimelineTests.InputCommitPublishesTypedDueFactsOnlyWhenTheInputTransactionCommits | LogicalTimelineTests.InputCommitPublishesTypedDueFactsOnlyWhenTheInputTransactionCommits | Identity unchanged |
+| LogicalTimelineTests.InputSequenceIsStableSealedAndLateOrDuplicateInputIsRejected | LogicalTimelineTests.InputSequenceIsStableSealedAndLateOrDuplicateInputIsRejected | Identity unchanged |
+| LogicalTimelineTests.LengthPrefixedBoundaryIdentityKeepsDelimiterBearingWorldAndProfileDistinct | LogicalTimelineTests.LengthPrefixedBoundaryIdentityKeepsDelimiterBearingWorldAndProfileDistinct | Identity unchanged |
+| LogicalTimelineTests.LengthPrefixedDueWorkIdentityKeepsDelimiterBearingComponentsDistinct | LogicalTimelineTests.LengthPrefixedDueWorkIdentityKeepsDelimiterBearingComponentsDistinct | Identity unchanged |
+| LogicalTimelineTests.NextCausalInstantChoosesEarliestInputWorkBoundaryOrTarget | LogicalTimelineTests.NextCausalInstantChoosesEarliestInputWorkBoundaryOrTarget | Identity unchanged |
+| LogicalTimelineTests.NextCausalInstantRetainsPendingBoundaryAndDoesNotChangeSameTickOrdering | LogicalTimelineTests.NextCausalInstantRetainsPendingBoundaryAndDoesNotChangeSameTickOrdering | Identity unchanged |
+| LogicalTimelineTests.NextCausalInstantYieldsCurrentForRestoredContinuationAndPendingHandoff | LogicalTimelineTests.NextCausalInstantYieldsCurrentForRestoredContinuationAndPendingHandoff | Identity unchanged |
+| LogicalTimelineTests.PendingContinuationReconstructionRejectsWrongWorldOrProfile("different-world","profile:one") | LogicalTimelineTests.PendingContinuationReconstructionRejectsWrongWorldOrProfile("different-world","profile:one") | Identity unchanged |
+| LogicalTimelineTests.PendingContinuationReconstructionRejectsWrongWorldOrProfile("world\|one","different-profile") | LogicalTimelineTests.PendingContinuationReconstructionRejectsWrongWorldOrProfile("world\|one","different-profile") | Identity unchanged |
+| LogicalTimelineTests.ProjectionRespectsCustomMonthLengths | LogicalTimelineTests.ProjectionRespectsCustomMonthLengths | Identity unchanged |
+| LogicalTimelineTests.ProjectionUsesLogicalDayAndCustomCalendarAtBoundariesAndMaximumDay | LogicalTimelineTests.ProjectionUsesLogicalDayAndCustomCalendarAtBoundariesAndMaximumDay | Identity unchanged |
+| LogicalTimelineTests.PublishedFactReconciliationRejectsIndexedIdentityWithDifferentDueOrCausalSequence(False) | LogicalTimelineTests.PublishedFactReconciliationRejectsIndexedIdentityWithDifferentDueOrCausalSequence(False) | Identity unchanged |
+| LogicalTimelineTests.PublishedFactReconciliationRejectsIndexedIdentityWithDifferentDueOrCausalSequence(True) | LogicalTimelineTests.PublishedFactReconciliationRejectsIndexedIdentityWithDifferentDueOrCausalSequence(True) | Identity unchanged |
+| LogicalTimelineTests.PublishedFactsAndUnhandedSignalsSurviveReconstructionAfterOuterFailure | LogicalTimelineTests.PublishedFactsAndUnhandedSignalsSurviveReconstructionAfterOuterFailure | Identity unchanged |
+| LogicalTimelineTests.QueriesArePureAndInputFailureRetainsUnappliedCommandForRetry | LogicalTimelineTests.QueriesArePureAndInputFailureRetainsUnappliedCommandForRetry | Identity unchanged |
+| LogicalTimelineTests.ReentrantAdvanceIsRejectedAndLegacyDailyRuntimeIsNotModifiedByThisCandidate | LogicalTimelineTests.ReentrantAdvanceIsRejectedAndLegacyDailyRuntimeIsNotModifiedByThisCandidate | Identity unchanged |
+| LogicalTimelineTests.ReloadedContinuationRejectsChangedFrozenDescriptorContent | LogicalTimelineTests.ReloadedContinuationRejectsChangedFrozenDescriptorContent | Identity unchanged |
+| LogicalTimelineTests.RestoredSignalHandoffRejectsWrongWorldOrProfile("different-world","profile:one") | LogicalTimelineTests.RestoredSignalHandoffRejectsWrongWorldOrProfile("different-world","profile:one") | Identity unchanged |
+| LogicalTimelineTests.RestoredSignalHandoffRejectsWrongWorldOrProfile("world\|one","different-profile") | LogicalTimelineTests.RestoredSignalHandoffRejectsWrongWorldOrProfile("world\|one","different-profile") | Identity unchanged |
+| LogicalTimelineTests.ResumableManifestPreservesZeroOneManyRosterAndInjectiveIdentities(0) | LogicalTimelineTests.ResumableManifestPreservesZeroOneManyRosterAndInjectiveIdentities(0) | Identity unchanged |
+| LogicalTimelineTests.ResumableManifestPreservesZeroOneManyRosterAndInjectiveIdentities(1) | LogicalTimelineTests.ResumableManifestPreservesZeroOneManyRosterAndInjectiveIdentities(1) | Identity unchanged |
+| LogicalTimelineTests.ResumableManifestPreservesZeroOneManyRosterAndInjectiveIdentities(3) | LogicalTimelineTests.ResumableManifestPreservesZeroOneManyRosterAndInjectiveIdentities(3) | Identity unchanged |
+| LogicalTimelineTests.SameInstantDueWorkOrderingIsIndependentOfRegistrationOrderAndRejectsSequenceCollision | LogicalTimelineTests.SameInstantDueWorkOrderingIsIndependentOfRegistrationOrderAndRejectsSequenceCollision | Identity unchanged |
+| LogicalTimelineTests.SameInstantGeneratedWorkUsesNextCausalWaveAfterCurrentWave | LogicalTimelineTests.SameInstantGeneratedWorkUsesNextCausalWaveAfterCurrentWave | Identity unchanged |
+| LogicalTimelineTests.SealedBoundaryInputsRunBeforeAtomicDayOwnerAndOrdinaryDueWork | LogicalTimelineTests.SealedBoundaryInputsRunBeforeAtomicDayOwnerAndOrdinaryDueWork | Identity unchanged |
+| LogicalTimelineTests.StaleReferenceDoesNotConsumeCommittedDispatchLimit | LogicalTimelineTests.StaleReferenceDoesNotConsumeCommittedDispatchLimit | Identity unchanged |
+
+## Unity-only identity
+
+| Candidate Unity identity | Prior canonical identity | Disposition |
+|---|---|---|
+| DeterministicRandomTests.NpcDecisionSelectionDoesNotDependOnActionInsertionOrder | DeterministicRandomTests.NpcDecisionSelectionDoesNotDependOnActionInsertionOrder | Unchanged Unity-only case; not part of the portable .NET case set |
+
+## Evidence boundary
+
+The map contains test names and source identities only. It contains no local filesystem paths, raw TRX output, test logs, or runtime payload. The evidence-packaging candidate still requires a policy-compliant private-source-compared package before CORE-B validation can be promoted.
