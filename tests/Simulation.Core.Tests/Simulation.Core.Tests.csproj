@@ -19,6 +19,7 @@
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarCoreTests.cs" Link="Calendar/CalendarCoreTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarParityTests.cs" Link="Calendar/CalendarParityTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/DeterministicRandomCoreTests.cs" Link="Determinism/DeterministicRandomCoreTests.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/DeterministicDemographyPolicyTests.cs" Link="Population/DeterministicDemographyPolicyTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/DeterministicRandomRootSnapshotTests.cs" Link="Determinism/DeterministicRandomRootSnapshotTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/LogicalTimelineTests.cs" Link="Temporal/LogicalTimelineTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/StableKeyEncodingTests.cs" Link="Identity/StableKeyEncodingTests.cs" />
