@@ -19,6 +19,8 @@ Os termos abaixo indicam o grau de compromisso:
 
 Quando uma implementação atual for mais estreita que uma direção futura, **não generalizar só para “preparar o futuro”**. Preservar o espaço conceitual e generalizar quando existir uso real.
 
+Um checkpoint delimitado pode provar um caso concreto sem definir esse caso como o modelo universal da capability. O caso de prova não converte uma Ruin em layout universal, uma fonte exógena em toda fonte produtiva, nem duas pessoas viajando juntas em toda atividade coletiva. Generalizar somente os limites semânticos que o próximo consumidor realmente exige.
+
 ### Autoridade documental
 
 1. `SIMULATION_ARCHITECTURE.md` — invariantes conceituais de longo prazo.
@@ -118,6 +120,35 @@ hospedado em Unity é uma alternativa válida se extração direta do Core ainda
 não for viável. Isso não exige agora extração completa, transporte ou segundo
 renderer. Frames e `Update` do host não definem o tempo ou a causalidade do mundo.
 
+### Artefatos de apresentação e desenvolvimento
+
+**DECIDIDO — NÃO AUTORITATIVOS POR PADRÃO**
+
+Unity Scenes, prefabs, inspectors e assets de configuração de uso geral são
+artefatos de apresentação, bootstrap ou teste por padrão. Sua presença,
+conteúdo ou edição não redefine silenciosamente o escopo de uma Phase, a
+arquitetura, as mecânicas de domínio, a participação em um perfil de
+persistência ou o inventário de owners autoritativos suportados.
+
+Um artefato pode integrar explicitamente um contrato de perfil suportado
+quando esse papel e seus limites forem aprovados e promovidos. Mesmo nesse
+caso, a composição e os inputs efetivos devem cumprir o contrato: mudar uma
+Scene ou um asset não altera por si só a definição do perfil. Fontes de
+authoring continuam sendo resolvidas para os valores e owners efetivos da
+simulação, conforme a seção de configuração; não se tornam uma autoridade
+concorrente de runtime.
+
+Perfis canônicos usam contratos explícitos de composição e, quando útil,
+fixtures ou configuração dedicadas que independem das Scenes mutáveis de
+desenvolvimento. O inventário vivo verifica o que foi realmente composto
+contra o perfil aprovado. Estado autoritativo adicional exige cobertura e
+admissão explícitas ou rejeição, conforme §92A; ele não pode ser omitido por
+ter surgido em um harness de desenvolvimento. Esta regra não exige migrar
+agora os artefatos já selecionados por contratos aprovados.
+A consolidação desta regra não certifica conformidade de uma composição
+existente nem entrega seu mecanismo de admissão; divergências observadas
+continuam exigindo validação e correção no workstream responsável.
+
 ### Extensibilidade e mundo pertencente ao jogador
 
 **DECIDIDO**
@@ -151,6 +182,42 @@ posterior; estes princípios não anunciam que essa plataforma já existe.
 ---
 
 # Parte II — Constituição semântica
+
+## 2A. Simulation Core independente de Unity — extração incremental
+
+**DECIDIDO — DIREÇÃO DE EXTRAÇÃO; CAPACIDADES POR CHECKPOINT**
+
+A direção escolhida é extrair uma implementação autoritativa C#/.NET que execute
+e seja testável sem Unity. Unity permanece o Simulation Studio oficial e passa
+a consumir esse Core. Lab e outros hosts aprovados consomem a mesma autoridade
+de aplicação/domínio; não existem regras alternativas por host. O Core mantém
+World Truth, identidades, decisões, sistemas de domínio, Knowledge, tempo lógico,
+aleatoriedade determinística, mutações, eventos/inputs e persistência/restauração.
+Unity mantém authoring, ScriptableObjects e conversão, lifecycle, UI/rendering,
+Scenes/prefabs, Editor e serviços ambientais específicos.
+
+Assets de authoring são resolvidos para definições efetivas puras, validadas e
+identificadas semanticamente antes da composição/publicação. Adapters não recebem
+autoridade de domínio. A extração preserva a autoridade existente de runtime,
+admissão/epochs/leases, fronteiras temporais e ordem causal; frames não governam
+a simulação. Não há novo runtime concorrente, estado paralelo ou cópia de regras.
+
+Extração de código, host não Unity equivalente e ampliação oficial de compatibilidade
+de saves são entregas distintas. O fechamento P12 no perfil same-build/current-host
+UnityBootstrap-Daily-v1 permanece válido e delimitado. Mudanças de assembly/build
+não podem ser ocultadas nos descritores; compilar fora de Unity não promete saves
+cross-host/build. Novos hosts provam equivalência nas fronteiras autoritativas para
+inputs compatíveis, conforme §12, antes de serem declarados suportados.
+
+O [contrato incremental](architecture/SIMULATION_CORE_EXTRACTION.md) registra a
+investigação atual, composição, DAG e gates. A frente é infraestrutura sem número
+de Phase; seu primeiro slice CORE-A extrai somente calendário/idade compartilhados,
+com design e revisão próprios. Não equivale à extração completa nem a um world-host.
+P19 loader não é pré-requisito. Fases encerradas permanecem encerradas e nenhum
+trabalho independente ganha um bloqueio geral de Core. Continuação de novos perfis
+exige suas próprias autoridades, cobertura e validação; o perfil P12 não cresce.
+
+---
 
 ## 3. Cadeia semântica principal
 
@@ -531,6 +598,8 @@ Knowledge, decisões e efeitos potencialmente diferentes. Participar junto não
 cria um NPC sintético, não funde identidades, não compartilha automaticamente
 Knowledge e não obriga outcomes iguais. Efeitos continuam sob as authorities
 dos respectivos domínios, não sob uma authority universal de resultados de Activity.
+
+Requisitos de início e contribuição para o resultado são perguntas separadas. Uma atividade pode exigir um mínimo de participantes para começar; outra pode ser válida com uma pessoa e aceitar colaboradores opcionais. Um papel pode admitir várias pessoas, vários papéis podem coexistir e os limites de cada papel podem diferir. O mínimo/máximo e as demais condições determinam **validade de formação/início**; quantidade, papel e capacidades dos participantes podem afetar duração, produção ou outros efeitos conforme regras do domínio, sem presumir escala linear. Um primeiro consumidor com duas Persons no mesmo papel não fixa a cardinalidade, o conjunto de papéis ou a duração das demais atividades.
 
 Uma atividade que precisa reunir participantes pode possuir proposta/formação
 antes da execução. Cada ator decide individualmente se participa usando sua
@@ -2293,6 +2362,14 @@ Existe source/sink deliberado?
 
 Um sink abstrato pode existir se for deliberado. Um pedágio com objetivo fiscal deve ter recebedor.
 
+### Fontes produtivas e fluxo material
+
+**DECIDIDO / DIREÇÃO**
+
+Uma fonte produtiva possui identidade própria e uma regra explícita de produção/exposição de material. Disponibilidade ou reserva determina o que ainda pode ser produzido quando aplicável; não se presume reserva finita para toda fonte nem produção exógena ilimitada para todas. Produção altera estoque sob uma autoridade de custódia; titularidade do material é fato distinto. Mercado é local de ofertas, demanda e possível preço, não sinônimo de fonte, reserva, dono ou agente decisor. Uma decisão econômica escolhe consumir, reter, vender ou transportar conforme a perspectiva e capacidade do ator/organização; transporte altera posição/custódia por sua autoridade e fronteira causal próprias.
+
+Múltiplas fontes podem coexistir. Um mundo pode combinar fonte finita, consumo local, excedente, comércio entre lugares e agentes como merchant, guilda, companhia, família, templo ou polity sem fazer da City a autoridade universal de decisão econômica. A City e o mercado agregado do primeiro perfil P14 são um recorte concreto. Fontes, reservas, titularidade/custódia, mercado, decisão e transporte continuam separáveis; uma transação ou mudança de reserva autoritativa deve ser coerente e reconstruível. Esta direção não implementa preços, comércio autônomo ou um engine econômico universal.
+
 ---
 
 # Parte XI — Demografia, família, residência e migração
@@ -3923,6 +4000,46 @@ por goals alcançados ou falhos, mudanças de controle, casualties, surrender,
 saídas e consequências políticas. O Conflict mais amplo pode sobreviver ao
 fim da War.
 
+### P17 — direção estratégica e primeiro recorte
+
+**DECIDIDO — DIREÇÃO DE PRODUTO; P17-A AINDA NÃO IMPLEMENTADO**
+
+War é um contexto estratégico persistente com participantes identificados que
+podem perseguir objetivos próprios. Uma War pode combinar disputa territorial,
+desgaste de capacidades e coerção sem conquista; nenhuma dessas famílias
+define sozinha o conceito. Um participante pode possuir vários objetivos,
+objetivos diferentes podem conflitar, e atingir um deles não termina a War.
+Objetivo real, objetivo declarado/publicamente conhecido e crença de outro
+ator sobre o objetivo permanecem fatos/perspectivas distintos.
+
+Participante estratégico, `WarSideId` e vínculo operacional de `ArmedForce`
+não são a mesma identidade. O `PersistentWarStore` de P7 continua sendo a
+authority de lifecycle e relações da War; sua evolução deve alojar os novos
+fatos estratégicos sem criar outro War owner. Vínculo de força com lado não
+concede automaticamente a uma Faction comando, lealdade ou título político.
+Contribuições e decisões de cada participante exigem associações e authorities
+explícitas no recorte que as consumir. War pode avaliar Battle, posição,
+suprimento, perdas ou controle factual, mas não se apropria das mutações desses
+domínios. Resultados de Battle e presença militar não alteram controle,
+jurisdição, soberania, propriedade, metas ou lifecycle da War por inferência.
+
+O primeiro recorte P17-A usa uma exigência coerciva não territorial: uma das
+duas Factions participantes quer que uma força explicitamente vinculada ao
+oponente deixe um Hex por uma travessia P16-A validada. É uma condição de
+retirada operacional, sem afirmar controle ou anexação do Hex. O cumprimento
+desse objetivo é avaliado pelo recibo autoritativo da travessia em fronteira
+concluída; não exige contador de pressão nem cópia da posição na War. A War
+permanece ativa após a travessia e só termina por uma transição explícita com
+motivo e causalidade registrados. Dois participantes, um objetivo e um salto
+são limites da prova, não cardinalidades universais.
+
+O [registro P17 de direção e entrada técnica](architecture/P17_STRATEGIC_WAR_DIRECTION.md)
+fixa o recorte, ownership, dependências, exclusões, preservação para
+reconstrução e avaliação de demonstrabilidade. O modelo de controle militar,
+ocupação, attrition/pressure composta, objetivos políticos e participação de
+mais atores permanece para checkpoints próprios. P17-A não cria War AI,
+tratados, governo, Campaign nem um `War.Winner` autoritativo.
+
 Campaign permanece **DEFERRED**. Não deve ser criada apenas porque uma guerra
 pode conter várias operações; ela será reavaliada quando existir um consumidor
 real que precise agrupar operações sob um objetivo operacional comum.
@@ -4083,6 +4200,10 @@ conexões percorríveis, entry points, publicação e conhecimento topológico. 
 O LocalTopologyStore atual é uma fundação reutilizável/adaptável. Futuramente
 deve aceitar um owner espacial neutro quando necessário, em vez de permanecer
 semanticamente limitado a City e ExplorableSite.
+
+Uma Ruin é um arquétipo/categoria de site, não uma instância única nem um layout obrigatório. Um mundo pode ter várias Ruins; cada instância tem identidade factual própria, distinta da definição/arquetipo e do `LocationId` que a ancora. A topologia de uma instância criada na gênese pode ser gerada deterministicamente a partir de inputs compatíveis do mundo, identidade estável do site, contexto de seed/aleatoriedade e regras/versionamento efetivos. Os mesmos inputs devem reproduzir a mesma topologia; instâncias ou mundos diferentes podem produzir resultados diferentes, sem exigir unicidade artificial. O primeiro perfil P10-A, com uma Ruin autorada e topologia finita, permanece válido como recorte, mas não define o modelo universal de geração.
+
+Geração local futura deve poder ampliar seu espaço de formas por regras de lugares, conexões e estrutura, em vez de escolher apenas entre layouts completos pré-autorados. A topologia semântica de lugares, contenção, entradas e conexões permanece separada de conteúdo, encontros, habitantes, recursos, armadilhas e interpretação por sistema de RPG. Regras temáticas e de conteúdo podem ser camadas futuras; nenhum ruleset OSR, formato de dungeon, catálogo ou engine universal é fixado aqui. Instâncias geradas entram na mesma autoridade de World Truth antes da primeira fronteira simulada; mudanças posteriores usam autoridades de runtime.
 
 ### SpatialReference
 
@@ -5328,6 +5449,57 @@ aleatoriedade autoritativa.
 
 ---
 
+## 85A. Demonstração humana e independência de Unity
+
+**DECIDIDO — DIREÇÃO ARQUITETURAL; LAB AINDA NÃO IMPLEMENTADO**
+
+Validação automatizada prova propriedades e regressões; demonstração humana
+permite executar um cenário pequeno e observar uma capacidade real. Checkpoints
+futuros de comportamento substancial avaliam ambas separadamente. A forma de
+demonstração acompanha o comportamento: texto ou tabela bastam para estados e
+transições simples; grafo ou linha do tempo só quando melhoram a compreensão.
+Não há obrigação geral de GUI nem requisito retroativo para fases encerradas.
+
+O Simulation Lab é um consumidor incremental de capacidades reais, não uma
+autoridade de mundo. Seu host de cenários prefere operar fora de Unity: prepara
+um mundo por uma composição/gênese aprovada, envia inputs pela autoridade de
+aplicação apropriada (incluindo `WorldCommand` quando cabível), avança pela
+autoridade temporal da Simulation e observa resultados por readers factuais ou
+outras consultas de capacidade aprovadas. O Lab não reimplementa regras,
+mantém Store paralelo, escreve diretamente em Stores ou usa snapshot P12,
+diagnóstico ou World Exchange como API mutável. Leituras usadas para afirmar
+World Truth precisam do corte coerente exigido em §91B; Knowledge individual
+permanece uma perspectiva distinta. Erros/rejeições devem permanecer visíveis.
+
+A direção de portabilidade é domínio e aplicação com semântica independente de
+`UnityEngine`, `MonoBehaviour`, `GameObject`, cenas, UI e lifecycle de Unity.
+Unity pode continuar como host e apresentação, mas o seu ciclo de vida não
+define causalidade do mundo. Uma demonstração que hoje só funciona dentro de
+Unity revela uma dependência a separar no recorte consumido; não autoriza
+duplicação das regras no Lab nem uma extração indiscriminada do projeto. Um
+host não Unity deve provar que invoca a mesma implementação autoritativa, não
+apenas que exibe dados exportados ou reexecuta um modelo simplificado.
+
+Simulation-External/World Explorer consome projeção factual portátil e pode
+apresentar artefatos do Lab quando o contrato de leitura for adequado. Sua
+projeção read-only não equivale a um host de execução interativa, transporte de
+comandos, save ou replay. O Lab não depende do loader P19; um futuro contrato
+público ou ferramenta externa pode reutilizar superfícies de aplicação
+estabilizadas por consumidores reais, sob revisão própria. Não se fixa agora
+protocolo, UI, formato de cenário, assembly ou API geral de extensões.
+
+O primeiro fundamento técnico será delimitado por um consumidor real: um host
+pequeno e reutilizável que execute um cenário, aplique/avance por autoridades
+existentes e exponha observação suficiente para esse cenário. Sua escolha de
+host, composição e extração de dependências exige design e revisão próprios.
+Novos consumidores ampliam a mesma base apenas quando necessários. A avaliação
+de demonstrabilidade em `EXECUTION_MODEL.md` determina se a demonstração entra
+no checkpoint, segue como entrega posterior antes do fechamento da fase quando
+prático, ou não tem significado para o checkpoint. Isso não altera a entrega
+ou o status de checkpoints passados.
+
+---
+
 ## 86. IA/NLP é tradutor, não autor automático do mundo
 
 **DECIDIDO**
@@ -5527,6 +5699,85 @@ Participação não pode existir apenas numa lista transitória de NPCs carregad
 
 ---
 
+## 91A. Identidade durável do mundo
+
+**DECIDIDO — DIREÇÃO ARQUITETURAL; WI-A ENTREGUE EM RECORTE DELIMITADO; SAVE/FORK AINDA NÃO ENTREGUES**
+
+`WorldId` identifica uma continuação causal independente do mundo. Uma nova
+identidade é publicada com o World Truth inicial completo e validado, antes da
+primeira fronteira simulada. Gênese que falha não publica mundo nem `WorldId`.
+Seed, fingerprint/conteúdo de gênese, arquivo de save e instância runtime não
+são a identidade do mundo. O owner é a composição/identidade do mundo, não uma
+etapa geradora, store espacial, exporter ou timeline.
+
+Save/load da mesma continuação preserva `WorldId`. Copiar bytes de um save não
+cria automaticamente outro mundo; antes de duas cópias continuarem
+independentemente, uma delas precisa de uma operação explícita de branch e
+novo `WorldId`. Um fork histórico P13 reconstrói o estado exato na fronteira T
+realmente simulada e publica uma continuação independente com novo `WorldId` e
+proveniência `(WorldId de origem, fronteira T)`. Fatos e IDs herdados do
+período anterior a T conservam sua identidade de domínio; novas alocações e
+ocorrências da branch precisam ser inequívocas. Templates, cenários e clones
+não usam identidade de conteúdo como identidade do mundo resultante.
+
+Não se exige `LineageId` ou `BranchId` separado em v1: `WorldId` identifica a
+branch e a proveniência registra sua origem. A representação e alocação do
+primeiro WorldId estão no design técnico WI-A promovido; compatibilidade com
+mundos antigos, gatilho de ramificação de saves copiados e conciliação dos
+IDs/receipts P18 herdados no fork permanecem design técnico ou
+decisão de produto específica. O `worldId` que P18 já injetava, isoladamente,
+não constituía implementação desta identidade durável; a entrega delimitada
+de WI-A está registrada no State e código canônicos.
+
+## 91B. Projeção factual read-only
+
+**DECIDIDO — DIREÇÃO ARQUITETURAL; FR-B/FR-C E WX-D ENTREGUES EM RECORTES DELIMITADOS**
+
+Consumidores de fatos aprovados usarão readers por capacidade com registros
+imutáveis, IDs semânticos e origem de autoridade declarada. A superfície não
+expõe Stores, coleções mutáveis, `NpcRuntime`, Unity, estruturas privadas de
+captura P12 ou tipos de World Exchange como contrato de domínio. Projeção não
+é persistência, History, diagnóstico autoritativo nem segunda World Truth.
+Adapters convertem semântica de Simulation para seus formatos externos; uma
+necessidade de apresentação não cria automaticamente um fato do mundo.
+
+O contrato de leitura distingue: fato autoritativo presente; fato opcional
+validamente ausente; fato atualmente indisponível por falta de owner/corte
+coerente/relação; conceito não suportado por reader aprovado; valor derivado
+para apresentação com fonte identificada; e Knowledge de um Actor, que requer
+perspectiva separada e não se apresenta como Truth objetiva. Coleção vazia
+somente significa ausência factual se a capacidade foi lida completamente.
+Adapters preservam essas diferenças ou recusam uma tradução inadequada.
+
+Exportação factual autoritativa exige sessão de leitura coerente para os owners
+declarados, em uma fronteira lógica concluída ou corte validado; falha ou
+repete se não puder provar o corte. Inspeção best-effort pode existir quando
+rotulada como não coerente. Infraestrutura de época/quiescência P12 pode ser
+reutilizada se cobrir o recorte, mas P12-A, P12-B e fechamento completo de P12
+não são pré-requisitos gerais da projeção factual. P19 não é pré-requisito do
+primeiro produtor oficial. Faction é o primeiro recorte real recomendado após
+`WorldId` e reader factual coerente; relações com Person exigem validação do
+corte entre os respectivos owners. Extensibilidade de projeção por mods é
+posterior e depende de consumidor e contrato público concretos.
+
+O estudo aprovado em
+[`design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md`](design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md)
+detalha evidência, DAG, exclusões e questões técnicas. Os contratos técnicos
+promovidos em
+[`design/WORLD_IDENTITY_FOUNDATION_DESIGN.md`](design/WORLD_IDENTITY_FOUNDATION_DESIGN.md)
+e
+[`design/FACTUAL_READ_SURFACE_FOUNDATION_DESIGN.md`](design/FACTUAL_READ_SURFACE_FOUNDATION_DESIGN.md)
+estabeleceram WI-A e FR-B como checkpoints independentemente executáveis no
+planejamento de 2026-10-01. Desde então, WI-A, FR-B, FR-C e o produtor WX-D
+foram promovidos em recortes delimitados, com evidência no State/código
+canônicos; Simulation-External v2 fornece o contrato de cobertura de coleções.
+Essa entrega não afirma captura P12, save/load, fork P13 ou projeção de todo o
+mundo. O recorte coerente inicial de FR-B é `UnityBootstrapDailyV1` e admite
+todos os escritores Faction/Person relevantes ao recorte. A distinção entre
+coleção vazia e conceito não suportado permanece no contrato externo.
+
+---
+
 ## 92. Save != Replay != History
 
 **DECIDIDO**
@@ -5573,6 +5824,54 @@ preserva a garantia de reconstrução também nessas fronteiras e não reinterpr
 retroativamente históricos executados no perfil diário. Instalação/retrofit de
 mod que altera estado após o início participa da história na sua fronteira;
 não reexecuta gênese nem recebe existência ou efeitos anteriores à instalação.
+
+## 92A. Entrada de estado autoritativo antes de Save completo
+
+**INVARIANTE ARQUITETURAL; NÃO É CAPACIDADE DE SAVE ENTREGUE**
+
+Uma nova capacidade pode estabelecer World Truth e evoluir durante a história
+simulada antes do fechamento da Phase 12. Ela não depende, por esse motivo
+isolado, da implementação de save/load ou de fork. Seu contrato deve nascer
+apto à continuação e à reconstrução: identidade semântica estável, um owner
+autoritativo, fronteira lógica de mutação confirmada, ordem causal
+determinística, distinção entre estado retido e derivado, relações por IDs,
+configuração/conteúdo e aleatoriedade efetivos quando causais, e inputs
+externos com payload, authority, fronteira e ordenação preservados. A criação,
+alteração e destruição em runtime devem ter consequências reconstruíveis na
+fronteira em que ocorreram. Caches e objetos Unity não são a única verdade.
+
+O owner precisa oferecer um limite semântico de estado que permita futura
+exportação exata, hidratação em composição privada e validação de relações
+antes da publicação. Isso não obriga o checkpoint de domínio a implementar
+agora DTOs P12, armazenamento, loader ou replay. Tampouco permite presumir
+que um adaptador futuro recuperará causalidade descartada na execução.
+
+O perfil `UnityBootstrap-Daily-v1` de P12 permanece o recorte explicitamente
+aceito. Seu fechamento exige continuação determinística completa para todos
+os owners autoritativos **efetivamente incluídos no perfil admitido**. Uma
+capacidade nova não amplia automaticamente esse perfil. Se uma composição
+selecionada passar a incluir novo estado sem cobertura exata, a admissão deve
+rejeitar essa composição até integração explícita ou uso de outro perfil
+compatível; ela não pode omitir estado silenciosamente. Um perfil futuro pode
+incluir a capacidade por versão/adaptador próprio. Essa fronteira de escopo não
+redefine save parcial como save válido.
+
+Enquanto P12-B ainda não prova admissão completa, um novo owner deve ficar
+fora da composição selecionada por construção, ou integrar um mecanismo de
+admissão que falhe fechado para esse owner e provar a rejeição em validação
+negativa antes da promoção do checkpoint de domínio. A integração com o
+hotspot P12-B é serial. Uma intenção documental de rejeitar não substitui
+essa evidência quando o owner pode ser composto.
+
+Não há milestone global `PHASE 12 FOUNDATION READY`: P12-B/C são capacidades
+específicas do perfil e não são pré-requisitos gerais da autoridade de novos
+domínios. O gate de entrada é o contrato de continuação/reconstrução de cada
+novo owner. P13 pode desenhar retenção, checkpoints e modelo de inputs antes
+do fechamento P12, mas a entrega de fork para uma fronteira exige continuação
+exata do mundo/perfil escolhido e recuperação histórica de estado inicial,
+mutações, inputs e semânticas compatíveis. O marcador administrativo
+`P12 CLOSED`, isoladamente, não comprova história reconstruível; P12 completo para
+o perfil escolhido, isoladamente, também não comprova fork histórico.
 
 ---
 
@@ -5807,10 +6106,17 @@ Estas perguntas não devem receber resposta implícita sem nova definição:
 7. **Governança genérica** — não criar engine universal antes de casos concretos de líder/conselho/voto.
 8. **Guerra estratégica completa** — a semântica constitucional de conflito,
    forças, batalha, controle, occupation, goals e término está definida acima;
-   a implementação integrada e seus consumidores concretos permanecem
-   deferidos até existir uma Phase própria.
+   P17-A delimita apenas a primeira exigência coerciva. Controle territorial,
+   desgaste composto, participação/decisão ampla e os demais consumidores
+   integrados permanecem para checkpoints próprios.
 9. **Government/constitution framework** — não generalizar a partir da política de sucessão apenas.
 10. **Título/social status** — contratos finais dependem de use cases.
+11. **Mecânica restante de WorldId e projeção** — a direção semântica é
+    decidida em §§91A–91B; WI-A e FR-B têm designs técnicos promovidos.
+    Migração de perfis sem ID, gatilho da ramificação de saves copiados,
+    compatibilidade de IDs P18 no fork, leitor Faction após FR-B e contrato
+    externo de cobertura/mapeamento do primeiro documento ainda dependem dos
+    seus respectivos gates; não alteram a direção aprovada por omissão.
 
 ---
 
@@ -5919,6 +6225,8 @@ PERSISTENT GROUP / ORGANIZATION != TEMPORARY MULTI-PARTICIPANT ACTIVITY
 PARTICIPATION != MEMBERSHIP != CONTROL OF OTHER ACTORS
 AGREEMENT / RESERVATION != VALIDATED START
 SHARED CONTEXT != SHARED KNOWLEDGE / IDENTICAL OUTCOME
+ACTIVITY START VALIDITY != PARTICIPANT CONTRIBUTION
+ONE ROLE MAY HAVE MULTIPLE PARTICIPANTS; REQUIRED != OPTIONAL
 SMALL-GROUP EXECUTION != AGGREGATE WARFARE EXECUTION
 
 INITIAL CONFIGURED WORLD → COMPLETE WORLD TRUTH BEFORE FIRST SIMULATED BOUNDARY
@@ -5926,6 +6234,7 @@ GENERATED BACKSTORY != SIMULATED HISTORY
 INITIAL GENERATED STATE != IMMUTABLE WORLD
 INITIAL GENERATION != RUNTIME MUTATION AUTHORITY
 GENESIS = ORDERED DEPENDENCY-AWARE PIPELINE
+SITE ARCHETYPE / DEFINITION != SITE INSTANCE / GENERATED TOPOLOGY
 MOD INSTALLATION != IMPLICIT HISTORICAL REGENERATION
 RUNTIME-CREATED WORLD STRUCTURE = NORMAL WORLD TRUTH
 EVERY SIMULATED HISTORICAL BOUNDARY → RECONSTRUCTABLE AUTHORITATIVE STATE AND INDEPENDENT FORK
@@ -5951,6 +6260,8 @@ PROVIDER REGISTRATION != ENABLEMENT
 ENABLED CAPABILITY WITHOUT HOST SUPPORT → COMPOSITION FAILURE
 SIMULATIONMODULESET LOCAL/LEGACY != CANONICAL ENABLEMENT AUTHORITY
 ECONOMY != MERCHANT != MERCHANT AUTONOMY
+PRODUCTIVE SOURCE != RESERVE != STOCK/CUSTODY != MARKET
+ECONOMIC DECISION != MATERIAL TRANSPORT
 NEW DISCRETIONARY TRADE REPOSITIONING = AUTONOMY
 EXISTING COMMERCIAL COMMITMENT EXECUTION != AUTOMATIC AUTONOMY
 MINIMUM PROFIT THRESHOLD → MERCHANT/JOB CONTENT

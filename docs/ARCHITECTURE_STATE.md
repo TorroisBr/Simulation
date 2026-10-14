@@ -1,0 +1,454 @@
+# General Architecture State
+
+## Privacy-safe TRX evidence contract promotion — 2026-10-13
+
+**Status:** ARCHITECTURE_PROMOTED for operational architecture/documentation
+when this entry lands on `codex/architecture/world-identity-projection`; before
+publication it is a prepared marker. The commit introducing this entry/review
+is the canonical promotion marker, resolved through Git provenance.
+**Previous canonical:** `32358d2a0faf511e098c4f295a5132a4bfb8cfb2`.
+**Reviewed content:** `1ca79d2e781dc6463ea6f0ffba50268d9d4ff3f6` from
+`codex/architecture/dotnet-trx-evidence-contract`.
+
+The user authorized architecture assessment, independent review and compatible
+documentation promotion for the .NET evidence/privacy gate. The [contract and
+exact Tools Master handoff](operations/DOTNET_TRX_EVIDENCE_CONTRACT.md) passed
+[two independent reviews](architecture/DOTNET_TRX_EVIDENCE_REVIEW.md):
+**PASS / READY_FOR_IMPLEMENTATION** for TRX-EVIDENCE-v1 after this promotion.
+This does not claim an implemented adapter or promote CORE-A.
+
+Accepted strategy: immutable originals with verified private access and complete
+normalized result reports plus reviewed provenance in a durable public package.
+Only the closed TRX metadata projection is allowed; no failure/outcome/case loss,
+no byte-identical-original claim, no hashes-only access/authenticity assertion.
+Archive verification and original comparison have distinct scopes. The public
+manifest/commands/cwd/retention handles and recovered/captured facts are explicit.
+
+Current CORE-A candidate `74677a0b5b74c7814874dd2d2b11aead2891bc42` retains
+implementation/docs PASS but remains **WAIT_DEPENDENCY for promotion** on the
+implemented/validated/reviewed shared adapter, actual ACL remediation, complete
+public package, independent original comparison and final exact-tip applicability.
+Its current local original copies have broad inherited ACLs, so their protection
+claim needs scoped correction; no disclosure is inferred. The original SDK run
+context, 27 matching inputs, generated dependency records and retained outputs
+make honest assembly/cwd recovery feasible without a normalization-only rerun.
+
+**Refreshed DAG:** promoted contract -> reviewed Tools capability -> verified
+original retention/source/assembly context -> complete cold/warm package and
+independent comparison -> CORE-A final applicability/preflight/promotion ->
+CORE-B/C actual baseline/dependency refresh. CORE-B/C existing design candidates
+are not implementation-ready merely through this policy. No source/test or active
+CORE-A worktree/ref is modified by this architecture promotion. Shared Tools
+implementation and integration remain owned/serialized under Master workflow.
+
+The original-only TRX publication clause is prospectively replaced by the
+conditional supported normalized path, not retroactively deemed satisfied.
+Existing .NET/Unity/P12/ALL/Smoke gate evidence is preserved; source/harness/input
+changes still need affected validation. This docs-only promotion requires no
+Unity/.NET rerun. Current P12 remains closed within its accepted profile; no P13
+readiness, save-profile growth, new gameplay or Phase reopening follows.
+No unresolved product/architecture decision remains for this bounded Tools slice.
+
+## Simulation Core extraction architecture promotion — 2026-10-13
+
+**Status:** ARCHITECTURE_PROMOTED for documentation/planning only when this
+entry is published on `codex/architecture/world-identity-projection`; while
+only on the candidate branch it is the prepared promotion record.
+**Previous canonical architecture:** `e940714bcc05c0d790e0cb9a7f614ee6b493e21a`.
+**Reviewed content:** `f4e11df2645e5c1bc91fdc09bfdfad3f34e5c12e` from
+`codex/architecture/simulation-core-extraction`. The commit introducing this
+State/review record is the promotion marker; resolve its full canonical SHA from
+Git provenance, avoiding a self-referential SHA field.
+
+The user explicitly selected genuine Unity-independent Core extraction and
+allowed compatible architecture review/promotion without routine approval.
+The [architecture and migration contract](architecture/SIMULATION_CORE_EXTRACTION.md)
+and [complete source inventory](architecture/SIMULATION_CORE_DEPENDENCY_INVENTORY.csv)
+were independently reviewed. [Review](architecture/SIMULATION_CORE_EXTRACTION_REVIEW.md):
+architecture PASS; CORE-A technical PASS / READY_FOR_IMPLEMENTATION after this
+promotion. Final metadata-tip applicability is required before publication.
+
+CORE-A extracts existing calendar/date/age semantics into one shared-source
+engine-free Core assembly, compiled by Unity and SDK projects. Its exact
+[Master handoff](architecture/SIMULATION_CORE_A_MASTER_HANDOFF.md) names source
+moves, two-host parity, Unity authoring/P12/full/Smoke gates, evidence, ownership,
+rollback and future implementation provenance. Master consumes it as an
+independently executable bounded candidate under its active implementation mandate.
+This General Architect assignment starts no code migration. CORE-B/C are
+READY_FOR_TECHNICAL_DESIGN; runtime/Lab, remaining individual domain closures
+and equivalent Daily-v1 .NET continuation keep their named WAIT_DEPENDENCY gates.
+No Core delivery, full world host or cross-host/build save promise is claimed.
+
+**Dependency refresh:** actual inspected P12 canonical
+`4cc31073f0ec6ba5c718084e4cebd6e914931d5d` records P12 CLOSED at
+`fbf06fa887a29b92be004d864f4ee98d90926d4a`, A–G promoted within accepted
+same-build/current-host Daily-v1. P13 remains WAIT_DEPENDENCY; P12 is not reopened.
+No profile expansion, gameplay or P19 loader prerequisite. Roadmap/Brief mark
+older P12 readiness as historical; other delivered phase contracts remain intact.
+
+Docs-only architecture direction is UPSTREAM_IRRELEVANT to unchanged active
+production inputs; eventual assembly/runtime moves require REVALIDATE/REINTEGRATE
+for actual consumers and build identity. Master must import bounded reviewed docs
+onto current production, not merge this architecture branch's older Assets tree.
+The implementation front is `codex/core/canonical` with future `docs/CORE_STATE.md`,
+not a new numbered Phase or a competing domain authority. Shared integration
+hotspots remain serialized; active Master worktrees and numbered-phase refs
+are untouched by this architecture promotion.
+
+Read-only measurement: 230 registered worktrees, 114 Library directories; one
+P12 Library sample 2,017,129,311 logical bytes/34,389 files. No migration saving or
+execution-time speedup measured, no cache cleanup. Current evidence packager
+support and .NET TRX/input boundaries are explicit in the operational updates.
+Documentation diff-check and independent exact-tip review are the promotion gates;
+no Unity/.NET test execution is claimed for this non-executable candidate.
+No unresolved product or architecture decision remains for CORE-A.
+
+## P20 checkpoint identity/design promotion — 2026-10-07
+
+**Status:** ARCHITECTURE_PROMOTED for architecture/documentation only.
+**Canonical branch:** `codex/architecture/world-identity-projection`.
+**Previous canonical architecture SHA:** `e16796014d348e3b59da7ed848101c4c03926ba5`.
+**User-approved candidate and promoted content SHA:**
+`eadfce01f44e7d0d649b2b93103abb10a21c6a37` from
+`codex/architecture/p20c-reconciliation-review`.
+
+The user explicitly approved the unchanged, independently reviewed candidate.
+Final preflight confirmed matching local/remote architecture and candidate
+tips, clean writer checkout, fast-forward ancestry, applicable independent
+PASS at the exact candidate, a nine-file Markdown-only diff and successful
+`git diff --check`. The approved content was fast-forwarded and pushed to
+the canonical architecture branch. This additive State/handoff refresh records
+that completed promotion; it changes no technical or product contract.
+
+P20-A remains Synthetic Multi-participant Operation; P20-B remains promoted
+Daily-profile census admission. Its owning State, historical design/review/
+promotion evidence and Git history remain preserved. P20-C names Two-Person
+Joint Civil Travel; two Persons is only the bounded fixture.
+P20-C's [reviewed technical contract](architecture/P20C_TECHNICAL_DESIGN_RECORD.md)
+remains PASS / READY_FOR_IMPLEMENTATION, including the required same-commit
+P20/P18 FailedStart revision-token synchronization and reconstruction tests.
+No further product or semantic decision is required.
+
+**Refreshed affected readiness/DAG:**
+
+- Promoted P18-A/B/C + P20-A + P8-E → P20-C Master implementation workflow.
+  The architecture-canonical gate is now satisfied; scheduling requires a
+  safe, serialized hotspot window, not another architecture decision.
+- P20-B's existing Daily-profile census boundary + current P12 composition
+  → P20-C compatibility/rejection validation before domain promotion.
+  Daily-v1 still admits absent/empty P20 state and rejects populated state.
+- Existing P20-C travel code → REVALIDATE/correct the specified FailedStart
+  reconstruction path and produce current-base P20-C implementation evidence.
+  P20-C runtime capability remains NOT PROMOTED.
+- P20-C promoted consumer + supported Lab execution/read path → follow-up
+  joint-travel demonstration; no hidden Lab prerequisite.
+- Unrelated delivered scopes and active numbered-phase fronts →
+  UPSTREAM_IRRELEVANT to this documentation-only identity/status publication.
+  Their own canonical refs, States, implementation and gates remain intact.
+
+The [P20-C Master handoff](architecture/P20C_JOINT_CIVIL_TRAVEL_MASTER_HANDOFF.md)
+is current and implementation-ready. Master must inspect existing code before
+selecting any delta, preserve P20-A isolation, serialize P8/P18/runtime/P12
+hotspots, validate current P12 integration and obtain independent exact-tip
+implementation review before requesting P20-C domain promotion.
+No runtime code or numbered-phase canonical branch is changed; no P12 scope
+growth, Phase closure or Unity test pass is claimed.
+
+## P20 checkpoint reconciliation candidate — 2026-10-07
+
+**Status:** VALIDATED_CANDIDATE for architecture/planning only, pending normal
+human canonical promotion approval.
+**Canonical branch/base verified locally and remotely:**
+`codex/architecture/world-identity-projection` at
+`e16796014d348e3b59da7ed848101c4c03926ba5`.
+**Candidate branch:** `codex/architecture/p20c-reconciliation-review`.
+**Source:** draft PR #1, head `9f24c4483bb4db0364cd3699f24f0e3d0868717c`;
+reviewed reconciliation/design content `461a045cbdc81c1e34faedc56e73b0c6878d3213`.
+
+The user accepted the checkpoint identity decision: P20-A remains Synthetic
+Multi-participant Operation; P20-B remains the promoted Daily-profile census
+admission checkpoint; P20-C becomes Two-Person Joint Civil Travel. Two Persons
+is only the proving fixture. Roadmap, Brief, decision annotation and Lab
+dependencies now carry that reconciliation in this candidate. Historical
+architecture entries below, historical design/review refs and numbered-phase
+P20-B promotion/State evidence remain intact.
+
+The [refreshed P20-C contract](architecture/P20C_TECHNICAL_DESIGN_RECORD.md)
+received [independent PASS / READY_FOR_IMPLEMENTATION](architecture/P20C_TECHNICAL_REVIEW.md).
+The old design cannot be dispatched unchanged: the refreshed record names
+current identity/bases/APIs and closes a concrete FailedStart revision/
+reconstruction boundary. Existing code still needs that bounded correction
+and P20-C-specific validation/integration review before a delivery claim.
+Master scheduling waits for architecture-canonical promotion and safe hotspot
+ownership; there is no remaining product or semantic choice in this slice.
+
+The [durable Master handoff](architecture/P20C_JOINT_CIVIL_TRAVEL_MASTER_HANDOFF.md)
+preserves P20-B's absent/empty admission and populated-owner rejection and
+requires compatibility proof against current P12. No P12 scope/file change,
+P20-C runtime implementation, Phase closure, active Master checkout edit or
+reopening of closed phases is included. Documentation validation consists of
+full-diff review and diff-check; no Unity run is claimed.
+
+## Development/presentation artifact authority promotion — 2026-10-05
+
+**Status:** `ARCHITECTURE_PROMOTED` for documentation/architecture only.
+**Canonical branch:** `codex/architecture/world-identity-projection`.
+**Previous architecture SHA:** `ffd75652d89d862b83d634868c560f8540869b89`.
+**Approved candidate and promoted content SHA:**
+`cef6ee45d4bb4ffb8d87d61bb0367f3332caf498` from
+`codex/architecture/development-artifact-authority`.
+
+The user approved the exact candidate. Final preflight confirmed unchanged
+local/remote canonical and candidate tips, clean fast-forward ancestry,
+applicable independent PASS review of the content and final review-record
+delta, a four-file documentation-only diff and `git diff --check`. Promotion
+changed no active Master implementation checkout, runtime, Scene, prefab or
+configuration asset.
+
+Architecture §2, the Execution Model and P12 Brief now establish development
+and presentation artifacts as non-authoritative by default. Explicit canonical
+composition contracts determine supported profile inputs and scope; live
+runtime validation still verifies actual composition and owner coverage.
+The recorded P12/P10-A LocalTopology divergence remains a configuration/profile
+reconciliation issue in P12's owning workstream. It does not widen the accepted
+P12 profile or prove admission rejection. No DAG edges, checkpoint readiness
+or compatible promoted contracts are changed by this consolidation.
+
+## P17 strategic War direction promotion — 2026-10-05
+
+**Status:** `ARCHITECTURE_PROMOTED` for architecture/planning only.
+**Canonical branch:** `codex/architecture/world-identity-projection`.
+**Previous architecture SHA:** `cddedfa41e72d9205d92411b5bedebf11ac0b16a`.
+**Approved candidate and promoted architecture content SHA:**
+`6a1b3ef4d0ea32c109fcfb434d3ee00d05cf589a` from
+`codex/architecture/p17-strategic-war-direction`.
+
+The user approved this exact candidate. Final preflight confirmed unchanged
+local/remote canonical and candidate tips, clean fast-forward ancestry, an
+unchanged documentation-only candidate, applicable [independent PASS
+review](architecture/P17_STRATEGIC_WAR_DIRECTION_REVIEW.md), and
+`git diff --check`. The promotion did not edit active Master worktrees or
+implement P17.
+
+Architecture §68, the [P17 direction](architecture/P17_STRATEGIC_WAR_DIRECTION.md),
+Roadmap and Phase 17 Brief now establish territorial, attritional/capability
+and coercive goals as compatible War families. P17-A — Explicit Withdrawal
+Demand and Explicit War Termination — selects one bounded coercive proof. It
+is `READY_FOR_TECHNICAL_DESIGN`, not implementation-ready. Its technical design
+must close participant and goal identity, target force/Hex and receipt
+evaluation, stale rejection, explicit concession and reasoned terminal commit,
+deterministic ordering/provenance, P12 selected-profile admission and future
+Lab observation. A separate independent technical review and durable Master
+handoff are required before implementation scheduling. No closed Phase is
+reopened; full P12, P19 and P20 remain outside P17-A's hard prerequisites.
+
+## Simulation Lab direction promotion — 2026-10-05
+
+**Status:** `ARCHITECTURE_PROMOTED` for architecture/planning only.
+**Canonical branch:** `codex/architecture/world-identity-projection`.
+**Previous architecture SHA:** `f6924e63d8e5731da1d33021d0361e7defe6dad7`.
+**Approved candidate and promoted architecture content SHA:**
+`6f568d037a566e10402f06aa979b0a4cfa5c9c61` from
+`codex/architecture/simulation-lab-direction`.
+
+The user approved this exact candidate. Final preflight confirmed unchanged
+local/remote canonical and candidate SHAs, clean fast-forward ancestry, an
+unchanged five-file documentation-only diff, applicable [independent PASS
+review](architecture/SIMULATION_LAB_DIRECTION_REVIEW.md) of the content tip,
+and `git diff --check`. Promotion did not touch numbered-phase implementation
+worktrees, implement the Lab, or reopen closed phases.
+
+Architecture §85A, the [Lab direction](architecture/SIMULATION_LAB_DIRECTION.md),
+Roadmap and Execution Model now make human demonstrability a forward-looking
+checkpoint assessment. The unnumbered Simulation Lab foundation is
+`READY_FOR_TECHNICAL_DESIGN` as a supporting consumer, not
+`IMPLEMENTATION_READY`: its first design must prove a bounded non-Unity
+application/composition/read path using real Simulation behavior. P14-B's
+promoted finite-source capability is the recommended first demonstration;
+the human scenario is not yet delivered. P19 loader, full P12 and P13 are not
+blanket dependencies. Implementation scheduling waits for a reviewed technical
+boundary and a safe Master hotspot window; current Master work is unaffected.
+When a demonstration exists, its handoff should include `HOW TO TRY IT` beside
+automated validation evidence.
+
+The P20-B label/scope discrepancy between the architecture Roadmap and the
+current Phase 20 State remains a separate reconciliation task. No P20-B Lab
+scenario is planned under that ambiguous label. P20-A synthetic shared behavior
+may be assessed independently. No new Lab product choice is required by this
+promotion.
+
+## P10-B/P14-B/P20-B product-direction promotion — 2026-10-03
+
+**Status:** `ARCHITECTURE_PROMOTED` for architecture and planning only. **Canonical branch:** `codex/architecture/world-identity-projection`. **Previous architecture SHA:** `3bf09249b7dd9e255c3493aacfd75c96080a31e3`. **Approved candidate and promoted content SHA:** `ad9132ab9d41b0314185709e14b5a09d023094b4` from `codex/architecture/p10-p14-p20-product-direction`.
+
+The user approved that exact candidate. Final preflight confirmed matching canonical local/remote at the previous SHA, unchanged candidate tip, clean fast-forward ancestry, the [independent PASS review](architecture/P10_P14_P20_PRODUCT_DIRECTION_REVIEW.md), a seven-file documentation-only diff and `git diff --check`. The promotion did not edit numbered-phase implementation branches or reopen closed phases. Active P12 work advances independently; these follow-ons do not enlarge its selected continuation profile.
+
+P10-B deterministic generated local topology, P14-B finite source reserve/production and P20-B two-Person joint civil travel are `READY_FOR_TECHNICAL_DESIGN`. Their accepted bounded product directions and exclusions are in the [decision record](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md), the Roadmap and owning Briefs. They require bounded technical designs and independent technical review before any implementation handoff. P10-A, P14-A and P20-A remain promoted only within their delivered profiles. P14-C remains dependent on the selected mixed-source proof; P14-D retains a product/transport scope gate. No runtime implementation is approved by this promotion.
+
+## P15-A/P16-A bounded planning promotion — 2026-10-03
+
+**Status:** `ARCHITECTURE_PROMOTED` for planning/technical-design contracts only. **Canonical branch:** `codex/architecture/world-identity-projection`. **Previous architecture SHA:** `da34d50bd7831ac3eefab31e925492ede8dded5c`. **Approved candidate and promoted architecture content SHA:** `a2788e6400251b5ce3cf8d2269ea8a5b5fdfd4a8` from `codex/architecture/p15-p16-p13-p19-design`.
+
+The user approved that exact candidate. Final preflight confirmed clean fast-forward ancestry, matching local/remote candidate content, unchanged canonical base, a documentation-only diff, `git diff --check`, and the [independent PASS review](architecture/P15_P16_NEXT_SLICES_REVIEW_RECORD.md) of the technical content and final review-metadata delta. Active P12-B remained clean at `54fc23b89cb13598dd184a2b5b6bacf9dc23b0a7`; its branch/worktree was not modified.
+
+P15-A is one inert structure created at an existing canonical Location through one runtime structure owner. This proving slice has no material debit because promoted P14-A offers no applicable authoritative construction-cost transaction; future cost-bearing construction requires its own checkpoint. P16-A is one selected ArmedForce crossing one valid passage once with finite carried-supply consumption under the existing military spatial owner. Both reviewed designs are `READY_FOR_MASTER_IMPLEMENTATION_HANDOFF` after this promotion, subject to current-base scheduling and implementation review. Neither is implemented or admitted silently to `UnityBootstrap-Daily-v1`. Before a domain checkpoint is promoted, prove the specified P12 profile exclusion/rejection with negative validation and serialize any P12-B hotspot integration.
+
+P13 retention/causal-input design is `P13_RETENTION_CAUSAL_INPUT_DESIGN_READY`; actual historical reconstruction/fork remains `WAIT_DEPENDENCY` on exact chosen-profile continuation and recoverable causal history. P19 public-extension-surface design is `P19_PUBLIC_EXTENSION_SURFACE_DESIGN_READY`; its general loader remains `DEFERRED`. P10/P14/P20 follow-ons remain `READY_FOR_PRODUCT_SCOPE_DECISION`; the [decision packet](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) recommends options without selecting them. The [durable Master handoff](architecture/P15_P16_NEXT_SLICES_MASTER_HANDOFF.md) is the current scheduling record. No closed Phase is reopened and no runtime code changed.
+
+## Capability-level P12 DAG promotion — 2026-10-03
+
+**Status:** `ARCHITECTURE_PROMOTED` — `PARTIAL_PARALLELIZATION_APPROVED`.
+**Canonical branch:** `codex/architecture/world-identity-projection`.
+**Previous canonical SHA:** `451340c56e9b676bf6ea43412bcb856b9ccde3de`.
+**Approved candidate and promoted architecture SHA:** `ee8cca1010c8f5f37928e81849b6489bffd6a318` from `codex/architecture/p12-capability-dag`.
+
+The user approved promotion of that exact candidate. Final remote preflight found both branches at the expected SHAs, a clean canonical worktree, fast-forward ancestry, unchanged candidate, no newer canonical architecture commit, and unchanged active `codex/phase12/canonical` at `54fc23b89cb13598dd184a2b5b6bacf9dc23b0a7`. `git diff --check 451340c..ee8cca1` passed. The independent exact-tip review of semantic revision `d5ac8a5` passed; the final `ee8cca1` commit adds only its durable review record. Promotion was a non-destructive fast-forward and remote push. No executable file or P12-B branch/worktree was changed.
+
+Canonical meaning is in `SIMULATION_ARCHITECTURE.md` §92A; the [capability DAG audit](architecture/P12_CAPABILITY_DAG_AUDIT.md) and [independent review](architecture/P12_CAPABILITY_DAG_REVIEW.md) record scope and evidence. P12 still owes full deterministic continuation for every admitted owner of `UnityBootstrap-Daily-v1`, and P12-B remains incomplete. There is no global `PHASE 12 FOUNDATION READY` milestone. P13 fork implementation remains capability-blocked; P15/P16 are not implementation-authorized by this promotion. New owners must prove exclusion from the selected P12 composition or tested fail-closed rejection before their domain checkpoint is promoted.
+
+The [Master handoff](architecture/P12_CAPABILITY_DAG_MASTER_HANDOFF.md) records the refreshed executable design set, product decisions, dependency gates, and serial integration boundaries. Numbered-phase States continue to own their own delivery history; this architecture promotion reopens none of them.
+
+## P12-B bounded completion design promotion — 2026-10-07
+
+**Status:** ARCHITECTURE_PROMOTED — documentation/technical-design only.
+**Canonical branch:** `codex/architecture/world-identity-projection`.
+**Previous architecture SHA:** `a29ddd1271fff8fc45abb3270229b43bfe89f2a9`.
+**Approved candidate / promoted content SHA:**
+`f513d4249fc3ba91f5e7b3db3f5f1818bd0eae45` from
+`codex/architecture/p12b-bounded-completion-design`.
+
+The user approved the exact candidate. Final preflight verified matching
+local/remote architecture and candidate refs, unchanged candidate contents,
+clean fast-forward ancestry, the applicable independent PASS technical and
+assembled-tip reviews, and full-diff `git diff --check`. The candidate adds
+only the contract, independent review and Master handoff. This State record is
+additive promotion metadata; the reviewed candidate files remain unchanged.
+No numbered-phase canonical ref or implementation worktree was modified.
+
+The [bounded contract](architecture/P12B_BOUNDED_COMPLETION_CONTRACT.md) and
+[Master handoff](architecture/P12B_BOUNDED_COMPLETION_MASTER_HANDOFF.md) remain
+current against P12 remote `94551b08be8cc9347de35eae5051b8e578ea4c1e`.
+Independent [technical review](architecture/P12B_BOUNDED_COMPLETION_DESIGN_REVIEW.md)
+remains **PASS / READY_FOR_IMPLEMENTATION** for one bounded completion slice
+inside existing P12-B. Evidence closure comes first: exhaustive supported
+Daily-v1 owners/ingresses/transitions and runtime-wide owner-thread/quiescence
+using the existing protocol, epochs, contexts and advance lease. The immutable
+ephemeral SimulationRuntime-owned token issues only after a fully successful
+positive outer advance and final coherent census/health assessment; failure,
+partial completion, throw, fault or idleness cannot issue a token.
+
+P12-B delivery remains **INCOMPLETE**. P12-C still depends on promoted B;
+D/E depend on B+C; F depends on C/D/E; G depends on B–F plus validated inventory.
+P12-A and P13 retain their separate dependency gates. Full allocator state stays
+C; deeper Knowledge/Expedition stays F. No Daily-v1 widening, runtime code,
+save/hydration capability or closed-phase reopening is implied. The Master
+uses current source, discards no durable history, and does not replay stale
+ActorChoice branches. No product/architecture decision remains open.
+
+## Validation evidence policy adoption — 2026-10-11
+
+Scope: prospective operational documentation/diagnostic ignore rule only.
+Canonical branch: `codex/architecture/world-identity-projection`.
+Previous architecture SHA: `47eff220c7ce00f6e7c759bdc2b76780bb46f628`.
+Independently reviewed substantive content SHA:
+`a41b000b58b2b69d6412bf810948ea59b586e476`, from
+`codex/architecture/validation-evidence-retention`.
+
+The current user task authorizes compatible independently reviewed operational
+documentation promotion without a routine approval stop. The [PASS review](reviews/VALIDATION_EVIDENCE_POLICY_REVIEW.md)
+covers the full substantive diff and bounded retention corrections. Promotion
+requires final independent metadata applicability, refreshed fast-forward
+preflight, diff-check and local/remote synchronization. This entry becomes the
+adoption record when present on canonical; the containing canonical commit and
+durable orchestration record identify the final metadata/promotion tip.
+
+The [policy](operations/VALIDATION_EVIDENCE_POLICY.md) contains the measured
+assessment, permanent evidence contract, security/storage classes, full-input
+reuse rules, workflow comparison, historical-preserving migration and bounded
+Master handoff (section 9). AGENTS, seven workflow Skills, Execution Model and
+validation README apply it prospectively. Complete retrievable result evidence,
+required suites, independent exact-tip review and owning Phase State remain
+mandatory. Existing P12 autonomous bounded-promotion rules are reconciled; no
+new routine human gate is introduced.
+
+The normalized result packer remains **NOT IMPLEMENTED**; section 9 defines an
+isolated Tools implementation/review window, with original-XML transition
+evidence until it closes. This adds no P12-G dependency. P12 continues under
+its own current State; no Phase scope/profile, domain semantics, executable
+tree, active implementation checkout or numbered-phase canonical ref changes.
+Historical evidence is preserved; no cleanup, history rewrite or bulk ref/
+worktree deletion was performed. No product or architecture decision remains.
+
+## P12-G political binding decision and completion handoff — 2026-10-12
+
+Scope: reviewed technical/evidence decision and planning only.
+Canonical branch: `codex/architecture/world-identity-projection`.
+Previous architecture SHA: `58157f9ac7bf573e9a4ed1b2d485a2db190e7c4f`.
+Reviewed substantive content: `b71fc066aab46784a3ebc25e25cd718845b4ef03`,
+from `codex/architecture/p12g-political-binding-closure`.
+Current P12 source inspected: `eef376d51f36641918a13b2e937e704051814820`.
+
+The [decision and Master handoff](architecture/P12G_POLITICAL_BINDING_AND_COMPLETION_HANDOFF.md)
+accepts option A for a test-only populated political source constructed before
+census, obtaining its token through a real successful positive outer advance.
+Authentic E/F capture and production G graph/vector/guard/admission checks are
+mandatory. One internal test-only context factory addresses the existing
+restored-source context derivation limit without enabling that production route.
+No new Daily political writer/epoch capability is required solely for this
+evidence. The named political round-trip/rejection/no-effect/parity proofs
+may count toward their mapped G requirements; ordinary producer end-to-end
+and production repeated-restore claims remain excluded and visibly limited.
+
+Independent [review](architecture/P12G_POLITICAL_BINDING_AND_COMPLETION_REVIEW.md):
+**PASS / READY_FOR_IMPLEMENTATION** for this bounded fixture/seam.
+Final metadata applicability, current-source compatibility and fast-forward
+preflight remain mandatory. When present on canonical, this entry records
+adoption; the containing canonical commit and durable orchestration record
+identify the exact final metadata/promotion tip.
+
+The finite completion plan consolidates a current coverage matrix, batches
+residual graph/failure evidence, then requires an integrated no-replay/parity
+and original-contract completion audit. Covered B–F/inventory/package seams
+are not reopened; Required base owners are not excluded for lack of a normal
+producer. Production repeated-restored-context support remains a separate
+capability limitation; the factory is not its implementation.
+
+No numbered-phase code, active implementation checkout or P12 canonical ref
+was changed by this architecture stream. Historical evidence remains intact.
+P12 owning State remains authoritative: G partially delivered / WAIT_DEPENDENCY,
+A WAIT_DEPENDENCY, P13 BLOCKED, Phase 12 OPEN. No new profile, Phase closure,
+save/fork readiness, domain semantics or product choice follows.
+
+## P12-A readiness after B–G completion — 2026-10-12
+
+Scope: current-source readiness assessment and bounded Master design handoff.
+Canonical architecture branch: `codex/architecture/world-identity-projection`.
+Previous architecture SHA: `f3077ac5decbbb726a7e3ab80fc098fa4a8689fb`.
+Reviewed substantive content: `1cf3c862118da7f61995b6106f3d3bc1d59dbdc7`,
+from `codex/architecture/p12a-current-readiness`.
+P12 governing remote: `25d2dcf1371137ceb0e158eef4ba02d2e2304612`.
+The separately named local P12 ref was stale at `eef376d5` and was not used
+as the baseline or changed.
+
+[Assessment and Master handoff](architecture/P12A_CURRENT_READINESS_MASTER_HANDOFF.md):
+**upstream prerequisites SATISFIED / READY_FOR_TECHNICAL_DESIGN**.
+Independent [review](architecture/P12A_CURRENT_READINESS_REVIEW.md): **PASS**.
+Final metadata applicability, refreshed current-source compatibility and
+fast-forward preflight remain required. This becomes the planning adoption
+record when present on canonical; its containing commit and durable
+orchestration identify the final metadata/promotion tip.
+
+B–G and the live selected inventory are complete within their approved
+contracts; old unmet-owner/inventory/G blockers are historical. A still lacks
+a concrete current schema/codec, detached saved-input reconstruction route,
+production persistence lifecycle and corresponding persisted-byte evidence.
+One bounded A technical design/review is the minimum next executable work;
+then implementation readiness/authority can be recorded through the current
+workflow. No routine human gate or new upstream checkpoint is introduced.
+
+The Roadmap records the refreshed planning DAG. P12 owning State remains
+authoritative and currently labels A WAIT_DEPENDENCY; this architecture entry
+does not silently change that delivery record. No A code was dispatched or
+implemented. No active implementation checkout or numbered-phase canonical
+ref was modified; no owner/profile expansion or completed checkpoint reopening.
+P13 remains BLOCKED and Phase 12 OPEN under their separate gates.
