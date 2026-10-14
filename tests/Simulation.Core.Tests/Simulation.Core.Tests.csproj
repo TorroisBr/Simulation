@@ -35,5 +35,6 @@
     <Compile Include="DailyV1DefinitionIdentityTests.cs" Link="Definitions/DailyV1DefinitionIdentityTests.cs" />
     <None Include="Fixtures/CORE_F_WP1_VALUES_BASELINE.txt" CopyToOutputDirectory="PreserveNewest" />
       <Compile Include="DailyV1DefinitionProviderVectors.cs" Link="Definitions/DailyV1DefinitionProviderVectors.cs" />
+      <Compile Include="SimulationConfigurationResolverPrecedenceTests.cs" Link="Configuration/SimulationConfigurationResolverPrecedenceTests.cs" />
   </ItemGroup>
 </Project>
