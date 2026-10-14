@@ -367,6 +367,7 @@ function Assert-TrxColdWarmAttemptLabels {
         if($label -cnotin @('cold','warm') -or -not $labels.Add($label)){throw 'Each TRX run must contain exactly one cold and one warm attempt.'}
     }
     if(-not $labels.Contains('cold') -or -not $labels.Contains('warm')){throw 'Each TRX run must contain exactly one cold and one warm attempt.'}
+    if([string]$Attempts[0]['label'] -cne 'cold' -or [string]$Attempts[1]['label'] -cne 'warm'){throw 'TRX attempts must preserve cold then warm source order.'}
 }
 
 function Assert-TrxPublicManifest {
