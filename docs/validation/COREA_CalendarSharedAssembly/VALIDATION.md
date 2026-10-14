@@ -145,16 +145,18 @@ Measured local build storage was 26,247 bytes for Core `bin`, 37,131 for Core
 `bin`, 201,911 for demo `obj`, and 132,716 bytes for result files. These are
 local measurements, not a project-wide performance claim.
 
-Original cold/warm TRX reports are privately retained with the exact hashes and
+The following describes the initial run `66946b2a7bcb441b81bba30f0822f5ac`;
+its report-bundle gap is resolved for the corrected rerun below. Original
+cold/warm TRX reports from that initial run are privately retained with the exact hashes and
 lengths in that manifest. They contain a host identifier and absolute local
 worktree paths. The approved host evidence contract requires the complete
 original TRX reports in one reviewed durable bundle; the Unity packager does not
 support TRX, and editing those reports or publishing their machine-local
 metadata without a privacy disposition would violate the evidence boundary.
-Therefore the original reports have not been altered or published, and the
-durable .NET report-bundle requirement remains unresolved. The manifest and
-test outcome summary are useful provenance, but are not claimed as a substitute
-for the required original reports.
+At that point the reports had not been altered or published, and the durable
+.NET report-bundle requirement remained unresolved. The manifest and test
+outcome summary are useful provenance, but were not claimed as a substitute for
+the required original reports.
 
 Report identities, retained only in protected local evidence:
 
@@ -167,12 +169,62 @@ The public manifest itself was privacy-inspected: it contains no user-home or
 worktree path, machine-name field, or credential-like value. Its SHA and
 per-case content do not make the unretained reports independently reviewable.
 
+## Parser review correction and current .NET rerun
+
+The independent exact-tip review of the initial candidate `78011db2cbbe36981e30f9a58b2f14a3756d6e5e`
+found that the TRX reader accepted an absent `TestRun/@id`, omitted that
+identity from the manifest, and did not validate or retain
+`ResultSummary/@outcome`. The review is recorded at
+`c4c73bae26ecbacdb9e761821f408534610622a2`. The calendar implementation and
+Unity-facing source were accepted; the review disposition was NEEDS_CHANGES.
+
+Commit `f725fa87c6d1259d822180b84856b747c9e02980`, tree
+`bdb6b9b63532e780661477430099a835d2b4f086`, corrects the bounded evidence-reader
+issue. It requires a nonempty run ID and a completed summary, persists run ID,
+run name and summary outcome for both runs, and adds missing-ID, missing-summary,
+contradictory-summary and positive identity-retention self-tests. The Core
+calendar implementation and Unity test/source files are unchanged from
+`e702cdf196703ead98d8d37ff818bd1c0d0219e4`.
+
+The corrected .NET runner completed as run
+`1aa63d7e04854212be037b09d299fccd` on the sparse SDK-only worktree with no Unity
+`Library`. Input digest was
+`174a3de69f00b1cb370f6b75749b14f5da72a3c8c911d675bc921270e5cbffee`, stable
+before and after. Locked restore, build, cold/warm tests and cold/warm demo
+passed; each test run passed all 45 discovered cases with zero failures,
+skips, inconclusive or not-executed cases. Both TRX summary outcomes are
+`Completed`, and their distinct root run IDs are now retained in the manifest.
+The parser self-tests also passed after the correction.
+
+The private manifest is 68,178 bytes (SHA-256
+`5e189a598f3e1d21e465c150031e111c8c83041c4985b8377a23f5a017ea02ca`). The
+original reports are 61,701 bytes each: cold SHA-256
+`a69e23ba2e3f90ea63f673979c2128d00fb672ad6e87086fd587ee1f1b2b62f6`, warm
+SHA-256 `7926c4e9a508976bdb6532a28f326dc3af30167ab16b6a8c29de7b5cfed8b0a4`.
+An integrity-checked local archive of the manifest and reports has SHA-256
+`e8a6814929a57a7b04a77fa81e2cd2acc8b12efe1aa5a44818fddde49209d1de`; every
+archive entry was rehashed against its source. The archive is retained only in
+protected local evidence at `<LOCALAPPDATA>/Simulation/CoreValidation/1aa63d7e04854212be037b09d299fccd/`.
+
+Privacy inspection found that each original TRX contains a local Windows
+account identifier in its run metadata and 91 absolute repository checkout
+path markers under `E:\\GitHub\\`. It contains no credential-like values or
+email address. The account identifier and exact paths are intentionally not
+copied into Git. The original reports remain unmodified and protected locally;
+the raw bundle is not a publishable candidate. The runner manifest records
+complete results and provenance but is not a substitute for the unavailable
+durable report evidence. CORE-A promotion remains blocked until the required
+complete evidence can be retained without exposing private metadata under the
+current host policy. No normalized .NET TRX adapter is implemented or claimed.
+
 ## Current verdict and limits
 
 Implementation and execution gates passed, including the Unity P12 regressions,
-parity, authoring, ALL EditMode, official Smoke, SDK runner checks and demo.
-The project is not yet promotion-ready: durable publication of the original
-.NET TRX bundle and independent exact-tip implementation review remain pending.
-No canonical promotion has occurred. No full SimulationRuntime, full-world
+parity, authoring, ALL EditMode, official Smoke, corrected SDK runner checks and
+demo. The first exact-tip review's parser findings have been corrected and the
+corrected SDK validation passes. Final independent exact-tip code review and
+normal canonical preflight remain pending. The complete .NET report evidence is
+not publishable under the inspected privacy boundary, so the evidence gate and
+canonical promotion remain blocked. No canonical promotion has occurred. No full SimulationRuntime, full-world
 hosting, P12 .NET continuation, cross-build save compatibility, P13 historical
 fork, P19 mod persistence or broad Unity independence claim is made.
