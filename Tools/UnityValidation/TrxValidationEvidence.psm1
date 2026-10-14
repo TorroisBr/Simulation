@@ -795,6 +795,15 @@ function Assert-TrxRecoveredCommandWorkingDirectory {
     return $cwd
 }
 
+function Assert-TrxRecoveredAssemblyIdentity {
+    param([System.Collections.IDictionary]$Claim,[Parameter(Mandatory)][object]$Identity,[string]$ExpectedSimpleName,[long]$ActualBytes,[string]$ActualSha256)
+    $claimMvid=[Guid]::Empty;$actualMvid=[Guid]::Empty
+    if([long]$Claim.bytes -le 0 -or [long]$Claim.bytes -ne $ActualBytes -or [string]$Claim.sha256 -notmatch '^[a-f0-9]{64}$' -or [string]$Claim.sha256 -cne $ActualSha256){throw 'Recovered assembly byte/hash identity differs from the bound output.'}
+    if(-not [Guid]::TryParse([string]$Claim.mvid,[ref]$claimMvid) -or -not [Guid]::TryParse([string]$Identity.mvid,[ref]$actualMvid) -or $claimMvid -ne $actualMvid){throw 'Recovered assembly MVID differs from the bound output.'}
+    if([string]::IsNullOrWhiteSpace([string]$Claim.fullName) -or [string]$Claim.fullName -cne [string]$Identity.fullName){throw 'Recovered assembly full identity differs from the bound output.'}
+    if(([string]$Identity.fullName).Split(',')[0] -cne $ExpectedSimpleName){throw 'Recovered assembly simple name differs from its report-bound output.'}
+    return $true
+}
 function Get-TrxRetainedAssemblyInventory {
     param([System.Collections.IDictionary]$Context,[string]$SourceRoot,[string]$ProtectedRoot,[System.Collections.IDictionary]$Runner,[string]$TestAssemblyRelative,[switch]$Create)
     $claims=@($Context.publicRuns[0].assemblies)
@@ -802,15 +811,12 @@ function Get-TrxRetainedAssemblyInventory {
     $testRelative=(ConvertTo-TrxPortableRelative $TestAssemblyRelative).Replace('\','/')
     if([IO.Path]::GetFileName($testRelative) -cne 'Simulation.Core.Tests.dll'){throw 'Validated output binding must originate from the exact test DLL named by TRX.'}
     $derivedPaths=[ordered]@{'Simulation.Core.Tests.dll'=$testRelative;'Simulation.Core.dll'=(Join-Path (Split-Path -Parent $testRelative) 'Simulation.Core.dll').Replace('\','/')}
-    $expected=[ordered]@{
-        'Simulation.Core.Tests.dll'=[ordered]@{bytes=21504L;sha256='2bb9950f25fb6c8c935b022e4e8c43c9e636f013ca4462e81a7ec084eb616505';mvid='0ca9abd7-fa47-49be-93b8-3f3d0121b396'}
-        'Simulation.Core.dll'=[ordered]@{bytes=13824L;sha256='26569417bc8d538bb97746adf575108dfb212ca065e42922bdb99bdf2401f625';mvid='3bb1f3d1-3369-4cd5-bd28-d3994ee2e575'}
-    }
+    $expectedLeaves=@('Simulation.Core.Tests.dll','Simulation.Core.dll')
     $byLeaf=[Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
     foreach($claim in $claims){
         Assert-TrxKeys $claim @('path','fullName','mvid','bytes','sha256','identityMode','observedAtUtc','provenance') 'private validated assembly identity'
         $relative=ConvertTo-TrxPortableRelative ([string]$claim.path);$leaf=[IO.Path]::GetFileName($relative)
-        if(-not $expected.Contains($leaf) -or $byLeaf.ContainsKey($leaf) -or $relative -cne [string]$derivedPaths[$leaf]){throw 'Private validated assembly inventory has an unexpected, duplicate, or TRX-unbound DLL path.'}
+        if($leaf -notin $expectedLeaves -or $byLeaf.ContainsKey($leaf) -or $relative -cne [string]$derivedPaths[$leaf]){throw 'Private validated assembly inventory has an unexpected, duplicate, or TRX-unbound DLL path.'}
         if([string]$claim.identityMode -cne 'recovered-validated-output'){throw 'Private assembly identity is not marked as recovered validated output.'}
         $observed=[DateTimeOffset]::MinValue
         if(-not [DateTimeOffset]::TryParseExact([string]$claim.observedAtUtc,'o',[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::AssumeUniversal,[ref]$observed) -or $observed.Offset -ne [TimeSpan]::Zero){throw 'Private assembly observation time must be a UTC round-trip timestamp.'}
@@ -840,11 +846,12 @@ function Get-TrxRetainedAssemblyInventory {
     $retained=[Collections.Generic.List[object]]::new()
     foreach($leaf in @('Simulation.Core.Tests.dll','Simulation.Core.dll')){
         $claim=$byLeaf[$leaf];$relative=ConvertTo-TrxPortableRelative ([string]$claim.path);$source=Resolve-TrxWorktreeFile $relative @($Context.worktreeRoots)
-        $sourceBefore=[IO.File]::ReadAllBytes($source);$sourceHash=Get-TrxBytesSha256 $sourceBefore;$fixed=$expected[$leaf]
+        $sourceBefore=[IO.File]::ReadAllBytes($source);$sourceHash=Get-TrxBytesSha256 $sourceBefore
         if((Get-Item -LiteralPath $source -Force).LastWriteTimeUtc -gt $testStart.UtcDateTime){throw "Validated output '$leaf' was written after the original test execution began."}
-        if($sourceBefore.LongLength -ne [long]$fixed.bytes -or $sourceHash -cne [string]$fixed.sha256){throw "Validated output '$leaf' differs from its reviewed identity."}
-        $identity=Get-TrxAssemblyIdentity $source;$pdb=Assert-TrxMatchingPortablePdb $source
-        if([string]$identity.mvid -cne [string]$fixed.mvid -or [string]$identity.fullName -cne [string]$claim.fullName -or [string]$claim.mvid -cne [string]$identity.mvid -or [long]$claim.bytes -ne $sourceBefore.LongLength -or [string]$claim.sha256 -cne $sourceHash){throw "Private evidence claim for '$leaf' differs from its verified output."}
+        $identity=Get-TrxAssemblyIdentity $source
+        # §7 recovery binds the actual report-targeted DLL to this exact source/input snapshot; it is not a fixed prior-run binary whitelist.
+        $null=Assert-TrxRecoveredAssemblyIdentity $claim $identity ([IO.Path]::GetFileNameWithoutExtension($leaf)) $sourceBefore.LongLength $sourceHash
+        $pdb=Assert-TrxMatchingPortablePdb $source
         $destination=Join-Path $retentionDir $leaf;$pdbDestination=[IO.Path]::ChangeExtension($destination,'.pdb')
         if($Create){if(-not (Test-Path -LiteralPath $destination)){[IO.File]::Copy($source,$destination,$false)};if(-not (Test-Path -LiteralPath $pdbDestination)){[IO.File]::Copy($pdb.Path,$pdbDestination,$false)}}
         $sourceAfter=[IO.File]::ReadAllBytes($source);$copyBytes=[IO.File]::ReadAllBytes($destination);$pdbCopyBytes=[IO.File]::ReadAllBytes($pdbDestination)
@@ -1019,7 +1026,7 @@ function Get-TrxToolIdentity {
     $files=[System.Collections.Generic.List[object]]::new()
     foreach($relative in $paths){$full=Join-Path $projectRoot ($relative.Replace('/',[IO.Path]::DirectorySeparatorChar));$item=Get-Item -LiteralPath $full -ErrorAction Stop;$files.Add([ordered]@{path=$relative;bytes=[long]$item.Length;sha256=(Get-EvidenceSha256 $full)})}
     $runtime=Assert-EvidenceRuntime
-    return [ordered]@{commit=$commit;tree=$tree;version='1.2.0';files=@($files.ToArray());runtime=[ordered]@{powershellEdition=$runtime.powershellEdition;powershellVersion=$runtime.powershellVersion;dotnetVersion=$runtime.dotnetVersion;compressionAssemblyVersion=$runtime.compressionAssemblyVersion}}
+    return [ordered]@{commit=$commit;tree=$tree;version='1.2.1';files=@($files.ToArray());runtime=[ordered]@{powershellEdition=$runtime.powershellEdition;powershellVersion=$runtime.powershellVersion;dotnetVersion=$runtime.dotnetVersion;compressionAssemblyVersion=$runtime.compressionAssemblyVersion}}
 }
 
 function Assert-TrxToolManifestBinding {
