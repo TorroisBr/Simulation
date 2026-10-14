@@ -33,18 +33,28 @@ $projectAssets = @(
 $records = [System.Collections.Generic.List[object]]::new()
 
 function Invoke-Dotnet {
-    param([string]$Name, [string[]]$Arguments)
+    param([string]$Name, [string[]]$Arguments, [string]$RuntimeTracePath)
     $logPath = Join-Path $runDirectory ($Name + '.log')
     $watch = [Diagnostics.Stopwatch]::StartNew()
     # Keep CLI headings stable across host locales. Test cases still exercise
     # their declared en-US and pt-BR cultures inside the test process.
     $previousUiLanguage = [Environment]::GetEnvironmentVariable('DOTNET_CLI_UI_LANGUAGE', 'Process')
+    $previousCoreHostTrace = [Environment]::GetEnvironmentVariable('COREHOST_TRACE', 'Process')
+    $previousCoreHostTraceFile = [Environment]::GetEnvironmentVariable('COREHOST_TRACEFILE', 'Process')
     try {
         [Environment]::SetEnvironmentVariable('DOTNET_CLI_UI_LANGUAGE', 'en-US', 'Process')
+        [Environment]::SetEnvironmentVariable('COREHOST_TRACE', $null, 'Process')
+        [Environment]::SetEnvironmentVariable('COREHOST_TRACEFILE', $null, 'Process')
+        if ($RuntimeTracePath) {
+            [Environment]::SetEnvironmentVariable('COREHOST_TRACE', '1', 'Process')
+            [Environment]::SetEnvironmentVariable('COREHOST_TRACEFILE', $RuntimeTracePath, 'Process')
+        }
         $output = @(& dotnet @Arguments 2>&1 | ForEach-Object { $_.ToString() })
         $exitCode = $LASTEXITCODE
     } finally {
         [Environment]::SetEnvironmentVariable('DOTNET_CLI_UI_LANGUAGE', $previousUiLanguage, 'Process')
+        [Environment]::SetEnvironmentVariable('COREHOST_TRACE', $previousCoreHostTrace, 'Process')
+        [Environment]::SetEnvironmentVariable('COREHOST_TRACEFILE', $previousCoreHostTraceFile, 'Process')
     }
     $watch.Stop()
     [IO.File]::WriteAllLines($logPath, [string[]]$output, [Text.UTF8Encoding]::new($false))
@@ -108,12 +118,14 @@ try {
     }
     if ($expectedTests.Count -eq 0) { throw 'Test discovery returned no expected cases.' }
 
-    $coldTest = Invoke-Dotnet -Name 'cold-test' -Arguments @('test', $testProject, '--no-restore', '--configuration', 'Release', '--logger', 'trx;LogFileName=CoreTests-cold.trx', '--results-directory', $runDirectory)
+    $coldRuntimeTracePath = Join-Path $runDirectory 'cold-runtime-selection.trace.log'
+    $coldTest = Invoke-Dotnet -Name 'cold-test' -Arguments @('test', $testProject, '--no-restore', '--configuration', 'Release', '--logger', 'trx;LogFileName=CoreTests-cold.trx', '--results-directory', $runDirectory) -RuntimeTracePath $coldRuntimeTracePath
     $coldTrxPath = Join-Path $runDirectory 'CoreTests-cold.trx'
     $coldAssessment = Get-CoreTrxAssessment -Path $coldTrxPath -ExpectedTests $expectedTests.ToArray()
     if ($coldTest.exitCode -ne 0 -or -not $coldAssessment.gatePassed) { throw 'Cold test gate did not pass. Valid test failures are not retried.' }
 
-    $warmTest = Invoke-Dotnet -Name 'warm-test' -Arguments @('test', $testProject, '--no-build', '--no-restore', '--configuration', 'Release', '--logger', 'trx;LogFileName=CoreTests-warm.trx', '--results-directory', $runDirectory)
+    $warmRuntimeTracePath = Join-Path $runDirectory 'warm-runtime-selection.trace.log'
+    $warmTest = Invoke-Dotnet -Name 'warm-test' -Arguments @('test', $testProject, '--no-build', '--no-restore', '--configuration', 'Release', '--logger', 'trx;LogFileName=CoreTests-warm.trx', '--results-directory', $runDirectory) -RuntimeTracePath $warmRuntimeTracePath
     $warmTrxPath = Join-Path $runDirectory 'CoreTests-warm.trx'
     $warmAssessment = Get-CoreTrxAssessment -Path $warmTrxPath -ExpectedTests $expectedTests.ToArray()
     if ($warmTest.exitCode -ne 0 -or -not $warmAssessment.gatePassed) { throw 'Warm test measurement/gate did not pass.' }

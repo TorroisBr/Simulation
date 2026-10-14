@@ -34,6 +34,10 @@ test cases, outcomes, available durations, toolchain, elapsed times, build
 storage and generated dependency-input hashes. Keep the private source copy and
 the exact input-identifying manifest together during review.
 
+The cold and warm test gates also retain separate private `COREHOST_TRACE`
+files so the selected CLR is bound to each test assembly runtime configuration.
+Trace paths stay inside the protected run directory and are never published.
+
 For the final .NET-only proof, invoke the runner from a sparse isolated worktree
 that contains the explicitly listed package/project/test/demo/tool inputs and
 has no `Library` directory. Unity validation remains a separate gate in the
