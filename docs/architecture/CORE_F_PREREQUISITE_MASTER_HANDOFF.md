@@ -528,12 +528,15 @@ run dotnet tests without Unity imports. One owned Studio validation checkout/win
 can integrate cumulative package source and run full required gates.
 
 Start Values and Owners now; Persistence may proceed simultaneously in its own
-checkout. Preferred integration is Owners baseline evidence, then Persistence, then
-Values: the latter reuses the delivered shared strict framing rather than creating
-another P12 writer. This is serialization/soft ordering, not a hard implementation
-block: Values can prepare typed projections/tests before Persistence integration
-and retain the existing internal wire adapter until the combined build is reviewed.
-Do not create a temporary alternative codec implementation to avoid the window.
+checkout. Integration is Owners baseline evidence, then Persistence, then Values. The
+Persistence -> Values edge is a hard integration dependency for the shared strict
+framing API, not a block on isolated Values preparation: its configuration/value
+mapping/characterization work can proceed now, but the complete Values candidate
+must compile against promoted Persistence before its own promotion. No Core code
+may reference Unity's internal wire adapter or create a temporary duplicate codec.
+Owners baseline collection can proceed independently; its final evidence must
+classify the actual integrated input changes rather than require an arbitrary
+promotion order for unrelated test-only files.
 
 After each promotion, update owning Core State (on production, not a shadow copy
 in architecture), rerun source-bound matrix/member parity applicability and compute
@@ -599,6 +602,7 @@ flowchart TD
   V --> C[Concrete selected owner-runtime source closure design and migration]
   O --> C
   P --> C
+  P -->|shared framing; integration only| V
   C --> H[Same SimulationRuntime and private restore host integration]
   H --> F[CORE-F real dotNET continuation and complete parity gate]
   F --> X[CORE-X remains DEFERRED separate scope]
@@ -658,8 +662,9 @@ source Lab remains available; later F host executes the same real runtime.
 After this design's independent PASS and architecture promotion, dispatch the three
 packages above under the active Core mandate. Obtain exact-tip implementation and
 evidence reviews and promote each bounded additive delta on Core canonical through
-the normal gates. They are independently closeable prerequisites within CORE-F,
-not declarations of CORE-F/Phase12/P13 completion.
+the normal gates. They have bounded completion criteria within CORE-F; Values promotion consumes
+promoted Persistence, while its isolated preparation and Owners work can proceed
+in parallel. None declares CORE-F/Phase12/P13 completion.
 
 The final CORE-F host remains WAIT_DEPENDENCY until its selected live owners,
 actual runtime/restore source closure, truthful host composition and parent WP3

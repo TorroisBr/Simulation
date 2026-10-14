@@ -82,8 +82,10 @@ leave the optional BCL composition validator in place; pass stage-order/coordina
 provider contract tokens as values instead of importing P10/spatial/census owners;
 keep the existing P9 big-endian record-hash framing separate from P12 little-endian
 wire; and preserve lazy getter call order. These clarify already required exact
-source/parity behavior and do not alter product/profile scope. Obtain independent
-exact-tip successor applicability before publication. Its containing commit is the
+source/parity behavior and do not alter product/profile scope. The final integration-order clarification explicitly records Persistence
+before Values promotion for the shared framing API; Values preparation remains
+parallel and no Core-to-Unity wire dependency or temporary codec is allowed.
+Obtain independent exact-tip successor applicability before publication. Its containing commit is the
 adoption marker, avoiding a self-referential SHA.
 
 Final promotion must refresh remote refs, classify any canonical drift, preserve
