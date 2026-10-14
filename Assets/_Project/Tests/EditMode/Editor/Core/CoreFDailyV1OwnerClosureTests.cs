@@ -51,7 +51,7 @@ public sealed class CoreFDailyV1OwnerClosureTests
         Assert.That(initial, Has.Count.EqualTo(CoreFDailyV1OwnerClosureVectors.ExpectedSectionCount(
             runtime.NpcRuntimes.Count, 0, runtime.PersonStore.Persons.Count, runtime.Cities.Count)));
         Assert.That(initial, Has.Count.EqualTo(299), "61 + 22*N + U + P + 4*C, with N=10, U=10, P=0, C=2.");
-        Assert.That(initial.Select(row => row.SectionId), Is.Ordered.Using(System.StringComparer.Ordinal));
+        Assert.That(initial.Select(row => row.SectionId), Is.Ordered.Using<string>(System.StringComparer.Ordinal));
         Assert.That(initial.Select(row => row.SectionId).Distinct(System.StringComparer.Ordinal), Has.Count.EqualTo(initial.Count));
         Assert.That(initial.All(row => row.Role == OwnerSectionRole.Required
             || row.Role == OwnerSectionRole.ExplicitlyEmpty), Is.True);
