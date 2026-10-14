@@ -31,7 +31,9 @@ day=2 status=Applied produced=2 reserve=0 sourceRevision=2 marketRevision=2 stoc
 day=3 status=Exhausted produced=0 reserve=0 sourceRevision=2 marketRevision=2 stock=7 price=2.2857144 priceBits=40124925
 ```
 
-The cold/warm Core TRX package is `cored-net-cold-warm-e53857e.zip` (SHA-256 `6a5d194649f719118c4b2289454bc94450f1aeff1beb8d6a2c32cfbd769739f2`); its manifest SHA-256 is `b544bab96e5f7c8d9d1e8d0ade9342468172754e116275777acf8feb071e450d`.
+The cold/warm Core TRX package is `cored-net-cold-warm-e53857e.zip` (archive SHA-256 `6a5d194649f719118c4b2289454bc94450f1aeff1beb8d6a2c32cfbd769739f2`); its committed manifest Git-blob SHA-256 is `4bba39e0d1d5d55709b29385cad657f595b89b8fe300f8a0c1dbf324852f33a4`.
+
+Manifest digests identify the committed Git-blob bytes, avoiding platform-specific checkout line-ending conversion. Archive digests identify the ZIP bytes.
 
 The approved `DotNetTrx` packager compared both normalized reports to their unchanged originals and verified the exact source, command, runtime, logger, test identity, assembly/PDB, and retention evidence. Context-bound verification passed with `originalComparisonVerified`; a separate public archive-only verification passed with `originalComparisonNotPerformed`. The public package contains only normalized cold/warm TRX entries, with no local absolute path or private evidence locator. Original TRX and command logs remain unchanged in protected storage.
 
@@ -45,7 +47,7 @@ All runs used Unity `6000.3.9f1` and the same stable 1,584-file input inventory:
 | Official filtered `Smoke` | `3d8cee82a32c4ea2b6e288dc1aebaa71` | 5/5 | `9675baa813c29d84d978e05601f1f70dbac3a680b3cc869b3a0af517eb380f43` | `3c174d7beb82b355b190c04a678b4b8b75fbfd50fafaf88a1161c8ddc3f745f5` |
 | ALL EditMode | `ce16fed9c2a6423e925e2834cf1a763f` | 3,120/3,120 | `6b1be03931809eeda031f58fcf0fc89067acafd1deffe0d3281955bcb6216ce4` | `d87670ffb029b4df6cdbfff37a99c57a5d7d2be0720a40b7f5f6dd2f35828572` |
 
-The deterministic normalized ALL EditMode package is `cored-editmode-e53857e.zip` (SHA-256 `85470f220d081cd2b8654f5ba7559855590e85f3018e00812a990d50f8182a5d`); its manifest SHA-256 is `f89f4ee11f06ddec8c8a1792883f284b08128270ef2f7309532b5a656e2bff39`. Package verification passed. The archive contains only normalized result XML. Filtered focused and Smoke originals/logs remain private and unchanged.
+The deterministic normalized ALL EditMode package is `cored-editmode-e53857e.zip` (archive SHA-256 `85470f220d081cd2b8654f5ba7559855590e85f3018e00812a990d50f8182a5d`); its committed manifest Git-blob SHA-256 is `d4688415d2182fd4c92a1f1df666cf39bf784b9b821acd72c0a6b9aee7c0c426`. Package verification passed. The archive contains only normalized result XML. Filtered focused and Smoke originals/logs remain private and unchanged.
 
 The earlier `cored-editmode.zip` and `cored-editmode.manifest.json` artifacts were preserved unchanged (SHA-256 `3c68fe19d88464c462a1d76acd4c263137799bd6926b43603a8e7c72979d0ee6` and `ab57574b4a183c83b303ab6091ed465cc1e6589d86181916fdf69ddf914c12ca`, respectively).
 
