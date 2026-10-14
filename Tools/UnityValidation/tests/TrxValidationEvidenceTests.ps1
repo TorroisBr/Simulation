@@ -268,6 +268,11 @@ Chose FX version [C:\Program Files\dotnet\shared\Microsoft.NETCore.App\9.0.20]
     Assert-Throws { & $trxModule {param($r) Assert-TrxProvenanceRecord $r} $unsupportedProvenance } 'public provenance rejects kinds outside the promoted closed enum'
     & $trxModule {param($txt,$cases) Assert-TrxDiscoveryOutput $txt $cases|Out-Null} "The following Tests are available:`n    alpha`n    beta`n" @('alpha','beta')
     Assert-True $true 'complete ordered discovery output matches exactly'
+    $mappedTracePath=& $trxModule {param($p,$r) Get-TrxOptionalMappedRelativePath $p $r} 'C:\agent\project\bin\Simulation.Core.Tests.runtimeconfig.json' @('C:\agent\project')
+    Assert-True ($mappedTracePath.Replace('\','/') -ceq 'bin/Simulation.Core.Tests.runtimeconfig.json') 'optional runtime trace mapping identifies a verified worktree path'
+    $externalTracePath=& $trxModule {param($p,$r) Get-TrxOptionalMappedRelativePath $p $r} 'C:\Program Files\dotnet\host\fxr\9.0.20\dotnet.runtimeconfig.json' @('C:\agent\project')
+    Assert-True ($null -eq $externalTracePath) 'optional runtime trace mapping ignores external host configuration paths'
+    Assert-Throws { & $trxModule {param($p,$r) Get-TrxOptionalMappedRelativePath $p $r} 'C:\agent\project\nested\bin\test.runtimeconfig.json' @('C:\agent\project','C:\agent\project\nested') } 'optional runtime trace mapping rejects overlapping worktree roots'
     $equalBytes=& $trxModule {param([byte[]]$a,[byte[]]$b) Test-TrxByteSequenceEqual $a $b} ([byte[]]@(0,1,255)) ([byte[]]@(0,1,255))
     Assert-True $equalBytes 'strict byte comparison accepts equal receipt bytes'
     $changedBytes=& $trxModule {param([byte[]]$a,[byte[]]$b) Test-TrxByteSequenceEqual $a $b} ([byte[]]@(0,1,255)) ([byte[]]@(0,2,255))

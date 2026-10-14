@@ -676,8 +676,8 @@ function Assert-TrxRuntimeSelectionEvidence {
         $testConfigHits=[Collections.Generic.List[object]]::new()
         foreach($hit in $configHits){
             if(-not [IO.Path]::IsPathRooted([string]$hit.ConfigPath) -or -not [IO.Path]::IsPathRooted([string]$hit.DevPath)){throw "Private $label runtimeconfig trace paths are not absolute."}
-            $cfgRelative=Get-TrxMappedRelativePath ([string]$hit.ConfigPath) @($Context.worktreeRoots)
-            if($cfgRelative.Replace('\','/') -ceq $expectedConfig){$testConfigHits.Add($hit)}
+            $cfgRelative=Get-TrxOptionalMappedRelativePath ([string]$hit.ConfigPath) @($Context.worktreeRoots)
+            if($null -ne $cfgRelative -and $cfgRelative.Replace('\','/') -ceq $expectedConfig){$testConfigHits.Add($hit)}
         }
         if($testConfigHits.Count -ne 1){throw "Private $label runtime trace must contain exactly one runtimeconfig selection block for its bound test assembly."}
         $selectedConfig=$testConfigHits[0]
@@ -1077,6 +1077,19 @@ function Get-TrxMappedRelativePath {
     if(-not [IO.Path]::IsPathRooted($Value)){return (ConvertTo-TrxPortableRelative $Value)}
     foreach($root in $Roots){$match=Replace-TrxRootPrefix $Value @($root) '<WORKTREE>/' -RequireMatch; if($match.StartsWith('<WORKTREE>/')){return (ConvertTo-TrxPortableRelative $match.Substring('<WORKTREE>/'.Length))}}
     throw 'TRX assembly path is outside every verified worktree root.'
+}
+
+function Get-TrxOptionalMappedRelativePath {
+    param([string]$Value,[string[]]$Roots)
+    if(-not [IO.Path]::IsPathRooted($Value)){throw 'Optional TRX trace path must be absolute.'}
+    $mappedPaths=[Collections.Generic.List[string]]::new()
+    foreach($root in $Roots){
+        $mapped=Replace-TrxRootPrefix $Value @($root) '<WORKTREE>/'
+        if($mapped.StartsWith('<WORKTREE>/')){$mappedPaths.Add((ConvertTo-TrxPortableRelative $mapped.Substring('<WORKTREE>/'.Length)))}
+    }
+    if($mappedPaths.Count -gt 1){throw 'TRX trace path has ambiguous or overlapping worktree root mappings.'}
+    if($mappedPaths.Count -eq 0){return $null}
+    return $mappedPaths[0]
 }
 
 function Assert-DotNetTrxContextBinding {
