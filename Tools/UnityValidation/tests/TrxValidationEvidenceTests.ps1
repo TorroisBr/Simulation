@@ -38,6 +38,15 @@ try {
             Assert-True (-not $outcomeFacts.GatePassed -and $outcomeFacts.ResultCount -eq 1 -and $outcomeFacts.OutcomeCounts[$outcome] -eq 1) "$outcome is retained as a non-passing result fact"
         }
     }
+    $pinnedDiscovery="Test run for C:\agent\project\tests\Simulation.Core.Tests\bin\Release\net8.0\Simulation.Core.Tests.dll (.NETCoreApp,Version=v8.0)`nA total of 1 test file matched the specified pattern.`n`nThe following Tests are available:`n    alpha`n    beta`n"
+    & $trxModule {param($txt,$cases,$assembly,$framework) Assert-TrxDiscoveryOutput $txt $cases $assembly $framework|Out-Null} $pinnedDiscovery @('alpha','beta') 'C:\agent\project\tests\Simulation.Core.Tests\bin\Release\net8.0\Simulation.Core.Tests.dll' '.NETCoreApp,Version=v8.0'
+    Assert-True $true 'pinned VSTest preamble binds the exact test assembly and target framework'
+    Assert-Throws {& $trxModule {param($txt,$cases,$assembly,$framework) Assert-TrxDiscoveryOutput $txt $cases $assembly $framework|Out-Null} $pinnedDiscovery @('alpha','beta') 'C:\agent\project\other.dll' '.NETCoreApp,Version=v8.0'} 'discovery banner assembly mismatch rejects'
+    Assert-Throws {& $trxModule {param($txt,$cases,$assembly,$framework) Assert-TrxDiscoveryOutput $txt $cases $assembly $framework|Out-Null} $pinnedDiscovery @('alpha','beta') 'C:\agent\project\tests\Simulation.Core.Tests\bin\Release\net8.0\Simulation.Core.Tests.dll' '.NETCoreApp,Version=v9.0'} 'discovery banner target framework mismatch rejects'
+    $wrongDiscoveryCount=$pinnedDiscovery.Replace('A total of 1 test file matched','A total of 2 test files matched')
+    Assert-Throws {& $trxModule {param($txt,$cases,$assembly,$framework) Assert-TrxDiscoveryOutput $txt $cases $assembly $framework|Out-Null} $wrongDiscoveryCount @('alpha','beta') 'C:\agent\project\tests\Simulation.Core.Tests\bin\Release\net8.0\Simulation.Core.Tests.dll' '.NETCoreApp,Version=v8.0'} 'discovery one-file summary mutation rejects'
+    $extraDiscoveryCase=$pinnedDiscovery.Replace("    beta`n", "    beta`n    injected`n")
+    Assert-Throws {& $trxModule {param($txt,$cases,$assembly,$framework) Assert-TrxDiscoveryOutput $txt $cases $assembly $framework|Out-Null} $extraDiscoveryCase @('alpha','beta') 'C:\agent\project\tests\Simulation.Core.Tests\bin\Release\net8.0\Simulation.Core.Tests.dll' '.NETCoreApp,Version=v8.0'} 'extra VSTest discovery case rejects'
     $original=Get-TrxFacts $passed
     $projected=ConvertTo-TrxProjectedDocument $original.Document @('C:\agent\project')
     $xmlBytes=ConvertTo-TrxCanonicalXml $projected;$normalized=Write-Trx 'normalized.trx' ([Text.UTF8Encoding]::new($false,$true).GetString($xmlBytes))

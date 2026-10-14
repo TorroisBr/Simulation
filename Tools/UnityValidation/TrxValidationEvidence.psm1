@@ -525,12 +525,20 @@ function Assert-TrxCompleteRunnerManifest {
 }
 
 function Assert-TrxDiscoveryOutput {
-    param([string]$Text,[string[]]$Cases)
+    param([string]$Text,[string[]]$Cases,[string]$ExpectedTestAssemblyPath,[string]$ExpectedTargetFramework)
     if($null -eq $Cases -or $Cases.Count -lt 1){throw 'Captured discovery case list is empty.'}
     $lines=@(($Text -replace "`r`n","`n" -replace "`r","`n") -split "`n")
     while($lines.Count -gt 0 -and $lines[-1] -ceq ''){$lines=@($lines|Select-Object -First ($lines.Count-1))}
-    if($lines.Count -ne ($Cases.Count+1) -or $lines[0] -cne 'The following Tests are available:'){throw 'Test-list output does not exactly match the complete captured discovery output.'}
-    for($i=0;$i -lt $Cases.Count;$i++){if($lines[$i+1] -cne ('    '+[string]$Cases[$i])){throw 'Test-list output order or case identity differs from captured discovery.'}}
+    $caseOffset=1
+    if($ExpectedTestAssemblyPath -or $ExpectedTargetFramework){
+        if([string]::IsNullOrWhiteSpace($ExpectedTestAssemblyPath) -or [string]::IsNullOrWhiteSpace($ExpectedTargetFramework)){throw 'VSTest discovery preamble binding is incomplete.'}
+        if($lines.Count -lt 4){throw 'VSTest discovery preamble is incomplete.'}
+        $banner=[regex]::Match($lines[0],'^Test run for (.+) \((\.NETCoreApp,Version=v[0-9]+\.[0-9]+)\)$')
+        if(-not $banner.Success -or -not [string]::Equals($banner.Groups[1].Value,$ExpectedTestAssemblyPath,[StringComparison]::Ordinal) -or -not [string]::Equals($banner.Groups[2].Value,$ExpectedTargetFramework,[StringComparison]::Ordinal) -or $lines[1] -cne 'A total of 1 test file matched the specified pattern.' -or $lines[2] -cne '' -or $lines[3] -cne 'The following Tests are available:'){throw 'VSTest discovery preamble does not match the bound assembly, target framework, and pinned one-file profile.'}
+        $caseOffset=4
+    }elseif($lines.Count -eq ($Cases.Count+1) -and $lines[0] -cne 'The following Tests are available:'){throw 'Test-list output does not exactly match the complete captured discovery output.'}
+    if($lines.Count -ne ($Cases.Count+$caseOffset) -or $lines[$caseOffset-1] -cne 'The following Tests are available:'){throw 'Test-list output does not exactly match the complete captured discovery output.'}
+    for($i=0;$i -lt $Cases.Count;$i++){if($lines[$i+$caseOffset] -cne ('    '+[string]$Cases[$i])){throw 'Test-list output order or case identity differs from captured discovery.'}}
     return $true
 }
 
@@ -862,7 +870,7 @@ function Assert-TrxPublicRunSourceClaims {
     $sdkText=[IO.File]::ReadAllText($sdkLog,[Text.UTF8Encoding]::new($false,$true)).Trim();if($sdkText -cne [string]$Runner.toolchain.sdk){throw 'SDK output log does not match the runner manifest toolchain.'}
     $runtimeLog=Join-Path $ProtectedRoot 'dotnet-runtimes.log';$runtimeText=[IO.File]::ReadAllText($runtimeLog,[Text.UTF8Encoding]::new($false,$true));$runtimeLines=@($runtimeText -split "`r?`n"|Where-Object {$_ -ne ''})
     if((ConvertTo-Json -InputObject @($runtimeLines) -Compress) -cne (ConvertTo-Json -InputObject @($Runner.toolchain.runtimes) -Compress)){throw 'Runtime-list output log differs from runner toolchain evidence.'}
-    $listLog=Join-Path $ProtectedRoot 'list-tests.log';$listText=[IO.File]::ReadAllText($listLog,[Text.UTF8Encoding]::new($false,$true));Assert-TrxDiscoveryOutput $listText @($Runner.testDiscovery.cases)
+    $listLog=Join-Path $ProtectedRoot 'list-tests.log';$listText=[IO.File]::ReadAllText($listLog,[Text.UTF8Encoding]::new($false,$true))
     Assert-TrxRestoreProjectAssetPaths $Runner $SourceRoot $scriptFull
     $infoLog=[IO.File]::ReadAllText((Join-Path $ProtectedRoot 'dotnet-info.log'),[Text.UTF8Encoding]::new($false,$true));if(-not $infoLog.Contains([string]$Runner.toolchain.sdk)){throw 'dotnet --info output log does not bind the declared SDK version.'}
     $logger=$Context.loggerEvidence
@@ -885,6 +893,10 @@ function Assert-TrxPublicRunSourceClaims {
         foreach($definition in @($facts.Document.SelectNodes("//*[local-name()='UnitTest']"))){$method=$definition.SelectSingleNode("*[local-name()='TestMethod']");if($null -eq $method){throw 'Original TRX UnitTest lacks its TestMethod assembly reference.'};$storage=Get-TrxMappedRelativePath $definition.GetAttribute('storage') @($Context.worktreeRoots);$codeBase=Get-TrxMappedRelativePath $method.GetAttribute('codeBase') @($Context.worktreeRoots);if(-not [string]::Equals($storage,$codeBase,[StringComparison]::OrdinalIgnoreCase)){throw 'Original TRX storage/codeBase references disagree.'};$resolved=Resolve-TrxWorktreeFile $codeBase @($Context.worktreeRoots);if([IO.Path]::GetFileName($resolved) -cne 'Simulation.Core.Tests.dll'){throw 'Original TRX does not bind to the exact Simulation.Core.Tests.dll output.'};if($null -ne $testAssemblyRelative -and -not [string]::Equals($testAssemblyRelative,$codeBase,[StringComparison]::OrdinalIgnoreCase)){throw 'Cold/warm TRX tests bind to different test assemblies.'};$testAssemblyRelative=$codeBase}
     }
     if([string]::IsNullOrWhiteSpace($testAssemblyRelative)){throw 'Original reports do not identify the validated test assembly output.'}
+    if([string]$frameworks[0] -notmatch '^net(?<version>[0-9]+\.[0-9]+)$'){throw 'Current CORE-A test target framework is unsupported by the pinned VSTest discovery adapter.'}
+    $expectedVSTestTargetFramework='.NETCoreApp,Version=v'+$Matches.version
+    $expectedTestAssemblyPath=Resolve-TrxWorktreeFile $testAssemblyRelative @($Context.worktreeRoots)
+    Assert-TrxDiscoveryOutput $listText @($Runner.testDiscovery.cases) $expectedTestAssemblyPath $expectedVSTestTargetFramework
     $null=Assert-TrxRecoveredCommandWorkingDirectory $Context $Runner $SourceRoot $ProtectedRoot $testAssemblyRelative
     $retainedAssemblies=@(Get-TrxRetainedAssemblyInventory $Context $SourceRoot $ProtectedRoot $Runner $testAssemblyRelative -Create)
     $assembled=[Collections.Generic.List[object]]::new()
