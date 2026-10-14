@@ -383,12 +383,41 @@ NUnit normalization/path redaction and Assets/Packages/ProjectSettings/UnityVali
 input roots remain bounded; this refresh does not extend the implemented parser.
 
 For CORE-A, use the exact [host evidence contract](../architecture/SIMULATION_CORE_A_MASTER_HANDOFF.md):
-complete original .NET TRX reports in one reviewed durable bundle, full SDK/CLR/
+complete .NET TRX result evidence in one reviewed durable bundle (originals, or
+the implemented and independently validated projection in section 11), full SDK/CLR/
 project/lock/source/runner input manifest, before/after equality and nonempty
 complete per-case execution. Preserve failures/skips/counts/identity/reasons and
 protected diagnostics. Review actual report content and outgoing objects before
 publication. Do not feed unsupported TRX into the Unity packer, edit it to fit,
 or replace inaccessible results with hashes. Unity uses its delivered packer plus
-a sidecar identity manifest for new inputs beyond its roots. Any future normalized
-.NET adapter needs independent schema/losslessness review. Existing mandatory
+a sidecar identity manifest for new inputs beyond its roots. The normalized
+.NET adapter in section 11 still needs implementation and independent schema/
+result-equivalence review before use. Existing mandatory
 focused/full/Smoke/LongRun gates and historical packages remain unchanged.
+
+## 11. Privacy-safe .NET TRX evidence — approved contract, tool not yet delivered
+
+Use [the exact TRX contract and Master handoff](DOTNET_TRX_EVIDENCE_CONTRACT.md).
+After its independent design PASS and architecture promotion, a complete normalized
+TRX package may satisfy CORE-A's durable result-evidence gate only once the shared
+Evidence Packager's bounded TRX adapter is implemented, validated and independently
+reviewed. The original-only public TRX clause is replaced for this supported path;
+no existing sanitized artifact is retrospectively accepted and no execution gate
+is weakened. Until that capability passes, the current evidence block remains.
+
+Originals remain immutable and access-controlled under diagnostic retention;
+complete normalized reports plus source/input/assembly/projection identities and
+independent comparison are permanent accessible evidence. Local-only originals,
+hashes or JSON outcome summaries are not sole permanent promotion evidence.
+Archive-only verification checks retained integrity/consistency, not raw-source
+equivalence or execution authenticity. Independent original comparison must be
+completed and attested before promotion; no stronger claim without raw access.
+
+Only the exact field projection is permitted; preserve all outcomes/case identities,
+native counters, derived complete outcome accounting, errors, times and cold/warm
+provenance. Unsupported structures/private immutable payload fail closed. Existing
+NUnit behavior and mandatory validation remain. Actual CORE-A local ACLs were not
+isolated as previously claimed; secure-copy/hash/access remediation is required,
+without editing originals or active implementation worktrees. This finding is not
+a finding of disclosure. Retained original SDK outputs permit reviewed retrospective
+assembly binding; label recovery honestly, never invent capture-time hashes.

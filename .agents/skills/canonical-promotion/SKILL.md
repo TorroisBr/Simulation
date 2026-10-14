@@ -17,3 +17,12 @@ Output prior/final full SHAs, files and integration path, validation/review evid
 ## Evidence retention and reuse
 
 Apply docs/operations/VALIDATION_EVIDENCE_POLICY.md: verify the accessible final result package, full input identity, required gates, exact-tip independent applicability and normal State links. Inspect the actual outgoing object closure and generated archive contents, including ancestors. Keep original-XML evidence until the reviewed packer exists. Reuse only proven identical inputs and scope; do not bypass external publication review. Preserve historical packages and active candidates.
+
+## TRX evidence gate
+
+For supported .NET runs apply docs/operations/DOTNET_TRX_EVIDENCE_CONTRACT.md.
+Before CORE-A promotion require the implemented/reviewed adapter, verified protected
+originals, durable complete public reports and independent source comparison,
+assembly/input binding and final exact-tip applicability. A promoted policy is
+not that capability. Archive-only verification and local hashes cannot substitute
+for the original comparison or durable result access. Preserve all execution gates.

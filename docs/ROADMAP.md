@@ -22,6 +22,30 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
 
+## CORE-A evidence-path refresh — 2026-10-13
+
+CORE-A candidate `74677a0b5b74c7814874dd2d2b11aead2891bc42` has independent
+implementation/docs PASS and recorded Unity/.NET execution results; it is not
+canonical. Its remaining delivery gate is complete durable privacy-safe .NET
+evidence, including actual access-control remediation and final applicability.
+The [TRX evidence contract and Tools handoff](operations/DOTNET_TRX_EVIDENCE_CONTRACT.md)
+is READY_FOR_IMPLEMENTATION after independent design PASS and architecture
+promotion; CORE-A promotion remains WAIT_DEPENDENCY on that delivery. The adapter
+is not implemented by this documentation.
+
+```text
+reviewed/promoted TRX contract -> implemented/validated/reviewed shared adapter
+  -> verified protected originals + recovered assembly/input binding
+  -> complete public cold/warm package + independent original comparison
+  -> final CORE-A applicability/preflight -> CORE-A canonical promotion
+  -> CORE-B/C actual dependency/baseline refresh
+```
+
+CORE-B design `d20c2352` and CORE-C design `e80ae27c` have independent design
+reviews in candidate refs; neither becomes implementation-ready merely through
+this evidence policy. Active candidates/source/tests and all P12/numbered-phase
+contracts remain untouched. This update introduces no gameplay or new Phase.
+
 ## Current infrastructure and P12 refresh — 2026-10-13
 
 The user selected [Unity-independent Simulation Core extraction](architecture/SIMULATION_CORE_EXTRACTION.md)

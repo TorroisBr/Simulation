@@ -26,3 +26,11 @@ source/assembly moves as consumer integration/build/serialization revalidation;
 docs-only direction does not reopen closed phases. Preserve P12's exact supported
 profile and identity checks. Check the actual execution canonical for delivered
 packager/closure capabilities rather than stale architecture-checkout source.
+
+## .NET evidence capability
+
+Track the approved TRX contract, implemented shared adapter, actual evidence package
+and original-comparison review as separate dependencies. CORE-A promotion waits
+for the latter three plus exact-tip applicability; policy adoption alone unlocks
+neither CORE-A delivery nor CORE-B/C implementation. Docs-only changes can reuse
+unchanged runs after review; actual input/harness changes require affected gates.

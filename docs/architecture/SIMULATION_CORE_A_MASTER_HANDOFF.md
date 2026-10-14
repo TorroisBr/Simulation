@@ -200,10 +200,13 @@ records, empty selection, mismatched IDs/counters or missing expected cases.
 Gate requires all expected selected cases executed/Passed, zero failed/error/
 timeout/aborted/skipped/not-executed/inconclusive. Record operational failures
 without converting them into pass; no automatic retry of valid test failures.
-Preserve a complete original TRX bundle and manifest, independently inspect actual
-content/privacy and outgoing Git objects before publication; do not strip or
-hand-edit it to satisfy the unsupported Unity packer. Protected originals/logs
-follow evidence policy. Self-tests cover a passing populated report, failed and
+Preserve complete original TRX bytes and manifest under verified protected
+retention. Public evidence may be either privacy-approved originals or the exact
+[approved TRX projection](../operations/DOTNET_TRX_EVIDENCE_CONTRACT.md), only after
+its shared packager adapter passes implementation, validation and independent
+review. Inspect actual public content and outgoing Git objects; no hand-edited
+report or unsupported NUnit-parser workaround. This replaces original-only public
+publication, not complete per-case evidence or any CORE-A execution gate. Self-tests cover a passing populated report, failed and
 skipped cases, empty discovery, malformed/missing report and count/ID/tamper or
 input-instability rejection. No generalized normalized report/schema framework.
 
@@ -212,7 +215,9 @@ sidecar full-input manifest for SDK/project/linked sources outside its captured
 roots; verify equality across the final two-host gate set. Do not claim existing
 Unity package hashes cover newly added .NET inputs. If a report format or privacy
 rule cannot safely retain required evidence, leave that evidence gate unresolved;
-no manifest/hash-only substitute. One final cumulative package per host is enough,
+no manifest/hash-only substitute. The approved TRX adapter path requires verified
+ACLs and independent original comparison; local presence alone is insufficient.
+One final cumulative package per host is enough,
 with earlier unchanged-source parity baseline evidence referenced, not copied.
 
 ## 6. Validation and closure criteria

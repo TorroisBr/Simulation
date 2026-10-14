@@ -353,8 +353,8 @@ not establish .NET source/toolchain input equality. Its XML schema/path redactio
 is deliberately bounded; do not pass TRX or unsupported .NET assembly reports to
 it or edit reports to manufacture acceptance.
 
-CORE-A's .NET side keeps a complete original TRX result bundle under the evidence
-policy transition rule, with a manifest covering SDK/global.json, Core/test/demo
+CORE-A's .NET side keeps complete TRX result evidence under the evidence
+policy, with a manifest covering SDK/global.json, Core/test/demo
 projects and explicit linked sources, lockfiles, runner/commands, OS/CLR/architecture,
 case identities/results/counts and before/after input digests. Full original
 TRX is permanent evidence only after content/privacy review; originals/logs also
@@ -362,7 +362,11 @@ follow protected diagnostic retention. No hashes-only or aggregate-only proof.
 One small Tools/CoreValidation helper may capture identity, run dotnet and verify
 expected complete results; no generic packaging framework or port of the Unity
 packer is required. Its exact acceptance algorithm is in the first handoff.
-A future normalized TRX adapter requires its own independent losslessness review.
+The [approved privacy-safe TRX contract](../operations/DOTNET_TRX_EVIDENCE_CONTRACT.md)
+permits a complete normalized package after its shared adapter is implemented,
+validated and independently reviewed; originals remain under verified protected
+retention and original-to-derived comparison. This is not an existing capability
+or a retroactive acceptance of prior sanitized evidence.
 Unity evidence uses the delivered packager unchanged; CORE-A supplies a sidecar
 manifest for added SDK/linked-test inputs outside the Unity packer's roots.
 

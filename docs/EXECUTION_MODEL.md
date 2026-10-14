@@ -227,8 +227,10 @@ substitution is authorized. CORE-A needs both hosts and P12/asset regressions.
 Current production P12 has adopted the evidence packager; older future-implementation
 wording above describes its earlier state. Verify the selected production ref and
 Tools README before using it. It supports its declared Unity NUnit/input boundary,
-not arbitrary TRX/SDK roots. CORE-A uses a complete reviewed original-TRX bundle
-plus full .NET input manifest and a Unity input sidecar, under evidence policy.
+not arbitrary TRX/SDK roots. CORE-A requires complete reviewed TRX result evidence plus full .NET input and
+assembly identity and a Unity input sidecar, under evidence policy. The approved
+privacy-safe TRX projection can replace public original-report publication only
+after its adapter implementation/validation and independent source comparison.
 No unsupported normalization or inaccessible hashes-only evidence may pass.
 
 Architecture promotion uses the user's explicit extraction/autonomous-compatible-
@@ -250,3 +252,22 @@ architecture/documentation promotion and durable implementation handoff. It star
 no migration implementation. READY_FOR_IMPLEMENTATION is technical readiness,
 not an automatic implementation grant or a reason to create a routine human gate;
 Master checks its existing active mandate as in every other checkpoint dispatch.
+
+## Privacy-safe TRX evidence and CORE-A applicability — 2026-10-13
+
+Follow [the bounded TRX contract](operations/DOTNET_TRX_EVIDENCE_CONTRACT.md).
+Tool design readiness is not tool delivery or CORE-A promotion. Preserve original
+run/input identities and complete case/result evidence; normalized reports differ
+from originals. Archive-only integrity verification does not prove original
+comparison, authenticity or access. Verify actual ACLs and retained execution
+context; current CORE-A copies need access isolation before packaging.
+
+A docs/packaging-only successor may reuse the original runs after independent
+exact-tip applicability. Distinguish recorded capture-time inputs from later
+packaging tools, explicitly review all final-tree deltas and never claim differing
+whole input inventories are equal. Changing execution inputs/harness behavior
+requires affected fresh validation. The shared TRX adapter has its own synthetic,
+legacy Tools and real-read-only comparison gates; no Unity/.NET rerun merely to
+change docs or normalize unchanged original evidence. Master implements/promotes
+the Tools capability, then packages/reviews CORE-A and performs separate canonical
+promotion. No code migration or promotion is executed in this architecture task.

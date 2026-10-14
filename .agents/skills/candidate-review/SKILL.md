@@ -23,5 +23,15 @@ Check actual compiled/transitive dependencies, one authoritative source owner,
 SDK/asmdef integration, serialized asset linkage, exact cross-host case mapping,
 authoritative parity and P12 build/profile compatibility boundaries. Inspect
 both host gate results and their complete input/toolchain identity. The current
-Unity packager does not support arbitrary .NET TRX; use the bounded handoff's
-complete original-report path. A pure compile alone is not a portable world host.
+Unity packager supports only its delivered report formats; use the bounded
+handoff's approved evidence path, never assume a proposed TRX adapter exists. A pure compile alone is not a portable world host.
+
+## TRX normalization review
+
+Use docs/operations/DOTNET_TRX_EVIDENCE_CONTRACT.md for the bounded supported path.
+Verify source originals, ACLs, native/derived counts, full case graph, immutable
+failure payload, explicit metadata projection and source/assembly binding. Check
+complete source-to-derived equivalence independently of aggregate/hash claims.
+Distinguish archive integrity from original-comparison proof and retained local
+files from durable public evidence. Bind original/tested refs and packaging-time
+tool refs separately; no retroactive acceptance or fabricated rerun.

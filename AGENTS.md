@@ -103,3 +103,16 @@ schema/input roots do not cover arbitrary TRX/SDK inputs. Retain complete origin
 .NET case results and full toolchain/input manifests under the evidence policy.
 The packager is delivered on inspected P12 canonical `4cc31073`; older prospective
 wording above is historical, not a reason to recreate the tool.
+
+## Privacy-safe TRX result publication
+
+Apply docs/operations/DOTNET_TRX_EVIDENCE_CONTRACT.md. Complete normalized TRX
+may replace public original bytes only after the approved shared adapter is
+implemented, validated and independently compared with accessible originals.
+No current TRX support or CORE-A promotion follows from documentation. Preserve
+all native/derived outcomes, case/failure details and cold/warm/source/assembly
+identities. Verify actual ACLs; location labels and hashes are insufficient.
+Archive-only verification does not claim original comparison or execution trust.
+Keep old input inventories separate from later packaging tool identities and
+obtain exact-tip applicability; do not rerun unchanged domain tests solely for
+normalization or claim equality of different captured input sets.

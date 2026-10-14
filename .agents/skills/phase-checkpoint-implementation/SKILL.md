@@ -28,3 +28,12 @@ waive current Unity integration/full/Smoke or required LongRun gates. Preserve
 asset serialization and P12 descriptor/incompatibility semantics. Use the current
 production packager only for supported reports/inputs; keep complete .NET results
 and input manifests under evidence policy. No engine stubs or copied domain rules.
+
+## .NET evidence publication
+
+The approved TRX contract permits complete normalized reports only after its
+shared adapter implementation/validation/review. Preserve raw bytes under verified
+access control, package complete result evidence and require independent original
+comparison. No private-metadata publication workaround or summary/hash-only gate.
+For already validated CORE-A use retained original context and honest assembly
+recovery; rerun only for an actual execution/input/claim gap, not packaging alone.
