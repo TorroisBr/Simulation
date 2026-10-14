@@ -764,7 +764,7 @@ function Get-TrxRetainedAssemblyInventory {
     param([System.Collections.IDictionary]$Context,[string]$SourceRoot,[string]$ProtectedRoot,[System.Collections.IDictionary]$Runner,[string]$TestAssemblyRelative,[switch]$Create)
     $claims=@($Context.publicRuns[0].assemblies)
     if($claims.Count -ne 2){throw 'Private evidence context must bind exactly the two validated CORE assembly outputs.'}
-    $testRelative=ConvertTo-TrxPortableRelative $TestAssemblyRelative
+    $testRelative=(ConvertTo-TrxPortableRelative $TestAssemblyRelative).Replace('\','/')
     if([IO.Path]::GetFileName($testRelative) -cne 'Simulation.Core.Tests.dll'){throw 'Validated output binding must originate from the exact test DLL named by TRX.'}
     $derivedPaths=[ordered]@{'Simulation.Core.Tests.dll'=$testRelative;'Simulation.Core.dll'=(Join-Path (Split-Path -Parent $testRelative) 'Simulation.Core.dll').Replace('\','/')}
     $expected=[ordered]@{
