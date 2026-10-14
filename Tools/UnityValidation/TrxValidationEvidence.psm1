@@ -560,6 +560,11 @@ function Test-TrxByteSequenceEqual {
     return $true
 }
 
+function Assert-TrxPackageOutputNamesAvailable {
+    param([string]$ArchivePath,[string]$ManifestPath)
+    if((Test-Path -LiteralPath $ArchivePath) -or (Test-Path -LiteralPath $ManifestPath)){throw 'TRX evidence output already exists; refusing overwrite.'}
+}
+
 function Assert-TrxRetentionResumeState {
     param([string]$Directory,[string]$AclReceiptPath,[string]$ProtectedRoot)
     $hasDirectory=Test-Path -LiteralPath $Directory -PathType Container
@@ -1163,7 +1168,7 @@ function New-DotNetTrxEvidencePackage {
     $manifest=[ordered]@{schema='validation-evidence-trx-package-v1';bundleId=$BundleId;format=[ordered]@{reportProfile=$script:TrxProfile;counterProfile=$script:TrxCounterProfile;projectionPolicy=$script:TrxProjection};tool=(Get-TrxToolIdentity);archive=[ordered]@{file=$archiveName;bytes=0;sha256='0'*64;format='zip-deflate-fixed-1980-01-01';entryPolicy='normalized-trx-only'};runs=@($run)}
     $manifestBytes=ConvertTo-EvidenceJsonBytes $manifest;Test-PublicEvidenceText ([Text.UTF8Encoding]::new($false,$true).GetString($manifestBytes))
     $zipPath=Join-Path ([IO.Path]::GetFullPath($OutputDirectory)) $archiveName;$manifestPath=[IO.Path]::ChangeExtension($zipPath,'.manifest.json')
-    if(Test-Path -LiteralPath $zipPath -or Test-Path -LiteralPath $manifestPath){throw 'TRX evidence output already exists; refusing overwrite.'}
+    Assert-TrxPackageOutputNamesAvailable $zipPath $manifestPath
     New-Item -ItemType Directory -Path $OutputDirectory -Force|Out-Null
     try{Write-DeterministicEvidenceArchive -Path $zipPath -Entries @($zipEntries.ToArray());$zipRecord=Get-Item -LiteralPath $zipPath;$manifest.archive.bytes=[long]$zipRecord.Length;$manifest.archive.sha256=Get-EvidenceSha256 $zipPath;Assert-TrxPublicManifest $manifest;$manifestBytes=ConvertTo-EvidenceJsonBytes $manifest;Test-PublicEvidenceText ([Text.UTF8Encoding]::new($false,$true).GetString($manifestBytes));[IO.File]::WriteAllBytes($manifestPath,$manifestBytes);$verified=Test-DotNetTrxEvidencePackage -ManifestPath $manifestPath -ArchivePath $zipPath -SourceContextPath @($contextPath);if(-not $verified.IsValid){throw $verified.Error};return [pscustomobject]@{ManifestPath=$manifestPath;ArchivePath=$zipPath;ArchiveSha256=$manifest.archive.sha256;ArchiveBytes=$manifest.archive.bytes;OriginalComparison=$verified.OriginalComparison}}catch{Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue;Remove-Item -LiteralPath $manifestPath -Force -ErrorAction SilentlyContinue;throw}
 }

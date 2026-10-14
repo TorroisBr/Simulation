@@ -272,6 +272,14 @@ Chose FX version [C:\Program Files\dotnet\shared\Microsoft.NETCore.App\9.0.20]
     Assert-True (-not $changedBytes) 'strict byte comparison rejects a changed receipt byte'
     $differentLength=& $trxModule {param([byte[]]$a,[byte[]]$b) Test-TrxByteSequenceEqual $a $b} ([byte[]]@(0,1)) ([byte[]]@(0,1,255))
     Assert-True (-not $differentLength) 'strict byte comparison rejects a different receipt length'
+    $availableArchive=Join-Path $root 'available.zip';$availableManifest=Join-Path $root 'available.manifest.json'
+    & $trxModule {param($z,$m) Assert-TrxPackageOutputNamesAvailable $z $m} $availableArchive $availableManifest
+    Assert-True $true 'package output check allows two absent files'
+    [IO.File]::WriteAllBytes($availableArchive,[byte[]]@(1))
+    Assert-Throws { & $trxModule {param($z,$m) Assert-TrxPackageOutputNamesAvailable $z $m} $availableArchive $availableManifest } 'package output check refuses an existing archive'
+    Remove-Item -LiteralPath $availableArchive -Force
+    [IO.File]::WriteAllBytes($availableManifest,[byte[]]@(1))
+    Assert-Throws { & $trxModule {param($z,$m) Assert-TrxPackageOutputNamesAvailable $z $m} $availableArchive $availableManifest } 'package output check refuses an existing manifest'
     Assert-Throws { & $trxModule {param($txt,$cases) Assert-TrxDiscoveryOutput $txt $cases|Out-Null} "The following Tests are available:`n    beta`n    alpha`n" @('alpha','beta') } 'discovery order mutation rejects'
     Assert-Throws { & $trxModule {param($txt,$cases) Assert-TrxDiscoveryOutput $txt $cases|Out-Null} "The following Tests are available:`n    alpha`n    beta`n    injected`n" @('alpha','beta') } 'extra discovery output rejects'
     $partialRetained=Join-Path $root 'partial-retained';New-Item -ItemType Directory -Path $partialRetained -Force|Out-Null;[IO.File]::WriteAllText((Join-Path $partialRetained 'Simulation.Core.dll'),'partial')
