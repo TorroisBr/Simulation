@@ -130,6 +130,12 @@ try {
         [ordered]@{label='warm-demo';executable='dotnet';workingDirectory='<WORKTREE>';argv=@('run','--project','tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj','--no-build','--no-restore','--configuration','Release');exitCode=0;elapsedMilliseconds=100;derivation='recovered-from-bound-runner';provenance=@()})
     $manifest.runs[0].demonstrations=@([ordered]@{label='cold-demo';exitCode=0;elapsedMilliseconds=100;output=@();derivation='recovered-from-bound-runner';provenance=@()},[ordered]@{label='warm-demo';exitCode=0;elapsedMilliseconds=100;output=@();derivation='recovered-from-bound-runner';provenance=@()})
     $claimsExpected=& $trxModule {param($r) Copy-TrxPublicRun $r} $manifest.runs[0]
+    $claimsActualMixed= & $trxModule {param($r) Copy-TrxPublicRun $r} $manifest.runs[0]
+    $claimsExpectedMixed= & $trxModule {param($r) Copy-TrxPublicRun $r} $manifest.runs[0]
+    $claimsActualMixed.discovery=ConvertFrom-Json -InputObject '{"count":3,"cases":["case-a","case-b","case-c"]}' -AsHashtable
+    $claimsExpectedMixed.discovery=[ordered]@{count=3;cases=@('case-a','case-b','case-c')}
+    & $trxModule {param($a,$e) Assert-TrxBoundPublicClaims $a $e} $claimsActualMixed $claimsExpectedMixed
+    Assert-True $true 'public claims compare JSON and ordered dictionaries when a count key shadows Count'
     & $trxModule {param($a,$e) Assert-TrxBoundPublicClaims $a $e} $claimsExpected $claimsExpected
     Assert-True $true 'all reconstructed public claim groups compare exactly'
     $claimsMutation=& $trxModule {param($r) Copy-TrxPublicRun $r} $manifest.runs[0];$claimsMutation.source.commit='f'*40;Assert-Throws {& $trxModule {param($a,$e) Assert-TrxBoundPublicClaims $a $e} $claimsMutation $claimsExpected} 'public source identity mutation is detected'

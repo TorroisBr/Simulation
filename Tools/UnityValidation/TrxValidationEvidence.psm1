@@ -966,7 +966,9 @@ function Test-TrxClaimValueEqual {
     if($null -eq $Expected){return $null -eq $Actual}
     if($null -eq $Actual){return $false}
     if($Expected -is [System.Collections.IDictionary]){
-        if($Actual -isnot [System.Collections.IDictionary] -or $Actual.Count -ne $Expected.Count){return $false}
+        if($Actual -isnot [System.Collections.IDictionary]){return $false}
+        $dictionaryCountProperty=[System.Collections.ICollection].GetProperty('Count')
+        if([int]$dictionaryCountProperty.GetValue($Actual) -ne [int]$dictionaryCountProperty.GetValue($Expected)){return $false}
         foreach($key in $Expected.Keys){if(-not $Actual.Contains($key) -or -not (Test-TrxClaimValueEqual $Actual[$key] $Expected[$key])){return $false}}
         return $true
     }
