@@ -42,6 +42,8 @@ try {
     $projected=ConvertTo-TrxProjectedDocument $original.Document @('C:\agent\project')
     $xmlBytes=ConvertTo-TrxCanonicalXml $projected;$normalized=Write-Trx 'normalized.trx' ([Text.UTF8Encoding]::new($false,$true).GetString($xmlBytes))
     $normalizedFacts=Get-TrxFacts $normalized
+    $carriageReturnXml=(New-TrxText).Replace('case detail unchanged','before&#13;after');$carriageReturnFacts=Get-TrxFacts (Write-Trx 'carriage-return.trx' $carriageReturnXml);$carriageReturnCanonical=ConvertTo-TrxCanonicalXml $carriageReturnFacts.Document;$carriageReturnText=[Text.UTF8Encoding]::new($false,$true).GetString($carriageReturnCanonical);$carriageReturnRoundTrip=Write-Trx 'carriage-return-canonical.trx' $carriageReturnText;$carriageReturnCanonicalAgain=ConvertTo-TrxCanonicalXml (Get-TrxFacts $carriageReturnRoundTrip).Document
+    Assert-True ($carriageReturnText.Contains('before&#xD;after') -and (Get-BytesSha256 $carriageReturnCanonical) -ceq (Get-BytesSha256 $carriageReturnCanonicalAgain)) 'literal text carriage returns use a round-trip-stable XML character reference'
     Assert-True ($projected.DocumentElement.GetAttribute('runUser') -eq '<PRIVATE_RUN_USER>') 'run user placeholder'
     Assert-True ($projected.DocumentElement.GetAttribute('name') -eq "run-$($original.RunId)") 'stable display run label'
     Assert-True (@($projected.SelectNodes("//*[local-name()='UnitTestResult']"))[0].GetAttribute('computerName') -eq 'HOST-0001') 'host alias first appearance'

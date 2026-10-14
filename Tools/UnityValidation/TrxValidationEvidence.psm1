@@ -306,7 +306,7 @@ function ConvertTo-TrxProjectedDocument {
     return $clone
 }
 
-function ConvertTo-TrxEscapedText([string]$Value) { [System.Security.SecurityElement]::Escape($Value) }
+function ConvertTo-TrxEscapedText([string]$Value) { ([System.Security.SecurityElement]::Escape($Value)).Replace("`r",'&#xD;') }
 function ConvertTo-TrxEscapedAttribute([string]$Value) { (ConvertTo-TrxEscapedText $Value).Replace('"','&quot;').Replace("`r",'&#xD;').Replace("`n",'&#xA;').Replace("`t",'&#x9;') }
 function ConvertTo-TrxCanonicalXml {
     param([System.Xml.XmlDocument]$Document)
