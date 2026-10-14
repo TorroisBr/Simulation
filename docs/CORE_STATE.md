@@ -70,7 +70,12 @@ bounded implementation follows the documented CORE-A and P14-B dependencies.
 Its candidate and exact validation are recorded in
 [`validation/COREC_FiniteSource/VALIDATION.md`](validation/COREC_FiniteSource/VALIDATION.md).
 
-## Readiness boundary
+## Historical readiness boundary before CORE-C implementation
+
+**Historical snapshot:** the following readiness statements describe the
+period after CORE-B promotion and before CORE-C implementation/promotion. They
+are retained for traceability and are superseded by the later CORE-C and
+CORE-D status sections below.
 
 CORE-A and CORE-B are promoted. CORE-B passed design review,
 current-baseline revalidation, cold/warm validation, package verification,
@@ -209,3 +214,18 @@ readiness, full P14-B City daily economy, persistence, cross-build compatibility
 or a public extension surface. The P12 Daily-v1 owner inventory and admission
 contract are unchanged; this does not create a .NET continuation host or reopen
 the closed P12 profile.
+
+## Current Core extraction readiness — 2026-10-14
+
+CORE-A through CORE-D are promoted to `codex/core/canonical`; the current
+canonical State tip is recorded by the commit that contains this entry. CORE-D
+adds the bounded shared finite-source runtime and fixed Lab host described above.
+
+CORE-E remains the architecture-defined collection of individually reviewed
+domain closures. The current canonical history contains no next CORE-E
+checkpoint handoff or candidate design, so no additional domain extraction is
+implementation-ready from this State alone. CORE-F remains blocked on the exact
+selected Daily-v1 owner/definition/runtime closure and its own host design;
+P12 closure and CORE-D do not satisfy those prerequisites. CORE-X remains
+deferred pending an explicit compatibility scope and design. These extraction
+readiness limits do not change numbered Phase status or authorize profile growth.
