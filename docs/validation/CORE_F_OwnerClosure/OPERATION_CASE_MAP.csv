@@ -1,0 +1,25 @@
+operation_id,registration_source,admitted root/source,epoch behavior,case disposition
+runtime.npc-membership,SimulationRuntime.cs:354,SimulationRuntime.TryRegisterNpc/TryUnregisterNpc,Reserved composite; one shared epoch on committed membership transition; CORE-F-OWNER-004/005
+runtime.person.parentage,SimulationRuntime.cs:355,SimulationRuntime.TryAddParentage,per successful NotifyCommittedMutations call; runtime.person.parentage facade,Source registration exact; positive/negative path evidence remains in P12G closure
+runtime.bootstrap-publication,SimulationRuntime.cs:356,TesteSimulacao bootstrap publication callback,actual publication commit notification,bootstrap-only ingress; not a post-bootstrap gameplay mutation
+runtime.advance-day,SimulationRuntime.cs:357,SimulationRuntime.TryAdvanceDay/AdvanceDayAfterClockAdvance,one or more successful owner notifications can occur inside outer advance; no universal one-per-day rule,CORE-F-OWNER-008/009
+runtime.travel.start,SimulationRuntime.cs:358,SimulationRuntime travel facade,operation-specific successful commit notifications,selected when travelSystem is composed
+runtime.travel-party.advance,SimulationRuntime.cs:359,SimulationRuntime travel-party facade,operation-specific notifications and reserved composite behavior as implemented,selected when travelPartySystem is composed
+runtime.economy.npc-trade,SimulationRuntime.cs:360,SimulationRuntime economy transaction facade,actual changed-section notification calls; may be multiple per operation,selected ingress in P12 closure
+runtime.economy.money-transfer,SimulationRuntime.cs:361,SimulationRuntime economy transaction facade,actual changed-section notification calls,selected ingress in P12 closure
+runtime.economy.market-purchase,SimulationRuntime.cs:362,SimulationRuntime market purchase facade,actual changed-section notification calls,selected ingress in P12 closure
+runtime.economy.market-sale,SimulationRuntime.cs:363,SimulationRuntime market sale facade,actual changed-section notification calls,selected ingress in P12 closure
+runtime.merchant.advance-npc-trade-state,SimulationRuntime.cs:364,SimulationRuntime merchant daily facade,actual changed-section notification calls,selected ingress in P12 closure
+p12.institution-office.owner-commit,SimulationRuntime.cs:365,SimulationRuntime institution/office supported facade,per successful notification call,selected supported facade; not daily-loop-only
+p12.faction.owner-commit,SimulationRuntime.cs:366,SimulationRuntime faction supported facade,per successful notification call,selected supported facade; synthetic political restore does not add writer
+p12.political-claim.owner-commit,SimulationRuntime.cs:367,SimulationRuntime political claim supported facade,per successful notification call,selected supported facade
+p12.political-support.owner-commit,SimulationRuntime.cs:368,SimulationRuntime political support supported facade,per successful notification call,selected supported facade
+p12.property.owner-commit,SimulationRuntime.cs:369,SimulationRuntime property supported facade,per successful notification call,selected supported facade
+p12.estate.owner-commit,SimulationRuntime.cs:370,SimulationRuntime estate supported facade,per successful notification call,selected supported facade
+runtime.population.immigration,P12PopulationLifecycleCensus.cs:7,SimulationRuntime supported population lifecycle facade,operation-specific; reservations follow current transition,selected supported lifecycle root
+runtime.population.emigration,P12PopulationLifecycleCensus.cs:8,SimulationRuntime supported population lifecycle facade,operation-specific; reservations follow current transition,selected supported lifecycle root
+runtime.population.resident-death,P12PopulationLifecycleCensus.cs:9,SimulationRuntime supported population lifecycle facade,operation-specific; preserve completed commits/compensation,selected supported lifecycle root
+runtime.population.residence-migration,P12PopulationLifecycleCensus.cs:10,SimulationRuntime supported population lifecycle facade,operation-specific; reservations follow current transition,selected supported lifecycle root
+runtime.person.death,P12PopulationLifecycleCensus.cs:11,SimulationRuntime supported Person lifecycle facade,operation-specific; preserve current state/revision notifications,selected supported lifecycle root
+runtime.person.residence-bind,P12PopulationLifecycleCensus.cs:12,SimulationRuntime supported Person/NPC binding facade,one reservation according to the concrete composite mutation path,selected supported lifecycle root
+runtime.travel-party.start,SimulationRuntime.cs registration block near 2275,SimulationRuntime travel-party start facade,operation-specific notifications and reserved composite behavior as implemented,selected when travelPartySystem is composed
