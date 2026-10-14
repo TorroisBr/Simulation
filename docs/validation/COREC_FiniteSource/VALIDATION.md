@@ -4,8 +4,13 @@
 
 - Current Core canonical base: `bb82446c279ef47cf0d18a371f4728b2be4090e3`.
 - Candidate branch: `codex/core/CORE-C-P14B-finite-source`.
+- Final candidate reviewed: `114e3a7ec9f794b2996305eb1d640a8a58ab1083`, full
+  tree `2359e06c25dc9f244fe48b653eb5ace9d9930583`.
 - Core implementation commit/tree: `6355d37f416f88f90eb11ce6c8283c23d8acfb51` / `b5ad86fd6114db106d7223e6e70da3bd5ff2b62c`.
-- Candidate under review: `b33a302f9b78e8f35ba0ea94bf7168e6ee94f86f` / `170d95b3fa7fc73a069a472f029261e880680415`.
+- Test/input commit/tree: `b33a302f9b78e8f35ba0ea94bf7168e6ee94f86f` /
+  `170d95b3fa7fc73a069a472f029261e880680415`. The later commits to the final
+  candidate add validation/evidence and review records only; executable source
+  and test inputs are unchanged.
 - Technical design: `e80ae27cdf597e9f551fe94dd22827f59636712a`; independent design review: `cb98d3e99c9491ce2c34278516272763333b271e`.
 - Current-baseline applicability review: `8fa0408e481f457c153d7552eaed8ed5551cc612`.
 
@@ -18,7 +23,7 @@ the Core kernel.
 ## .NET cold/warm validation
 
 The promoted `Tools/CoreValidation` runner completed both cold and warm gates
-on candidate `b33a302f9b78e8f35ba0ea94bf7168e6ee94f86f`:
+on test/input commit `b33a302f9b78e8f35ba0ea94bf7168e6ee94f86f`:
 
 - Cold: 104/104 passed; native VSTest run `25a4fd2e-e12b-4e50-87b8-72cb31e28114`.
 - Warm: 104/104 passed; native VSTest run `e1bc6a7e-0dbe-4bcb-af70-1ce3056a2c47`.
@@ -49,7 +54,8 @@ without a Unity `Library` directory.
 
 ## Unity validation
 
-All evidence wrapper runs reported `InputStable=True` on candidate `b33a302`.
+All evidence wrapper runs reported `InputStable=True` on test/input commit
+`b33a302`.
 
 | Suite | Result | Run ID |
 |---|---:|---|
@@ -79,5 +85,11 @@ report contains the complete five passing Smoke cases; no altered or
 reinterpreted Smoke XML is published.
 
 `git diff --check` passed for the implementation and validation-tool changes.
-Independent exact-tip implementation review and canonical promotion are
-pending; this record does not claim CORE-C promotion.
+Independent exact-tip implementation review passed with no actionable findings
+for final candidate `114e3a7ec9f794b2996305eb1d640a8a58ab1083` and tree
+`2359e06c25dc9f244fe48b653eb5ace9d9930583`; durable record
+`c04ec332eef29387463937c7153387d9b8728c75` is on
+`codex/core/CORE-C-implementation-review-114e3a7`. The reviewer verified the
+recorded evidence but did not rerun the suites. This validation record alone
+does not claim CORE-C promotion; promotion remains subject to refreshed
+canonical preflight.

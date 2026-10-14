@@ -86,14 +86,38 @@ hotspots; CORE-B is sequencing, not a design or dependency blocker. The older
 by its current review records and this State. CORE-A and P14-B are promoted;
 CORE-B is now promoted and the serialized integration window is clear. The
 CORE-C checkpoint was `READY_FOR_IMPLEMENTATION` within the exact reviewed
-P14-B extraction boundary. Candidate `b33a302f9b78e8f35ba0ea94bf7168e6ee94f86f`
-is submitted against Core canonical `bb82446c279ef47cf0d18a371f4728b2be4090e3`
-with implementation tree `b5ad86fd6114db106d7223e6e70da3bd5ff2b62c` and final
-candidate tree `170d95b3fa7fc73a069a472f029261e880680415`. Focused, cold/warm
-.NET, ALL EditMode, Smoke and `git diff --check` validation passed. Independent
-exact-tip implementation review remains pending. No claim is made about P12
-readiness, equivalent .NET P12 continuation, P13, full world hosting, or
-broader simulation hosting.
+P14-B extraction boundary. Its implementation candidate is
+`codex/core/CORE-C-P14B-finite-source` at
+`114e3a7ec9f794b2996305eb1d640a8a58ab1083` (full tree
+`2359e06c25dc9f244fe48b653eb5ace9d9930583`), based on Core canonical
+`bb82446c279ef47cf0d18a371f4728b2be4090e3` and P14 canonical
+`09fcbe46ffb5a7d80377185692d550310debc110`. The tested source/input tip was
+`b33a302f9b78e8f35ba0ea94bf7168e6ee94f86f` (tree
+`170d95b3fa7fc73a069a472f029261e880680415`); later candidate commits add only
+the validation record and evidence packages. The implementation commit is
+`6355d37f416f88f90eb11ce6c8283c23d8acfb51` (tree
+`b5ad86fd6114db106d7223e6e70da3bd5ff2b62c`).
+
+Focused validation passed, .NET cold/warm passed 104/104 each, ALL EditMode
+passed 3110/3110, official Smoke passed 5/5, and `git diff --check` passed.
+The normalized .NET package was privately compared against the protected
+originals; its archive and manifest hashes are recorded in the linked
+validation record. The ALL EditMode package verified against its protected
+source run. The separate Smoke package was rejected for an inconsistent XML
+aggregate count; its original remains private and unchanged, and all five Smoke
+cases are present in the verified ALL EditMode report.
+
+Independent exact-tip implementation review passed with no actionable findings
+for candidate `114e3a7ec9f794b2996305eb1d640a8a58ab1083` and tree
+`2359e06c25dc9f244fe48b653eb5ace9d9930583`. Durable review record
+`c04ec332eef29387463937c7153387d9b8728c75` is published on
+`codex/core/CORE-C-implementation-review-114e3a7`; the record commit is a direct
+child of the reviewed candidate and adds only the review document. The review
+checked the complete base-to-candidate diff and exact validation references;
+tests were not rerun during review. The candidate is a validated candidate;
+canonical promotion remains pending final refreshed preflight. No claim is made
+about P12 readiness, equivalent .NET P12 continuation, P13, full world hosting,
+or broader simulation hosting.
 
 ## TRX-EVIDENCE-v1 — shared .NET evidence packaging
 
