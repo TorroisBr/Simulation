@@ -172,15 +172,16 @@ Exact-tip validation passed: TRX evidence suite 144 assertions, Unity evidence p
 
 ## CORE-D — shared finite-source runtime and Lab host
 
-**Status:** implementation and validation candidate; independent exact-tip
-implementation review is pending. CORE canonical remains
-`af084c2028528d8588268801daaee14a905f5f5b`; this candidate has not been
-promoted.
+**Status:** promoted to `codex/core/canonical` at candidate commit
+`45f80689acceebdbe7e56565640a970142ec43a3` (tree
+`1ddae66b757fb44466d0581afb5be3f9faf43f57`) on 2026-10-14. This is the bounded
+shared finite-source runtime and Lab-host slice described below.
 
-The candidate branch is `codex/core/CORE-D-implementation`, with implementation
-commit `e83ea3ba7c9cbddf76280f20e12785ce82383e43` and validation/tooling commit
-`e53857e3f157def116136001e78af97e64ff50cb` (tree
-`cf63c3db6054f749a82c631ea85c7e216001cf04`). The `Assets`, Core package,
+The candidate branch is `codex/core/CORE-D-implementation`. Its implementation
+commit is `e83ea3ba7c9cbddf76280f20e12785ce82383e43`; the exact validated
+source/tooling commit is `e53857e3f157def116136001e78af97e64ff50cb` (tree
+`cf63c3db6054f749a82c631ea85c7e216001cf04`). The final candidate tip adds
+validation records and corrected manifest digest labels only. The `Assets`, Core package,
 `src`, `tests`, and `tools/Simulation.Lab` trees remain identical between those
 commits. The implementation composes the promoted CORE-C finite-source kernel
 through one immutable Core scenario runtime, reuses it from the Unity adapter
@@ -193,12 +194,18 @@ Unity `FiniteSource` 41/41, ALL EditMode 3,120/3,120, official Smoke 5/5, and
 the existing Core validation self-tests. The `.NET` cold/warm reports were
 packaged and privately compared under the promoted TRX evidence tool;
 context-bound and archive-only verification passed. ALL EditMode was packaged
-and verified with the existing Unity evidence tool. Run IDs, source identities,
+and verified with the existing Unity evidence tool. The initial exact-tip
+implementation review found only stale prose hashes for the two committed JSON
+manifests; its record is `8ff0e76a45b482e28d79dafe177c51c17d529021`. The
+corrected documentation-only successor `45f80689acceebdbe7e56565640a970142ec43a3`
+received independent exact-tip applicability PASS at review record
+`271bdfff6327e4568045531a411a421f8e46f463`. Run IDs, source identities,
 hashes, and exact Lab output are recorded in
 [`CORE-D validation evidence`](validation/CORE_D_ScenarioLab/VALIDATION.md).
 The previous ALL EditMode package and manifest remain preserved unchanged.
 
 These results do not claim an equivalent P12 continuation host, P12/P13
 readiness, full P14-B City daily economy, persistence, cross-build compatibility,
-or a public extension surface. CORE-D awaits independent exact-tip review and
-the normal Core canonical promotion preflight.
+or a public extension surface. The P12 Daily-v1 owner inventory and admission
+contract are unchanged; this does not create a .NET continuation host or reopen
+the closed P12 profile.
