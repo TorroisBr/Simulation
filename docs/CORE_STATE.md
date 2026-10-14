@@ -111,9 +111,7 @@ dependency.
 
 ### Unity CLI verifier import-order correction
 
-**Status:** independently reviewed and ready for canonical promotion; the
-canonical ref remains at `c68ca7a9a51df178ba0b889096c762c3fd7f4034` until the
-separate promotion preflight completes.
+**Status:** promoted to `codex/core/canonical` by commit `fb2189e41b4ebfe51146be5c4f85fc5c58270a75`.
 
 The exact implementation candidate is
 `2bda6341f3c5e599064e10ccda569237b9aea445` (tree
