@@ -68,4 +68,6 @@ These files are reusable procedures, not new architecture or authorization. Read
 
 Routine read/search, Git, and relevant Unity validation operations may be performed within the active task and permission policy. If the sandbox requires technical approval, request the minimum permission. No operational rule here overrides a user's explicit read-only or narrower scope.
 
+For Windows GitHub HTTPS authentication with multiple saved accounts, follow `docs/operations/GIT_AUTHENTICATION_WINDOWS.md`. Never inspect or print credential values.
+
 The lifecycle and dependency vocabulary is in `docs/EXECUTION_MODEL.md`; it does not grant permission to execute the roadmap.
