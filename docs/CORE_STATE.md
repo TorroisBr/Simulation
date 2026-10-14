@@ -67,31 +67,44 @@ claimed by CORE-A.
 
 ## TRX-EVIDENCE-v1 — shared .NET evidence packaging
 
-**Status:** promoted as shared Core infrastructure. The reviewed implementation
-commit `c555eb21c6f0f658dd851fbeda8d12ac59ddd18c` (tree
-`274cb87538ca0038fd31c35457fd3f99d29ba48d`) is included in the new
-`codex/core/canonical` front, initialized from P12 production base
-`4cc31073f0ec6ba5c718084e4cebd6e914931d5d`. The bounded architecture and
-contract documentation delta is from architecture canonical
+**Status:** promoted as shared Core infrastructure. The latest reviewed
+implementation commit is `b7535041a8aeb6e341fe35c6fcc465da48ce313e` (tree
+`67b595da4c1337f4da29116cb4d3e791ada54d91`), promoted to
+`codex/core/canonical` together with its review record at
+`ba7c5c463a4754fe1f2b174b47fb6d79cdb30df5`. This is an additive correction to
+the earlier promoted implementation `c555eb21c6f0f658dd851fbeda8d12ac59ddd18c`
+(tree `274cb87538ca0038fd31c35457fd3f99d29ba48d`). The Core line remains based
+on P12 production history. The bounded architecture and contract documentation
+delta is from architecture canonical
 `63d3b8352a450b27b9a5f593c4ea166c0343c59e`; the applicable validation policy
 is the independently promoted `58157f9ac7bf573e9a4ed1b2d485a2db190e7c4f`.
-The durable exact-tip review is
-`551e68fccdd558ac0cf08afa42a937555e9bbede` on
-`codex/tools/trx-evidence-v1-review-c555eb21`.
+The exact-tip independent review record is
+[`INDEPENDENT_REVIEW_TRX_EVIDENCE_V1_B7535041.md`](../Tools/UnityValidation/INDEPENDENT_REVIEW_TRX_EVIDENCE_V1_B7535041.md)
+on `codex/tools/trx-evidence-v1-review-b7535041`.
 
-The shared packager now accepts the reviewed flat VSTest TRX profile while
-preserving the Unity/NUnit default and its existing archive behavior. Exact-tip
-validation passed: TRX synthetic tests 116 assertions, shared packager tests
-64 assertions, Unity runner self-tests 33/33, and `git diff --check`. The review
-also passed these exact-tip checks. Unity EditMode/Smoke and .NET domain runs
-were not repeated because this is an evidence-tool/documentation change with no
-domain, runner, fixture, or execution-input change.
+The latest correction requires cold then warm attempt order in both packaging
+and archive verification, with a regression rejecting reversed equal-duration,
+equal-exit attempts. Exact-tip validation passed: TRX synthetic tests 144
+assertions, shared packager tests 64 assertions, Unity runner self-tests 33/33,
+and `git diff --check`. Independent review reran those checks. Unity
+EditMode/Smoke and .NET domain runs were not repeated because the change is
+limited to evidence packaging and tests and does not change domain code, runner
+behavior, fixtures, or execution inputs.
 
-**CORE-A remains blocked at its separate durable evidence gate.** The approved
-adapter has not yet produced the actual cold/warm CORE-A package or completed
-private original-to-normalized comparison. The CORE-A candidate, its existing
-execution evidence, and its original reports remain preserved; no CORE-A code
-is promoted by this Tools delivery. No P12, P13, CORE-B, or CORE-C readiness is
-implied by the packager promotion. CORE-B still requires CORE-A promotion and
-current-baseline revalidation; CORE-C still requires CORE-A and its documented
-P14-B dependency.
+The reviewed pre-promotion package trial for CORE-A has archive SHA-256
+`540026a1fe878a927bd2ba70c51dc5e03b87526f43f474467f60eb68cb5a43ed` (13,867
+bytes). Exact-context comparison reported `originalComparisonVerified`; a
+separate archive-only verification reported
+`originalComparisonNotPerformed`, as required without private source context.
+This trial was made before canonical promotion and is not the final CORE-A
+evidence package.
+
+**CORE-A remains blocked at its separate durable evidence gate.** The final
+cold/warm CORE-A package must be generated and privately compared using the
+promoted tool, then recorded with its source/test identity and independent
+applicability review. The CORE-A candidate, its existing execution evidence,
+and original reports remain preserved; no CORE-A code is promoted by this Tools
+delivery. No P12, P13, CORE-B, or CORE-C readiness is implied by this
+promotion. CORE-B still requires CORE-A promotion and current-baseline
+revalidation; CORE-C still requires CORE-A and its documented P14-B
+dependency.
