@@ -361,7 +361,7 @@ function Assert-TrxPublicManifest {
     param([System.Collections.IDictionary]$Manifest)
     Assert-TrxKeys $Manifest @('schema','bundleId','format','tool','archive','runs') 'manifest'
     if($Manifest.schema -cne 'validation-evidence-trx-package-v1'){throw 'Unsupported TRX evidence manifest schema.'}
-    if([string]$Manifest.bundleId -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$'){throw 'TRX bundle identifier is invalid.'}
+    if($Manifest.bundleId -isnot [string] -or [string]$Manifest.bundleId -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$'){throw 'TRX bundle identifier is invalid.'}
     Assert-TrxKeys $Manifest.format @('reportProfile','counterProfile','projectionPolicy') 'manifest.format'
     if($Manifest.format.reportProfile -cne $script:TrxProfile -or $Manifest.format.counterProfile -cne $script:TrxCounterProfile -or $Manifest.format.projectionPolicy -cne $script:TrxProjection){throw 'TRX evidence profile identifiers are unsupported.'}
     Assert-TrxKeys $Manifest.tool @('commit','tree','version','files','runtime') 'manifest.tool'
