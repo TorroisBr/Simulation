@@ -25,10 +25,12 @@ $null = Set-ProtectedEvidenceDirectory -Path $runDirectory
 $null = Test-ProtectedEvidenceDirectory -Path $runDirectory
 $testProject = 'tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj'
 $demoProject = 'tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj'
+$labProject = 'tools/Simulation.Lab/Simulation.Lab.csproj'
 $projectAssets = @(
     'src/Simulation.Core/obj/project.assets.json',
     'tests/Simulation.Core.Tests/obj/project.assets.json',
-    'tools/Simulation.Core.CalendarDemo/obj/project.assets.json'
+    'tools/Simulation.Core.CalendarDemo/obj/project.assets.json',
+    'tools/Simulation.Lab/obj/project.assets.json'
 )
 $records = [System.Collections.Generic.List[object]]::new()
 
@@ -114,6 +116,8 @@ try {
     Assert-CommandPassed $restoreTests
     $restoreDemo = Invoke-Dotnet -Name 'restore-demo-locked' -Arguments @('restore', $demoProject, '--locked-mode')
     Assert-CommandPassed $restoreDemo
+    $restoreLab = Invoke-Dotnet -Name 'restore-lab-locked' -Arguments @('restore', $labProject, '--locked-mode')
+    Assert-CommandPassed $restoreLab
     $generatedBefore = Get-GeneratedInputSnapshot -Paths $projectAssets
 
     $coldBuild = Invoke-Dotnet -Name 'cold-build' -Arguments @('build', $testProject, '--no-restore', '--configuration', 'Release')
@@ -169,6 +173,26 @@ try {
         if (-not ($coldDemo.output -ccontains $line) -or -not ($warmDemo.output -ccontains $line)) { throw "CalendarDemo result mismatch: $line" }
     }
 
+    $labBuild = Invoke-Dotnet -Name 'lab-build' -Arguments @('build', $labProject, '--no-restore', '--configuration', 'Release')
+    Assert-CommandPassed $labBuild
+    $coldLab = Invoke-Dotnet -Name 'lab-cold' -Arguments @('run', '--project', $labProject, '--no-build', '--no-restore', '--configuration', 'Release')
+    Assert-CommandPassed $coldLab
+    $warmLab = Invoke-Dotnet -Name 'lab-warm' -Arguments @('run', '--project', $labProject, '--no-build', '--no-restore', '--configuration', 'Release')
+    Assert-CommandPassed $warmLab
+    $coldLabOutput = [string]::Join("`n", [string[]]$coldLab.output)
+    $warmLabOutput = [string]::Join("`n", [string[]]$warmLab.output)
+    if ($coldLabOutput -cne $warmLabOutput) { throw 'Simulation.Lab cold and warm output differs.' }
+    foreach ($prefix in @(
+        'scenario location=location.p14b-lab settlement=settlement.p14b-lab source=source.p14b-lab market=market.p14b-lab item=item.p14b-lab',
+        'day=1 status=Applied produced=3 reserve=2 sourceRevision=1 marketRevision=1 stock=5 price=3.2 priceBits=404CCCCD',
+        'day=2 status=Applied produced=2 reserve=0 sourceRevision=2 marketRevision=2 stock=7 price=2.2857144 priceBits=40124925',
+        'day=3 status=Exhausted produced=0 reserve=0 sourceRevision=2 marketRevision=2 stock=7 price=2.2857144 priceBits=40124925'
+    )) {
+        if (@($coldLab.output | Where-Object { $_.StartsWith($prefix, [StringComparison]::Ordinal) }).Count -ne 1) {
+            throw "Simulation.Lab scenario output mismatch: $prefix"
+        }
+    }
+
     $generatedAfter = Get-GeneratedInputSnapshot -Paths $projectAssets
     $generatedComparison = Compare-CoreInputSnapshots -Before $generatedBefore -After $generatedAfter
     if (-not $generatedComparison.stable) { throw "Generated dependency inputs changed during validation: $($generatedComparison.changedPaths -join ', ')" }
@@ -179,7 +203,7 @@ try {
     $libraryPath = Join-Path $root 'Library'
     $libraryAbsent = -not (Test-Path -LiteralPath $libraryPath)
     $storage = @()
-    foreach ($relative in @('src/Simulation.Core/bin','src/Simulation.Core/obj','tests/Simulation.Core.Tests/bin','tests/Simulation.Core.Tests/obj','tools/Simulation.Core.CalendarDemo/bin','tools/Simulation.Core.CalendarDemo/obj')) {
+    foreach ($relative in @('src/Simulation.Core/bin','src/Simulation.Core/obj','tests/Simulation.Core.Tests/bin','tests/Simulation.Core.Tests/obj','tools/Simulation.Core.CalendarDemo/bin','tools/Simulation.Core.CalendarDemo/obj','tools/Simulation.Lab/bin','tools/Simulation.Lab/obj')) {
         $full = Join-Path $root ($relative -replace '/', [IO.Path]::DirectorySeparatorChar)
         if (Test-Path -LiteralPath $full) {
             $bytes = (Get-ChildItem -LiteralPath $full -File -Recurse | Measure-Object -Property Length -Sum).Sum
@@ -212,6 +236,9 @@ try {
             warmTests = [ordered]@{ exitCode = $warmTest.exitCode; elapsedMilliseconds = $warmTest.elapsedMilliseconds; resultFile = 'CoreTests-warm.trx'; runId = $warmAssessment.runId; runName = $warmAssessment.runName; summaryOutcome = $warmAssessment.summaryOutcome; counters = $warmAssessment.counters; cases = $warmAssessment.results }
             coldDemo = [ordered]@{ exitCode = $coldDemo.exitCode; elapsedMilliseconds = $coldDemo.elapsedMilliseconds; output = $coldDemo.output }
             warmDemo = [ordered]@{ exitCode = $warmDemo.exitCode; elapsedMilliseconds = $warmDemo.elapsedMilliseconds; output = $warmDemo.output }
+            labBuild = [ordered]@{ exitCode = $labBuild.exitCode; elapsedMilliseconds = $labBuild.elapsedMilliseconds; output = $labBuild.output }
+            labCold = [ordered]@{ exitCode = $coldLab.exitCode; elapsedMilliseconds = $coldLab.elapsedMilliseconds; output = $coldLab.output }
+            labWarm = [ordered]@{ exitCode = $warmLab.exitCode; elapsedMilliseconds = $warmLab.elapsedMilliseconds; output = $warmLab.output }
         }
         storage = [ordered]@{ worktreeLibraryAbsent = $libraryAbsent; projectBinObjBytes = $storage; resultBytes = [long]((Get-ChildItem -LiteralPath $runDirectory -File | Measure-Object -Property Length -Sum).Sum) }
         artifacts = [ordered]@{ reports = @($trxArtifacts); logs = @($logArtifacts) }

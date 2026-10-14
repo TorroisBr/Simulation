@@ -25,5 +25,7 @@
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/MarketPriceParityVectors.cs" Link="Economy/MarketPriceParityVectors.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/MarketPriceCalculatorParityTests.cs" Link="Economy/MarketPriceCalculatorParityTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceProductionKernelTests.cs" Link="Economy/FiniteSourceProductionKernelTests.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioParityVectors.cs" Link="Economy/FiniteSourceScenarioParityVectors.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioRuntimeTests.cs" Link="Economy/FiniteSourceScenarioRuntimeTests.cs" />
   </ItemGroup>
 </Project>

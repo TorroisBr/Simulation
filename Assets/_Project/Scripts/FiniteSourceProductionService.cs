@@ -94,6 +94,7 @@ public sealed class FiniteSourceProductionService
         MarketRuntime market,
         string settlementSemanticId,
         string marketStoreSemanticId,
+        string locationId,
         ItemData item,
         long absoluteDay,
         long expectedSourceRevision,
@@ -101,6 +102,7 @@ public sealed class FiniteSourceProductionService
     {
         FiniteProductionSourceState expectedSource = sourceStore != null ? sourceStore.Source : null;
         if (!TryPrepareDaily(sourceStore, market, settlementSemanticId, marketStoreSemanticId,
+                locationId,
                 expectedSource != null ? expectedSource.ProductionSourceId : null,
                 expectedSource != null ? expectedSource.ContentRevision : null,
                 item, absoluteDay, expectedSourceRevision, expectedMarketRevision,
@@ -144,6 +146,7 @@ public sealed class FiniteSourceProductionService
         MarketRuntime market,
         string settlementSemanticId,
         string marketStoreSemanticId,
+        string locationId,
         string productionSourceId,
         string contentRevision,
         ItemData item,
@@ -161,7 +164,8 @@ public sealed class FiniteSourceProductionService
             || !string.Equals(source.MarketStoreSemanticId, marketStoreSemanticId, StringComparison.Ordinal)
             || !string.Equals(source.ProductionSourceId, productionSourceId, StringComparison.Ordinal)
             || !string.Equals(source.ContentRevision, contentRevision, StringComparison.Ordinal)
-            || !string.Equals(source.ItemDefinitionId, item.DefinitionId, StringComparison.Ordinal))
+            || !string.Equals(source.ItemDefinitionId, item.DefinitionId, StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(locationId))
             return false;
 
         if (source.Revision != expectedSourceRevision) { rejectionReason = "StaleSourceRevision"; return false; }
@@ -170,9 +174,20 @@ public sealed class FiniteSourceProductionService
         if (source.RemainingReserve < 0 || source.RemainingReserve > source.InitialReserve
             || source.DailyOutputLimit <= 0)
         { rejectionReason = "InvalidSourceState"; return false; }
-
         int quantity = Math.Min(source.DailyOutputLimit, source.RemainingReserve);
-        if (quantity == 0)
+        if (quantity > 0 && source.Revision == long.MaxValue)
+        { rejectionReason = "SourceRevisionExhausted"; return false; }
+        if (quantity > 0 && market.Revision == long.MaxValue)
+        { rejectionReason = "MarketRevisionExhausted"; return false; }
+        if (!market.TryCreateFiniteSourceScenario(locationId, source,
+                out FiniteSourceScenarioRuntime runtime, out FiniteSourceScenarioSnapshot currentSnapshot,
+                out rejectionReason))
+            return false;
+        if (!runtime.TryPrepareAdvance(currentSnapshot, absoluteDay,
+                out PreparedFiniteSourceAdvance preparedAdvance, out rejectionReason)) return false;
+        if (preparedAdvance.Quantity != quantity)
+        { rejectionReason = "InvalidMarketInput"; return false; }
+        if (preparedAdvance.Status == FiniteSourceOperationStatus.Exhausted)
         {
             preparation = new FiniteSourceProductionPreparation(sourceStore, market, null,
                 expectedSourceRevision, expectedMarketRevision, absoluteDay, 0,
@@ -180,19 +195,13 @@ public sealed class FiniteSourceProductionService
             rejectionReason = string.Empty;
             return true;
         }
-        if (source.Revision == long.MaxValue) { rejectionReason = "SourceRevisionExhausted"; return false; }
-        FiniteSourceOperationRequest operation = new FiniteSourceOperationRequest(
-            new FiniteSourceSnapshot(source.ProductionSourceId, source.SettlementSemanticId,
-                source.MarketStoreSemanticId, source.ItemDefinitionId, source.ContentRevision,
-                source.DailyOutputLimit, source.InitialReserve, source.RemainingReserve,
-                source.Revision, source.LastProcessedDay),
-            expectedSourceRevision, market.Revision, expectedMarketRevision, absoluteDay, quantity,
-            Array.Empty<MarketStockRow>());
-        if (!market.TryPrepareFiniteStockIncrease(operation,
-                out PreparedMarketState preparedMarket, out FiniteSourceOperationResult preparedOperation,
-                out rejectionReason))
-            return false;
-        int stockBefore = preparedOperation.StockBefore;
+        if (preparedAdvance.Status != FiniteSourceOperationStatus.Applied)
+        { rejectionReason = "InvalidMarketInput"; return false; }
+        if (!runtime.TryApplyPrepared(currentSnapshot, preparedAdvance,
+                out FiniteSourceScenarioSnapshot nextSnapshot, out rejectionReason)) return false;
+        if (!market.TryPrepareFiniteStockIncrease(currentSnapshot, preparedAdvance, nextSnapshot,
+                out PreparedMarketState preparedMarket, out rejectionReason)) return false;
+        int stockBefore = preparedAdvance.StockBefore;
         if (!sourceStore.CanInstall(expectedSourceRevision, absoluteDay))
         {
             rejectionReason = source.Revision != expectedSourceRevision
@@ -207,8 +216,8 @@ public sealed class FiniteSourceProductionService
         }
 
         preparation = new FiniteSourceProductionPreparation(sourceStore, market, preparedMarket,
-            expectedSourceRevision, expectedMarketRevision, absoluteDay, preparedOperation.Quantity,
-            preparedOperation.ReserveBefore, stockBefore);
+            expectedSourceRevision, expectedMarketRevision, absoluteDay, preparedAdvance.Quantity,
+            preparedAdvance.ReserveBefore, stockBefore);
         rejectionReason = string.Empty;
         return true;
     }

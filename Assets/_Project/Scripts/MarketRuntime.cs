@@ -436,19 +436,43 @@ public class MarketRuntime
         return new PreparedMarketState(replacement);
     }
 
+    internal bool TryCreateFiniteSourceScenario(string locationId, FiniteProductionSourceState source,
+        out FiniteSourceScenarioRuntime runtime, out FiniteSourceScenarioSnapshot snapshot,
+        out string rejectionReason)
+    {
+        runtime = null;
+        snapshot = null;
+        rejectionReason = "IdentityMismatch";
+        if (source == null || string.IsNullOrWhiteSpace(locationId)) return false;
+
+        FiniteSourceSnapshot coreSource = new FiniteSourceSnapshot(
+            source.ProductionSourceId, source.SettlementSemanticId, source.MarketStoreSemanticId,
+            source.ItemDefinitionId, source.ContentRevision, source.DailyOutputLimit,
+            source.InitialReserve, source.RemainingReserve, source.Revision, source.LastProcessedDay);
+        List<MarketStockRow> rows = CaptureFiniteSourceRows();
+        if (!FiniteSourceScenarioDefinition.TryCreate(locationId, coreSource, revision, rows,
+                out FiniteSourceScenarioDefinition definition, out rejectionReason))
+            return false;
+        FiniteSourceScenarioSnapshot initial = new FiniteSourceScenarioSnapshot(coreSource, revision, rows);
+        if (!FiniteSourceScenarioRuntime.TryCreate(definition, initial, out runtime, out rejectionReason))
+            return false;
+        snapshot = initial;
+        return true;
+    }
+
     internal bool TryPrepareFiniteStockIncrease(
-        FiniteSourceOperationRequest operation,
+        FiniteSourceScenarioSnapshot currentSnapshot,
+        PreparedFiniteSourceAdvance preparedAdvance,
+        FiniteSourceScenarioSnapshot nextSnapshot,
         out PreparedMarketState replacement,
-        out FiniteSourceOperationResult preparedOperation,
         out string rejectionReason)
     {
         replacement = null;
-        preparedOperation = null;
         rejectionReason = "InvalidMarketInput";
-        if (operation == null || operation.Source == null
-            || string.IsNullOrEmpty(operation.Source.ItemDefinitionId)
-            || operation.RequestedQuantity <= 0) return false;
-        if (revision != operation.ExpectedMarketRevision)
+        if (currentSnapshot == null || preparedAdvance == null || nextSnapshot == null
+            || preparedAdvance.Status != FiniteSourceOperationStatus.Applied
+            || preparedAdvance.Quantity <= 0) return false;
+        if (revision != currentSnapshot.MarketRevision)
         {
             rejectionReason = "StaleMarketRevision";
             return false;
@@ -463,37 +487,23 @@ public class MarketRuntime
             rejectionReason = "MarketMutationRejected";
             return false;
         }
-
-        List<MarketItemRuntime> currentItems = items ?? (items = new List<MarketItemRuntime>());
-        List<MarketStockRow> rows = new List<MarketStockRow>(currentItems.Count);
-        foreach (MarketItemRuntime current in currentItems)
+        if (preparedAdvance.MarketRevisionBefore != revision
+            || preparedAdvance.MarketRevisionAfter != revision + 1
+            || nextSnapshot.MarketRevision != revision + 1
+            || preparedAdvance.StockBefore < 0
+            || preparedAdvance.StockAfter != (long)preparedAdvance.StockBefore + preparedAdvance.Quantity)
         {
-            if (current == null)
-            {
-                rows.Add(MarketStockRow.NullRow());
-            }
-            else if (current.Item == null)
-            {
-                rows.Add(MarketStockRow.NullItem(current.Amount, current.DesiredAmount, current.CurrentPrice));
-            }
-            else
-            {
-                rows.Add(MarketStockRow.Item(
-                    new MarketItemDefinition(current.Item.DefinitionId, current.Item.basePrice),
-                    current.Amount, current.DesiredAmount, current.CurrentPrice));
-            }
+            rejectionReason = "MarketRowMapping";
+            return false;
         }
 
-        FiniteSourceOperationRequest preparedRequest = operation.WithMarketRows(rows);
-        if (!FiniteSourceProductionKernel.TryPrepare(preparedRequest,
-                out preparedOperation, out rejectionReason))
-            return false;
-        if (preparedOperation.Status != FiniteSourceOperationStatus.Applied
-            || preparedOperation.PreparedMarketRows.Count != currentItems.Count
-            || preparedOperation.TargetRowIndex < 0
-            || preparedOperation.TargetRowIndex >= currentItems.Count)
+        List<MarketItemRuntime> currentItems = items ?? (items = new List<MarketItemRuntime>());
+        List<MarketStockRow> liveRows = CaptureFiniteSourceRows();
+        if (!SameMarketRows(currentSnapshot.MarketRows, liveRows)
+            || nextSnapshot.MarketRows.Count != currentItems.Count
+            || preparedAdvance.TargetRowIndex < 0
+            || preparedAdvance.TargetRowIndex >= currentItems.Count)
         {
-            preparedOperation = null;
             rejectionReason = "MarketRowMapping";
             return false;
         }
@@ -502,21 +512,20 @@ public class MarketRuntime
         for (int i = 0; i < currentItems.Count; i++)
         {
             MarketItemRuntime current = currentItems[i];
-            MarketStockRow prepared = preparedOperation.PreparedMarketRows[i];
+            MarketStockRow prepared = nextSnapshot.MarketRows[i];
             if (current == null)
             {
                 if (prepared == null || prepared.Kind != MarketStockRowKind.NullRow)
-                    return RejectRowMapping(out preparedOperation, out rejectionReason);
+                    return RejectMarketRowMapping(out replacement, out rejectionReason);
                 nextItems.Add(null);
                 continue;
             }
             if (current.Item == null)
             {
                 if (prepared == null || prepared.Kind != MarketStockRowKind.NullItem
-                    || prepared.Amount != current.Amount
-                    || prepared.DesiredAmount != current.DesiredAmount
+                    || prepared.Amount != current.Amount || prepared.DesiredAmount != current.DesiredAmount
                     || !SameFloatBits(prepared.CurrentPrice, current.CurrentPrice))
-                    return RejectRowMapping(out preparedOperation, out rejectionReason);
+                    return RejectMarketRowMapping(out replacement, out rejectionReason);
                 nextItems.Add(new MarketItemRuntime(current));
                 continue;
             }
@@ -526,13 +535,14 @@ public class MarketRuntime
                 || !string.Equals(prepared.ItemDefinition.DefinitionId, current.Item.DefinitionId, StringComparison.Ordinal)
                 || !SameFloatBits(prepared.ItemDefinition.BasePrice, current.Item.basePrice)
                 || prepared.DesiredAmount != current.DesiredAmount)
-                return RejectRowMapping(out preparedOperation, out rejectionReason);
+                return RejectMarketRowMapping(out replacement, out rejectionReason);
 
-            bool target = i == preparedOperation.TargetRowIndex;
-            if (target)
+            if (i == preparedAdvance.TargetRowIndex)
             {
-                if ((long)current.Amount + operation.RequestedQuantity != prepared.Amount)
-                    return RejectRowMapping(out preparedOperation, out rejectionReason);
+                if ((long)current.Amount + preparedAdvance.Quantity != prepared.Amount
+                    || current.Amount != preparedAdvance.StockBefore
+                    || prepared.Amount != preparedAdvance.StockAfter)
+                    return RejectMarketRowMapping(out replacement, out rejectionReason);
                 nextItems.Add(MarketItemRuntime.CreatePreparedFiniteStockRow(
                     current.Item, prepared.Amount, prepared.DesiredAmount, prepared.CurrentPrice));
             }
@@ -540,7 +550,7 @@ public class MarketRuntime
             {
                 if (prepared.Amount != current.Amount
                     || !SameFloatBits(prepared.CurrentPrice, current.CurrentPrice))
-                    return RejectRowMapping(out preparedOperation, out rejectionReason);
+                    return RejectMarketRowMapping(out replacement, out rejectionReason);
                 nextItems.Add(new MarketItemRuntime(current));
             }
         }
@@ -550,10 +560,43 @@ public class MarketRuntime
         return true;
     }
 
-    private static bool RejectRowMapping(out FiniteSourceOperationResult preparedOperation,
-        out string rejectionReason)
+    private List<MarketStockRow> CaptureFiniteSourceRows()
     {
-        preparedOperation = null;
+        List<MarketItemRuntime> currentItems = EnsureItems();
+        List<MarketStockRow> rows = new List<MarketStockRow>(currentItems.Count);
+        foreach (MarketItemRuntime current in currentItems)
+        {
+            if (current == null) rows.Add(MarketStockRow.NullRow());
+            else if (current.Item == null)
+                rows.Add(MarketStockRow.NullItem(current.Amount, current.DesiredAmount, current.CurrentPrice));
+            else rows.Add(MarketStockRow.Item(
+                new MarketItemDefinition(current.Item.DefinitionId, current.Item.basePrice),
+                current.Amount, current.DesiredAmount, current.CurrentPrice));
+        }
+        return rows;
+    }
+
+    private static bool SameMarketRows(IReadOnlyList<MarketStockRow> left, IReadOnlyList<MarketStockRow> right)
+    {
+        if (left == null || right == null || left.Count != right.Count) return false;
+        for (int i = 0; i < left.Count; i++)
+        {
+            MarketStockRow a = left[i], b = right[i];
+            if (a == null || b == null || a.Kind != b.Kind || a.Amount != b.Amount
+                || a.DesiredAmount != b.DesiredAmount || !SameFloatBits(a.CurrentPrice, b.CurrentPrice)) return false;
+            if (a.ItemDefinition == null || b.ItemDefinition == null)
+            {
+                if (a.ItemDefinition != b.ItemDefinition) return false;
+            }
+            else if (!string.Equals(a.ItemDefinition.DefinitionId, b.ItemDefinition.DefinitionId, StringComparison.Ordinal)
+                || !SameFloatBits(a.ItemDefinition.BasePrice, b.ItemDefinition.BasePrice)) return false;
+        }
+        return true;
+    }
+
+    private static bool RejectMarketRowMapping(out PreparedMarketState replacement, out string rejectionReason)
+    {
+        replacement = null;
         rejectionReason = "MarketRowMapping";
         return false;
     }

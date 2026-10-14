@@ -19,5 +19,6 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketItemDefinition.cs" Link="Economy/MarketItemDefinition.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketPriceCalculator.cs" Link="Economy/MarketPriceCalculator.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/FiniteSourceProductionKernel.cs" Link="Economy/FiniteSourceProductionKernel.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/FiniteSourceScenarioRuntime.cs" Link="Economy/FiniteSourceScenarioRuntime.cs" />
   </ItemGroup>
 </Project>

@@ -1,7 +1,9 @@
 # CORE-D — shared runtime and finite-source Lab host
 
-**Status:** technical design proposal; independent design review pending. This
-document does not authorize implementation, alter architecture, extend a save
+**Status:** technical design independently reviewed PASS. Review record
+`60fd0c00acd940d98e68262dc4445a8340cdb69c` on
+`codex/core/CORE-D-design-review-786a976`. The reviewed boundary supports CORE-D
+implementation; this document does not alter architecture, extend a save
 profile, or promote a Phase.
 
 **Checkpoint:** CORE-D, shared runtime composition + Lab host.
@@ -231,9 +233,7 @@ affected gates if any executable source/test/harness input changes.
   host design. CORE-D does not make CORE-F ready by itself.
 - CORE-X and P19 public extension/loader work remain deferred.
 
-Implementation readiness follows only after independent review of this exact
-technical boundary. If the review cannot establish that the selected runtime
-can preserve one-owner authority without changing P14-B or P12 admission
-semantics, CORE-D remains `WAIT_DEPENDENCY` and the review must name the
-smallest unresolved architectural contract. No gameplay or compatibility
-decision is implied here.
+The independent review established that this exact technical boundary can
+preserve one-owner authority without changing P14-B or P12 admission semantics.
+Implementation proceeds only within the accepted scope above. No gameplay or
+compatibility decision is implied here.

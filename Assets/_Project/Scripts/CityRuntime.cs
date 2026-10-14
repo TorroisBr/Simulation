@@ -232,6 +232,7 @@ public class CityRuntime
                 Market,
                 cityData.settlementSemanticId,
                 cityData.marketStoreSemanticId,
+                cityData.materialFlowLocationId,
                 source.item,
                 absoluteDay,
                 finiteProductionSources.Source.Revision,
@@ -410,7 +411,8 @@ public class CityRuntime
 
                 if (!new FiniteSourceProductionService().TryPrepareDaily(
                         finiteProductionSources, Market, cityData.settlementSemanticId,
-                        cityData.marketStoreSemanticId, sourceConfig.productionSourceId,
+                        cityData.marketStoreSemanticId, cityData.materialFlowLocationId,
+                        sourceConfig.productionSourceId,
                         sourceConfig.contentRevision, sourceConfig.item, manifest.AbsoluteDay,
                         sourceState.Revision, marketRevision,
                         out finiteProductionPreparation, out _))

@@ -59,9 +59,9 @@ public sealed class FiniteSourceProductionTests
         FiniteSourceProductionService service = new FiniteSourceProductionService();
 
         FiniteSourceProductionResult applied = service.TryProduceDaily(
-            source, market, "settlement.p14b", "store.p14b", item, 1, 0, 0);
+            source, market, "settlement.p14b", "store.p14b", "location.p14b", item, 1, 0, 0);
 
-        Assert.That(applied.Status, Is.EqualTo(FiniteSourceProductionStatus.Applied));
+        Assert.That(applied.Status, Is.EqualTo(FiniteSourceProductionStatus.Applied), applied.RejectionReason);
         Assert.That(applied.Quantity, Is.EqualTo(3));
         Assert.That(applied.ReserveBefore, Is.EqualTo(3));
         Assert.That(applied.ReserveAfter, Is.Zero);
@@ -73,13 +73,65 @@ public sealed class FiniteSourceProductionTests
         Assert.That(market.GetPrice(item), Is.EqualTo(3.2f).Within(0.0001f));
 
         FiniteSourceProductionResult exhausted = service.TryProduceDaily(
-            source, market, "settlement.p14b", "store.p14b", item, 2, 1, 1);
+            source, market, "settlement.p14b", "store.p14b", "location.p14b", item, 2, 1, 1);
 
-        Assert.That(exhausted.Status, Is.EqualTo(FiniteSourceProductionStatus.Exhausted));
+        Assert.That(exhausted.Status, Is.EqualTo(FiniteSourceProductionStatus.Exhausted), exhausted.RejectionReason);
         Assert.That(exhausted.Quantity, Is.Zero);
         Assert.That(source.Source.Revision, Is.EqualTo(1));
         Assert.That(market.Revision, Is.EqualTo(1));
         Assert.That(market.GetAmount(item), Is.EqualTo(5));
+    }
+
+    [Test]
+    public void UnityP14BAdapterMatchesSharedCoreScenarioForAppliedAndExhaustedDays()
+    {
+        FiniteSourceScenarioDefinition definition = FiniteSourceScenarioParityVectors.CreateDefinition(
+            out FiniteSourceScenarioSnapshot coreSnapshot);
+        Assert.That(FiniteSourceScenarioRuntime.TryCreate(definition, coreSnapshot,
+            out FiniteSourceScenarioRuntime coreRuntime, out string rejection), Is.True, rejection);
+
+        ItemData item = SimulationTestFactory.CreateItem(FiniteSourceScenarioParityVectors.ItemId, 2f);
+        FiniteProductionSourceStore source = new FiniteProductionSourceStore(
+            LocalMaterialFlowProfile.FiniteReserveDaily,
+            new CityProductionConfig
+            {
+                item = item,
+                amountPerDay = 3,
+                initialReserve = 5,
+                productionSourceId = FiniteSourceScenarioParityVectors.ProductionSourceId,
+                contentRevision = FiniteSourceScenarioParityVectors.ContentRevision
+            },
+            FiniteSourceScenarioParityVectors.SettlementId,
+            FiniteSourceScenarioParityVectors.MarketStoreId);
+        MarketRuntime market = CreateMarket(item, 2, 8);
+
+        foreach (long day in FiniteSourceScenarioParityVectors.AdmittedDays)
+        {
+            Assert.That(coreRuntime.TryPrepareAdvance(coreSnapshot, day,
+                out PreparedFiniteSourceAdvance prepared, out rejection), Is.True, rejection);
+            Assert.That(coreRuntime.TryApplyPrepared(coreSnapshot, prepared,
+                out FiniteSourceScenarioSnapshot nextCoreSnapshot, out rejection), Is.True, rejection);
+            FiniteSourceProductionResult unity = new FiniteSourceProductionService().TryProduceDaily(
+                source, market, FiniteSourceScenarioParityVectors.SettlementId,
+                FiniteSourceScenarioParityVectors.MarketStoreId,
+                FiniteSourceScenarioParityVectors.LocationId, item, day,
+                source.Source.Revision, market.Revision);
+
+            FiniteSourceProductionStatus expectedStatus = prepared.Status == FiniteSourceOperationStatus.Applied
+                ? FiniteSourceProductionStatus.Applied : FiniteSourceProductionStatus.Exhausted;
+            Assert.That(unity.Status, Is.EqualTo(expectedStatus), unity.RejectionReason);
+            Assert.That(unity.Quantity, Is.EqualTo(prepared.Quantity));
+            Assert.That(unity.ReserveAfter, Is.EqualTo(nextCoreSnapshot.Source.RemainingReserve));
+            Assert.That(source.Source.Revision, Is.EqualTo(nextCoreSnapshot.Source.Revision));
+            Assert.That(market.Revision, Is.EqualTo(nextCoreSnapshot.MarketRevision));
+            Assert.That(market.Items[0].Item.DefinitionId,
+                Is.EqualTo(nextCoreSnapshot.MarketRows[0].ItemDefinition.DefinitionId));
+            Assert.That(market.Items[0].Amount, Is.EqualTo(nextCoreSnapshot.MarketRows[0].Amount));
+            Assert.That(market.Items[0].DesiredAmount, Is.EqualTo(nextCoreSnapshot.MarketRows[0].DesiredAmount));
+            Assert.That(FloatBits(market.Items[0].CurrentPrice),
+                Is.EqualTo(FloatBits(nextCoreSnapshot.MarketRows[0].CurrentPrice)));
+            coreSnapshot = nextCoreSnapshot;
+        }
     }
 
     [Test]
@@ -183,11 +235,11 @@ public sealed class FiniteSourceProductionTests
         FiniteSourceProductionService service = new FiniteSourceProductionService();
 
         FiniteSourceProductionResult wrongTitle = service.TryProduceDaily(
-            source, market, "settlement.other", "store.p14b", item, 1, 0, 0);
+            source, market, "settlement.other", "store.p14b", "location.p14b", item, 1, 0, 0);
         FiniteSourceProductionResult wrongCustody = service.TryProduceDaily(
-            source, market, "settlement.p14b", "store.other", item, 1, 0, 0);
+            source, market, "settlement.p14b", "store.other", "location.p14b", item, 1, 0, 0);
         FiniteSourceProductionResult wrongItemResult = service.TryProduceDaily(
-            source, market, "settlement.p14b", "store.p14b", wrongItem, 1, 0, 0);
+            source, market, "settlement.p14b", "store.p14b", "location.p14b", wrongItem, 1, 0, 0);
 
         Assert.That(wrongTitle.RejectionReason, Is.EqualTo("IdentityMismatch"));
         Assert.That(wrongCustody.RejectionReason, Is.EqualTo("IdentityMismatch"));
@@ -540,7 +592,8 @@ public sealed class FiniteSourceProductionTests
         long day,
         long sourceRevision,
         long marketRevision) => new FiniteSourceProductionService().TryProduceDaily(
-            source, market, "settlement.p14b", "store.p14b", item, day, sourceRevision, marketRevision);
+            source, market, "settlement.p14b", "store.p14b", "location.p14b", item,
+            day, sourceRevision, marketRevision);
 
     private static CityData CreateCityData(string id, ItemData item, int reserve)
     {

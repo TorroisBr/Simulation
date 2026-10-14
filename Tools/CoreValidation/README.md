@@ -6,7 +6,7 @@ Run the synthetic parser/input-integrity checks:
 pwsh -NoProfile -File .\Tools\CoreValidation\Invoke-CoreValidation.ps1 -SelfTest
 ```
 
-Run the locked Core test and CalendarDemo gates from the repository root:
+Run the locked Core test, CalendarDemo and Simulation.Lab gates from the repository root:
 
 ```powershell
 pwsh -NoProfile -File .\Tools\CoreValidation\Invoke-CoreValidation.ps1
@@ -41,5 +41,8 @@ Trace paths stay inside the protected run directory and are never published.
 
 For the final .NET-only proof, invoke the runner from a sparse isolated worktree
 that contains the explicitly listed package/project/test/demo/tool inputs and
-has no `Library` directory. Unity validation remains a separate gate in the
-implementation worktree using the unchanged Unity harness and evidence tool.
+has no `Library` directory. The runner also verifies repeatable output from the
+fixed P14-B Lab fixture, including stable owner identities, source/Market
+revisions, stock and exact price bits. Unity validation remains a separate gate
+in the implementation worktree using the unchanged Unity harness and evidence
+tool.

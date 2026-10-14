@@ -26,6 +26,8 @@
 /tests/Simulation.Core.Tests/obj/
 /tools/Simulation.Core.CalendarDemo/bin/
 /tools/Simulation.Core.CalendarDemo/obj/
+/tools/Simulation.Lab/bin/
+/tools/Simulation.Lab/obj/
 
 # MemoryCaptures can get excessive in size.
 # They also could contain extremely sensitive data
@@ -55,6 +57,7 @@ ExportedObj/
 !/src/Simulation.Core/Simulation.Core.csproj
 !/tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj
 !/tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj
+!/tools/Simulation.Lab/Simulation.Lab.csproj
 *.unityproj
 *.sln
 *.slnx
