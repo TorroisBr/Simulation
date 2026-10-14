@@ -525,16 +525,17 @@ function Assert-TrxCompleteRunnerManifest {
 }
 
 function Assert-TrxDiscoveryOutput {
-    param([string]$Text,[string[]]$Cases,[string]$ExpectedTestAssemblyPath,[string]$ExpectedTargetFramework)
+    param([string]$Text,[string[]]$Cases,[string]$ExpectedTestAssemblyPath,[string]$ExpectedTargetFramework,[string]$ExpectedVSTestVersion,[string]$ExpectedVSTestArchitecture)
     if($null -eq $Cases -or $Cases.Count -lt 1){throw 'Captured discovery case list is empty.'}
     $lines=@(($Text -replace "`r`n","`n" -replace "`r","`n") -split "`n")
     while($lines.Count -gt 0 -and $lines[-1] -ceq ''){$lines=@($lines|Select-Object -First ($lines.Count-1))}
     $caseOffset=1
-    if($ExpectedTestAssemblyPath -or $ExpectedTargetFramework){
-        if([string]::IsNullOrWhiteSpace($ExpectedTestAssemblyPath) -or [string]::IsNullOrWhiteSpace($ExpectedTargetFramework)){throw 'VSTest discovery preamble binding is incomplete.'}
+    if($ExpectedTestAssemblyPath -or $ExpectedTargetFramework -or $ExpectedVSTestVersion -or $ExpectedVSTestArchitecture){
+        if([string]::IsNullOrWhiteSpace($ExpectedTestAssemblyPath) -or [string]::IsNullOrWhiteSpace($ExpectedTargetFramework) -or [string]::IsNullOrWhiteSpace($ExpectedVSTestVersion) -or [string]::IsNullOrWhiteSpace($ExpectedVSTestArchitecture)){throw 'VSTest discovery preamble binding is incomplete.'}
         if($lines.Count -lt 4){throw 'VSTest discovery preamble is incomplete.'}
         $banner=[regex]::Match($lines[0],'^Test run for (.+) \((\.NETCoreApp,Version=v[0-9]+\.[0-9]+)\)$')
-        if(-not $banner.Success -or -not [string]::Equals($banner.Groups[1].Value,$ExpectedTestAssemblyPath,[StringComparison]::Ordinal) -or -not [string]::Equals($banner.Groups[2].Value,$ExpectedTargetFramework,[StringComparison]::Ordinal) -or $lines[1] -cne 'A total of 1 test file matched the specified pattern.' -or $lines[2] -cne '' -or $lines[3] -cne 'The following Tests are available:'){throw 'VSTest discovery preamble does not match the bound assembly, target framework, and pinned one-file profile.'}
+        $expectedVersionLine='VSTest version '+$ExpectedVSTestVersion+' ('+$ExpectedVSTestArchitecture+')'
+        if(-not $banner.Success -or -not [string]::Equals($banner.Groups[1].Value,$ExpectedTestAssemblyPath,[StringComparison]::Ordinal) -or -not [string]::Equals($banner.Groups[2].Value,$ExpectedTargetFramework,[StringComparison]::Ordinal) -or $ExpectedVSTestVersion -cne '17.14.1' -or $ExpectedVSTestArchitecture -cnotin @('x64','x86','arm64') -or $lines[1] -cne $expectedVersionLine -or $lines[2] -cne '' -or $lines[3] -cne 'The following Tests are available:'){throw 'VSTest discovery preamble does not match the bound assembly, target framework, and pinned producer profile.'}
         $caseOffset=4
     }elseif($lines.Count -eq ($Cases.Count+1) -and $lines[0] -cne 'The following Tests are available:'){throw 'Test-list output does not exactly match the complete captured discovery output.'}
     if($lines.Count -ne ($Cases.Count+$caseOffset) -or $lines[$caseOffset-1] -cne 'The following Tests are available:'){throw 'Test-list output does not exactly match the complete captured discovery output.'}
@@ -896,7 +897,9 @@ function Assert-TrxPublicRunSourceClaims {
     if([string]$frameworks[0] -notmatch '^net(?<version>[0-9]+\.[0-9]+)$'){throw 'Current CORE-A test target framework is unsupported by the pinned VSTest discovery adapter.'}
     $expectedVSTestTargetFramework='.NETCoreApp,Version=v'+$Matches.version
     $expectedTestAssemblyPath=Resolve-TrxWorktreeFile $testAssemblyRelative @($Context.worktreeRoots)
-    Assert-TrxDiscoveryOutput $listText @($Runner.testDiscovery.cases) $expectedTestAssemblyPath $expectedVSTestTargetFramework
+    $expectedVSTestVersion=[string]$Run.producer.vstestVersion
+    $expectedVSTestArchitecture=([string]$Runner.toolchain.processArchitecture).ToLowerInvariant()
+    Assert-TrxDiscoveryOutput $listText @($Runner.testDiscovery.cases) $expectedTestAssemblyPath $expectedVSTestTargetFramework $expectedVSTestVersion $expectedVSTestArchitecture
     $null=Assert-TrxRecoveredCommandWorkingDirectory $Context $Runner $SourceRoot $ProtectedRoot $testAssemblyRelative
     $retainedAssemblies=@(Get-TrxRetainedAssemblyInventory $Context $SourceRoot $ProtectedRoot $Runner $testAssemblyRelative -Create)
     $assembled=[Collections.Generic.List[object]]::new()
