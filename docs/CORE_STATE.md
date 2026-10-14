@@ -230,3 +230,98 @@ selected Daily-v1 owner/definition/runtime closure and its own host design;
 P12 closure and CORE-D do not satisfy those prerequisites. CORE-X remains
 deferred pending an explicit compatibility scope and design. These extraction
 readiness limits do not change numbered Phase status or authorize profile growth.
+
+## CORE-F current-base owner and asset audit — 2026-10-14
+
+The CORE-F Daily-v1 host design was authored against Core canonical
+`6950f596cab9f96921290e24a9aeb091229dcc6d`. Its current-base review classifies
+the change to `032259b4177a24ee4c0c536919f65e052cef9572` as
+`BASE_DRIFT_ONLY`: CORE-E adds the bounded `PersonId` and demographic-policy
+sources, but does not change the selected P12 owner-family inventory,
+cardinality rules, codecs, staged restore, or admission contract. The design
+requires docs-only baseline and dependency corrections followed by a fresh
+independent review; the original old-base branch is not itself a current-base
+candidate.
+
+The current owner-family inventory contains 89 family rows: 61 fixed families
+(48 Required and 13 ExplicitlyEmpty), plus 28 dynamic families (22 per-NPC,
+four per-City, one non-Person-NPC residence, and one Person life/residence).
+The 39 authored asset Git blobs in the existing
+inventory match the inventory's recorded source identities. These counts and
+blob matches establish contract-key and authored-source provenance only. They
+do not prove post-resolution effective Unity values, a complete owner-to-live
+instance map, or parity between Unity-resolved definitions and a .NET input.
+
+The refreshed SDK project explicitly compiles 14 shared Core sources: the
+previous 10 CORE-A through CORE-D sources, `PersonId`, and the three promoted
+CORE-E demographic-policy sources. The selected Daily-v1 owner codecs,
+SimulationRuntime, bootstrap graph, effective-definition resolver, and staged
+restoration host remain Unity-owned; the current Core project is not a .NET
+Daily-v1 host.
+
+Implementation readiness remains `WAIT_DEPENDENCY`. The audit found existing
+owner providers, revision sources, runtime operation boundaries, and Unity P12
+capture/restore behavior, but their presence does not establish complete
+supported-writer coverage, direct/nested mutation-to-revision mapping, or
+runtime-wide epoch invalidation for every admitted owner. Effective-value
+parity, complete live owner/cardinality binding, dynamic membership closure,
+the complete writer/revision/epoch matrix, Core-owned runtime composition, and
+same-build .NET restore/continuation validation remain unproven or absent.
+The Unity P12 implementation and its evidence remain valid for Unity; they are
+not relabeled as .NET host evidence. No P12 profile expansion or numbered
+Phase status change is implied. CORE-X remains deferred.
+
+## CORE-E — deterministic demographic policy (promoted 2026-10-14)
+
+**Status:** the bounded deterministic demographic-policy closure is promoted to
+`codex/core/canonical`. The canonical fast-forward was from
+`6950f596cab9f96921290e24a9aeb091229dcc6d` to the exact-tip review record
+`032259b4177a24ee4c0c536919f65e052cef9572`; the reviewed implementation and
+validation candidate is `12d5b203eec15dd70909e0e16093b77d92650622` (tree
+`ac50869d65b35228c7c8b927fc56e466f9a9a7e4`). Its tested implementation commit
+is `2dcd4933f214d797d4e064b6cea26cdbe5bd5cba` (tree
+`17543d1f9f318a77b5e6155f64c62d769e6b6557`). The independent exact-tip
+implementation/evidence review is recorded in
+[`CORE-E review`](reviews/CORE_E_DEMOGRAPHIC_POLICY_IMPLEMENTATION_REVIEW_12D5B20.md).
+The implementation validation is recorded in
+[`CORE-E validation`](architecture/SIMULATION_CORE_E_IMPLEMENTATION_VALIDATION.md).
+
+The slice moves the existing deterministic demographic sampler and aggregate
+birth/death policy, their required contracts, and `PersonId` into the shared
+engine-free Core assembly; Unity calls the same moved implementation. The narrow
+`AggregateDemographyContext` constructor accessibility change is the only
+behavior-facing API change. Population mutation, receipts, daily coordination,
+owner state, and P12 continuation authorities remain in Unity and unchanged.
+CORE-E remains a collection of separately bounded closures, not a claim that
+all demographic or population systems are portable.
+
+Validation passed the required shared characterization and Unity regressions:
+ALL EditMode 3,132/3,132, official Smoke 5/5, and the unchanged LongRun suite
+7/7 (including the original 100-, 1,000-, and 5,000-day cases). The normalized
+.NET cold/warm package passed 125/125 in each attempt and was privately
+source-compared with `originalComparisonVerified`; the locked Lab cold/warm
+regression passed. The result-only archive SHA-256 is
+`4b74838a29be7fbe63eb83aaff2dc8e015e54931c6011a4cd09dae89d827628f`; its
+manifest SHA-256 is
+`72bdcb177ca05af1caa5f51a7e9dfe2e928e7fc51842ee668dd3a17f051f91e1`.
+Protected Unity originals and private .NET source context remain outside the
+public package.
+
+This promotion does not deliver a population owner, natural-mortality query,
+headless world advance, full Daily-v1 .NET host, new save profile, or cross-host
+save compatibility. It does not change any numbered Phase or P12/P13 readiness.
+
+## Current Core extraction readiness — refreshed after CORE-E
+
+This entry supersedes the older readiness snapshot above. At the promotion record
+`032259b4177a24ee4c0c536919f65e052cef9572`, CORE-A through CORE-E have their
+recorded bounded promotions; CORE-E is only the demographic-policy slice
+described above. The promoted architecture baseline is
+`7166ed088483c69d37300b4f12528ebb4b27be84`. CORE-F remains
+`WAIT_DEPENDENCY` on the exact selected Daily-v1 owner, effective-definition,
+and runtime closure, despite its authorized technical-design work; live owner
+bindings and complete supported-writer/revision/epoch evidence remain
+prerequisites to implementation readiness. CORE-E does not close that
+dependency. CORE-X remains deferred until
+its separate compatibility scope and design are approved. This refresh changes
+no numbered Phase status and authorizes no profile growth.
