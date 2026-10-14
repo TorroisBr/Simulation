@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using NUnit.Framework;
@@ -158,10 +158,19 @@ public sealed class PersistenceFoundationTests
         byte[] bad = (byte[])valid.Clone();
         bad[4] = (byte)'X';
         Assert.That(P12ACompatibilityAdmission.ClassifyUnityV2(bad), Is.EqualTo(P12AResultCode.CorruptOrTruncated));
-        byte[] unknown = (byte[])valid.Clone();
-        unknown[12] = 3;
-        Assert.That(P12ACompatibilityDescriptorV2.TryReadCanonical(unknown, out _, out var code), Is.False);
-        Assert.That(code, Is.EqualTo(P12AResultCode.UnsupportedSchema));
+
+        byte[] unknownProfile = (byte[])V2().CanonicalBytes.Clone();
+        unknownProfile[FindEncodedStringOffset(unknownProfile, "UnityBootstrap-Daily-v1") + sizeof(int)] = (byte)'X';
+        Assert.That(P12ACompatibilityDescriptorV2.TryReadCanonical(unknownProfile, out _, out var code), Is.False);
+        Assert.That(code, Is.EqualTo(P12AResultCode.UnsupportedProfile));
+        Assert.That(P12ACompatibilityAdmission.ClassifyUnityV2(unknownProfile), Is.EqualTo(P12AResultCode.UnsupportedSchema));
+        Assert.That(P12ACompatibilityAdmission.AdmitDotNetV2(unknownProfile, V2(), out _), Is.EqualTo(P12AResultCode.UnsupportedProfile));
+
+        byte[] malformedUnknownProfile = (byte[])unknownProfile.Clone();
+        malformedUnknownProfile[FindEncodedStringOffset(malformedUnknownProfile, ".NET 8") + sizeof(int)] = 0xFF;
+        Assert.That(P12ACompatibilityDescriptorV2.TryReadCanonical(malformedUnknownProfile, out _, out code), Is.False);
+        Assert.That(code, Is.EqualTo(P12AResultCode.CorruptOrTruncated));
+        Assert.That(P12ACompatibilityAdmission.ClassifyUnityV2(malformedUnknownProfile), Is.EqualTo(P12AResultCode.CorruptOrTruncated));
     }
     [Test]
     public void AtomicSlotUsesDefaultFilesystemAndValidatorRunsOnceBeforeReplacement()

@@ -167,6 +167,30 @@ public sealed class P12AContinuationCodecTests
                 out saveRejection), Is.False);
             Assert.That(saveRejection.Code, Is.EqualTo(P12AResultCode.CorruptOrTruncated));
             Assert.That(File.ReadAllBytes(slot), Is.EqualTo(originalSlot));
+            byte[] unknownProfile = (byte[])foreign.CanonicalBytes.Clone();
+            unknownProfile[16] = (byte)'X';
+            byte[] unknownProfileFrame = ReplaceCompatibilityDescriptor(original, expected.CanonicalBytes, unknownProfile);
+            Assert.That(P12AContinuationCodec.TryDecode(unknownProfileFrame, Manifest, expected,
+                out decoded, out rejection), Is.False);
+            Assert.That(rejection.Code, Is.EqualTo(P12AResultCode.UnsupportedSchema));
+            Assert.That(P12AContinuationStore.TrySave(unknownProfileFrame, Manifest, expected, root,
+                out saveRejection), Is.False);
+            Assert.That(saveRejection.Code, Is.EqualTo(P12AResultCode.UnsupportedSchema));
+            Assert.That(File.ReadAllBytes(slot), Is.EqualTo(originalSlot));
+
+            byte[] malformedUnknownProfile = (byte[])unknownProfile.Clone();
+            int frameworkOffset = FindByteSequence(malformedUnknownProfile, System.Text.Encoding.UTF8.GetBytes(".NET 8"));
+            Assert.That(frameworkOffset, Is.GreaterThanOrEqualTo(0));
+            malformedUnknownProfile[frameworkOffset] = 0xFF;
+            byte[] malformedUnknownProfileFrame = ReplaceCompatibilityDescriptor(
+                original, expected.CanonicalBytes, malformedUnknownProfile);
+            Assert.That(P12AContinuationCodec.TryDecode(malformedUnknownProfileFrame, Manifest, expected,
+                out decoded, out rejection), Is.False);
+            Assert.That(rejection.Code, Is.EqualTo(P12AResultCode.CorruptOrTruncated));
+            Assert.That(P12AContinuationStore.TrySave(malformedUnknownProfileFrame, Manifest, expected, root,
+                out saveRejection), Is.False);
+            Assert.That(saveRejection.Code, Is.EqualTo(P12AResultCode.CorruptOrTruncated));
+            Assert.That(File.ReadAllBytes(slot), Is.EqualTo(originalSlot));
         }
         finally
         {
@@ -174,6 +198,23 @@ public sealed class P12AContinuationCodecTests
         }
     }
 
+    private static int FindByteSequence(byte[] source, byte[] value)
+    {
+        for (int i = 0; i <= source.Length - value.Length; i++)
+        {
+            bool matches = true;
+            for (int j = 0; j < value.Length; j++)
+            {
+                if (source[i + j] == value[j])
+                    continue;
+                matches = false;
+                break;
+            }
+            if (matches)
+                return i;
+        }
+        return -1;
+    }
     private static byte[] ReplaceCompatibilityDescriptor(byte[] frame, byte[] oldDescriptor, byte[] newDescriptor)
     {
         int headerLength = checked((int)BitConverter.ToUInt32(frame, 12));

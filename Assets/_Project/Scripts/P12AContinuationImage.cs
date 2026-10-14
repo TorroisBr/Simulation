@@ -14,7 +14,7 @@ internal sealed class P12AResult
     internal string StableOwnerKey { get; }
 }
 
-}
+
 
 internal sealed class P12AContinuationHeader
 {

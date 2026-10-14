@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -148,13 +148,24 @@ public sealed class P12ACompatibilityDescriptorV2
                 int cv = r.ReadInt32();
                 if (!ReadRequired(r, out var ch) || !ReadRequired(r, out var p9) || !ReadRequired(r, out var p8) || ms.Position != ms.Length)
                     return false;
+                var parsedDescriptor = new P12ACompatibilityDescriptorV2(
+                    profile, pv, host, framework, rv, os, rid, arch, tfm, aa,
+                    numeric, nv, config, content, provider, calendar, cv, ch, p9, p8);
+                if (!ContinuationWire.BytesEqual(bytes, parsedDescriptor.canonicalBytes))
+                    return false;
+
                 if (profile != "UnityBootstrap-Daily-v1")
-                { result = P12AResultCode.UnsupportedProfile; return false; }
+                {
+                    result = P12AResultCode.UnsupportedProfile;
+                    return false;
+                }
                 if (pv != 1)
-                { result = P12AResultCode.UnsupportedSchema; return false; }
-                descriptor = new P12ACompatibilityDescriptorV2(profile, pv, host, framework, rv, os, rid, arch, tfm, aa, numeric, nv, config, content, provider, calendar, cv, ch, p9, p8);
-                if (!ContinuationWire.BytesEqual(bytes, descriptor.canonicalBytes))
-                { descriptor = null; return false; }
+                {
+                    result = P12AResultCode.UnsupportedSchema;
+                    return false;
+                }
+
+                descriptor = parsedDescriptor;
                 result = P12AResultCode.Decoded;
                 return true;
             }
@@ -262,7 +273,10 @@ public static class P12ACompatibilityAdmission
     public static P12AResultCode ClassifyUnityV2(byte[] bytes)
     {
         if (!P12ACompatibilityDescriptorV2.TryReadCanonical(bytes, out _, out var result))
-            return result;
+            return result == P12AResultCode.UnsupportedProfile
+                ? P12AResultCode.UnsupportedSchema
+                : result;
+
         return P12AResultCode.UnsupportedSchema;
     }
     private static bool IsV2(byte[] bytes) => bytes.Length >= 4 && bytes[0] == 0xFE && bytes[1] == 0xFF && bytes[2] == 0xFF && bytes[3] == 0xFF;
