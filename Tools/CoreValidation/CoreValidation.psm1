@@ -103,6 +103,8 @@ function Get-CoreTrxAssessment {
 
     $run = $document.DocumentElement
     if ($null -eq $run -or $run.LocalName -cne 'TestRun') { throw 'TRX root is not TestRun.' }
+    $runId = $run.GetAttribute('id')
+    if ([string]::IsNullOrWhiteSpace($runId)) { throw 'TRX run identity is missing.' }
     $definitionsNode = $run.SelectSingleNode("*[local-name()='TestDefinitions']")
     $entriesNode = $run.SelectSingleNode("*[local-name()='TestEntries']")
     $resultsNode = $run.SelectSingleNode("*[local-name()='Results']")
@@ -175,6 +177,9 @@ function Get-CoreTrxAssessment {
 
     $countersNode = $summaryNode.SelectSingleNode("*[local-name()='Counters']")
     if ($null -eq $countersNode) { throw 'TRX summary lacks counters.' }
+    $summaryOutcome = $summaryNode.GetAttribute('outcome')
+    if ([string]::IsNullOrWhiteSpace($summaryOutcome)) { throw 'TRX summary outcome is missing.' }
+    if ($summaryOutcome -cne 'Completed') { throw "TRX summary outcome must be 'Completed', found '$summaryOutcome'." }
     $counterNames = @('total','executed','passed','failed','error','timeout','aborted','inconclusive','notExecuted')
     $counters = @{}
     foreach ($name in $counterNames) {
@@ -210,8 +215,9 @@ function Get-CoreTrxAssessment {
 
     $nonPassed = @($results | Where-Object { $_.outcome -cne 'Passed' }).Count
     return [pscustomobject]@{
-        runId = $run.GetAttribute('id')
+        runId = $runId
         runName = $run.GetAttribute('name')
+        summaryOutcome = $summaryOutcome
         counters = $counters
         resultCount = $results.Count
         gatePassed = ($nonPassed -eq 0 -and $counters.failed -eq 0 -and $counters.error -eq 0 -and $counters.timeout -eq 0 -and $counters.aborted -eq 0 -and $counters.inconclusive -eq 0 -and $counters.notExecuted -eq 0)

@@ -15,7 +15,7 @@ function Assert-Rejected([scriptblock]$Action, [string]$Message) {
 }
 
 function New-SyntheticTrx {
-    param([string[]]$Names, [string[]]$Outcomes, [int]$CounterAdjustment = 0, [string]$ResultTestIdOverride = '')
+    param([string[]]$Names, [string[]]$Outcomes, [int]$CounterAdjustment = 0, [string]$ResultTestIdOverride = '', [string]$RunId = 'synthetic-run', [string]$SummaryOutcome = 'Completed')
     $definitions = [System.Text.StringBuilder]::new()
     $entries = [System.Text.StringBuilder]::new()
     $results = [System.Text.StringBuilder]::new()
@@ -32,7 +32,7 @@ function New-SyntheticTrx {
         [void]$results.Append("<UnitTestResult testId=`"$resultTestId`" executionId=`"$executionId`" testName=`"$name`" outcome=`"$outcome`" duration=`"00:00:00.001`"><Output><StdOut>synthetic-output</StdOut></Output></UnitTestResult>")
     }
     $total = $Names.Count + $CounterAdjustment
-    return "<TestRun id=`"synthetic-run`" name=`"synthetic`"><TestDefinitions>$definitions</TestDefinitions><TestEntries>$entries</TestEntries><Results>$results</Results><ResultSummary outcome=`"Completed`"><Counters total=`"$total`" executed=`"$executed`" passed=`"$passed`" failed=`"$failed`" error=`"0`" timeout=`"0`" aborted=`"0`" inconclusive=`"0`" notExecuted=`"$notExecuted`" /></ResultSummary></TestRun>"
+    return "<TestRun id=`"$RunId`" name=`"synthetic`"><TestDefinitions>$definitions</TestDefinitions><TestEntries>$entries</TestEntries><Results>$results</Results><ResultSummary outcome=`"$SummaryOutcome`"><Counters total=`"$total`" executed=`"$executed`" passed=`"$passed`" failed=`"$failed`" error=`"0`" timeout=`"0`" aborted=`"0`" inconclusive=`"0`" notExecuted=`"$notExecuted`" /></ResultSummary></TestRun>"
 }
 
 function Write-SyntheticTrx([string]$Xml) {
@@ -45,6 +45,8 @@ $passPath = Write-SyntheticTrx (New-SyntheticTrx -Names @('Parameterized case (i
 try {
     $pass = Get-CoreTrxAssessment -Path $passPath -ExpectedTests @('Parameterized case (int: 1)', 'Parameterized case (string: "1")')
     Assert-True $pass.gatePassed 'Populated parameterized passing TRX should pass.'
+    Assert-True ($pass.runId -ceq 'synthetic-run') 'TRX run identity must be retained.'
+    Assert-True ($pass.summaryOutcome -ceq 'Completed') 'TRX summary outcome must be retained.'
     Assert-True ($pass.results.Count -eq 2) 'Both parameterized rows must be retained.'
     Assert-Rejected { Get-CoreTrxAssessment -Path $passPath -ExpectedTests @() } 'Empty discovery must be rejected.'
 } finally { Remove-Item -LiteralPath $passPath -Force }
@@ -74,10 +76,22 @@ $badCounterPath = Write-SyntheticTrx (New-SyntheticTrx -Names @('Case') -Outcome
 try { Assert-Rejected { Get-CoreTrxAssessment -Path $badCounterPath -ExpectedTests @('Case') } 'Mismatched TRX counters must be rejected.' }
 finally { Remove-Item -LiteralPath $badCounterPath -Force }
 
+$missingRunIdPath = Write-SyntheticTrx (New-SyntheticTrx -Names @('Case') -Outcomes @('Passed') -RunId '')
+try { Assert-Rejected { Get-CoreTrxAssessment -Path $missingRunIdPath -ExpectedTests @('Case') } 'Missing TRX run identity must be rejected.' }
+finally { Remove-Item -LiteralPath $missingRunIdPath -Force }
+
+$missingSummaryOutcomePath = Write-SyntheticTrx (New-SyntheticTrx -Names @('Case') -Outcomes @('Passed') -SummaryOutcome '')
+try { Assert-Rejected { Get-CoreTrxAssessment -Path $missingSummaryOutcomePath -ExpectedTests @('Case') } 'Missing TRX summary outcome must be rejected.' }
+finally { Remove-Item -LiteralPath $missingSummaryOutcomePath -Force }
+
+$contradictorySummaryPath = Write-SyntheticTrx (New-SyntheticTrx -Names @('Case') -Outcomes @('Passed') -SummaryOutcome 'Failed')
+try { Assert-Rejected { Get-CoreTrxAssessment -Path $contradictorySummaryPath -ExpectedTests @('Case') } 'A non-completed TRX summary must be rejected.' }
+finally { Remove-Item -LiteralPath $contradictorySummaryPath -Force }
+
 $before = @([pscustomobject]@{ path = 'input.cs'; bytes = 1; sha256 = 'a' })
 $afterSame = @([pscustomobject]@{ path = 'input.cs'; bytes = 1; sha256 = 'a' })
 $afterChanged = @([pscustomobject]@{ path = 'input.cs'; bytes = 1; sha256 = 'b' })
 Assert-True (Compare-CoreInputSnapshots -Before $before -After $afterSame).stable 'Equal input snapshots should be stable.'
 Assert-True (-not (Compare-CoreInputSnapshots -Before $before -After $afterChanged).stable) 'Changed input snapshots must be rejected as unstable.'
 
-Write-Output 'Core validation self-tests PASS: populated/parameterized, failed, not-executed, empty discovery, malformed/missing report, ID/count integrity, and input stability.'
+Write-Output 'Core validation self-tests PASS: populated/parameterized, failed, not-executed, empty discovery, malformed/missing report, run identity/summary outcome, ID/count integrity, and input stability.'

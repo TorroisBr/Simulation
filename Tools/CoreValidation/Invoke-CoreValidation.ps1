@@ -169,8 +169,8 @@ try {
         testDiscovery = [ordered]@{ count = $expectedTests.Count; cases = $expectedTests.ToArray() }
         gates = [ordered]@{
             coldBuild = [ordered]@{ exitCode = $coldBuild.exitCode; elapsedMilliseconds = $coldBuild.elapsedMilliseconds }
-            coldTests = [ordered]@{ exitCode = $coldTest.exitCode; elapsedMilliseconds = $coldTest.elapsedMilliseconds; resultFile = 'CoreTests-cold.trx'; counters = $coldAssessment.counters; cases = $coldAssessment.results }
-            warmTests = [ordered]@{ exitCode = $warmTest.exitCode; elapsedMilliseconds = $warmTest.elapsedMilliseconds; resultFile = 'CoreTests-warm.trx'; counters = $warmAssessment.counters; cases = $warmAssessment.results }
+            coldTests = [ordered]@{ exitCode = $coldTest.exitCode; elapsedMilliseconds = $coldTest.elapsedMilliseconds; resultFile = 'CoreTests-cold.trx'; runId = $coldAssessment.runId; runName = $coldAssessment.runName; summaryOutcome = $coldAssessment.summaryOutcome; counters = $coldAssessment.counters; cases = $coldAssessment.results }
+            warmTests = [ordered]@{ exitCode = $warmTest.exitCode; elapsedMilliseconds = $warmTest.elapsedMilliseconds; resultFile = 'CoreTests-warm.trx'; runId = $warmAssessment.runId; runName = $warmAssessment.runName; summaryOutcome = $warmAssessment.summaryOutcome; counters = $warmAssessment.counters; cases = $warmAssessment.results }
             coldDemo = [ordered]@{ exitCode = $coldDemo.exitCode; elapsedMilliseconds = $coldDemo.elapsedMilliseconds; output = $coldDemo.output }
             warmDemo = [ordered]@{ exitCode = $warmDemo.exitCode; elapsedMilliseconds = $warmDemo.elapsedMilliseconds; output = $warmDemo.output }
         }
