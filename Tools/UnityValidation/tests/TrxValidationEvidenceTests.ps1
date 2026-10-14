@@ -162,6 +162,22 @@ try {
     $nestedEvidence=Join-Path $retentionChild 'retained.bin';[IO.File]::WriteAllBytes($nestedEvidence,[byte[]]@(1,2,3))
     Assert-ProtectedEvidenceFile -Path $nestedEvidence -ProtectedRoot $privateTraceRoot | Out-Null
     Assert-True $true 'nested validated-output parents and retained files remain owner-only'
+    $resumeRoot=Join-Path $root 'retention-resume';$null=Set-ProtectedEvidenceDirectory $resumeRoot
+    $resumeParent=Join-Path $resumeRoot 'validated-output';$null=Set-ProtectedEvidenceDirectory $resumeParent
+    $resumeDir=Join-Path $resumeParent ([guid]::NewGuid().ToString('N'));$null=Set-ProtectedEvidenceDirectory $resumeDir
+    foreach($name in @('Simulation.Core.Tests.dll','Simulation.Core.Tests.pdb','Simulation.Core.dll','Simulation.Core.pdb','assembly-retention.json')){[IO.File]::WriteAllBytes((Join-Path $resumeDir $name),[byte[]]@(1,2,3))}
+    $resumeAclReceipt=Join-Path $resumeRoot 'retention-receipt.json'
+    $resumeAllowed=& $trxModule {param($d,$a,$p) Assert-TrxRetentionResumeState $d $a $p} $resumeDir $resumeAclReceipt $resumeRoot
+    Assert-True ($resumeAllowed -and -not (Test-Path -LiteralPath $resumeAclReceipt)) 'complete protected retention set can resume after interruption before paired ACL receipt'
+    [IO.File]::WriteAllBytes($resumeAclReceipt,[byte[]]@(1))
+    $resumeWithReceipt=& $trxModule {param($d,$a,$p) Assert-TrxRetentionResumeState $d $a $p} $resumeDir $resumeAclReceipt $resumeRoot
+    Assert-True $resumeWithReceipt 'complete protected retention set accepts its protected paired receipt'
+    $partialResume=Join-Path $resumeParent ([guid]::NewGuid().ToString('N'));$null=Set-ProtectedEvidenceDirectory $partialResume
+    [IO.File]::WriteAllBytes((Join-Path $partialResume 'Simulation.Core.Tests.dll'),[byte[]]@(1))
+    Assert-Throws { & $trxModule {param($d,$a,$p) Assert-TrxRetentionResumeState $d $a $p} $partialResume (Join-Path $resumeRoot 'missing-receipt.json') $resumeRoot } 'partial protected retention set is not resumable'
+    $orphanReceiptRoot=Join-Path $root 'orphan-retention-receipt';$null=Set-ProtectedEvidenceDirectory $orphanReceiptRoot
+    [IO.File]::WriteAllBytes((Join-Path $orphanReceiptRoot 'retention-receipt.json'),[byte[]]@(1))
+    Assert-Throws { & $trxModule {param($d,$a,$p) Assert-TrxRetentionResumeState $d $a $p} (Join-Path $orphanReceiptRoot 'validated-output/missing-run') (Join-Path $orphanReceiptRoot 'retention-receipt.json') $orphanReceiptRoot } 'paired receipt cannot exist without retained outputs'
     $traceRunnerId=[guid]::NewGuid().ToString('N');$coldNative=[guid]::NewGuid().ToString('D');$warmNative=[guid]::NewGuid().ToString('D')
     $traceTemplate=@"
 Runtime config is cfg=C:\agent\project\bin\Simulation.Core.Tests.runtimeconfig.json dev=C:\agent\project\bin\Simulation.Core.Tests.runtimeconfig.dev.json
@@ -250,6 +266,12 @@ Chose FX version [C:\Program Files\dotnet\shared\Microsoft.NETCore.App\9.0.20]
     Assert-Throws { & $trxModule {param($r) Assert-TrxProvenanceRecord $r} $unsupportedProvenance } 'public provenance rejects kinds outside the promoted closed enum'
     & $trxModule {param($txt,$cases) Assert-TrxDiscoveryOutput $txt $cases|Out-Null} "The following Tests are available:`n    alpha`n    beta`n" @('alpha','beta')
     Assert-True $true 'complete ordered discovery output matches exactly'
+    $equalBytes=& $trxModule {param([byte[]]$a,[byte[]]$b) Test-TrxByteSequenceEqual $a $b} ([byte[]]@(0,1,255)) ([byte[]]@(0,1,255))
+    Assert-True $equalBytes 'strict byte comparison accepts equal receipt bytes'
+    $changedBytes=& $trxModule {param([byte[]]$a,[byte[]]$b) Test-TrxByteSequenceEqual $a $b} ([byte[]]@(0,1,255)) ([byte[]]@(0,2,255))
+    Assert-True (-not $changedBytes) 'strict byte comparison rejects a changed receipt byte'
+    $differentLength=& $trxModule {param([byte[]]$a,[byte[]]$b) Test-TrxByteSequenceEqual $a $b} ([byte[]]@(0,1)) ([byte[]]@(0,1,255))
+    Assert-True (-not $differentLength) 'strict byte comparison rejects a different receipt length'
     Assert-Throws { & $trxModule {param($txt,$cases) Assert-TrxDiscoveryOutput $txt $cases|Out-Null} "The following Tests are available:`n    beta`n    alpha`n" @('alpha','beta') } 'discovery order mutation rejects'
     Assert-Throws { & $trxModule {param($txt,$cases) Assert-TrxDiscoveryOutput $txt $cases|Out-Null} "The following Tests are available:`n    alpha`n    beta`n    injected`n" @('alpha','beta') } 'extra discovery output rejects'
     $partialRetained=Join-Path $root 'partial-retained';New-Item -ItemType Directory -Path $partialRetained -Force|Out-Null;[IO.File]::WriteAllText((Join-Path $partialRetained 'Simulation.Core.dll'),'partial')

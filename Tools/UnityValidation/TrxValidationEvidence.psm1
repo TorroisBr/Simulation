@@ -553,6 +553,23 @@ function Assert-TrxRetainedOutputShape {
     return $true
 }
 
+function Test-TrxByteSequenceEqual {
+    param([AllowEmptyCollection()][byte[]]$Left,[AllowEmptyCollection()][byte[]]$Right)
+    if($Left.Length -ne $Right.Length){return $false}
+    for($index=0;$index -lt $Left.Length;$index++){if($Left[$index] -ne $Right[$index]){return $false}}
+    return $true
+}
+
+function Assert-TrxRetentionResumeState {
+    param([string]$Directory,[string]$AclReceiptPath,[string]$ProtectedRoot)
+    $hasDirectory=Test-Path -LiteralPath $Directory -PathType Container
+    $hasReceipt=Test-Path -LiteralPath $AclReceiptPath
+    if(-not $hasDirectory){if($hasReceipt){throw 'Sanitized retention receipt exists without its validated-output directory.'};return $false}
+    $null=Assert-TrxRetainedOutputShape $Directory $true
+    if($hasReceipt){$null=Assert-ProtectedEvidenceFile -Path $AclReceiptPath -ProtectedRoot $ProtectedRoot}
+    return $true
+}
+
 function Assert-TrxRunnerInputInventory {
     param([System.Collections.IDictionary]$Runner,[string[]]$WorktreeRoots)
     if($WorktreeRoots.Count -lt 1){throw 'Runner input inventory has no source worktree root.'}
@@ -793,8 +810,14 @@ function Get-TrxRetainedAssemblyInventory {
     $receiptPath=Join-Path $retentionDir 'assembly-retention.json'
     $aclReceiptPath=Join-Path $ProtectedRoot 'retention-receipt.json'
     $retentionExists=Test-Path -LiteralPath $retentionDir
-    if($Create -and -not $retentionExists){if(Test-Path -LiteralPath $aclReceiptPath){throw 'Sanitized retention receipt exists without its validated-output directory.'};$null=Set-ProtectedEvidenceDirectory -Path $retentionDir}
-    elseif($Create -and $retentionExists){$null=Assert-TrxRetainedOutputShape $retentionDir $true;if(-not (Test-Path -LiteralPath $aclReceiptPath -PathType Leaf)){throw 'Existing retained outputs lack the paired owner-only retention receipt.'}}
+    if($Create){
+        # A prior interrupted packaging attempt may have completed the retained copies and their
+        # deterministic receipt before writing the paired ACL receipt. Accept only a complete
+        # directory shape here; every source/copy hash, identity, ACL, and receipt is rechecked
+        # below before the missing paired receipt can be created.
+        $retentionExists=Assert-TrxRetentionResumeState $retentionDir $aclReceiptPath $ProtectedRoot
+        if(-not $retentionExists){$null=Set-ProtectedEvidenceDirectory -Path $retentionDir}
+    }
     $null=Test-ProtectedEvidenceDirectory -Path $retentionDir
     $retained=[Collections.Generic.List[object]]::new()
     foreach($leaf in @('Simulation.Core.Tests.dll','Simulation.Core.dll')){
@@ -818,13 +841,13 @@ function Get-TrxRetainedAssemblyInventory {
     if($Create){
         if(Test-Path -LiteralPath $receiptPath -PathType Leaf){
             $existingReceiptBytes=[IO.File]::ReadAllBytes((Assert-ProtectedEvidenceFile -Path $receiptPath -ProtectedRoot $ProtectedRoot))
-            if(-not [Linq.Enumerable]::SequenceEqual[byte]($existingReceiptBytes,$expectedReceiptBytes)){throw 'Existing protected assembly retention receipt differs from the deterministic verified receipt.'}
+            if(-not (Test-TrxByteSequenceEqual $existingReceiptBytes $expectedReceiptBytes)){throw 'Existing protected assembly retention receipt differs from the deterministic verified receipt.'}
         }else{
             $fs=[IO.File]::Open($receiptPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None);try{$fs.Write($expectedReceiptBytes,0,$expectedReceiptBytes.Length);$fs.Flush($true)}finally{$fs.Dispose()}
         }
     }
     $null=Assert-ProtectedEvidenceFile -Path $receiptPath -ProtectedRoot $ProtectedRoot
-    $receiptBytes=[IO.File]::ReadAllBytes($receiptPath);if(-not [Linq.Enumerable]::SequenceEqual[byte]($receiptBytes,$expectedReceiptBytes)){throw 'Protected assembly retention receipt does not byte-match the deterministic verified receipt.'};$receiptText=[Text.UTF8Encoding]::new($false,$true).GetString($receiptBytes);$stored=$receiptText|ConvertFrom-Json -AsHashtable -DateKind String
+    $receiptBytes=[IO.File]::ReadAllBytes($receiptPath);if(-not (Test-TrxByteSequenceEqual $receiptBytes $expectedReceiptBytes)){throw 'Protected assembly retention receipt does not byte-match the deterministic verified receipt.'};$receiptText=[Text.UTF8Encoding]::new($false,$true).GetString($receiptBytes);$stored=$receiptText|ConvertFrom-Json -AsHashtable -DateKind String
     Assert-TrxKeys $stored @('schema','runnerRunId','sourceCommit','sourceTree','assemblies') 'protected assembly retention receipt'
     if($stored.schema -cne 'trx-validated-output-retention-v1' -or [string]$stored.runnerRunId -cne [string]$Runner.runId -or [string]$stored.sourceCommit -cne [string]$Runner.source.commit -or [string]$stored.sourceTree -cne [string]$Runner.source.committedTree -or (ConvertTo-Json -InputObject @($stored.assemblies) -Depth 10 -Compress) -cne (ConvertTo-Json -InputObject @($retained.ToArray()) -Depth 10 -Compress)){throw 'Protected assembly retention receipt does not match independently rechecked source and retained output identities.'}
     if($Create){
