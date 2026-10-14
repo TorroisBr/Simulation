@@ -102,6 +102,37 @@ try {
     $aclTestFile = Join-Path $aclTestDirectory 'private-evidence.txt'
     [IO.File]::WriteAllText($aclTestFile, 'protected test evidence', [Text.UTF8Encoding]::new($false))
     $null = Assert-ProtectedEvidenceFile -Path $aclTestFile -ProtectedRoot $aclTestDirectory
+
+    $traceDirectory = Join-Path $aclTestDirectory 'runtime-traces'
+    $null = Set-ProtectedEvidenceDirectory -Path $traceDirectory
+    $testAssemblyPath = Join-Path $aclTestDirectory 'output/Simulation.Core.Tests.dll'
+    $runtimeConfigPath = [regex]::Replace($testAssemblyPath, '(?i)\.dll$', '.runtimeconfig.json')
+    $runtimeDevConfigPath = [regex]::Replace($testAssemblyPath, '(?i)\.dll$', '.runtimeconfig.dev.json')
+    $tracePath = Join-Path $traceDirectory 'testhost.12345.log'
+    $traceLines = @(
+        'Tracing enabled @ Wed Oct 14 16:33:24 2026 GMT',
+        "Runtime config is cfg=$runtimeConfigPath dev=$runtimeDevConfigPath",
+        'Chose FX version [C:\Program Files\dotnet\shared\Microsoft.NETCore.App\8.0.28]'
+    )
+    [IO.File]::WriteAllLines($tracePath, [string[]]$traceLines, [Text.UTF8Encoding]::new($false))
+    $null = Assert-ProtectedEvidenceFile -Path $tracePath -ProtectedRoot $traceDirectory
+    $selection = Get-CoreRuntimeSelectionTrace -TraceDirectory $traceDirectory -TestAssemblyPath $testAssemblyPath
+    Assert-True ($selection.selectedClr -ceq '8.0.28') 'The selected CLR must come from the bound testhost runtime-config block.'
+    Assert-True ($selection.fileName -ceq 'testhost.12345.log') 'Only the testhost process trace may be selected.'
+    $traceBytes=[IO.File]::ReadAllBytes($tracePath)
+    Assert-True ($selection.bytes -eq $traceBytes.LongLength) 'Recorded trace length must match the parsed byte snapshot.'
+    $traceSha=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($traceBytes)).ToLowerInvariant()
+    Assert-True ($selection.sha256 -ceq $traceSha) 'Recorded trace hash must match the same parsed byte snapshot.'
+
+    $duplicateTrace = Join-Path $traceDirectory 'testhost.12346.log'
+    [IO.File]::WriteAllText($duplicateTrace, [string]::Join([Environment]::NewLine, $traceLines), [Text.UTF8Encoding]::new($false))
+    Assert-Rejected { Get-CoreRuntimeSelectionTrace -TraceDirectory $traceDirectory -TestAssemblyPath $testAssemblyPath } 'Multiple testhost traces must be rejected as ambiguous.'
+    Remove-Item -LiteralPath $duplicateTrace -Force
+
+    $mismatchedConfig = @($traceLines)
+    $mismatchedConfig[1] = $mismatchedConfig[1].Replace('Simulation.Core.Tests.runtimeconfig.json', 'Other.Tests.runtimeconfig.json')
+    [IO.File]::WriteAllLines($tracePath, [string[]]$mismatchedConfig, [Text.UTF8Encoding]::new($false))
+    Assert-Rejected { Get-CoreRuntimeSelectionTrace -TraceDirectory $traceDirectory -TestAssemblyPath $testAssemblyPath } 'A trace for a different assembly runtime config must be rejected.'
 }
 finally {
     if (Test-Path -LiteralPath $aclTestDirectory -PathType Container) {
@@ -113,4 +144,4 @@ finally {
     }
 }
 
-Write-Output 'Core validation self-tests PASS: populated/parameterized, failed, not-executed, empty discovery, malformed/missing report, run identity/summary outcome, ID/count integrity, input stability, and protected evidence ACL.'
+Write-Output 'Core validation self-tests PASS: populated/parameterized, failed, not-executed, empty discovery, malformed/missing report, run identity/summary outcome, ID/count integrity, input stability, exact testhost runtime selection, and protected evidence ACL.'

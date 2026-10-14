@@ -33,7 +33,7 @@ $projectAssets = @(
 $records = [System.Collections.Generic.List[object]]::new()
 
 function Invoke-Dotnet {
-    param([string]$Name, [string[]]$Arguments, [string]$RuntimeTracePath)
+    param([string]$Name, [string[]]$Arguments, [string]$RuntimeTraceDirectory)
     $logPath = Join-Path $runDirectory ($Name + '.log')
     $watch = [Diagnostics.Stopwatch]::StartNew()
     # Keep CLI headings stable across host locales. Test cases still exercise
@@ -41,13 +41,23 @@ function Invoke-Dotnet {
     $previousUiLanguage = [Environment]::GetEnvironmentVariable('DOTNET_CLI_UI_LANGUAGE', 'Process')
     $previousCoreHostTrace = [Environment]::GetEnvironmentVariable('COREHOST_TRACE', 'Process')
     $previousCoreHostTraceFile = [Environment]::GetEnvironmentVariable('COREHOST_TRACEFILE', 'Process')
+    $previousCoreHostTraceVerbosity = [Environment]::GetEnvironmentVariable('COREHOST_TRACE_VERBOSITY', 'Process')
+    $previousDotnetHostTrace = [Environment]::GetEnvironmentVariable('DOTNET_HOST_TRACE', 'Process')
+    $previousDotnetHostTraceFile = [Environment]::GetEnvironmentVariable('DOTNET_HOST_TRACEFILE', 'Process')
+    $previousDotnetHostTraceVerbosity = [Environment]::GetEnvironmentVariable('DOTNET_HOST_TRACE_VERBOSITY', 'Process')
     try {
         [Environment]::SetEnvironmentVariable('DOTNET_CLI_UI_LANGUAGE', 'en-US', 'Process')
         [Environment]::SetEnvironmentVariable('COREHOST_TRACE', $null, 'Process')
         [Environment]::SetEnvironmentVariable('COREHOST_TRACEFILE', $null, 'Process')
-        if ($RuntimeTracePath) {
-            [Environment]::SetEnvironmentVariable('COREHOST_TRACE', '1', 'Process')
-            [Environment]::SetEnvironmentVariable('COREHOST_TRACEFILE', $RuntimeTracePath, 'Process')
+        [Environment]::SetEnvironmentVariable('COREHOST_TRACE_VERBOSITY', $null, 'Process')
+        [Environment]::SetEnvironmentVariable('DOTNET_HOST_TRACE', $null, 'Process')
+        [Environment]::SetEnvironmentVariable('DOTNET_HOST_TRACEFILE', $null, 'Process')
+        [Environment]::SetEnvironmentVariable('DOTNET_HOST_TRACE_VERBOSITY', $null, 'Process')
+        if ($RuntimeTraceDirectory) {
+            if (-not (Test-Path -LiteralPath $RuntimeTraceDirectory -PathType Container)) { throw 'Runtime trace output directory must exist before the test gate starts.' }
+            [Environment]::SetEnvironmentVariable('DOTNET_HOST_TRACE', '1', 'Process')
+            [Environment]::SetEnvironmentVariable('DOTNET_HOST_TRACEFILE', $RuntimeTraceDirectory, 'Process')
+            [Environment]::SetEnvironmentVariable('DOTNET_HOST_TRACE_VERBOSITY', '4', 'Process')
         }
         $output = @(& dotnet @Arguments 2>&1 | ForEach-Object { $_.ToString() })
         $exitCode = $LASTEXITCODE
@@ -55,6 +65,10 @@ function Invoke-Dotnet {
         [Environment]::SetEnvironmentVariable('DOTNET_CLI_UI_LANGUAGE', $previousUiLanguage, 'Process')
         [Environment]::SetEnvironmentVariable('COREHOST_TRACE', $previousCoreHostTrace, 'Process')
         [Environment]::SetEnvironmentVariable('COREHOST_TRACEFILE', $previousCoreHostTraceFile, 'Process')
+        [Environment]::SetEnvironmentVariable('COREHOST_TRACE_VERBOSITY', $previousCoreHostTraceVerbosity, 'Process')
+        [Environment]::SetEnvironmentVariable('DOTNET_HOST_TRACE', $previousDotnetHostTrace, 'Process')
+        [Environment]::SetEnvironmentVariable('DOTNET_HOST_TRACEFILE', $previousDotnetHostTraceFile, 'Process')
+        [Environment]::SetEnvironmentVariable('DOTNET_HOST_TRACE_VERBOSITY', $previousDotnetHostTraceVerbosity, 'Process')
     }
     $watch.Stop()
     [IO.File]::WriteAllLines($logPath, [string[]]$output, [Text.UTF8Encoding]::new($false))
@@ -118,17 +132,23 @@ try {
     }
     if ($expectedTests.Count -eq 0) { throw 'Test discovery returned no expected cases.' }
 
-    $coldRuntimeTracePath = Join-Path $runDirectory 'cold-runtime-selection.trace.log'
-    $coldTest = Invoke-Dotnet -Name 'cold-test' -Arguments @('test', $testProject, '--no-restore', '--configuration', 'Release', '--logger', 'trx;LogFileName=CoreTests-cold.trx', '--results-directory', $runDirectory) -RuntimeTracePath $coldRuntimeTracePath
+    $testAssemblyPath = Join-Path $root 'tests/Simulation.Core.Tests/bin/Release/net8.0/Simulation.Core.Tests.dll'
+    $coldRuntimeTraceDirectory = Join-Path $runDirectory 'cold-runtime-selection'
+    $null = Set-ProtectedEvidenceDirectory -Path $coldRuntimeTraceDirectory
+    $coldTest = Invoke-Dotnet -Name 'cold-test' -Arguments @('test', $testProject, '--no-restore', '--configuration', 'Release', '--logger', 'trx;LogFileName=CoreTests-cold.trx', '--results-directory', $runDirectory) -RuntimeTraceDirectory $coldRuntimeTraceDirectory
+    $coldRuntimeSelection = Get-CoreRuntimeSelectionTrace -TraceDirectory $coldRuntimeTraceDirectory -TestAssemblyPath $testAssemblyPath
     $coldTrxPath = Join-Path $runDirectory 'CoreTests-cold.trx'
     $coldAssessment = Get-CoreTrxAssessment -Path $coldTrxPath -ExpectedTests $expectedTests.ToArray()
     if ($coldTest.exitCode -ne 0 -or -not $coldAssessment.gatePassed) { throw 'Cold test gate did not pass. Valid test failures are not retried.' }
 
-    $warmRuntimeTracePath = Join-Path $runDirectory 'warm-runtime-selection.trace.log'
-    $warmTest = Invoke-Dotnet -Name 'warm-test' -Arguments @('test', $testProject, '--no-build', '--no-restore', '--configuration', 'Release', '--logger', 'trx;LogFileName=CoreTests-warm.trx', '--results-directory', $runDirectory) -RuntimeTracePath $warmRuntimeTracePath
+    $warmRuntimeTraceDirectory = Join-Path $runDirectory 'warm-runtime-selection'
+    $null = Set-ProtectedEvidenceDirectory -Path $warmRuntimeTraceDirectory
+    $warmTest = Invoke-Dotnet -Name 'warm-test' -Arguments @('test', $testProject, '--no-build', '--no-restore', '--configuration', 'Release', '--logger', 'trx;LogFileName=CoreTests-warm.trx', '--results-directory', $runDirectory) -RuntimeTraceDirectory $warmRuntimeTraceDirectory
+    $warmRuntimeSelection = Get-CoreRuntimeSelectionTrace -TraceDirectory $warmRuntimeTraceDirectory -TestAssemblyPath $testAssemblyPath
     $warmTrxPath = Join-Path $runDirectory 'CoreTests-warm.trx'
     $warmAssessment = Get-CoreTrxAssessment -Path $warmTrxPath -ExpectedTests $expectedTests.ToArray()
     if ($warmTest.exitCode -ne 0 -or -not $warmAssessment.gatePassed) { throw 'Warm test measurement/gate did not pass.' }
+    if ($coldRuntimeSelection.selectedClr -cne $warmRuntimeSelection.selectedClr) { throw 'Cold and warm test gates selected different Microsoft.NETCore.App CLR versions.' }
 
     $coldDemo = Invoke-Dotnet -Name 'cold-demo' -Arguments @('run', '--project', $demoProject, '--no-restore', '--configuration', 'Release')
     Assert-CommandPassed $coldDemo
@@ -182,6 +202,10 @@ try {
         toolchain = [ordered]@{ sdk = $sdkVersion; dotnetInfoLog = 'dotnet-info.log'; runtimes = @($runtime.output); os = [Environment]::OSVersion.VersionString; architecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString(); processArchitecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString(); culturesCoveredBySharedCases = @('en-US','pt-BR') }
         inputs = [ordered]@{ digest = $inputComparison.afterDigest; stable = $inputComparison.stable; files = $afterInputs; generatedDependencies = $generatedAfter; generatedDependenciesStable = $generatedComparison.stable }
         testDiscovery = [ordered]@{ count = $expectedTests.Count; cases = $expectedTests.ToArray() }
+        runtimeSelectionTraces = @(
+            [ordered]@{ gateLabel = 'cold'; runnerRunId = $runId; path = $coldRuntimeSelection.path; bytes = $coldRuntimeSelection.bytes; sha256 = $coldRuntimeSelection.sha256; selectedClr = $coldRuntimeSelection.selectedClr },
+            [ordered]@{ gateLabel = 'warm'; runnerRunId = $runId; path = $warmRuntimeSelection.path; bytes = $warmRuntimeSelection.bytes; sha256 = $warmRuntimeSelection.sha256; selectedClr = $warmRuntimeSelection.selectedClr }
+        )
         gates = [ordered]@{
             coldBuild = [ordered]@{ exitCode = $coldBuild.exitCode; elapsedMilliseconds = $coldBuild.elapsedMilliseconds }
             coldTests = [ordered]@{ exitCode = $coldTest.exitCode; elapsedMilliseconds = $coldTest.elapsedMilliseconds; resultFile = 'CoreTests-cold.trx'; runId = $coldAssessment.runId; runName = $coldAssessment.runName; summaryOutcome = $coldAssessment.summaryOutcome; counters = $coldAssessment.counters; cases = $coldAssessment.results }

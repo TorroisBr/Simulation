@@ -107,6 +107,63 @@ function Compare-CoreInputSnapshots {
     }
 }
 
+function Get-CoreRuntimeSelectionTrace {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$TraceDirectory,
+        [Parameter(Mandatory)][string]$TestAssemblyPath
+    )
+
+    if (-not (Test-Path -LiteralPath $TraceDirectory -PathType Container)) { throw 'Runtime trace directory is missing.' }
+    $traceFiles = @(Get-ChildItem -LiteralPath $TraceDirectory -Filter 'testhost.*.log' -File)
+    if ($traceFiles.Count -ne 1) { throw 'Runtime trace directory must contain exactly one testhost process trace.' }
+
+    $testAssembly = [IO.Path]::GetFullPath($TestAssemblyPath)
+    if ($testAssembly -notmatch '(?i)\.dll$') { throw 'Runtime trace binding requires a test assembly DLL path.' }
+    $expectedConfig = [regex]::Replace($testAssembly, '(?i)\.dll$', '.runtimeconfig.json')
+    $expectedDevConfig = [regex]::Replace($testAssembly, '(?i)\.dll$', '.runtimeconfig.dev.json')
+    $traceFile = $traceFiles[0]
+    $bytes = [IO.File]::ReadAllBytes($traceFile.FullName)
+    $text = [Text.UTF8Encoding]::new($false, $true).GetString($bytes)
+    $lines = @([regex]::Split($text, '\r?\n'))
+    $configHits = [System.Collections.Generic.List[object]]::new()
+    for ($lineIndex = 0; $lineIndex -lt $lines.Count; $lineIndex++) {
+        if ($lines[$lineIndex] -match '(?i)^\s*Runtime config is cfg=(?<cfg>.+\.runtimeconfig\.json)\s+dev=(?<dev>.+\.runtimeconfig\.dev\.json)\s*$') {
+            $configHits.Add([pscustomobject]@{ Line = $lineIndex; ConfigPath = $Matches.cfg.Trim(); DevPath = $Matches.dev.Trim() })
+        }
+    }
+    $testConfigHits = @($configHits | Where-Object {
+        [IO.Path]::IsPathRooted($_.ConfigPath) -and [IO.Path]::IsPathRooted($_.DevPath) -and
+        [string]::Equals([IO.Path]::GetFullPath($_.ConfigPath), $expectedConfig, [StringComparison]::OrdinalIgnoreCase)
+    })
+    if ($testConfigHits.Count -ne 1) { throw 'Testhost trace must contain exactly one runtimeconfig selection block for the test assembly.' }
+    $selectedConfig = $testConfigHits[0]
+    if (-not [string]::Equals([IO.Path]::GetFullPath($selectedConfig.DevPath), $expectedDevConfig, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Testhost runtimeconfig.dev.json does not match the test assembly.'
+    }
+
+    $nextConfig = $lines.Count
+    for ($lineIndex = [int]$selectedConfig.Line + 1; $lineIndex -lt $lines.Count; $lineIndex++) {
+        if ($lines[$lineIndex] -match '(?i)^\s*Runtime config is cfg=') { $nextConfig = $lineIndex; break }
+    }
+    $chosen = [System.Collections.Generic.List[string]]::new()
+    for ($lineIndex = [int]$selectedConfig.Line + 1; $lineIndex -lt $nextConfig; $lineIndex++) {
+        if ($lines[$lineIndex] -match '(?i)^\s*Chose FX version \[(?<path>[^\]\r\n]+)\]\s*$') { $chosen.Add($Matches.path) }
+    }
+    $runtimeMatch = if ($chosen.Count -eq 1) { [regex]::Match($chosen[0], '(?i)(?:^|[\\/])shared[\\/]Microsoft\.NETCore\.App[\\/](?<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$') } else { [regex]::Match('', 'a^') }
+    if ($chosen.Count -ne 1 -or -not $runtimeMatch.Success) {
+        throw 'Testhost trace does not prove exactly one selected Microsoft.NETCore.App CLR for the bound test assembly.'
+    }
+
+    return [pscustomobject]@{
+        path = $traceFile.FullName
+        fileName = $traceFile.Name
+        bytes = [long]$bytes.LongLength
+        sha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+        selectedClr = $runtimeMatch.Groups['version'].Value
+    }
+}
+
 function Get-CoreTrxAssessment {
     [CmdletBinding()]
     param(
@@ -249,4 +306,4 @@ function Get-CoreTrxAssessment {
     }
 }
 
-Export-ModuleMember -Function Get-CoreInputSnapshot, Get-CoreInputDigest, Compare-CoreInputSnapshots, Get-CoreTrxAssessment
+Export-ModuleMember -Function Get-CoreInputSnapshot, Get-CoreInputDigest, Compare-CoreInputSnapshots, Get-CoreRuntimeSelectionTrace, Get-CoreTrxAssessment
