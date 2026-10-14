@@ -56,8 +56,8 @@ The normalized ALL EditMode evidence package is verified. Filtered Smoke
 remains privately retained because the supported packager rejects its
 incoherent aggregate suite counts; its raw report was not modified. See
 [`validation/COREB_DeterministicTemporal/VALIDATION.md`](validation/COREB_DeterministicTemporal/VALIDATION.md).
-This candidate is awaiting independent exact-tip review. It is not promoted and
-makes no P12 readiness claim.
+Independent exact-tip review passed for promotion candidate 15833b01830d0a8789803af0e28e0e5529ddf916 (tree 163c296a530c477a968f2326166cf62a7a26366f). The review record is 79460dbffef35eeaa85f814e11e2a7b6a6bc894f on codex/core/COREB-CoreValidation-15833b-review. The final cold/warm TRX package and source comparison are recorded in the validation file. The candidate remains unpromoted pending canonical fast-forward and makes no P12 readiness claim.
+Promotion candidate codex/core/CORE-B-secure-evidence-directory is published at 15833b01830d0a8789803af0e28e0e5529ddf916 (tree 163c296a530c477a968f2326166cf62a7a26366f). It adds only reusable CoreValidation evidence-directory/runtime-trace tooling to the reviewed CORE-B implementation; src and tests remain identical to candidate 3560f395. Final package SHA-256: b3c745f1c45acaf88397d325c6cc09ae45bfd37d11a2222b757b0b35ec7779a3; manifest SHA-256: 16f6331cc36c0c01f953e2cda09d71139824bf4ef92ab710287e8e4d9f3e3044.
 ## CORE-C — Market numerical capability
 
 Technical design candidate `e80ae27cdf597e9f551fe94dd22827f59636712a` received
@@ -68,9 +68,7 @@ CORE-A and P14-B dependencies.
 
 ## Readiness boundary
 
-CORE-A is promoted. CORE-B has passed design review and current-baseline
-revalidation; its bounded implementation candidate is validated and awaiting
-independent exact-tip review.
+CORE-A is promoted. CORE-B has passed design review, current-baseline revalidation, validation and independent exact-tip review; the bounded candidate is awaiting canonical promotion.
 CORE-C has an exact design PASS and current-baseline applicability PASS at
 `8fa0408e481f457c153d7552eaed8ed5551cc612` (design PASS record
 `cb98d3e99c9491ce2c34278516272763333b271e`). It can be scheduled after CORE-B
