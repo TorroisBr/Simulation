@@ -97,14 +97,11 @@ internal static class P12AContinuationStore
     {
         result = new P12AResult(P12AResultCode.StorageFailure);
         if (bytes == null || manifest == null || compatibility == null
-            || string.IsNullOrWhiteSpace(persistentDataPath) || fileOperations == null)
+            || string.IsNullOrWhiteSpace(persistentDataPath) || fileOperations == null
+            || bytes.Length > P12AContinuationCodec.MaxFrameBytes)
         {
-            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
-            return false;
-        }
-        if (bytes.Length > P12AContinuationCodec.MaxFrameBytes)
-        {
-            result = new P12AResult(P12AResultCode.LimitExceeded);
+            result = new P12AResult(bytes != null && bytes.Length > P12AContinuationCodec.MaxFrameBytes
+                ? P12AResultCode.LimitExceeded : P12AResultCode.InvalidOwnerValue);
             return false;
         }
         if (!P12AContinuationCodec.TryDecode(bytes, manifest, compatibility,
