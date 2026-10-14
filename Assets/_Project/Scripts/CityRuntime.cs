@@ -1361,6 +1361,12 @@ public sealed class CityDailyEconomyReceipt
     public int? ActualFreeConsumption { get; }
     public int? ClosingStock { get; }
     internal CityDailyEconomyReceipt(string identity, string fingerprint,
+        IReadOnlyList<CityProductionResult> production, IReadOnlyList<CityConsumptionResult> consumption)
+        : this(identity, fingerprint, production, consumption, string.Empty, 0L)
+    {
+    }
+
+    internal CityDailyEconomyReceipt(string identity, string fingerprint,
         IReadOnlyList<CityProductionResult> production, IReadOnlyList<CityConsumptionResult> consumption,
         string boundaryOccurrenceId, long absoluteDay,
         IReadOnlyList<CityDailyMaterialFlowSourceOutcome> sourceOutcomes = null,
