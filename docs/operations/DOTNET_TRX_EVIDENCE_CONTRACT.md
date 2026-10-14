@@ -193,6 +193,112 @@ locator handles instead; private access/recovery instructions remain private.
 Privacy-scan XML, manifest, ZIP names and actual outgoing Git object closure;
 structural validity and a regex scan alone are not publication approval.
 
+### Public manifest whitelist and source derivation
+
+`validation-evidence-trx-package-v1` permits exactly the following public keys.
+Containers and array-item shapes are closed; unspecified keys are rejected.
+No raw private JSON object is passed through. All required evidence below must
+be available/bound; absent facts cannot be filled from the current machine.
+
+| Public field / object | Exact content and source |
+|---|---|
+| schema | Literal `validation-evidence-trx-package-v1`. |
+| bundleId | Existing shared safe bundle ID syntax; stable input supplied once. |
+| format | `{reportProfile,counterProfile,projectionPolicy}` with literals `trx-vstest-flat-v1`, `vstest-17.14.1-flat`, `trx-private-metadata-v1`. |
+| tool | `{commit,tree,version,files,runtime}` from actual approved packager; files are portable `{path,bytes,sha256}` records. runtime has only powershellEdition, powershellVersion, dotnetVersion, compressionAssemblyVersion from existing pinned runtime assertion. |
+| archive | `{file,bytes,sha256,format,entryPolicy}`; safe bundle ZIP filename, actual bytes/hash and existing fixed ZIP format; entryPolicy literal `normalized-trx-only`. |
+| runs[] | Items described below, in original runner/attempt order. |
+
+Each `runs[]` item has exactly:
+
+| Field | Exact content and source |
+|---|---|
+| runnerRunId | Original private runner manifest runId, 32 hexadecimal characters; no replacement. |
+| source | `{commit,tree,originalInputDigest,inputStable,files,generatedDependencies,influencingChanges}` from original source/input capture, verified against identified tree/context. files/generatedDependencies preserve their original ordered `{path,bytes,sha256}` entries; influencingChanges are `{path,gitStatus,bytes,sha256}` for actual dirty/untracked influencing inputs, empty for clean CORE-A. Each must be covered by the full input inventory; unresolved influence blocks. |
+| originalManifest | `{bytes,sha256}` for actual original private runner manifest; never embed its private text. |
+| producer | `{vstestVersion,sdkVersion,logger,identityMode,provenance}`. Required values 17.14.1, 9.0.315; logger `{file,fileVersion,productVersion,bytes,sha256}` has basename `Microsoft.VisualStudio.TestPlatform.Extensions.Trx.TestLogger.dll`, file version 17.1400.125.42801, product 17.14.1-release-25428-01 and the section 3 identity. identityMode is captured or recovered-validated-output, accurately labeled. provenance is the evidence-ref array below. |
+| execution | `{sdkVersion,clrVersion,targetFramework,configuration,osVersion,osArchitecture,processArchitecture,cultures,packageLocks,provenance}`. Preserve actual safe semantic values from original capture/bound evidence, not installation paths/list-runtimes text. packageLocks are original relative `{path,bytes,sha256}` records already in inputs. No environment variables, usernames or machine-name field. |
+| discovery | `{count,cases}` from original test discovery, exact ordered strings/multiset; no renaming or parameter stripping. |
+| commands[] | `{label,executable,argv,exitCode,elapsedMilliseconds,derivation,provenance}` per known original operation. Exact rules below; no invented recorded argv. |
+| assemblies[] | `{path,fullName,mvid,bytes,sha256,identityMode,observedAtUtc,provenance}` from actual section 7 binding; safe relative output path, original full assembly identity, UUID and byte identity; observation time supplied by fixed recorded/recovery context, not packaging wall clock. |
+| attempts[] | `{label,nativeRunId,nativeRunLabel,originalReport,normalizedReport,summaryOutcome,nativeCounters,caseOutcomeCounts,resultCount,gatePassed,exitCode,elapsedMilliseconds,comparison}`. label cold/warm for current run; nativeRunLabel is `run-` plus unchanged TRX id. originalReport `{bytes,sha256}`; normalizedReport `{entry,bytes,sha256,semanticSha256}`. Counts/outcomes/IDs from independently parsed report; command facts from bound original run; comparison literal `source-projection-verified` only after actual full comparison. Complete cases/details remain in the archived TRX, not duplicated/abridged in JSON. |
+| demonstrations[] | `{label,exitCode,elapsedMilliseconds,output,derivation,provenance}` for claimed human-demo evidence, preserving complete safe original output. Current CORE-A cold/warm CalendarDemo lines are required, unmodified; sensitive/unsupported output blocks, not silently omitted. |
+| measurements | `{worktreeLibraryAbsent,projectBinObjBytes,resultBytes}` copied from original measurement, with only portable `{path,bytes}` storage entries. No current-machine recomputation labeled as original. |
+| retention | `{handle,ownerRole,policy,plannedPostPromotionDays,aclVerification,provenance}`; exact handle/access rules below. policy is this contract version, planned days 30 subject to recorded binding limits, aclVerification literal `verified-owner-only-known-copies` only after actual checks. |
+| existingReviews | `{sourceImplementation,toolImplementation}` full existing Git refs; the new independent comparison/package attestation is external to this manifest, avoiding a self-hash cycle. |
+
+`provenance` arrays use only `{kind,commit,blob,path,bytes,sha256,field,mode}`:
+Git refs/blob/path identify public source or the captured runner; private artifacts
+use hash/length, safe filename and a static schema field pointer, never an absolute
+locator. Only applicable keys are present. kind is `git-source`, `original-manifest`,
+`original-trx`, `retained-command-log` or `retained-output`. mode is `captured` or
+`recovered-validated-output`. A record that cannot supply required fields fails
+binding, rather than using an untyped free-text claim. Recovery facts are attested
+in the separate review; private maps/access instructions stay under retention handle.
+
+All SHA fields are lowercase 64-hex; Git refs 40/64-hex as applicable, UUIDs parsed
+and preserved. Sizes/counts are nonnegative invariant integers. Input/artifact
+paths must be safe relative paths, unique at their documented scope, with no
+absolute root, traversal, URI, credential/query or account directory; path spelling
+from original source inputs is preserved, not silently relabeled. The original
+input-digest algorithm/order/version is bound to the captured runner blob; never
+hash the differently projected public object and call it the old input digest.
+Text fields, labels and refs still undergo full privacy/content inspection.
+Unknown source fields carrying results/required inputs fail closed; declared
+incidental source-only fields (for example local paths/run labels) are retained
+privately and omitted/projected exactly as above, never passed through by default.
+
+Command derivation is closed:
+
+- `executable` is literal `dotnet`; `label` is one of sdk-version, dotnet-info,
+  dotnet-runtimes, restore-tests-locked, restore-demo-locked, cold-build, list-tests,
+  cold-test, warm-test, cold-demo, warm-demo for current runner. Preserve original
+  ordering and command labels; a different runner needs reviewed adapter support.
+- `argv` is a token array preserving all option names/order/case and semantic values
+  (projects, target/framework, Release configuration, filters, logger filename,
+  no-build/no-restore and discovery). Transform only exact token values that are
+  recorded worktree-root paths to `<WORKTREE>/` + unchanged relative suffix and
+  exact evidence-root directory tokens to `<EVIDENCE>/` + unchanged run-relative
+  suffix. An absolute path inside another token/string is unsupported unless the
+  bound runner defines its exact token shape; no regex edits inside filters,
+  quoted strings, logger configuration or other semantic values. For current
+  `--results-directory`, replace its complete directory argument with
+  `<EVIDENCE>/` + runnerRunId. Never publish private redaction maps.
+- Current runner manifest does not capture argv arrays. For CORE-A use
+  `derivation=recovered-from-bound-runner`: inspect exact captured Invoke-CoreValidation
+  script blob, original command logs and original report/manifest associations.
+  Reconstruct each literal argument array and resolved public relative project
+  from that source; prove executed SDK/configuration/selection via those logs,
+  discovery and TRX. The source exposes no arbitrary test-filter input. Record
+  the script commit/blob and each inspected log hash in provenance. Never call
+  reconstructed vectors contemporaneously recorded. Original elapsed/exit facts
+  already recorded for gates are copied exactly; supporting command facts absent
+  from the manifest require retained log/source evidence or are left unclaimed
+  (optional supporting commands may be absent; mandatory build/test/demo commands
+  and their claims may not be invented).
+- Future vectors actually captured by an approved runner use `derivation=captured`,
+  with original manifest field pointers/log linkage and the same projection.
+  Selection claims must equal the command/discovery/report multiset; fixture
+  cultures, TFM and configuration must agree with captured sources. Execution
+  facts not directly captured but recovered from bound metadata are labeled with
+  recovered provenance; installed-runtime inventories alone are not selected CLR
+  execution proof. A required unresolved command/toolchain fact blocks binding.
+- The independent private comparison constructs these expected public values
+  from original sources/context and compares every public key/value/array. It
+  also verifies all result-bearing original fields are either present in public
+  TRX/manifest or explicitly unsupported. Whitelist validity and matching hashes
+  alone do not establish that source provenance was truthful.
+
+Retention handles are exactly `evidence-` plus a random 32-lowercase-hex UUID,
+generated once when the private context is created and reused unchanged for
+repackaging. They encode no account/path/machine data. ownerRole is literal
+`GeneralOrchestrator`. The private mapping binds that handle to the exact selected
+run copies, original hashes, ACL checks, owner/access/recovery instructions and
+planned deadline/any binding-limit exception; the public package contains only
+the handle, role, policy and safe attestation. No raw locator or per-secret hash.
+If a binding rule requires a different duration, record a reviewed safe policy
+exception ref rather than silently changing the retention promise.
+
 ## 5. Outcome accounting and counter semantics
 
 Source TRX remains run authority. Packaging success is not a passing test gate.
@@ -356,19 +462,35 @@ architecture checkout's executable tree or editing the active CORE-A worktrees.
 
 ## 8. Protected original retention and access
 
-Apply the existing owner-only fixed-local-drive ACL checks to every private run
-directory and source file, including private manifests, original ZIP/TRX,
+Apply the existing owner-only fixed-local-drive ACL checks to every known owned
+copy of the selected run retained as private evidence, including private manifests, original ZIP/TRX,
 recovered assembly observations/bytes needed for comparison and path maps.
 Inherited owner-only file permissions within a verified isolated parent are okay;
 inherited broad principals, reparse points, root escapes and ambiguous ownership
 are not. Do not publish usernames/SIDs or ACL dumps. A readonly bit, directory
 name, archive encryption label or hash alone is not effective access control.
 
-For current originals: create a new isolated destination, copy read-only source
-bytes, verify original recorded hashes/lengths and destination hashes, verify
-ACLs before placing private content and before comparison, then record the secure
-locator/owner role/recovery method privately. Do not edit original TRX, rewrite
-metadata, delete the previous copy, or change permissions on unrelated folders.
+For current originals: first inventory all known owned selected-run TRX, manifest,
+logs and archive copies. Verify the exact source run directory is dedicated to
+that run, owner-controlled, contains no unrelated files, and is not an active
+implementation worktree/reparse path. Master may correct ACLs on **that exact
+run directory and those files only**, using existing owner-only checks, while
+preserving every content byte/hash. Verify ACL propagation/effective access on
+all known copies. An isolated copy alone does not cure the broadly accessible
+original. If isolation of the existing exact source cannot be safely established,
+record the remaining copy/access and leave this gate blocked; no blanket parent
+permission change or security bypass.
+
+Where recovery/worktree removal warrants a separate diagnostic copy, create its
+isolated destination before copying, hash source/destination and verify access.
+The previous known source copy must also pass the scoped ACL checks; do not
+leave it broad and claim complete remediation. Record secure locators and access/
+recovery methods privately. Do not edit TRX content, rewrite metadata or delete
+previous copies. Source worktree assemblies are read-only recovery inputs; protect
+any diagnostic copies without changing permissions/content in active worktrees.
+Private context/maps/intermediate data stay inside verified protected directories,
+never an unprotected temporary folder. Public preview may leave that boundary only
+after all privacy checks.
 This handoff authorizes no automated deletion or blanket permission changes.
 If access cannot be established under applicable rules, block packaging/access
 rather than bypassing security controls.
