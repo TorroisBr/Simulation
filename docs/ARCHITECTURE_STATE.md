@@ -1,5 +1,30 @@
 # General Architecture State
 
+## CORE-F executable prerequisite candidate — 2026-10-14
+
+**Status:** architecture/documentation candidate pending independent exact-tip
+review and refreshed promotion preflight. Architecture base
+`7166ed088483c69d37300b4f12528ebb4b27be84`; current Core production
+`8ea3b47e9ab1be9ab3fe6261a73dc33fece8cd8f`.
+
+The user confirms parent host design PASS while full F remains WAIT_DEPENDENCY.
+[Master handoffs](architecture/CORE_F_PREREQUISITE_MASTER_HANDOFF.md) define three
+substantial executable packages inside existing WP1/WP2: Values, Owners and
+Persistence. The first implements pure configuration/definition conversion and
+parity; Owners implements source-linked live-binding/writer/epoch evidence; the
+third extracts actual shared compatibility/wire/storage code and negative Unity
+v2 admission. No micro-checkpoint IDs or new product systems are introduced.
+
+Current A–E delivery and P12 closure remain production-State facts, not copied
+implementation State in this older architecture checkout. The unchanged 89-family/
+39-asset provenance is refreshed against Core and a 164-field source map fixes
+Values scope. Full runtime/restore source closure and actual .NET continuation
+remain dependent downstream work, not proven by Unity tests or these handoffs.
+[Independent review](architecture/CORE_F_PREREQUISITE_REVIEW.md) determines exact
+readiness. No product/human architecture gate is required by accepted semantics.
+Only docs/planning are changed; active implementation worktrees and Core/numbered-
+phase canonical refs are untouched. Master imports only these reviewed docs deltas.
+
 ## CORE-E domain closure / CORE-F readiness — 2026-10-14
 
 **Status:** ARCHITECTURE_PROMOTED when this entry is published on

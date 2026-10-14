@@ -11,6 +11,29 @@ implementation readiness does not itself start migration.
 Independent verdicts and exact reviewed refs: [review](SIMULATION_CORE_EXTRACTION_REVIEW.md).
 First bounded executable contract: [CORE-A Master handoff](SIMULATION_CORE_A_MASTER_HANDOFF.md).
 
+## CORE-F executable prerequisite refresh — 2026-10-14
+
+Current production Core is `8ea3b47e9ab1be9ab3fe6261a73dc33fece8cd8f`.
+A–E have their recorded bounded promotions. The [accepted host design](../design/CORE_F_DAILY_V1_HOST_TECHNICAL_DESIGN.md)
+has independent PASS; final F implementation remains WAIT_DEPENDENCY. Its former
+undifferentiated prerequisites are refined by [three exact Master handoffs](CORE_F_PREREQUISITE_MASTER_HANDOFF.md):
+WP1-Values (pure effective configuration/definitions plus dual identity parity),
+WP1-Owners (complete live binding/supported writer and epoch test/evidence baseline),
+and WP2-Persistence (shared v1/v2 descriptor/wire and atomic slot foundation).
+After independent PASS and this architecture promotion, each is separately executable
+under the Master Core mandate. No new checkpoint IDs or production code are created.
+
+The [source member map](CORE_F_SELECTED_VALUE_MEMBERS.csv), existing 89-family and
+39-asset inventories anchor concrete source work. P9 effective record identity and
+P12 serialized-content identity stay distinct. Current epoch semantics are per
+successful notification/reservation, not universally per outer operation. Whole
+runtime/owner/restore migration still consumes the actual promoted interfaces and
+complete source closure before the parent real .NET continuation proof. A–E and
+Unity P12 evidence do not satisfy that .NET execution gate. CORE-X stays DEFERRED;
+no scope growth, Phase reopening or unrelated numbered-phase dependency follows.
+See [independent review](CORE_F_PREREQUISITE_REVIEW.md). Older readiness sections
+below are historical where superseded by this entry and current production State.
+
 ## Current readiness supersession — 2026-10-14
 
 Production authority is `codex/core/canonical` at

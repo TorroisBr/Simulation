@@ -22,6 +22,31 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
 
+## CORE-F executable prerequisites — 2026-10-14
+
+Core canonical `8ea3b47e9ab1be9ab3fe6261a73dc33fece8cd8f` has bounded
+A–E promoted. The [Daily-v1 host design](design/CORE_F_DAILY_V1_HOST_TECHNICAL_DESIGN.md)
+is accepted after independent review; F implementation remains WAIT_DEPENDENCY.
+[Three reviewed prerequisite handoffs](architecture/CORE_F_PREREQUISITE_MASTER_HANDOFF.md)
+turn its remaining groups into executable packages, not new checkpoint IDs:
+
+- WP1-Values: shared effective configuration/definitions and Unity/.NET value plus
+  existing P9/P12 identity parity.
+- WP1-Owners: cumulative selected live-owner binding/writer/revision/epoch evidence
+  using current authorities and the complete supported ingress boundary.
+- WP2-Persistence: shared v1/v2 descriptor/wire and atomic byte storage integrated
+  with the existing Unity P12 wrapper; no full image/runtime extraction claim.
+
+Each becomes READY_FOR_IMPLEMENTATION after independent design PASS and this
+architecture promotion; Owners is a test/evidence implementation package. They
+may proceed in isolation with serialized shared project/Studio integration. Their
+actual interfaces and coverage outputs feed concrete selected owner/runtime source
+migration, then same-runtime .NET hosting and real continuation/parity validation.
+No universal per-outer-operation epoch, effective-only content hash, P12 profile
+expansion, cross-host save compatibility or unrelated numbered-phase lock.
+CORE-X remains DEFERRED. [Review](architecture/CORE_F_PREREQUISITE_REVIEW.md)
+records readiness independently; historical earlier entries below do not override it.
+
 ## Current Simulation Core readiness — 2026-10-14
 
 At Core canonical `ad7a18899a13ec42a3d2b6b3098dff2f0a318492`, CORE-A

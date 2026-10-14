@@ -9,6 +9,18 @@ scope/exit criteria, not a completed host API or implementation permission.
 [Independent review](SIMULATION_CORE_E_F_REVIEW.md) covers this assessment and
 [CORE-E handoff](SIMULATION_CORE_E_MASTER_HANDOFF.md) separately.
 
+## Current prerequisite execution refresh — 2026-10-14
+
+At Core `8ea3b47e9ab1be9ab3fe6261a73dc33fece8cd8f`, bounded CORE-E is
+promoted and the host technical design has independent PASS. The old design-entry
+status above is superseded for that design. F implementation still waits on actual
+selected closure, not a new product decision. The [prerequisite handoffs](CORE_F_PREREQUISITE_MASTER_HANDOFF.md)
+now define separately executable Values, Owners and Persistence work under the
+existing WP1/WP2 scopes, subject to their independent review/architecture promotion.
+The older 8-step assessment below remains provenance; use the new handoff for
+current implementation boundaries, source inputs, parity and finite closure gates.
+No production State/code, selected profile or owner list is modified here.
+
 ## 1. Actual delivered capability and evidence
 
 A–D are promoted on the pinned Core history. `docs/CORE_STATE.md` there records
