@@ -9,8 +9,11 @@ Production base for CORE-A: `codex/phase12/canonical` at
 
 ## CORE-A — Calendar Shared Assembly
 
-**Status:** implementation and review remediation are committed; final
-independent exact-tip review and canonical promotion remain pending. The
+**Status:** implementation and review remediation are committed. Independent
+exact-tip review passed candidate `2062e616d5a6bc53a2f154f33e9f4887a44972fe`
+and is recorded at `ad4d141d0ec00dee6b776d9373187173a330f0cc` on
+`codex/core/CORE-A-calendar-review-2062e616`. Canonical promotion remains
+blocked by the durable .NET result-evidence/privacy gate below. The
 original cold/warm .NET TRX files are preserved byte-for-byte in protected
 local evidence, but are not published because their metadata contains a local
 account identifier and checkout paths. The required durable result-evidence
@@ -33,9 +36,11 @@ remediation. The first exact-tip review of `78011db2` found missing TRX run
 identity/summary binding and an absent durable raw-report bundle. The parser
 now requires and persists those fields; focused self-tests and a clean .NET
 validation rerun pass. The first review's record is
-`c4c73bae26ecbacdb9e761821f408534610622a2`. The full original reports remain
-protected locally because publication would disclose private run metadata;
-final exact-tip code review is separate from this unresolved evidence gate.
+`c4c73bae26ecbacdb9e761821f408534610622a2`. The fresh exact-tip review of
+`2062e616` passed at `ad4d141d0ec00dee6b776d9373187173a330f0cc` and confirms
+that the parser finding is resolved. The original reports remain protected
+locally because publication would disclose private run metadata; the review
+does not resolve this separate durable-evidence gate.
 
 ## CORE-B — Deterministic and Temporal primitives
 
