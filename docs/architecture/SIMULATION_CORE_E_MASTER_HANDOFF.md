@@ -5,8 +5,9 @@ CORE-E remains a collection of closures, not a promise that every domain is port
 **Production design base:** `codex/core/canonical` at
 `ad7a18899a13ec42a3d2b6b3098dff2f0a318492`.
 **Architecture base:** `63d3b8352a450b27b9a5f593c4ea166c0343c59e`.
-**Design status:** pending independent review; implementation readiness requires
-PASS and architecture promotion. Review: [E/F record](SIMULATION_CORE_E_F_REVIEW.md).
+**Design verdict:** PASS / READY_FOR_IMPLEMENTATION for this exact slice after
+architecture promotion. Two independent reviews passed; implementation itself
+is not delivered. Review: [E/F record](SIMULATION_CORE_E_F_REVIEW.md).
 **Implementation owner:** General Orchestrator under its active Core mandate.
 **Target:** `codex/core/canonical`; suggested isolated candidate
 `codex/core/CORE-E-demographic-policy`. No numbered-phase ref is changed.
@@ -109,9 +110,10 @@ opportunistically repairing it:
 - Annual-rate/calendar conversion, Math.Floor, strict sample < fractional-event
   comparison, int.MaxValue saturation, NaN/infinity/range exceptions and their
   order remain exact. Constructor validation remains calendar-null only; retain
-  the existing default sampler construction. GetChange requests birth then death
-  samples, including on subsequent calculation rejection; injected sample side
-  effects/exceptions must have the same ordering. Deaths use the same Math.Min
+  the existing default sampler construction. GetChange evaluates the birth sample
+  before the birth calculation, then the death sample before the death calculation.
+  A rejected/throwing birth calculation prevents the death request. Injected sample
+  side effects/exceptions must retain this exact order and short-circuit behavior. Deaths use the same Math.Min
   against AggregateOnlyPopulation. Do not reinterpret malformed detached contexts
   as valid owner state or silently normalize them.
 - Preserve AggregateDemographyChange/Context value equality/hash and unchecked

@@ -2,8 +2,14 @@
 
 ## CORE-E domain closure / CORE-F readiness — 2026-10-14
 
-**Status:** architecture/documentation candidate; independent review and final
-promotion preflight pending. Architecture base
+**Status:** ARCHITECTURE_PROMOTED when this entry is published on
+`codex/architecture/world-identity-projection`; before publication it is the
+prepared adoption marker. The commit containing this reviewed State/review delta
+is the canonical promotion marker (resolve through Git provenance).
+**Reviewed design content:** `034681cbbd903424f9b43f317c5309c294f55370` from
+`codex/architecture/core-e-demography-f-readiness`, two independent PASS verdicts.
+Final metadata applicability and refreshed preflight are required before publication.
+**Architecture base:**
 `63d3b8352a450b27b9a5f593c4ea166c0343c59e`; inspected Core canonical
 `ad7a18899a13ec42a3d2b6b3098dff2f0a318492`.
 
@@ -15,8 +21,8 @@ Daily-v1 coordinator or continuation host.
 
 The [CORE-E technical design/Master handoff](architecture/SIMULATION_CORE_E_MASTER_HANDOFF.md)
 defines one exact demographic-policy/sample closure with existing PersonId and
-value/interface dependencies. After independent PASS and this architecture
-promotion it is READY_FOR_IMPLEMENTATION, not production delivery or all-E closure.
+value/interface dependencies. Independent design PASS is recorded; on this
+architecture promotion it is READY_FOR_IMPLEMENTATION, not production delivery or all-E closure.
 The [CORE-F assessment/design handoff](architecture/SIMULATION_CORE_F_READINESS.md)
 keeps implementation WAIT_DEPENDENCY on exact Daily-v1 owner/definition/runtime
 closure plus approved host design. Its finite design work is READY_FOR_TECHNICAL_DESIGN.

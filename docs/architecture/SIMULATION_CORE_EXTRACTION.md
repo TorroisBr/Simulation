@@ -309,7 +309,7 @@ Readiness is per actual consumed capability and individually reviewed design.
 | CORE-B | PROMOTED | Existing RNG/stable-key/logical timeline closure, not all temporal consumers. |
 | CORE-C | PROMOTED | Market pricing and prepared finite-source production kernel, not all economy. |
 | CORE-D | PROMOTED | One immutable finite-source scenario runtime reused by Unity and fixed .NET Lab; in-memory, no P12 host. |
-| CORE-E selected demographic policy | Reviewed design + architecture promotion gate | Exact demographic policy/sample, PersonId and input contracts; [Master handoff](SIMULATION_CORE_E_MASTER_HANDOFF.md). No ledger/coordinator move. |
+| CORE-E selected demographic policy | Independent PASS / READY_FOR_IMPLEMENTATION on architecture promotion | Exact demographic policy/sample, PersonId and input contracts; [Master handoff](SIMULATION_CORE_E_MASTER_HANDOFF.md). No ledger/coordinator move. |
 | CORE-E other domains | WAIT_DEPENDENCY on individual reviewed closures | Extract real owners/rules/definitions in measured dependency order, not every folder at once. |
 | CORE-F | Implementation WAIT_DEPENDENCY; bounded inventory/host-design preparation READY_FOR_TECHNICAL_DESIGN | Exact selected Daily-v1 owner/definition/runtime closure and independently approved host design; [design work and inventory](SIMULATION_CORE_F_READINESS.md). |
 | CORE-X | DEFERRED | Separate explicitly approved compatibility scope/design/evidence; no automatic cross-host/build save promise. |
