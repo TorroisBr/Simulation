@@ -5,9 +5,9 @@
 ## Evidence sources and limits
 
 - `OWNER_WRITER_MATRIX.csv` has all 89 selected family/prefix rows from `SIMULATION_CORE_F_OWNER_SECTIONS.csv`, preserving the exact section contract source path and line and adding source blob identity at the production base, provider/owner binding notes, writer/operation disposition, epoch rules, dynamic or exact-empty classification, and case references.
-- `OPERATION_CASE_MAP.csv` names all 24 operation IDs present when the selected solo and group travel services are composed. The fixture compares the exact live sealed inventory, not just the count.
+- `OPERATION_CASE_MAP.csv` names all 24 operation IDs present when the selected solo and group travel services are composed. Each row binds its ID declaration to the specific registration callsite and exact operation case; the fixture compares the exact live sealed inventory, not just the count.
 - `CASE_MAP.csv` joins the cumulative executable scenarios and reused P12 closure evidence to source paths and bounded outcomes.
-- `CoreFDailyV1OwnerClosureTests` captures at the existing quiescent census boundary, passes the same snapshots through `P12ADailyV1Census.TryCreate`, checks the exact `61+22*N+U+P+4*C` formula and live RuntimeIdentityRegistry alias, advances the actual selected runtime, then checks the reserved NPC membership epoch, stale token and fresh token after another positive advance.
+- `CoreFDailyV1OwnerClosureTests` captures the selected runtime P8-A snapshot and reports its actual codec fingerprint, then captures at the existing quiescent census boundary, passes the same snapshots through `P12ADailyV1Census.TryCreate`, checks the exact `61+22*N+U+P+4*C` formula and live RuntimeIdentityRegistry alias, advances the actual selected runtime, then checks the reserved NPC membership epoch, stale token and fresh token after another positive advance.
 - Existing selected-profile tests are cited for unregister/retained identity, Person registration/materialization/residence binding, exact-zero/alias/provider behavior, operation scope/token invalidation, failure/compensation and restored-graph evidence. Their applicability is limited to the current accepted UnityBootstrap-Daily-v1 fixture and reviewed source routes.
 
 ## Counts and classifications
@@ -20,6 +20,6 @@ The selected source boundary is `ContinuationCensusProtocol.TryCaptureQuiescentO
 
 P12 formal closure remains unchanged and applies to same-build/current-host Unity continuation. This migration baseline consumes that source evidence only where the same profile and route apply. It is not a .NET live-graph closure, a new P12 claim, or CORE-F completion.
 
-## Validation pending
+## Validation
 
-No Unity tests or project-wide suites were run by this worker. Parent orchestration owns the focused owner-closure suite, affected RuntimeAdmission/BootstrapComposition/P12 suites, ALL EditMode and official Smoke. Results must be added here with exact source tree and artifact identities before the evidence package is complete. `git diff --check` is still required for this candidate commit.
+Parent orchestration reports the focused owner-closure suite passed (1/1) and the full EditMode suite passed (3134/3134). This worker did not run Unity. The official Smoke gate remains parent-owned; add its exact source tree and artifact identity when recorded. `git diff --check` is run for this candidate commit.

@@ -35,6 +35,16 @@ public sealed class CoreFDailyV1OwnerClosureTests
 
         SimulationRuntime runtime = simulation.Bootstrap.Runtime;
         Assert.That(runtime, Is.Not.Null);
+        Assert.That(P12CSpatialAuthoritySnapshot.TryCapture(
+            SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
+            SimulationGenesisPipeline.GeographyProfileContractIdentity,
+            2,
+            runtime.SpatialAuthorityStore,
+            out P12CSpatialAuthoritySnapshot p8Snapshot,
+            out P12CSpatialAuthoritySnapshotFailure p8Failure), Is.True, p8Failure.ToString());
+        Assert.That(P12ACSpatialAuthorityCodec.TryComputeFingerprint(p8Snapshot, out string p8Fingerprint), Is.True);
+        Assert.That(p8Fingerprint, Is.Not.Empty);
+        TestContext.WriteLine("Selected Daily-v1 live P8-A fingerprint: " + p8Fingerprint);
         Assert.That(runtime.Cities, Has.Count.EqualTo(2));
         Assert.That(runtime.NpcRuntimes, Has.Count.EqualTo(10));
         ContinuationCensusProtocol protocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
