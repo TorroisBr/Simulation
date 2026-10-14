@@ -32,6 +32,10 @@ public class MarketItemRuntime
         this.currentPrice = currentPrice;
     }
 
+    internal static MarketItemRuntime CreatePreparedFiniteStockRow(
+        ItemData item, int amount, int desiredAmount, float currentPrice) =>
+        new MarketItemRuntime(item, amount, desiredAmount, currentPrice);
+
     internal static bool TryCreateFromOwnerSnapshot(
         ItemData item,
         int amount,
@@ -101,11 +105,7 @@ public class MarketItemRuntime
     private float CalculatePrice()
     {
         if (item == null) return 0f;
-
-        float basePrice = Mathf.Max(0.01f, item.basePrice);
-        float stockForRatio = Mathf.Max(1, amount);
-        float multiplier = desiredAmount / stockForRatio;
-        return basePrice * Mathf.Clamp(multiplier, 0.5f, 3f);
+        return MarketPriceCalculator.CalculateCurrentPrice(item.basePrice, desiredAmount, amount);
     }
 }
 
@@ -437,18 +437,18 @@ public class MarketRuntime
     }
 
     internal bool TryPrepareFiniteStockIncrease(
-        ItemData item,
-        int quantity,
-        long expectedRevision,
+        FiniteSourceOperationRequest operation,
         out PreparedMarketState replacement,
-        out int stockBefore,
+        out FiniteSourceOperationResult preparedOperation,
         out string rejectionReason)
     {
         replacement = null;
-        stockBefore = 0;
+        preparedOperation = null;
         rejectionReason = "InvalidMarketInput";
-        if (item == null || quantity <= 0) return false;
-        if (revision != expectedRevision)
+        if (operation == null || operation.Source == null
+            || string.IsNullOrEmpty(operation.Source.ItemDefinitionId)
+            || operation.RequestedQuantity <= 0) return false;
+        if (revision != operation.ExpectedMarketRevision)
         {
             rejectionReason = "StaleMarketRevision";
             return false;
@@ -465,51 +465,102 @@ public class MarketRuntime
         }
 
         List<MarketItemRuntime> currentItems = items ?? (items = new List<MarketItemRuntime>());
-        int matchCount = 0;
-        MarketItemRuntime matchingItem = null;
+        List<MarketStockRow> rows = new List<MarketStockRow>(currentItems.Count);
         foreach (MarketItemRuntime current in currentItems)
         {
-            if (current == null || current.Item == null
-                || !string.Equals(current.Item.DefinitionId, item.DefinitionId, StringComparison.Ordinal)) continue;
-            matchCount++;
-            matchingItem = current;
+            if (current == null)
+            {
+                rows.Add(MarketStockRow.NullRow());
+            }
+            else if (current.Item == null)
+            {
+                rows.Add(MarketStockRow.NullItem(current.Amount, current.DesiredAmount, current.CurrentPrice));
+            }
+            else
+            {
+                rows.Add(MarketStockRow.Item(
+                    new MarketItemDefinition(current.Item.DefinitionId, current.Item.basePrice),
+                    current.Amount, current.DesiredAmount, current.CurrentPrice));
+            }
         }
-        if (matchCount != 1)
-        {
-            rejectionReason = "MarketRowCardinality";
+
+        FiniteSourceOperationRequest preparedRequest = operation.WithMarketRows(rows);
+        if (!FiniteSourceProductionKernel.TryPrepare(preparedRequest,
+                out preparedOperation, out rejectionReason))
             return false;
-        }
-        if (matchingItem.Amount > int.MaxValue - quantity)
+        if (preparedOperation.Status != FiniteSourceOperationStatus.Applied
+            || preparedOperation.PreparedMarketRows.Count != currentItems.Count
+            || preparedOperation.TargetRowIndex < 0
+            || preparedOperation.TargetRowIndex >= currentItems.Count)
         {
-            rejectionReason = "MarketStockOverflow";
+            preparedOperation = null;
+            rejectionReason = "MarketRowMapping";
             return false;
         }
 
         List<MarketItemRuntime> nextItems = new List<MarketItemRuntime>(currentItems.Count);
-        foreach (MarketItemRuntime current in currentItems)
+        for (int i = 0; i < currentItems.Count; i++)
         {
-            if (ReferenceEquals(current, matchingItem))
+            MarketItemRuntime current = currentItems[i];
+            MarketStockRow prepared = preparedOperation.PreparedMarketRows[i];
+            if (current == null)
             {
-                MarketItemRuntime increased = new MarketItemRuntime(current);
-                if (!increased.AddAmount(quantity))
-                {
-                    rejectionReason = "MarketStockOverflow";
-                    return false;
-                }
-                increased.UpdatePrice();
-                nextItems.Add(increased);
+                if (prepared == null || prepared.Kind != MarketStockRowKind.NullRow)
+                    return RejectRowMapping(out preparedOperation, out rejectionReason);
+                nextItems.Add(null);
+                continue;
+            }
+            if (current.Item == null)
+            {
+                if (prepared == null || prepared.Kind != MarketStockRowKind.NullItem
+                    || prepared.Amount != current.Amount
+                    || prepared.DesiredAmount != current.DesiredAmount
+                    || !SameFloatBits(prepared.CurrentPrice, current.CurrentPrice))
+                    return RejectRowMapping(out preparedOperation, out rejectionReason);
+                nextItems.Add(new MarketItemRuntime(current));
+                continue;
+            }
+
+            if (prepared == null || prepared.Kind != MarketStockRowKind.Item
+                || prepared.ItemDefinition == null
+                || !string.Equals(prepared.ItemDefinition.DefinitionId, current.Item.DefinitionId, StringComparison.Ordinal)
+                || !SameFloatBits(prepared.ItemDefinition.BasePrice, current.Item.basePrice)
+                || prepared.DesiredAmount != current.DesiredAmount)
+                return RejectRowMapping(out preparedOperation, out rejectionReason);
+
+            bool target = i == preparedOperation.TargetRowIndex;
+            if (target)
+            {
+                if ((long)current.Amount + operation.RequestedQuantity != prepared.Amount)
+                    return RejectRowMapping(out preparedOperation, out rejectionReason);
+                nextItems.Add(MarketItemRuntime.CreatePreparedFiniteStockRow(
+                    current.Item, prepared.Amount, prepared.DesiredAmount, prepared.CurrentPrice));
             }
             else
             {
-                nextItems.Add(current == null ? null : new MarketItemRuntime(current));
+                if (prepared.Amount != current.Amount
+                    || !SameFloatBits(prepared.CurrentPrice, current.CurrentPrice))
+                    return RejectRowMapping(out preparedOperation, out rejectionReason);
+                nextItems.Add(new MarketItemRuntime(current));
             }
         }
 
-        stockBefore = matchingItem.Amount;
         replacement = new PreparedMarketState(nextItems);
         rejectionReason = string.Empty;
         return true;
     }
+
+    private static bool RejectRowMapping(out FiniteSourceOperationResult preparedOperation,
+        out string rejectionReason)
+    {
+        preparedOperation = null;
+        rejectionReason = "MarketRowMapping";
+        return false;
+    }
+
+    private static bool SameFloatBits(float left, float right) =>
+        BitConverter.ToInt32(BitConverter.GetBytes(left), 0)
+        == BitConverter.ToInt32(BitConverter.GetBytes(right), 0);
 
     internal bool CanInstallFiniteStock(long expectedRevision, PreparedMarketState replacement) =>
         replacement != null && CanInstall(expectedRevision) && CanCommitP12OwnerMutation();

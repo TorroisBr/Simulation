@@ -16,5 +16,8 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Determinism/DeterministicRandom.cs" Link="Determinism/DeterministicRandom.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/StableKeyEncoding.cs" Link="Identity/StableKeyEncoding.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Temporal/LogicalTimeline.cs" Link="Temporal/LogicalTimeline.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketItemDefinition.cs" Link="Economy/MarketItemDefinition.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketPriceCalculator.cs" Link="Economy/MarketPriceCalculator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/FiniteSourceProductionKernel.cs" Link="Economy/FiniteSourceProductionKernel.cs" />
   </ItemGroup>
 </Project>

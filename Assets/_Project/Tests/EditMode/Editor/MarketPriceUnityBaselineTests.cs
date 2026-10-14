@@ -23,6 +23,9 @@ public sealed class MarketPriceUnityBaselineTests
             Assert.That(MarketPriceParityVectors.ToBits(row.CurrentPrice), Is.EqualTo(vector.ExpectedPriceBits),
                 "Unity price vector " + i + " expected 0x" + vector.ExpectedPriceBits.ToString("X8")
                 + " but received 0x" + MarketPriceParityVectors.ToBits(row.CurrentPrice).ToString("X8"));
+            Assert.That(MarketPriceParityVectors.ToBits(MarketPriceCalculator.CalculateCurrentPrice(
+                    item.basePrice, vector.DesiredAmount, vector.Amount)),
+                Is.EqualTo(vector.ExpectedPriceBits), "Core price vector " + i);
         }
     }
 }

@@ -181,9 +181,18 @@ public sealed class FiniteSourceProductionService
             return true;
         }
         if (source.Revision == long.MaxValue) { rejectionReason = "SourceRevisionExhausted"; return false; }
-        if (!market.TryPrepareFiniteStockIncrease(item, quantity, expectedMarketRevision,
-                out PreparedMarketState preparedMarket, out int stockBefore, out rejectionReason))
+        FiniteSourceOperationRequest operation = new FiniteSourceOperationRequest(
+            new FiniteSourceSnapshot(source.ProductionSourceId, source.SettlementSemanticId,
+                source.MarketStoreSemanticId, source.ItemDefinitionId, source.ContentRevision,
+                source.DailyOutputLimit, source.InitialReserve, source.RemainingReserve,
+                source.Revision, source.LastProcessedDay),
+            expectedSourceRevision, market.Revision, expectedMarketRevision, absoluteDay, quantity,
+            Array.Empty<MarketStockRow>());
+        if (!market.TryPrepareFiniteStockIncrease(operation,
+                out PreparedMarketState preparedMarket, out FiniteSourceOperationResult preparedOperation,
+                out rejectionReason))
             return false;
+        int stockBefore = preparedOperation.StockBefore;
         if (!sourceStore.CanInstall(expectedSourceRevision, absoluteDay))
         {
             rejectionReason = source.Revision != expectedSourceRevision
@@ -198,8 +207,8 @@ public sealed class FiniteSourceProductionService
         }
 
         preparation = new FiniteSourceProductionPreparation(sourceStore, market, preparedMarket,
-            expectedSourceRevision, expectedMarketRevision, absoluteDay, quantity,
-            source.RemainingReserve, stockBefore);
+            expectedSourceRevision, expectedMarketRevision, absoluteDay, preparedOperation.Quantity,
+            preparedOperation.ReserveBefore, stockBefore);
         rejectionReason = string.Empty;
         return true;
     }

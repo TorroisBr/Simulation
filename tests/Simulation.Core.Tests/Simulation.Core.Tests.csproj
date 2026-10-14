@@ -22,5 +22,8 @@
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/DeterministicRandomRootSnapshotTests.cs" Link="Determinism/DeterministicRandomRootSnapshotTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/LogicalTimelineTests.cs" Link="Temporal/LogicalTimelineTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/StableKeyEncodingTests.cs" Link="Identity/StableKeyEncodingTests.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/MarketPriceParityVectors.cs" Link="Economy/MarketPriceParityVectors.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/MarketPriceCalculatorParityTests.cs" Link="Economy/MarketPriceCalculatorParityTests.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceProductionKernelTests.cs" Link="Economy/FiniteSourceProductionKernelTests.cs" />
   </ItemGroup>
 </Project>

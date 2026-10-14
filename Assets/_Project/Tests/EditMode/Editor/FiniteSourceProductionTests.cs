@@ -313,6 +313,208 @@ public sealed class FiniteSourceProductionTests
             Is.EqualTo(city.LastMaterialFlow.AppliedSourceQuantity));
     }
 
+    [Test]
+    public void DirectProductionPreservesThreeAdmissionCallsAndNotifiesAfterBothInstalls()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("corec-direct-admission-item");
+        FiniteProductionSourceStore source = CreateSource(item, 2, 4);
+        MarketRuntime market = CreateMarket(item, 7, 20);
+        List<string> observations = new List<string>();
+        market.BindP12MutationBoundary(() =>
+        {
+            observations.Add("admit:" + OwnerState(source, market, item));
+            return true;
+        }, () => observations.Add("notify:" + OwnerState(source, market, item)));
+
+        FiniteSourceProductionResult result = Produce(source, market, item, 1, 0, 0);
+
+        Assert.That(result.Status, Is.EqualTo(FiniteSourceProductionStatus.Applied));
+        Assert.That(observations, Is.EqualTo(new[]
+        {
+            "admit:reserve=4;sourceRevision=0;stock=7;marketRevision=0",
+            "admit:reserve=4;sourceRevision=0;stock=7;marketRevision=0",
+            "admit:reserve=4;sourceRevision=0;stock=7;marketRevision=0",
+            "notify:reserve=2;sourceRevision=1;stock=9;marketRevision=1"
+        }));
+    }
+
+    [Test]
+    public void DirectProductionRejectsAtEveryAdmissionPositionWithoutPartialInstall()
+    {
+        for (int rejectedCall = 1; rejectedCall <= 3; rejectedCall++)
+        {
+            ItemData item = SimulationTestFactory.CreateItem("corec-direct-reject-" + rejectedCall);
+            FiniteProductionSourceStore source = CreateSource(item, 2, 4);
+            MarketRuntime market = CreateMarket(item, 7, 20);
+            int admissionCalls = 0;
+            int notifications = 0;
+            market.BindP12MutationBoundary(() => ++admissionCalls != rejectedCall,
+                () => notifications++);
+
+            FiniteSourceProductionResult result = Produce(source, market, item, 1, 0, 0);
+
+            Assert.That(result.Status, Is.EqualTo(FiniteSourceProductionStatus.Rejected), "call " + rejectedCall);
+            Assert.That(result.RejectionReason, Is.EqualTo("MarketMutationRejected"), "call " + rejectedCall);
+            Assert.That(admissionCalls, Is.EqualTo(rejectedCall), "call " + rejectedCall);
+            Assert.That(notifications, Is.Zero, "call " + rejectedCall);
+            Assert.That(source.Source.RemainingReserve, Is.EqualTo(4), "call " + rejectedCall);
+            Assert.That(source.Source.Revision, Is.Zero, "call " + rejectedCall);
+            Assert.That(market.GetAmount(item), Is.EqualTo(7), "call " + rejectedCall);
+            Assert.That(market.Revision, Is.Zero, "call " + rejectedCall);
+        }
+    }
+
+    [Test]
+    public void PreparedCityProductionPreservesFourAdmissionCallsAndPostInstallNotification()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("corec-city-admission-item");
+        CityRuntime city = CreateFiniteCity("corec-city-admission", item, 4);
+        List<string> observations = new List<string>();
+        city.Market.BindP12MutationBoundary(() =>
+        {
+            observations.Add("admit:" + OwnerState(city.FiniteProductionSources, city.Market, item));
+            return true;
+        }, () => observations.Add("notify:" + OwnerState(city.FiniteProductionSources, city.Market, item)));
+        BoundaryContinuationManifest manifest = CreateProductionManifest(city, "corec-city-admission", 1);
+        BoundaryContinuationStep step = manifest.Steps[0];
+
+        Assert.That(city.TryPrepareDailyEconomyStep(manifest, step,
+            out IBoundaryContinuationStepCommit prepared, out TimelineFailure prepareFailure), Is.True,
+            prepareFailure.ToString());
+        Assert.That(prepared.TryCommit(out TimelineFailure commitFailure), Is.True, commitFailure.ToString());
+
+        Assert.That(observations, Is.EqualTo(new[]
+        {
+            "admit:reserve=4;sourceRevision=0;stock=10;marketRevision=0",
+            "admit:reserve=4;sourceRevision=0;stock=10;marketRevision=0",
+            "admit:reserve=4;sourceRevision=0;stock=10;marketRevision=0",
+            "admit:reserve=4;sourceRevision=0;stock=10;marketRevision=0",
+            "notify:reserve=2;sourceRevision=1;stock=12;marketRevision=1"
+        }));
+        Assert.That(city.TryResolveDailyEconomyReceipt(manifest, step, out _, out _), Is.True);
+    }
+
+    [Test]
+    public void PreparedCityProductionRejectsAtEveryAdmissionPositionWithoutPartialInstall()
+    {
+        for (int rejectedCall = 1; rejectedCall <= 4; rejectedCall++)
+        {
+            string id = "corec-city-reject-" + rejectedCall;
+            ItemData item = SimulationTestFactory.CreateItem(id);
+            CityRuntime city = CreateFiniteCity(id, item, 4);
+            int admissionCalls = 0;
+            int notifications = 0;
+            city.Market.BindP12MutationBoundary(() => ++admissionCalls != rejectedCall,
+                () => notifications++);
+            BoundaryContinuationManifest manifest = CreateProductionManifest(city, id, 1);
+            BoundaryContinuationStep step = manifest.Steps[0];
+
+            bool preparedSuccessfully = city.TryPrepareDailyEconomyStep(manifest, step,
+                out IBoundaryContinuationStepCommit prepared, out _);
+            if (rejectedCall <= 2)
+            {
+                Assert.That(preparedSuccessfully, Is.False, "call " + rejectedCall);
+                Assert.That(prepared, Is.Null, "call " + rejectedCall);
+            }
+            else
+            {
+                Assert.That(preparedSuccessfully, Is.True, "call " + rejectedCall);
+                Assert.That(prepared.TryCommit(out _), Is.False, "call " + rejectedCall);
+            }
+
+            Assert.That(admissionCalls, Is.EqualTo(rejectedCall), "call " + rejectedCall);
+            Assert.That(notifications, Is.Zero, "call " + rejectedCall);
+            Assert.That(city.FiniteProductionSources.Source.RemainingReserve, Is.EqualTo(4), "call " + rejectedCall);
+            Assert.That(city.FiniteProductionSources.Source.Revision, Is.Zero, "call " + rejectedCall);
+            Assert.That(city.Market.GetAmount(item), Is.EqualTo(10), "call " + rejectedCall);
+            Assert.That(city.Market.Revision, Is.Zero, "call " + rejectedCall);
+            Assert.That(city.TryResolveDailyEconomyReceipt(manifest, step, out _, out _), Is.False,
+                "call " + rejectedCall);
+        }
+    }
+
+    [Test]
+    public void AdmissionExceptionRejectsAndNotificationExceptionDoesNotUndoInstalledOwners()
+    {
+        ItemData rejectedItem = SimulationTestFactory.CreateItem("corec-admission-exception-item");
+        FiniteProductionSourceStore rejectedSource = CreateSource(rejectedItem, 2, 4);
+        MarketRuntime rejectedMarket = CreateMarket(rejectedItem, 7, 20);
+        rejectedMarket.BindP12MutationBoundary(
+            () => throw new System.InvalidOperationException("admission"),
+            () => Assert.Fail("Rejected mutation sent a notification."));
+        FiniteSourceProductionResult rejected = Produce(rejectedSource, rejectedMarket, rejectedItem, 1, 0, 0);
+        Assert.That(rejected.Status, Is.EqualTo(FiniteSourceProductionStatus.Rejected));
+        Assert.That(rejected.RejectionReason, Is.EqualTo("MarketMutationRejected"));
+        Assert.That(rejectedSource.Source.RemainingReserve, Is.EqualTo(4));
+        Assert.That(rejectedMarket.GetAmount(rejectedItem), Is.EqualTo(7));
+
+        ItemData committedItem = SimulationTestFactory.CreateItem("corec-notification-exception-item");
+        FiniteProductionSourceStore committedSource = CreateSource(committedItem, 2, 4);
+        MarketRuntime committedMarket = CreateMarket(committedItem, 7, 20);
+        committedMarket.BindP12MutationBoundary(() => true,
+            () => throw new System.InvalidOperationException("notification"));
+        FiniteSourceProductionResult committed = Produce(committedSource, committedMarket, committedItem, 1, 0, 0);
+
+        Assert.That(committed.Status, Is.EqualTo(FiniteSourceProductionStatus.Applied));
+        Assert.That(committedSource.Source.RemainingReserve, Is.EqualTo(2));
+        Assert.That(committedSource.Source.Revision, Is.EqualTo(1));
+        Assert.That(committedMarket.GetAmount(committedItem), Is.EqualTo(9));
+        Assert.That(committedMarket.Revision, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void FiniteMarketRowAdapterPreservesRowsAndUsesTheExistingTargetItemReference()
+    {
+        ItemData requestedItem = SimulationTestFactory.CreateItem("corec-row-target");
+        requestedItem.basePrice = 2.5f;
+        ItemData rowAlias = SimulationTestFactory.CreateItem("corec-row-target");
+        rowAlias.basePrice = 9.25f;
+        ItemData unrelatedItem = SimulationTestFactory.CreateItem("corec-row-unrelated");
+
+        MarketItemRuntime nullItem = new MarketItemRuntime(null, 1, 1);
+        float payloadNaN = System.BitConverter.ToSingle(
+            System.BitConverter.GetBytes(unchecked((int)0xFFC00001)), 0);
+        float negativeZero = System.BitConverter.ToSingle(
+            System.BitConverter.GetBytes(int.MinValue), 0);
+        SetPrivate(nullItem, "amount", -17);
+        SetPrivate(nullItem, "desiredAmount", 0);
+        SetPrivate(nullItem, "currentPrice", payloadNaN);
+
+        MarketItemRuntime unrelated = new MarketItemRuntime(unrelatedItem, 3, 11);
+        SetPrivate(unrelated, "currentPrice", negativeZero);
+        MarketItemRuntime target = new MarketItemRuntime(rowAlias, 7, 19);
+        SetPrivate(target, "currentPrice", payloadNaN);
+
+        MarketRuntime market = new MarketRuntime();
+        List<MarketItemRuntime> originalRows = new List<MarketItemRuntime> { null, nullItem, unrelated, target };
+        SetPrivate(market, "items", originalRows);
+        SetPrivate<object>(market, "readOnlyItems", null);
+
+        FiniteProductionSourceStore source = CreateSource(requestedItem, 2, 4);
+        FiniteSourceProductionResult result = Produce(source, market, requestedItem, 1, 0, 0);
+
+        Assert.That(result.Status, Is.EqualTo(FiniteSourceProductionStatus.Applied));
+        Assert.That(market.Items.Count, Is.EqualTo(4));
+        Assert.That(market.Items[0], Is.Null);
+        Assert.That(market.Items[1], Is.Not.Null);
+        Assert.That(market.Items[1].Item, Is.Null);
+        Assert.That(market.Items[1].Amount, Is.EqualTo(-17));
+        Assert.That(market.Items[1].DesiredAmount, Is.Zero);
+        Assert.That(FloatBits(market.Items[1].CurrentPrice), Is.EqualTo(FloatBits(payloadNaN)));
+        Assert.That(ReferenceEquals(market.Items[2].Item, unrelatedItem), Is.True);
+        Assert.That(market.Items[2].Amount, Is.EqualTo(3));
+        Assert.That(market.Items[2].DesiredAmount, Is.EqualTo(11));
+        Assert.That(FloatBits(market.Items[2].CurrentPrice), Is.EqualTo(FloatBits(negativeZero)));
+        Assert.That(ReferenceEquals(market.Items[3].Item, rowAlias), Is.True);
+        Assert.That(market.Items[3].Amount, Is.EqualTo(9));
+        Assert.That(market.Items[3].DesiredAmount, Is.EqualTo(19));
+        Assert.That(FloatBits(market.Items[3].CurrentPrice), Is.EqualTo(FloatBits(
+            MarketPriceCalculator.CalculateCurrentPrice(rowAlias.basePrice, 19, 9))));
+        Assert.That(source.Source.RemainingReserve, Is.EqualTo(2));
+        Assert.That(source.Source.Revision, Is.EqualTo(1));
+        Assert.That(market.Revision, Is.EqualTo(1));
+    }
+
     private static FiniteProductionSourceStore CreateSource(ItemData item, int dailyLimit, int reserve)
     {
         return new FiniteProductionSourceStore(LocalMaterialFlowProfile.FiniteReserveDaily, new CityProductionConfig
@@ -363,4 +565,36 @@ public sealed class FiniteSourceProductionTests
         Assert.That(field, Is.Not.Null, "Expected field " + name);
         field.SetValue(target, value);
     }
+
+    private static void SetPrivate<T>(object target, string name, T value)
+    {
+        FieldInfo field = target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, "Expected field " + name);
+        field.SetValue(target, value);
+    }
+
+    private static int FloatBits(float value) =>
+        System.BitConverter.ToInt32(System.BitConverter.GetBytes(value), 0);
+
+    private static CityRuntime CreateFiniteCity(string id, ItemData item, int reserve)
+    {
+        CityData data = CreateCityData(id, item, reserve);
+        data.materialFlowProfile = LocalMaterialFlowProfile.FiniteReserveDaily;
+        return new CityRuntime("runtime." + id, data, new SpatialLocationRuntime("legacy." + id));
+    }
+
+    private static BoundaryContinuationManifest CreateProductionManifest(CityRuntime city, string id, long day)
+    {
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world." + id, "profile." + id, day);
+        Assert.That(city.TryCreateDailyEconomyStep(operation, 0, CityDailyEconomyStepKind.Production,
+            out BoundaryContinuationStep step, out TimelineFailure failure), Is.True, failure.ToString());
+        return new BoundaryContinuationManifest(operation, "daily-economy", "1", "config." + id,
+            new List<BoundaryContinuationStep> { step });
+    }
+
+    private static string OwnerState(FiniteProductionSourceStore source, MarketRuntime market, ItemData item) =>
+        "reserve=" + source.Source.RemainingReserve
+        + ";sourceRevision=" + source.Source.Revision
+        + ";stock=" + market.GetAmount(item)
+        + ";marketRevision=" + market.Revision;
 }
