@@ -785,7 +785,11 @@ function Get-TrxRetainedAssemblyInventory {
     $reportCompletion=[DateTimeOffset]::MinValue;$testStart=[DateTimeOffset]::MaxValue
     foreach($report in @($Context.reports)){$facts=Get-TrxFacts ([IO.Path]::GetFullPath([string]$report.path));$interval=Get-TrxReportUtcInterval $facts.Document;if($interval.FinishUtc -gt $reportCompletion){$reportCompletion=$interval.FinishUtc};if($interval.StartUtc -lt $testStart){$testStart=$interval.StartUtc}}
     foreach($claim in $claims){$observed=[DateTimeOffset]::ParseExact([string]$claim.observedAtUtc,'o',[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::AssumeUniversal);if($observed -lt $reportCompletion){throw 'Recovered assembly observation time predates completion of the original validation reports.'}}
-    $retentionDir=Join-Path $ProtectedRoot ('validated-output\'+[string]$Runner.runId)
+    $retentionParent=Join-Path $ProtectedRoot 'validated-output'
+    if(-not (Test-Path -LiteralPath $retentionParent -PathType Container)){
+        if($Create){$null=Set-ProtectedEvidenceDirectory -Path $retentionParent}else{throw 'Validated-output retention parent is missing.'}
+    }else{$null=Test-ProtectedEvidenceDirectory -Path $retentionParent}
+    $retentionDir=Join-Path $retentionParent ([string]$Runner.runId)
     $receiptPath=Join-Path $retentionDir 'assembly-retention.json'
     $aclReceiptPath=Join-Path $ProtectedRoot 'retention-receipt.json'
     $retentionExists=Test-Path -LiteralPath $retentionDir

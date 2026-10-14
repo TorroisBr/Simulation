@@ -157,6 +157,11 @@ try {
     $mutated=ConvertFrom-Json ([IO.File]::ReadAllText($manifestPath)) -AsHashtable;$mutated.extra='unapproved';[IO.File]::WriteAllBytes($manifestPath,(ConvertTo-EvidenceJsonBytes $mutated));$invalid=Test-DotNetTrxEvidencePackage -ManifestPath $manifestPath -ArchivePath $packageZip;Assert-True (-not $invalid.IsValid) 'unknown public manifest key rejects'
     $tampered=Join-Path $root 'tampered.zip';[IO.File]::Copy($packageZip,$tampered);$bytes=[IO.File]::ReadAllBytes($tampered);$bytes[$bytes.Length-8]=$bytes[$bytes.Length-8] -bxor 1;[IO.File]::WriteAllBytes($tampered,$bytes);$validManifest=Join-Path $root 'valid-copy.manifest.json';[IO.File]::WriteAllBytes($validManifest,(ConvertTo-EvidenceJsonBytes $manifest));$invalid=Test-DotNetTrxEvidencePackage -ManifestPath $validManifest -ArchivePath $tampered;Assert-True (-not $invalid.IsValid) 'archive tampering is detected'
     $privateTraceRoot=Join-Path $root 'protected-traces';$null=Set-ProtectedEvidenceDirectory $privateTraceRoot
+    $retentionParent=Join-Path $privateTraceRoot 'validated-output';$null=Set-ProtectedEvidenceDirectory $retentionParent
+    $retentionChild=Join-Path $retentionParent ([guid]::NewGuid().ToString('N'));$null=Set-ProtectedEvidenceDirectory $retentionChild
+    $nestedEvidence=Join-Path $retentionChild 'retained.bin';[IO.File]::WriteAllBytes($nestedEvidence,[byte[]]@(1,2,3))
+    Assert-ProtectedEvidenceFile -Path $nestedEvidence -ProtectedRoot $privateTraceRoot | Out-Null
+    Assert-True $true 'nested validated-output parents and retained files remain owner-only'
     $traceRunnerId=[guid]::NewGuid().ToString('N');$coldNative=[guid]::NewGuid().ToString('D');$warmNative=[guid]::NewGuid().ToString('D')
     $traceTemplate=@"
 Runtime config is cfg=C:\agent\project\bin\Simulation.Core.Tests.runtimeconfig.json dev=C:\agent\project\bin\Simulation.Core.Tests.runtimeconfig.dev.json
