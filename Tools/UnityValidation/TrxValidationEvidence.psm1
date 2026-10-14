@@ -199,8 +199,7 @@ function Get-TrxFacts {
     $counterAttrs=@('total','executed','passed','failed','error','timeout','aborted','inconclusive','passedButRunAborted','notRunnable','notExecuted','disconnected','warning','completed','inProgress','pending')
     $native=[ordered]@{}
     foreach($n in $counterAttrs){ $v=Get-TrxRequiredAttribute $counters[0] $n; $parsed=0L; if(-not [long]::TryParse($v,[Globalization.NumberStyles]::None,[Globalization.CultureInfo]::InvariantCulture,[ref]$parsed) -or $parsed -lt 0){throw "Invalid TRX counter '$n'."}; $native[$n]=$v }
-    $nativeFailedCases=[long]$hist.Failed+[long]$hist.Error
-    if ([long]$native.total -ne $results.Count -or [long]$native.passed -ne $hist.Passed -or [long]$native.failed -ne $nativeFailedCases -or [long]$native.executed -ne ($hist.Passed+$nativeFailedCases)) { throw 'TRX native total/executed/passed/failed counters disagree with result records.' }
+    if ([long]$native.total -ne $results.Count -or [long]$native.passed -ne $hist.Passed -or [long]$native.failed -ne $hist.Failed -or [long]$native.executed -ne ([long]$hist.Passed+[long]$hist.Failed)) { throw 'TRX native total/executed/passed/failed counters disagree with result records.' }
     foreach($n in $counterAttrs | Where-Object { $_ -notin @('total','executed','passed','failed') }) { if ([long]$native[$n] -ne 0) { throw "VSTest profile requires native counter '$n' to be zero." } }
     if (@(Get-TrxElementChildren $sections.TestDefinitions 'TestDefinitions').Count -eq 0 -or @(Get-TrxElementChildren $sections.TestEntries 'TestEntries').Count -eq 0) { throw 'TRX test selection is empty.' }
     $nonPassing=0; foreach($outcome in $allowedOutcomes | Where-Object {$_ -ne 'Passed'}) { $nonPassing += [int]$hist[$outcome] }
@@ -334,10 +333,11 @@ function Assert-TrxPublicManifest {
     Assert-TrxKeys $Manifest.format @('reportProfile','counterProfile','projectionPolicy') 'manifest.format'
     if($Manifest.format.reportProfile -cne $script:TrxProfile -or $Manifest.format.counterProfile -cne $script:TrxCounterProfile -or $Manifest.format.projectionPolicy -cne $script:TrxProjection){throw 'TRX evidence profile identifiers are unsupported.'}
     Assert-TrxKeys $Manifest.tool @('commit','tree','version','files','runtime') 'manifest.tool'
-    foreach($file in @($Manifest.tool.files)){Assert-TrxKeys $file @('path','bytes','sha256') 'manifest.tool.files[]';$null=ConvertTo-TrxPortableRelative ([string]$file.path)}
+    if([string]$Manifest.tool.commit -notmatch '^[a-f0-9]{40,64}$' -or [string]$Manifest.tool.tree -notmatch '^[a-f0-9]{40,64}$' -or [string]::IsNullOrWhiteSpace([string]$Manifest.tool.version)){throw 'Tool source identity scalars are malformed.'}
+    foreach($file in @($Manifest.tool.files)){Assert-TrxKeys $file @('path','bytes','sha256') 'manifest.tool.files[]';$null=ConvertTo-TrxPortableRelative ([string]$file.path);if([long]$file.bytes -lt 1 -or [string]$file.sha256 -notmatch '^[a-f0-9]{64}$'){throw 'Tool source file identity is malformed.'}}
     Assert-TrxKeys $Manifest.tool.runtime @('powershellEdition','powershellVersion','dotnetVersion','compressionAssemblyVersion') 'manifest.tool.runtime'
     Assert-TrxKeys $Manifest.archive @('file','bytes','sha256','format','entryPolicy') 'manifest.archive'
-    if($Manifest.archive.entryPolicy -cne 'normalized-trx-only'){throw 'Unsupported TRX archive entry policy.'}
+    if([IO.Path]::GetFileName([string]$Manifest.archive.file) -cne [string]$Manifest.archive.file -or [string]$Manifest.archive.file -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}\.zip$' -or [long]$Manifest.archive.bytes -lt 1 -or [string]$Manifest.archive.sha256 -notmatch '^[a-f0-9]{64}$' -or [string]$Manifest.archive.format -cne 'zip-deflate-fixed-1980-01-01' -or $Manifest.archive.entryPolicy -cne 'normalized-trx-only'){throw 'TRX archive identity, format, or entry policy is invalid.'}
     $runKeys=@('runnerRunId','source','originalManifest','producer','execution','discovery','commands','assemblies','attempts','demonstrations','measurements','retention','existingReviews')
     $attemptKeys=@('label','nativeRunId','nativeRunLabel','originalReport','normalizedReport','summaryOutcome','nativeCounters','caseOutcomeCounts','resultCount','gatePassed','exitCode','elapsedMilliseconds','comparison')
     $basicHashKeys=@('bytes','sha256')
@@ -354,20 +354,27 @@ function Assert-TrxPublicManifest {
         if(@($run.attempts).Count -ne 2 -or @($run.attempts|Select-Object -ExpandProperty label -Unique).Count -ne 2 -or @($run.attempts|Where-Object {$_.label -cnotin @('cold','warm')}).Count -ne 0 -or @($run.attempts|Where-Object {$_.label -ceq 'cold'}).Count -ne 1 -or @($run.attempts|Where-Object {$_.label -ceq 'warm'}).Count -ne 1){throw 'Each TRX run must contain exactly one cold and one warm attempt.'}
         Assert-TrxKeys $run.originalManifest $basicHashKeys 'run.originalManifest'
         Assert-TrxKeys $run.source @('commit','tree','originalInputDigest','inputStable','files','generatedDependencies','influencingChanges') 'run.source'
-        foreach($file in @($run.source.files)){Assert-TrxKeys $file @('path','bytes','sha256') 'run.source.files[]';$null=ConvertTo-TrxPortableRelative ([string]$file.path)}
-        foreach($file in @($run.source.generatedDependencies)){Assert-TrxKeys $file @('path','bytes','sha256') 'run.source.generatedDependencies[]';$null=ConvertTo-TrxPortableRelative ([string]$file.path)}
-        foreach($file in @($run.source.influencingChanges)){Assert-TrxKeys $file @('path','gitStatus','bytes','sha256') 'run.source.influencingChanges[]';$null=ConvertTo-TrxPortableRelative ([string]$file.path)}
+        if([string]$run.source.commit -notmatch '^[a-f0-9]{40,64}$' -or [string]$run.source.tree -notmatch '^[a-f0-9]{40,64}$' -or [string]$run.source.originalInputDigest -notmatch '^[a-f0-9]{64}$' -or -not [bool]$run.source.inputStable){throw 'Source commit/tree/input stability claims are malformed or incomplete.'}
+        foreach($file in @($run.source.files)){Assert-TrxKeys $file @('path','bytes','sha256') 'run.source.files[]';$null=ConvertTo-TrxPortableRelative ([string]$file.path);if([long]$file.bytes -lt 0 -or [string]$file.sha256 -notmatch '^[a-f0-9]{64}$'){throw 'Source input identity is malformed.'}}
+        foreach($file in @($run.source.generatedDependencies)){Assert-TrxKeys $file @('path','bytes','sha256') 'run.source.generatedDependencies[]';$null=ConvertTo-TrxPortableRelative ([string]$file.path);if([long]$file.bytes -lt 0 -or [string]$file.sha256 -notmatch '^[a-f0-9]{64}$'){throw 'Generated dependency identity is malformed.'}}
+        foreach($file in @($run.source.influencingChanges)){Assert-TrxKeys $file @('path','gitStatus','bytes','sha256') 'run.source.influencingChanges[]';$null=ConvertTo-TrxPortableRelative ([string]$file.path);if([long]$file.bytes -lt 0 -or [string]$file.sha256 -notmatch '^[a-f0-9]{64}$' -or [string]$file.gitStatus -notmatch '^[ MADRCU?!]{2}$'){throw 'Captured source influence identity is malformed.'}}
         Assert-TrxKeys $run.producer @('vstestVersion','sdkVersion','logger','identityMode','provenance') 'run.producer'
         Assert-TrxKeys $run.producer.logger @('file','fileVersion','productVersion','bytes','sha256') 'run.producer.logger'
         Assert-TrxKeys $run.execution @('sdkVersion','clrVersion','targetFramework','configuration','osVersion','osArchitecture','processArchitecture','cultures','packageLocks','provenance') 'run.execution'
         foreach($file in @($run.execution.packageLocks)){Assert-TrxKeys $file @('path','bytes','sha256') 'run.execution.packageLocks[]';$null=ConvertTo-TrxPortableRelative ([string]$file.path)}
         Assert-TrxKeys $run.discovery @('count','cases') 'run.discovery'
+        if([int]$run.discovery.count -lt 1 -or @($run.discovery.cases).Count -ne [int]$run.discovery.count -or @($run.discovery.cases|Where-Object {[string]::IsNullOrWhiteSpace([string]$_)}).Count -gt 0){throw 'Public test discovery count/cases are incomplete.'}
         foreach($cmd in @($run.commands)){Assert-TrxKeys $cmd @('label','executable','workingDirectory','argv','exitCode','elapsedMilliseconds','derivation','provenance') 'run.commands[]'}
         foreach($asm in @($run.assemblies)){Assert-TrxKeys $asm @('path','fullName','mvid','bytes','sha256','identityMode','observedAtUtc','provenance') 'run.assemblies[]';$null=ConvertTo-TrxPortableRelative ([string]$asm.path)}
         foreach($demo in @($run.demonstrations)){Assert-TrxKeys $demo @('label','exitCode','elapsedMilliseconds','output','derivation','provenance') 'run.demonstrations[]'}
         Assert-TrxKeys $run.measurements @('worktreeLibraryAbsent','projectBinObjBytes','resultBytes') 'run.measurements'
         Assert-TrxKeys $run.retention @('handle','ownerRole','policy','plannedPostPromotionDays','aclVerification','provenance') 'run.retention'
         Assert-TrxKeys $run.existingReviews @('sourceImplementation','toolImplementation') 'run.existingReviews'
+        if(@($run.commands).Count -ne 5){throw 'Public command inventory must contain the five mandatory build/test/demo commands.'}
+        $commandLabels=@('cold-build','cold-test','warm-test','cold-demo','warm-demo')
+        for($commandIndex=0;$commandIndex -lt $commandLabels.Count;$commandIndex++){$cmd=$run.commands[$commandIndex];$label=$commandLabels[$commandIndex];$expectedCommandArgs=switch($label){'cold-build'{@('build','tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj','--no-restore','--configuration','Release')};'cold-test'{@('test','tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj','--no-restore','--configuration','Release','--logger','trx;LogFileName=CoreTests-cold.trx','--results-directory',"<EVIDENCE>/$($run.runnerRunId)")};'warm-test'{@('test','tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj','--no-build','--no-restore','--configuration','Release','--logger','trx;LogFileName=CoreTests-warm.trx','--results-directory',"<EVIDENCE>/$($run.runnerRunId)")};'cold-demo'{@('run','--project','tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj','--no-restore','--configuration','Release')};'warm-demo'{@('run','--project','tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj','--no-build','--no-restore','--configuration','Release')}};if([string]$cmd.label -cne $label -or [string]$cmd.executable -cne 'dotnet' -or [string]$cmd.workingDirectory -cne '<WORKTREE>' -or [string]$cmd.derivation -cne 'recovered-from-bound-runner' -or [long]$cmd.exitCode -lt 0 -or [double]$cmd.elapsedMilliseconds -lt 0 -or -not [double]::IsFinite([double]$cmd.elapsedMilliseconds) -or (ConvertTo-Json -InputObject @($cmd.argv) -Compress) -cne (ConvertTo-Json -InputObject $expectedCommandArgs -Compress)){throw "Public command '$label' does not match its fixed recovered contract shape."}}
+        if([int]$run.attempts[0].exitCode -ne [int]$run.commands[1].exitCode -or [int]$run.attempts[1].exitCode -ne [int]$run.commands[2].exitCode -or [double]$run.attempts[0].elapsedMilliseconds -ne [double]$run.commands[1].elapsedMilliseconds -or [double]$run.attempts[1].elapsedMilliseconds -ne [double]$run.commands[2].elapsedMilliseconds){throw 'Cold/warm attempt exits/durations do not bind to their corresponding command results.'}
+        if(@($run.demonstrations).Count -ne 2 -or [string]$run.demonstrations[0].label -cne 'cold-demo' -or [string]$run.demonstrations[1].label -cne 'warm-demo' -or [int]$run.demonstrations[0].exitCode -ne [int]$run.commands[3].exitCode -or [int]$run.demonstrations[1].exitCode -ne [int]$run.commands[4].exitCode){throw 'Cold/warm demo claims do not bind to their corresponding command results.'}
         if([string]$run.retention.handle -notmatch '^evidence-[a-f0-9]{32}$' -or $run.retention.ownerRole -cne 'GeneralOrchestrator' -or $run.retention.aclVerification -cne 'verified-owner-only-known-copies'){throw 'TRX retention attestation is invalid.'}
         foreach($attempt in @($run.attempts)){
             if($attempt.label -cnotin @('cold','warm') -or [string]$attempt.nativeRunLabel -cne "run-$($attempt.nativeRunId)" -or [string]$attempt.nativeRunId -notmatch '^[0-9a-fA-F-]{32,36}$'){throw 'TRX native attempt identity/label is invalid.'}
@@ -375,7 +382,14 @@ function Assert-TrxPublicManifest {
             $outcomeKeys=@('Error','Failed','Timeout','Aborted','Inconclusive','PassedButRunAborted','NotRunnable','NotExecuted','Disconnected','Warning','Passed','Completed','InProgress','Pending')
             Assert-TrxKeys $attempt.caseOutcomeCounts $outcomeKeys 'attempt.caseOutcomeCounts'
             if([int]$attempt.resultCount -ne [int]$attempt.nativeCounters.total -or $attempt.comparison -cne 'source-projection-verified'){throw 'TRX result accounting/comparison claim is invalid.'}
-            if([long]$attempt.exitCode -lt 0 -or [long]$attempt.elapsedMilliseconds -lt 0 -or ($attempt.gatePassed -and [int]$attempt.exitCode -ne 0)){throw 'TRX attempt gate/exit/duration claims are inconsistent.'}
+            if([string]$attempt.summaryOutcome -cnotin @('Completed','Failed')){throw 'TRX summary outcome is unsupported.'}
+            $outcomeSum=0;foreach($key in $outcomeKeys){$value=[long]$attempt.caseOutcomeCounts[$key];if($value -lt 0){throw 'TRX outcome histogram contains a negative count.'};$outcomeSum+=$value}
+            if($outcomeSum -ne [long]$attempt.resultCount){throw 'TRX outcome histogram does not sum to the result count.'}
+            $expectedFailed=[long]$attempt.caseOutcomeCounts.Failed;$expectedPassed=[long]$attempt.caseOutcomeCounts.Passed;$expectedExecuted=$expectedFailed+$expectedPassed
+            if([long]$attempt.nativeCounters.failed -ne $expectedFailed -or [long]$attempt.nativeCounters.passed -ne $expectedPassed -or [long]$attempt.nativeCounters.executed -ne $expectedExecuted -or [long]$attempt.nativeCounters.error -ne 0){throw 'TRX native counter claims do not match the pinned producer semantics.'}
+            foreach($counter in @('timeout','aborted','inconclusive','passedButRunAborted','notRunnable','notExecuted','disconnected','warning','completed','inProgress','pending')){if([long]$attempt.nativeCounters[$counter] -ne 0){throw 'TRX native non-passed counters contradict the pinned producer profile.'}}
+            $mustPass=([string]$attempt.summaryOutcome -ceq 'Completed' -and $expectedFailed -eq 0 -and $outcomeSum -eq $expectedPassed -and [long]$attempt.exitCode -eq 0)
+            if([long]$attempt.exitCode -lt 0 -or [double]$attempt.elapsedMilliseconds -lt 0 -or -not [double]::IsFinite([double]$attempt.elapsedMilliseconds) -or [bool]$attempt.gatePassed -ne $mustPass){throw 'TRX attempt gate/exit/duration claims are inconsistent.'}
             if([string]$attempt.normalizedReport.entry -cne ('results/'+[string]$run.runnerRunId+'/'+[string]$attempt.label+'.trx')){throw 'TRX report entry path does not match its cold/warm attempt label.'}
         }
         foreach($prov in @($run.producer.provenance)+@($run.execution.provenance)+@($run.retention.provenance)+@($run.commands|ForEach-Object {$_.provenance})+@($run.demonstrations|ForEach-Object {$_.provenance})+@($run.assemblies|ForEach-Object {$_.provenance})){Assert-TrxProvenanceRecord $prov}
@@ -396,7 +410,8 @@ function Read-DotNetTrxSourceContext {
     $runnerBytes=[IO.File]::ReadAllBytes($runnerPath)
     if($runnerBytes.LongLength -ne [long]$context.runnerManifestIdentity.bytes -or (Get-TrxBytesSha256 $runnerBytes) -cne [string]$context.runnerManifestIdentity.sha256){throw 'Original runner manifest bytes differ from the pre-recorded private identity.'}
     $runner=([Text.UTF8Encoding]::new($false,$true).GetString($runnerBytes)|ConvertFrom-Json -AsHashtable -DateKind String)
-    if($runner.schema -cne 'simulation-core-validation/v1' -or -not $runner.inputs.stable -or -not $runner.inputs.generatedDependenciesStable -or $runner.status -cne 'Passed'){throw 'Original CORE Validation manifest is incomplete or unstable.'}
+    if($runner.schema -cne 'simulation-core-validation/v1' -or -not $runner.inputs.stable -or -not $runner.inputs.generatedDependenciesStable){throw 'Original CORE Validation manifest is incomplete or unstable.'}
+    Assert-TrxCompleteRunnerManifest $runner
     $sourceRoot=Assert-TrxRunnerInputInventory $runner @($context.worktreeRoots)
     Assert-TrxRunnerArtifactEvidence $context $runner $contextRoot
     Assert-TrxLoggerEvidence $context.loggerEvidence $contextRoot
@@ -424,12 +439,15 @@ function Assert-TrxRunnerArtifactEvidence {
     if(@($reportRecords|Select-Object -ExpandProperty file -Unique).Count -ne 2){throw 'Runner manifest TRX report artifact names are not unique.'}
     $privateReports=@($Context.reports)
     if($privateReports.Count -ne 2){throw 'Private context requires exactly cold and warm original TRX reports.'}
+    $coldReportDirectory=$null
     foreach($label in @('cold','warm')){
         $records=@($privateReports|Where-Object label -CEQ $label);$g=if($label -eq 'cold'){$Runner.gates.coldTests}else{$Runner.gates.warmTests}
         if($records.Count -ne 1){throw "Private context requires exactly one $label TRX locator."};$record=$records[0]
         Assert-TrxKeys $record @('label','path','bytes','sha256','nativeRunId') "private $label TRX locator"
         $name=if($label -eq 'cold'){'CoreTests-cold.trx'}else{'CoreTests-warm.trx'}
         if([string]$g.resultFile -cne $name -or [string]$g.runId -cne [string]$record.nativeRunId -or [IO.Path]::GetFileName([string]$record.path) -cne $name){throw "Private $label TRX locator differs from the original runner gate/artifact name."}
+        $reportDirectory=[IO.Path]::GetFullPath([IO.Path]::GetDirectoryName([string]$record.path));if([IO.Path]::GetFileName($reportDirectory) -cne [string]$Runner.runId){throw "Private $label TRX is outside the effective <EVIDENCE>/<runnerRunId> result directory."}
+        if($label -eq 'cold'){$coldReportDirectory=$reportDirectory}elseif(-not [string]::Equals([string]$coldReportDirectory,$reportDirectory,[StringComparison]::OrdinalIgnoreCase)){throw 'Cold and warm TRX reports do not share the effective runner-specific result directory.'}
         $artifact=@($reportRecords|Where-Object file -CEQ $name);if($artifact.Count -ne 1){throw "Original runner manifest lacks the unique $label report artifact record."};$artifact=$artifact[0]
         if([long]$record.bytes -ne [long]$artifact.bytes -or [string]$record.sha256 -cne [string]$artifact.sha256){throw "Private $label report identity differs from the original runner manifest."}
         $path=[IO.Path]::GetFullPath([string]$record.path);$null=Assert-ProtectedEvidenceFile -Path $path -ProtectedRoot $ProtectedRoot
@@ -444,6 +462,42 @@ function Assert-TrxRunnerArtifactEvidence {
     $expectedLogNames=@('sdk-version.log','dotnet-info.log','dotnet-runtimes.log','restore-tests-locked.log','restore-demo-locked.log','cold-build.log','list-tests.log','cold-test.log','warm-test.log','cold-demo.log','warm-demo.log')
     $actualLogNames=@($logRecords|ForEach-Object {[string]$_.file});[Array]::Sort($expectedLogNames,[StringComparer]::Ordinal);[Array]::Sort($actualLogNames,[StringComparer]::Ordinal)
     if(($expectedLogNames -join "`n") -cne ($actualLogNames -join "`n")){throw 'Runner command log inventory does not match the exact hash-bound script command set.'}
+    return $true
+}
+
+function Assert-TrxCompleteRunnerManifest {
+    param([System.Collections.IDictionary]$Runner)
+    if([string]$Runner.status -cnotin @('Passed','Failed')){throw 'CORE runner manifest status is neither a complete passing nor complete nonpassing run.'}
+    foreach($name in @('coldBuild','coldTests','warmTests','coldDemo','warmDemo')){
+        $gate=$Runner.gates[$name];if($null -eq $gate){throw "CORE runner manifest is incomplete: missing $name gate."}
+        if($name -in @('coldTests','warmTests')){Assert-TrxKeys $gate @('exitCode','elapsedMilliseconds','resultFile','runId','runName','summaryOutcome','counters','cases') "$name gate"}
+        elseif($name -in @('coldDemo','warmDemo')){Assert-TrxKeys $gate @('exitCode','elapsedMilliseconds','output') "$name gate"}
+        else{Assert-TrxKeys $gate @('exitCode','elapsedMilliseconds') "$name gate"}
+        if($null -eq $gate.exitCode -or [long]$gate.exitCode -lt 0 -or $null -eq $gate.elapsedMilliseconds -or [double]$gate.elapsedMilliseconds -lt 0 -or -not [double]::IsFinite([double]$gate.elapsedMilliseconds)){throw "CORE runner $name gate lacks a valid complete exit/duration result."}
+    }
+    $hasFailedGate=@(@('coldBuild','coldTests','warmTests','coldDemo','warmDemo')|Where-Object {[long]$Runner.gates[$_].exitCode -ne 0}).Count -gt 0
+    if(([string]$Runner.status -ceq 'Passed') -eq $hasFailedGate){throw 'CORE runner overall status conflicts with its completed gate exit codes.'}
+    if([int]$Runner.testDiscovery.count -lt 1 -or @($Runner.testDiscovery.cases).Count -ne [int]$Runner.testDiscovery.count){throw 'CORE runner manifest has incomplete test discovery.'}
+    foreach($label in @('coldTests','warmTests')){if(@($Runner.gates[$label].cases).Count -ne [int]$Runner.testDiscovery.count){throw "CORE runner $label gate has incomplete case identity evidence."}}
+}
+
+function Assert-TrxDiscoveryOutput {
+    param([string]$Text,[string[]]$Cases)
+    if($null -eq $Cases -or $Cases.Count -lt 1){throw 'Captured discovery case list is empty.'}
+    $lines=@(($Text -replace "`r`n","`n" -replace "`r","`n") -split "`n")
+    while($lines.Count -gt 0 -and $lines[-1] -ceq ''){$lines=@($lines|Select-Object -First ($lines.Count-1))}
+    if($lines.Count -ne ($Cases.Count+1) -or $lines[0] -cne 'The following Tests are available:'){throw 'Test-list output does not exactly match the complete captured discovery output.'}
+    for($i=0;$i -lt $Cases.Count;$i++){if($lines[$i+1] -cne ('    '+[string]$Cases[$i])){throw 'Test-list output order or case identity differs from captured discovery.'}}
+    return $true
+}
+
+function Assert-TrxRetainedOutputShape {
+    param([string]$Directory,[bool]$RequireComplete)
+    if(-not (Test-Path -LiteralPath $Directory -PathType Container)){if($RequireComplete){throw 'Protected retained-output directory is missing.'};return $false}
+    $expected=@('Simulation.Core.Tests.dll','Simulation.Core.Tests.pdb','Simulation.Core.dll','Simulation.Core.pdb','assembly-retention.json');$items=@(Get-ChildItem -LiteralPath $Directory -Force)
+    if(@($items|Where-Object {$_.PSIsContainer}).Count -gt 0){throw 'Protected retained-output directory contains nested directories.'}
+    $actual=@($items|ForEach-Object {$_.Name});[Array]::Sort($expected,[StringComparer]::Ordinal);[Array]::Sort($actual,[StringComparer]::Ordinal)
+    if(($expected -join "`n") -cne ($actual -join "`n")){throw 'Protected retained-output directory is partial or contains unexpected files.'}
     return $true
 }
 
@@ -575,6 +629,24 @@ function New-TrxOriginalReportProvenance {
     return [ordered]@{kind='original-trx';path=$path;bytes=[long]$Report.bytes;sha256=[string]$Report.sha256;field=$Field;mode='captured'}
 }
 
+function Assert-TrxRestoreProjectAssetPaths {
+    param([System.Collections.IDictionary]$Runner,[string]$SourceRoot,[string]$RunnerScriptPath)
+    $coreProject='src/Simulation.Core/Simulation.Core.csproj';$testProject='tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj';$demoProject='tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj'
+    $expected=@{
+        'src/Simulation.Core/obj/project.assets.json'=$coreProject
+        'tests/Simulation.Core.Tests/obj/project.assets.json'=$testProject
+        'tools/Simulation.Core.CalendarDemo/obj/project.assets.json'=$demoProject
+    }
+    $scriptText=[IO.File]::ReadAllText($RunnerScriptPath,[Text.UTF8Encoding]::new($false,$true));$assetsMatch=[regex]::Match($scriptText,'(?s)\$projectAssets\s*=\s*@\((?<body>.*?)\)')
+    if(-not $assetsMatch.Success){throw 'Hash-bound runner lacks its generated project.assets.json declaration.'}
+    $declared=@([regex]::Matches($assetsMatch.Groups['body'].Value,"'([^']+)'" )|ForEach-Object {$_.Groups[1].Value.Replace('\\','/')})
+    $expectedPaths=@($expected.Keys);[Array]::Sort($declared,[StringComparer]::Ordinal);[Array]::Sort($expectedPaths,[StringComparer]::Ordinal)
+    if(($declared -join "`n") -cne ($expectedPaths -join "`n")){throw 'Runner generated dependency declaration does not match the two recovered projects.'}
+    $assets=@($Runner.inputs.generatedDependencies)
+    if($assets.Count -ne $expected.Count){throw 'Generated dependency inventory does not contain exactly all three restored Core/test/demo project asset files.'}
+    foreach($record in $assets){$relative=[string]$record.path;if(-not $expected.ContainsKey($relative)){throw "Unexpected generated project assets file '$relative'."};$full=Resolve-TrxWorktreeFile $relative @($SourceRoot);$document=([IO.File]::ReadAllText($full,[Text.UTF8Encoding]::new($false,$true))|ConvertFrom-Json -AsHashtable -Depth 100);$restore=$document.project.restore;if($null -eq $restore -or [string]::IsNullOrWhiteSpace([string]$restore.projectPath)){throw "Generated project assets '$relative' lacks project.restore.projectPath."};$actualProject=[IO.Path]::GetFullPath([string]$restore.projectPath);$wantedProject=[IO.Path]::GetFullPath((Join-Path $SourceRoot ($expected[$relative].Replace('/',[IO.Path]::DirectorySeparatorChar))));if(-not [string]::Equals($actualProject,$wantedProject,[StringComparison]::OrdinalIgnoreCase)){throw "Generated project assets '$relative' restore.projectPath does not bind to the validated source worktree project."}}
+}
+
 function Get-TrxRetainedAssemblyInventory {
     param([System.Collections.IDictionary]$Context,[string]$SourceRoot,[string]$ProtectedRoot,[System.Collections.IDictionary]$Runner,[string]$TestAssemblyRelative,[switch]$Create)
     $claims=@($Context.publicRuns[0].assemblies)
@@ -602,10 +674,9 @@ function Get-TrxRetainedAssemblyInventory {
     foreach($claim in $claims){$observed=[DateTimeOffset]::ParseExact([string]$claim.observedAtUtc,'o',[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::AssumeUniversal);if($observed -lt $reportCompletion){throw 'Recovered assembly observation time predates completion of the original validation reports.'}}
     $retentionDir=Join-Path $ProtectedRoot ('validated-output\'+[string]$Runner.runId)
     $receiptPath=Join-Path $retentionDir 'assembly-retention.json'
-    if($Create){
-        if(Test-Path -LiteralPath $retentionDir){throw 'Protected validated-output retention already exists; refusing to overwrite or reuse unverified data.'}
-        $null=Set-ProtectedEvidenceDirectory -Path $retentionDir
-    }
+    $retentionExists=Test-Path -LiteralPath $retentionDir
+    if($Create -and -not $retentionExists){if(Test-Path -LiteralPath $aclReceiptPath){throw 'Sanitized retention receipt exists without its validated-output directory.'};$null=Set-ProtectedEvidenceDirectory -Path $retentionDir}
+    elseif($Create -and $retentionExists){$null=Assert-TrxRetainedOutputShape $retentionDir $true;if(-not (Test-Path -LiteralPath $aclReceiptPath -PathType Leaf)){throw 'Existing retained outputs lack the paired owner-only retention receipt.'}}
     $null=Test-ProtectedEvidenceDirectory -Path $retentionDir
     $retained=[Collections.Generic.List[object]]::new()
     foreach($leaf in @('Simulation.Core.Tests.dll','Simulation.Core.dll')){
@@ -616,7 +687,7 @@ function Get-TrxRetainedAssemblyInventory {
         $identity=Get-TrxAssemblyIdentity $source;$pdb=Assert-TrxMatchingPortablePdb $source
         if([string]$identity.mvid -cne [string]$fixed.mvid -or [string]$identity.fullName -cne [string]$claim.fullName -or [string]$claim.mvid -cne [string]$identity.mvid -or [long]$claim.bytes -ne $sourceBefore.LongLength -or [string]$claim.sha256 -cne $sourceHash){throw "Private evidence claim for '$leaf' differs from its verified output."}
         $destination=Join-Path $retentionDir $leaf;$pdbDestination=[IO.Path]::ChangeExtension($destination,'.pdb')
-        if($Create){[IO.File]::Copy($source,$destination,$false);[IO.File]::Copy($pdb.Path,$pdbDestination,$false)}
+        if($Create){if(-not (Test-Path -LiteralPath $destination)){[IO.File]::Copy($source,$destination,$false)};if(-not (Test-Path -LiteralPath $pdbDestination)){[IO.File]::Copy($pdb.Path,$pdbDestination,$false)}}
         $sourceAfter=[IO.File]::ReadAllBytes($source);$copyBytes=[IO.File]::ReadAllBytes($destination);$pdbCopyBytes=[IO.File]::ReadAllBytes($pdbDestination)
         if((Get-TrxBytesSha256 $sourceAfter) -cne $sourceHash -or (Get-TrxBytesSha256 $copyBytes) -cne $sourceHash -or $copyBytes.LongLength -ne $sourceBefore.LongLength -or (Get-TrxBytesSha256 ([IO.File]::ReadAllBytes($pdb.Path))) -cne $pdb.Sha256 -or (Get-TrxBytesSha256 $pdbCopyBytes) -cne $pdb.Sha256 -or $pdbCopyBytes.LongLength -ne [long]$pdb.Bytes){throw "Protected copy integrity check failed for '$leaf' or its matching PDB."}
         $copyIdentity=Get-TrxAssemblyIdentity $destination;$null=Assert-TrxMatchingPortablePdb $destination
@@ -634,9 +705,7 @@ function Get-TrxRetainedAssemblyInventory {
     if($stored.schema -cne 'trx-validated-output-retention-v1' -or [string]$stored.runnerRunId -cne [string]$Runner.runId -or [string]$stored.sourceCommit -cne [string]$Runner.source.commit -or [string]$stored.sourceTree -cne [string]$Runner.source.committedTree -or (ConvertTo-Json -InputObject @($stored.assemblies) -Depth 10 -Compress) -cne (ConvertTo-Json -InputObject @($retained.ToArray()) -Depth 10 -Compress)){throw 'Protected assembly retention receipt does not match independently rechecked source and retained output identities.'}
     $aclReceiptPath=Join-Path $ProtectedRoot 'retention-receipt.json'
     if($Create){
-        if(Test-Path -LiteralPath $aclReceiptPath){throw 'Sanitized retention receipt already exists; refusing overwrite.'}
-        $aclReceipt=[ordered]@{schema='trx-retention-assertion-v1';assemblyCount=2;pdbCount=2;ownerOnlyAclVerified=$true;copyHashesVerified=$true;privateLocatorsExcluded=$true;publicBinaryPayloadExcluded=$true}
-        $aclBytes=ConvertTo-EvidenceJsonBytes $aclReceipt;$aclStream=[IO.File]::Open($aclReceiptPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None);try{$aclStream.Write($aclBytes,0,$aclBytes.Length);$aclStream.Flush($true)}finally{$aclStream.Dispose()}
+        if(-not (Test-Path -LiteralPath $aclReceiptPath)){$aclReceipt=[ordered]@{schema='trx-retention-assertion-v1';assemblyCount=2;pdbCount=2;ownerOnlyAclVerified=$true;copyHashesVerified=$true;privateLocatorsExcluded=$true;publicBinaryPayloadExcluded=$true};$aclBytes=ConvertTo-EvidenceJsonBytes $aclReceipt;$aclStream=[IO.File]::Open($aclReceiptPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None);try{$aclStream.Write($aclBytes,0,$aclBytes.Length);$aclStream.Flush($true)}finally{$aclStream.Dispose()}}
     }
     $null=Assert-ProtectedEvidenceFile -Path $aclReceiptPath -ProtectedRoot $ProtectedRoot
     $aclBytes=[IO.File]::ReadAllBytes($aclReceiptPath);$aclText=[Text.UTF8Encoding]::new($false,$true).GetString($aclBytes);$aclReceipt=$aclText|ConvertFrom-Json -AsHashtable -DateKind String
@@ -651,12 +720,13 @@ function Assert-TrxPublicRunSourceClaims {
     $testProject='tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj';$demoProject='tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj'
     $expectedArgs=[ordered]@{
         'cold-build'=@('build',$testProject,'--no-restore','--configuration','Release')
-        'cold-test'=@('test',$testProject,'--no-restore','--configuration','Release','--logger','trx;LogFileName=CoreTests-cold.trx','--results-directory','<EVIDENCE>')
-        'warm-test'=@('test',$testProject,'--no-build','--no-restore','--configuration','Release','--logger','trx;LogFileName=CoreTests-warm.trx','--results-directory','<EVIDENCE>')
+        'cold-test'=@('test',$testProject,'--no-restore','--configuration','Release','--logger','trx;LogFileName=CoreTests-cold.trx','--results-directory',"<EVIDENCE>/$($Runner.runId)")
+        'warm-test'=@('test',$testProject,'--no-build','--no-restore','--configuration','Release','--logger','trx;LogFileName=CoreTests-warm.trx','--results-directory',"<EVIDENCE>/$($Runner.runId)")
         'cold-demo'=@('run','--project',$demoProject,'--no-restore','--configuration','Release')
         'warm-demo'=@('run','--project',$demoProject,'--no-build','--no-restore','--configuration','Release')
     }
     $normalizedScript=([regex]::Replace($script,'\s+',' ')).Replace('\','/')
+    if($normalizedScript -match '(?i)(?:\bSet-Location\b|\bPush-Location\b|\bPop-Location\b|\b(?:cd|sl)\s+)'){throw 'Runner script changes process working directory, so recovered command cwd is unsupported.'}
     $expectedCalls=@(
         "Invoke-Dotnet -Name 'cold-build' -Arguments @('build', `$testProject, '--no-restore', '--configuration', 'Release')",
         "Invoke-Dotnet -Name 'cold-test' -Arguments @('test', `$testProject, '--no-restore', '--configuration', 'Release', '--logger', 'trx;LogFileName=CoreTests-cold.trx', '--results-directory', `$runDirectory)",
@@ -665,13 +735,13 @@ function Assert-TrxPublicRunSourceClaims {
         "Invoke-Dotnet -Name 'warm-demo' -Arguments @('run', '--project', `$demoProject, '--no-build', '--no-restore', '--configuration', 'Release')"
     )
     foreach($call in $expectedCalls){if(-not $normalizedScript.Contains($call)){throw 'Hash-bound runner command argv differs from the contract-reconstructed command set.'}}
-    if(-not $normalizedScript.Contains("`$testProject = '$testProject'") -or -not $normalizedScript.Contains("`$demoProject = '$demoProject'")){throw 'Hash-bound runner project paths differ from the reconstructed command arguments.'}
+    if(-not $normalizedScript.Contains("`$testProject = '$testProject'") -or -not $normalizedScript.Contains("`$demoProject = '$demoProject'") -or -not $normalizedScript.Contains("`$runDirectory = Join-Path `$EvidenceRoot `$runId")){throw 'Hash-bound runner project/results paths differ from the reconstructed command arguments.'}
     if(-not $normalizedScript.Contains("'--configuration', 'Release'")){throw 'Hash-bound runner configuration cannot be reconstructed as Release.'}
     $expectedLogLabels=@('cold-build','cold-test','warm-test','cold-demo','warm-demo');$commands=[Collections.Generic.List[object]]::new()
     for($commandIndex=0;$commandIndex -lt $expectedLogLabels.Count;$commandIndex++){$label=$expectedLogLabels[$commandIndex]
         $gate=if($label -eq 'cold-build'){$Runner.gates.coldBuild}elseif($label -eq 'cold-test'){$Runner.gates.coldTests}elseif($label -eq 'warm-test'){$Runner.gates.warmTests}elseif($label -eq 'cold-demo'){$Runner.gates.coldDemo}else{$Runner.gates.warmDemo}
-        if([int]$gate.exitCode -ne 0 -or [double]$gate.elapsedMilliseconds -lt 0){throw "Runner gate '$label' is not a successful, timed command fact."}
-        $argv=@($expectedArgs[$label]);if($label -in @('cold-test','warm-test')){$argv[-1]=[string]$Context.reports[0].path;$report=@($Context.reports|Where-Object label -CEQ $(if($label -eq 'cold-test'){'cold'}else{'warm'}));if($report.Count -ne 1){throw "Private report path is missing for '$label'."};$reportParent=[IO.Path]::GetFullPath([IO.Path]::GetDirectoryName([string]$report[0].path));$otherReportParent=[IO.Path]::GetFullPath([IO.Path]::GetDirectoryName([string](@($Context.reports|Where-Object label -CEQ $(if($label -eq 'cold-test'){'warm'}else{'cold'}))[0].path)));if(-not [string]::Equals($reportParent,$otherReportParent,[StringComparison]::OrdinalIgnoreCase)){throw 'Cold/warm report outputs do not share the runner results directory.'};$argv[-1]='<EVIDENCE>'}
+        if([double]$gate.elapsedMilliseconds -lt 0){throw "Runner gate '$label' has an invalid duration."}
+        $argv=@($expectedArgs[$label]);if($label -in @('cold-test','warm-test')){$report=@($Context.reports|Where-Object label -CEQ $(if($label -eq 'cold-test'){'cold'}else{'warm'}));if($report.Count -ne 1){throw "Private report path is missing for '$label'."};$reportParent=[IO.Path]::GetFullPath([IO.Path]::GetDirectoryName([string]$report[0].path));$otherReportParent=[IO.Path]::GetFullPath([IO.Path]::GetDirectoryName([string](@($Context.reports|Where-Object label -CEQ $(if($label -eq 'cold-test'){'warm'}else{'cold'}))[0].path)));if(-not [string]::Equals($reportParent,$otherReportParent,[StringComparison]::OrdinalIgnoreCase)){throw 'Cold/warm report outputs do not share the runner results directory.'};if([IO.Path]::GetFileName($reportParent) -cne [string]$Runner.runId){throw 'Runner results directory is not <EVIDENCE>/<runnerRunId>.'};$argv[-1]="<EVIDENCE>/$($Runner.runId)"}
         $commandField="/runs/0/commands/$commandIndex";$commandProvenance=[Collections.Generic.List[object]]::new();$commandProvenance.Add((New-TrxBoundSourceProvenance $SourceRoot $scriptRel $commandField));$commandProvenance.Add((New-TrxBoundLogProvenance $Runner $label $commandField))
         if($label -in @('cold-test','warm-test')){$reportLabel=if($label -eq 'cold-test'){'cold'}else{'warm'};$reportRecord=@($Context.reports|Where-Object label -CEQ $reportLabel);if($reportRecord.Count -ne 1){throw "Original $reportLabel TRX is missing for its command provenance."};$attemptIndex=if($reportLabel -eq 'cold'){0}else{1};$commandProvenance.Add((New-TrxOriginalReportProvenance $reportRecord[0] "/runs/0/attempts/$attemptIndex/originalReport"))}
         $commands.Add([ordered]@{label=$label;executable='dotnet';workingDirectory='<WORKTREE>';argv=$argv;exitCode=[int]$gate.exitCode;elapsedMilliseconds=[double]$gate.elapsedMilliseconds;derivation='recovered-from-bound-runner';provenance=@($commandProvenance.ToArray())})
@@ -680,7 +750,8 @@ function Assert-TrxPublicRunSourceClaims {
     $sdkText=[IO.File]::ReadAllText($sdkLog,[Text.UTF8Encoding]::new($false,$true)).Trim();if($sdkText -cne [string]$Runner.toolchain.sdk){throw 'SDK output log does not match the runner manifest toolchain.'}
     $runtimeLog=Join-Path $ProtectedRoot 'dotnet-runtimes.log';$runtimeText=[IO.File]::ReadAllText($runtimeLog,[Text.UTF8Encoding]::new($false,$true));$runtimeLines=@($runtimeText -split "`r?`n"|Where-Object {$_ -ne ''})
     if((ConvertTo-Json -InputObject @($runtimeLines) -Compress) -cne (ConvertTo-Json -InputObject @($Runner.toolchain.runtimes) -Compress)){throw 'Runtime-list output log differs from runner toolchain evidence.'}
-    $listLog=Join-Path $ProtectedRoot 'list-tests.log';$listText=[IO.File]::ReadAllText($listLog,[Text.UTF8Encoding]::new($false,$true));foreach($case in @($Runner.testDiscovery.cases)){if(-not $listText.Contains([string]$case)){throw 'Test-list output log does not contain a captured discovery case.'}}
+    $listLog=Join-Path $ProtectedRoot 'list-tests.log';$listText=[IO.File]::ReadAllText($listLog,[Text.UTF8Encoding]::new($false,$true));Assert-TrxDiscoveryOutput $listText @($Runner.testDiscovery.cases)
+    Assert-TrxRestoreProjectAssetPaths $Runner $SourceRoot $scriptFull
     $infoLog=[IO.File]::ReadAllText((Join-Path $ProtectedRoot 'dotnet-info.log'),[Text.UTF8Encoding]::new($false,$true));if(-not $infoLog.Contains([string]$Runner.toolchain.sdk)){throw 'dotnet --info output log does not bind the declared SDK version.'}
     $logger=$Context.loggerEvidence
     if([string]$Run.producer.vstestVersion -cne '17.14.1' -or [string]$Run.producer.sdkVersion -cne [string]$Runner.toolchain.sdk -or [string]$Run.producer.logger.file -cne 'Microsoft.VisualStudio.TestPlatform.Extensions.Trx.TestLogger.dll' -or [long]$Run.producer.logger.bytes -ne [long]$logger.bytes -or [string]$Run.producer.logger.sha256 -cne [string]$logger.sha256 -or [string]$Run.producer.logger.fileVersion -cne '17.1400.125.42801' -or [string]$Run.producer.logger.productVersion -cne '17.14.1-release-25428-01'){throw 'Public producer/logger claims are not derived from the verified runner SDK and protected logger binary.'}
@@ -873,12 +944,11 @@ function New-DotNetTrxEvidencePackage {
     Assert-TrxPublicRunSourceClaims $run $runner $context $private.SourceRoot $contextRoot $runnerBytes
     $run.attempts=@($outcomes.ToArray());$run.originalManifest=[ordered]@{bytes=[long]$runnerBytes.LongLength;sha256=$manifestHash}
     $run.source.commit=[string]$runner.source.commit;$run.source.tree=[string]$runner.source.committedTree;$run.source.originalInputDigest=[string]$runner.inputs.digest;$run.source.inputStable=[bool]$runner.inputs.stable
-    $run.source.files=@($runner.inputs.files);$run.source.generatedDependencies=@($runner.inputs.generatedDependencies);$run.source.influencingChanges=@()
+    $run.source.files=@($runner.inputs.files);$run.source.generatedDependencies=@($runner.inputs.generatedDependencies)
     $run.discovery=[ordered]@{count=[int]$runner.testDiscovery.count;cases=@($runner.testDiscovery.cases)}
     if(-not $BundleId){$BundleId=[Guid]::NewGuid().ToString('N')};if($BundleId -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$'){throw 'BundleId may contain only letters, digits, period, underscore, or hyphen.'}
     $archiveName="$BundleId.zip"
     $manifest=[ordered]@{schema='validation-evidence-trx-package-v1';bundleId=$BundleId;format=[ordered]@{reportProfile=$script:TrxProfile;counterProfile=$script:TrxCounterProfile;projectionPolicy=$script:TrxProjection};tool=(Get-TrxToolIdentity);archive=[ordered]@{file=$archiveName;bytes=0;sha256='0'*64;format='zip-deflate-fixed-1980-01-01';entryPolicy='normalized-trx-only'};runs=@($run)}
-    Assert-TrxPublicManifest $manifest
     $manifestBytes=ConvertTo-EvidenceJsonBytes $manifest;Test-PublicEvidenceText ([Text.UTF8Encoding]::new($false,$true).GetString($manifestBytes))
     $zipPath=Join-Path ([IO.Path]::GetFullPath($OutputDirectory)) $archiveName;$manifestPath=[IO.Path]::ChangeExtension($zipPath,'.manifest.json')
     if(Test-Path -LiteralPath $zipPath -or Test-Path -LiteralPath $manifestPath){throw 'TRX evidence output already exists; refusing overwrite.'}
@@ -892,7 +962,7 @@ function Test-DotNetTrxEvidencePackage {
     try{
         $null=Assert-EvidenceRuntime;$manifestBytes=[IO.File]::ReadAllBytes($ManifestPath);if($manifestBytes.Length -gt $script:TrxMaxManifestBytes){throw 'TRX package manifest exceeds size limit.'};$manifestText=[Text.UTF8Encoding]::new($false,$true).GetString($manifestBytes);Test-PublicEvidenceText $manifestText;$manifest=$manifestText|ConvertFrom-Json -AsHashtable -DateKind String;Assert-TrxPublicManifest $manifest
         if($SourceContextPath -and $SourceContextPath.Count -ne 1){throw 'TRX comparison requires one source context.'}
-        $zip=Get-Item -LiteralPath $ArchivePath -ErrorAction Stop;if($zip.Length -ne [long]$manifest.archive.bytes -or (Get-EvidenceSha256 $ArchivePath) -cne $manifest.archive.sha256){throw 'TRX archive integrity mismatch.'}
+        $zip=Get-Item -LiteralPath $ArchivePath -ErrorAction Stop;if([IO.Path]::GetFileName($ArchivePath) -cne [string]$manifest.archive.file -or $zip.Length -ne [long]$manifest.archive.bytes -or (Get-EvidenceSha256 $ArchivePath) -cne $manifest.archive.sha256){throw 'TRX archive identity or integrity mismatch.'}
         Add-Type -AssemblyName System.IO.Compression;$stream=[IO.File]::OpenRead($ArchivePath);try{$archive=[IO.Compression.ZipArchive]::new($stream,[IO.Compression.ZipArchiveMode]::Read,$true);try{
             $expected=[Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal);foreach($run in @($manifest.runs)){foreach($attempt in @($run.attempts)){$expected.Add([string]$attempt.normalizedReport.entry,$attempt)}}
             if($archive.Entries.Count -ne $expected.Count){throw 'TRX archive entries do not match manifest.'};$seen=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal);$expanded=0L;$actual=[Collections.Generic.List[object]]::new();$actualEntryBytes=[Collections.Generic.Dictionary[string,byte[]]]::new([StringComparer]::Ordinal)
