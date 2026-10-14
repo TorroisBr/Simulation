@@ -24,9 +24,12 @@ Unity-independent Core application code and a small .NET Lab host:
 4. read the resulting source reserve, source/Market revisions, Market stock,
    and calculated price.
 
-The proving input is the already-promoted P14-B finite-reserve profile: one
-City/settlement, one finite source, and one Item. Those counts constrain only
-this fixture. They do not define universal City, source, or Item cardinality.
+The proving input is a Lab fixture for the already-promoted P14-B
+finite-reserve **operation**: one City/settlement identity, one finite source,
+and one Item. It demonstrates that bounded operation through Core; it is not a
+claim to port the complete P14-B City daily economy. In particular, population
+consumption and other City behaviors remain outside this scenario. These counts
+constrain only the fixture, not universal City, source, or Item cardinality.
 The existing LocationId-to-City-anchor check remains part of Unity profile
 composition. The Lab fixture receives an explicit effective LocationId and
 the same semantic identities; it does not mint geography or resolve Unity
