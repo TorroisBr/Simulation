@@ -280,6 +280,11 @@ Chose FX version [C:\Program Files\dotnet\shared\Microsoft.NETCore.App\9.0.20]
     Remove-Item -LiteralPath $availableArchive -Force
     [IO.File]::WriteAllBytes($availableManifest,[byte[]]@(1))
     Assert-Throws { & $trxModule {param($z,$m) Assert-TrxPackageOutputNamesAvailable $z $m} $availableArchive $availableManifest } 'package output check refuses an existing manifest'
+    $orderedAttempts=@([ordered]@{label='cold'},[ordered]@{label='warm'})
+    & $trxModule {param($a) Assert-TrxColdWarmAttemptLabels $a} $orderedAttempts
+    Assert-True $true 'cold/warm validation accepts ordered dictionary attempt records'
+    Assert-Throws { & $trxModule {param($a) Assert-TrxColdWarmAttemptLabels $a} @([ordered]@{label='cold'},[ordered]@{label='cold'}) } 'cold/warm validation rejects a duplicate label'
+    Assert-Throws { & $trxModule {param($a) Assert-TrxColdWarmAttemptLabels $a} @([ordered]@{name='missing-label'},[ordered]@{label='warm'}) } 'cold/warm validation rejects a missing label'
     Assert-Throws { & $trxModule {param($txt,$cases) Assert-TrxDiscoveryOutput $txt $cases|Out-Null} "The following Tests are available:`n    beta`n    alpha`n" @('alpha','beta') } 'discovery order mutation rejects'
     Assert-Throws { & $trxModule {param($txt,$cases) Assert-TrxDiscoveryOutput $txt $cases|Out-Null} "The following Tests are available:`n    alpha`n    beta`n    injected`n" @('alpha','beta') } 'extra discovery output rejects'
     $partialRetained=Join-Path $root 'partial-retained';New-Item -ItemType Directory -Path $partialRetained -Force|Out-Null;[IO.File]::WriteAllText((Join-Path $partialRetained 'Simulation.Core.dll'),'partial')

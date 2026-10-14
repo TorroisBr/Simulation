@@ -357,6 +357,18 @@ function Assert-TrxProvenanceRecord {
     }
 }
 
+function Assert-TrxColdWarmAttemptLabels {
+    param([object[]]$Attempts)
+    if($Attempts.Count -ne 2){throw 'Each TRX run must contain exactly one cold and one warm attempt.'}
+    $labels=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach($attempt in $Attempts){
+        if($attempt -isnot [System.Collections.IDictionary] -or -not $attempt.Contains('label')){throw 'Each TRX attempt must bind its cold/warm label.'}
+        $label=[string]$attempt['label']
+        if($label -cnotin @('cold','warm') -or -not $labels.Add($label)){throw 'Each TRX run must contain exactly one cold and one warm attempt.'}
+    }
+    if(-not $labels.Contains('cold') -or -not $labels.Contains('warm')){throw 'Each TRX run must contain exactly one cold and one warm attempt.'}
+}
+
 function Assert-TrxPublicManifest {
     param([System.Collections.IDictionary]$Manifest)
     Assert-TrxKeys $Manifest @('schema','bundleId','format','tool','archive','runs') 'manifest'
@@ -385,7 +397,7 @@ function Assert-TrxPublicManifest {
             Assert-TrxKeys $attempt.originalReport $basicHashKeys 'attempt.originalReport';Assert-TrxJsonInteger $attempt.originalReport.bytes 'original report bytes' 1
             Assert-TrxKeys $attempt.normalizedReport @('entry','bytes','sha256','semanticSha256') 'attempt.normalizedReport';Assert-TrxJsonInteger $attempt.normalizedReport.bytes 'normalized report bytes' 1
         }
-        if(@($run.attempts).Count -ne 2 -or @($run.attempts|Select-Object -ExpandProperty label -Unique).Count -ne 2 -or @($run.attempts|Where-Object {$_.label -cnotin @('cold','warm')}).Count -ne 0 -or @($run.attempts|Where-Object {$_.label -ceq 'cold'}).Count -ne 1 -or @($run.attempts|Where-Object {$_.label -ceq 'warm'}).Count -ne 1){throw 'Each TRX run must contain exactly one cold and one warm attempt.'}
+        Assert-TrxColdWarmAttemptLabels @($run.attempts)
         Assert-TrxKeys $run.originalManifest $basicHashKeys 'run.originalManifest';Assert-TrxJsonInteger $run.originalManifest.bytes 'original runner manifest bytes' 1
         Assert-TrxKeys $run.source @('commit','tree','originalInputDigest','inputStable','files','generatedDependencies','influencingChanges') 'run.source'
         Assert-TrxJsonBoolean $run.source.inputStable 'source inputStable'
