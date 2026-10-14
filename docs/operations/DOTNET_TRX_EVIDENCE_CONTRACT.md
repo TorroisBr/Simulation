@@ -552,7 +552,9 @@ Expected implementation surface:
 
 Define adapter context schema `dotnet-trx-source-context-v1`: original runner
 manifest hash/length and protected local locator; exact source refs/input digest;
-producer profile; one ordered record per gate containing safe gate label, native
+producer object/version/binary identity and captured-versus-recovered provenance
+matching the public whitelist (with private source locators); one ordered record
+per gate containing safe gate label, native
 runId, original TRX hash/length and protected locator; original command exit,
 expected discovery multiset, assembly-binding record and private worktree-root
 mapping; retention owner/deadline/ACL-check result. Values must agree with actual
