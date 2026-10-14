@@ -103,6 +103,11 @@ public sealed class PersistenceFoundationTests
         Assert.That(result, Is.EqualTo(P12AResultCode.UnsupportedSchema));
         int profileOffset = FindEncodedStringOffset(bytes, "UnityBootstrap-Daily-v1");
         int hostKindOffset = profileOffset + sizeof(int) + System.Text.Encoding.UTF8.GetByteCount("UnityBootstrap-Daily-v1") + sizeof(int);
+        byte[] zeroProfileVersion = (byte[])bytes.Clone();
+        Array.Clear(zeroProfileVersion, hostKindOffset - sizeof(int), sizeof(int));
+        Assert.That(P12ACompatibilityDescriptorV2.TryReadCanonical(zeroProfileVersion, out _, out result), Is.False);
+        Assert.That(result, Is.EqualTo(P12AResultCode.CorruptOrTruncated),
+            "A mandatory positive profile version of zero is malformed, while positive unknown versions are schema rejections.");
         byte[] hostReserved = (byte[])bytes.Clone();
         hostReserved[hostKindOffset + sizeof(ushort)] = 1;
         Assert.That(P12ACompatibilityDescriptorV2.TryReadCanonical(hostReserved, out _, out result), Is.False);

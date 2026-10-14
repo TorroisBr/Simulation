@@ -27,6 +27,14 @@ public sealed class P12AContinuationCodecTests
         SimulationTestFactory.CleanupDefinitions();
     }
 
+    [Test]
+    public void OversizedSaveRetainsLegacyLimitPrecedenceWithOtherInvalidArguments()
+    {
+        byte[] oversized = new byte[P12AContinuationCodec.MaxFrameBytes + 1];
+        Assert.That(P12AContinuationStore.TrySave(oversized, null, null, null, null,
+            out P12AResult result), Is.False);
+        Assert.That(result.Code, Is.EqualTo(P12AResultCode.LimitExceeded));
+    }
     private static readonly P12ADailyV1SectionManifest Manifest = new P12ADailyV1SectionManifest(
         new[]
         {
