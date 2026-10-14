@@ -39,7 +39,7 @@ function Invoke-Case {
 }
 
 $projectPath = (Get-Location).ProviderPath
-$testRoot = Join-Path $projectPath ('Temp\UnityValidationSelfTests-' + [Guid]::NewGuid().ToString('N'))
+$testRoot = Join-Path ([IO.Path]::GetTempPath()) ('UnityValidationSelfTests-' + [Guid]::NewGuid().ToString('N'))
 $resultsRoot = Join-Path $testRoot 'Results'
 New-Item -ItemType Directory -Path $resultsRoot -Force | Out-Null
 

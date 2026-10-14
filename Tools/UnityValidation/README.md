@@ -100,3 +100,51 @@ Evidence tool self-tests use synthetic XML only:
 ```powershell
 pwsh -NoProfile -File .\Tools\UnityValidation\tests\Package-UnityValidationEvidenceTests.ps1
 ```
+
+### .NET VSTest TRX evidence
+
+The shared packager also supports the reviewed closed `trx-vstest-flat-v1` profile.
+The existing Unity/NUnit behavior remains the default. TRX callers must explicitly
+select `-ReportFormat DotNetTrx` and provide the private
+`dotnet-trx-source-context-v1` adapter context through `-RunManifestPath`:
+
+```powershell
+.\Tools\UnityValidation\Package-UnityValidationEvidence.ps1 `
+    -Action Package `
+    -ReportFormat DotNetTrx `
+    -RunManifestPath $privateTrxContext `
+    -OutputDirectory .\artifacts\validation `
+    -BundleId core-calendar-cold-warm
+
+.\Tools\UnityValidation\Package-UnityValidationEvidence.ps1 `
+    -Action Verify `
+    -ManifestPath .\artifacts\validation\core-calendar-cold-warm.manifest.json `
+    -ArchivePath .\artifacts\validation\core-calendar-cold-warm.zip
+
+.\Tools\UnityValidation\Package-UnityValidationEvidence.ps1 `
+    -Action Verify `
+    -ManifestPath .\artifacts\validation\core-calendar-cold-warm.manifest.json `
+    -ArchivePath .\artifacts\validation\core-calendar-cold-warm.zip `
+    -ReportFormat DotNetTrx `
+    -VerifyRunManifestPath $privateTrxContext
+```
+
+TRX packaging accepts only the VSTest 17.14.1 flat profile and its exact supported
+XML grammar. It preserves native outcomes, counters, case identities, diagnostics,
+and order. A valid nonpassing run is packaged as nonpassing evidence; packaging
+does not convert it into a passing gate. Only the enumerated incidental metadata
+is projected using the private context's verified worktree-root mapping. Unknown
+nodes, attributes, references, counter semantics, ambiguous roots, unsupported
+diagnostic paths, or incomplete source context fail closed. Cold and warm reports
+remain separate entries under `results/<runner-run-id>/`.
+
+The public manifest is a closed whitelist. Original TRX and runner-manifest bytes
+stay in verified owner-only local retention and are never included in the public
+archive. `Verify` without private context checks package integrity and reports
+`originalComparisonNotPerformed`; passing a private context performs the full
+original-to-projection comparison. Verification never extracts archive entries.
+Synthetic profile tests use no real CORE-A reports:
+
+```powershell
+pwsh -NoProfile -File .\Tools\UnityValidation\tests\TrxValidationEvidenceTests.ps1
+```

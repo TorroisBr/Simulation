@@ -643,7 +643,11 @@ function Write-DeterministicEvidenceArchive {
     param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][object[]]$Entries)
     Add-Type -AssemblyName System.IO.Compression
     $ordinalEntries = [System.Collections.Generic.SortedDictionary[string, object]]::new([StringComparer]::Ordinal)
-    foreach ($item in $Entries) { $ordinalEntries.Add([string]$item.name, $item) }
+    foreach ($item in $Entries) {
+        $entryName = [string]$item.name
+        if ([string]::IsNullOrWhiteSpace($entryName) -or $entryName.Contains('\') -or $entryName.StartsWith('/') -or [System.IO.Path]::IsPathRooted($entryName) -or $entryName -match '(^|/)\.\.?(/|$)' -or ([string]$item.name).EndsWith('/')) { throw "Unsafe archive entry name '$entryName'." }
+        $ordinalEntries.Add($entryName, $item)
+    }
     $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
     $completed = $false
     try {
@@ -979,5 +983,6 @@ function Read-UnityValidationEvidencePackage {
 Export-ModuleMember -Function @(
     'Get-UnityEvidenceInputSnapshot', 'Invoke-UnityValidationEvidenceCapture', 'New-UnityValidationEvidencePackage',
     'Test-UnityValidationEvidencePackage', 'Read-UnityValidationEvidencePackage', 'Get-UnityEvidenceReportFacts',
-    'ConvertTo-NormalizedUnityReport', 'Get-UnityXmlSemanticHash', 'ConvertTo-EvidenceJsonBytes', 'Get-BytesSha256', 'Set-ProtectedEvidenceDirectory', 'Test-ProtectedEvidenceDirectory', 'ConvertTo-PublicRemoteIdentity'
+    'ConvertTo-NormalizedUnityReport', 'Get-UnityXmlSemanticHash', 'ConvertTo-EvidenceJsonBytes', 'Get-BytesSha256', 'Set-ProtectedEvidenceDirectory', 'Test-ProtectedEvidenceDirectory', 'ConvertTo-PublicRemoteIdentity',
+    'Assert-EvidenceRuntime', 'Get-EvidenceSha256', 'Test-PublicEvidenceText', 'Assert-ProtectedEvidenceFile', 'Write-DeterministicEvidenceArchive'
 )
