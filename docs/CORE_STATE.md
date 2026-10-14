@@ -217,9 +217,10 @@ the closed P12 profile.
 
 ## Current Core extraction readiness — 2026-10-14
 
-CORE-A through CORE-D are promoted to `codex/core/canonical`; the current
-canonical State tip is recorded by the commit that contains this entry. CORE-D
-adds the bounded shared finite-source runtime and fixed Lab host described above.
+At the verified `codex/core/canonical` base
+`158cc6f5663c5561a04ddafc623bac7bb41f6c38`, CORE-A through CORE-D were
+promoted. CORE-D adds the bounded shared finite-source runtime and fixed Lab
+host described above.
 
 CORE-E remains the architecture-defined collection of individually reviewed
 domain closures. The current canonical history contains no next CORE-E
