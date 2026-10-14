@@ -159,12 +159,93 @@ and stale-revision failures. A successful positive contribution prepares the
 same whole reserve debit and stock increase; exhausted or rejected operations
 leave both owners unchanged.
 
-Preserve the current P14-B hook sequence: `TryPrepareFiniteStockIncrease`
-checks P12 mutation admission once during preparation; outer prepared-commit
-validation checks it through `CanInstallFiniteStock`; then
-`FiniteSourceProductionPreparation.Install()` rechecks `CanInstall()` before
-either owner mutates. After both owner installs,
-`NotifyFiniteStockInstalled()` calls the P12 committed-mutation hook once.
+#### Public Core boundary and Unity handshake
+
+The Unity production assembly consumes the package as a separate assembly, so
+the value-only entry point and its DTOs must be public; do not use
+`InternalsVisibleTo` or expose live owner types. The bounded API is:
+
+```csharp
+public static class FiniteSourceProductionKernel
+{
+    public static bool TryPrepare(
+        FiniteSourceOperationRequest request,
+        out FiniteSourceOperationResult result,
+        out string rejectionReason);
+}
+```
+
+`FiniteSourceOperationRequest` is an immutable value request containing the
+source snapshot (source/settlement/Market/item identities, content revision,
+reserve, daily limit, local revision, last processed absolute day), expected
+source and Market revisions, admitted absolute day, requested quantity, and an
+ordered copied list of `MarketStockRow` values. A row has an explicit row-kind
+discriminator (`NullRow`, `NullItem`, or `Item`) so null list rows and rows with
+no item remain distinct; item rows carry DefinitionId, the row's effective
+basePrice, amount, desiredAmount, and currentPrice. The request constructor
+copies its input list so callers cannot mutate the prepared input during the
+call.
+
+`FiniteSourceOperationResult` is an immutable prepared value containing the
+next reserve, source revision, last-processed day, and a full ordered Market
+row replacement with the same row kinds and count. It contains no Unity object,
+live store, callback, or install method. Failure returns `false`, a null result,
+and the existing P14-B rejection reason; it does not mutate the request.
+`MarketStockRow` and the source snapshot types are public immutable Core values
+because they cross the Unity/Core assembly boundary, but they are operation
+DTOs, not new live authorities or a persistence format.
+
+The Unity facade in the existing `MarketRuntime`/finite-source service owns the
+handshake. It snapshots `FiniteProductionSourceStore` and `MarketRuntime` rows
+in order, builds the request, and calls the Core function. On success it
+validates the result's cardinality and row-kind/index correspondence, maps it
+back to the existing `PreparedMarketState` using the retained parallel row
+references, and creates the existing Unity-side
+`FiniteSourceProductionPreparation`. That preparation remains the only commit
+coordinator: it rechecks live revisions and admission, installs the source
+owner and Market owner using their existing methods, then sends the existing
+post-commit notification. Core never installs either owner. On failure, the
+facade forwards the same rejection reason and does not create an installable
+preparation. The current source validation and Market row/cardinality checks
+retain their rejection precedence at the same boundary as today.
+
+#### Existing P12 callback sequence to preserve
+
+P12 mutation admission is a synchronous, potentially stateful callback. Keep
+the existing calls, order, and failure points; do not consolidate them as an
+optimization. For the direct `FiniteSourceProductionService.TryProduceDaily`
+route, a successful positive operation reaches these admission calls:
+
+1. `MarketRuntime.TryPrepareFiniteStockIncrease` invokes
+   `CanCommitP12OwnerMutation()` while preparing the Market replacement.
+2. `FiniteSourceProductionService.TryPrepareDaily` invokes
+   `MarketRuntime.CanInstallFiniteStock(...)` after the source-store
+   preflight; that helper invokes `CanCommitP12OwnerMutation()` again.
+3. `FiniteSourceProductionPreparation.Install()` invokes `CanInstall()`,
+   which calls `CanInstallFiniteStock(...)` and therefore checks admission a
+   third time before either owner mutates.
+
+After the source and Market installs, `NotifyFiniteStockInstalled()` invokes
+the P12 committed-mutation hook once. The direct route therefore has three
+admission calls and one post-commit notification on success.
+
+The `CityRuntime` prepared daily route retains the same first two checks during
+`TryPrepareDaily`, followed by: (3) the outer City preparation's final
+`FiniteSourceProductionPreparation.CanInstall()`, (4) the
+`CityDailyEconomyCommit.TryCommit` validation's `FiniteSource.CanInstall()`,
+and (5) the final `FiniteSource.Install()` pre-mutation `CanInstall()` check.
+This route therefore makes five admission calls before owner installation and
+one post-commit notification after both installs. Preserve the current
+admission callback exception behavior (rejected) and notification callback
+exception behavior (swallowed). No callback may be introduced between the two
+owner installs. P14-C's separate aggregate sequence below remains unchanged.
+
+Add focused tests with a recording/stateful admission callback that assert the
+exact call count and order for direct and CityRuntime prepared success, failure
+at each admission position, no partial owner mutation on rejection, and exactly
+one notification after successful dual install. Retain callback-throws cases
+for the existing reject/swallow behavior. These assertions are part of the
+extraction contract because callback behavior is observable.
 Admission callback exceptions remain rejected by the current helper;
 notification callback exceptions remain swallowed by the current helper. There
 is no callback introduced between owner installs. For P14-C, preserve its
@@ -180,8 +261,8 @@ P14-C remains the already-promoted mixed-source consumer and remains wholly
 Unity-side in this checkpoint. Its coordinator retains its ordinal source
 sort, exogenous-source behavior, whole-contributor overflow policy, outcomes,
 replay/receipt behavior, one prepared Market replacement, and commit boundary.
-Its finite contribution calculation and `MarketItemRuntime` price refresh are
-unchanged. P14-C's integration suites must demonstrate that the extraction
+Its finite contribution calculation and call to the authoritative Market
+price calculation are unchanged. P14-C's integration suites must demonstrate that the extraction
 leaves those results unchanged; they do not establish Core sharing. A successful
 P14-B finite install increments the Market revision once. P14-C retains
 `MarketRevisionIncrements` equal to the count of successfully applied source
@@ -299,6 +380,22 @@ from such ItemData values. P12's separate owner-snapshot validation rejects
 non-finite/non-positive current prices, but P14 profiles remain outside that
 P12 profile and CORE-C changes no admission boundary.
 
+There must be one authoritative implementation of this Market price rule. Move
+the expression into a narrowly named public pure-Core helper,
+`MarketPriceCalculator.CalculateCurrentPrice(basePrice, desiredAmount,
+amount)`, and make the existing Unity `MarketItemRuntime.CalculatePrice`
+delegate to it. The helper owns only this current-price formula; it does not
+own Market rows, revisions, stock, or transactions. Every existing Unity caller
+of `MarketItemRuntime.CalculatePrice` continues through that delegation, so
+ordinary Market operations and P14-C use the same implementation as the
+finite-source prepared calculation. Do not retain a second copy of the
+formula in the finite-source kernel or Unity adapter. Preserve the exact
+expression order, `Mathf` comparison behavior, and source-run bit patterns;
+the implementation design must confirm the Core target runtime reproduces
+those semantics bit-for-bit. Any unavoidable runtime-specific compatibility
+branch belongs inside this single helper, never in a second caller-specific
+formula.
+
 The following exact binary32 vectors are calculated from the source expression
 above; input bit patterns identify `item.basePrice`, and `amount` is the stock
 amount after the proposed finite-source increment. They are the expected
@@ -323,9 +420,8 @@ record the exact input and output bits, and compare the table. If an actual
 Unity result differs—including NaN payload behavior—revise the expected vector
 from that retained source-run evidence and independently re-review the design
 before implementation. .NET must then match the measured Unity values exactly;
-no epsilon comparison is allowed. The Core implementation may use only the
-narrow reviewed compatibility calculation needed by this prepared operation;
-it must not replace or change `Mathf` behavior for ordinary Market callers.
+no epsilon comparison is allowed. The shared helper must preserve current
+behavior for ordinary Market callers as well as this prepared operation.
 
 The operation consumes `absoluteDay` as an already-resolved monotonic daily
 boundary and does not itself call `SimulationCalendar`, `SimulationDate`, or
@@ -368,7 +464,9 @@ and Market revisions, exact row cardinality, integer stock overflow, reserve
 bounds, and revision exhaustion. Add atomicity assertions proving every
 rejection preserves source and Market state/revisions. Add price parity vectors
 for normal values and the admitted numeric boundary cases; compare the same
-expected value table from the Unity baseline and .NET. Verify source identity,
+expected value table from the Unity baseline and .NET. Add the callback-order
+and callback-count cases specified above, including rejection at every
+admission position and no owner mutation on each rejection. Verify source identity,
 item ID, output quantity, stock, reserve, revisions, and rejection reason
 exactly.
 
@@ -388,7 +486,8 @@ callers. These guard existing Market authority outside the finite-source
 operation; they are not candidates for migration into CORE-C.
 
 The Unity validation must show that only the P14-B facade calls the Core
-finite-source code, while the P14-C regression suite retains its existing
+finite-source kernel, all `MarketItemRuntime` price callers delegate to the
+single Core `MarketPriceCalculator`, and the P14-C regression suite retains its existing
 outcomes and prepared-flow semantics. It must also show that the P12 mutation
 gate and notification remain correctly ordered, P14-A remains unchanged, P10
 and P14 profiles remain separate, and P12 Daily-v1 still rejects P14 profiles
@@ -419,6 +518,10 @@ unchanged. No XML/log edits or hash-only substitution.
   returns a prepared row replacement. It is not a general Market stock owner.
   `MarketRuntime` remains the sole live store and keeps the current
   serialization fields, revision, non-P14-B callers, and P12 hooks.
+- `FiniteSourceProductionKernel`, its immutable request/result/row DTOs, and
+  `MarketPriceCalculator` are the narrow public pure-Core assembly surface.
+  Unity adapters remain responsible for snapshots, callback admission,
+  prepared-owner installation, and notification.
 
 ### Unity host/admission candidates
 
