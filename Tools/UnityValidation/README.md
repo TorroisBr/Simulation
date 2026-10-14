@@ -138,11 +138,28 @@ nodes, attributes, references, counter semantics, ambiguous roots, unsupported
 diagnostic paths, or incomplete source context fail closed. Cold and warm reports
 remain separate entries under `results/<runner-run-id>/`.
 
+The private `dotnet-trx-source-context-v1` must include the protected original
+runner manifest and reports, unique worktree mapping, producer/logger evidence,
+runtime-selection traces, and a `commandWorkingDirectory` record. For recovered
+CORE-A context that record has the private absolute `path`, `mode: recovered`, and
+the closed evidence set checked by the adapter. The adapter independently binds
+the recovered directory to fixed relative project arguments, original
+`project.assets.json` restore paths, retained build/test logs, and TRX assembly
+targets. Runtime traces must bind both the test assembly's `.runtimeconfig.json`
+and `.runtimeconfig.dev.json` paths before the selected CLR block is accepted.
+Every captured dirty or untracked source influence must also match a byte/hash
+record in the original source or generated-dependency inventory.
+
 The public manifest is a closed whitelist. Original TRX and runner-manifest bytes
 stay in verified owner-only local retention and are never included in the public
 archive. `Verify` without private context checks package integrity and reports
 `originalComparisonNotPerformed`; passing a private context performs the full
 original-to-projection comparison. Verification never extracts archive entries.
+Public JSON scalar types are checked before PowerShell conversion, so values such
+as `"false"` cannot satisfy boolean claims and numeric-looking strings cannot
+satisfy byte/count fields. Every supported native summary outcome is preserved;
+an Aborted or otherwise nonpassing report remains evidence only with its gate
+recorded as nonpassing.
 Synthetic profile tests use no real CORE-A reports:
 
 ```powershell
