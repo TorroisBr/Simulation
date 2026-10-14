@@ -207,11 +207,14 @@ archive entry was rehashed against its source. The archive is retained only in
 protected local evidence at `<LOCALAPPDATA>/Simulation/CoreValidation/1aa63d7e04854212be037b09d299fccd/`.
 
 Privacy inspection found that each original TRX contains a local Windows
-account identifier in its run metadata and 91 absolute repository checkout
-path markers under `E:\\GitHub\\`. It contains no credential-like values or
-email address. The account identifier and exact paths are intentionally not
-copied into Git. The original reports remain unmodified and protected locally;
-the raw bundle is not a publishable candidate. The runner manifest records
+account identifier in its run metadata and absolute repository checkout
+references under `E:\\GitHub\\`. It contains no credential-like values or
+email address. The independent exact-tip review counted 92 path-marker
+occurrences across both reports (90 in `TestMethod/@codeBase`, 2 in `StdOut`);
+the earlier inspection recorded 91 markers using a different count. This
+difference does not change the privacy finding. The account identifier and
+exact paths are intentionally not copied into Git. The original reports remain
+unmodified and protected locally. The raw bundle is not a publishable candidate. The runner manifest records
 complete results and provenance but is not a substitute for the unavailable
 durable report evidence. CORE-A promotion remains blocked until the required
 complete evidence can be retained without exposing private metadata under the
@@ -221,9 +224,10 @@ current host policy. No normalized .NET TRX adapter is implemented or claimed.
 
 Implementation and execution gates passed, including the Unity P12 regressions,
 parity, authoring, ALL EditMode, official Smoke, corrected SDK runner checks and
-demo. The first exact-tip review's parser findings have been corrected and the
-corrected SDK validation passes. Final independent exact-tip code review and
-normal canonical preflight remain pending. The complete .NET report evidence is
+demo. The first exact-tip review's parser findings have been corrected, and the
+corrected SDK validation passes. Independent exact-tip implementation review
+of candidate `2062e616d5a6bc53a2f154f33e9f4887a44972fe` passed at review
+`ad4d141d0ec00dee6b776d9373187173a330f0cc`. The complete .NET report evidence is
 not publishable under the inspected privacy boundary, so the evidence gate and
 canonical promotion remain blocked. No canonical promotion has occurred. No full SimulationRuntime, full-world
 hosting, P12 .NET continuation, cross-build save compatibility, P13 historical
