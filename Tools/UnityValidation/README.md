@@ -149,6 +149,8 @@ targets. Runtime traces must bind both the test assembly's `.runtimeconfig.json`
 and `.runtimeconfig.dev.json` paths before the selected CLR block is accepted.
 Every captured dirty or untracked source influence must also match a byte/hash
 record in the original source or generated-dependency inventory.
+Original TRX timestamp offsets are converted to UTC only for chronology checks;
+the retained original report bytes and their recorded timestamps are preserved.
 
 The public manifest is a closed whitelist. Original TRX and runner-manifest bytes
 stay in verified owner-only local retention and are never included in the public

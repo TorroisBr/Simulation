@@ -227,6 +227,16 @@ function Get-TrxFacts {
     return [pscustomobject]@{ Document=$document; RunId=$nativeRunId; RunName=$root.GetAttribute('name'); SummaryOutcome=$summaryOutcome; Counters=$native; OutcomeCounts=$hist; ResultCount=$results.Count; Results=$results; Definitions=$definitions; GatePassed=($summaryOutcome -ceq 'Completed' -and $nonPassing -eq 0) }
 }
 
+function Get-TrxReportUtcInterval {
+    param([Parameter(Mandatory)][System.Xml.XmlDocument]$Document)
+    $times=$Document.SelectSingleNode("//*[local-name()='Times']")
+    if($null -eq $times){throw 'Original TRX lacks its run time interval.'}
+    $start=[DateTimeOffset]::Parse($times.GetAttribute('start'),[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::AssumeUniversal).ToUniversalTime()
+    $finish=[DateTimeOffset]::Parse($times.GetAttribute('finish'),[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::AssumeUniversal).ToUniversalTime()
+    if($finish -lt $start){throw 'Original TRX run interval is invalid.'}
+    return [pscustomobject]@{StartUtc=$start;FinishUtc=$finish}
+}
+
 function ConvertTo-TrxPortableRelative {
     param([string]$Value)
     if ([string]::IsNullOrWhiteSpace($Value) -or [IO.Path]::IsPathRooted($Value) -or $Value -match '(^|[\\/])\.{1,2}([\\/]|$)' -or $Value -match '^[a-zA-Z][a-zA-Z0-9+.-]*:' -or $Value.Contains('?') -or $Value.Contains('#')) { throw 'TRX path is not a safe relative path.' }
@@ -762,7 +772,7 @@ function Get-TrxRetainedAssemblyInventory {
     }
     if(-not $byLeaf.ContainsKey('Simulation.Core.Tests.dll') -or -not $byLeaf.ContainsKey('Simulation.Core.dll')){throw 'Private validated assembly inventory is missing one required DLL.'}
     $reportCompletion=[DateTimeOffset]::MinValue;$testStart=[DateTimeOffset]::MaxValue
-    foreach($report in @($Context.reports)){$facts=Get-TrxFacts ([IO.Path]::GetFullPath([string]$report.path));$times=$facts.Document.SelectSingleNode("//*[local-name()='Times']");if($null -eq $times){throw 'Original TRX lacks its run time interval.'};$start=[DateTimeOffset]::Parse($times.GetAttribute('start'),[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::AssumeUniversal);$finish=[DateTimeOffset]::Parse($times.GetAttribute('finish'),[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::AssumeUniversal);if($start.Offset -ne [TimeSpan]::Zero -or $finish.Offset -ne [TimeSpan]::Zero -or $finish -lt $start){throw 'Original TRX run interval is not a valid UTC interval.'};if($finish -gt $reportCompletion){$reportCompletion=$finish};if($start -lt $testStart){$testStart=$start}}
+    foreach($report in @($Context.reports)){$facts=Get-TrxFacts ([IO.Path]::GetFullPath([string]$report.path));$interval=Get-TrxReportUtcInterval $facts.Document;if($interval.FinishUtc -gt $reportCompletion){$reportCompletion=$interval.FinishUtc};if($interval.StartUtc -lt $testStart){$testStart=$interval.StartUtc}}
     foreach($claim in $claims){$observed=[DateTimeOffset]::ParseExact([string]$claim.observedAtUtc,'o',[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::AssumeUniversal);if($observed -lt $reportCompletion){throw 'Recovered assembly observation time predates completion of the original validation reports.'}}
     $retentionDir=Join-Path $ProtectedRoot ('validated-output\'+[string]$Runner.runId)
     $receiptPath=Join-Path $retentionDir 'assembly-retention.json'
@@ -903,7 +913,7 @@ function Get-TrxToolIdentity {
 function Get-TrxAssemblyIdentity {
     param([Parameter(Mandatory)][string]$Path)
     Add-Type -AssemblyName System.Reflection.Metadata
-    $stream=[IO.File]::OpenRead($Path);try{$pe=[System.Reflection.PortableExecutable.PEReader]::new($stream);try{if(-not $pe.HasMetadata){throw 'Recovered assembly has no CLI metadata.'};$metadata=$pe.GetMetadataReader();$definition=$metadata.GetAssemblyDefinition();$module=$metadata.GetModuleDefinition();$name=[System.Reflection.AssemblyName]::GetAssemblyName($Path);return [pscustomobject]@{fullName=$name.FullName;mvid=$metadata.GetGuid($module.Mvid).ToString('D')}}finally{$pe.Dispose()}}finally{$stream.Dispose()}
+    $stream=[IO.File]::OpenRead($Path);try{$pe=[System.Reflection.PortableExecutable.PEReader]::new($stream);try{if(-not $pe.HasMetadata){throw 'Recovered assembly has no CLI metadata.'};$metadata=[System.Reflection.Metadata.PEReaderExtensions]::GetMetadataReader($pe);$definition=$metadata.GetAssemblyDefinition();$module=$metadata.GetModuleDefinition();$name=[System.Reflection.AssemblyName]::GetAssemblyName($Path);return [pscustomobject]@{fullName=$name.FullName;mvid=$metadata.GetGuid($module.Mvid).ToString('D')}}finally{$pe.Dispose()}}finally{$stream.Dispose()}
 }
 
 function Assert-TrxMatchingPortablePdb {
