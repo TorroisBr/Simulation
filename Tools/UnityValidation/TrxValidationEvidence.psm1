@@ -361,6 +361,7 @@ function Assert-TrxPublicManifest {
     param([System.Collections.IDictionary]$Manifest)
     Assert-TrxKeys $Manifest @('schema','bundleId','format','tool','archive','runs') 'manifest'
     if($Manifest.schema -cne 'validation-evidence-trx-package-v1'){throw 'Unsupported TRX evidence manifest schema.'}
+    if([string]$Manifest.bundleId -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$'){throw 'TRX bundle identifier is invalid.'}
     Assert-TrxKeys $Manifest.format @('reportProfile','counterProfile','projectionPolicy') 'manifest.format'
     if($Manifest.format.reportProfile -cne $script:TrxProfile -or $Manifest.format.counterProfile -cne $script:TrxCounterProfile -or $Manifest.format.projectionPolicy -cne $script:TrxProjection){throw 'TRX evidence profile identifiers are unsupported.'}
     Assert-TrxKeys $Manifest.tool @('commit','tree','version','files','runtime') 'manifest.tool'
@@ -369,7 +370,8 @@ function Assert-TrxPublicManifest {
     Assert-TrxKeys $Manifest.tool.runtime @('powershellEdition','powershellVersion','dotnetVersion','compressionAssemblyVersion') 'manifest.tool.runtime'
     Assert-TrxKeys $Manifest.archive @('file','bytes','sha256','format','entryPolicy') 'manifest.archive'
     Assert-TrxJsonInteger $Manifest.archive.bytes 'archive bytes' 1
-    if([IO.Path]::GetFileName([string]$Manifest.archive.file) -cne [string]$Manifest.archive.file -or [string]$Manifest.archive.file -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}\.zip$' -or [string]$Manifest.archive.sha256 -notmatch '^[a-f0-9]{64}$' -or [string]$Manifest.archive.format -cne 'zip-deflate-fixed-1980-01-01' -or $Manifest.archive.entryPolicy -cne 'normalized-trx-only'){throw 'TRX archive identity, format, or entry policy is invalid.'}
+    $expectedArchiveFile=[string]$Manifest.bundleId+'.zip'
+    if([IO.Path]::GetFileName([string]$Manifest.archive.file) -cne [string]$Manifest.archive.file -or [string]$Manifest.archive.file -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}\.zip$' -or [string]$Manifest.archive.file -cne $expectedArchiveFile -or [string]$Manifest.archive.sha256 -notmatch '^[a-f0-9]{64}$' -or [string]$Manifest.archive.format -cne 'zip-deflate-fixed-1980-01-01' -or $Manifest.archive.entryPolicy -cne 'normalized-trx-only'){throw 'TRX archive identity, format, or entry policy is invalid.'}
     $runKeys=@('runnerRunId','source','originalManifest','producer','execution','discovery','commands','assemblies','attempts','demonstrations','measurements','retention','existingReviews')
     $attemptKeys=@('label','nativeRunId','nativeRunLabel','originalReport','normalizedReport','summaryOutcome','nativeCounters','caseOutcomeCounts','resultCount','gatePassed','exitCode','elapsedMilliseconds','comparison')
     $basicHashKeys=@('bytes','sha256')
