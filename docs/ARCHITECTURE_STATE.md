@@ -551,3 +551,37 @@ exact-tip review; executable gates are neither rerun nor relabeled as new result
 No ordinary product/architecture decision has been identified for this bounded
 technical preparation. Promotion follows refreshed compatible fast-forward
 preflight and independent applicability under the existing authority.
+
+## CORE-F Shared Runtime Source compatibility design — 2026-10-15
+
+**Status:** ARCHITECTURE_PROMOTED for the reviewed technical design when this
+entry is published on `codex/architecture/world-identity-projection`; before
+publication it is a prepared adoption marker. The promotion is documentation-only.
+
+Architecture base: `758d4eaf7022e09f4b106ef25b390d14d6b55f7a`.
+Core canonical design base: `652ac7bf02943cf6160fd27f271a781db70657c5`.
+Reviewed Core design/evidence tip:
+[`781cfb71f43bd80d781aaf7a678495ad4e7cdc46`](https://github.com/TorroisBr/Simulation/tree/781cfb71f43bd80d781aaf7a678495ad4e7cdc46)
+on `codex/core/CORE-F-Shared-Runtime-Design-652ac7b`. Its technical design
+SHA-256 is `36137D97DDBB633ECDE6C82E5EE1F7B60ED98F5457781B506531E254DECDE2FE`;
+the [independent technical review](https://github.com/TorroisBr/Simulation/blob/781cfb71f43bd80d781aaf7a678495ad4e7cdc46/docs/validation/CORE_F_SharedRuntimeSource/TECHNICAL_DESIGN_REVIEW.md)
+and [exact-tip candidate review](https://github.com/TorroisBr/Simulation/blob/781cfb71f43bd80d781aaf7a678495ad4e7cdc46/docs/validation/CORE_F_SharedRuntimeSource/CANDIDATE_REVIEW.md)
+record PASS.
+
+The bounded design fixes two engine-free compatibility surfaces: the frozen
+P18-D `Plan`/`Edge` causal-payload codec and exact numeric helpers for the
+selected `Mathf` overloads in the inspected runtime/restore closure. The
+independent review verified the accepted Unity 6000.3.9f1 EditMode oracle run
+(`3173/3173`, zero failures), the package/raw-report provenance, 247 captured
+outputs, and all 172 numeric vectors. This record promotes the technical design
+only; it does not claim production implementation or alter any executable
+source.
+
+Implementation remains a separate authorized activity after exact-tip
+architecture/Core adoption and must pass the specified .NET and Unity parity
+gates before promotion. The provider call-site switch, selected-owner migration,
+shared runtime, restoration, .NET host and full CORE-F remain dependency-gated.
+P12 remains closed within its accepted Daily-v1 scope; no new P12 guarantee,
+P13 readiness, cross-host save compatibility or CORE-X scope follows. CORE-F
+remains WAIT_DEPENDENCY as a complete host/continuation workstream; CORE-X stays
+DEFERRED. No numbered-phase branch is changed by this architecture promotion.
