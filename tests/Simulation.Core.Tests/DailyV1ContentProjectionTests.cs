@@ -269,6 +269,69 @@ public sealed class DailyV1ContentProjectionTests
         writer.Write(bytes);
     }
 
+    // These readers are used only to edit/inspect the retained output vector while forming
+    // the large-item expected-byte case. The normal parity input comes from fixed constructors.
+    private static string ReadString(BinaryReader reader)
+    {
+        int length = reader.ReadInt32();
+        if (length < 0 || length > ContinuationWire.MaxStringBytes) throw new InvalidDataException("Invalid fixture string length.");
+        byte[] bytes = reader.ReadBytes(length);
+        if (bytes.Length != length) throw new EndOfStreamException();
+        return new UTF8Encoding(false, true).GetString(bytes);
+    }
+
+    private static void ReadValue(BinaryReader reader, string sourceType,
+        Dictionary<string, Dictionary<string, string>> schema)
+    {
+        long start = reader.BaseStream.Position;
+        if (reader.ReadByte() == 0) return; // legacy null has only its tag byte
+        reader.BaseStream.Position = start;
+        ReadString(reader); // retained legacy CLR type token
+        byte tag = reader.ReadByte();
+        switch (tag)
+        {
+            case 1: case 2: case 3: ReadString(reader); return;
+            case 4: reader.ReadBoolean(); return;
+            case 5: reader.ReadByte(); return;
+            case 6: reader.ReadSByte(); return;
+            case 7: reader.ReadInt16(); return;
+            case 8: reader.ReadUInt16(); return;
+            case 9: reader.ReadInt32(); return;
+            case 10: reader.ReadUInt32(); return;
+            case 11: reader.ReadInt64(); return;
+            case 12: reader.ReadUInt64(); return;
+            case 13: reader.ReadUInt16(); return;
+            case 14: reader.ReadInt32(); return;
+            case 15: reader.ReadInt64(); return;
+            case 16: reader.ReadInt32(); reader.ReadInt32(); reader.ReadInt32(); reader.ReadInt32(); return;
+            case 17: ReadString(reader); return;
+            case 18: case 19: reader.ReadInt64(); return;
+            case 20:
+            {
+                int count = reader.ReadInt32();
+                if (count < 0 || count > 1_000_000) throw new InvalidDataException("Invalid fixture list length.");
+                string elementType = sourceType.Substring(5, sourceType.Length - 6);
+                for (int i = 0; i < count; i++) ReadValue(reader, elementType, schema);
+                return;
+            }
+            case 21:
+            {
+                int count = reader.ReadInt32();
+                if (!schema.TryGetValue(sourceType, out Dictionary<string, string> fields) || count != fields.Count)
+                    throw new InvalidDataException("Invalid fixture object shape " + sourceType);
+                for (int i = 0; i < count; i++)
+                {
+                    ReadString(reader);
+                    string name = ReadString(reader);
+                    if (!fields.TryGetValue(name, out string fieldType)) throw new InvalidDataException("Unknown fixture member " + name);
+                    ReadValue(reader, fieldType, schema);
+                }
+                return;
+            }
+            default: throw new InvalidDataException("Unknown retained fixture tag " + tag.ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
     private static DailyV1SelectedContentAsset ReverseFields(DailyV1SelectedContentAsset value) =>
         new DailyV1SelectedContentAsset(value.Key, value.TypeToken, value.Fields.Reverse());
 
