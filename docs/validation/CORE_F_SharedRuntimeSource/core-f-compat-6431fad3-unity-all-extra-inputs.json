@@ -1,0 +1,63 @@
+{
+  "schema": "core-f-unity-extra-input-sidecar-v1",
+  "source": {
+    "commit": "6431fad3bc94263d2db5699706bdf185683b0f76",
+    "tree": "4cdae296cc2fa84e26d48b38636ed9a9647cab06"
+  },
+  "run": {
+    "runId": "17bfb6a506ee456f8aeb7d8ed77f5b45",
+    "mode": "EditMode",
+    "selection": "all",
+    "inputSnapshotSha256": "8b09f676668e5ebcf87ffdc7da0b20ac23648bb92ff7edcddf62c8ac170b9689",
+    "unityVersion": "6000.3.9f1",
+    "status": "Passed",
+    "total": 3175,
+    "passed": 3175,
+    "failed": 0,
+    "skipped": 0,
+    "inconclusive": 0
+  },
+  "inputRoot": "docs/validation/CORE_F_SharedRuntimeSource",
+  "inventoryScope": "additional tracked CSV fixtures read by CORE_F_CompatibilityParityTests and outside UnityValidation input roots",
+  "before": [
+    {
+      "path": "docs/validation/CORE_F_SharedRuntimeSource/JSON_PAYLOAD_ORACLE.csv",
+      "bytes": 4469,
+      "sha256": "63F5829227C6A507E0B78B42D195AEAA5717EE2918154E68EE617D78F4EE6C1C",
+      "gitBlob": "87d249b42bec3f2f6e0b6b0c72cd94b80936a761"
+    },
+    {
+      "path": "docs/validation/CORE_F_SharedRuntimeSource/NUMERIC_ORACLE_VECTORS.csv",
+      "bytes": 10107,
+      "sha256": "2A5D2C653CEC82421936939A0FFBABABBB2F12B8834AFA645B890D884DEAF2F1",
+      "gitBlob": "dad759353967fbdf95e62ae8882a37807a268101"
+    },
+    {
+      "path": "docs/validation/CORE_F_SharedRuntimeSource/UNITY_ORACLE_CAPTURE_RESULTS_d8b4c40e.csv",
+      "bytes": 181513,
+      "sha256": "95E3912A43712693CF6EF68CF22E306A770B53A51818B0D6123842F6FA1D7A44",
+      "gitBlob": "8f5a487a652cb64f1dea03c91f29790f704c3de8"
+    }
+  ],
+  "after": [
+    {
+      "path": "docs/validation/CORE_F_SharedRuntimeSource/JSON_PAYLOAD_ORACLE.csv",
+      "bytes": 4469,
+      "sha256": "63F5829227C6A507E0B78B42D195AEAA5717EE2918154E68EE617D78F4EE6C1C",
+      "gitBlob": "87d249b42bec3f2f6e0b6b0c72cd94b80936a761"
+    },
+    {
+      "path": "docs/validation/CORE_F_SharedRuntimeSource/NUMERIC_ORACLE_VECTORS.csv",
+      "bytes": 10107,
+      "sha256": "2A5D2C653CEC82421936939A0FFBABABBB2F12B8834AFA645B890D884DEAF2F1",
+      "gitBlob": "dad759353967fbdf95e62ae8882a37807a268101"
+    },
+    {
+      "path": "docs/validation/CORE_F_SharedRuntimeSource/UNITY_ORACLE_CAPTURE_RESULTS_d8b4c40e.csv",
+      "bytes": 181513,
+      "sha256": "95E3912A43712693CF6EF68CF22E306A770B53A51818B0D6123842F6FA1D7A44",
+      "gitBlob": "8f5a487a652cb64f1dea03c91f29790f704c3de8"
+    }
+  ],
+  "unchanged": true
+}

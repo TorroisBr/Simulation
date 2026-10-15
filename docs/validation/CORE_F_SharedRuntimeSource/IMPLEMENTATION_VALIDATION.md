@@ -32,3 +32,13 @@
 - `git diff --check` is required again on the final documentation/evidence successor before review. Provider switching remains separately gated on the reviewed parity/rejection work and exact-tip independent review.
 
 `Design-text limitation:` one sentence in the reviewed design describes null object rows in the runtime roster differently from the hash-bound Unity Editor capture. This implementation follows the accepted captured output and does not change a provider callsite. Before provider switching, the design owner should reconcile that prose and verify the exact captured behavior; this note does not reinterpret the approved contract.
+
+## Unity oracle-input inventory remediation
+
+The first independent implementation review found that Unity's standard input roots omit the three CSV files read by `CORE_F_CompatibilityParityTests`. The earlier `6896dae1a7b847cea43056a568490a36` ALL package is preserved but is superseded for final review by a sidecar-bound rerun on the same exact code commit/tree. The code and test source did not change.
+
+- Final sidecar-bound unfiltered ALL EditMode run: `17bfb6a506ee456f8aeb7d8ed77f5b45`, 3,175/3,175 passed with zero failures/skips/inconclusive and stable standard input snapshot `8b09f676668e5ebcf87ffdc7da0b20ac23648bb92ff7edcddf62c8ac170b9689`.
+- Additional input identity sidecar: [`core-f-compat-6431fad3-unity-all-extra-inputs.json`](core-f-compat-6431fad3-unity-all-extra-inputs.json), SHA-256 `657178480c76188600bd8a7d3e5a99488ccaFA37c4d85c060192178400b8ba70`. It binds pre/post byte length, SHA-256, Git blob identity, source commit/tree, and run ID for the three CSV fixtures above. Every before/after hash matched, each Git worktree entry was clean, and the sidecar declares them as additional Unity validation inputs.
+- Final normalized result package: [`core-f-compat-6431fad3-unity-all-inputbound.manifest.json`](core-f-compat-6431fad3-unity-all-inputbound.manifest.json), SHA-256 `B0A4F12E99E8208844B6B2ED5690B8829794BBD5BBF857E65825EF16205BD349`; archive [`core-f-compat-6431fad3-unity-all-inputbound.zip`](core-f-compat-6431fad3-unity-all-inputbound.zip), SHA-256 `ee56efbee92816320dd681911764e1418ba02815d95313bd2d8d070c7421aa13` (166,854 bytes). The approved verifier again compared the archive with the protected original report.
+
+The complete report from this final run contains and passes both codec/numeric parity test cases and all five Smoke case identities. The earlier standalone focused and filtered Smoke executions remain supplementary; their filtered XMLs were not edited or packaged. The review finding is ready for independent revalidation against the sidecar and final package.

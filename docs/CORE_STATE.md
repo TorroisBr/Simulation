@@ -581,3 +581,7 @@ The Core-canonical adopted design has implementation candidate `6431fad3bc94263d
 The candidate remains awaiting independent exact-tip implementation review. CORE-F remains WAIT_DEPENDENCY for provider switch, selected-owner extraction, shared runtime/restore, and .NET host. This candidate does not close CORE-F, change P12, or establish CORE-X/P13 readiness.
 
 The reviewed design contains one prose discrepancy about null object rows in the runtime roster versus the hash-bound Unity capture. This candidate follows the captured output and leaves provider behavior unchanged; reconcile the design prose and verify the capture before a provider switch.
+
+### Unity fixture-input identity remediation
+
+An independent review found the Unity snapshot omitted the three CSV oracle fixtures consumed by the new parity tests. The finding is addressed without changing code/tests: final run `17bfb6a506ee456f8aeb7d8ed77f5b45` passed ALL EditMode 3,175/3,175 with stable inputs, and the committed extra-input sidecar binds each fixture's pre/post hashes and Git identity to the run. The final verified result archive is `core-f-compat-6431fad3-unity-all-inputbound.zip` (SHA-256 `ee56efbee92816320dd681911764e1418ba02815d95313bd2d8d070c7421aa13`). Fresh independent exact-tip review is pending; no provider switch or broader CORE-F readiness is claimed.
