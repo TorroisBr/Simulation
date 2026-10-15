@@ -143,6 +143,7 @@ public sealed class DailyV1EffectiveDefinitions
     public EffectiveSimulationConfiguration EffectiveConfiguration { get; }
     public DailyV1CalendarDefinition Calendar { get; }
     public string ContentFingerprint { get; }
+    public DailyV1SelectedContentProjection ContentProjection { get; }
     internal IReadOnlyDictionary<string, DailyV1ContentRecord> ContentRecords => contentRecords;
     public IReadOnlyDictionary<string, DailyV1CityDefinition> Cities => cities;
     public IReadOnlyDictionary<string, DailyV1ItemDefinition> Items => items;
@@ -180,7 +181,17 @@ public sealed class DailyV1EffectiveDefinitions
             Wrap(actions, value => new DailyV1ActionDefinition("NpcActionData", value.id, value)),
             Wrap(statuses, value => new DailyV1StatusDefinition("NpcStatusData", value.id, value)),
             null, stageOrder, profileContractIdentity, geographyProfileContractIdentity,
-            geographyStageIdentity, hexCoordinateConvention, hexCoordinateCanonicalOrder);
+            geographyStageIdentity, hexCoordinateConvention, hexCoordinateCanonicalOrder, null);
+    }
+
+    /// <summary>Returns a copied graph with the validated selected P12 content projection attached.</summary>
+    public DailyV1EffectiveDefinitions WithContentProjection(DailyV1SelectedContentProjection projection)
+    {
+        if (projection == null) throw new ArgumentNullException(nameof(projection));
+        return new DailyV1EffectiveDefinitions(Configuration, EffectiveConfiguration, Calendar, null,
+            cities.Values, items.Values, npcs.Values, jobs.Values, actions.Values, statuses.Values,
+            contentRecords, StageOrder, ProfileContractIdentity, GeographyProfileContractIdentity,
+            GeographyStageIdentity, HexCoordinateConvention, HexCoordinateCanonicalOrder, projection);
     }
 
     internal DailyV1EffectiveDefinitions(DailyV1SimulationConfigData configuration,
@@ -193,7 +204,8 @@ public sealed class DailyV1EffectiveDefinitions
         IEnumerable<KeyValuePair<string, DailyV1ContentRecord>> contentRecords,
         IEnumerable<string> stageOrder, string profileContractIdentity,
         string geographyProfileContractIdentity, string geographyStageIdentity,
-        string hexCoordinateConvention, string hexCoordinateCanonicalOrder)
+        string hexCoordinateConvention, string hexCoordinateCanonicalOrder,
+        DailyV1SelectedContentProjection contentProjection)
     {
         Configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         EffectiveConfiguration = effectiveConfiguration ?? throw new ArgumentNullException(nameof(effectiveConfiguration));
@@ -205,8 +217,10 @@ public sealed class DailyV1EffectiveDefinitions
         this.actions = Freeze(actions);
         this.statuses = Freeze(statuses);
         this.contentRecords = FreezeContent(contentRecords);
-        ContentFingerprint = this.contentRecords.Count == 0 ? null : DailyV1ContentProjection.FingerprintRecords(this.contentRecords);
-        if (!string.IsNullOrWhiteSpace(contentFingerprint)
+        ContentProjection = contentProjection;
+        ContentFingerprint = contentProjection != null ? contentProjection.Fingerprint
+            : this.contentRecords.Count == 0 ? null : DailyV1ContentProjection.FingerprintRecords(this.contentRecords);
+        if (contentProjection == null && !string.IsNullOrWhiteSpace(contentFingerprint)
             && !string.Equals(ContentFingerprint, contentFingerprint, StringComparison.Ordinal))
             throw new ArgumentException("The supplied content identity does not match the copied projection.", nameof(contentFingerprint));
         StageOrder = FreezeList(stageOrder);
