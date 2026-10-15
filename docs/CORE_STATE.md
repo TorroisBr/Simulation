@@ -325,3 +325,38 @@ prerequisites to implementation readiness. CORE-E does not close that
 dependency. CORE-X remains deferred until
 its separate compatibility scope and design are approved. This refresh changes
 no numbered Phase status and authorizes no profile growth.
+
+
+## CORE-F WP2-Persistence bounded delivery — 2026-10-15
+
+**Status:** VALIDATED_CANDIDATE, eligible for immediate autonomous bounded
+promotion after refreshed remote/fast-forward preflight. This entry is the
+factual preflight record; canonical delivery is established by the canonical
+ref containing the reviewed candidate and this documentation-only successor.
+
+- Production base: `8ea3b47e9ab1be9ab3fe6261a73dc33fece8cd8f`.
+- Approved prerequisite architecture: `4da844dee0c69fdf66562590fa96cc728fc86bf7`.
+- Independently validated integration candidate:
+  `fb48bea45ee2425fa706e356641d768b9d29f278`.
+- Exact tested production/test source:
+  `50976a358e3563be3dcd37404ccd9d511d6855ff`.
+- Independent review: `reviews/CORE_F_WP2_PERSISTENCE_FINAL_REVIEW.md`.
+- Validation: `validation/CORE_F_Persistence/VALIDATION.md`, complete final
+  taxonomy ALL and cold/warm result packages, protected unchanged originals.
+- Gates: .NET 153/153 cold/warm, locked Lab PASS, Unity focused269/269,
+  ALL3163/3163 including seven original LongRun cases, official Smoke5/5,
+  base diff-check PASS. No nonpassing cases; source/input identities verified.
+
+The package supplies shared descriptor-v1/wire, the approved bounded v2 value
+and admission taxonomy, numeric probe identity and one atomic byte-slot kernel.
+Unity retains v1 same-build/current-host wrapper authority and its existing
+slot/signatures/results. Canonical v2 rejection is exercised before owner staging.
+No owner/runtime host or cross-host compatibility is claimed.
+
+Dependency refresh: WP2 delivery satisfies Values' persistence integration edge;
+Values still needs its complete independently constructed164-field value parity,
+final two-host gates and independent review. WP1-Owners remains an independently
+executable test/evidence package with no new owner implementations. Concrete
+selected-owner/runtime/restore source closure and real .NET continuation remain
+CORE-F dependencies. Full CORE-F remains WAIT_DEPENDENCY; CORE-X DEFERRED;
+closed P12 contracts and all numbered canonical branches remain unchanged.
