@@ -432,8 +432,8 @@ existing Unity v1 save into .NET v2.
 
 | Work | Readiness |
 |---|---|
-| Frozen P18-D codec design | `READY_FOR_INDEPENDENT_REVIEW`; the full Editor run and hash-bound output record now cover controls, surrogate handling, duplicate-key behavior, null/empty behavior, and the actual legacy reader. Implementation remains gated on independent design PASS and exact-tip architecture adoption. |
-| Numeric compatibility helper | `READY_FOR_INDEPENDENT_REVIEW`; the preserved Unity vectors cover all selected overload families, threshold neighbors, and Pow transitions including full signed-Int32 conversion edges. Implementation remains gated on independent review of the callsite/domain/vector package and exact-tip architecture adoption. |
+| Frozen P18-D codec design | `INDEPENDENT_DESIGN_REVIEW_PASS / CORE_CANONICAL_ADOPTION_PENDING`; the full Editor run and hash-bound output record cover controls, surrogate handling, duplicate-key behavior, null/empty behavior, and the actual legacy reader. Production implementation is outside this design and requires separate authorization after exact-tip architecture/Core adoption; it must pass the specified .NET and Unity parity gates before promotion. |
+| Numeric compatibility helper | `INDEPENDENT_DESIGN_REVIEW_PASS / CORE_CANONICAL_ADOPTION_PENDING`; the preserved Unity vectors cover all selected overload families, threshold neighbors, and Pow transitions including full signed-Int32 conversion edges. Production implementation is outside this design and requires separate authorization after exact-tip architecture/Core adoption; it must pass the specified .NET and Unity parity gates before promotion. |
 | P18-D provider call-site switch | `WAIT_DEPENDENCY` on the reviewed Core codec implementation and Unity parity test. |
 | Any owner source migration | `WAIT_DEPENDENCY` on complete owner-group source/writer/epoch/census/export/hydration/relation closure. |
 | Shared runtime, restore composition, .NET host | `WAIT_DEPENDENCY` on owner-group migration and serialized integration contract. |
