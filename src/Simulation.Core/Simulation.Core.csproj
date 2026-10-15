@@ -38,5 +38,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ContinuationDescriptorV2.cs" Link="Persistence/ContinuationDescriptorV2.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/AtomicFileSlot.cs" Link="Persistence/AtomicFileSlot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/NumericProfileIdentity.cs" Link="Persistence/NumericProfileIdentity.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P18DCommercialSharingCodec.cs" Link="Persistence/P18DCommercialSharingCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Numerics/UnityMathfCompatibility.cs" Link="Numerics/UnityMathfCompatibility.cs" />
   </ItemGroup>
 </Project>

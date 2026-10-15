@@ -95,6 +95,19 @@ $afterChanged = @([pscustomobject]@{ path = 'input.cs'; bytes = 1; sha256 = 'b' 
 Assert-True (Compare-CoreInputSnapshots -Before $before -After $afterSame).stable 'Equal input snapshots should be stable.'
 Assert-True (-not (Compare-CoreInputSnapshots -Before $before -After $afterChanged).stable) 'Changed input snapshots must be rejected as unstable.'
 
+$repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..\..')).Path
+$coreInputs = @(Get-CoreInputSnapshot -ProjectRoot $repositoryRoot | ForEach-Object { [string]$_.path })
+foreach ($requiredInput in @(
+    'Packages/com.simulation.core/Runtime/Persistence/P18DCommercialSharingCodec.cs',
+    'Packages/com.simulation.core/Runtime/Numerics/UnityMathfCompatibility.cs',
+    'Assets/_Project/Tests/EditMode/Editor/Core/CORE_F_CompatibilityParityTests.cs',
+    'docs/validation/CORE_F_SharedRuntimeSource/JSON_PAYLOAD_ORACLE.csv',
+    'docs/validation/CORE_F_SharedRuntimeSource/NUMERIC_ORACLE_VECTORS.csv',
+    'docs/validation/CORE_F_SharedRuntimeSource/UNITY_ORACLE_CAPTURE_RESULTS_d8b4c40e.csv'
+)) {
+    Assert-True ($coreInputs -ccontains $requiredInput) "Core validation snapshot omits compatibility input $requiredInput."
+}
+
 $aclTestDirectory = Join-Path ([IO.Path]::GetTempPath()) ('core-validation-acl-' + [Guid]::NewGuid().ToString('N'))
 try {
     $null = Set-ProtectedEvidenceDirectory -Path $aclTestDirectory
