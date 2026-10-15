@@ -100,6 +100,7 @@ public sealed class BattleOutcomeApplicationService
         internal AggregateDemographyTransition Transition { get; }
         internal int PopulationBefore { get; }
         internal long PopulationRevisionBefore { get; }
+        internal PopulationRollbackPoint PopulationRollbackPoint { get; }
 
         internal PreparedSourceTransition(
             ManpowerSourceId sourceId,
@@ -113,8 +114,9 @@ public sealed class BattleOutcomeApplicationService
             Population = population;
             RepresentedResidentFloor = representedResidentFloor;
             Transition = transition;
-            PopulationBefore = population.CurrentPopulation;
-            PopulationRevisionBefore = population.Revision;
+            PopulationRollbackPoint = PopulationOwnerBridge.CaptureRollbackPoint(population);
+            PopulationBefore = PopulationRollbackPoint.Population;
+            PopulationRevisionBefore = PopulationRollbackPoint.Revision;
         }
     }
 
@@ -653,7 +655,10 @@ public sealed class BattleOutcomeApplicationService
             PreparedSourceTransition source = sourceWrites[index];
             try
             {
-                source.Population.RestoreSnapshot(source.PopulationBefore, source.PopulationRevisionBefore);
+                if (!PopulationOwnerBridge.TryRestoreRollbackPoint(
+                        source.Population,
+                        source.PopulationRollbackPoint))
+                    success = false;
                 if (source.Population.CurrentPopulation != source.PopulationBefore
                     || source.Population.Revision != source.PopulationRevisionBefore)
                     success = false;

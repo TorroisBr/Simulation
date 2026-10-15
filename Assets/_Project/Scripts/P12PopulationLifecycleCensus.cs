@@ -234,8 +234,9 @@ public sealed partial class SimulationRuntime
                 || !populationAggregateSectionIdsByOwner.ContainsKey(population)
                 || !populationReceiptSectionIdsByOwner.ContainsKey(population))
                 return false;
-            if (population.IsP12PopulationBound) continue;
-            population.BindP12PopulationMutationBoundary(
+            if (PopulationOwnerBridge.IsP12PopulationBound(population)) continue;
+            PopulationOwnerBridge.BindP12PopulationMutationBoundary(
+                population,
                 CanCommitP12PopulationMutation,
                 NotifyP12PopulationMutation);
         }
@@ -616,7 +617,7 @@ public sealed partial class SimulationRuntime
             bool actionChanged = npc.CurrentActionRuntime != null;
             if (actionChanged)
                 sectionIds.Add(NpcCurrentActionCensusProvider.SectionIdFor(npc.RuntimeId));
-            localRevisionCapacity = () => settlement.Population.CanAdvanceP12AggregateRevision
+            localRevisionCapacity = () => PopulationOwnerBridge.CanAdvanceP12AggregateRevision(settlement.Population)
                 && person.CanAdvanceP12LifeResidenceRevision(residentDeath ? 2 : 1)
                 && (!residentDeath || npc.CanAdvanceP12LifecycleRevisions(
                     1, 0, actionChanged ? 1 : 0));
@@ -629,7 +630,7 @@ public sealed partial class SimulationRuntime
         bool npcActionChanged = npc.CurrentActionRuntime != null;
         if (npcActionChanged)
             sectionIds.Add(NpcCurrentActionCensusProvider.SectionIdFor(npc.RuntimeId));
-        localRevisionCapacity = () => settlement.Population.CanAdvanceP12AggregateRevision
+        localRevisionCapacity = () => PopulationOwnerBridge.CanAdvanceP12AggregateRevision(settlement.Population)
             && npc.CanAdvanceP12LifecycleRevisions(
                 residentDeath ? 1 : 0, 1, npcActionChanged ? 1 : 0);
         return true;
@@ -668,15 +669,15 @@ public sealed partial class SimulationRuntime
                 || !ReferenceEquals(registeredPerson, person))
                 return false;
             sectionIds.Add(PersonLifeResidenceCensusProvider.SectionIdFor(person.PersonId));
-            localRevisionCapacity = () => origin.Population.CanAdvanceP12AggregateRevision
-                && destination.Population.CanAdvanceP12AggregateRevision
+            localRevisionCapacity = () => PopulationOwnerBridge.CanAdvanceP12AggregateRevision(origin.Population)
+                && PopulationOwnerBridge.CanAdvanceP12AggregateRevision(destination.Population)
                 && person.CanAdvanceP12LifeResidenceRevision(1);
             return true;
         }
 
         sectionIds.Add(NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, true));
-        localRevisionCapacity = () => origin.Population.CanAdvanceP12AggregateRevision
-            && destination.Population.CanAdvanceP12AggregateRevision
+        localRevisionCapacity = () => PopulationOwnerBridge.CanAdvanceP12AggregateRevision(origin.Population)
+            && PopulationOwnerBridge.CanAdvanceP12AggregateRevision(destination.Population)
             && npc.CanAdvanceP12LifecycleRevisions(0, 1);
         return true;
     }

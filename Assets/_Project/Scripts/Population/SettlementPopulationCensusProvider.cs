@@ -40,7 +40,7 @@ public static class SettlementPopulationCensusProvider
                     owner.Revision);
             }
 
-            owner.GetOperationReceiptCensus(out int cardinality, out long receiptRevision);
+            PopulationOwnerBridge.GetOperationReceiptCensus(owner, out int cardinality, out long receiptRevision);
             return new OwnerSectionCensusWitness(
                 sectionId,
                 SchemaVersion,

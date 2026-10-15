@@ -350,7 +350,7 @@ public static class PersonDeathLifecycleSystem
                 string populationOperationIdentity = GetResidentPopulationOperationIdentity(transition);
                 string populationFingerprint = GetResidentPopulationFingerprint(transition);
                 PopulationOperationReceiptResolution populationReceipt =
-                    settlement.Population.ResolveOperationReceipt(
+                    PopulationOwnerBridge.ResolveOperationReceipt(settlement.Population,
                         populationOperationIdentity, populationFingerprint);
                 if (populationReceipt == PopulationOperationReceiptResolution.Conflicting)
                 {
@@ -480,7 +480,7 @@ public static class PersonDeathLifecycleSystem
                 populationOperationIdentity = GetResidentPopulationOperationIdentity(transition);
                 populationFingerprint = GetResidentPopulationFingerprint(transition);
                 PopulationOperationReceiptResolution populationReceipt =
-                    residentPopulation.ResolveOperationReceipt(
+                    PopulationOwnerBridge.ResolveOperationReceipt(residentPopulation,
                         populationOperationIdentity, populationFingerprint);
                 if (populationReceipt == PopulationOperationReceiptResolution.Conflicting)
                 {
@@ -513,7 +513,8 @@ public static class PersonDeathLifecycleSystem
                 }
                 else
                 {
-                    applied = residentPopulation.TryApplyTransitionWithReceipt(
+                    applied = PopulationOwnerBridge.TryApplyTransitionWithReceipt(
+                        residentPopulation,
                         populationOperationIdentity,
                         populationFingerprint,
                         aggregateTransition,

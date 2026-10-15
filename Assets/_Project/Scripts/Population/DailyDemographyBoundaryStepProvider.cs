@@ -608,7 +608,7 @@ public sealed class DailyDemographyBoundaryOwner
 
         try
         {
-            if (AggregateDemographySystem.TryApplyWithReceipt(
+            if (PopulationOwnerBridge.TryApplyAggregateWithReceipt(
                     city.Population,
                     transition.RepresentedResidentFloor,
                     transition,
@@ -638,7 +638,7 @@ public sealed class DailyDemographyBoundaryOwner
         {
             // The exact proposal stays in PendingAggregate. Retrying this call
             // resolves the population receipt and never re-runs the provider.
-            if (AggregateDemographySystem.TryApplyWithReceipt(
+            if (PopulationOwnerBridge.TryApplyAggregateWithReceipt(
                     city.Population,
                     transition.RepresentedResidentFloor,
                     transition,

@@ -218,7 +218,8 @@ internal sealed class P12DCityRootOwnerSnapshot
             return false;
         }
 
-        if (!population.TryCaptureOperationReceiptSnapshot(
+        if (!PopulationOwnerBridge.TryCaptureOperationReceiptSnapshot(
+                population,
                 out IReadOnlyList<PopulationOperationReceiptSnapshot> populationReceipts,
                 out long populationReceiptRevision)
             || populationReceipts == null
@@ -397,7 +398,7 @@ internal sealed class P12DCityRootOwnerSnapshot
             marketRows.Add(stagedRow);
         }
 
-        if (!SettlementPopulationRuntime.TryCreateFromOwnerSnapshot(
+        if (!PopulationOwnerBridge.TryCreateFromOwnerSnapshot(
                 PopulationRuntimeId,
                 CurrentPopulation,
                 PopulationRevision,

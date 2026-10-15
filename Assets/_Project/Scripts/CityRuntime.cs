@@ -1258,14 +1258,14 @@ public class CityRuntime
     {
         EnsureRuntimeMutationGuardBinding();
         return runtimeMutationGuardBinding.CanBindTo(guard)
-            && Population.CanBindMutationGuard(guard);
+            && PopulationOwnerBridge.CanBindMutationStatus(Population, guard);
     }
 
     internal bool TryBindRuntimeMutationGuard(AuthoritativeMutationGuard guard)
     {
         EnsureRuntimeMutationGuardBinding();
         return CanBindRuntimeMutationGuard(guard)
-            && Population.TryBindMutationGuard(guard)
+            && PopulationOwnerBridge.TryBindMutationStatus(Population, guard)
             && runtimeMutationGuardBinding.TryBindTo(guard);
     }
 

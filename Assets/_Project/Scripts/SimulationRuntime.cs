@@ -5895,7 +5895,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         AddRequiredMutationGuardBinding(authorities, conflictStore, nameof(PersistentConflictStore));
         AddRequiredMutationGuardBinding(authorities, warStore, nameof(PersistentWarStore));
         AddRequiredMutationGuardBinding(authorities, battleStore, nameof(PersistentBattleStore));
-        AddRequiredMutationGuardBinding(authorities, genealogyStore, nameof(GenealogyStore));
+        AddRequiredMutationGuardBinding(
+            authorities,
+            new GenealogyMutationGuardBinding(genealogyStore),
+            nameof(GenealogyStore));
         AddRequiredMutationGuardBinding(authorities, institutionStore, nameof(InstitutionStore));
         AddRequiredMutationGuardBinding(authorities, officeStore, nameof(OfficeStore));
         AddRequiredMutationGuardBinding(authorities, propertyOwnershipStore, nameof(PropertyOwnershipStore));
@@ -6437,7 +6440,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                         && (materializedNpc == null
                             || materializedNpc.CanAdvanceP12LifecycleRevisions(
                                 1, 0, actionChanged ? 1 : 0))
-                        && (!resident || settlement.Population.CanAdvanceP12AggregateRevision),
+                        && (!resident || PopulationOwnerBridge.CanAdvanceP12AggregateRevision(settlement.Population)),
                     out P12PopulationOperationScope p12Scope))
             {
                 failure = PersonDeathLifecycleFailure.RuntimeFaulted;

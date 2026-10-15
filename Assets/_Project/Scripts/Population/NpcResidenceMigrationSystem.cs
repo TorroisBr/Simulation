@@ -475,7 +475,7 @@ public static class NpcResidenceMigrationSystem
 
         // The paired population boundary repeats the aggregate checks and commits both
         // sides together; it exposes no arbitrary populationAfter mutation primitive.
-        if (SettlementPopulationRuntime.TryApplyPairedMigration(
+        if (PopulationOwnerBridge.TryApplyPairedMigration(
             origin,
             destination,
             transition.OriginExpectedRevision,
