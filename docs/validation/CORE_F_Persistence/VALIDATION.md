@@ -1,5 +1,61 @@
 # CORE-F WP2-Persistence — implementation validation
 
+## Current final validation — 2026-10-15
+
+Final tested production/test source: `50976a358e3563be3dcd37404ccd9d511d6855ff`.
+Tree: `2a3d95cec8b72df29939d03693caa3de522256f9`; Assets:
+`cf38591739b1a2f017ca1b2d79e6243697645b16`; Packages:
+`08a12ac6d1adf71582341714b19e5e5c104c8fa6`. ProjectSettings and both
+validation-tool trees remain the identities recorded in the historical section below.
+
+The final independent source audit identified the combined foreign-host/unknown-
+profile case. One structural canonical parser now precedes admission policy:
+malformed framing/UTF-8/mandatory version zero is Corrupt; Unity rejects every
+structurally canonical v2 as UnsupportedSchema; the pure .NET policy rejects a
+canonical foreign Unity host as IncompatibleBuildOrRuntime before profile/version
+admission. Native-host unknown profile and positive unsupported profile version
+retain UnsupportedProfile and UnsupportedSchema respectively. The public v2
+canonical parser retains its supported-profile contract. The added 2x2x2
+host/profile/version regression also tests malformed data for each combination.
+
+| Final gate | Protected run | Result |
+|---|---|---|
+| .NET pinned cold/warm, Library absent | `e96eed452ca149b78e4e6024e8e18e2b` | 153/153 each |
+| Locked Lab cold/warm | `5048deb8e044446a8b5079d4f0806fac` | PASS, exact four-line scenario |
+| Unity focused codec/shared persistence/admission | `2362aac6728f4432ac30196ebbd20009` | 269/269 |
+| ALL EditMode | `11094e4768424ff9a2e07e718774d14a` | 3163/3163, no nonpassing cases |
+| Official -TestFilter Smoke | `36bb6127cff2482793934160691b351c` | 5/5 |
+| Original LongRun cases in ALL | same ALL | 7/7, unchanged 100/1000/5000-day horizons |
+| Base-to-tip diff --check | final source above | PASS |
+
+New complete result packages supersede the earlier result packages for final
+source applicability; historical packages and immutable originals remain intact.
+
+- `core-f-persistence-taxonomy-cold-warm.manifest.json` and matching ZIP:
+  archive SHA-256 `1a7c318676284f85421c5659328437ade89a1e98d5f5984b76a7a6d2b6210ba2`.
+  Private comparison: originalComparisonVerified. Separate archive-only check:
+  originalComparisonNotPerformed. SDK/project/compiled-source identity is bound
+  by the TRX package, including inputs outside Unity capture roots.
+- `core-f-persistence-taxonomy-all.manifest.json` and matching ZIP:
+  archive SHA-256 `8f1fcfa134a9fe86d77c2c7134ece309ac1fbdc63eae084e0eb3adca88c21601`.
+  Package verification against the protected run manifest passed.
+
+All three Unity runs captured identical input inventories, stable before/after,
+from the same source SHA. Every focused and Smoke case was joined to a passing
+case in the complete ALL report. Original focused XML SHA-256:
+`2f7d14093e168444685de0cc93ce5d507c927b909fd0a2c0337702e38eea5d60`;
+Smoke XML SHA-256:
+`41b4facbde2ba1b33758d30915a9de0f7d247b01fd742de1182be2ec460871b7`.
+The filtered-suite packaging limitation described below still applies; no report
+was rewritten. Public packages contain complete normalized results with private
+metadata removed by the approved tool, not private binaries/log locators.
+
+The same infrastructure-only exclusions below apply. Final exact-tip independent
+review is recorded separately before promotion. Documentation-only successors
+reuse these runs only after verification that all effective inputs are unchanged.
+
+## Historical validation at 3d0ed689 (superseded for final source)
+
 ## Candidate and exact executed source
 
 Production base: `8ea3b47e9ab1be9ab3fe6261a73dc33fece8cd8f`.
