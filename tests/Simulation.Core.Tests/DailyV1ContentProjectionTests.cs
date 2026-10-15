@@ -305,101 +305,9 @@ public sealed class DailyV1ContentProjectionTests
         string encoded = Find(lines, "p12-catalog-bytes");
         byte[] bytes = Convert.FromBase64String(encoded);
         string fingerprint = Find(lines, "p12-content");
-        Dictionary<string, Dictionary<string, string>> schema = ReadSchema();
-        using (MemoryStream stream = new MemoryStream(bytes, false))
-        using (BinaryReader reader = new BinaryReader(stream, new UTF8Encoding(false, true), true))
-        {
-            Assert.That(ReadString(reader), Is.EqualTo("p12a.official-content-catalog/v1"));
-            int count = reader.ReadInt32();
-            List<DailyV1SelectedContentAsset> assets = new List<DailyV1SelectedContentAsset>();
-            DailyV1SelectedContentAsset profile = null;
-            for (int i = 0; i < count; i++)
-            {
-                string key = ReadString(reader);
-                int length = reader.ReadInt32();
-                byte[] recordBytes = reader.ReadBytes(length);
-                Assert.That(recordBytes, Has.Length.EqualTo(length));
-                using (MemoryStream recordStream = new MemoryStream(recordBytes, false))
-                using (BinaryReader record = new BinaryReader(recordStream, new UTF8Encoding(false, true), true))
-                {
-                    string type = ReadString(record);
-                    List<DailyV1SelectedContentField> fields = ReadFields(record, type, schema);
-                    Assert.That(recordStream.Position, Is.EqualTo(recordStream.Length));
-                    DailyV1SelectedContentAsset asset = new DailyV1SelectedContentAsset(key, type, fields);
-                    if (key == DailyV1SelectedContentAsset.ProfileKey) profile = asset;
-                    else assets.Add(asset);
-                }
-            }
-            Assert.That(stream.Position, Is.EqualTo(stream.Length));
-            Assert.That(profile, Is.Not.Null);
-            return new Fixture(bytes, fingerprint, profile, assets.ToArray());
-        }
-    }
-
-    private static List<DailyV1SelectedContentField> ReadFields(BinaryReader reader, string objectType,
-        Dictionary<string, Dictionary<string, string>> schema)
-    {
-        int count = reader.ReadInt32();
-        Assert.That(schema.TryGetValue(objectType, out Dictionary<string, string> members), Is.True, objectType);
-        Assert.That(count, Is.EqualTo(members.Count), objectType);
-        List<DailyV1SelectedContentField> fields = new List<DailyV1SelectedContentField>(count);
-        for (int i = 0; i < count; i++)
-        {
-            string declaringType = ReadString(reader);
-            string name = ReadString(reader);
-            Assert.That(members.TryGetValue(name, out string sourceType), Is.True, objectType + "." + name);
-            fields.Add(new DailyV1SelectedContentField(declaringType, name, ReadValue(reader, sourceType, schema)));
-        }
-        return fields;
-    }
-
-    private static DailyV1SelectedContentValue ReadValue(BinaryReader reader, string sourceType,
-        Dictionary<string, Dictionary<string, string>> schema)
-    {
-        string expected = TypeToken(sourceType);
-        long initialPosition = reader.BaseStream.Position;
-        int leadingByte = reader.ReadByte();
-        reader.BaseStream.Position = initialPosition;
-        if (leadingByte == 0)
-        {
-            reader.ReadByte();
-            return DailyV1SelectedContentValue.Null(expected);
-        }
-        string token = ReadString(reader);
-        byte tag = reader.ReadByte();
-        switch (tag)
-        {
-            case 1: return DailyV1SelectedContentValue.Reference(token, ReadString(reader));
-            case 2: return DailyV1SelectedContentValue.Scalar(token, ReadString(reader));
-            case 3: return DailyV1SelectedContentValue.Enum(token, ReadString(reader));
-            case 4: return DailyV1SelectedContentValue.Scalar(token, reader.ReadBoolean());
-            case 5: return DailyV1SelectedContentValue.Scalar(token, reader.ReadByte());
-            case 6: return DailyV1SelectedContentValue.Scalar(token, reader.ReadSByte());
-            case 7: return DailyV1SelectedContentValue.Scalar(token, reader.ReadInt16());
-            case 8: return DailyV1SelectedContentValue.Scalar(token, reader.ReadUInt16());
-            case 9: return DailyV1SelectedContentValue.Scalar(token, reader.ReadInt32());
-            case 10: return DailyV1SelectedContentValue.Scalar(token, reader.ReadUInt32());
-            case 11: return DailyV1SelectedContentValue.Scalar(token, reader.ReadInt64());
-            case 12: return DailyV1SelectedContentValue.Scalar(token, reader.ReadUInt64());
-            case 13: return DailyV1SelectedContentValue.Scalar(token, (char)reader.ReadUInt16());
-            case 14: return DailyV1SelectedContentValue.Scalar(token, BitConverter.ToSingle(BitConverter.GetBytes(reader.ReadInt32()), 0));
-            case 15: return DailyV1SelectedContentValue.Scalar(token, BitConverter.ToDouble(BitConverter.GetBytes(reader.ReadInt64()), 0));
-            case 16: return DailyV1SelectedContentValue.Scalar(token, new decimal(new[] { reader.ReadInt32(), reader.ReadInt32(), reader.ReadInt32(), reader.ReadInt32() }));
-            case 17: return DailyV1SelectedContentValue.Scalar(token, Guid.ParseExact(ReadString(reader), "N"));
-            case 18: return DailyV1SelectedContentValue.Scalar(token, DateTime.FromBinary(reader.ReadInt64()));
-            case 19: return DailyV1SelectedContentValue.Scalar(token, TimeSpan.FromTicks(reader.ReadInt64()));
-            case 20:
-            {
-                int itemCount = reader.ReadInt32();
-                string elementType = sourceType.Substring(5, sourceType.Length - 6);
-                List<DailyV1SelectedContentValue> values = new List<DailyV1SelectedContentValue>(itemCount);
-                for (int i = 0; i < itemCount; i++) values.Add(ReadValue(reader, elementType, schema));
-                return DailyV1SelectedContentValue.List(token, values);
-            }
-            case 21:
-                return DailyV1SelectedContentValue.Object(token, ReadFields(reader, sourceType, schema));
-            default: throw new InvalidDataException("Unknown content tag " + tag.ToString(CultureInfo.InvariantCulture));
-        }
+        DailyV1CapturedSelectedContentFixture.Create(out DailyV1SelectedContentAsset capturedProfile,
+            out DailyV1SelectedContentAsset[] capturedAssets);
+        return new Fixture(bytes, fingerprint, capturedProfile, capturedAssets);
     }
 
     private static Dictionary<string, Dictionary<string, string>> ReadSchema()
@@ -441,14 +349,6 @@ public sealed class DailyV1ContentProjectionTests
         return sourceType;
     }
 
-    private static string ReadString(BinaryReader reader)
-    {
-        int length = reader.ReadInt32();
-        byte[] bytes = reader.ReadBytes(length);
-        if (bytes.Length != length) throw new EndOfStreamException();
-        return new UTF8Encoding(false, true).GetString(bytes);
-    }
-
     private static string Find(IEnumerable<string> lines, string name)
     {
         string prefix = name + "=";
@@ -473,4 +373,6 @@ public sealed class DailyV1ContentProjectionTests
         public Fixture(byte[] bytes, string fingerprint, DailyV1SelectedContentAsset profile, DailyV1SelectedContentAsset[] assets)
         { Bytes = bytes; Fingerprint = fingerprint; Profile = profile; Assets = assets; }
     }
+
+
 }

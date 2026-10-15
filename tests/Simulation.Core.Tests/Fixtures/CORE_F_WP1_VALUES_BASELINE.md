@@ -13,6 +13,15 @@ It is evidence captured from Unity, not generated from the new DTOs. The capture
 test is retained as the reproduction source. SHA-256:
 `422805cbe373cf1410ee6a928d363fa1ef413dbcf50dc062dce7867ed4fdd1b3`.
 
+`DailyV1CapturedSelectedContentFixture.cs` is generated from the 718 independent
+`member=` rows and the reviewed 164-row CSV, never from the expected P12 bytes.
+The generator pins the baseline SHA, checks that its nested object/list walk
+accounts for every captured field occurrence, and emits explicit C# constructor
+inputs for the bounded P12 projection and typed P9 definition graph. The .NET
+tests compare those values against all 184 retained P9 records, the P9 digest,
+and the complete P12 catalog bytes. Regenerate with:
+`py -c "import runpy; runpy.run_path('Tools/generate_daily_v1_captured_content_fixture.py', run_name='__main__')"`.
+
 The test does not capture a P8 fingerprint; this fixture makes no P8 identity
 claim. Runtime adapter inputs must continue to take the P8 fingerprint from the
 existing Unity authority.

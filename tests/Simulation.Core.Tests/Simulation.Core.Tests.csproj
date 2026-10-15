@@ -32,6 +32,7 @@
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioRuntimeTests.cs" Link="Economy/FiniteSourceScenarioRuntimeTests.cs" />
       <Compile Include="DailyV1DefinitionIdentityTests.cs" Link="Definitions/DailyV1DefinitionIdentityTests.cs" />
       <Compile Include="DailyV1ContentProjectionTests.cs" Link="Definitions/DailyV1ContentProjectionTests.cs" />
+      <Compile Include="DailyV1CapturedSelectedContentFixture.cs" Link="Definitions/DailyV1CapturedSelectedContentFixture.cs" />
       <Compile Include="DailyV1DefinitionProviderVectors.cs" Link="Definitions/DailyV1DefinitionProviderVectors.cs" />
       <Compile Include="SimulationConfigurationResolverPrecedenceTests.cs" Link="Configuration/SimulationConfigurationResolverPrecedenceTests.cs" />
       <Compile Include="DailyV1TypedDefinitionGraphTests.cs" Link="Definitions/DailyV1TypedDefinitionGraphTests.cs" />
