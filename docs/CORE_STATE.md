@@ -571,3 +571,13 @@ rewrite causal bytes, close full CORE-F, establish CORE-X or P13 readiness, or
 change numbered-phase branches. Full CORE-F remains **WAIT_DEPENDENCY** on the
 actual selected owner/runtime/restore source closure, host composition, detached
 restoration, and exact .NET continuation/parity proof. CORE-X remains **DEFERRED**.
+
+## CORE-F — Shared Runtime Source compatibility extraction (2026-10-15)
+
+The Core-canonical adopted design has implementation candidate `6431fad3bc94263d2db5699706bdf185683b0f76` (source tree `4cdae296cc2fa84e26d48b38636ed9a9647cab06`), based on Core canonical `b8962cbc8a390c735858ac77b6fdf8e50cfaea8b`. It extracts the approved typed payload codec and selected numeric compatibility helpers into the shared engine-free Core source path with Unity/.NET tests. Scope excludes provider switching, owner migration, runtime, P12 persistence changes, restoration, and host composition. Full evidence is in [`CORE-F compatibility validation`](validation/CORE_F_SharedRuntimeSource/IMPLEMENTATION_VALIDATION.md).
+
+.NET cold/warm validation passed 171/171 each. Unity 6000.3.9f1 / Test Framework 1.6.0 unfiltered ALL EditMode passed 3,175/3,175 with stable complete inputs. The verified normalized Unity package is `core-f-compat-6431fad3-unity-all.zip` (SHA-256 `9341c09d66fbe693ad0a2f3d13cb0d2b6645b437403f4616fef129ec4ab2d6d4`); the .NET TRX package is `core-f-compat-6431fad3-cold-warm.zip` (SHA-256 `6917029217d029e4bf7c8f752aced893bdf0a4a476cd242eec5ab539d05ec878`). The complete Unity report includes the two focused parity cases and all five Smoke cases. Filtered executions also passed, but their standalone XMLs are not packaged because the fail-closed verifier detects stale parent-suite aggregate counts; no XML was changed or accepted as normalized evidence.
+
+The candidate remains awaiting independent exact-tip implementation review. CORE-F remains WAIT_DEPENDENCY for provider switch, selected-owner extraction, shared runtime/restore, and .NET host. This candidate does not close CORE-F, change P12, or establish CORE-X/P13 readiness.
+
+The reviewed design contains one prose discrepancy about null object rows in the runtime roster versus the hash-bound Unity capture. This candidate follows the captured output and leaves provider behavior unchanged; reconcile the design prose and verify the capture before a provider switch.
