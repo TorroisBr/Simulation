@@ -6,9 +6,9 @@ using System.Collections.ObjectModel;
 /// Mutable aggregate population state owned by a future settlement runtime.
 /// This ledger intentionally has no independent runtime identity and no named-NPC awareness.
 /// </summary>
-public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBindable
+public sealed class SettlementPopulationRuntime
 {
-    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    private readonly MutationStatusBinding mutationStatusBinding = new MutationStatusBinding();
     private readonly object operationReceiptGate = new object();
     private readonly string settlementRuntimeId;
     private int currentPopulation;
@@ -22,8 +22,7 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
     public string SettlementRuntimeId => settlementRuntimeId;
     public int CurrentPopulation => currentPopulation;
     public long Revision => revision;
-    internal bool CanMutate => mutationGuardBinding.CanMutate;
-    internal AuthoritativeMutationGuard BoundMutationGuard => mutationGuardBinding.BoundGuard;
+    internal bool CanMutate => mutationStatusBinding.CanMutate;
     internal bool IsP12PopulationBound => p12PopulationMutationAdmission != null;
     internal bool CanAdvanceP12AggregateRevision =>
         p12PopulationMutationAdmission == null || revision < long.MaxValue;
@@ -376,7 +375,7 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
         out PopulationTransitionFailure failure)
     {
         failure = PopulationTransitionFailure.None;
-        if (!mutationGuardBinding.CanMutate)
+        if (!mutationStatusBinding.CanMutate)
         {
             failure = PopulationTransitionFailure.RuntimeFaulted;
             return false;
@@ -518,24 +517,14 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
         return true;
     }
 
-    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    internal bool CanBindMutationStatus(IAuthoritativeMutationStatus status)
     {
-        return mutationGuardBinding.CanBindTo(guard);
+        return mutationStatusBinding.CanBindTo(status);
     }
 
-    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    internal bool TryBindMutationStatus(IAuthoritativeMutationStatus status)
     {
-        return mutationGuardBinding.TryBindTo(guard);
-    }
-
-    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
-    {
-        return CanBindMutationGuard(guard);
-    }
-
-    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
-    {
-        return TryBindMutationGuard(guard);
+        return mutationStatusBinding.TryBindTo(status);
     }
 
     private static bool originCanApply(
@@ -549,15 +538,15 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
             return true;
         }
 
-        if (!origin.mutationGuardBinding.CanMutate || !destination.mutationGuardBinding.CanMutate)
+        if (!origin.mutationStatusBinding.CanMutate || !destination.mutationStatusBinding.CanMutate)
         {
             failure = PopulationTransitionFailure.RuntimeFaulted;
             return false;
         }
 
         if (!ReferenceEquals(
-                origin.mutationGuardBinding.BoundGuard,
-                destination.mutationGuardBinding.BoundGuard))
+                origin.mutationStatusBinding.BoundStatus,
+                destination.mutationStatusBinding.BoundStatus))
         {
             failure = PopulationTransitionFailure.RuntimeOwnershipMismatch;
             return false;
@@ -581,13 +570,13 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
 }
 
 /// <summary>Detached immutable value for one retained population operation receipt.</summary>
-internal sealed class PopulationOperationReceiptSnapshot
+public sealed class PopulationOperationReceiptSnapshot
 {
-    internal string Identity { get; }
-    internal string Fingerprint { get; }
-    internal SettlementPopulationTransition Transition { get; }
+    public string Identity { get; }
+    public string Fingerprint { get; }
+    public SettlementPopulationTransition Transition { get; }
 
-    internal PopulationOperationReceiptSnapshot(
+    public PopulationOperationReceiptSnapshot(
         string identity,
         string fingerprint,
         SettlementPopulationTransition transition)
@@ -598,7 +587,7 @@ internal sealed class PopulationOperationReceiptSnapshot
     }
 }
 
-internal enum PopulationOperationReceiptResolution
+public enum PopulationOperationReceiptResolution
 {
     Missing = 0,
     Matching = 1,

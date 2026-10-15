@@ -328,7 +328,7 @@ public static class AggregateDemographySystem
 
     private static string CreateOperationFingerprint(AggregateDemographyTransition transition)
     {
-        return SpatialStableKey.Encode(
+        return StableKeyEncoding.Encode(
             "aggregate-demography-v1",
             transition.SettlementRuntimeId,
             transition.ExpectedPopulationRevision.ToString(System.Globalization.CultureInfo.InvariantCulture),
