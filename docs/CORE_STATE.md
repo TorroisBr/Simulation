@@ -585,3 +585,64 @@ The reviewed design contains one prose discrepancy about null object rows in the
 ### Unity fixture-input identity remediation
 
 An initial independent review found the Unity snapshot omitted the three CSV oracle fixtures consumed by the new parity tests. The finding was addressed without changing code/tests: final run `17bfb6a506ee456f8aeb7d8ed77f5b45` passed ALL EditMode 3,175/3,175 with stable inputs, and the committed extra-input sidecar binds each fixture's pre/post hashes and Git identity to the run. The final verified result archive is `core-f-compat-6431fad3-unity-all-inputbound.zip` (SHA-256 `ee56efbee92816320dd681911764e1418ba02815d95313bd2d8d070c7421aa13`). Independent exact-tip review then passed as recorded above. No provider switch or broader CORE-F readiness is claimed.
+
+## CORE-F compatibility slice promotion — 2026-10-15
+
+The bounded codec and numeric-helper implementation/evidence candidate was
+promoted to `codex/core/canonical` by fast-forward from
+`b8962cbc8a390c735858ac77b6fdf8e50cfaea8b` through
+`6b2364cc500a32a68cef7edc39ff508a0d68dff0`. Remote refs were refreshed before
+promotion; candidate ancestry, exact source tree, package hashes, and
+`git diff --check` passed. The exact implementation is `6431fad3bc94263d2db5699706bdf185683b0f76`, tree
+`4cdae296cc2fa84e26d48b38636ed9a9647cab06`. Independent implementation review
+passed for exact candidate `1057f52eb2165421f05d8c9f0b25403719de6c83`; the
+independent review of docs-only successor `6b2364cc500a32a68cef7edc39ff508a0d68dff0`
+also passed and verified unchanged code/test blobs, evidence identities, scope,
+and protected-file boundaries. See
+[`implementation review`](validation/CORE_F_SharedRuntimeSource/IMPLEMENTATION_REVIEW.md).
+
+The final evidence remains .NET CoreValidation cold/warm 171/171 each and Unity
+6000.3.9f1 / Test Framework 1.6.0 ALL EditMode 3,175/3,175. The Unity full
+report contains the two codec/numeric parity cases and all five Smoke case
+identities. Final package hashes are recorded in the linked validation and
+review records; the input-bound Unity archive is
+`core-f-compat-6431fad3-unity-all-inputbound.zip` and the .NET archive is
+`core-f-compat-6431fad3-cold-warm.zip`. No new test run or original-XML
+comparison is claimed by this docs-only promotion record.
+
+This promotion delivers only the shared typed frozen P18-D `Plan`/`Edge` codec,
+selected Unity-compatible numeric helpers, and their shared .NET/Unity tests.
+The Unity provider, owner authorities, `SimulationRuntime`, P12 persistence,
+restore, and host composition are unchanged. P12 remains closed only for its
+accepted same-build/current-host `UnityBootstrap-Daily-v1` profile; this slice
+adds no P12 profile/save guarantee. CORE-F remains open and
+`WAIT_DEPENDENCY`.
+
+## CORE-F readiness refresh after compatibility promotion — 2026-10-15
+
+- **PROMOTED:** the reviewed codec and numeric-helper compatibility foundation
+  above.
+- **WAIT_ARCHITECTURE_RECONCILIATION:** the P18-D provider call-site switch.
+  The canonical design says a JSON null element in `runtimeRoster` remains a
+  null row (`docs/design/CORE_F_SHARED_RUNTIME_SOURCE_TECHNICAL_DESIGN.md`,
+  “Frozen P18-D payload codec”). The hash-bound capture CSV for run
+  `d8b4c40e04ab466a9c56fdf6e5f5361d` instead records sequence 18 as
+  `roster=len=1[runtimeId=~,personId=~]`; the current Core codec intentionally
+  matches that captured default-object behavior, and the existing provider
+  rejects the incomplete row before owner mutation. The capture row and source
+  were inspected here; this is not a new claim of raw-report comparison. The
+  design owner must reconcile the prose before provider switching. No production
+  behavior or design meaning was changed by this promotion.
+- **WAIT_DEPENDENCY:** owner-group extraction, shared runtime/restore
+  composition, and the .NET Daily-v1 host still require complete selected-owner
+  source/writer/epoch/export/hydration/relation closure and serialized
+  composition evidence. Full CORE-F remains `WAIT_DEPENDENCY`; CORE-X remains
+  `DEFERRED`.
+
+The dependency edges are unchanged: promoted Persistence/Owners/Values plus the
+closed P12 contract support the compatibility foundation; the provider switch
+depends on design reconciliation; selected owner/runtime/restore extraction
+depends on complete owner-group closure; and the .NET host, detached restoration,
+and exact T/T+1/T+2 continuation parity follow that source closure. No numbered
+Phase, P12, or P13 readiness changed. Protected ProjectSettings edits and the
+untracked superseded oracle package remain untouched.

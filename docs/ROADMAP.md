@@ -61,6 +61,41 @@ save interchange follows. Architecture documentation changes are imported into
 current Core as documentation deltas; never merge this checkout's older code tree.
 
 
+## CORE-F compatibility foundation promotion and readiness — 2026-10-15
+
+The Core-canonical adopted Shared Runtime Source design is architecture
+canonical at `bec3998f697f362944aa5b551d45998145f4e67e`. Its bounded shared
+P18-D `Plan`/`Edge` codec and selected Unity-compatible numeric helper slice is
+promoted to `codex/core/canonical` at implementation/evidence candidate
+`6b2364cc500a32a68cef7edc39ff508a0d68dff0`; exact tested code is
+`6431fad3bc94263d2db5699706bdf185683b0f76`, tree
+`4cdae296cc2fa84e26d48b38636ed9a9647cab06`. See the owning
+[`CORE_STATE.md`](CORE_STATE.md) and the exact validation/review records under
+`docs/validation/CORE_F_SharedRuntimeSource/`.
+
+The refreshed CORE-F dependency path is:
+
+```text
+promoted Values + Owners + Persistence + closed P12 profile contract
+  -> promoted shared payload/numeric compatibility foundation
+  -> P18-D provider adapter (WAIT_ARCHITECTURE_RECONCILIATION)
+  -> complete selected owner-group source/writer/epoch/export/hydration/relation closure
+  -> one serialized shared runtime/restore composition
+  -> fixed .NET host + detached restoration + exact T/T+1/T+2 continuation parity
+  -> full CORE-F bounded result
+```
+
+The provider adapter remains blocked by one technical-design text conflict:
+the approved capture for a JSON-null `runtimeRoster` element records a
+default-valued roster object, while one design sentence says the element stays
+null. The shared codec matches the captured output, and the existing provider
+rejects that incomplete row before owner mutation. The design owner must
+reconcile the prose before that call-site switch; this requires no P12 profile
+change or product-semantics expansion. The supported P12 contract remains
+formally closed only for same-build/current-host `UnityBootstrap-Daily-v1` at
+P12 canonical `fbf06fa887a29b92be004d864f4ee98d90926d4a`; this Core slice does
+not add P12 persistence, broaden its profile, or establish P13 readiness.
+
 ## Current Simulation Core readiness — 2026-10-14
 
 At Core canonical `ad7a18899a13ec42a3d2b6b3098dff2f0a318492`, CORE-A
