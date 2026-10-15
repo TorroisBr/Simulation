@@ -251,7 +251,7 @@ internal static class P12ADailyV1ContentAdapter
             if (itemCount < 0) throw new InvalidOperationException("A Daily-v1 collection has a negative count.");
             long minimum = MinimumValueBytes(elementType);
             long required = checked((long)itemCount * minimum);
-            if (required > DailyV1ContentProjection.MaxCatalogBytes - _bytes)
+            if (required > DailyV1SelectedContentProjectionFactory.MaxCatalogBytes - _bytes)
                 throw new InvalidOperationException("The Daily-v1 content catalog exceeds its byte bound during Unity capture.");
         }
 
@@ -271,10 +271,10 @@ internal static class P12ADailyV1ContentAdapter
             return 1;
         }
 
-        private void Add(long count)
+        public void Add(long count)
         {
             _bytes = checked(_bytes + count);
-            if (count < 0 || _bytes > DailyV1ContentProjection.MaxCatalogBytes)
+            if (count < 0 || _bytes > DailyV1SelectedContentProjectionFactory.MaxCatalogBytes)
                 throw new InvalidOperationException("The Daily-v1 content catalog exceeds its byte bound during Unity capture.");
         }
     }

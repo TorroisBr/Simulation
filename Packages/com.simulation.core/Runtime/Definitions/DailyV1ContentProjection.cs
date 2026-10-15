@@ -394,6 +394,8 @@ public sealed class DailyV1SelectedContentProjection
 /// </summary>
 public static class DailyV1SelectedContentProjectionFactory
 {
+    /// <summary>The selected compatibility catalog byte limit, shared with host capture guards.</summary>
+    public const int MaxCatalogBytes = DailyV1ContentProjection.MaxCatalogBytes;
     private const string Schema =
         "SimulationConfigData|simulationName|string\n" +
         "SimulationConfigData|calendar|CalendarDefinition\n" +
