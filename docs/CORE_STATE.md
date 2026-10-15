@@ -501,3 +501,18 @@ fast-forward preflight. Existing final .NET169/169 cold/warm, locked Lab PASS,
 Unity typed2/2, focused340/340, ALL3169/3169 including7 original LongRun cases,
 and Smoke5/5 remain their original run results; they are not new host evidence.
 No routine human decision remains for the next bounded technical-design wave.
+
+
+### Core source-preparation adoption — independent applicability
+
+Independent Luna reviewer `/root/wp2_final_review` passed exact Core adoption
+`e8b2343e525a1965cc1064c09a92d5b646606041`:13 imported artifact blobs match
+promoted architecture758d4eaf exactly, and all16 changed paths are documentation.
+The reviewer confirmed no executable-input differences between executed source
+e2184090, production basefff5cca0 and this adoption in the relevant source/test/
+Tools/profile roots. All original final validation remains applicable; no new run
+or .NET full-world proof is claimed. Diff-check and handoff/review links passed.
+This State-only successor records that independent PASS and requires unchanged
+metadata applicability plus immediate safe fast-forward preflight, without another
+routine user gate. Exact canonical delivery is established by the containing
+commit on `codex/core/canonical`; architecture and numbered-phase refs are separate.
