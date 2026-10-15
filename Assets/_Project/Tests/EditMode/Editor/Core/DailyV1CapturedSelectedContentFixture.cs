@@ -2,7 +2,7 @@
 // Source baseline SHA-256: 422805cbe373cf1410ee6a928d363fa1ef413dbcf50dc062dce7867ed4fdd1b3; reviewed inventory rows: 164; captured occurrences: 718.
 using System;
 
-internal static class DailyV1CapturedSelectedContentFixture
+public static class DailyV1CapturedSelectedContentFixture
 {
     public static void Create(out DailyV1SelectedContentAsset profile, out DailyV1SelectedContentAsset[] assets)
     {
