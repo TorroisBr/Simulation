@@ -36,6 +36,7 @@
       <Compile Include="DailyV1TypedDefinitionGraphTests.cs" Link="Definitions/DailyV1TypedDefinitionGraphTests.cs" />
       <Compile Include="DailyV1SelectedMemberCoverageTests.cs" Link="Definitions/DailyV1SelectedMemberCoverageTests.cs" />
       <None Include="../../docs/architecture/CORE_F_SELECTED_VALUE_MEMBERS.csv" Link="Fixtures/CORE_F_SELECTED_VALUE_MEMBERS.csv" CopyToOutputDirectory="PreserveNewest" />
+      <None Include="../../Assets/_Project/Scripts/CoreAdapters/DailyV1DefinitionAdapter.cs" Link="Fixtures/DailyV1DefinitionAdapter.source.cs" CopyToOutputDirectory="PreserveNewest" />
       <None Include="Fixtures/CORE_F_WP1_VALUES_BASELINE.txt" CopyToOutputDirectory="PreserveNewest" />
       <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/PersistenceFoundationTests.cs" Link="Persistence/PersistenceFoundationTests.cs" />
       <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/PersistenceFoundationFaultMatrixTests.cs" Link="Persistence/PersistenceFoundationFaultMatrixTests.cs" />
