@@ -33,6 +33,11 @@ public sealed class CoreFDailyV1ValueBaselineTests
 
         string p9 = SimulationGenesisPipeline.CreateFingerprint(
             authoring, resolution.Configuration, calendar, out IReadOnlyList<string> p9Records);
+        string[] retained = File.ReadAllLines(Path.Combine("tests", "Simulation.Core.Tests", "Fixtures", "CORE_F_WP1_VALUES_BASELINE.txt"),
+            new UTF8Encoding(false, true));
+        Assert.That(p9, Is.EqualTo(RetainedValue(retained, "p9")), "Typed P9 fingerprint must preserve the pre-refactor identity.");
+        CollectionAssert.AreEqual(RetainedRecords(retained, "p9-record="), p9Records,
+            "Typed P9 builder must preserve every ordered pre-refactor record.");
         MethodInfo catalogMethod = typeof(P12ACompatibilityDescriptorFactory).GetMethod(
             "FingerprintContentCatalog", BindingFlags.NonPublic | BindingFlags.Static);
         Assert.That(catalogMethod, Is.Not.Null);
@@ -41,6 +46,8 @@ public sealed class CoreFDailyV1ValueBaselineTests
         byte[] catalogBytes = CaptureCatalogBytes(authoring, catalogMethod);
         Assert.That(Sha256(catalogBytes), Is.EqualTo(p12), "The retained P12 bytes must be the production encoder output.");
         List<string> orderedValues = CaptureSelectedMemberValues(authoring);
+        CollectionAssert.AreEqual(RetainedRecords(retained, "member="), orderedValues,
+            "The selected 164-field/718-occurrence input vector changed from the retained Unity baseline.");
         string provider = InvokePrivateFingerprint("FingerprintProviders");
         string calendarIdentity = InvokePrivateFingerprint("FingerprintCalendar", calendar);
         string outputPath = Path.Combine(Directory.GetCurrentDirectory(), "Library", "CORE_F_WP1_VALUES_BASELINE.txt");
@@ -239,6 +246,24 @@ public sealed class CoreFDailyV1ValueBaselineTests
     private static string Escape(string value)
     {
         return Convert.ToBase64String(Encoding.UTF8.GetBytes(value ?? string.Empty));
+    }
+
+    private static string RetainedValue(string[] lines, string key)
+    {
+        string prefix = key + "=";
+        foreach (string line in lines)
+            if (line.StartsWith(prefix, StringComparison.Ordinal))
+                return Encoding.UTF8.GetString(Convert.FromBase64String(line.Substring(prefix.Length)));
+        throw new InvalidDataException("The retained value baseline lacks " + key + ".");
+    }
+
+    private static List<string> RetainedRecords(string[] lines, string prefix)
+    {
+        List<string> result = new List<string>();
+        foreach (string line in lines)
+            if (line.StartsWith(prefix, StringComparison.Ordinal))
+                result.Add(Encoding.UTF8.GetString(Convert.FromBase64String(line.Substring(prefix.Length))));
+        return result;
     }
 
     private static int CountCatalogRecords(byte[] bytes)

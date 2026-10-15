@@ -431,24 +431,12 @@ public static class SimulationGenesisPipeline
 
     private static void Add(List<string> fields, string kind, params object[] values)
     {
-        var record = new StringBuilder(kind);
-        foreach (object value in values)
-        {
-            string text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? "";
-            record.Append('|').Append(text.Length.ToString(CultureInfo.InvariantCulture)).Append(':').Append(text);
-        }
-        fields.Add(record.ToString());
+        fields.Add(DailyV1DefinitionIdentity.CreateRecord(kind, values));
     }
 
     private static string Pack(params object[] values)
     {
-        var record = new StringBuilder();
-        foreach (object value in values)
-        {
-            string text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? "";
-            record.Append(text.Length.ToString(CultureInfo.InvariantCulture)).Append(':').Append(text);
-        }
-        return record.ToString();
+        return DailyV1DefinitionIdentity.Pack(values);
     }
 
     public static void ValidateProfile(SimulationConfigData config)

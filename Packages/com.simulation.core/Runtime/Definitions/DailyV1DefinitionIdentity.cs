@@ -112,8 +112,10 @@ public static class DailyV1DefinitionIdentity
                 Add(records, "connection", city.id, route?.destination, route?.travelDays);
         }
 
-        if (config.explorableSites != null && config.explorableSites.Count != 0)
-            throw new InvalidOperationException("The selected Daily-v1 value closure does not include populated ExplorableSiteData definitions.");
+        List<DailyV1ExplorableSiteConfig> sites = new List<DailyV1ExplorableSiteConfig>(config.explorableSites ?? Array.Empty<DailyV1ExplorableSiteConfig>());
+        sites.Sort((a, b) => StringComparer.Ordinal.Compare(a?.site, b?.site));
+        foreach (DailyV1ExplorableSiteConfig site in sites)
+            Add(records, "site", site?.site, site?.anchorCity, site?.travelDaysFromAnchor, site?.siteKind?.Spelling);
 
         List<DailyV1NpcSimulationConfig> npcs = new List<DailyV1NpcSimulationConfig>(config.npcs ?? Array.Empty<DailyV1NpcSimulationConfig>());
         npcs.Sort((a, b) => StringComparer.Ordinal.Compare(a?.npc, b?.npc));
@@ -293,16 +295,23 @@ public static class DailyV1DefinitionIdentity
 
     private static void Add(List<string> records, string kind, params object[] values)
     {
+        records.Add(CreateRecord(kind, values));
+    }
+
+    /// <summary>Creates one legacy P9 length-prefixed record from invariant scalar values.</summary>
+    public static string CreateRecord(string kind, params object[] values)
+    {
         StringBuilder record = new StringBuilder(kind);
         foreach (object value in values)
         {
             string text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
             record.Append('|').Append(text.Length.ToString(CultureInfo.InvariantCulture)).Append(':').Append(text);
         }
-        records.Add(record.ToString());
+        return record.ToString();
     }
 
-    private static string Pack(params object[] values)
+    /// <summary>Packs nested legacy P9 values using the original invariant character lengths.</summary>
+    public static string Pack(params object[] values)
     {
         StringBuilder record = new StringBuilder();
         foreach (object value in values)

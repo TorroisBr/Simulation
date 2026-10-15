@@ -38,11 +38,31 @@ public sealed class DailyV1TypedDefinitionGraphTests
         Assert.That(DailyV1DefinitionIdentity.CreateP9Fingerprint(changed, out _), Is.Not.EqualTo(fingerprint));
     }
 
-    private static DailyV1SimulationConfigData CreateConfiguration(float travelCost, string[] cities)
+    [Test]
+    public void P9BuilderPreservesExplorableSiteIdentityAndKind()
+    {
+        DailyV1ExplorableSiteConfig[] sites =
+        {
+            new DailyV1ExplorableSiteConfig("SITE_A", "CITY_A", 2, new DailyV1EnumValue(1, "Ruin"))
+        };
+        DailyV1EffectiveDefinitions definitions = DailyV1EffectiveDefinitions.CreateSelectedSchema(
+            CreateConfiguration(1f, new[] { "CITY_A" }, sites), SimulationConfigurationDefaults.Create(),
+            new DailyV1CalendarDefinition(1, 1, 1, null), Array.Empty<DailyV1CityData>(),
+            Array.Empty<DailyV1ItemData>(), Array.Empty<DailyV1NpcData>(), Array.Empty<DailyV1NpcJobData>(),
+            Array.Empty<DailyV1NpcActionData>(), Array.Empty<DailyV1NpcStatusData>(), Array.Empty<string>(),
+            "test.daily-v1", "test.geography-v1", "test.geography-stage/v1", "hex-v1", "q-r-s");
+
+        DailyV1DefinitionIdentity.CreateP9Fingerprint(definitions, out var records);
+
+        Assert.That(records, Does.Contain("site|6:SITE_A|6:CITY_A|1:2|4:Ruin"));
+    }
+
+    private static DailyV1SimulationConfigData CreateConfiguration(float travelCost, string[] cities,
+        DailyV1ExplorableSiteConfig[] explorableSites = null)
     {
         return new DailyV1SimulationConfigData(
             "Typed", new DailyV1CalendarDefinition(1, 1, 1, null), new[] { new DailyV1EnumValue(0, "Economy") },
-            cities, null, null, null, null, null, null, null,
+            cities, explorableSites, null, null, null, null, null, null,
             false, null, 0, 0,
             null, null, null, null, null, null, null, null, null,
             "test.daily-v1", null,

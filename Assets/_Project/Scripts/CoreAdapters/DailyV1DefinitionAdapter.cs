@@ -39,7 +39,9 @@ public static class DailyV1DefinitionAdapter
                 else if (asset.GetType() == typeof(NpcJobData)) jobs.Add(ConvertNpcJobData(asset));
                 else if (asset.GetType() == typeof(NpcActionData)) actions.Add(ConvertNpcActionData(asset));
                 else if (asset.GetType() == typeof(NpcStatusData)) statuses.Add(ConvertNpcStatusData(asset));
-                else throw new InvalidOperationException("The selected Daily-v1 profile contains an unsupported populated definition family: " + asset.GetType().FullName);
+                // Trait, capability-attribute, and explorablesite assets are part of the closed
+                // serialized profile graph, but their selected semantics are represented as IDs
+                // in the typed Core values. The content projection captures their full values.
             }
             DailyV1CalendarDefinition resolvedCalendar = new DailyV1CalendarDefinition(
                 calendar.MonthsPerYear, calendar.WeeksPerMonth, calendar.DaysPerWeek, calendar.monthLengths);
@@ -61,23 +63,49 @@ public static class DailyV1DefinitionAdapter
 
     private static void PrimeLazyDefaults(SimulationConfigData source)
     {
-        List<SimulationModule> modules = source.EnabledModules;
+        _ = source.EnabledModules;
         List<CityData> cities = source.Cities;
-        List<ExplorableSiteConfig> sites = source.ExplorableSites;
-        List<NpcSimulationConfig> npcs = source.Npcs;
-        List<NpcActionData> actions = source.Actions;
-        List<NpcStatusData> statuses = source.Statuses;
-        List<NpcJobData> jobs = source.Jobs;
-        List<InitialWantedRecordConfig> warrants = source.InitialWarrants;
-        List<ScheduledDirectiveConfig> directives = source.ScheduledDirectives;
-        CommercialKnowledgeSettings commercialKnowledge = source.CommercialKnowledge;
-        SimulationLogSettings logSettings = source.LogSettings;
         List<CityData> orderedCities = new List<CityData>(cities);
         orderedCities.Sort((left, right) => StringComparer.Ordinal.Compare(left?.DefinitionId, right?.DefinitionId));
-        foreach (CityData city in orderedCities) if (city != null) { MarketLiquidityConfig liquidity = city.MarketLiquidity; PopulationConsumptionConfig consumption = city.PopulationConsumption; }
+        foreach (CityData city in orderedCities) if (city != null) { _ = city.MarketLiquidity; _ = city.PopulationConsumption; }
+
+        _ = source.ExplorableSites;
+        List<NpcSimulationConfig> npcs = source.Npcs;
         List<NpcSimulationConfig> orderedNpcs = new List<NpcSimulationConfig>(npcs);
         orderedNpcs.Sort((left, right) => StringComparer.Ordinal.Compare(left?.npc?.DefinitionId, right?.npc?.DefinitionId));
-        foreach (NpcSimulationConfig npc in orderedNpcs) if (npc != null) { List<NpcInitialInventoryItemConfig> inventory = npc.InitialInventory; List<ExplorableSiteData> knownSites = npc.InitialKnownExplorableSites; }
+        foreach (NpcSimulationConfig npc in orderedNpcs) if (npc != null) { _ = npc.InitialInventory; _ = npc.InitialKnownExplorableSites; }
+
+        _ = source.Actions;
+        _ = source.Statuses;
+        List<NpcJobData> jobs = source.Jobs;
+        HashSet<NpcJobData> selectedJobs = new HashSet<NpcJobData>(jobs);
+        foreach (NpcSimulationConfig npc in npcs)
+            if (npc?.npc?.job != null) selectedJobs.Add(npc.npc.job);
+        List<NpcJobData> orderedJobs = new List<NpcJobData>(selectedJobs);
+        orderedJobs.Sort((left, right) => StringComparer.Ordinal.Compare(left?.DefinitionId, right?.DefinitionId));
+        foreach (NpcJobData job in orderedJobs) if (job != null) _ = job.PreferredTradeItems;
+
+        HashSet<ItemData> selectedItems = new HashSet<ItemData>();
+        foreach (CityData city in cities)
+        {
+            if (city == null) continue;
+            foreach (MarketItemConfig market in city.marketItems ?? new List<MarketItemConfig>()) selectedItems.Add(market?.item);
+            foreach (CityProductionConfig production in city.productionConfigs ?? new List<CityProductionConfig>()) selectedItems.Add(production?.item);
+        }
+        foreach (NpcSimulationConfig npc in npcs)
+        {
+            if (npc == null) continue;
+            foreach (NpcInitialInventoryItemConfig item in npc.InitialInventory) selectedItems.Add(item?.item);
+            if (npc.npc?.job != null) foreach (TradeItemPreference item in npc.npc.job.PreferredTradeItems) selectedItems.Add(item?.item);
+        }
+        foreach (NpcJobData job in jobs)
+            if (job != null) foreach (TradeItemPreference item in job.PreferredTradeItems) selectedItems.Add(item?.item);
+        List<ItemData> orderedItems = new List<ItemData>(selectedItems);
+        orderedItems.Sort((left, right) => StringComparer.Ordinal.Compare(left?.DefinitionId, right?.DefinitionId));
+        foreach (ItemData item in orderedItems) if (item != null) _ = item.CapabilityModifiers;
+
+        _ = source.InitialWarrants;
+        _ = source.ScheduledDirectives;
     }
 
     private static SortedDictionary<string, ScriptableObject> CaptureAssets(SimulationConfigData root)
@@ -85,7 +113,8 @@ public static class DailyV1DefinitionAdapter
         SortedDictionary<string, ScriptableObject> assets = new SortedDictionary<string, ScriptableObject>(StringComparer.Ordinal);
         Queue<ScriptableObject> pending = new Queue<ScriptableObject>();
         HashSet<object> visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        CollectReferences(root, assets, pending, visited, 0);
+        foreach (FieldInfo field in SerializableFields(root.GetType()))
+            CollectReferences(field.GetValue(root), assets, pending, visited, 0);
         while (pending.Count > 0)
         {
             ScriptableObject asset = pending.Dequeue();
@@ -131,7 +160,8 @@ public static class DailyV1DefinitionAdapter
 
     private static bool IsSelectedAssetType(Type type) => type == typeof(CityData) || type == typeof(ItemData)
         || type == typeof(NpcData) || type == typeof(NpcJobData) || type == typeof(NpcActionData)
-        || type == typeof(NpcStatusData);
+        || type == typeof(NpcStatusData) || type == typeof(TraitData)
+        || type == typeof(CapabilityAttributeData) || type == typeof(ExplorableSiteData);
 
     private static List<FieldInfo> SerializableFields(Type type)
     {
@@ -280,7 +310,8 @@ public static class DailyV1DefinitionAdapter
         return new DailyV1ExplorableSiteConfig(
             AssetField(source, "site"),
             AssetField(source, "anchorCity"),
-            ReadField<int>(source, "travelDaysFromAnchor"));
+            ReadField<int>(source, "travelDaysFromAnchor"),
+            EnumField(FieldValue(source, "site"), "kind"));
     }
 
     private static DailyV1InitialWantedRecordConfig ConvertInitialWantedRecordConfig(object source)

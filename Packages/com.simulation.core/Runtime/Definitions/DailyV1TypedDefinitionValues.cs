@@ -167,12 +167,14 @@ public sealed class DailyV1ExplorableSiteConfig
     public string site { get; }
     public string anchorCity { get; }
     public int travelDaysFromAnchor { get; }
+    public DailyV1EnumValue siteKind { get; }
 
-    public DailyV1ExplorableSiteConfig(string site, string anchorCity, int travelDaysFromAnchor)
+    public DailyV1ExplorableSiteConfig(string site, string anchorCity, int travelDaysFromAnchor, DailyV1EnumValue siteKind)
     {
         this.site = site;
         this.anchorCity = anchorCity;
         this.travelDaysFromAnchor = travelDaysFromAnchor;
+        this.siteKind = siteKind;
     }
 }
 
