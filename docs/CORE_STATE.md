@@ -431,3 +431,32 @@ A bound compile graph identifies303 runtime+restore source nodes including a
 191-file runtime/domain/census SCC; it is source design evidence, not permission
 to move303 files unchanged or admit unselected state. CORE-X stays DEFERRED.
 No numbered canonical branch or unrelated worktree was changed.
+
+
+## CORE-F prerequisites promoted — final factual marker (2026-10-15)
+
+All three approved prerequisites are **PROMOTED** on `codex/core/canonical`:
+
+| Package | Exact bounded promotion SHA |
+|---|---|
+| WP2-Persistence | `84b66da69be896f0db347b940d9e464cfaa1c4f2` |
+| WP1-Owners | `8fc975631db0d4e53fa58c490c752fb79d209b0e` |
+| WP1-Values | `c69fcf471be7c73c3b63b539d0ae5e659cb9e029` |
+
+Each was independently reviewed, passed its required gates, and was promoted by
+an additive fast-forward after refreshed preflight. Local/remote equality was
+verified at each SHA. This actual delivery marker supersedes earlier conditional
+eligibility entries; historical records, diagnostics and source identities remain.
+The Values promotion includes only its approved implementation and reviewed
+validation/review/State successors. Final run sources are unchanged by this marker.
+
+Effective-value parity and the selected Unity owner evidence baseline are now
+delivered, as are shared descriptor/wire/atomic storage. Full CORE-F remains
+**WAIT_DEPENDENCY** on actual shared selected-owner/runtime/restore source closure
+and the real net8 host continuation/comparison proof. The bound303-file source
+closure and precise Unity/numeric/serialization inversions inform the next bounded
+technical design; static compilation alone is not a .NET execution result.
+No new product/architecture choice has been identified. No arbitrary profile,
+P12 guarantee, cross-host save or CORE-X scope is admitted by these promotions.
+P12 canonical remains `4cc31073f0ec6ba5c718084e4cebd6e914931d5d`;
+architecture policy remains `4da844dee0c69fdf66562590fa96cc728fc86bf7`.
