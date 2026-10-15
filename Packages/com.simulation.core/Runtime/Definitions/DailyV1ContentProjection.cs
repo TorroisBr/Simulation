@@ -33,7 +33,8 @@ internal static class DailyV1ContentProjection
         out byte[] bytes, out string diagnostic)
     {
         bytes = null;
-        if (records == null || records.Count == 0 || records.Count > MaxCatalogAssets)
+        // The fixed profile is a catalog record but is not one of the selected assets.
+        if (records == null || records.Count == 0 || records.Count - 1 > MaxCatalogAssets)
         { diagnostic = "The Daily-v1 content catalog has an invalid record count."; return false; }
         try
         {
@@ -482,7 +483,7 @@ public static class DailyV1SelectedContentProjectionFactory
                 if (records.ContainsKey(asset.Key))
                     throw new InvalidOperationException("The selected Daily-v1 content graph contains a duplicate stable key.");
                 records.Add(asset.Key, asset);
-                if (records.Count > DailyV1ContentProjection.MaxCatalogAssets)
+                if (records.Count - 1 > DailyV1ContentProjection.MaxCatalogAssets)
                     throw new InvalidOperationException("The Daily-v1 content catalog exceeds its asset bound.");
             }
 
