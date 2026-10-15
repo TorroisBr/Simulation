@@ -119,9 +119,3 @@ File.WriteAllText(manifestFile,
     "Graph: 329 Assembly-CSharp files, "+adj.Sum(e=>e.Count)+" unique directed file-pair edges (HashSet-deduplicated), "+sharedDeclEdges.Count+" directed shared-partial declaration links, "+comps.Count+" SCCs; runtime "+runSet.Count+", restore "+restoreSet.Count+", outside both "+(trees.Length-restoreSet.Count)+".\n"+
     "Reachability is source declaration-reference closure within Assembly-CSharp only, not method-level or owner-completeness proof. Unity and Simulation.Core symbol edges are separate inventories.\n",
     new System.Text.UTF8Encoding(false));Console.WriteLine($"Privacy-safe inventories emitted: {paths.Length} sources; {adj.Sum(e=>e.Count)} edges; {comps.Count} SCCs; runtime={runSet.Count}; restore={restoreSet.Count}; outputs=source-inventory.csv,source-edges.csv,unity-symbol-edges.csv,core-symbol-edges.csv,metadata-references.csv,analysis-manifest.txt");
-
-
-
-
-
-
