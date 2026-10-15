@@ -17,7 +17,7 @@ public enum AuthoritativeMutationFaultReason
 /// The integrity latch shared by one composed SimulationRuntime and its bound
 /// authorities. It is deliberately not a gameplay-facing mutation API.
 /// </summary>
-internal sealed class AuthoritativeMutationGuard
+internal sealed class AuthoritativeMutationGuard : IAuthoritativeMutationStatus
 {
     public AuthoritativeMutationHealth Health { get; private set; }
         = AuthoritativeMutationHealth.Healthy;
