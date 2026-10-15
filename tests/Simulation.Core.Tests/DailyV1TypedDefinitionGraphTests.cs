@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using NUnit.Framework;
 
 public sealed class DailyV1TypedDefinitionGraphTests
@@ -55,6 +56,29 @@ public sealed class DailyV1TypedDefinitionGraphTests
         DailyV1DefinitionIdentity.CreateP9Fingerprint(definitions, out var records);
 
         Assert.That(records, Does.Contain("site|6:SITE_A|6:CITY_A|1:2|4:Ruin"));
+    }
+
+    [Test]
+    public void DefinitionMapsAreReadOnlyAndDuplicateIdentityIsRejected()
+    {
+        DailyV1CityData city = new DailyV1CityData("CITY_A", "City A", null, null, null, null,
+            2, null, null, null, null, null);
+        DailyV1EffectiveDefinitions definitions = DailyV1EffectiveDefinitions.CreateSelectedSchema(
+            CreateConfiguration(1f, new[] { "CITY_A" }), SimulationConfigurationDefaults.Create(),
+            new DailyV1CalendarDefinition(1, 1, 1, null), new[] { city }, Array.Empty<DailyV1ItemData>(),
+            Array.Empty<DailyV1NpcData>(), Array.Empty<DailyV1NpcJobData>(), Array.Empty<DailyV1NpcActionData>(),
+            Array.Empty<DailyV1NpcStatusData>(), Array.Empty<string>(), "test.daily-v1", "test.geography-v1",
+            "test.geography-stage/v1", "hex-v1", "q-r-s");
+
+        Assert.That(definitions.Cities["CITY_A"].Values, Is.SameAs(city));
+        Assert.Throws<NotSupportedException>(() =>
+            ((IDictionary<string, DailyV1CityDefinition>)definitions.Cities).Clear());
+        Assert.Throws<ArgumentException>(() => DailyV1EffectiveDefinitions.CreateSelectedSchema(
+            CreateConfiguration(1f, new[] { "CITY_A" }), SimulationConfigurationDefaults.Create(),
+            new DailyV1CalendarDefinition(1, 1, 1, null), new[] { city, city }, Array.Empty<DailyV1ItemData>(),
+            Array.Empty<DailyV1NpcData>(), Array.Empty<DailyV1NpcJobData>(), Array.Empty<DailyV1NpcActionData>(),
+            Array.Empty<DailyV1NpcStatusData>(), Array.Empty<string>(), "test.daily-v1", "test.geography-v1",
+            "test.geography-stage/v1", "hex-v1", "q-r-s"));
     }
 
     private static DailyV1SimulationConfigData CreateConfiguration(float travelCost, string[] cities,
