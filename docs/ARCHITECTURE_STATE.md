@@ -585,3 +585,29 @@ P12 remains closed within its accepted Daily-v1 scope; no new P12 guarantee,
 P13 readiness, cross-host save compatibility or CORE-X scope follows. CORE-F
 remains WAIT_DEPENDENCY as a complete host/continuation workstream; CORE-X stays
 DEFERRED. No numbered-phase branch is changed by this architecture promotion.
+
+
+## CORE-F null-roster contract reconciliation — 2026-10-15
+
+Architecture base: `bec3998f697f362944aa5b551d45998145f4e67e`.
+Production Core inspected: `64610d6c4a5cfaec2c9e14fdb70b5e7ed5d5aeaa`.
+The shared codec/numeric compatibility slice is PROMOTED; its original Unity
+oracle is3173/3173 and final implementation Unity gate3175/3175, .NET171/171
+cold/warm with focused parity2/2. Existing immutable reviews/evidence apply.
+
+The [targeted correction and exact Master handoff](architecture/CORE_F_NULL_ROSTER_PROVIDER_SWITCH_MASTER_HANDOFF.md)
+supersede only the adopted technical-design sentence saying a null roster row
+remains null. Sequence18 proves one non-null default object with both IDs null.
+The closed codec already matches it; provider activation equality/roster
+validation still rejects before any commit/authoritative write. Decoded temporary
+values are observable to codec callers; they confer no admission authority.
+
+After independent PASS and canonical publication, this correction removes
+WAIT_ARCHITECTURE_RECONCILIATION and makes the bounded Unity provider switch
+READY_FOR_IMPLEMENTATION under the Master's existing mandate. Master imports
+this documentation delta, corrects the literal design bullet and refreshes Core
+State on its implementation branch. This architecture record changes no Core
+production code or canonical ref. Full CORE-F remains WAIT_DEPENDENCY on actual
+owner migration, shared runtime/restore, host and detached .NET continuation.
+P12/CORE-X and all numbered-phase scopes/refs remain unchanged. Independent review
+and final compatible docs-only promotion preflight remain required.

@@ -22,6 +22,19 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
 
+## CORE-F provider compatibility reconciliation — 2026-10-15
+
+Core64610d6c has the promoted shared codec/helpers and parity/review gates.
+The [null-roster amendment and Master handoff](architecture/CORE_F_NULL_ROSTER_PROVIDER_SWITCH_MASTER_HANDOFF.md)
+correct only the inaccurate null-reference observation in the adopted design.
+After independent PASS/canonical promotion, the existing provider call-site
+switch is READY_FOR_IMPLEMENTATION; its WAIT_ARCHITECTURE_RECONCILIATION gate is
+resolved. No new checkpoint. The switch needs fresh Unity provider/rejection/
+full/Smoke evidence and exact-tip implementation review before Core promotion.
+Owner migration, shared host/restore and real .NET continuation remain separate
+WAIT_DEPENDENCY edges; full CORE-F stays WAIT_DEPENDENCY and CORE-X DEFERRED.
+P12 scope, semantic authority and numbered-phase readiness are unchanged.
+
 ## CORE-F prerequisite delivery and remaining source closure — 2026-10-15
 
 Production Core canonical `fff5cca0297ce5af346a264b7fa2e2e37be587b0`
