@@ -6,6 +6,10 @@ function Get-CoreInputSnapshot {
 
     $root = (Resolve-Path -LiteralPath $ProjectRoot).Path
     $fixedInputs = @(
+        'Assets/_Project/Tests/EditMode/Editor/Core/DailyV1CapturedSelectedContentFixture.cs',
+        'Assets/_Project/Tests/EditMode/Editor/Core/DailyV1CapturedSelectedContentFixture.cs.meta',
+        'Assets/_Project/Tests/EditMode/Editor/Core/DailyV1DefinitionAdapterTypedParityTests.cs',
+        'Assets/_Project/Tests/EditMode/Editor/Core/DailyV1DefinitionAdapterTypedParityTests.cs.meta',
         'Assets/_Project/Scripts/CoreAdapters/DailyV1DefinitionAdapter.cs',
         'Assets/_Project/Scripts/CoreAdapters/DailyV1DefinitionAdapter.cs.meta',
         'Assets/_Project/Scripts/CoreAdapters/P12ADailyV1ContentAdapter.cs',
@@ -118,7 +122,6 @@ function Get-CoreInputSnapshot {
         'docs/architecture/CORE_F_SELECTED_VALUE_MEMBERS.csv',
         'global.json',
         'src/Simulation.Core/Simulation.Core.csproj',
-        'tests/Simulation.Core.Tests/DailyV1CapturedSelectedContentFixture.cs',
         'tests/Simulation.Core.Tests/DailyV1ContentProjectionTests.cs',
         'tests/Simulation.Core.Tests/DailyV1DefinitionIdentityTests.cs',
         'tests/Simulation.Core.Tests/DailyV1DefinitionProviderVectors.cs',
