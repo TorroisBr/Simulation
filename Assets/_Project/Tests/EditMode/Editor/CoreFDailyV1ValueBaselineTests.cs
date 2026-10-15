@@ -225,7 +225,7 @@ public sealed class CoreFDailyV1ValueBaselineTests
         string prefix = key + "=";
         foreach (string line in lines)
             if (line.StartsWith(prefix, StringComparison.Ordinal))
-                return Encoding.UTF8.GetString(Convert.FromBase64String(line.Substring(prefix.Length)));
+                return line.Substring(prefix.Length);
         throw new InvalidDataException("The retained value baseline lacks " + key + ".");
     }
 
