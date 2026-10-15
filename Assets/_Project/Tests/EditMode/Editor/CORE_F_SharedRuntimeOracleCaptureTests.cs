@@ -87,11 +87,10 @@ public sealed class CORE_F_SharedRuntimeOracleCaptureTests
         foreach (BoundaryContinuationStep step in steps)
             TestContext.WriteLine("PROVIDER|" + step.StepId + "|" + step.OperationKind + "|" + B64(step.Payload));
 
-        Type providerType = typeof(CommercialKnowledgeSharingDailyBoundaryStepProvider);
-        Type planType = providerType.GetNestedType("Plan", BindingFlags.NonPublic);
-        Type rosterType = providerType.GetNestedType("RosterMember", BindingFlags.NonPublic);
-        Type participantType = providerType.GetNestedType("Participant", BindingFlags.NonPublic);
-        Type edgeType = providerType.GetNestedType("Edge", BindingFlags.NonPublic);
+        Type planType = typeof(Plan);
+        Type rosterType = typeof(RosterMember);
+        Type participantType = typeof(Participant);
+        Type edgeType = typeof(Edge);
         object plan = Activator.CreateInstance(planType, true);
         Array rosterRows = Array.CreateInstance(rosterType, 1);
         rosterRows.SetValue(CreateRow(rosterType, new[] { "runtimeId", "personId" }, new[] { "npc-\"α\\id", "person-Ω" }), 0);
@@ -108,7 +107,8 @@ public sealed class CORE_F_SharedRuntimeOracleCaptureTests
         object edge = CreateRow(edgeType, new[] { "senderRuntimeId", "receiverRuntimeId" }, new[] { "npc-\"α\\id", "npc-β" });
         TestContext.WriteLine("SPECIAL_EDGE|" + B64(JsonUtility.ToJson(edge)));
 
-        MethodInfo tryRead = providerType.GetMethod("TryRead", BindingFlags.NonPublic | BindingFlags.Static);
+        MethodInfo tryRead = typeof(CORE_F_SharedRuntimeOracleCaptureTests)
+            .GetMethod("TryRead", BindingFlags.NonPublic | BindingFlags.Static);
         foreach (string json in new[] { "", " ", "{", "[]", "null", "{}", "{\"runtimeRoster\":null,\"participants\":[],\"edges\":[]}",
             "{\"runtimeRoster\":[],\"participants\":[],\"edges\":[]}",
             "{\"runtimeRoster\":[],\"participants\":[],\"edges\":[],\"futureField\":7}",
@@ -128,9 +128,9 @@ public sealed class CORE_F_SharedRuntimeOracleCaptureTests
     [Test]
     public void CaptureExpandedJsonEscapingAndLegacyReaderBehavior()
     {
-        Type providerType = typeof(CommercialKnowledgeSharingDailyBoundaryStepProvider);
-        Type edgeType = providerType.GetNestedType("Edge", BindingFlags.NonPublic);
-        MethodInfo tryRead = providerType.GetMethod("TryRead", BindingFlags.NonPublic | BindingFlags.Static);
+        Type edgeType = typeof(Edge);
+        MethodInfo tryRead = typeof(CORE_F_SharedRuntimeOracleCaptureTests)
+            .GetMethod("TryRead", BindingFlags.NonPublic | BindingFlags.Static);
 
         char[] controlCharacters = new char[32];
         for (int i = 0; i < controlCharacters.Length; i++)
@@ -169,7 +169,7 @@ public sealed class CORE_F_SharedRuntimeOracleCaptureTests
             "{\"senderRuntimeId\":\"\\uDC00\",\"receiverRuntimeId\":\"receiver\"}",
             "EDGE_ISOLATED_LOW_SURROGATE");
 
-        Type planType = providerType.GetNestedType("Plan", BindingFlags.NonPublic);
+        Type planType = typeof(Plan);
         CaptureRead(tryRead, planType,
             "{\"runtimeRoster\":[],\"runtimeRoster\":[null],\"participants\":[],\"edges\":[]}",
             "PLAN_DUPLICATE_ARRAY_KEY");
@@ -286,6 +286,16 @@ public sealed class CORE_F_SharedRuntimeOracleCaptureTests
         TestContext.WriteLine(label + "|" + B64(json) + "|" + outcome);
     }
 
+    // Test-owned mirror of the pre-extraction Unity reader. Keep this oracle independent
+    // of the production provider adapter and shared Core codec.
+    private static bool TryRead<T>(string json, out T value) where T : class
+    {
+        value = null;
+        if (string.IsNullOrWhiteSpace(json)) return false;
+        try { value = JsonUtility.FromJson<T>(json); return value != null; }
+        catch (ArgumentException) { return false; }
+    }
+
     private static string Describe(object value, Type dtoType)
     {
         if (value == null) return "null";
@@ -332,6 +342,22 @@ public sealed class CORE_F_SharedRuntimeOracleCaptureTests
 
     private static void SetField(object value, string name, object fieldValue) =>
         value.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).SetValue(value, fieldValue);
+
+    [Serializable] private sealed class Plan
+    {
+        public RosterMember[] runtimeRoster;
+        public Participant[] participants;
+        public Edge[] edges;
+    }
+    [Serializable] private sealed class RosterMember { public string runtimeId; public string personId; }
+    [Serializable] private sealed class Participant
+    {
+        public string runtimeId;
+        public string personId;
+        public string cityRuntimeId;
+        public string locationRuntimeId;
+    }
+    [Serializable] private sealed class Edge { public string senderRuntimeId; public string receiverRuntimeId; }
 
     private static void CaptureMaxMin(string label, float left, float right)
     {

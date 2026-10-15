@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-using UnityEngine;
 
 /// <summary>
 /// Freezes legacy merchant pairing into P18-D boundary descriptors and commits
@@ -93,7 +92,8 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
 
         if (edges.Count > int.MaxValue - firstOrdinal - 1) return false;
         Plan plan = new Plan { runtimeRoster = frozenRoster.ToArray(), participants = participants.ToArray(), edges = edges.ToArray() };
-        string frozenPayload = JsonUtility.ToJson(plan);
+        string frozenPayload = P18DCommercialSharingCodec.EncodePlan(
+            ToCoreRoster(frozenRoster), ToCoreParticipants(participants), ToCoreEdges(edges));
         if (activations.TryGetValue(operation.OccurrenceId, out ActivationEvidence prior))
         {
             if (prior.Payload != frozenPayload || !SameCityBindings(prior.CityByNpc, frozenCities)) return false;
@@ -112,7 +112,8 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
             Edge edge = edges[i];
             created.Add(new BoundaryContinuationStep(firstOrdinal + i + 1,
                 GetEdgeStepId(edge.senderRuntimeId, edge.receiverRuntimeId), OwnerId,
-                EdgeKind, Version, string.Empty, JsonUtility.ToJson(edge)));
+                EdgeKind, Version, string.Empty,
+                P18DCommercialSharingCodec.EncodeEdge(edge.senderRuntimeId, edge.receiverRuntimeId)));
         }
         steps = created.AsReadOnly();
         failure = TimelineFailure.None;
@@ -133,7 +134,7 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
 
         if (step.StepId == SnapshotStepId)
         {
-            if (step.OperationKind != SnapshotKind || !TryRead(step.Payload, out Plan plan)
+            if (step.OperationKind != SnapshotKind || !TryReadPlan(step.Payload, out Plan plan)
                 || plan.runtimeRoster == null || plan.participants == null || plan.edges == null
                 || !activations.TryGetValue(manifest.BoundaryOccurrenceId, out ActivationEvidence activation)
                 || activation.Payload != step.Payload || !ValidateRosterEvidence(plan)) return false;
@@ -153,14 +154,14 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
             return true;
         }
 
-        if (step.OperationKind != EdgeKind || !TryRead(step.Payload, out Edge edge)
+        if (step.OperationKind != EdgeKind || !TryReadEdge(step.Payload, out Edge edge)
             || string.IsNullOrWhiteSpace(edge.senderRuntimeId) || string.IsNullOrWhiteSpace(edge.receiverRuntimeId)) return false;
         if (!string.Equals(step.StepId, GetEdgeStepId(edge.senderRuntimeId, edge.receiverRuntimeId), StringComparison.Ordinal)) return false;
         BoundaryContinuationStep snapshotStep = null;
         foreach (BoundaryContinuationStep candidate in manifest.Steps)
             if (candidate.StepId == SnapshotStepId) { snapshotStep = candidate; break; }
         if (snapshotStep == null || snapshotStep.Ordinal >= step.Ordinal
-            || !TryRead(snapshotStep.Payload, out Plan frozenPlan)) return false;
+            || !TryReadPlan(snapshotStep.Payload, out Plan frozenPlan)) return false;
         int edgeOrdinal = step.Ordinal - snapshotStep.Ordinal - 1;
         if (frozenPlan.edges == null || edgeOrdinal < 0 || edgeOrdinal >= frozenPlan.edges.Length
             || frozenPlan.edges[edgeOrdinal] == null
@@ -257,12 +258,113 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
         return location != 0 ? location : string.CompareOrdinal(left.RuntimeId, right.RuntimeId);
     }
 
-    private static bool TryRead<T>(string json, out T value) where T : class
+    private static P18DCommercialSharingCodec.RosterMember[] ToCoreRoster(IReadOnlyList<RosterMember> rows)
     {
-        value = null;
-        if (string.IsNullOrWhiteSpace(json)) return false;
-        try { value = JsonUtility.FromJson<T>(json); return value != null; }
-        catch (ArgumentException) { return false; }
+        if (rows == null) return null;
+        var result = new P18DCommercialSharingCodec.RosterMember[rows.Count];
+        for (int i = 0; i < rows.Count; i++)
+        {
+            RosterMember row = rows[i];
+            result[i] = row == null ? null
+                : new P18DCommercialSharingCodec.RosterMember(row.runtimeId, row.personId);
+        }
+        return result;
+    }
+
+    private static P18DCommercialSharingCodec.Participant[] ToCoreParticipants(IReadOnlyList<Participant> rows)
+    {
+        if (rows == null) return null;
+        var result = new P18DCommercialSharingCodec.Participant[rows.Count];
+        for (int i = 0; i < rows.Count; i++)
+        {
+            Participant row = rows[i];
+            result[i] = row == null ? null
+                : new P18DCommercialSharingCodec.Participant(row.runtimeId, row.personId,
+                    row.cityRuntimeId, row.locationRuntimeId);
+        }
+        return result;
+    }
+
+    private static P18DCommercialSharingCodec.Edge[] ToCoreEdges(IReadOnlyList<Edge> rows)
+    {
+        if (rows == null) return null;
+        var result = new P18DCommercialSharingCodec.Edge[rows.Count];
+        for (int i = 0; i < rows.Count; i++)
+        {
+            Edge row = rows[i];
+            result[i] = row == null ? null
+                : new P18DCommercialSharingCodec.Edge(row.senderRuntimeId, row.receiverRuntimeId);
+        }
+        return result;
+    }
+
+    private static bool TryReadPlan(string json, out Plan plan)
+    {
+        plan = null;
+        if (!P18DCommercialSharingCodec.TryDecodePlan(json, out P18DCommercialSharingCodec.Plan decoded))
+            return false;
+        plan = new Plan
+        {
+            runtimeRoster = FromCoreRoster(decoded.RuntimeRoster),
+            participants = FromCoreParticipants(decoded.Participants),
+            edges = FromCoreEdges(decoded.Edges)
+        };
+        return true;
+    }
+
+    private static bool TryReadEdge(string json, out Edge edge)
+    {
+        edge = null;
+        if (!P18DCommercialSharingCodec.TryDecodeEdge(json, out P18DCommercialSharingCodec.Edge decoded))
+            return false;
+        edge = new Edge { senderRuntimeId = decoded.SenderRuntimeId, receiverRuntimeId = decoded.ReceiverRuntimeId };
+        return true;
+    }
+
+    private static RosterMember[] FromCoreRoster(IReadOnlyList<P18DCommercialSharingCodec.RosterMember> rows)
+    {
+        if (rows == null) return null;
+        var result = new RosterMember[rows.Count];
+        for (int i = 0; i < rows.Count; i++)
+        {
+            P18DCommercialSharingCodec.RosterMember row = rows[i];
+            result[i] = row == null ? null : new RosterMember { runtimeId = row.RuntimeId, personId = row.PersonId };
+        }
+        return result;
+    }
+
+    private static Participant[] FromCoreParticipants(IReadOnlyList<P18DCommercialSharingCodec.Participant> rows)
+    {
+        if (rows == null) return null;
+        var result = new Participant[rows.Count];
+        for (int i = 0; i < rows.Count; i++)
+        {
+            P18DCommercialSharingCodec.Participant row = rows[i];
+            result[i] = row == null ? null : new Participant
+            {
+                runtimeId = row.RuntimeId,
+                personId = row.PersonId,
+                cityRuntimeId = row.CityRuntimeId,
+                locationRuntimeId = row.LocationRuntimeId
+            };
+        }
+        return result;
+    }
+
+    private static Edge[] FromCoreEdges(IReadOnlyList<P18DCommercialSharingCodec.Edge> rows)
+    {
+        if (rows == null) return null;
+        var result = new Edge[rows.Count];
+        for (int i = 0; i < rows.Count; i++)
+        {
+            P18DCommercialSharingCodec.Edge row = rows[i];
+            result[i] = row == null ? null : new Edge
+            {
+                senderRuntimeId = row.SenderRuntimeId,
+                receiverRuntimeId = row.ReceiverRuntimeId
+            };
+        }
+        return result;
     }
 
     private static string GetEdgeStepId(string senderRuntimeId, string receiverRuntimeId) =>

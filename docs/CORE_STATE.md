@@ -646,3 +646,33 @@ depends on complete owner-group closure; and the .NET host, detached restoration
 and exact T/T+1/T+2 continuation parity follow that source closure. No numbered
 Phase, P12, or P13 readiness changed. Protected ProjectSettings edits and the
 untracked superseded oracle package remain untouched.
+
+## CORE-F null-roster reconciliation adopted; provider switch ready — 2026-10-15
+
+The current architecture canonical is
+`4b69e43516b3fc548611ce704ef45af9e54e3d0e`. Its independently reviewed
+reconciliation is imported in
+[`CORE_F_NULL_ROSTER_PROVIDER_SWITCH_MASTER_HANDOFF.md`](architecture/CORE_F_NULL_ROSTER_PROVIDER_SWITCH_MASTER_HANDOFF.md)
+and [`CORE_F_NULL_ROSTER_PROVIDER_SWITCH_REVIEW.md`](architecture/CORE_F_NULL_ROSTER_PROVIDER_SWITCH_REVIEW.md).
+The Core technical design now records the hash-bound Unity observation for
+`runtimeRoster:[null]`: decode succeeds with one non-null roster member whose
+two IDs are null, and the provider separately rejects that incomplete member
+before preparation or authoritative mutation. This supersedes the earlier
+`WAIT_ARCHITECTURE_RECONCILIATION` status above; it does not change the codec,
+admission rule, or original oracle evidence. The amended Core technical design
+has SHA-256 `91bbeabf249a5ec77d47fa7c975c6ad9ed9eff01c97ecefff1c60fa59fd21b6f`;
+the original adopted design/review and protected Unity oracle identities remain
+unchanged historical evidence.
+
+**READY_FOR_IMPLEMENTATION** on Core canonical
+`64610d6c4a5cfaec2c9e14fdb70b5e7ed5d5aeaa`: switch only the P18-D Unity
+provider's frozen Plan/Edge encoding and decoding call sites to the promoted
+`P18DCommercialSharingCodec`, using lossless private DTO conversions. Preserve
+raw activation-payload comparisons, provider validation order, owners, commit
+boundaries, replay, identities, and failure behavior. The bounded implementation
+and validation gates are specified in the imported handoff. No provider switch
+has yet been promoted by this readiness record.
+
+Selected-owner migration, shared runtime/restore composition, and the real
+Daily-v1 .NET host/continuation remain separately dependency-gated; full CORE-F
+remains `WAIT_DEPENDENCY`, and CORE-X remains `DEFERRED`.

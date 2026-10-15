@@ -1,5 +1,7 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
 using NUnit.Framework;
 using UnityEngine;
@@ -233,6 +235,157 @@ public sealed class CommercialKnowledgeSharingTests
         Assert.That(first.SetCurrentPresence(replacement.Location, replacement), Is.True);
         Assert.That(provider.TryPrepareStep(manifest, steps[1], out _, out _), Is.False);
     }
+
+    [Test]
+    public void BoundaryProvider_SharedCodecRetainsNullRosterRowAndRejectsBeforeAnyOwnerWrite()
+    {
+        const string nullRosterPayload = "{\"runtimeRoster\":[null],\"participants\":[],\"edges\":[]}";
+        CityRuntime city = SimulationTestFactory.CreateCity("city-null-roster", "location-null-roster");
+        ItemData senderItem = SimulationTestFactory.CreateItem("item-null-roster-sender");
+        ItemData receiverItem = SimulationTestFactory.CreateItem("item-null-roster-receiver");
+        NpcRuntime sender = CreateMerchant("npc-null-roster-sender", city);
+        NpcRuntime receiver = CreateMerchant("npc-null-roster-receiver", city);
+        sender.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
+            city.Location.RuntimeId, senderItem, 17f, 8, 10, 10));
+        receiver.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
+            city.Location.RuntimeId, receiverItem, 23f, 5, 10, 10));
+        NpcRuntime[] roster = { sender, receiver };
+        Dictionary<string, NpcRuntime> actors = new Dictionary<string, NpcRuntime>
+        {
+            [sender.RuntimeId] = sender,
+            [receiver.RuntimeId] = receiver
+        };
+        CommercialKnowledgeSharingSystem owner = new CommercialKnowledgeSharingSystem(
+            new SimulationTime(20L), new EffectiveCommercialKnowledgeConfiguration());
+        CommercialKnowledgeSharingDailyBoundaryStepProvider provider =
+            new CommercialKnowledgeSharingDailyBoundaryStepProvider(() => roster,
+                id => actors.TryGetValue(id, out NpcRuntime npc) ? npc : null, owner);
+
+        // The provider adapter must preserve the captured successful decode as a
+        // non-null default member. Admission remains the provider's separate job.
+        MethodInfo readPlan = typeof(CommercialKnowledgeSharingDailyBoundaryStepProvider)
+            .GetMethod("TryReadPlan", BindingFlags.NonPublic | BindingFlags.Static);
+        object[] decodedArguments = { nullRosterPayload, null };
+        Assert.That((bool)readPlan.Invoke(null, decodedArguments), Is.True);
+        object decodedPlan = decodedArguments[1];
+        object[] decodedRoster = (object[])GetPrivateField(decodedPlan, "runtimeRoster");
+        Assert.That(decodedRoster, Has.Length.EqualTo(1));
+        Assert.That(decodedRoster[0], Is.Not.Null);
+        Assert.That(GetPrivateField(decodedRoster[0], "runtimeId"), Is.Null);
+        Assert.That(GetPrivateField(decodedRoster[0], "personId"), Is.Null);
+
+        // Retain a populated baseline snapshot so rejection checks prove the owner
+        // map and values remain unchanged rather than comparing empty state.
+        DailyBoundaryOperation baselineOperation = new DailyBoundaryOperation("world", "profile", 20L);
+        Assert.That(provider.TryCreateSteps(baselineOperation, 0,
+            out IReadOnlyList<BoundaryContinuationStep> baselineSteps, out _), Is.True);
+        BoundaryContinuationManifest baselineManifest = CreateManifest(baselineOperation, baselineSteps);
+        Assert.That(provider.TryPrepareStep(baselineManifest, baselineSteps[0],
+            out IBoundaryContinuationStepCommit baselineCommit, out TimelineFailure baselineFailure), Is.True);
+        Assert.That(baselineFailure, Is.EqualTo(TimelineFailure.None));
+        Assert.That(baselineCommit.TryCommit(out TimelineFailure commitFailure), Is.True);
+        Assert.That(commitFailure, Is.EqualTo(TimelineFailure.None));
+
+        Dictionary<string, object> retainedBefore = CopyRetainedPhaseSnapshots(owner);
+        Assert.That(retainedBefore, Has.Count.EqualTo(1));
+        CommercialMarketObservation senderBefore = sender.CommercialKnowledge.Observations[0];
+        CommercialMarketObservation receiverBefore = receiver.CommercialKnowledge.Observations[0];
+        long senderRevision = sender.CommercialKnowledge.Revision;
+        long receiverRevision = receiver.CommercialKnowledge.Revision;
+
+        // Ordinary tampering is rejected by the unchanged activation-byte guard.
+        DailyBoundaryOperation tamperedOperation = new DailyBoundaryOperation("world", "profile", 21L);
+        Assert.That(provider.TryCreateSteps(tamperedOperation, 0,
+            out IReadOnlyList<BoundaryContinuationStep> tamperedSteps, out _), Is.True);
+        IReadOnlyList<BoundaryContinuationStep> tamperedManifestSteps = ReplaceSnapshotPayload(
+            tamperedSteps, nullRosterPayload);
+        BoundaryContinuationManifest tamperedManifest = CreateManifest(tamperedOperation, tamperedManifestSteps);
+        Assert.That(provider.TryPrepareStep(tamperedManifest, tamperedManifestSteps[0],
+            out IBoundaryContinuationStepCommit tamperedPrepared, out TimelineFailure tamperedFailure), Is.False);
+        Assert.That(tamperedPrepared, Is.Null);
+        Assert.That(tamperedFailure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        AssertOwnerStateUnchanged(owner, retainedBefore, sender, receiver,
+            senderBefore, receiverBefore, senderRevision, receiverRevision);
+
+        // Align only the private activation evidence in this test fixture so the
+        // actual roster validator is reached; production has no such bypass.
+        DailyBoundaryOperation guardedOperation = new DailyBoundaryOperation("world", "profile", 22L);
+        Assert.That(provider.TryCreateSteps(guardedOperation, 0,
+            out IReadOnlyList<BoundaryContinuationStep> guardedSteps, out _), Is.True);
+        AlignPrivateActivationPayload(provider, guardedOperation.OccurrenceId, nullRosterPayload);
+        IReadOnlyList<BoundaryContinuationStep> guardedManifestSteps = ReplaceSnapshotPayload(
+            guardedSteps, nullRosterPayload);
+        BoundaryContinuationManifest guardedManifest = CreateManifest(guardedOperation, guardedManifestSteps);
+        Assert.That(provider.TryPrepareStep(guardedManifest, guardedManifestSteps[0],
+            out IBoundaryContinuationStepCommit guardedPrepared, out TimelineFailure guardedFailure), Is.False);
+        Assert.That(guardedPrepared, Is.Null);
+        Assert.That(guardedFailure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        AssertOwnerStateUnchanged(owner, retainedBefore, sender, receiver,
+            senderBefore, receiverBefore, senderRevision, receiverRevision);
+    }
+
+    private static BoundaryContinuationManifest CreateManifest(DailyBoundaryOperation operation,
+        IReadOnlyList<BoundaryContinuationStep> steps) => new BoundaryContinuationManifest(
+            operation, "test", "1", "config", steps, "content");
+
+    private static IReadOnlyList<BoundaryContinuationStep> ReplaceSnapshotPayload(
+        IReadOnlyList<BoundaryContinuationStep> steps, string payload)
+    {
+        BoundaryContinuationStep first = steps[0];
+        List<BoundaryContinuationStep> replacement = new List<BoundaryContinuationStep>(steps.Count)
+        {
+            new BoundaryContinuationStep(first.Ordinal, first.StepId, first.OwnerId,
+                first.OperationKind, first.OperationVersion, first.OwnerRevision, payload,
+                first.PersonId, first.Disposition)
+        };
+        for (int i = 1; i < steps.Count; i++) replacement.Add(steps[i]);
+        return replacement.AsReadOnly();
+    }
+
+    private static void AlignPrivateActivationPayload(
+        CommercialKnowledgeSharingDailyBoundaryStepProvider provider, string occurrenceId, string payload)
+    {
+        FieldInfo field = typeof(CommercialKnowledgeSharingDailyBoundaryStepProvider)
+            .GetField("activations", BindingFlags.Instance | BindingFlags.NonPublic);
+        IDictionary activations = (IDictionary)field.GetValue(provider);
+        object prior = activations[occurrenceId];
+        Type activationType = prior.GetType();
+        object cityBindings = activationType.GetProperty("CityByNpc").GetValue(prior, null);
+        ConstructorInfo constructor = activationType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)[0];
+        activations[occurrenceId] = constructor.Invoke(new[] { payload, cityBindings });
+    }
+
+    private static void AssertOwnerStateUnchanged(CommercialKnowledgeSharingSystem owner,
+        IReadOnlyDictionary<string, object> retainedBefore, NpcRuntime sender, NpcRuntime receiver,
+        CommercialMarketObservation senderObservation, CommercialMarketObservation receiverObservation,
+        long senderRevision, long receiverRevision)
+    {
+        Dictionary<string, object> retainedAfter = CopyRetainedPhaseSnapshots(owner);
+        Assert.That(retainedAfter.Keys, Is.EquivalentTo(retainedBefore.Keys));
+        foreach (KeyValuePair<string, object> entry in retainedBefore)
+            Assert.That(retainedAfter[entry.Key], Is.SameAs(entry.Value));
+        Assert.That(sender.CommercialKnowledge.Revision, Is.EqualTo(senderRevision));
+        Assert.That(receiver.CommercialKnowledge.Revision, Is.EqualTo(receiverRevision));
+        Assert.That(sender.CommercialKnowledge.Observations, Does.Contain(senderObservation));
+        Assert.That(receiver.CommercialKnowledge.Observations, Does.Contain(receiverObservation));
+        Assert.That(sender.CommercialKnowledge.Observations, Has.Count.EqualTo(1));
+        Assert.That(receiver.CommercialKnowledge.Observations, Has.Count.EqualTo(1));
+        Assert.That(sender.CommercialKnowledge.LiquidityObservations, Is.Empty);
+        Assert.That(receiver.CommercialKnowledge.LiquidityObservations, Is.Empty);
+    }
+
+    private static Dictionary<string, object> CopyRetainedPhaseSnapshots(CommercialKnowledgeSharingSystem owner)
+    {
+        FieldInfo field = typeof(CommercialKnowledgeSharingSystem)
+            .GetField("retainedPhaseSnapshots", BindingFlags.Instance | BindingFlags.NonPublic);
+        IDictionary snapshots = (IDictionary)field.GetValue(owner);
+        Dictionary<string, object> copy = new Dictionary<string, object>(StringComparer.Ordinal);
+        foreach (DictionaryEntry entry in snapshots) copy.Add((string)entry.Key, entry.Value);
+        return copy;
+    }
+
+    private static object GetPrivateField(object value, string name) => value.GetType()
+        .GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(value);
 
     private static NpcRuntime CreateMerchant(string id, CityRuntime city) => new NpcRuntime(id,
         SimulationTestFactory.CreateNpc(id, NpcJobType.Merchant), city, 100f);

@@ -198,8 +198,11 @@ report and result records:
 - omitted fields/defaults, empty arrays, and unknown fields: true;
 - trailing non-JSON data: false;
 - an array field with a scalar value: true with that field left null;
-- null array elements are skipped by Unity's deserializer, while a null object
-  row inside the runtime-roster array remains a null row;
+- For the captured `runtimeRoster:[null]` input, decoding succeeds and produces
+  one non-null default-valued roster member whose `runtimeId` and `personId`
+  are null. The row is retained. This is a decode result; existing provider
+  validation rejects the incomplete member before authoritative mutation.
+  Other captured reader outcomes retain their previously approved scope.
 - missing edge strings remain null; a numeric string field is converted to
   its decimal text by the current reader.
 
