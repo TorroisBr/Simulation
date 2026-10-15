@@ -653,3 +653,5 @@ Full CORE-F remains **WAIT_DEPENDENCY**, CORE-X **DEFERRED**. Preserve all89
 family definitions,24 operation routes and exact61+22*N+U+P+4*C role/key/alias
 semantics. No Unity-only result proves .NET continuation; no cross-host save
 promise or unrelated numbered-phase dependency follows. No production change.
+
+Independent [CORE-F closure-path review](architecture/CORE_F_CLOSURE_PATH_REVIEW.md) passed exact candidate cb70ec79ff6dc4e98da08e026cc73940d204ed00 against architecture4b69e435 and Core0094febf. Demographic owners are PASS / READY_FOR_IMPLEMENTATION after this architecture publication; runtime/restore and fullF remain WAIT_DEPENDENCY. The review-record successor changes no contract, graph input, production source or numbered canonical.
