@@ -11,6 +11,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../Packages/com.simulation.core/Runtime/IAuthoritativeMutationStatus.cs" Link="IAuthoritativeMutationStatus.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/MutationStatusBinding.cs" Link="MutationStatusBinding.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationTypes.cs" Link="Configuration/SimulationConfigurationTypes.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationDefaults.cs" Link="Configuration/SimulationConfigurationDefaults.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationResolver.cs" Link="Configuration/SimulationConfigurationResolver.cs" />
