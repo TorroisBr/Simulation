@@ -725,3 +725,106 @@ slice from this promotion. Selected-owner source/writer/epoch closure, shared
 runtime and restore composition, detached restoration, and the .NET host with
 deterministic continuation remain separately dependency-gated. Full CORE-F
 remains `WAIT_DEPENDENCY`; this promotion changes no P12/P13 or CORE-X status.
+
+## CORE-F demographic owners promoted; post-owner graph refreshed — 2026-10-15
+
+Preflight refreshed the remote refs before continuing. Architecture canonical
+remains `a20978d2b61e07a4b131afbb3971aae346511acb`. Core canonical was
+`0094febf7f97333d0653eaf9688fe1d24d73327f` before the promotion and is now
+`b2c2c0e94c7a8dd9175a8db3fab4fb9d78dcfb2a` locally and remotely on
+`codex/core/canonical`. The promoted implementation is
+`9c1ed5e2065f2d509b61e63b39fb6c84508fd5fe`, tree
+`f9934338811f7272c8f7013f5bbda14e06c4a92e`. The exact-tip review is PASS at
+the durable review/evidence tip `b2c2c0e94c7a8dd9175a8db3fab4fb9d78dcfb2a`;
+the reviewed implementation tree is unchanged.
+
+The promotion delivers only the seven approved Aggregate Population owner
+sources and two Genealogy owner sources, their shared Core bridges and required
+Unity/P12 adapters/tests. It preserves existing mutation-guard identity and
+writer/revision/epoch behavior. Genealogy revision preservation applies only
+to restored-continuation cloning; ordinary clone normalization remains
+unchanged. No runtime composition, detached host, v2 persistence, or
+cross-host continuation is included.
+
+Validation bound to the exact implementation identity remains:
+
+- CoreValidation cold and warm: 188/188 each; original-report comparison
+  verified. Manifest SHA-256
+  `7e875adf9d5ea4ed6e1b8c92f1061c936765399c07e545148e6e42e70f2035dc`;
+  normalized archive SHA-256
+  `1513b163b861e8cbfb7868fb2d3a4ca5ec11e2d2013f2dde1d400b5636a100d0`.
+- Unfiltered Unity ALL EditMode: 3,177/3,177, with zero failures, skips or
+  inconclusive tests. Manifest SHA-256
+  `e880f97406da7cce8f9adb816a2694c6e2ae7accc1d861f1df5335f176b66a14`;
+  normalized archive SHA-256
+  `f8903c1caeda8d6a1b9ea811ee6dd20eefd65f53ae99293a993a2b45ca4ec596`.
+- Focused owner tests: 17/17; supported Core target builds with zero
+  warnings/errors.
+- Standalone LongRun 7/7 and Smoke 5/5 passed. Their filtered XML originals
+  failed closed in the approved packager because retained parent fixture
+  counts describe full discovery. Originals were not altered or packaged; all
+  12 case identities and passed outcomes occur in the complete normalized ALL
+  report. The independent review retains this evidence limitation explicitly.
+- Independent exact-tip implementation review: PASS / `VALIDATED_CANDIDATE`;
+  `git diff --check` passed.
+
+The graph and mechanical source-identity join are in
+[`CORE-F post-demographic source/access reconciliation`](validation/CORE_F_DemographicOwners/PostOwnerGraph/README.md).
+Against the promoted compiler response, the graph records 322 Assembly-CSharp
+sources, 2,923 unique declaration-reference file edges, 50 shared-partial
+links, 122 SCCs, runtime reach 227, restore reach 296, and 26 outside both.
+It also records 477 Unity symbol edges across 76 files and 2,005 shared-Core
+symbol edges across 176 files. All 322 Assembly-CSharp source blobs and 44
+explicit Core compile-input blobs were rechecked against the promoted tree;
+there were no mismatches. The graph is declaration-level evidence, not a
+method-call, owner-completeness or epoch-coverage proof.
+
+The additive source join retains the historical 89-family, capture-target and
+24-operation matrices and records current Git blobs for every referenced
+source. It covers 89 family rows, 89 capture-target rows and 24 operation rows
+(1,660 field/path associations over 142 distinct current source files), with
+no unresolved path or blob. It also makes a remaining evidence gap concrete:
+the historical family/capture rows do not cite the newly promoted Core owner
+source paths. At this initial graph/join checkpoint, only
+`runtime.person.parentage` and `runtime.person.residence-bind` had normalized
+owner-family keys in the historical operation map; the other 22 used
+descriptive phrases. The follow-up reconciliation below supersedes that
+operation-key limitation without rewriting the historical matrix. This is not
+a claim that any operation lacks working behavior.
+
+**Dependency refresh:** demographic owners are promoted within scope. The
+next `CORE-F-Shared-DailyV1-Application-and-Host` package remains
+`WAIT_DEPENDENCY`. Its entry gate still requires the exact selected 89-family
+member/source/access ledger to join each live owner instance and constructor,
+all admitted writers and invalidation paths, capture/export, decoder/hydrator,
+relations and rejection behavior to current compiled sources. The refreshed
+graph does not satisfy that gate or make shared bootstrap/runtime, detached
+restore, .NET host, or T/T+1/T+2 continuation implementation ready. The next
+authorized work is the bounded owner/operation ledger reconciliation; runtime
+and persistence integration remain serialized hotspots. P12 and numbered
+Phase readiness are unchanged; CORE-X remains `DEFERRED`.
+
+### Follow-up operation/family reconciliation
+
+The additive [`current owner/operation overlay`](validation/CORE_F_DemographicOwners/PostOwnerGraph/OWNER_OPERATION_CURRENT_OVERLAY.md)
+now joins the 24 documented operation rows to exact owner-family keys where
+the source constructs the corresponding section IDs, while retaining the
+historical matrices and their source identities. The exact City population
+receipt family is a registered/captured row with **no admitted successful
+receipt writer in the reviewed P12 Daily-v1 operation set**: the lifecycle
+builders omit its section ID, the owner callback requires that ID for a
+receipt-changing commit, runtime-admitted keyed Person-death receipts reject,
+and the accepted profile configuration disables Natural Mortality and
+Aggregate Demography. This is an exact-zero classification within those
+profile/operation boundaries, not a claim about the separate P18-D daily
+boundary provider or generic receipt APIs.
+
+The P12-A genealogy codec is now named as a direct consumer of the moved
+`ParentageRecord`. No affirmative missing invalidation edge was found among
+the 24 reviewed operation cases. This does not close the full 89-family
+member/alias ledger, all-ingress writer inventory, global owner-thread
+quiescence, or completed-advance-boundary proof. The next Shared-DailyV1
+Application/Host package remains `WAIT_DEPENDENCY`; no new implementation
+checkpoint is made READY by this evidence-only overlay. No tests were rerun
+for this documentation update, and the promoted demographic-owner code/tree
+and validation evidence are unchanged.
