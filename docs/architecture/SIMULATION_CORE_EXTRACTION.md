@@ -11,6 +11,38 @@ implementation readiness does not itself start migration.
 Independent verdicts and exact reviewed refs: [review](SIMULATION_CORE_EXTRACTION_REVIEW.md).
 First bounded executable contract: [CORE-A Master handoff](SIMULATION_CORE_A_MASTER_HANDOFF.md).
 
+## CORE-F closure-oriented owner and host path — 2026-10-15
+
+Production Core `0094febf7f97333d0653eaf9688fe1d24d73327f` has A–E,
+Values/Owners/Persistence, shared codec/numeric helpers and Unity provider switch
+promoted. Latest retained implementation gates: Unity3176/3176, .NET171/171
+cold/warm, Smoke5/5. Older provider-ready/reconciliation text is historical.
+
+The [closure execution contract](CORE_F_CLOSURE_EXECUTION_CONTRACT.md)
+replaces an undifferentiated source wait with one bounded demographic-owner
+package: seven population and two genealogy sources, same Runtime guard object,
+complete original writer/access ledger and existing Unity P12 adapters. After
+independent PASS and this architecture publication, the
+[Master handoff](CORE_F_DEMOGRAPHIC_OWNERS_MASTER_HANDOFF.md)
+is **READY_FOR_IMPLEMENTATION**. The two owner work areas can prepare in isolated
+worktrees; common guard/project/runtime/P12 integration is serialized. No new ID.
+
+A source-confirmed genealogy restored-clone revision loss is addressed narrowly
+in that handoff with exact restored-context cloning and authentic capture/restore
+regressions; ordinary constructor behavior and P12 vector validation stay intact.
+This is not a new profile, a reopened Phase or a claim that the defect test ran.
+
+Remaining graph: demographic owners → definition-bound selected owner/runtime
+source closure → shared bootstrap/private restore/publication → fixed net8 host
+and descriptor-v2 image/store integration → detached T/T+1/T+2 and Unity/.NET
+behavior parity → CORE-F acceptance. Source graph counts are inspection evidence,
+not a303-file move authorization. The
+[dependent runtime/restore design](CORE_F_RUNTIME_RESTORE_INTEGRATION_DESIGN.md)
+is not implementation-ready until its actual source/member closure is fixed.
+Full CORE-F remains **WAIT_DEPENDENCY**, CORE-X **DEFERRED**. Preserve all89
+family definitions,24 operation routes and exact61+22*N+U+P+4*C role/key/alias
+semantics. No Unity-only result proves .NET continuation; no cross-host save
+promise or unrelated numbered-phase dependency follows. No production change.
 ## CORE-F promoted prerequisites and source-bound next work — 2026-10-15
 
 At production Core `fff5cca0297ce5af346a264b7fa2e2e37be587b0`, all three

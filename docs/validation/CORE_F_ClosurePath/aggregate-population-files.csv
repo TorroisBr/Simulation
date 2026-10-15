@@ -1,0 +1,8 @@
+"source_path","git_blob","scc_id","scc_size","runtime_closure","restore_closure","disposition","unity_symbol_names"
+"Assets/_Project/Scripts/Population/AggregateDemographyContracts.cs","60a1003c25bf088cb870961582fc05b82fd525f9","SCC-104","1","true","true","CoreMove",""
+"Assets/_Project/Scripts/Population/AggregateDemographySystem.cs","105ec31064a6a6f24bd98ddcddf2441aedb9edef","SCC-002","191","true","true","CoreMove",""
+"Assets/_Project/Scripts/Population/AggregateDemographyTransition.cs","bb3feb9edbedb081f6822d5d2fd5586c71f743a9","SCC-105","1","true","true","CoreMove",""
+"Assets/_Project/Scripts/Population/PopulationChangeSet.cs","a7e5ce18234d5bdb4f0b425d4fa5572f9e860730","SCC-106","1","true","true","CoreMove",""
+"Assets/_Project/Scripts/Population/SettlementPopulationRuntime.cs","55490ecfbf7f00f721f23c9c2f3b4568d92f2cab","SCC-107","1","true","true","CoreMove",""
+"Assets/_Project/Scripts/Population/SettlementPopulationSystem.cs","af7ccc809a59e864f474201e278e0eb1bde44ae2","SCC-108","1","true","true","CoreMove",""
+"Assets/_Project/Scripts/Population/SettlementPopulationTransition.cs","21bda8ceaec40bb8e2d4d04831a9bd2dca0e61cd","SCC-109","1","true","true","CoreMove",""
