@@ -34,3 +34,86 @@ The fixed C# constructor fixture regenerated identically from the independent
 Expected P12 bytes are output vectors only; generator input is not the encoded
 catalog. Baseline Unity fixture bytes remain unchanged at SHA-256
 `422805cbe373cf1410ee6a928d363fa1ef413dbcf50dc062dce7867ed4fdd1b3`.
+
+
+## Final closure evidence — source e2184090
+
+Exact tested source: `e2184090f0803a2b0ede16d00da0742189fab9be`.
+Tree: `69667f7e485cc15242ae071aae659330395ac111`.
+Assets: `47992d69c9484524f515a190100fedbe3abb6dc0`.
+Packages: `121020c847703090757766b7b355203c71b7559f`.
+ProjectSettings: `db5c1636993b7f82f2409e07300df2744a5dfe85`.
+CoreValidation: `43e9645d454bf710e8f69686e30dfd31b2cf5346`.
+UnityValidation: `965c46eef5d172f96cec6a17fd39bdc18ffde1f0`.
+Core base: `8fc975631db0d4e53fa58c490c752fb79d209b0e`.
+Architecture: `4da844dee0c69fdf66562590fa96cc728fc86bf7`.
+
+The initial field-parity gap is resolved by one generated C# constructor fixture
+shared from Editor/Core via an explicit SDK link. The pre-migration baseline
+remains under tests/Simulation.Core.Tests/Fixtures, unchanged at SHA-256
+`422805cbe373cf1410ee6a928d363fa1ef413dbcf50dc062dce7867ed4fdd1b3`.
+The generator consumes718 independently captured member occurrences and164 mapped
+rows, not expected P12 bytes. It produces typed values driving the actual P9
+builder (all184 records/hash) and raw values driving the sole P12 encoder (complete
+bytes/hash,39 records including one profile and38 referenced assets).
+Final normalized constructor source SHA-256:
+`c7280804cb43a597992fd59667c646b8991e6d0d9ea22042c03f837e83becadc`.
+
+The Unity comparison checks actual adapter output recursively across root/effective
+configuration, calendar, all six ID tables, nested properties, enum numeric and
+symbolic values, float/double bits, reference IDs, null/list shape/order and
+identity inputs. The copy-immunity test mutates actual source scalars, nested
+production and city-list references after capture, checks unchanged copied values,
+and restores source state in finally without saving assets. The separate raw P12
+boundary remains intact. The fixture location is test-only shared ownership, not
+a new runtime loader or extension API.
+
+| Required final gate | Protected run | Result |
+|---|---|---|
+| Core cold/warm, pinned SDK/CLR,132 inputs, no Library | `b42be6cd2a0d4e5c860fb268376013a8` | 169/169 each |
+| Locked Lab cold/warm | `84430f74092649f8b469876a861af793` | exact four-line PASS |
+| Explicit typed/copy filter | `30bd22fab633429daf07391cd2816fd9` | 2/2 |
+| Config/bootstrap/genesis/P10/content/P12/restore/typed | `904b3e9fe34845f499841875b4aca4aa` | 340/340 |
+| ALL EditMode | `077e36b28c624f9cac8466fcada9e37d` | 3169/3169, no nonpassing cases |
+| Official -TestFilter Smoke | `8d3be4885e604f4da29f43503a1e1bfc` | 5/5 |
+| Original LongRun in ALL | same ALL | 7/7, original100/1000/5000-day horizons |
+| Base diff-check | final source above | PASS |
+
+Both exact typed test names are individual passing nodes in focused, broad and
+ALL XML: `DailyV1DefinitionAdapterTypedParityTests.UnityAdapterMatchesEveryFixedTypedDefinitionValue`
+and `.AdaptedTypedDefinitionsRemainCopiedWhenSourceAssetsAndListsChange`.
+Independent review confirmed actual execution; a filter/assembly match is not
+execution proof. All four Unity inventories match and are stable before/after;
+every filtered case joins to a passing ALL case. The owner test's actual P8
+fingerprint is unchanged from its pre-Values source-bound witness:
+`db509154628cf74ffd21d01fd9b37e8d31f1e9fc39ee34b151eed4132b22b017`.
+
+Complete final packages:
+
+- `core-f-values-typed-cold-warm.manifest.json` and matching ZIP. Archive SHA-256:
+  `0fda9451e8b7faf4d37210b119a134400fa0e211504fb5460919bd46ddcefacb`.
+  Private original comparison: originalComparisonVerified. Separate archive-only
+  check: originalComparisonNotPerformed. Actual SDK/runtime/assembly/source
+  identity and132 inputs are bound by the package.
+- `core-f-values-typed-all.manifest.json` and matching ZIP. Archive SHA-256:
+  `a05a20f21d903d9db5bae11065cd665145da3ca0730fe1307cd7bb7e2e588738`.
+  Verification against protected originals passed. Original ALL XML SHA-256:
+  `3332e47d0302d709f6e897eaf8f250cd8298cc89653e7d0bb2ddbea8b2525d65`.
+
+The preceding `core-f-values-final-*` bundles are superseded ab7dd68 intermediate
+evidence: Unity ignored two new C# assets with malformed importer metadata, so
+those reports do not satisfy typed-parity closure. Root corrected only their
+metas to valid MonoImporter form with the same GUIDs and reran required gates.
+No report was rewritten. Other diagnostic runs remain protected and excluded.
+Filtered aggregate packaging limitations are unchanged; the complete final ALL
+package supplies retrievable case results. Original reports/logs/binaries remain
+immutable and private; no private locators or binaries are published.
+
+Delivery is the five-file pure configuration closure, complete copied selected
+values, one P9 identity builder and one selected P12 catalog encoder with Unity
+conversion adapters. Existing default/error/order semantics and truthful build
+compatibility remain; continuation in the new Unity build passes. No .NET runtime
+host, owner extraction, cross-host save, profile expansion, P12 reopening, full
+CORE-F or CORE-X readiness is claimed. Final exact-tip evidence review and refreshed
+promotion preflight are recorded separately. Docs-only successors may reuse these
+runs only after effective-input applicability is confirmed.
