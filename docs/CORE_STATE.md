@@ -676,3 +676,23 @@ has yet been promoted by this readiness record.
 Selected-owner migration, shared runtime/restore composition, and the real
 Daily-v1 .NET host/continuation remain separately dependency-gated; full CORE-F
 remains `WAIT_DEPENDENCY`, and CORE-X remains `DEFERRED`.
+
+## CORE-F null-roster provider switch candidate — 2026-10-15
+
+Implementation candidate `6a1e3a5f49284152159086e2bb22aa50cda510ad` (tree
+`4aae462cfee091705bf3e84a5611ee39202507ea`) switches only the frozen P18-D
+Plan/Edge codec call sites and decouples the oracle fixture from provider-private
+types. It preserves the `runtimeRoster:[null]` decode result and rejects the
+incomplete member before preparation or authoritative mutation. The exact
+implementation and evidence are recorded in
+[`CORE-F null-roster provider-switch validation`](validation/CORE_F_NullRosterProviderSwitch/VALIDATION.md).
+
+Unity focused provider/parity/consumer/daily-boundary suites and official Smoke
+passed; unfiltered ALL EditMode passed 3,176/3,176 with stable candidate/input
+identities. The normalized report archive and additional-input sidecar verify
+the full run. Fresh CoreValidation passed cold/warm 171/171 each; its 142-file
+effective .NET input inventory is byte-identical to the already reviewed and
+packaged compatibility run. `git diff --check` passed. Independent exact-tip
+implementation review and Core-canonical promotion are pending. This candidate
+does not close CORE-F; selected-owner migration, shared runtime/restore,
+detached restoration, and .NET host continuation remain dependency-gated.
