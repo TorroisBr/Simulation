@@ -6,9 +6,9 @@ using System.Collections.ObjectModel;
 /// Authoritative parentage store for one world boundary.
 /// It intentionally knows only PersonId and does not validate world membership.
 /// </summary>
-public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
+public sealed class GenealogyStore
 {
-    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    private readonly MutationStatusBinding mutationStatusBinding = new MutationStatusBinding();
     private readonly HashSet<ParentageRecord> records = new HashSet<ParentageRecord>();
     private readonly Dictionary<PersonId, HashSet<PersonId>> childrenByParent =
         new Dictionary<PersonId, HashSet<PersonId>>();
@@ -37,12 +37,12 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
     /// owner operation. The caller must hold the P12-B completed-boundary
     /// capture authority; this method does not create or validate that token.
     /// </summary>
-    internal GenealogyOwnerSnapshot CaptureOwnerSnapshot()
+    internal GenealogyOwnerExport CaptureOwnerExport()
     {
         List<ParentageRecord> snapshot = new List<ParentageRecord>(records);
         snapshot.Sort(CompareRecords);
-        return new GenealogyOwnerSnapshot(
-            GenealogyOwnerSnapshot.CurrentSchemaVersion,
+        return new GenealogyOwnerExport(
+            GenealogyOwnerExport.CurrentSchemaVersion,
             revision,
             snapshot);
     }
@@ -52,8 +52,8 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
     /// Cross-owner endpoint membership is intentionally checked by the later
     /// merged D graph validator after related person records are staged.
     /// </summary>
-    internal static bool TryCreateFromOwnerSnapshot(
-        GenealogyOwnerSnapshot snapshot,
+    internal static bool TryCreateFromOwnerExport(
+        GenealogyOwnerExport snapshot,
         out GenealogyStore stagedStore,
         out GenealogyFailure failure,
         Action afterRecordStagedForTest = null)
@@ -67,7 +67,7 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
-        if (snapshot.SchemaVersion != GenealogyOwnerSnapshot.CurrentSchemaVersion)
+        if (snapshot.SchemaVersion != GenealogyOwnerExport.CurrentSchemaVersion)
         {
             failure = GenealogyFailure.Create(
                 GenealogyFailureCode.UnsupportedSnapshotSchema,
@@ -155,7 +155,7 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
         PersonId child,
         out GenealogyFailure failure)
     {
-        if (!mutationGuardBinding.CanMutate)
+        if (!mutationStatusBinding.CanMutate)
         {
             failure = GenealogyFailure.Create(GenealogyFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
@@ -287,7 +287,7 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
         bool allowSaturatedRollback,
         out GenealogyFailure failure)
     {
-        if (!mutationGuardBinding.CanMutate)
+        if (!mutationStatusBinding.CanMutate)
         {
             failure = GenealogyFailure.Create(GenealogyFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
@@ -520,8 +520,9 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
         return string.CompareOrdinal(left.Value, right.Value);
     }
 
-    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
-    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
-    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
-    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
+    internal bool CanBindMutationStatus(IAuthoritativeMutationStatus status) =>
+        mutationStatusBinding.CanBindTo(status);
+
+    internal bool TryBindMutationStatus(IAuthoritativeMutationStatus status) =>
+        mutationStatusBinding.TryBindTo(status);
 }
