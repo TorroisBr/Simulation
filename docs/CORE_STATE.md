@@ -516,3 +516,58 @@ This State-only successor records that independent PASS and requires unchanged
 metadata applicability plus immediate safe fast-forward preflight, without another
 routine user gate. Exact canonical delivery is established by the containing
 commit on `codex/core/canonical`; architecture and numbered-phase refs are separate.
+
+
+## CORE-F Shared Runtime Source design adoption — 2026-10-15
+
+This State successor adopts the independently reviewed compatibility design into
+Core canonical. The architecture design promotion is current at
+[`codex/architecture/world-identity-projection` `bec3998f697f362944aa5b551d45998145f4e67e`](https://github.com/TorroisBr/Simulation/tree/bec3998f697f362944aa5b551d45998145f4e67e).
+The Core design/evidence candidate is `codex/core/CORE-F-Shared-Runtime-Design-652ac7b`
+at `781cfb71f43bd80d781aaf7a678495ad4e7cdc46`, based on the current Core canonical
+`652ac7bf02943cf6160fd27f271a781db70657c5`. The reviewed technical-design SHA-256
+is `36137D97DDBB633ECDE6C82E5EE1F7B60ED98F5457781B506531E254DECDE2FE`; its
+independent design review is `PASS` in
+[`TECHNICAL_DESIGN_REVIEW.md`](validation/CORE_F_SharedRuntimeSource/TECHNICAL_DESIGN_REVIEW.md).
+The exact-tip candidate review and its docs-only successor review are recorded in
+[`CANDIDATE_REVIEW.md`](validation/CORE_F_SharedRuntimeSource/CANDIDATE_REVIEW.md).
+
+The accepted Unity oracle is run `d8b4c40e04ab466a9c56fdf6e5f5361d`: Unity
+6000.3.9f1, Test Framework 1.6.0, unfiltered EditMode 3,173/3,173 with zero
+failures/skips/inconclusive. The integrated Editor fixture SHA-256 is
+`B0713750A006BBF1A5B75AD70EE183CF3CD0A2581D940DF49335B2037B70D5B5`. Current
+public evidence rehashes to the reviewed identities: manifest
+`75652F63593191509DFC9E5E3B2F2C277657BAD4BF33B33D2E3D581CDC2AC80B`, archive
+`D930CA6E929ABBBDF14508C245363FE700F519CE4A6032CEB895233596520B9B`, capture
+records `95E3912A43712693CF6EF68CF22E306A770B53A51818B0D6123842F6FA1D7A44`,
+and the 172 numeric vectors `2A5D2C653CEC82421936939A0FFBABABBB2F12B8834AFA645B890D884DEAF2F1`.
+The prior independent design review verified the original XML/log comparison
+against the protected run manifest and the 247 captured outputs. This adoption
+relies on that existing attestation and the unchanged, hash-verified public
+package; the protected raw XML/log were not reopened in this orchestration run,
+so this record does not claim a new original-report comparison.
+
+The reviewed design's readiness matrix records its status at design review time
+(`CORE_CANONICAL_ADOPTION_PENDING`) and is superseded by this current State. The
+active Master instruction explicitly authorizes the next bounded compatibility
+extraction after this Core adoption; implementation authority comes from that
+instruction, not from architecture promotion alone.
+
+- **READY_FOR_IMPLEMENTATION:** the closed typed P18-D `Plan`/`Edge` Core codec
+  values/API and golden tests, using the exact captured JSON bytes and reader
+  outcomes; and the selected numeric compatibility helper overloads with the
+  complete reviewed 172-vector/domain set. Keep each implementation within the
+  shared `Simulation.Core` package and existing explicit .NET source/test links.
+- **WAIT_DEPENDENCY:** switching `P18DCommercialSharingBoundaryStepProvider`
+  to the shared codec until the Core codec candidate passes its .NET and Unity
+  parity/rejection gates and independent exact-tip review.
+- **WAIT_DEPENDENCY:** selected owner migration, shared runtime/restore, and a
+  real .NET Daily-v1 host until the full per-owner source/writer/epoch/export/
+  hydration/relationship closure and serialized composition gates are satisfied.
+
+The first implementation does not change P12's same-build/current-host
+`UnityBootstrap-Daily-v1` contract or add a save format. It does not move owners,
+rewrite causal bytes, close full CORE-F, establish CORE-X or P13 readiness, or
+change numbered-phase branches. Full CORE-F remains **WAIT_DEPENDENCY** on the
+actual selected owner/runtime/restore source closure, host composition, detached
+restoration, and exact .NET continuation/parity proof. CORE-X remains **DEFERRED**.
