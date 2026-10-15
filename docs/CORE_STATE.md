@@ -395,3 +395,39 @@ requires independent fixed164-field fixture parity, final two-host gates and fin
 review. The source-closure design can be prepared from actual APIs but cannot be
 marked executable from a guessed transitive source list. Full CORE-F remains
 WAIT_DEPENDENCY; CORE-X DEFERRED; numbered canonical branches remain unchanged.
+
+
+## CORE-F WP1-Values validated completion — 2026-10-15
+
+WP1-Owners is **PROMOTED** at `8fc975631db0d4e53fa58c490c752fb79d209b0e`;
+WP2-Persistence remains **PROMOTED** at
+`84b66da69be896f0db347b940d9e464cfaa1c4f2`. Local/remote sync was verified.
+These actual deliveries supersede the earlier conditional promotion entries.
+
+WP1-Values is **VALIDATED_CANDIDATE**, eligible for autonomous bounded promotion
+once the immediate refreshed-ref/fast-forward and docs-only applicability gates pass.
+
+- Reviewed candidate: `925c58d9cb529db5a7a62f3746a38c9d8ce32481`.
+- Executed source: `e2184090f0803a2b0ede16d00da0742189fab9be`.
+- Review: `reviews/CORE_F_WP1_VALUES_FINAL_REVIEW.md`.
+- Full final evidence: `validation/CORE_F_Values/VALIDATION.md`, aligned cold/warm
+  and typed ALL packages,132-row source ledger and protected unchanged originals.
+- .NET169/169 cold/warm, fresh locked Lab PASS, actual typed2/2, focused340/340,
+  ALL3169/3169 including7 original LongRun cases, official Smoke5/5, diff-check PASS.
+- Independent exact source verification:132 SDK inputs,107/107 shared raw hashes,
+  all1,635 Unity inputs and both exact typed case results verified.
+
+The package supplies the five-file engine-free configuration closure, complete
+copied164-field selected definitions, independent constructor/value parity,
+shared P9 identity and shared closed P12 catalog encoding with Unity adapters.
+The real WP2 dependency is satisfied; no P12/profile/host compatibility expansion.
+
+DAG refresh: A-E and Persistence -> Values (delivery ready); closed P12 -> Owners
+(delivered); Values + Owners + Persistence -> exact shared owner/runtime/restore
+source migration -> actual net8 host -> complete same-host .NET continuation and
+matched authoritative cross-host execution proof. Full CORE-F remains
+WAIT_DEPENDENCY on those actual capabilities, not another abstract owner inventory.
+A bound compile graph identifies303 runtime+restore source nodes including a
+191-file runtime/domain/census SCC; it is source design evidence, not permission
+to move303 files unchanged or admit unselected state. CORE-X stays DEFERRED.
+No numbered canonical branch or unrelated worktree was changed.
