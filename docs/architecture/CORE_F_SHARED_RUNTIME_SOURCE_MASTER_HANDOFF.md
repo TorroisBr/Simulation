@@ -1,6 +1,6 @@
 # CORE-F shared-runtime source preparation — Master design handoff
 
-**Artifact type:** bounded continuation of CORE-F source-migration design. **Design disposition:** source/readiness assessment and finite technical-design handoff; independent review pending. **Production migration readiness:** WAIT_DEPENDENCY. This document and its CSV inputs authorize neither source edits nor an implementation wave by themselves. No new checkpoint ID, phase, product capability, profile, or architecture change is created.
+**Artifact type:** bounded continuation of CORE-F source-migration design. **Design disposition:** source/readiness assessment and finite technical-design handoff; independent assessment PASS / VALIDATED_CANDIDATE at `091a1e19ead74daafcf9fa7c661a1ec4fc0ce983`; [review](CORE_F_SHARED_RUNTIME_SOURCE_REVIEW.md). **Production migration readiness:** WAIT_DEPENDENCY. This document and its CSV inputs authorize neither source edits nor an implementation wave by themselves. No new checkpoint ID, phase, product capability, profile, or architecture change is created.
 
 ## Baseline and prerequisites
 
