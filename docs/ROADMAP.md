@@ -22,6 +22,45 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
 
+## CORE-F prerequisite delivery and remaining source closure — 2026-10-15
+
+Production Core canonical `fff5cca0297ce5af346a264b7fa2e2e37be587b0`
+records all three reviewed prerequisite packages **PROMOTED**:
+WP2-Persistence at `84b66da69be896f0db347b940d9e464cfaa1c4f2`,
+WP1-Owners at `8fc975631db0d4e53fa58c490c752fb79d209b0e`, and
+WP1-Values at `c69fcf471be7c73c3b63b539d0ae5e659cb9e029`.
+Use the owning Core State and complete final review/validation records there.
+Earlier prerequisite-ready and CORE-E-pending entries below are historical.
+
+The delivered boundaries are complete copied selected effective definitions and
+identity parity, the selected89-family/24-route owner evidence baseline, and shared
+descriptor/wire/atomic storage. The live selected owners and SimulationRuntime
+are not yet a shared executable .NET world. **CORE-F remains WAIT_DEPENDENCY** on
+actual selected source/runtime/restore closure followed by real .NET composition,
+same-host continuation and authoritative execution parity. Unity continuation and
+engine-free definition tests do not satisfy that last proof.
+
+```text
+A-E + WP2-Persistence PROMOTED -> WP1-Values PROMOTED
+closed selected P12 contract -> WP1-Owners PROMOTED
+Values + Owners + Persistence
+  -> reviewed host-edge cuts and actual shared owner/runtime/restore migration
+  -> fixed net8 host using the same runtime
+  -> complete two-host execution and same-host continuation evidence
+  -> CORE-F bounded promotion
+CORE-X remains DEFERRED on its separate compatibility scope
+```
+
+The next source design uses a bound329-file Unity application-assembly semantic
+graph,235 runtime and303 restore-reachable application source nodes, with a191-file
+runtime/domain/census SCC. Shared Core metadata edges are tracked separately.
+These are compile-level dependencies, not303 unchanged moves or profile admission.
+Source ownership, exact Unity adapter cuts and causal serialization/numeric parity
+must be fixed before dispatch. No numbered-phase lock, P12 scope change or cross-host
+save interchange follows. Architecture documentation changes are imported into
+current Core as documentation deltas; never merge this checkout's older code tree.
+
+
 ## Current Simulation Core readiness — 2026-10-14
 
 At Core canonical `ad7a18899a13ec42a3d2b6b3098dff2f0a318492`, CORE-A

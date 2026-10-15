@@ -460,3 +460,44 @@ No new product/architecture choice has been identified. No arbitrary profile,
 P12 guarantee, cross-host save or CORE-X scope is admitted by these promotions.
 P12 canonical remains `4cc31073f0ec6ba5c718084e4cebd6e914931d5d`;
 architecture policy remains `4da844dee0c69fdf66562590fa96cc728fc86bf7`.
+
+
+## CORE-F source-preparation architecture adopted — 2026-10-15
+
+Production base: `fff5cca0297ce5af346a264b7fa2e2e37be587b0`.
+Promoted architecture: `758d4eaf7022e09f4b106ef25b390d14d6b55f7a`.
+This successor imports only the new reviewed documentation/evidence delta and
+refreshes planning; it changes no executable source or validation input. The three
+prerequisite promotions and their final exact-source reviews/packages above remain
+current: Persistence84b66da6, Owners8fc97563, Valuesc69fcf47, all PROMOTED.
+
+[Exact Master design handoff](architecture/CORE_F_SHARED_RUNTIME_SOURCE_MASTER_HANDOFF.md)
+and [independent assessment](architecture/CORE_F_SHARED_RUNTIME_SOURCE_REVIEW.md)
+are canonical architecture and imported here. The source/readiness assessment
+passed independent review; only the finite next compatibility design/evidence wave
+is READY_FOR_TECHNICAL_DESIGN. Full CORE-F and production runtime/restore source
+migration remain WAIT_DEPENDENCY, not READY_FOR_IMPLEMENTATION.
+
+The next authorized work captures original Unity frozen-payload and numeric
+compatibility evidence, fixes exact engine-free APIs/access/source cuts and receives
+independent technical review before port dispatch. The329-node application graph
+and separate Core API/source-reference inventories identify real dependencies;
+they are not303 unchanged source moves, owner/profile admission or .NET runtime
+proof. No original implementation source or evidence is invalidated by this
+compatible documentation-only refresh.
+
+DAG: A-E + promoted Values/Owners/Persistence -> bounded compatibility/source-cut
+design -> reviewed actual selected owner/runtime/restore migration -> fixed net8
+host using the same runtime -> complete same-host T/T+1/T+2 continuation and
+authoritative execution comparison -> CORE-F bounded promotion. The required
+89-family/24-route matrix, completed token/epoch/lease and failure atomicity
+remain intact. CORE-X stays DEFERRED; no cross-host/build save promise, new P12
+scope, P13 readiness or numbered-phase reopening/lock follows.
+
+The architecture promotion was docs/evidence-only and fast-forward, independently
+reviewed at758d4eaf and verified local/remote. This Core adoption requires the normal
+independent exact-tip docs-only applicability, diff/link/privacy check and fresh
+fast-forward preflight. Existing final .NET169/169 cold/warm, locked Lab PASS,
+Unity typed2/2, focused340/340, ALL3169/3169 including7 original LongRun cases,
+and Smoke5/5 remain their original run results; they are not new host evidence.
+No routine human decision remains for the next bounded technical-design wave.

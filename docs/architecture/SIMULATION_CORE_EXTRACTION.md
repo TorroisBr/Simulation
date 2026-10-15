@@ -11,6 +11,24 @@ implementation readiness does not itself start migration.
 Independent verdicts and exact reviewed refs: [review](SIMULATION_CORE_EXTRACTION_REVIEW.md).
 First bounded executable contract: [CORE-A Master handoff](SIMULATION_CORE_A_MASTER_HANDOFF.md).
 
+## CORE-F promoted prerequisites and source-bound next work — 2026-10-15
+
+At production Core `fff5cca0297ce5af346a264b7fa2e2e37be587b0`, all three
+WP1-Values, WP1-Owners and WP2-Persistence packages are promoted. Owning Core State
+and complete final implementation/evidence reviews establish these deliveries;
+the historical prerequisite-ready wording below is superseded. Definitions and
+identity parity, live selected-owner evidence and shared persistence primitives
+are available. The selected runtime and restore composition still require actual
+shared-source migration and real net8 execution/continuation proof. CORE-F stays
+WAIT_DEPENDENCY; CORE-X stays DEFERRED. No P12 profile or compatibility expansion.
+
+The next handoff is [shared-runtime source preparation](CORE_F_SHARED_RUNTIME_SOURCE_MASTER_HANDOFF.md).
+Its bound application-assembly dependency evidence is not a source-move command,
+complete cross-assembly closure, or permission to omit Required zero-row owners.
+Use that handoff's exact reviewed readiness and integration boundary; no entire
+older architecture code tree is imported into production Core.
+
+
 ## Current readiness supersession — 2026-10-14
 
 Production authority is `codex/core/canonical` at
