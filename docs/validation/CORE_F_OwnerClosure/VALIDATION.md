@@ -1,6 +1,6 @@
 # CORE-F WP1-Owners evidence status
 
-**Status:** candidate implementation/evidence package; Unity validation and independent exact-tip review are pending. **Baseline:** `8ea3b47e9ab1be9ab3fe6261a73dc33fece8cd8f`; current isolated branch includes the separately identified docs-only architecture/handoff ancestry commit. **Production scope:** test-only. No Simulation.Core live graph or .NET host claim.
+**Status:** final integrated validation and independent exact-tip review passed at `026ebf82f5bb8164036238bc2878bb30f5c2e379`; see the final section and owning review record. **Baseline:** `8ea3b47e9ab1be9ab3fe6261a73dc33fece8cd8f`; current isolated branch includes the separately identified docs-only architecture/handoff ancestry commit. **Production scope:** test-only. No Simulation.Core live graph or .NET host claim.
 
 ## Evidence sources and limits
 
