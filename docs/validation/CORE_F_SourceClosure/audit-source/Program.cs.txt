@@ -1,0 +1,127 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Collections.Generic;
+using System.Linq;
+
+var rsp=args[0]; var root=Path.GetFullPath(args[1]); var cache=Path.GetFullPath(args[2]); var sdk=args[3];
+var parsed=CSharpCommandLineParser.Default.Parse(new[]{"@"+rsp},root,sdk,null);
+if(parsed.Errors.Length>0) throw new Exception("Response parse errors: "+parsed.Errors.Length);
+string Resolve(string p){ if(Path.IsPathRooted(p)) return p; var n=p.Replace('/','\\'); if(n.StartsWith("Library\\",StringComparison.OrdinalIgnoreCase)) return Path.GetFullPath(Path.Combine(cache,n.Substring("Library\\".Length))); return Path.GetFullPath(Path.Combine(root,n)); }
+var srcs=parsed.SourceFiles.Select(s=>Resolve(s.Path)).ToArray();
+if(srcs.Any(p=>!File.Exists(p))) throw new Exception("Missing source input count: "+srcs.Count(p=>!File.Exists(p)));
+var refs=new List<MetadataReference>(); var resolvedReferencePaths=new List<string>(); var missingRefs=new List<string>();
+foreach(var r in parsed.MetadataReferences){ var p=Resolve(r.Reference); if(!File.Exists(p)){missingRefs.Add(p);continue;} refs.Add(MetadataReference.CreateFromFile(p,r.Properties));resolvedReferencePaths.Add(p); }
+Console.WriteLine($"Inputs: {srcs.Length} sources, {parsed.MetadataReferences.Length} rsp refs, {refs.Count} resolved refs, {missingRefs.Count} missing parser refs.");
+foreach(var m in missingRefs) Console.WriteLine("UNRESOLVED_REFERENCE");
+var trees=srcs.Select(p=>CSharpSyntaxTree.ParseText(File.ReadAllText(p),parsed.ParseOptions,p)).ToArray();
+var comp=CSharpCompilation.Create(parsed.CompilationName,trees,refs,parsed.CompilationOptions);
+var diagnostics=comp.GetDiagnostics(); var errors=diagnostics.Where(d=>d.Severity==DiagnosticSeverity.Error).ToArray();
+Console.WriteLine($"Compilation errors={errors.Length}; warnings={diagnostics.Count(d=>d.Severity==DiagnosticSeverity.Warning)}");
+foreach(var e in errors.Take(30)) Console.WriteLine("ERROR " + e.Id + " at " + Rel(e.Location.SourceTree?.FilePath ?? ""));
+if(errors.Length>0) return;
+string Rel(string p)=>Path.GetRelativePath(root,p).Replace('\\','/');
+var paths=trees.Select(t=>Rel(t.FilePath)).ToArray(); var index=paths.Select((p,i)=>(p,i)).ToDictionary(x=>x.p,x=>x.i,StringComparer.OrdinalIgnoreCase);
+var adj=Enumerable.Range(0,trees.Length).Select(_=>new HashSet<int>()).ToArray(); var sharedDeclEdges=new HashSet<(int,int)>();
+var external=new HashSet<string>(StringComparer.Ordinal); var coreByFile=new Dictionary<string,HashSet<string>>(StringComparer.OrdinalIgnoreCase); var unityByFile=new Dictionary<string,HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+void AddSymbolEdge(int from, ISymbol? s){ if(s is null || s is INamespaceSymbol)return; foreach(var dr in s.DeclaringSyntaxReferences){var p=Rel(dr.SyntaxTree.FilePath); if(index.TryGetValue(p,out var to)&&to!=from){ adj[from].Add(to); }} if(s is INamedTypeSymbol nt){foreach(var dr in nt.DeclaringSyntaxReferences){var p=Rel(dr.SyntaxTree.FilePath);if(index.TryGetValue(p,out var to)&&to!=from)adj[from].Add(to);}} if(s.ContainingAssembly?.Name=="Simulation.Core"){if(!coreByFile.TryGetValue(paths[from],out var cs))coreByFile[paths[from]]=cs=new(StringComparer.Ordinal);cs.Add(s.ToDisplayString());} if(s.ContainingNamespace is { IsGlobalNamespace:false } ns && s.Locations.Any(l=>!l.IsInSource)){ external.Add(ns.ToDisplayString()+"."+s.Name); if(ns.ToDisplayString().StartsWith("UnityEngine",StringComparison.Ordinal)){if(!unityByFile.TryGetValue(paths[from],out var set))unityByFile[paths[from]]=set=new(StringComparer.Ordinal);set.Add(ns.ToDisplayString()+"."+s.Name);} } }
+for(int i=0;i<trees.Length;i++){var model=comp.GetSemanticModel(trees[i]);var rootNode=trees[i].GetRoot();foreach(var n in rootNode.DescendantNodesAndSelf()){var si=model.GetSymbolInfo(n);AddSymbolEdge(i,si.Symbol);foreach(var c in si.CandidateSymbols)AddSymbolEdge(i,c); if(n is ExpressionSyntax or TypeSyntax){var ti=model.GetTypeInfo(n);AddSymbolEdge(i,ti.Type);AddSymbolEdge(i,ti.ConvertedType);}}}
+IEnumerable<INamedTypeSymbol> Types(INamespaceSymbol ns){foreach(var m in ns.GetMembers()){if(m is INamespaceSymbol child){foreach(var t in Types(child))yield return t;}else if(m is INamedTypeSymbol nt){yield return nt;foreach(var nested in Nested(nt))yield return nested;}}}
+IEnumerable<INamedTypeSymbol> Nested(INamedTypeSymbol nt){foreach(var m in nt.GetTypeMembers()){yield return m;foreach(var t in Nested(m))yield return t;}}
+foreach(var ty in Types(comp.Assembly.GlobalNamespace)){var files=ty.DeclaringSyntaxReferences.Select(r=>Rel(r.SyntaxTree.FilePath)).Distinct(StringComparer.OrdinalIgnoreCase).Where(index.ContainsKey).Select(p=>index[p]).ToArray();for(int a=0;a<files.Length;a++)for(int b=a+1;b<files.Length;b++){adj[files[a]].Add(files[b]);adj[files[b]].Add(files[a]);sharedDeclEdges.Add((files[a],files[b]));sharedDeclEdges.Add((files[b],files[a]));}}
+// Tarjan SCC over file -> referenced declaration edges.
+int next=0;var ids=Enumerable.Repeat(-1,trees.Length).ToArray();var low=new int[trees.Length];var stack=new Stack<int>();var on=new bool[trees.Length];var comps=new List<List<int>>();
+void Visit(int v){ids[v]=low[v]=next++;stack.Push(v);on[v]=true;foreach(var w in adj[v]){if(ids[w]<0){Visit(w);low[v]=Math.Min(low[v],low[w]);}else if(on[w])low[v]=Math.Min(low[v],ids[w]);}if(low[v]==ids[v]){var c=new List<int>();int w;do{w=stack.Pop();on[w]=false;c.Add(w);}while(w!=v);comps.Add(c);}}
+for(int i=0;i<trees.Length;i++)if(ids[i]<0)Visit(i);
+var sccs=comps.OrderByDescending(c=>c.Count).ToArray(); Console.WriteLine($"Graph: {trees.Length} file nodes, {adj.Sum(e=>e.Count)} directed declaration edges, {comps.Count} SCCs, nontrivial={comps.Count(c=>c.Count>1)}.");
+foreach(var c in sccs.Where(c=>c.Count>1).Take(60)){Console.WriteLine($"SCC[{c.Count}] "+string.Join(" | ",c.Select(i=>paths[i]).OrderBy(p=>p,StringComparer.Ordinal)));}
+var keys=new[]{"SimulationRuntime","SimulationTime","DailyV1","P12","Census","Owner","Bootstrap","WorldState","AdvanceDay","Person.cs","City.cs","Npc"};
+Console.WriteLine("SELECTED PATH INVENTORY:");foreach(var p in paths.Where(p=>keys.Any(k=>p.Contains(k,StringComparison.OrdinalIgnoreCase))).OrderBy(p=>p,StringComparer.OrdinalIgnoreCase))Console.WriteLine(p+"; refs="+adj[index[p]].Count+"; scc="+sccs.First(c=>c.Contains(index[p])).Count);
+Console.WriteLine("CORE EXTERNAL SYMBOLS:");foreach(var pair in coreByFile.OrderBy(p=>p.Key,StringComparer.OrdinalIgnoreCase))Console.WriteLine(pair.Key+" => "+string.Join(",",pair.Value.OrderBy(x=>x,StringComparer.Ordinal))); Console.WriteLine("UNITY EXTERNAL SYMBOLS:");foreach(var pair in unityByFile.OrderBy(p=>p.Key,StringComparer.OrdinalIgnoreCase))Console.WriteLine(pair.Key+" => "+string.Join(",",pair.Value.OrderBy(x=>x,StringComparer.Ordinal)));
+foreach(var query in new[]{"Assets/_Project/Scripts/P12AContinuationImage.cs","Assets/_Project/Scripts/SimulationRuntime.cs","Assets/_Project/Scripts/P12GDailyV1RestoreCoordinator.cs"}){if(index.TryGetValue(query,out var ix))Console.WriteLine("DIRECT["+query+"] "+string.Join(" | ",adj[ix].Select(j=>paths[j]).OrderBy(p=>p,StringComparer.OrdinalIgnoreCase)));}
+
+
+
+
+var compOf=new int[trees.Length];for(int ci=0;ci<comps.Count;ci++)foreach(var v in comps[ci])compOf[v]=ci;
+IEnumerable<int> Reach(int start){var seen=new HashSet<int>{start};var q=new Queue<int>();q.Enqueue(start);while(q.Count>0){var c=q.Dequeue();foreach(var v in comps[c])foreach(var w in adj[v]){var d=compOf[w];if(seen.Add(d))q.Enqueue(d);}}return seen;}
+foreach(var label in new[]{"Assets/_Project/Scripts/SimulationRuntime.cs","Assets/_Project/Scripts/P12GDailyV1RestoreCoordinator.cs"}){var si=index[label];var reach=Reach(compOf[si]);var nodes=reach.SelectMany(c=>comps[c]).Distinct().ToArray();Console.WriteLine("REACH["+label+"] sccs="+reach.Count()+" nodes="+nodes.Length+" sizes="+string.Join(",",reach.Select(c=>comps[c].Count).OrderByDescending(x=>x)));}
+var big=sccs.First(c=>c.Count>100);var bigIx=compOf[big[0]];var outgroups=new HashSet<int>();foreach(var v in comps[bigIx])foreach(var w in adj[v])if(compOf[w]!=bigIx)outgroups.Add(compOf[w]);Console.WriteLine("MAIN_SCC_OUTGOING_GROUPS="+outgroups.Count+" NODES="+outgroups.Sum(c=>comps[c].Count));foreach(var c in outgroups.OrderByDescending(c=>comps[c].Count)){Console.WriteLine("OUT["+comps[c].Count+"] "+string.Join(" | ",comps[c].Select(i=>paths[i]).OrderBy(p=>p,StringComparer.OrdinalIgnoreCase)));}
+var restoreReachSet=Reach(compOf[index["Assets/_Project/Scripts/P12GDailyV1RestoreCoordinator.cs"]]).SelectMany(c=>comps[c]).ToHashSet();Console.WriteLine("NOT_IN_RESTORE_CLOSURE="+(trees.Length-restoreReachSet.Count));foreach(var i in Enumerable.Range(0,trees.Length).Where(i=>!restoreReachSet.Contains(i)).OrderBy(i=>paths[i],StringComparer.OrdinalIgnoreCase))Console.WriteLine("UNREACH "+paths[i]);
+var runReach=Reach(compOf[index["Assets/_Project/Scripts/SimulationRuntime.cs"]]).SelectMany(c=>comps[c]).ToHashSet();var restReach=Reach(compOf[index["Assets/_Project/Scripts/P12GDailyV1RestoreCoordinator.cs"]]).SelectMany(c=>comps[c]).ToHashSet();var restoreOnly=restReach.Except(runReach).OrderBy(i=>paths[i],StringComparer.OrdinalIgnoreCase).ToArray();Console.WriteLine("RESTORE_ONLY_SOURCE_NODES="+restoreOnly.Length);foreach(var i in restoreOnly)Console.WriteLine("RESTORE_ONLY "+paths[i]);
+
+// Emit privacy-safe, repo-relative source and edge inventories.
+var outputDir = Path.GetFullPath(args[4]);
+Directory.CreateDirectory(outputDir);
+string Csv(string? value) => "\"" + (value ?? "").Replace("\"", "\"\"") + "\"";
+string GitBlob(string path) {
+    var psi = new System.Diagnostics.ProcessStartInfo("git") { WorkingDirectory = root, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+    psi.ArgumentList.Add("hash-object"); psi.ArgumentList.Add("--"); psi.ArgumentList.Add(path);
+    using var proc = System.Diagnostics.Process.Start(psi)!;
+    var stdout = proc.StandardOutput.ReadToEnd().Trim(); proc.WaitForExit();
+    if (proc.ExitCode != 0) throw new Exception("Could not compute source blob identity.");
+    return stdout;
+}
+var sccOrder = Enumerable.Range(0, comps.Count).OrderBy(ci => comps[ci].Select(i => paths[i]).Min(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase).ToArray();
+var sccLabel = new string[comps.Count];
+for (var n = 0; n < sccOrder.Length; n++) sccLabel[sccOrder[n]] = "SCC-" + (n + 1).ToString("D3");
+var runSet = runReach;
+var restoreSet = restReach;
+var sourceFile = Path.Combine(outputDir, "source-inventory.csv");
+using (var w = new StreamWriter(sourceFile, false, new System.Text.UTF8Encoding(false))) {
+    w.WriteLine("source_path,git_blob,scc_id,scc_size,runtime_closure,restore_closure,disposition,unity_symbol_names");
+    foreach (var i in Enumerable.Range(0, paths.Length).OrderBy(i => paths[i], StringComparer.OrdinalIgnoreCase)) {
+        var inRun = runSet.Contains(i); var inRestore = restoreSet.Contains(i);
+        var disposition = (inRun || inRestore) ? (unityByFile.ContainsKey(paths[i]) ? "SplitHostDomain" : "CoreMove") : "HostOnly";
+        var us = unityByFile.TryGetValue(paths[i], out var names) ? string.Join("|", names.OrderBy(x => x, StringComparer.Ordinal)) : "";
+        w.WriteLine(string.Join(",", new[]{Csv(paths[i]), Csv(GitBlob(paths[i])), Csv(sccLabel[compOf[i]]), comps[compOf[i]].Count.ToString(), inRun ? "true":"false", inRestore ? "true":"false", disposition, Csv(us)}));
+    }
+}
+var edgeFile = Path.Combine(outputDir, "source-edges.csv");
+using (var w = new StreamWriter(edgeFile, false, new System.Text.UTF8Encoding(false))) {
+    w.WriteLine("from_source,to_source,from_scc,to_scc,dependency_kind");
+    foreach (var i in Enumerable.Range(0, paths.Length).OrderBy(i => paths[i], StringComparer.OrdinalIgnoreCase))
+        foreach (var j in adj[i].OrderBy(j => paths[j], StringComparer.OrdinalIgnoreCase))
+            w.WriteLine(string.Join(",", new[]{Csv(paths[i]), Csv(paths[j]), Csv(sccLabel[compOf[i]]), Csv(sccLabel[compOf[j]]), Csv(sharedDeclEdges.Contains((i,j)) ? "shared partial declaration (also semantic if independently referenced)" : "semantic declaration reference")}));
+}
+var symbolNames = parsed.ParseOptions.PreprocessorSymbolNames.OrderBy(x=>x,StringComparer.Ordinal).ToArray(); File.WriteAllText(Path.Combine(outputDir, "preprocessor-symbols.txt"), string.Join("\\n", symbolNames)+"\\n", new System.Text.UTF8Encoding(false));var refsFile = Path.Combine(outputDir, "metadata-references.csv");
+using (var w = new StreamWriter(refsFile, false, new System.Text.UTF8Encoding(false))) {
+    w.WriteLine("reference_id,safe_label,sha256,byte_length");
+    for (var rix = 0; rix < resolvedReferencePaths.Count; rix++) {
+        var p = resolvedReferencePaths[rix];
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(p))).ToLowerInvariant();
+        w.WriteLine(string.Join(",", new[]{"REF-"+(rix+1).ToString("D3"), Csv(Path.GetFileName(p)), hash, new FileInfo(p).Length.ToString()}));
+    }
+}var coreEdgeFile = Path.Combine(outputDir, "core-symbol-edges.csv");
+using (var w = new StreamWriter(coreEdgeFile, false, new System.Text.UTF8Encoding(false))) {
+    w.WriteLine("source_path,simulation_core_symbol");
+    foreach (var pair in coreByFile.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+        foreach (var symbol in pair.Value.OrderBy(x => x, StringComparer.Ordinal))
+            w.WriteLine(string.Join(",", new[]{Csv(pair.Key), Csv(symbol)}));
+}var unityEdgeFile = Path.Combine(outputDir, "unity-symbol-edges.csv");
+using (var w = new StreamWriter(unityEdgeFile, false, new System.Text.UTF8Encoding(false))) {
+    w.WriteLine("source_path,unity_symbol");
+    foreach (var pair in unityByFile.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+        foreach (var symbol in pair.Value.OrderBy(x => x, StringComparer.Ordinal))
+            w.WriteLine(string.Join(",", new[]{Csv(pair.Key), Csv(symbol)}));
+}var manifestFile = Path.Combine(outputDir, "analysis-manifest.txt");
+File.WriteAllText(manifestFile,
+    "Unity compilation graph provenance\n"+
+    "SDK: 9.0.315; Roslyn binaries resolved from pinned SDK; no NuGet package dependency.\n"+
+    "Unity editor version: "+File.ReadAllText(Path.Combine(root,"ProjectSettings","ProjectVersion.txt")).Split('\n')[0].Replace("m_EditorVersion: ","").Trim()+".\n"+
+    "Compiler response identity: sha256="+Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(rsp))).ToLowerInvariant()+"; bytes="+new FileInfo(rsp).Length+".\n"+
+    "Source inputs: "+srcs.Length+"; source blobs: recorded per row in source-inventory.csv.\n"+
+    "Metadata refs: "+refs.Count+" resolved; content hashes in metadata-references.csv; "+missingRefs.Count+" omitted parser-added reference(s).\n"+
+    "Excluded reference: one parser-added mscorlib.dll has no SDK Roslyn file and is omitted; a distinct resolved Unity mscorlib reference is hashed in metadata-references.csv.\n"+
+    "Parse options: language="+parsed.ParseOptions.LanguageVersion+"; kind="+parsed.ParseOptions.Kind+"; documentation="+parsed.ParseOptions.DocumentationMode+"; symbols="+string.Join("|",symbolNames)+".\n"+
+    "Compilation options: output="+parsed.CompilationOptions.OutputKind+"; optimization="+parsed.CompilationOptions.OptimizationLevel+"; unsafe="+parsed.CompilationOptions.AllowUnsafe+"; overflow="+parsed.CompilationOptions.CheckOverflow+"; platform="+parsed.CompilationOptions.Platform+"; warnings="+parsed.CompilationOptions.WarningLevel+".\n"+
+    "Roslyn result: "+errors.Length+" errors, "+diagnostics.Count(d=>d.Severity==DiagnosticSeverity.Warning)+" warnings; warning IDs="+string.Join(",",diagnostics.Where(d=>d.Severity==DiagnosticSeverity.Warning).Select(d=>d.Id).Distinct().OrderBy(x=>x,StringComparer.Ordinal))+".\n"+
+    "Graph: 329 Assembly-CSharp files, "+adj.Sum(e=>e.Count)+" unique directed file-pair edges (HashSet-deduplicated), "+sharedDeclEdges.Count+" directed shared-partial declaration links, "+comps.Count+" SCCs; runtime "+runSet.Count+", restore "+restoreSet.Count+", outside both "+(trees.Length-restoreSet.Count)+".\n"+
+    "Reachability is source declaration-reference closure within Assembly-CSharp only, not method-level or owner-completeness proof. Unity and Simulation.Core symbol edges are separate inventories.\n",
+    new System.Text.UTF8Encoding(false));Console.WriteLine($"Privacy-safe inventories emitted: {paths.Length} sources; {adj.Sum(e=>e.Count)} edges; {comps.Count} SCCs; runtime={runSet.Count}; restore={restoreSet.Count}; outputs=source-inventory.csv,source-edges.csv,unity-symbol-edges.csv,core-symbol-edges.csv,metadata-references.csv,analysis-manifest.txt");
+
+
+
+
+
+

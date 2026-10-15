@@ -520,3 +520,34 @@ does not silently change that delivery record. No A code was dispatched or
 implemented. No active implementation checkout or numbered-phase canonical
 ref was modified; no owner/profile expansion or completed checkpoint reopening.
 P13 remains BLOCKED and Phase 12 OPEN under their separate gates.
+
+
+## CORE-F promoted prerequisites and bounded source-preparation refresh — 2026-10-15
+
+Architecture base: `4da844dee0c69fdf66562590fa96cc728fc86bf7`.
+Production Core inspected: `fff5cca0297ce5af346a264b7fa2e2e37be587b0`.
+Current P12 remains `4cc31073f0ec6ba5c718084e4cebd6e914931d5d`, CLOSED
+within its existing same-build/current-host Daily-v1 scope.
+
+All three accepted Core prerequisites are promoted: Persistence `84b66da6`,
+Owners `8fc97563`, Values `c69fcf47` (full SHAs and final evidence in production
+Core State). The owning State is authoritative; this architecture checkout's
+older executable source and historical readiness snapshots do not override it.
+Effective-value parity, the selected89-family/24-operation evidence baseline and
+shared descriptor/wire/atomic storage no longer block their exact consumers.
+
+The [next source-preparation handoff](architecture/CORE_F_SHARED_RUNTIME_SOURCE_MASTER_HANDOFF.md)
+and [independent review](architecture/CORE_F_SHARED_RUNTIME_SOURCE_REVIEW.md)
+record the exact remaining dispatch boundary. The source analysis is a Unity
+application-assembly dependency map, not a full cross-assembly move authorization.
+Actual selected owner/runtime/restore migration, host composition and real net8
+continuation/parity remain CORE-F dependencies. CORE-F stays WAIT_DEPENDENCY;
+CORE-X stays DEFERRED. No new Phase, profile, save interoperability promise or
+product decision is introduced. No numbered canonical or active implementation
+worktree is changed. Production imports only reviewed documentation deltas.
+
+This documentation-only refresh needs diff/link/inventory checks and independent
+exact-tip review; executable gates are neither rerun nor relabeled as new results.
+No ordinary product/architecture decision has been identified for this bounded
+technical preparation. Promotion follows refreshed compatible fast-forward
+preflight and independent applicability under the existing authority.

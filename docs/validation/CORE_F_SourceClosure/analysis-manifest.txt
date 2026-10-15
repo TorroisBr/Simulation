@@ -1,0 +1,12 @@
+Unity compilation graph provenance
+SDK: 9.0.315; Roslyn binaries resolved from pinned SDK; no NuGet package dependency.
+Unity editor version: 6000.3.9f1.
+Compiler response identity: sha256=cf4be5e167041136a8f5b12bd7035397de0ec636e1f9a973cd77d20043076b35; bytes=61634.
+Source inputs: 329; source blobs: recorded per row in source-inventory.csv.
+Metadata refs: 332 resolved; content hashes in metadata-references.csv; 1 omitted parser-added reference(s).
+Excluded reference: one parser-added mscorlib.dll has no SDK Roslyn file and is omitted; a distinct resolved Unity mscorlib reference is hashed in metadata-references.csv.
+Parse options: language=CSharp9; kind=Regular; documentation=None; symbols=137 symbols; sorted list in preprocessor-symbols.txt.
+Compilation options: output=DynamicallyLinkedLibrary; optimization=Release; unsafe=False; overflow=False; platform=AnyCpu; warnings=4.
+Roslyn result: 0 errors, 8 warnings; warning IDs=CS0108,CS0618.
+Graph: 329 Assembly-CSharp files, 2990 unique directed file-pair edges (HashSet-deduplicated), 50 directed shared-partial declaration links, 128 SCCs; runtime 235, restore 303, outside both 26.
+Reachability is source declaration-reference closure within Assembly-CSharp only, not method-level or owner-completeness proof. Unity and Simulation.Core symbol edges are separate inventories. The analyzer also emits core-symbol-edges.csv. core-build-inputs.csv records current Core csproj compile links.
