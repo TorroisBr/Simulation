@@ -5,8 +5,8 @@ using NUnit.Framework;
 
 public sealed class PersistenceFoundationTests
 {
-    private static P12ACompatibilityDescriptorV2 V2(ushort host = 1, string framework = ".NET 8", string version = "8.0.1.0", string os = "Windows", string rid = "win-x64", string arch = "x64", string tfm = "net8.0", string assemblyName = "Simulation.Core", string assemblyVersion = "1.0.0.0", string mvid = "4b37a0ac-246b-47c5-9bbc-fd79704e0666", string numeric = "numeric", int numericVersion = 1, string config = "config", string content = "content", string providers = "providers", string calendar = "calendar", int calendarVersion = 1, string calendarHash = "calendar-hash", string p9 = "p9", string p8 = "p8")
-        => new P12ACompatibilityDescriptorV2("UnityBootstrap-Daily-v1", 1, host, framework, version, os, rid, arch, tfm,
+    private static P12ACompatibilityDescriptorV2 V2(ushort host = 1, string framework = ".NET 8", string version = "8.0.1.0", string os = "Windows", string rid = "win-x64", string arch = "x64", string tfm = "net8.0", string assemblyName = "Simulation.Core", string assemblyVersion = "1.0.0.0", string mvid = "4b37a0ac-246b-47c5-9bbc-fd79704e0666", string numeric = "numeric", int numericVersion = 1, string config = "config", string content = "content", string providers = "providers", string calendar = "calendar", int calendarVersion = 1, string calendarHash = "calendar-hash", string p9 = "p9", string p8 = "p8", string profileId = "UnityBootstrap-Daily-v1", int profileVersion = 1)
+        => new P12ACompatibilityDescriptorV2(profileId, profileVersion, host, framework, version, os, rid, arch, tfm,
             new[] { new P12AAssemblyIdentityV2(assemblyName, assemblyVersion, mvid) }, numeric, numericVersion, config, content, providers, calendar, calendarVersion, calendarHash, p9, p8);
     [Test]
     public void V1DescriptorMatchesIndependentPreExtractionCanonicalVector()
@@ -177,6 +177,31 @@ public sealed class PersistenceFoundationTests
         Assert.That(code, Is.EqualTo(P12AResultCode.CorruptOrTruncated));
         Assert.That(P12ACompatibilityAdmission.ClassifyUnityV2(malformedUnknownProfile), Is.EqualTo(P12AResultCode.CorruptOrTruncated));
     }
+    [Test]
+    public void HostAdmissionPrecedesProfilePolicyOnlyAfterFullCanonicalStructureValidation()
+    {
+        var expected = V2();
+        foreach (ushort host in new ushort[] { 1, 2 })
+        foreach (bool unknownProfile in new[] { false, true })
+        foreach (int profileVersion in new[] { 1, 2 })
+        {
+            var descriptor = V2(host: host, profileId: unknownProfile ? "unknown-profile" : "UnityBootstrap-Daily-v1",
+                profileVersion: profileVersion);
+            byte[] bytes = descriptor.CanonicalBytes;
+            P12AResultCode expectedResult = host == 2 ? P12AResultCode.IncompatibleBuildOrRuntime
+                : unknownProfile ? P12AResultCode.UnsupportedProfile
+                : profileVersion != 1 ? P12AResultCode.UnsupportedSchema : P12AResultCode.Decoded;
+            Assert.That(P12ACompatibilityAdmission.AdmitDotNetV2(bytes, expected, out _), Is.EqualTo(expectedResult));
+            Assert.That(P12ACompatibilityAdmission.ClassifyUnityV2(bytes), Is.EqualTo(P12AResultCode.UnsupportedSchema));
+            byte[] malformed = (byte[])bytes.Clone();
+            malformed[FindEncodedStringOffset(malformed, ".NET 8") + sizeof(int)] = 0xFF;
+            Assert.That(P12ACompatibilityAdmission.AdmitDotNetV2(malformed, expected, out _),
+                Is.EqualTo(P12AResultCode.CorruptOrTruncated));
+            Assert.That(P12ACompatibilityAdmission.ClassifyUnityV2(malformed),
+                Is.EqualTo(P12AResultCode.CorruptOrTruncated));
+        }
+    }
+
     [Test]
     public void AtomicSlotUsesDefaultFilesystemAndValidatorRunsOnceBeforeReplacement()
     {

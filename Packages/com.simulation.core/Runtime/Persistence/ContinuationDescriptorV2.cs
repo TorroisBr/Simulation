@@ -107,6 +107,26 @@ public sealed class P12ACompatibilityDescriptorV2
     }
     public static bool TryReadCanonical(byte[] bytes, out P12ACompatibilityDescriptorV2 descriptor, out P12AResultCode result)
     {
+        if (!TryReadStructuralCanonical(bytes, out descriptor, out result))
+            return false;
+        if (descriptor.ProfileId != "UnityBootstrap-Daily-v1")
+        {
+            descriptor = null;
+            result = P12AResultCode.UnsupportedProfile;
+            return false;
+        }
+        if (descriptor.ProfileVersion != 1)
+        {
+            descriptor = null;
+            result = P12AResultCode.UnsupportedSchema;
+            return false;
+        }
+        return true;
+    }
+
+    // One structural parser serves both profile-aware reading and host admission.
+    internal static bool TryReadStructuralCanonical(byte[] bytes, out P12ACompatibilityDescriptorV2 descriptor, out P12AResultCode result)
+    {
         descriptor = null;
         result = P12AResultCode.CorruptOrTruncated;
         if (bytes == null || bytes.Length > ContinuationWire.MaxHeaderBytes)
@@ -153,17 +173,6 @@ public sealed class P12ACompatibilityDescriptorV2
                     numeric, nv, config, content, provider, calendar, cv, ch, p9, p8);
                 if (!ContinuationWire.BytesEqual(bytes, parsedDescriptor.canonicalBytes))
                     return false;
-
-                if (profile != "UnityBootstrap-Daily-v1")
-                {
-                    result = P12AResultCode.UnsupportedProfile;
-                    return false;
-                }
-                if (pv != 1)
-                {
-                    result = P12AResultCode.UnsupportedSchema;
-                    return false;
-                }
 
                 descriptor = parsedDescriptor;
                 result = P12AResultCode.Decoded;
@@ -261,10 +270,14 @@ public static class P12ACompatibilityAdmission
         if (!IsV2(bytes))
             return P12ACompatibilityDescriptor.TryReadCanonical(bytes, out _)
             ? P12AResultCode.IncompatibleBuildOrRuntime : P12AResultCode.CorruptOrTruncated;
-        if (!P12ACompatibilityDescriptorV2.TryReadCanonical(bytes, out actual, out var parsed))
+        if (!P12ACompatibilityDescriptorV2.TryReadStructuralCanonical(bytes, out actual, out var parsed))
             return parsed;
         if (actual.HostKind != 1)
             return P12AResultCode.IncompatibleBuildOrRuntime;
+        if (actual.ProfileId != "UnityBootstrap-Daily-v1")
+            return P12AResultCode.UnsupportedProfile;
+        if (actual.ProfileVersion != 1)
+            return P12AResultCode.UnsupportedSchema;
         if (!string.Equals(expected.TargetFramework, "net8.0", StringComparison.Ordinal)
             || !string.Equals(actual.TargetFramework, "net8.0", StringComparison.Ordinal))
             return P12AResultCode.IncompatibleBuildOrRuntime;
@@ -272,10 +285,8 @@ public static class P12ACompatibilityAdmission
     }
     public static P12AResultCode ClassifyUnityV2(byte[] bytes)
     {
-        if (!P12ACompatibilityDescriptorV2.TryReadCanonical(bytes, out _, out var result))
-            return result == P12AResultCode.UnsupportedProfile
-                ? P12AResultCode.UnsupportedSchema
-                : result;
+        if (!P12ACompatibilityDescriptorV2.TryReadStructuralCanonical(bytes, out _, out var result))
+            return result;
 
         return P12AResultCode.UnsupportedSchema;
     }
