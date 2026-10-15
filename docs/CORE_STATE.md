@@ -360,3 +360,38 @@ executable test/evidence package with no new owner implementations. Concrete
 selected-owner/runtime/restore source closure and real .NET continuation remain
 CORE-F dependencies. Full CORE-F remains WAIT_DEPENDENCY; CORE-X DEFERRED;
 closed P12 contracts and all numbered canonical branches remain unchanged.
+
+
+## CORE-F prerequisite promotion refresh — 2026-10-15
+
+WP2-Persistence is **PROMOTED** at Core canonical
+`84b66da69be896f0db347b940d9e464cfaa1c4f2`; local/remote synchronization was
+verified. This factual marker supersedes the conditional WP2 preflight status
+above. Its exact source, review and complete final packages are unchanged.
+
+WP1-Owners is **VALIDATED_CANDIDATE**, eligible for autonomous bounded promotion
+following immediate refreshed-ref/fast-forward preflight and docs-only applicability.
+
+- Independently reviewed candidate:
+  `026ebf82f5bb8164036238bc2878bb30f5c2e379`.
+- Tested source: `6441c18374eb2b6bacb7238be442ac52d73e0b8f`.
+- Review: `reviews/CORE_F_WP1_OWNERS_FINAL_REVIEW.md`.
+- Evidence: `validation/CORE_F_OwnerClosure/VALIDATION.md`, complete normalized
+  ALL archive and unchanged protected originals.
+- Gates: focused owner1/1, ALL3164/3164 including original seven LongRun cases,
+  official Smoke5/5, diff-check PASS. Unchanged91 SDK inputs preserve WP2
+  .NET153/153 cold/warm and locked Lab applicability; no .NET live graph claim.
+
+The package closes the selected89-family owner-binding/writer/capture/target
+migration evidence baseline and24 currently composed operation-route mapping.
+It changes no production owner, scope, P12 guarantee or profile. The source-bound
+P8 witness was captured before Values production changes from the existing runtime.
+
+Current dependency DAG: A-E promoted -> Values; closed P12 -> Owners and
+Persistence; Persistence promoted -> Values canonical integration edge satisfied;
+Values plus Owners plus Persistence -> concrete selected-owner/runtime/restore
+source closure -> real .NET host/continuation/parity -> full CORE-F. Values still
+requires independent fixed164-field fixture parity, final two-host gates and final
+review. The source-closure design can be prepared from actual APIs but cannot be
+marked executable from a guessed transitive source list. Full CORE-F remains
+WAIT_DEPENDENCY; CORE-X DEFERRED; numbered canonical branches remain unchanged.
