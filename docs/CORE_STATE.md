@@ -693,6 +693,35 @@ identities. The normalized report archive and additional-input sidecar verify
 the full run. Fresh CoreValidation passed cold/warm 171/171 each; its 142-file
 effective .NET input inventory is byte-identical to the already reviewed and
 packaged compatibility run. `git diff --check` passed. Independent exact-tip
-implementation review and Core-canonical promotion are pending. This candidate
-does not close CORE-F; selected-owner migration, shared runtime/restore,
-detached restoration, and .NET host continuation remain dependency-gated.
+implementation review and Core-canonical promotion were pending when this
+candidate record was written; the following promotion record supersedes that
+status. The provider switch does not close CORE-F; selected-owner migration,
+shared runtime/restore, detached restoration, and .NET host continuation remain
+dependency-gated.
+
+## CORE-F null-roster provider switch promoted — 2026-10-15
+
+The bounded P18-D provider call-site switch was fast-forwarded to
+`codex/core/canonical` at `3e817bf14c2d4e9e0f5fc30e48d14197d4450875`, from
+`64610d6c4a5cfaec2c9e14fdb70b5e7ed5d5aeaa`. The promoted implementation is
+`6a1e3a5f49284152159086e2bb22aa50cda510ad`, tree
+`4aae462cfee091705bf3e84a5611ee39202507ea`. The independent exact-tip review
+returned `VALIDATED_CANDIDATE` at evidence tip
+`cc7c579c64097ec90eac8356e8f6ea61483b62f7`; its durable record is
+[`IMPLEMENTATION_REVIEW.md`](validation/CORE_F_NullRosterProviderSwitch/IMPLEMENTATION_REVIEW.md).
+
+Final promotion preflight confirmed the architecture canonical remained
+`4b69e43516b3fc548611ce704ef45af9e54e3d0e`, the candidate was a clean
+fast-forward, production/test source was unchanged after review, the Unity
+package verified against its protected original, the .NET effective input
+inventory still matched the reviewed package, and `git diff --check` passed.
+The focused provider/parity/consumer/daily-boundary suites, Smoke 5/5, ALL
+EditMode 3,176/3,176, and fresh CoreValidation cold/warm 171/171 each remain
+bound to the reviewed implementation and input identities in the validation
+record.
+
+The refreshed CORE-F graph has no new implementation-ready owner/runtime/host
+slice from this promotion. Selected-owner source/writer/epoch closure, shared
+runtime and restore composition, detached restoration, and the .NET host with
+deterministic continuation remain separately dependency-gated. Full CORE-F
+remains `WAIT_DEPENDENCY`; this promotion changes no P12/P13 or CORE-X status.

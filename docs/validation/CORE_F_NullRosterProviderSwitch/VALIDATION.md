@@ -1,6 +1,6 @@
 # CORE-F null-roster provider switch validation
 
-**Status:** implementation candidate; exact-tip independent implementation review and Core-canonical promotion pending. This record covers only the bounded P18-D provider call-site switch. It does not claim full CORE-F completion.
+**Status:** promoted to Core canonical at `3e817bf14c2d4e9e0f5fc30e48d14197d4450875`. This record covers only the bounded P18-D provider call-site switch. It does not claim full CORE-F completion.
 
 ## Candidate identity
 
@@ -46,5 +46,6 @@ The reviewed prior cold/warm TRX package is [`core-f-compat-6431fad3-cold-warm.z
 - `git diff --check` passes for the implementation candidate.
 - The protected `ProjectSettings` worktree changes were excluded from the candidate and left unstaged/uncommitted. They remain outside the implementation source identity.
 - Unity provider-switch, null-roster rejection, failure atomicity, codec parity, P18-D integration, daily boundary, consumer, Smoke and full EditMode gates pass.
-- Independent exact-tip implementation review is pending; implementation is not yet promoted.
+- Independent exact-tip implementation review passed for evidence tip `cc7c579c64097ec90eac8356e8f6ea61483b62f7`; the source/test tree remained unchanged in the promotion commits.
+- The implementation was fast-forwarded to `codex/core/canonical` at `3e817bf14c2d4e9e0f5fc30e48d14197d4450875` after refreshed remote, ancestry, source-tree, package-integrity and diff-check preflight.
 - CORE-F remains open and `WAIT_DEPENDENCY`. Selected-owner migration, shared runtime/restore composition, detached restoration and .NET host continuation remain separately gated. No broader P12 profile or CORE-X/P13 readiness is claimed.
