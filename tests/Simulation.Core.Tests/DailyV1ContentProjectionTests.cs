@@ -94,7 +94,7 @@ public sealed class DailyV1ContentProjectionTests
     }
 
     [Test]
-    public void RejectsSelectedCollectionOverItsItemBound()
+    public void AcceptsLegacyListBeyondAssetCountWhenEncodedCatalogFitsByteLimit()
     {
         Fixture fixture = ReadFixture();
         DailyV1SelectedContentAsset action = fixture.Assets.First(value => value.TypeToken == "NpcActionData");
@@ -103,8 +103,170 @@ public sealed class DailyV1ContentProjectionTests
         DailyV1SelectedContentAsset oversized = ReplaceField(action, "statusToAdd",
             DailyV1SelectedContentValue.List(TypeToken("List<NpcStatusData>"), values));
         Assert.That(DailyV1SelectedContentProjectionFactory.TryCreate(Replace(fixture.Assets, oversized),
-            fixture.Profile, out DailyV1SelectedContentProjection rejected, out _), Is.False);
-        Assert.That(rejected, Is.Null);
+            fixture.Profile, out DailyV1SelectedContentProjection projection, out string diagnostic), Is.True, diagnostic);
+        Assert.That(projection.Bytes, Is.EqualTo(ReplaceLegacyActionList(fixture.Bytes, action.Key, 65537)));
+        Assert.That(ReadActionStatusAddCount(projection.Bytes), Is.EqualTo(65537));
+        Assert.That(projection.Bytes.Length, Is.LessThan(1024 * 1024));
+    }
+
+    [Test]
+    public void PreflightsOversizedStringBeforeCopyingEncoderGraph()
+    {
+        Fixture fixture = ReadFixture();
+        DailyV1SelectedContentAsset profile = ReplaceField(fixture.Profile, "simulationName",
+            DailyV1SelectedContentValue.Scalar("System.String", new string('x', ContinuationWire.MaxStringBytes + 1)));
+        Assert.That(DailyV1SelectedContentProjectionFactory.TryCreate(fixture.Assets, profile,
+            out DailyV1SelectedContentProjection projection, out string diagnostic), Is.False);
+        Assert.That(projection, Is.Null);
+        Assert.That(diagnostic, Does.Contain("string exceeds its byte bound"));
+    }
+
+    [Test]
+    public void PreflightsOversizedNestedListAgainstCatalogByteBudget()
+    {
+        Fixture fixture = ReadFixture();
+        const int itemCount = 3200000;
+        List<DailyV1SelectedContentValue> items = new List<DailyV1SelectedContentValue>(itemCount);
+        DailyV1SelectedContentValue one = DailyV1SelectedContentValue.Scalar("System.Int32", 1);
+        for (int i = 0; i < itemCount; i++) items.Add(one);
+        DailyV1SelectedContentValue calendar = DailyV1SelectedContentValue.Object("CalendarDefinition", new[]
+        {
+            new DailyV1SelectedContentField("CalendarDefinition", "monthsPerYear", DailyV1SelectedContentValue.Scalar("System.Int32", 12)),
+            new DailyV1SelectedContentField("CalendarDefinition", "weeksPerMonth", DailyV1SelectedContentValue.Scalar("System.Int32", 4)),
+            new DailyV1SelectedContentField("CalendarDefinition", "daysPerWeek", DailyV1SelectedContentValue.Scalar("System.Int32", 7)),
+            new DailyV1SelectedContentField("CalendarDefinition", "monthLengths",
+                DailyV1SelectedContentValue.List(TypeToken("List<int>"), items))
+        });
+        DailyV1SelectedContentAsset profile = ReplaceField(fixture.Profile, "calendar", calendar);
+        Assert.That(DailyV1SelectedContentProjectionFactory.TryCreate(fixture.Assets, profile,
+            out DailyV1SelectedContentProjection projection, out string diagnostic), Is.False);
+        Assert.That(projection, Is.Null);
+        Assert.That(diagnostic, Does.Contain("catalog exceeds its byte bound"));
+    }
+
+    private static int ReadActionStatusAddCount(byte[] bytes)
+    {
+        Dictionary<string, Dictionary<string, string>> schema = ReadSchema();
+        using (MemoryStream stream = new MemoryStream(bytes, false))
+        using (BinaryReader reader = new BinaryReader(stream, new UTF8Encoding(false, true), true))
+        {
+            Assert.That(ReadString(reader), Is.EqualTo("p12a.official-content-catalog/v1"));
+            int recordCount = reader.ReadInt32();
+            for (int i = 0; i < recordCount; i++)
+            {
+                string key = ReadString(reader);
+                int length = reader.ReadInt32();
+                byte[] recordBytes = reader.ReadBytes(length);
+                using (MemoryStream recordStream = new MemoryStream(recordBytes, false))
+                using (BinaryReader record = new BinaryReader(recordStream, new UTF8Encoding(false, true), true))
+                {
+                    string type = ReadString(record);
+                    int fieldCount = record.ReadInt32();
+                    if (!schema.TryGetValue(type, out Dictionary<string, string> fieldSchema))
+                        throw new InvalidDataException("Unknown serialized type " + type);
+                    for (int fieldIndex = 0; fieldIndex < fieldCount; fieldIndex++)
+                    {
+                        string declaringType = ReadString(record);
+                        string name = ReadString(record);
+                        if (type == "NpcActionData" && name == "statusToAdd")
+                        {
+                            Assert.That(declaringType, Is.EqualTo(type));
+                            Assert.That(ReadString(record), Is.EqualTo(TypeToken("List<NpcStatusData>")));
+                            Assert.That(record.ReadByte(), Is.EqualTo(20));
+                            int count = record.ReadInt32();
+                            for (int item = 0; item < count; item++) Assert.That(record.ReadByte(), Is.Zero);
+                            return count;
+                        }
+                        Assert.That(fieldSchema.TryGetValue(name, out string sourceType), Is.True);
+                        ReadValue(record, sourceType, schema);
+                    }
+                }
+            }
+        }
+        Assert.Fail("NpcActionData was absent from the encoded catalog.");
+        return -1;
+    }
+
+    // Build the expected legacy P12 bytes by replacing only the one captured field in the
+    // approved original catalog and writing its documented little-endian tagged list shape.
+    private static byte[] ReplaceLegacyActionList(byte[] original, string targetKey, int count)
+    {
+        Dictionary<string, Dictionary<string, string>> schema = ReadSchema();
+        List<KeyValuePair<string, byte[]>> records = new List<KeyValuePair<string, byte[]>>();
+        using (MemoryStream stream = new MemoryStream(original, false))
+        using (BinaryReader reader = new BinaryReader(stream, new UTF8Encoding(false, true), true))
+        {
+            string identity = ReadString(reader);
+            int recordCount = reader.ReadInt32();
+            for (int i = 0; i < recordCount; i++)
+            {
+                string key = ReadString(reader);
+                int length = reader.ReadInt32();
+                byte[] payload = reader.ReadBytes(length);
+                Assert.That(payload, Has.Length.EqualTo(length));
+                using (MemoryStream payloadStream = new MemoryStream(payload, false))
+                using (BinaryReader record = new BinaryReader(payloadStream, new UTF8Encoding(false, true), true))
+                {
+                    string type = ReadString(record);
+                    int fieldCount = record.ReadInt32();
+                    if (key == targetKey && type == "NpcActionData")
+                    {
+                        byte[] replacement = null;
+                        for (int field = 0; field < fieldCount; field++)
+                        {
+                            ReadString(record);
+                            string name = ReadString(record);
+                            long start = payloadStream.Position;
+                            string sourceType = schema[type][name];
+                            ReadValue(record, sourceType, schema);
+                            if (name == "statusToAdd")
+                            {
+                                long end = payloadStream.Position;
+                                using (MemoryStream valueStream = new MemoryStream())
+                                using (BinaryWriter valueWriter = new BinaryWriter(valueStream, new UTF8Encoding(false, true), true))
+                                {
+                                    WriteLegacyString(valueWriter, TypeToken("List<NpcStatusData>"));
+                                    valueWriter.Write((byte)20);
+                                    valueWriter.Write(count);
+                                    for (int item = 0; item < count; item++) valueWriter.Write((byte)0);
+                                    valueWriter.Flush();
+                                    replacement = new byte[(int)(payload.Length - (end - start)) + (int)valueStream.Length];
+                                    Buffer.BlockCopy(payload, 0, replacement, 0, (int)start);
+                                    Buffer.BlockCopy(valueStream.GetBuffer(), 0, replacement, (int)start, (int)valueStream.Length);
+                                    Buffer.BlockCopy(payload, (int)end, replacement, (int)start + (int)valueStream.Length,
+                                        payload.Length - (int)end);
+                                }
+                            }
+                        }
+                        Assert.That(replacement, Is.Not.Null);
+                        payload = replacement;
+                    }
+                }
+                records.Add(new KeyValuePair<string, byte[]>(key, payload));
+            }
+            Assert.That(stream.Position, Is.EqualTo(stream.Length));
+            using (MemoryStream expected = new MemoryStream())
+            using (BinaryWriter writer = new BinaryWriter(expected, new UTF8Encoding(false, true), true))
+            {
+                WriteLegacyString(writer, identity);
+                writer.Write(recordCount);
+                foreach (KeyValuePair<string, byte[]> record in records)
+                {
+                    WriteLegacyString(writer, record.Key);
+                    writer.Write(record.Value.Length);
+                    writer.Write(record.Value);
+                }
+                writer.Flush();
+                return expected.ToArray();
+            }
+        }
+    }
+
+    private static void WriteLegacyString(BinaryWriter writer, string value)
+    {
+        byte[] bytes = new UTF8Encoding(false, true).GetBytes(value);
+        writer.Write(bytes.Length);
+        writer.Write(bytes);
     }
 
     private static DailyV1SelectedContentAsset ReverseFields(DailyV1SelectedContentAsset value) =>

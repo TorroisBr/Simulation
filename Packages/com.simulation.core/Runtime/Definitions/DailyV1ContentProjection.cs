@@ -38,7 +38,8 @@ internal static class DailyV1ContentProjection
         { diagnostic = "The Daily-v1 content catalog has an invalid record count."; return false; }
         try
         {
-            using (MemoryStream stream = new MemoryStream())
+            long exactLength = MeasureCatalog(records);
+            using (MemoryStream stream = new BoundedMemoryStream(MaxCatalogBytes))
             using (BinaryWriter writer = new BinaryWriter(stream, ContinuationWire.CreateStrictUtf8Encoding(), true))
             {
                 ContinuationWire.WriteString(writer, CatalogIdentity);
@@ -51,10 +52,10 @@ internal static class DailyV1ContentProjection
                     byte[] payload = SerializeObject(record.Value);
                     writer.Write(payload.Length);
                     writer.Write(payload);
-                    if (stream.Length > MaxCatalogBytes)
-                        throw new InvalidOperationException("The Daily-v1 content catalog exceeds its byte bound.");
                 }
                 writer.Flush();
+                if (stream.Length != exactLength)
+                    throw new InvalidOperationException("The Daily-v1 content preflight length did not match its encoded bytes.");
                 bytes = stream.ToArray();
             }
             diagnostic = null;
@@ -66,6 +67,120 @@ internal static class DailyV1ContentProjection
             bytes = null;
             diagnostic = exception.Message;
             return false;
+        }
+    }
+
+    private static long MeasureCatalog(IReadOnlyDictionary<string, DailyV1ContentRecord> records)
+    {
+        ByteBudget budget = new ByteBudget(MaxCatalogBytes);
+        budget.AddString(CatalogIdentity);
+        budget.Add(4);
+        foreach (KeyValuePair<string, DailyV1ContentRecord> record in records)
+        {
+            if (string.IsNullOrWhiteSpace(record.Key) || record.Value == null)
+                throw new InvalidOperationException("The Daily-v1 catalog contains an invalid record.");
+            budget.AddString(record.Key);
+            long payload = MeasureRecord(record.Value);
+            if (payload > int.MaxValue) throw new InvalidOperationException("A Daily-v1 content definition exceeds its byte bound.");
+            budget.Add(4);
+            budget.Add(payload);
+        }
+        return budget.Total;
+    }
+
+    private static long MeasureRecord(DailyV1ContentRecord record)
+    {
+        ByteBudget budget = new ByteBudget(MaxCatalogBytes);
+        budget.AddString(record.TypeToken);
+        budget.Add(4);
+        foreach (DailyV1DefinitionField field in record.Fields)
+        {
+            budget.AddString(field.DeclaringTypeToken);
+            budget.AddString(field.Name);
+            MeasureValue(field.Value, 0, budget);
+        }
+        return budget.Total;
+    }
+
+    private static void MeasureValue(DailyV1DefinitionValue value, int depth, ByteBudget budget)
+    {
+        if (depth > MaxValueDepth) throw new InvalidOperationException("Content value exceeds its depth bound.");
+        if (value == null || value.Kind == DailyV1DefinitionValue.ValueKind.Null) { budget.Add(1); return; }
+        budget.AddString(value.TypeToken);
+        switch (value.Kind)
+        {
+            case DailyV1DefinitionValue.ValueKind.Reference:
+                budget.Add(1); budget.AddString(value.ReferenceKey); return;
+            case DailyV1DefinitionValue.ValueKind.Scalar:
+                MeasureScalar(value.Scalar, budget); return;
+            case DailyV1DefinitionValue.ValueKind.Enum:
+                budget.Add(1); budget.AddString(value.EnumSpelling); return;
+            case DailyV1DefinitionValue.ValueKind.List:
+                budget.Add(5);
+                foreach (DailyV1DefinitionValue item in value.Items) MeasureValue(item, depth + 1, budget);
+                return;
+            case DailyV1DefinitionValue.ValueKind.Object:
+                budget.Add(5);
+                foreach (DailyV1DefinitionField field in value.Fields)
+                {
+                    budget.AddString(field.DeclaringTypeToken);
+                    budget.AddString(field.Name);
+                    MeasureValue(field.Value, depth + 1, budget);
+                }
+                return;
+            default: throw new InvalidOperationException("Unsupported Daily-v1 content value kind.");
+        }
+    }
+
+    private static void MeasureScalar(object value, ByteBudget budget)
+    {
+        if (value is string text) { budget.Add(1); budget.AddString(text); return; }
+        if (value is bool || value is byte || value is sbyte) { budget.Add(2); return; }
+        if (value is short || value is ushort || value is char) { budget.Add(3); return; }
+        if (value is int || value is uint || value is float) { budget.Add(5); return; }
+        if (value is long || value is ulong || value is double || value is DateTime || value is TimeSpan) { budget.Add(9); return; }
+        if (value is decimal) { budget.Add(17); return; }
+        if (value is Guid) { budget.Add(1); budget.AddString(((Guid)value).ToString("N")); return; }
+        throw new InvalidOperationException("The Daily-v1 content catalog contains an unsupported scalar.");
+    }
+
+    private sealed class ByteBudget
+    {
+        private readonly long _maximum;
+        public long Total { get; private set; }
+        public ByteBudget(long maximum) { _maximum = maximum; }
+        public void Add(long amount)
+        {
+            Total = checked(Total + amount);
+            if (amount < 0 || Total > _maximum)
+                throw new InvalidOperationException("The Daily-v1 content catalog exceeds its byte bound.");
+        }
+        public void AddString(string value)
+        {
+            if (value == null) { Add(4); return; }
+            int bytes = ContinuationWire.CreateStrictUtf8Encoding().GetByteCount(value);
+            if (bytes > ContinuationWire.MaxStringBytes)
+                throw new InvalidOperationException("A Daily-v1 content string exceeds its byte bound.");
+            Add(checked(4L + bytes));
+        }
+    }
+
+    private sealed class BoundedMemoryStream : MemoryStream
+    {
+        private readonly long _maximum;
+        public BoundedMemoryStream(long maximum) { _maximum = maximum; }
+        private void EnsureWrite(long count)
+        {
+            if (count < 0 || checked(Position + count) > _maximum)
+                throw new IOException("The Daily-v1 content catalog exceeds its byte bound.");
+        }
+        public override void Write(byte[] buffer, int offset, int count) { EnsureWrite(count); base.Write(buffer, offset, count); }
+        public override void Write(ReadOnlySpan<byte> buffer) { EnsureWrite(buffer.Length); base.Write(buffer); }
+        public override void WriteByte(byte value) { EnsureWrite(1); base.WriteByte(value); }
+        public override void SetLength(long value)
+        {
+            if (value < 0 || value > _maximum) throw new IOException("The Daily-v1 content catalog exceeds its byte bound.");
+            base.SetLength(value);
         }
     }
 
@@ -85,7 +200,7 @@ internal static class DailyV1ContentProjection
     internal static byte[] SerializeObject(DailyV1ContentRecord record)
     {
         if (record == null) throw new ArgumentNullException(nameof(record));
-        using (MemoryStream stream = new MemoryStream())
+        using (MemoryStream stream = new BoundedMemoryStream(MaxCatalogBytes))
         using (BinaryWriter writer = new BinaryWriter(stream, ContinuationWire.CreateStrictUtf8Encoding(), true))
         {
             ContinuationWire.WriteString(writer, record.TypeToken);
@@ -487,6 +602,8 @@ public static class DailyV1SelectedContentProjectionFactory
                     throw new InvalidOperationException("The Daily-v1 content catalog exceeds its asset bound.");
             }
 
+            PreflightSelectedCatalog(records);
+
             SortedDictionary<string, DailyV1ContentRecord> copied = new SortedDictionary<string, DailyV1ContentRecord>(StringComparer.Ordinal);
             foreach (KeyValuePair<string, DailyV1SelectedContentAsset> record in records)
             {
@@ -527,6 +644,92 @@ public static class DailyV1SelectedContentProjectionFactory
             diagnostic = exception.Message;
             return false;
         }
+    }
+
+    // Count the exact P12 wire bytes before copying the caller's immutable DTO graph into
+    // encoder nodes. Every string is strict UTF-8 and every recursive edge is depth checked.
+    private static void PreflightSelectedCatalog(Dictionary<string, DailyV1SelectedContentAsset> records)
+    {
+        long total = 0;
+        AddPreflightString(ref total, DailyV1ContentProjection.CatalogIdentity);
+        AddPreflight(ref total, 4);
+        foreach (KeyValuePair<string, DailyV1SelectedContentAsset> record in records)
+        {
+            AddPreflightString(ref total, record.Key);
+            long payload = 0;
+            AddPreflightString(ref payload, record.Value.TypeToken);
+            AddPreflight(ref payload, 4);
+            foreach (DailyV1SelectedContentField field in record.Value.Fields)
+            {
+                if (field == null) throw new InvalidOperationException("The selected Daily-v1 object contains a null field.");
+                AddPreflightString(ref payload, field.DeclaringTypeToken);
+                AddPreflightString(ref payload, field.Name);
+                MeasureSelectedValue(field.Value, 0, ref payload);
+            }
+            AddPreflight(ref total, 4);
+            AddPreflight(ref total, payload);
+        }
+    }
+
+    private static void MeasureSelectedValue(DailyV1SelectedContentValue value, int depth, ref long total)
+    {
+        if (depth > DailyV1ContentProjection.MaxValueDepth)
+            throw new InvalidOperationException("Content value exceeds its depth bound.");
+        if (value == null || value.Kind == DailyV1SelectedContentValue.ContentKind.Null)
+        { AddPreflight(ref total, 1); return; }
+        AddPreflightString(ref total, value.TypeToken);
+        switch (value.Kind)
+        {
+            case DailyV1SelectedContentValue.ContentKind.Reference:
+                AddPreflight(ref total, 1); AddPreflightString(ref total, value.Text); return;
+            case DailyV1SelectedContentValue.ContentKind.Enum:
+                AddPreflight(ref total, 1); AddPreflightString(ref total, value.Text); return;
+            case DailyV1SelectedContentValue.ContentKind.Scalar:
+                MeasureSelectedScalar(value.ScalarValue, ref total); return;
+            case DailyV1SelectedContentValue.ContentKind.List:
+                AddPreflight(ref total, 5);
+                foreach (DailyV1SelectedContentValue item in value.Items)
+                    MeasureSelectedValue(item, depth + 1, ref total);
+                return;
+            case DailyV1SelectedContentValue.ContentKind.Object:
+                AddPreflight(ref total, 5);
+                foreach (DailyV1SelectedContentField field in value.Fields)
+                {
+                    if (field == null) throw new InvalidOperationException("The selected Daily-v1 object contains a null field.");
+                    AddPreflightString(ref total, field.DeclaringTypeToken);
+                    AddPreflightString(ref total, field.Name);
+                    MeasureSelectedValue(field.Value, depth + 1, ref total);
+                }
+                return;
+            default: throw new InvalidOperationException("The selected Daily-v1 value tag is unsupported.");
+        }
+    }
+
+    private static void MeasureSelectedScalar(object value, ref long total)
+    {
+        if (value is string text) { AddPreflight(ref total, 1); AddPreflightString(ref total, text); return; }
+        if (value is bool || value is byte || value is sbyte) { AddPreflight(ref total, 2); return; }
+        if (value is short || value is ushort || value is char) { AddPreflight(ref total, 3); return; }
+        if (value is int || value is uint || value is float) { AddPreflight(ref total, 5); return; }
+        if (value is long || value is ulong || value is double || value is DateTime || value is TimeSpan) { AddPreflight(ref total, 9); return; }
+        if (value is decimal) { AddPreflight(ref total, 17); return; }
+        if (value is Guid) { AddPreflight(ref total, 1); AddPreflightString(ref total, ((Guid)value).ToString("N")); return; }
+        throw new InvalidOperationException("The Daily-v1 content catalog contains an unsupported scalar.");
+    }
+
+    private static void AddPreflightString(ref long total, string value)
+    {
+        int bytes = value == null ? 0 : ContinuationWire.CreateStrictUtf8Encoding().GetByteCount(value);
+        if (bytes > ContinuationWire.MaxStringBytes)
+            throw new InvalidOperationException("A Daily-v1 content string exceeds its byte bound.");
+        AddPreflight(ref total, checked(4L + bytes));
+    }
+
+    private static void AddPreflight(ref long total, long amount)
+    {
+        total = checked(total + amount);
+        if (amount < 0 || total > DailyV1ContentProjection.MaxCatalogBytes)
+            throw new InvalidOperationException("The Daily-v1 content catalog exceeds its byte bound.");
     }
 
     private static Dictionary<string, Dictionary<string, string>> CreateFieldTypes()
@@ -581,8 +784,8 @@ public static class DailyV1SelectedContentProjectionFactory
         if (value.Kind == DailyV1SelectedContentValue.ContentKind.Null) return;
         if (sourceType.StartsWith("List<", StringComparison.Ordinal) && sourceType.EndsWith(">", StringComparison.Ordinal))
         {
-            if (value.Kind != DailyV1SelectedContentValue.ContentKind.List || value.Items.Count > DailyV1ContentProjection.MaxCatalogAssets)
-                throw new InvalidOperationException("A selected Daily-v1 collection has an invalid shape or exceeds its item bound.");
+            if (value.Kind != DailyV1SelectedContentValue.ContentKind.List)
+                throw new InvalidOperationException("A selected Daily-v1 collection has an invalid shape.");
             string elementType = sourceType.Substring(5, sourceType.Length - 6);
             foreach (DailyV1SelectedContentValue item in value.Items) ValidateValue(item, elementType, records, depth + 1);
             return;
