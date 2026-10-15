@@ -547,4 +547,3 @@ public static class DailyV1DefinitionAdapter
         public int GetHashCode(object value) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(value);
     }
 }
-

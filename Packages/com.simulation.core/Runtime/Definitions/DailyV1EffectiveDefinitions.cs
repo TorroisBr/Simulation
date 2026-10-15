@@ -282,4 +282,3 @@ public sealed class DailyV1EffectiveDefinitions
     private static string Need(string value, string name) => string.IsNullOrWhiteSpace(value)
         ? throw new ArgumentException("A stable Daily-v1 identity value is required.", name) : value;
 }
-

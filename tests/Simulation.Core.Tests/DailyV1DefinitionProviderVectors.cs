@@ -118,4 +118,3 @@ public sealed partial class DailyV1DefinitionIdentityTests
         "p12d.city-population.operation-receipts/",
     };
 }
-

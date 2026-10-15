@@ -578,7 +578,3 @@ public sealed class DailyV1TradeItemPreference
         this.utilityMultiplier = utilityMultiplier;
     }
 }
-
-
-
-
