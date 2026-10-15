@@ -41,3 +41,30 @@ numeric vectors, fixture, execution inputs, and accepted 3,173/3,173 evidence
 are unchanged. The updated wording keeps production implementation separately
 authorized and leaves its .NET/Unity parity gates before implementation
 promotion. No new test run was required for this documentation-only successor.
+
+## Core-canonical adoption State review
+
+Independent exact-tip review: `PASS` for adoption candidate
+`9aae918eeff9bb10410dff4e519be5a70a0be3c9` (parent
+`781cfb71f43bd80d781aaf7a678495ad4e7cdc46`), based on Core canonical
+`652ac7bf02943cf6160fd27f271a781db70657c5` and architecture canonical
+`bec3998f697f362944aa5b551d45998145f4e67e`. The candidate changes only
+`docs/CORE_STATE.md` and records adoption of the exact approved design
+(`36137D97DDBB633ECDE6C82E5EE1F7B60ED98F5457781B506531E254DECDE2FE`),
+its bounded readiness matrix, current evidence identities, and limits.
+
+The review rehashed the public design, manifest, archive, capture-record CSV,
+numeric vectors, and integrated fixture and found each equal to the State
+record. It confirmed the 247 capture rows and 172 numeric vectors. It relies
+on the prior independent review's comparison of the protected original XML
+and log; those originals were not reopened during this review. The State
+preserves that distinction and makes no claim of fresh raw-evidence access.
+Only the codec/API plus golden tests and selected numeric helpers are marked
+`READY_FOR_IMPLEMENTATION`; provider switching and owner/runtime/restore/host
+work remain dependency-gated. The active Master implementation mandate is
+recorded as separate authority from architecture promotion. P12 scope is
+unchanged, and no CORE-F closure, CORE-X, or P13 readiness is claimed.
+
+No production source, tests, protected ProjectSettings, or untracked evidence
+were changed by the reviewed adoption candidate. This documentation review
+does not itself promote implementation or close CORE-F.
