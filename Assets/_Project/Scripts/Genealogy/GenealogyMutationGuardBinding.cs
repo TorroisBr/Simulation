@@ -1,6 +1,6 @@
 /// <summary>
 /// Unity composition adapter that binds the final Core genealogy owner to the
-/// exact guard instance owned by its SimulationRuntime.
+/// exact guard instance owned by the active world.
 /// </summary>
 internal sealed class GenealogyMutationGuardBinding : IAuthoritativeMutationGuardBindable
 {
