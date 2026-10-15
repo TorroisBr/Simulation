@@ -117,3 +117,39 @@ host, owner extraction, cross-host save, profile expansion, P12 reopening, full
 CORE-F or CORE-X readiness is claimed. Final exact-tip evidence review and refreshed
 promotion preflight are recorded separately. Docs-only successors may reuse these
 runs only after effective-input applicability is confirmed.
+
+
+## Final source representation alignment — authoritative .NET pair
+
+The final paired .NET result is now `core-f-values-aligned-cold-warm.manifest.json`
+and matching ZIP, run `7932d8734925477bb138ad634bc84bf7`, source
+`e2184090f0803a2b0ede16d00da0742189fab9be`,169/169 cold and warm, Library absent.
+Archive SHA-256:
+`946a0543ed9d731cffab28e2d2d734261fa3ed6021effc3dbe7cb950db780b8e`.
+Private-original verification passed; distinct archive-only verification reports
+originalComparisonNotPerformed. Fresh locked Lab run
+`59adfcfa0698469b88eb776097abb1ee` passed its exact four-line cold/warm output.
+These supersede the earlier typed cold/warm pair as the final .NET gates.
+The final Unity typed ALL/focused/Smoke results above are unchanged.
+
+Independent evidence review found10 LF/CRLF representation differences between
+the earlier SDK checkout and the preserved Unity checkout (eight overlap Unity's
+capture roots). Every difference was proven to be EOL-only against the exact
+canonical Git content. The supported Git clean filter and existing autocrlf policy
+map the captured working bytes to the committed source; a raw hash of differently
+filtered Git text alone is not a dirty-source finding. In particular the preserved
+Unity codec test file has87,253 bytes and SHA-256
+`2d1bd1503b3798b158a0b00d9a90a6092ccbc0133ca53925868a45462dc02855`,
+exactly its captured hash, and canonical Git blob
+`c390ec65f03d9098f4702bf0cee5bac73a4c2772`. All1,635 Unity capture files were
+independently matched against the preserved actual run-source checkout.
+
+To make the paired evidence raw-byte comparable, the Master aligned the132 SDK
+inputs to that preserved checkout after checking exact canonical equivalence,
+verified that the canonical index tree stayed unchanged and clean, and reran the
+SDK/Lab gates above. All107 overlapping SDK/Unity paths now match exact raw bytes
+and hashes. The other25 SDK inputs are explicitly outside the default Unity roots.
+`SOURCE_REPRESENTATION_LEDGER.csv` records all132 paths, prior/final hashes,
+Unity overlap scope, canonical source blob and10 EOL-only alignment rows. It
+changes no simulation code, fixture values, validation tool rule or original report.
+Actual assembly identities in the fresh package remain truthful; no MVID is masked.
