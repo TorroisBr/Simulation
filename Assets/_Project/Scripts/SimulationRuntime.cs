@@ -1405,7 +1405,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             this.battleExecutionContextBuilder,
             this.simulationTime,
             this.battleResolutionPolicy);
-        this.genealogyStore = CloneGenealogyStore(resolvedGenealogyStore);
+        this.genealogyStore = runtimeAdmissionContext?.IsRestoredContinuation == true
+            ? CloneRestoredGenealogyStore(resolvedGenealogyStore)
+            : CloneGenealogyStore(resolvedGenealogyStore);
         this.institutionStore = resolvedInstitutionStore;
         this.officeStore = resolvedOfficeStore;
         this.propertyOwnershipStore = resolvedPropertyOwnershipStore;
@@ -10032,6 +10034,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     "The SimulationRuntime GenealogyStore contains an invalid parentage record.",
                     nameof(source));
             }
+        }
+
+        return copy;
+    }
+
+    private static GenealogyStore CloneRestoredGenealogyStore(GenealogyStore source)
+    {
+        GenealogyOwnerExport ownerExport = GenealogyOwnerBridge.CaptureOwnerSnapshot(source);
+        if (!GenealogyOwnerBridge.TryCreateStagedOwner(
+                ownerExport,
+                out GenealogyStore copy,
+                out GenealogyFailure failure)
+            || copy == null)
+        {
+            throw new ArgumentException(
+                "The restored SimulationRuntime GenealogyStore could not preserve its owner export: "
+                + (failure?.ToString() ?? "unknown failure"),
+                nameof(source));
         }
 
         return copy;

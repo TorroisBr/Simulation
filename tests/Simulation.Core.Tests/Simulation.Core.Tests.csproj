@@ -46,5 +46,7 @@
       <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/PersistenceFoundationTests.cs" Link="Persistence/PersistenceFoundationTests.cs" />
       <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/PersistenceFoundationFaultMatrixTests.cs" Link="Persistence/PersistenceFoundationFaultMatrixTests.cs" />
       <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/CORE_F_CompatibilityParityTests.cs" Link="Compatibility/CORE_F_CompatibilityParityTests.cs" />
+      <Compile Include="PopulationOwnerContractTests.cs" Link="Population/PopulationOwnerContractTests.cs" />
+      <Compile Include="Genealogy/GenealogyOwnerTests.cs" Link="Genealogy/GenealogyOwnerTests.cs" />
   </ItemGroup>
 </Project>

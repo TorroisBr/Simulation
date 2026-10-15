@@ -31,6 +31,18 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/AggregateDemographyPolicyContracts.cs" Link="Population/AggregateDemographyPolicyContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/DemographicSampling.cs" Link="Population/DemographicSampling.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/DeterministicAggregateDemographyProvider.cs" Link="Population/DeterministicAggregateDemographyProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Population/AggregateDemographyContracts.cs" Link="Population/AggregateDemographyContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Population/AggregateDemographySystem.cs" Link="Population/AggregateDemographySystem.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Population/AggregateDemographyTransition.cs" Link="Population/AggregateDemographyTransition.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Population/PopulationChangeSet.cs" Link="Population/PopulationChangeSet.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Population/PopulationOwnerBridge.cs" Link="Population/PopulationOwnerBridge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Population/PopulationRollbackPoint.cs" Link="Population/PopulationRollbackPoint.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Population/SettlementPopulationRuntime.cs" Link="Population/SettlementPopulationRuntime.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Population/SettlementPopulationSystem.cs" Link="Population/SettlementPopulationSystem.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Population/SettlementPopulationTransition.cs" Link="Population/SettlementPopulationTransition.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Genealogy/GenealogyContracts.cs" Link="Genealogy/GenealogyContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Genealogy/GenealogyOwnerBridge.cs" Link="Genealogy/GenealogyOwnerBridge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Genealogy/GenealogyStore.cs" Link="Genealogy/GenealogyStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketItemDefinition.cs" Link="Economy/MarketItemDefinition.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketPriceCalculator.cs" Link="Economy/MarketPriceCalculator.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/FiniteSourceProductionKernel.cs" Link="Economy/FiniteSourceProductionKernel.cs" />

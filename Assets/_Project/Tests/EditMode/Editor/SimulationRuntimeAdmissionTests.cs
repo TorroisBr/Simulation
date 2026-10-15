@@ -6809,6 +6809,70 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestoredRuntimePreservesGenealogyRevisionGapsWhileOrdinaryConstructionNormalizes()
+    {
+        PersonId ordinaryParent = new PersonId("genealogy-ordinary-clone-parent");
+        PersonId ordinaryChild = new PersonId("genealogy-ordinary-clone-child");
+        GenealogyStore ordinarySource = new GenealogyStore();
+        Assert.That(ordinarySource.TryAddParentage(ordinaryParent, ordinaryChild, out _), Is.True);
+        Assert.That(ordinarySource.TryRemoveParentage(ordinaryParent, ordinaryChild, out _), Is.True);
+        Assert.That(ordinarySource.Count, Is.Zero);
+        Assert.That(ordinarySource.Revision, Is.EqualTo(2L));
+
+        SimulationRuntime ordinaryRuntime = new SimulationRuntime(
+            new SimulationTime(), null, null, economyEnabled: false, genealogyStore: ordinarySource);
+        Assert.That(ordinaryRuntime.GenealogyStoreForWorldBoundary.Count, Is.Zero);
+        Assert.That(ordinaryRuntime.GenealogyStoreForWorldBoundary.Revision, Is.Zero,
+            "Ordinary constructor cloning keeps its existing edge-replay normalization.");
+
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject bootstrapObject = new GameObject("P12-G restored genealogy revision preservation");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(bootstrap, config);
+            InvokeInitializeSimulation(bootstrap, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            Assert.That(original, Is.Not.Null);
+
+            PersonId parent = new PersonId("p12g-restored-revision-parent");
+            PersonId child = new PersonId("p12g-restored-revision-child");
+            Assert.That(original.Runtime.TryRegisterPerson(
+                new PersonRuntime(parent, 0L), out PersonStoreFailure parentFailure),
+                Is.True, parentFailure.ToString());
+            Assert.That(original.Runtime.TryRegisterPerson(
+                new PersonRuntime(child, 0L), out PersonStoreFailure childFailure),
+                Is.True, childFailure.ToString());
+            Assert.That(original.Runtime.TryAddParentage(
+                parent, child, out PersonGenealogyFailure addFailure), Is.True, addFailure.ToString());
+            Assert.That(original.Runtime.TryRemoveParentage(
+                parent, child, out PersonGenealogyFailure removeFailure), Is.True, removeFailure.ToString());
+            Assert.That(original.Runtime.GenealogyStoreForWorldBoundary.Count, Is.Zero);
+            Assert.That(original.Runtime.GenealogyStoreForWorldBoundary.Revision, Is.EqualTo(2L));
+
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+            Assert.That(bootstrap.TryRestoreDailyContinuation(
+                out P12GDailyV1RestoreFailure restoreFailure,
+                out string diagnostic), Is.True, restoreFailure + ": " + diagnostic);
+
+            SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(bootstrap, "activeSession");
+            Assert.That(restored, Is.Not.Null);
+            Assert.That(restored, Is.Not.SameAs(original));
+            Assert.That(restored.Runtime.GenealogyStoreForWorldBoundary.Count, Is.Zero);
+            Assert.That(restored.Runtime.GenealogyStoreForWorldBoundary.Revision, Is.EqualTo(2L));
+            Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextAdvanceFailure),
+                Is.True, nextAdvanceFailure.ToString());
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreRejectsDuplicateGenealogySnapshotAfterOnePrivateEdgeAndKeepsSourceRetryable()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(

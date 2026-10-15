@@ -11,6 +11,7 @@ internal sealed class GenealogyOwnerSnapshot
 
     private readonly GenealogyOwnerExport export;
 
+    internal GenealogyOwnerExport Export => export;
     internal int SchemaVersion => export.SchemaVersion;
     internal long Revision => export.Revision;
     internal IReadOnlyList<ParentageRecord> Records => export.Records;

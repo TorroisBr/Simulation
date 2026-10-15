@@ -139,7 +139,8 @@ public static class PersonGenealogySystem
         PersonId parentId,
         PersonId childId)
     {
-        return world.GenealogyStoreForWorldBoundary.TryRollbackParentageForBirth(
+        return GenealogyOwnerBridge.TryRollbackParentageForBirth(
+            world.GenealogyStoreForWorldBoundary,
             parentId,
             childId,
             out _);

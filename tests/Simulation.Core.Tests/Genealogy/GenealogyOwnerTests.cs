@@ -59,7 +59,7 @@ public sealed class GenealogyOwnerTests
         Assert.That(removed.Code, Is.EqualTo(GenealogyFailureCode.None));
         Assert.That(owner.TryRemoveParentage(root, branchB, out GenealogyFailure missing), Is.False);
         Assert.That(missing.Code, Is.EqualTo(GenealogyFailureCode.ParentageNotFound));
-        AssertIds(owner.GetAncestors(leaf), "branch-a", "root");
+        AssertIds(owner.GetAncestors(leaf), "branch-a", "branch-b", "root");
         Assert.That(owner.Revision, Is.EqualTo(5L));
     }
 

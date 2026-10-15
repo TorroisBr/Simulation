@@ -172,7 +172,8 @@ internal sealed class P12DDailyV1OwnerPackage
         }
 
         PersonStoreOwnerSnapshot personSnapshot = sourcePersons.CaptureOwnerSnapshot();
-        GenealogyOwnerSnapshot genealogySnapshot = sourceGenealogy.CaptureOwnerSnapshot();
+        GenealogyOwnerSnapshot genealogySnapshot = new GenealogyOwnerSnapshot(
+            GenealogyOwnerBridge.CaptureOwnerSnapshot(sourceGenealogy));
         SpatialNetworkOwnerSnapshot spatialSnapshot = sourceSpatialNetwork.CaptureOwnerSnapshot();
         if (!sourceExplorableSites.TryCaptureOwnerSnapshot(
                 out ExplorableSiteOwnerSnapshot siteSnapshot, out _)
@@ -217,8 +218,8 @@ internal sealed class P12DDailyV1OwnerPackage
             genealogySnapshot = genealogySnapshotOverrideForTest(genealogySnapshot);
 
         stageObserver?.Invoke(P12GDailyV1RestoreStage.DGenealogyHydratorEntry);
-        if (!GenealogyStore.TryCreateFromOwnerSnapshot(
-                genealogySnapshot, out GenealogyStore stagedGenealogy, out _,
+        if (!GenealogyOwnerBridge.TryCreateStagedOwner(
+                genealogySnapshot.Export, out GenealogyStore stagedGenealogy, out _,
                 afterGenealogyRecordStagedForTest)
             || stagedGenealogy == null)
         {
@@ -379,7 +380,7 @@ internal sealed class P12DDailyV1OwnerPackage
             || stagedSpatialNetwork == null
             || !PersonStore.TryCreateFromOwnerSnapshot(personSnapshot,
                 out PersonStore stagedPersons, out _) || stagedPersons == null
-            || !GenealogyStore.TryCreateFromOwnerSnapshot(genealogySnapshot,
+            || !GenealogyOwnerBridge.TryCreateStagedOwner(genealogySnapshot.Export,
                 out GenealogyStore stagedGenealogy, out _) || stagedGenealogy == null)
         { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
 
