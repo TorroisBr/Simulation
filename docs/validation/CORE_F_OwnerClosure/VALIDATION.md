@@ -20,6 +20,60 @@ The selected source boundary is `ContinuationCensusProtocol.TryCaptureQuiescentO
 
 P12 formal closure remains unchanged and applies to same-build/current-host Unity continuation. This migration baseline consumes that source evidence only where the same profile and route apply. It is not a .NET live-graph closure, a new P12 claim, or CORE-F completion.
 
-## Validation
+## Historical pre-integration execution
 
 Parent orchestration reports the focused owner-closure suite passed (1/1) and the full EditMode suite passed (3134/3134). This worker did not run Unity. The official Smoke gate remains parent-owned; add its exact source tree and artifact identity when recorded. `git diff --check` is run for this candidate commit.
+
+
+## Final integrated validation — 2026-10-15
+
+Exact tested source: `6441c18374eb2b6bacb7238be442ac52d73e0b8f`, tree
+`85bc7519c197d0697c6e1a15a2ab492dd7dcafe4`.
+Production dependency/base: promoted WP2 at
+`84b66da69be896f0db347b940d9e464cfaa1c4f2`.
+Architecture: `4da844dee0c69fdf66562590fa96cc728fc86bf7`.
+The complete nine-path package delta is test/evidence only. The source-linked
+matrix deliberately retains its original 8ea3b47 blob identities; the WP2 delta
+moves descriptor/IO code but leaves the cited owner/protocol/census bodies
+semantically unchanged. The independent integrated source review found no blocker.
+
+| Required gate | Protected run | Result |
+|---|---|---|
+| Focused live owner closure | `20417553ad7d43fdb61dc24739972538` | 1/1 |
+| ALL EditMode | `5fc71aec8d234242a556c212b10c94e2` | 3164/3164, no failed/skipped/inconclusive |
+| Official -TestFilter Smoke | `00b923cd60c6479b998dcffbd79f80ad` | 5/5 |
+| Original LongRun in ALL | same ALL | 7/7, unchanged 100/1000/5000-day horizons |
+| Core .NET input applicability | WP2 `e96eed452ca149b78e4e6024e8e18e2b` | all91 retained input hashes unchanged,153/153 cold/warm reused |
+| Existing locked Lab | WP2 `5048deb8e044446a8b5079d4f0806fac` | unchanged inputs,PASS reused |
+| Base-to-tip diff-check | source above | PASS |
+
+No .NET live owner graph test is claimed. Owners-only Unity tests are outside
+the unchanged SDK input set, as the approved package contract requires. The three
+Unity runs have identical source inventories, stable before/after. Focused and
+all five Smoke identities occur as passing cases in the complete ALL report.
+
+Complete retrievable report: `core-f-owners-final-all.manifest.json` and ZIP.
+Archive SHA-256:
+`971c144be780661bd20fe26a068241a3624aa43e2e10606cf649704459da7c76`.
+Approved package verification against the protected original run passed. The
+filtered-report aggregate limitation is unchanged; raw XML was not rewritten.
+Focused original XML SHA-256:
+`3fe78c30f7f7e8c790d8d206ce009858f9a6fc93cb95793d546276f6cd08ba21`;
+Smoke original XML SHA-256:
+`7c5e4158b34c8154b95bfe3550b8733ea5e875e0a2a6c223bea386014ab53026`.
+Protected originals remain immutable; private paths/log metadata are not published.
+
+The actual pre-Values live P8-A snapshot fingerprint from the focused runtime is
+`db509154628cf74ffd21d01fd9b37e8d31f1e9fc39ee34b151eed4132b22b017`.
+It uses the existing runtime store and P12C snapshot/codec; no second world was
+initialized. It is a source-bound migration witness, not a new spatial schema.
+The earlier characterization/owner baseline ALL3134 and Smoke5 reports remain
+on pushed baseline commit `70021fec80afeb0de9a67bc7b506928809107008` under
+`docs/validation/CORE_F_OwnerClosure`; those are historical, not final-tip runs.
+An operational filtered invocation accidentally ran before switching to the owner
+source; it is excluded from all package completion claims.
+
+Final independent exact-tip evidence review is required before promotion.
+Documentation-only successors may reuse these runs after applicability review.
+No production capability, .NET hosting, P12 expansion or full CORE-F closure is
+claimed by this package.
