@@ -43,8 +43,12 @@ public sealed class CoreFDailyV1ValueBaselineTests
         Assert.That(catalogMethod, Is.Not.Null);
         string p12 = (string)catalogMethod.Invoke(null, new object[] { authoring });
 
-        byte[] catalogBytes = CaptureCatalogBytes(authoring, catalogMethod);
+        byte[] catalogBytes = CaptureCatalogBytes(authoring);
         Assert.That(Sha256(catalogBytes), Is.EqualTo(p12), "The retained P12 bytes must be the production encoder output.");
+        Assert.That(p12, Is.EqualTo(RetainedValue(retained, "p12-content")),
+            "Content fingerprint must preserve the pre-refactor identity.");
+        CollectionAssert.AreEqual(Convert.FromBase64String(RetainedValue(retained, "p12-catalog-bytes")), catalogBytes,
+            "The sole Core catalog encoder must preserve every pre-refactor catalog byte.");
         List<string> orderedValues = CaptureSelectedMemberValues(authoring);
         CollectionAssert.AreEqual(RetainedRecords(retained, "member="), orderedValues,
             "The selected 164-field/718-occurrence input vector changed from the retained Unity baseline.");
@@ -83,43 +87,11 @@ public sealed class CoreFDailyV1ValueBaselineTests
             + resolution.Configuration.Travel.TravelCostPerDay.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
     }
 
-    private static byte[] CaptureCatalogBytes(SimulationConfigData root, MethodInfo fingerprintMethod)
+    private static byte[] CaptureCatalogBytes(SimulationConfigData root)
     {
-        Type factory = fingerprintMethod.DeclaringType;
-        MethodInfo keyMethod = factory.GetMethod("AssetKey", BindingFlags.NonPublic | BindingFlags.Static);
-        MethodInfo objectMethod = factory.GetMethod("SerializeObjectFields", BindingFlags.NonPublic | BindingFlags.Static);
-        Assert.That(keyMethod, Is.Not.Null);
-        Assert.That(objectMethod, Is.Not.Null);
-        SortedDictionary<string, byte[]> records = new SortedDictionary<string, byte[]>(StringComparer.Ordinal);
-        SortedDictionary<string, ScriptableObject> assets = new SortedDictionary<string, ScriptableObject>(StringComparer.Ordinal);
-        Queue<ScriptableObject> pending = new Queue<ScriptableObject>();
-        records.Add("profile-config/SimulationConfigData", (byte[])objectMethod.Invoke(null,
-            new object[] { root, assets, pending }));
-        int discovered = 0;
-        while (pending.Count != 0)
-        {
-            ScriptableObject asset = pending.Dequeue();
-            string key = (string)keyMethod.Invoke(null, new object[] { asset });
-            if (records.ContainsKey(key)) continue;
-            Assert.That(++discovered, Is.LessThanOrEqualTo(65536));
-            Assert.That(assets.TryGetValue(key, out ScriptableObject registered) && ReferenceEquals(asset, registered), Is.True);
-            records.Add(key, (byte[])objectMethod.Invoke(null, new object[] { asset, assets, pending }));
-        }
-
-        using (MemoryStream stream = new MemoryStream())
-        using (BinaryWriter writer = new BinaryWriter(stream, P12AWire.Utf8, true))
-        {
-            P12AWire.WriteString(writer, "p12a.official-content-catalog/v1");
-            writer.Write(records.Count);
-            foreach (KeyValuePair<string, byte[]> record in records)
-            {
-                P12AWire.WriteString(writer, record.Key);
-                writer.Write(record.Value.Length);
-                writer.Write(record.Value);
-            }
-            writer.Flush();
-            return stream.ToArray();
-        }
+        Assert.That(P12ADailyV1ContentAdapter.TryCapture(root,
+            out DailyV1SelectedContentProjection projection, out string diagnostic), Is.True, diagnostic);
+        return projection.Bytes;
     }
 
     private static string InvokePrivateFingerprint(string methodName, params object[] arguments)
