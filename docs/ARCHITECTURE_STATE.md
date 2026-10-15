@@ -611,3 +611,11 @@ production code or canonical ref. Full CORE-F remains WAIT_DEPENDENCY on actual
 owner migration, shared runtime/restore, host and detached .NET continuation.
 P12/CORE-X and all numbered-phase scopes/refs remain unchanged. Independent review
 and final compatible docs-only promotion preflight remain required.
+
+
+Independent [null-roster reconciliation review](architecture/CORE_F_NULL_ROSTER_PROVIDER_SWITCH_REVIEW.md)
+passed exact substantive candidate `a6a9a93e9b4712cbc0d223c84f0182d4a785a1b3`.
+Only the bounded provider switch becomes READY_FOR_IMPLEMENTATION on this
+architecture publication; Core source/State adoption and actual implementation
+remain the Master's separate workflow. This successor records the review and
+its nonblocking wording correction without altering the approved source behavior.

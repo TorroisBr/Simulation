@@ -4,9 +4,10 @@
 provider call-site integration, inside existing CORE-F. No new checkpoint.
 **Architecture base:** `bec3998f697f362944aa5b551d45998145f4e67e`.
 **Production Core inspected:** `64610d6c4a5cfaec2c9e14fdb70b5e7ed5d5aeaa`.
-**Assessment:** source/oracle reconciliation complete; independent review pending.
-**Provider-switch readiness:** READY_FOR_IMPLEMENTATION after independent PASS
-and publication of this correction on architecture canonical. Full CORE-F remains
+**Assessment:** independent PASS at `a6a9a93e9b4712cbc0d223c84f0182d4a785a1b3`;
+[review and adoption record](CORE_F_NULL_ROSTER_PROVIDER_SWITCH_REVIEW.md).
+**Provider-switch readiness:** READY_FOR_IMPLEMENTATION on publication of this
+independently reviewed correction on architecture canonical. Full CORE-F remains
 WAIT_DEPENDENCY. This record implements no production or test change.
 
 ## 1. Exact contract amendment and precedence
@@ -59,7 +60,7 @@ The Git LF bytes hash to `2fbf900ba4994693c1a83f4792a1be6c6179789631131e9f4154e0
 its CRLF representation hashes exactly to the recorded run-side CSV identity
 `95e3912a43712693cf6ef68cf22e306a770b53a51818b0d6123842f6fa1d7a44`.
 This is explicit line-ending representation equivalence, not equality of those
-raw byte hashes. Input bytes hash to
+raw byte hashes. The sequence18 input JSON is53 UTF-8 bytes and hashes to
 `f6fee7d1028c7a2a0029ea4d2062fcc773adaa900314103dd290f2320e9bb34f`.
 The integrated oracle fixture has SHA-256
 `b0713750a006bbf1a5b75ad70ee183cf3cd0a2581d940df49335b2037b70d5b5`.
@@ -107,7 +108,7 @@ in `Assets/_Project/Scripts/P18DCommercialSharingBoundaryProvider.cs`, source bl
 The decoded object/fields are observable through the public closed codec API and
 test inspection. They are temporary transport values with no world-authority
 publication. The rejection attempt prepares no commit and makes no new phase
-snapshot, Knowledge/receipt write, revision update or ID/RNG allocation. Keep
+snapshot, Knowledge/receipt write, revision update, ID allocation or RNG draw. Keep
 existing operation/epoch/fault handling intact. This per-attempt guarantee does
 not promise rollback of earlier steps in a multi-step advance or a capture token
 from a failed advance. Sequence18 is a decoder observation, not an oracle run of
