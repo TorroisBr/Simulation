@@ -6,6 +6,27 @@ using System.Collections.Generic;
 /// </summary>
 public static class PopulationOwnerBridge
 {
+    /// <summary>
+    /// Reconstructs the immutable transition value validated by the retained
+    /// P12 persistence codec. This does not apply the transition to an owner.
+    /// </summary>
+    public static SettlementPopulationTransition CreateDecodedTransition(
+        string settlementRuntimeId,
+        long expectedRevision,
+        int populationBefore,
+        PopulationChangeSet changes,
+        long netChange,
+        int populationAfter)
+    {
+        return new SettlementPopulationTransition(
+            settlementRuntimeId,
+            expectedRevision,
+            populationBefore,
+            changes,
+            netChange,
+            populationAfter);
+    }
+
     public static bool CanBindMutationStatus(
         SettlementPopulationRuntime owner,
         IAuthoritativeMutationStatus status)

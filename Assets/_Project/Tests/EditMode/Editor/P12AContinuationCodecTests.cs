@@ -1088,7 +1088,7 @@ public sealed class P12AContinuationCodecTests
     public void CityOwnerCodecPreservesTypedIdsHistoryAndCanonicalMapRows()
     {
         const string cityId = "city-test-1";
-        SettlementPopulationTransition transition = new SettlementPopulationTransition(
+        SettlementPopulationTransition transition = PopulationOwnerBridge.CreateDecodedTransition(
             cityId, 4L, 10, new PopulationChangeSet(2, 1, 1, 0), 2L, 12);
         P12DCityRootOwnerSnapshot source = new P12DCityRootOwnerSnapshot(
             cityId,

@@ -98,7 +98,8 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             .ToDictionary(value => value.RuntimeId, StringComparer.Ordinal);
         Assert.That(P12DDailyV1OwnerPackage.TryPreflightRelations(
             fixture.Runtime.PersonStore.CaptureOwnerSnapshot(),
-            fixture.Runtime.GenealogyStoreForWorldBoundary.CaptureOwnerSnapshot(),
+            new GenealogyOwnerSnapshot(GenealogyOwnerBridge.CaptureOwnerSnapshot(
+                fixture.Runtime.GenealogyStoreForWorldBoundary)),
             cityCaptures, d.Rows, locationsById, cityLocationIds), Is.True,
             "The captured source graph must be internally consistent before mutation of the detached projection.");
 
@@ -112,7 +113,8 @@ public sealed class P12DNpcRootOwnerSnapshotTests
 
         Assert.That(P12DDailyV1OwnerPackage.TryPreflightRelations(
             fixture.Runtime.PersonStore.CaptureOwnerSnapshot(),
-            fixture.Runtime.GenealogyStoreForWorldBoundary.CaptureOwnerSnapshot(),
+            new GenealogyOwnerSnapshot(GenealogyOwnerBridge.CaptureOwnerSnapshot(
+                fixture.Runtime.GenealogyStoreForWorldBoundary)),
             cityCaptures, detachedWrongLocation.Rows, locationsById, cityLocationIds), Is.False,
             "A destination Location owned by another City must be rejected before membership fill.");
         Assert.That(city.ImportantNpcRevision, Is.EqualTo(sourceRevision));

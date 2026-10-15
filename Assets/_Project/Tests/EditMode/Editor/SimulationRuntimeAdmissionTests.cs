@@ -10153,7 +10153,8 @@ public sealed class SimulationRuntimeAdmissionTests
         snapshots.Add("D/NpcRoots", npcDProjection.Rows);
         snapshots.Add("D/NpcFProjection", npcFProjection.Rows);
         snapshots.Add("D/Persons", runtime.PersonStore.CaptureOwnerSnapshot());
-        snapshots.Add("D/Genealogy", runtime.GenealogyStoreForWorldBoundary.CaptureOwnerSnapshot());
+        snapshots.Add("D/Genealogy", new GenealogyOwnerSnapshot(
+            GenealogyOwnerBridge.CaptureOwnerSnapshot(runtime.GenealogyStoreForWorldBoundary)));
         snapshots.Add("D/SpatialNetwork", session.SpatialNetwork.CaptureOwnerSnapshot());
         Assert.That(composition.ExplorableSites.TryCaptureOwnerSnapshot(
             out ExplorableSiteOwnerSnapshot siteSnapshot, out var siteFailure), Is.True, siteFailure?.Message);

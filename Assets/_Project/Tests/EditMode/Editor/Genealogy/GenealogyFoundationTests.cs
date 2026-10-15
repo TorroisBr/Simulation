@@ -199,12 +199,13 @@ public sealed class GenealogyFoundationTests
     public void OwnerSnapshot_RoundTripsRequiredEmptyAndPopulatedDiamondGraphs()
     {
         GenealogyStore empty = new GenealogyStore();
-        GenealogyOwnerSnapshot emptySnapshot = empty.CaptureOwnerSnapshot();
+        GenealogyOwnerSnapshot emptySnapshot = new GenealogyOwnerSnapshot(
+            GenealogyOwnerBridge.CaptureOwnerSnapshot(empty));
         Assert.That(emptySnapshot.SchemaVersion, Is.EqualTo(GenealogyOwnerSnapshot.CurrentSchemaVersion));
         Assert.That(emptySnapshot.Revision, Is.EqualTo(0));
         Assert.That(emptySnapshot.Records, Is.Empty);
-        Assert.That(GenealogyStore.TryCreateFromOwnerSnapshot(
-            emptySnapshot,
+        Assert.That(GenealogyOwnerBridge.TryCreateStagedOwner(
+            emptySnapshot.Export,
             out GenealogyStore restoredEmpty,
             out GenealogyFailure emptyFailure), Is.True);
         Assert.That(emptyFailure.Code, Is.EqualTo(GenealogyFailureCode.None));
@@ -216,10 +217,11 @@ public sealed class GenealogyFoundationTests
         Add(populated, "branch-b", "leaf");
         Add(populated, "root", "branch-a");
         Add(populated, "branch-a", "leaf");
-        GenealogyOwnerSnapshot snapshot = populated.CaptureOwnerSnapshot();
+        GenealogyOwnerSnapshot snapshot = new GenealogyOwnerSnapshot(
+            GenealogyOwnerBridge.CaptureOwnerSnapshot(populated));
 
-        Assert.That(GenealogyStore.TryCreateFromOwnerSnapshot(
-            snapshot,
+        Assert.That(GenealogyOwnerBridge.TryCreateStagedOwner(
+            snapshot.Export,
             out GenealogyStore restored,
             out GenealogyFailure failure), Is.True);
         Assert.That(failure.Code, Is.EqualTo(GenealogyFailureCode.None));
@@ -242,7 +244,8 @@ public sealed class GenealogyFoundationTests
         Assert.That(source.Count, Is.EqualTo(1));
         Assert.That(source.Revision, Is.EqualTo(firstRevision + 2));
 
-        GenealogyOwnerSnapshot snapshot = source.CaptureOwnerSnapshot();
+        GenealogyOwnerSnapshot snapshot = new GenealogyOwnerSnapshot(
+            GenealogyOwnerBridge.CaptureOwnerSnapshot(source));
         IList<ParentageRecord> snapshotRows = snapshot.Records as IList<ParentageRecord>;
         Assert.That(snapshotRows, Is.Not.Null);
         Assert.That(snapshotRows.IsReadOnly, Is.True);
@@ -256,8 +259,8 @@ public sealed class GenealogyFoundationTests
         Assert.That(snapshot.Records, Has.Count.EqualTo(1));
         Assert.That(snapshot.Revision, Is.EqualTo(firstRevision + 2));
 
-        Assert.That(GenealogyStore.TryCreateFromOwnerSnapshot(
-            snapshot,
+        Assert.That(GenealogyOwnerBridge.TryCreateStagedOwner(
+            snapshot.Export,
             out GenealogyStore restored,
             out GenealogyFailure failure), Is.True);
         Assert.That(failure.Code, Is.EqualTo(GenealogyFailureCode.None));
@@ -278,8 +281,8 @@ public sealed class GenealogyFoundationTests
             long.MaxValue,
             new[] { new ParentageRecord(new PersonId("parent"), new PersonId("child")) });
 
-        Assert.That(GenealogyStore.TryCreateFromOwnerSnapshot(
-            snapshot,
+        Assert.That(GenealogyOwnerBridge.TryCreateStagedOwner(
+            snapshot.Export,
             out GenealogyStore restored,
             out GenealogyFailure failure), Is.True);
         Assert.That(failure.Code, Is.EqualTo(GenealogyFailureCode.None));
@@ -297,7 +300,7 @@ public sealed class GenealogyFoundationTests
     [Test]
     public void OwnerSnapshot_RejectsMissingSchemaAndImpossibleRevision()
     {
-        Assert.That(GenealogyStore.TryCreateFromOwnerSnapshot(
+        Assert.That(GenealogyOwnerBridge.TryCreateStagedOwner(
             null,
             out GenealogyStore missing,
             out GenealogyFailure missingFailure), Is.False);
@@ -477,8 +480,8 @@ public sealed class GenealogyFoundationTests
         GenealogyOwnerSnapshot snapshot,
         GenealogyFailureCode expectedFailure)
     {
-        Assert.That(GenealogyStore.TryCreateFromOwnerSnapshot(
-            snapshot,
+        Assert.That(GenealogyOwnerBridge.TryCreateStagedOwner(
+            snapshot?.Export,
             out GenealogyStore staged,
             out GenealogyFailure failure), Is.False);
         Assert.That(staged, Is.Null);

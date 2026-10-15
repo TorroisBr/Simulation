@@ -291,7 +291,7 @@ internal static class P12ACityOwnerCodec
             || immigrations < 0 || emigrations < 0 || populationAfter < 0
             || net != (long)births + immigrations - deaths - emigrations
             || populationBefore + net != populationAfter) return false;
-        transition = new SettlementPopulationTransition(settlementId, expectedRevision,
+        transition = PopulationOwnerBridge.CreateDecodedTransition(settlementId, expectedRevision,
             populationBefore, new PopulationChangeSet(births, deaths, immigrations, emigrations),
             net, populationAfter);
         return true;

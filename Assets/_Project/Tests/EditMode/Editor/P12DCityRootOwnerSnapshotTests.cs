@@ -34,14 +34,15 @@ public sealed class P12DCityRootOwnerSnapshotTests
         NpcRuntime secondNpc = new NpcRuntime("city-root-npc-a", SimulationTestFactory.CreateNpc("city-root-npc-a"), city, 0f);
 
         SettlementPopulationRuntime population = city.Population;
-        SettlementPopulationTransition transition = new SettlementPopulationTransition(
+        SettlementPopulationTransition transition = PopulationOwnerBridge.CreateDecodedTransition(
             city.RuntimeId,
             population.Revision,
             population.CurrentPopulation,
             new PopulationChangeSet(2, 0, 0, 0),
             2L,
             population.CurrentPopulation + 2);
-        Assert.That(population.TryApplyTransitionWithReceipt(
+        Assert.That(PopulationOwnerBridge.TryApplyTransitionWithReceipt(
+            population,
             "city-root-operation-1",
             "city-root-fingerprint-1",
             transition,
@@ -129,7 +130,8 @@ public sealed class P12DCityRootOwnerSnapshotTests
         Assert.That(stagedCity.Market.Items[0].CurrentPrice, Is.EqualTo(snapshot.MarketItems[0].CurrentPrice));
         Assert.That(stagedCity.Population.CurrentPopulation, Is.EqualTo(snapshot.CurrentPopulation));
         Assert.That(stagedCity.Population.Revision, Is.EqualTo(snapshot.PopulationRevision));
-        stagedCity.Population.GetOperationReceiptCensus(out int stagedReceiptCount, out long stagedReceiptRevision);
+        PopulationOwnerBridge.GetOperationReceiptCensus(
+            stagedCity.Population, out int stagedReceiptCount, out long stagedReceiptRevision);
         Assert.That(stagedReceiptCount, Is.EqualTo(1));
         Assert.That(stagedReceiptRevision, Is.EqualTo(snapshot.PopulationReceiptRevision));
         Assert.That(stagedCity.ImportantNpcRevision, Is.EqualTo(snapshot.ImportantNpcRevision));
@@ -705,14 +707,15 @@ public sealed class P12DCityRootOwnerSnapshotTests
     {
         CityRuntime city = SimulationTestFactory.CreateCity("city-root-rollback", "city-root-rollback-location");
         SettlementPopulationRuntime population = city.Population;
-        SettlementPopulationTransition first = new SettlementPopulationTransition(
+        SettlementPopulationTransition first = PopulationOwnerBridge.CreateDecodedTransition(
             city.RuntimeId,
             0L,
             1000,
             new PopulationChangeSet(5, 0, 0, 0),
             5L,
             1005);
-        Assert.That(population.TryApplyTransitionWithReceipt(
+        Assert.That(PopulationOwnerBridge.TryApplyTransitionWithReceipt(
+            population,
             "city-root-retained-receipt",
             "city-root-retained-fingerprint",
             first,
@@ -720,14 +723,17 @@ public sealed class P12DCityRootOwnerSnapshotTests
             out _), Is.True);
         Assert.That(firstApplied, Is.True);
 
-        SettlementPopulationTransition second = new SettlementPopulationTransition(
+        PopulationRollbackPoint rollbackPoint = PopulationOwnerBridge.CaptureRollbackPoint(population);
+
+        SettlementPopulationTransition second = PopulationOwnerBridge.CreateDecodedTransition(
             city.RuntimeId,
             1L,
             1005,
             new PopulationChangeSet(3, 0, 0, 0),
             3L,
             1008);
-        Assert.That(population.TryApplyTransitionWithReceipt(
+        Assert.That(PopulationOwnerBridge.TryApplyTransitionWithReceipt(
+            population,
             "city-root-pruned-receipt",
             "city-root-pruned-fingerprint",
             second,
@@ -735,7 +741,7 @@ public sealed class P12DCityRootOwnerSnapshotTests
             out _), Is.True);
         Assert.That(secondApplied, Is.True);
 
-        population.RestoreSnapshot(1005, 1L);
+        Assert.That(PopulationOwnerBridge.TryRestoreRollbackPoint(population, rollbackPoint), Is.True);
         DailyCaptureEligibilityToken token = CreateToken(city, CreateOwnerSections(city));
         Assert.That(P12DCityRootOwnerSnapshot.TryCaptureForStaging(
             city,
@@ -760,7 +766,8 @@ public sealed class P12DCityRootOwnerSnapshotTests
             out _), Is.True);
         Assert.That(stagedCity.Population.CurrentPopulation, Is.EqualTo(1005));
         Assert.That(stagedCity.Population.Revision, Is.EqualTo(1L));
-        stagedCity.Population.GetOperationReceiptCensus(out int stagedReceiptCount, out long stagedReceiptRevision);
+        PopulationOwnerBridge.GetOperationReceiptCensus(
+            stagedCity.Population, out int stagedReceiptCount, out long stagedReceiptRevision);
         Assert.That(stagedReceiptCount, Is.EqualTo(1));
         Assert.That(stagedReceiptRevision, Is.EqualTo(3L));
     }
@@ -786,7 +793,8 @@ public sealed class P12DCityRootOwnerSnapshotTests
         Assert.That(city.TryCopyOwnerSnapshotMembership(
             out IReadOnlyList<string> memberIds,
             out long membershipRevision), Is.True);
-        Assert.That(city.Population.TryCaptureOperationReceiptSnapshot(
+        Assert.That(PopulationOwnerBridge.TryCaptureOperationReceiptSnapshot(
+            city.Population,
             out IReadOnlyList<PopulationOperationReceiptSnapshot> receipts,
             out long receiptRevision), Is.True);
 

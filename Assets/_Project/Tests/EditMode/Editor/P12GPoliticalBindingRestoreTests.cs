@@ -1194,7 +1194,8 @@ public sealed class P12GPoliticalBindingRestoreTests
             AppendValue(signature, key + "/life-residence-revision", row.LifeResidenceRevision);
         }
 
-        GenealogyOwnerSnapshot genealogy = runtime.GenealogyStoreForWorldBoundary.CaptureOwnerSnapshot();
+        GenealogyOwnerSnapshot genealogy = new GenealogyOwnerSnapshot(
+            GenealogyOwnerBridge.CaptureOwnerSnapshot(runtime.GenealogyStoreForWorldBoundary));
         AppendValue(signature, "D/genealogy/schema", genealogy.SchemaVersion);
         AppendValue(signature, "D/genealogy/revision", genealogy.Revision);
         int genealogyIndex = 0;
