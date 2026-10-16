@@ -946,7 +946,7 @@ dispositions. Shared Daily-v1 Runtime/Restore therefore remains
 `WAIT_DEPENDENCY`; this evidence does not authorize source extraction or widen
 the public API.
 
-## CORE-F owner-entry qualification — selected Daily-v1 evidence (current review candidate)
+## CORE-F owner-entry qualification — selected Daily-v1 evidence (validated candidate)
 
 The refreshed test/source candidate is `350d0aaa44f657379da9e1009838896a3da9ffef`
 (tree `ff290a1b6daa6b68a5e4f4b312a32fca467d3aea`), based on Core canonical
@@ -979,9 +979,15 @@ All three runs share the same stable 1,668-file input digest. The full
 normalized result package verifies against its protected original and contains
 all focused and Smoke case results. Previously approved CoreValidation
 cold/warm evidence is reused because its full 142-input digest exactly matches
-the current CoreValidation input set. The refreshed exact-tip independent
-review is pending; the prior review of the superseded evidence tip requested
-the two test-evidence corrections now recorded in this candidate.
+the current CoreValidation input set. Exact-tip independent review passed for
+evidence candidate `07d1b2c62dccb71f33f1c7beec5db5f65ebc990e` (tree
+`e400dca4137314f0307136ae0a5d67f124a9d7ae`), reviewing test/source candidate
+`350d0aaa44f657379da9e1009838896a3da9ffef` (tree
+`ff290a1b6daa6b68a5e4f4b312a32fca467d3aea`). The durable review is
+[`INDEPENDENT_REVIEW.md`](validation/CORE_F_OwnerEntryQualification/INDEPENDENT_REVIEW.md).
+It confirms the two prior test-evidence findings are resolved, with no
+actionable findings. The review record and this State update do not change the
+reviewed production/test tree or packaged validation bytes.
 
 The evidence qualifies the approved owner/source/access and grouped-restore
 claims; it does not alter production source, create a writer, widen Daily-v1,

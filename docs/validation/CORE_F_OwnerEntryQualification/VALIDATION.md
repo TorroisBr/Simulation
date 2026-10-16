@@ -60,9 +60,18 @@ The split-ArmedForce-alias rejection case now submits the malformed image to the
 
 The approved CoreValidation cold/warm evidence was reused under the handoff's exact-effective-input rule. Its full 142-path input digest is `9f69d9ba3b24a32deef96099ec3fe608a45f0394ec7656d198e0a12c4bb92061`, equal to the current input snapshot; no CoreValidation input changed. Run `5d026bdb1d64473fb3d8b004ec8f3151` passed 188/188 cold and 188/188 warm against source `ca55c3f9fa4d9c99e6a47a25adbbd1956ea04a1d`. This is reuse of the existing durable .NET package, not a new .NET execution.
 
-## Integrity and preservation
+## Independent review and integrity
 
-- `git diff --check` is required at the final exact candidate tip and will be recorded with the independent review.
+- Exact-tip independent review passed for evidence tip
+  `07d1b2c62dccb71f33f1c7beec5db5f65ebc990e` (tree
+  `e400dca4137314f0307136ae0a5d67f124a9d7ae`), reviewing source/test candidate
+  `350d0aaa44f657379da9e1009838896a3da9ffef` (tree
+  `ff290a1b6daa6b68a5e4f4b312a32fca467d3aea`). Verdict: PASS / VALIDATED_CANDIDATE;
+  no actionable findings. See [`INDEPENDENT_REVIEW.md`](INDEPENDENT_REVIEW.md).
+- `git diff --check` passed at the reviewed evidence tip. The review-record
+  successor changes documentation only; production/test source and packaged
+  validation bytes remain unchanged.
+
 - Generated `bin`, `obj`, and Python cache directories are not part of the evidence payload.
 - Pre-existing `ProjectSettings/EditorBuildSettings.asset`, `ProjectSettings/ProjectSettings.asset`, and `ProjectSettings/ShaderGraphSettings.asset` edits remain unstaged and untouched.
 - The qualification preserves all 89 families, the 18 Required dispositions, current owner identity/cardinality, and existing rejection/restore semantics. It creates no gameplay writers, no profile expansion, and no production implementation.
