@@ -946,7 +946,7 @@ dispositions. Shared Daily-v1 Runtime/Restore therefore remains
 `WAIT_DEPENDENCY`; this evidence does not authorize source extraction or widen
 the public API.
 
-## CORE-F owner-entry qualification — selected Daily-v1 evidence (validated candidate)
+## CORE-F owner-entry qualification — selected Daily-v1 evidence (promoted)
 
 The refreshed test/source candidate is `350d0aaa44f657379da9e1009838896a3da9ffef`
 (tree `ff290a1b6daa6b68a5e4f4b312a32fca467d3aea`), based on Core canonical
@@ -997,8 +997,34 @@ writer or unconditional exact-empty disposition as a prerequisite for every
 Required family. The 18 families remain Required and are qualified using their
 accepted preserve/restrict and supported-operation rules.
 
-Shared Runtime/Application/Host remains `WAIT_DEPENDENCY` pending the explicit
-post-qualification source, definition-binding, and integration-readiness
-reassessment under the existing CORE-F runtime/restore design. This evidence
-alone does not authorize a source move or establish detached .NET host,
-persistence, or deterministic continuation readiness.
+The reviewed qualification was promoted to `codex/core/canonical` by clean
+fast-forward from `1998974515b6357c308d861fb608f2db5071a63a` to
+`7e28028c3bf28e9d7d3ababd57eb3cfa09127828` on 2026-10-16. Remote
+synchronization is verified at that SHA. The promoted change adds the exact-tip
+review record and State/validation bookkeeping; production and test source
+remain the reviewed `350d0aaa44f657379da9e1009838896a3da9ffef` tree. The
+qualification remains evidence-only: no production owner, runtime, profile,
+codec, or public API changed.
+
+### Post-qualification readiness reassessment
+
+`CORE-F-Shared-DailyV1-Application-and-Host` is now
+`READY_FOR_IMPLEMENTATION` as the single bounded shared integration package in
+the reviewed runtime/restore design. Its entry gates are satisfied by the
+promoted exact 89-family owner chains, all 18 accepted Required dispositions,
+the complete row-linked member/access destination ledger with no unresolved
+groups, the attached reviewed definition/site/optional-descriptor binding
+contracts, and the exact-tip qualification review. This corrects the earlier
+pending-reassessment wording above; it does not declare the implementation
+delivered.
+
+The package must implement one authoritative shared `DailyV1Application`,
+selected owner/runtime construction and P12 detached hydration against the
+canonical definition graph, end-to-end v1/v2 continuation header/image/codec/
+store behavior, the thin Unity adapter, and the fixed .NET 8 host/fixture. It
+must meet the existing same-host restore, exact T/T+1/T+2 continuation, Unity/
+.NET parity, atomicity, privacy-safe evidence, and independent review gates.
+No profile or P12 scope is expanded. Full CORE-F remains
+`WAIT_DEPENDENCY` until this implementation, its detached .NET continuation,
+and all required validation are promoted; P13 and CORE-X readiness are not
+inferred.
