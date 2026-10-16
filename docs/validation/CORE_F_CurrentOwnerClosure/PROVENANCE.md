@@ -13,4 +13,4 @@ The local broad syntax-name diagnostic contained 65315 candidates; it is deliber
 
 OWNER_WRITER_MATRIX.csv retains the original current Core historical matrix bytes. PostOwnerGraph retains the reconciliation graph inputs with original provenance; two parent documentation links are anchored to immutable Core b2c2c0e because the copied graph has a new documentation location. Current closure README explicitly separates historical claims from current owner-body mapping.
 
-Artifact hashes in ARTIFACT_SHA256.csv cover retained inventory/graph documents other than that hash manifest. They bind this static analysis package, never substitute for original NUnit/TRX result evidence, exact source review or host execution.
+Artifact hashes in ARTIFACT_SHA256.csv cover retained Git blob bytes for inventory/graph documents other than that hash manifest. Checkout newline expansion is not the hashed representation; verify cat-file/archive bytes. They bind this static analysis package, never substitute for original NUnit/TRX result evidence, exact source review or host execution.
