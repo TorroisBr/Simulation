@@ -946,29 +946,47 @@ dispositions. Shared Daily-v1 Runtime/Restore therefore remains
 `WAIT_DEPENDENCY`; this evidence does not authorize source extraction or widen
 the public API.
 
-## CORE-F owner-entry qualification — selected Daily-v1 evidence
+## CORE-F owner-entry qualification — selected Daily-v1 evidence (current review candidate)
 
-The bounded test/evidence candidate is
-`af411093de1b95cf46ae7cdfad595864bca62ee4` (tree
-`99e74525432efe0d2ff3fed5c60bf12a1922bdaa`), based on Core canonical
-`1998974515b6357c308d861fb608f2db5071a63a` and owner-entry contract
-`512cf5721927a5b3d6766bc4d19cfd62a6729a41`. Its validation record is
+The test/source candidate is `5b46ee946a1e29813c11c4dd2bc5b34b5b6a25da`
+(tree `b3bc684fdbd125cc369f46fdf88c887b163d7164`), based on Core canonical
+`1998974515b6357c308d861fb608f2db5071a63a` and the owner-entry contract at
+architecture `512cf5721927a5b3d6766bc4d19cfd62a6729a41`. The reviewable
+qualification and validation record is
 [`CORE-F Owner Entry Qualification`](validation/CORE_F_OwnerEntryQualification/VALIDATION.md).
+The previous candidate and validation packages remain historical evidence;
+they are not the current validation baseline.
 
-The candidate evidence joins 89/89 selected owner-entry chains, preserves all
-18 no-writer dispositions as `Required`, and maps 18,270 row-linked references
-from 67 split host files into 3,365 destination groups; all groups have a
-destination and none are unresolved. The member-access
-projection contains 42,625 callsites and resolves all 2,582 Core declaration
-pairs; its Unity-engine projection contains 288 pairs. The post-institution
-join passes for all 89 owner/capture anchors and resolves all 1,660 cited
-references across 142 paths. Focused Unity passed 15/15, full EditMode passed
-3,184/3,184, and official filtered Smoke passed 5/5 on the exact candidate
-tree. Previously approved CoreValidation cold/warm evidence is reused under
-the exact 142-input equality rule. The normalized full EditMode package
-verifies against its protected original run.
+The current evidence joins 89/89 owner-entry chains, preserves all 18
+dispositions as `Required`, and maps 18,270 row-linked references from 67 split
+host files into 3,365 fully assigned destination groups. The member-access
+projection contains 42,625 callsites, including 2,582 resolved Core declaration
+pairs and 288 Unity-engine pairs. The post-institution source join passes all
+89 owner/capture anchors and resolves 1,660 references across 142 paths. The
+generated chain ledger now anchors current declarations to the actual Core
+canonical source blob/line and retains the prior production-base citation in a
+separate historical field. The anchor input contains 89 unique families and is
+verified against the canonical baseline, pinned source reference, and candidate
+working tree.
 
-This is a test/evidence qualification only. It adds no production writer or
-runtime behavior and does not widen Daily-v1. Shared
-Runtime/Application/Host remains `WAIT_DEPENDENCY`; this evidence does not
-alone authorize source extraction or establish runtime/restore readiness.
+Unity `6000.3.9f1` / Test Framework `1.6.0` validation against the exact
+candidate tree passed focused restore 15/15, full EditMode 3,184/3,184, and
+official filtered Smoke 5/5. The full normalized result package is durably
+retained and verifies against its protected original. It contains the complete
+case results for the focused suite and all five Smoke identities. Previously
+approved CoreValidation cold/warm evidence is reused because its full
+142-input digest exactly matches the current CoreValidation input set.
+
+The evidence qualifies the approved owner/source/access and grouped-restore
+claims; it does not alter production source, create a writer, widen Daily-v1,
+or prove that every selected runtime source is already movable. The promoted
+owner-entry contract supersedes historical State wording that treated a normal
+writer or unconditional exact-empty disposition as a prerequisite for every
+Required family. The 18 families remain Required and are qualified using their
+accepted preserve/restrict and supported-operation rules.
+
+Shared Runtime/Application/Host remains `WAIT_DEPENDENCY` pending the explicit
+post-qualification source, definition-binding, and integration-readiness
+reassessment under the existing CORE-F runtime/restore design. This evidence
+alone does not authorize a source move or establish detached .NET host,
+persistence, or deterministic continuation readiness.

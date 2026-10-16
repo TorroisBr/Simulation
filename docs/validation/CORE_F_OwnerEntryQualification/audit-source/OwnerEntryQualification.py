@@ -620,12 +620,64 @@ def make_owner_ledger(repo: pathlib.Path, output: pathlib.Path) -> tuple[list[di
     family_rows = read_csv(repo / "docs/architecture/SIMULATION_CORE_F_OWNER_SECTIONS.csv")
     writer_rows = read_csv(owners_dir / "OWNER_WRITER_MATRIX.csv")
     capture_rows = read_csv(owners_dir / "OWNER_CAPTURE_TARGET_CROSSWALK.csv")
-    if len(family_rows) != 89 or len(writer_rows) != 89 or len(capture_rows) != 89:
-        raise RuntimeError("The exact 89-row owner/writer/capture inputs are required")
+    current_anchor_path = source_root / "owner-current-source-anchors.csv"
+    current_anchor_rows = read_csv(current_anchor_path)
+    if len(family_rows) != 89 or len(writer_rows) != 89 or len(capture_rows) != 89 or len(current_anchor_rows) != 89:
+        raise RuntimeError("The exact 89-row owner/writer/capture/current-anchor inputs are required")
     writer_by_id = {row["section_or_prefix"]: row for row in writer_rows}
     capture_by_id = {row["section_or_prefix"]: row for row in capture_rows}
-    if set(writer_by_id) != set(capture_by_id) or set(writer_by_id) != {row["section_or_prefix"] for row in family_rows}:
-        raise RuntimeError("Owner, writer, and capture keys do not match exactly")
+    current_anchor_by_id = {row["section_or_prefix"]: row for row in current_anchor_rows}
+    family_ids = {row["section_or_prefix"] for row in family_rows}
+    if (
+        len(writer_by_id) != 89
+        or len(capture_by_id) != 89
+        or len(current_anchor_by_id) != 89
+        or set(writer_by_id) != set(capture_by_id)
+        or set(writer_by_id) != family_ids
+        or set(current_anchor_by_id) != family_ids
+    ):
+        raise RuntimeError("Owner, writer, capture, and current-anchor keys do not match exactly")
+
+    if run_git(repo, "merge-base", "--is-ancestor", SOURCE_REFERENCE, CORE_CANONICAL_BASE) != "":
+        raise RuntimeError("The source reference must be an ancestor of the Core canonical baseline")
+    verified_current_anchors: dict[str, tuple[str, str, str, int, str]] = {}
+    source_text_cache: dict[str, list[str]] = {}
+    for key, anchor in current_anchor_by_id.items():
+        source_path = anchor["source_path"]
+        source_commit = anchor["source_commit"]
+        expected_blob = anchor["source_blob"]
+        try:
+            source_line = int(anchor["current_source_line"])
+        except ValueError as error:
+            raise RuntimeError(f"Current owner anchor has an invalid line for {key}") from error
+        if not source_path or source_line < 1 or not source_commit or not expected_blob:
+            raise RuntimeError(f"Current owner anchor is incomplete for {key}")
+        # The CSV commit records when the line anchor was extracted. The
+        # authoritative current source is the promoted Core baseline; extraction
+        # commit ancestry is not a substitute for the canonical source identity.
+        run_git(repo, "rev-parse", f"{source_commit}:{source_path}")
+        source_blob = run_git(repo, "rev-parse", f"{CORE_CANONICAL_BASE}:{source_path}")
+        reference_blob = run_git(repo, "rev-parse", f"{SOURCE_REFERENCE}:{source_path}")
+        anchor_blob = run_git(repo, "rev-parse", f"{source_commit}:{source_path}")
+        working_blob = run_git(repo, "hash-object", "--", source_path)
+        if (
+            source_blob != expected_blob
+            or reference_blob != expected_blob
+            or anchor_blob != expected_blob
+            or working_blob != expected_blob
+        ):
+            raise RuntimeError(f"Current owner source blob does not match its reference and working tree for {key}")
+        source_lines = source_text_cache.get(source_path)
+        if source_lines is None:
+            source_lines = run_git(repo, "show", f"{CORE_CANONICAL_BASE}:{source_path}").splitlines()
+            source_text_cache[source_path] = source_lines
+        if source_line > len(source_lines):
+            raise RuntimeError(f"Current owner anchor line is outside its source for {key}")
+        actual_line = source_lines[source_line - 1].strip()
+        documented_line = anchor["current_source_anchor"].strip()
+        if not documented_line or documented_line not in actual_line:
+            raise RuntimeError(f"Current owner anchor text does not identify its source line for {key}")
+        verified_current_anchors[key] = (source_path, expected_blob, CORE_CANONICAL_BASE, source_line, source_commit)
 
     test_path = "Assets/_Project/Tests/EditMode/Editor/SimulationBootstrapCompositionTests.cs"
     test_source = (repo / test_path).read_text(encoding="utf-8-sig")
@@ -642,9 +694,10 @@ def make_owner_ledger(repo: pathlib.Path, output: pathlib.Path) -> tuple[list[di
         key = family["section_or_prefix"]
         writer = writer_by_id[key]
         capture = capture_by_id[key]
-        family_source_blob = run_git(
+        historical_source_blob = run_git(
             repo, "rev-parse", f"{family['production_base']}:{family['source_path']}"
         )
+        current_source_path, current_source_blob, current_source_commit, current_source_line, anchor_provenance_commit = verified_current_anchors[key]
         live = expression_matches_family(repo, key, calls, providers, knowledge)
         owner_expression = str(live["owner_expression"])
         identity_method = str(live["identity_method"])
@@ -678,7 +731,9 @@ def make_owner_ledger(repo: pathlib.Path, output: pathlib.Path) -> tuple[list[di
             "role": family["role"],
             "shape": family["shape"],
             "canonical_authority": family["canonical_authority"],
-            "family_schema_source_anchor": f"{family['source_path']}:{family['source_line']} ({family_source_blob} at {family['production_base']})",
+            "family_schema_source_anchor": f"{current_source_path}:{current_source_line} ({current_source_blob} at {current_source_commit})",
+            "family_schema_historical_source_anchor": f"{family['source_path']}:{family['source_line']} ({historical_source_blob} at {family['production_base']})",
+            "family_schema_anchor_extraction_commit": anchor_provenance_commit,
             "identity_provider_type": binding_type,
             "identity_provider_source_anchor": writer.get("provider_binding", ""),
             "identity_provider_current_declaration": provider_anchor,
@@ -852,6 +907,8 @@ def main() -> int:
 
     chain_rows, identity_test_blob = make_owner_ledger(repo, output)
     split_count, group_count, access_raw_hash, access_gzip_hash = make_destination_ledgers(repo, output)
+    current_anchor_path = repo / "docs/validation/CORE_F_SourceClosure_PostInstitution/owner-current-source-anchors.csv"
+    current_anchor_rows = read_csv(current_anchor_path)
     source_baseline_commit = run_git(repo, "rev-parse", "HEAD")
     source_baseline_tree = run_git(repo, "rev-parse", "HEAD^{tree}")
     design_reference = (
@@ -959,6 +1016,15 @@ def main() -> int:
         "ownerDispositionsBlob": disposition_blob,
         "ownerDispositionRows": len(dispositions),
         "sourceReferenceCommit": SOURCE_REFERENCE,
+        "currentOwnerSourceAnchorInput": {
+            "path": current_anchor_path.relative_to(repo).as_posix(),
+            "gitBlob": run_git(repo, "hash-object", "--", current_anchor_path.relative_to(repo).as_posix()),
+            "sha256": sha256(current_anchor_path.read_bytes()),
+            "rows": len(current_anchor_rows),
+            "sourceReferenceCommit": SOURCE_REFERENCE,
+            "canonicalSourceCommit": CORE_CANONICAL_BASE,
+            "anchorExtractionCommits": sorted({row["source_commit"] for row in current_anchor_rows}),
+        },
         "ownerRows": len(chain_rows),
         "selectedIdentityMapTestBlob": identity_test_blob,
         "selectedIdentityOracleChecks": identity_oracle_checks,
@@ -974,7 +1040,7 @@ def main() -> int:
         "files": {name: {"sha256": sha256((output / name).read_bytes()), "bytes": (output / name).stat().st_size} for name in files},
         "claims": [
             "All 18 no-writer dispositions remain Required and qualify only by the promoted architecture's preservation/restriction and supported-operation conservation rules.",
-            "The 89 owner chains combine current owner/writer/capture matrices with exact selected-profile live identity expressions; the grouped cases add only the approved integrated P12-G evidence.",
+            "The 89 owner chains combine exact current source-blob/line anchors with separately retained historical citations, current owner/writer/capture matrices, and exact selected-profile live identity expressions; the grouped cases add only the approved integrated P12-G evidence.",
             "The split-host destination ledger links every selected input row by ordinal and row hash and resolves all Simulation.Core targets to source declarations.",
             "This evidence does not move production source, create writers, widen public APIs, or declare Shared Runtime/Host implementation ready by itself.",
         ],

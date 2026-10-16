@@ -16,9 +16,9 @@
       "sha256": "6b7e22e149551b324cf7388e338caf17a34716abde60405ea73424c53565a3ca"
     },
     "Assets/_Project/Tests/EditMode/Editor/P12GOwnerEntryQualificationTests.cs.meta": {
-      "bytes": 254,
-      "gitBlob": "a4be7b87b46abe780cb0efd6ea9293378549b80b",
-      "sha256": "5d062711b56354f262db6e12c96ae36fb05285286a052f19e0b7fa267055b90d"
+      "bytes": 251,
+      "gitBlob": "4c4cd097789276eaeae30b66e1a6a4ab3c3232da",
+      "sha256": "fe78e162f74ce72a32fe70daef8e571a05504cc4a39844a641e15acbd8183e8c"
     },
     "Assets/_Project/Tests/EditMode/Editor/P12GPoliticalBindingRestoreTests.cs": {
       "bytes": 173433,
@@ -34,15 +34,26 @@
   "architectureContractBlob": "2cdcffe0760271cd6e31ee63cf8b23d17760f8f3",
   "architectureContractCommit": "512cf5721927a5b3d6766bc4d19cfd62a6729a41",
   "architectureContractPath": "docs/architecture/CORE_F_OWNER_ENTRY_CONTRACT.md",
-  "candidateCommit": "af411093de1b95cf46ae7cdfad595864bca62ee4",
-  "candidateTree": "99e74525432efe0d2ff3fed5c60bf12a1922bdaa",
+  "candidateCommit": "5b46ee946a1e29813c11c4dd2bc5b34b5b6a25da",
+  "candidateTree": "b3bc684fdbd125cc369f46fdf88c887b163d7164",
   "claims": [
     "All 18 no-writer dispositions remain Required and qualify only by the promoted architecture's preservation/restriction and supported-operation conservation rules.",
-    "The 89 owner chains combine current owner/writer/capture matrices with exact selected-profile live identity expressions; the grouped cases add only the approved integrated P12-G evidence.",
+    "The 89 owner chains combine exact current source-blob/line anchors with separately retained historical citations, current owner/writer/capture matrices, and exact selected-profile live identity expressions; the grouped cases add only the approved integrated P12-G evidence.",
     "The split-host destination ledger links every selected input row by ordinal and row hash and resolves all Simulation.Core targets to source declarations.",
     "This evidence does not move production source, create writers, widen public APIs, or declare Shared Runtime/Host implementation ready by itself."
   ],
   "coreCanonicalBase": "1998974515b6357c308d861fb608f2db5071a63a",
+  "currentOwnerSourceAnchorInput": {
+    "anchorExtractionCommits": [
+      "cb31d4d6f777a78af25670e3e6d43f01578b8809"
+    ],
+    "canonicalSourceCommit": "1998974515b6357c308d861fb608f2db5071a63a",
+    "gitBlob": "292d6ae1d7f6e0ba8da40a509a104745c788b2ed",
+    "path": "docs/validation/CORE_F_SourceClosure_PostInstitution/owner-current-source-anchors.csv",
+    "rows": 89,
+    "sha256": "97c1a6ed140798a46230254ba7f63a9e219dbb7558f7068acae234433d5e4533",
+    "sourceReferenceCommit": "ca55c3f9fa4d9c99e6a47a25adbbd1956ea04a1d"
+  },
   "definitionBindingDesign": {
     "architectureCommit": "512cf5721927a5b3d6766bc4d19cfd62a6729a41",
     "blob": "7be12e59aadd6a211f731fd52aa636fa073bb2b5",
@@ -65,8 +76,8 @@
       "sha256": "9b7c3b8742580aed4a12f743fcf3f10dbf8cd2bc362b92eada1f17812c3dd0be"
     },
     "owner-entry-chain-ledger.csv": {
-      "bytes": 585864,
-      "sha256": "4d373f595056c5e89316247cb90be6e3d51822a41c72ef3e8553ddab4e9fbc94"
+      "bytes": 602051,
+      "sha256": "13ec49ec5d4d02718558f21a331c0daee130da606c7197e62d323e4d731ef3ee"
     },
     "split-host-destination-groups.csv": {
       "bytes": 2032587,
@@ -128,17 +139,17 @@
     "role_binding": "registeredContract.Role, Is.EqualTo(expectedRole)",
     "schema_binding": "registeredContract.SchemaVersion, Is.EqualTo(expectedContract.SchemaVersion)"
   },
-  "sourceBaselineCommit": "af411093de1b95cf46ae7cdfad595864bca62ee4",
-  "sourceBaselineTree": "99e74525432efe0d2ff3fed5c60bf12a1922bdaa",
+  "sourceBaselineCommit": "5b46ee946a1e29813c11c4dd2bc5b34b5b6a25da",
+  "sourceBaselineTree": "b3bc684fdbd125cc369f46fdf88c887b163d7164",
   "sourceReferenceCommit": "ca55c3f9fa4d9c99e6a47a25adbbd1956ea04a1d",
   "splitHostAccessGroups": 3365,
   "splitHostAccessRows": 18270,
   "splitHostSourceCount": 67,
   "toolingSourceIdentities": {
     "docs/validation/CORE_F_OwnerEntryQualification/audit-source/OwnerEntryQualification.py": {
-      "bytes": 56754,
-      "gitBlob": "bea374ab208f119334f64df134abec3872f3105c",
-      "sha256": "788af2a52a5368369289f92d0743c6649ace2af5628dda6b4555f499be7089dd"
+      "bytes": 61125,
+      "gitBlob": "94dcd1ea1fba79d0911806f298e18591e9644c55",
+      "sha256": "134e6d4699f8938fed29026e3e132fe06ca602a131be89051ff5492b62d48c26"
     },
     "docs/validation/CORE_F_SourceClosure_PostInstitution/audit-source/MemberAccessCut.cs": {
       "bytes": 23553,
