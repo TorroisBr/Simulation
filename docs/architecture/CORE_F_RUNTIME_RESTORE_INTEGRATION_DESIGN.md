@@ -2,6 +2,10 @@
 
 **Status:** bounded dependent design; no production implementation or source movement. **Production source:** `0094febf7f97333d0653eaf9688fe1d24d73327f` (`codex/core/canonical`). **Architecture/design checkout:** `4b69e43516b3fc548611ce704ef45af9e54e3d0e`; its working copy is an architecture branch, so all executable claims below were checked against the named production commit with `git show`. The older `CORE_F_DAILY_V1_HOST_TECHNICAL_DESIGN.md` and runtime source review are historical inputs, not current source authority.
 
+## Current source applicability
+
+The [current owner-closure assessment](CORE_F_CURRENT_OWNER_CLOSURE.md) supersedes the historical next-task facts below at promoted Core b2c2c0e. Demographic owners are PROMOTED; institution/claim owner preparation is separately bounded. The application/host API and acceptance contract remain in force. Whole shared runtime/restore implementation stays WAIT_DEPENDENCY on exact selected owner/definition/member closure, not on missing token/quiescence architecture. No .NET continuation result follows from Unity P12 evidence.
+
 ## 1. Decision
 
 Build one engine-free `Simulation.Core` application composition which owns the selected Daily-v1 graph, runtime, admission protocol, capture coordinator, image codec/census, detached restoration, and publication-ready session value. Unity and .NET are thin host adapters around that same source. Do not implement a second .NET runtime or let either host provide authoritative owner values, epochs, tokens, or restore semantics.

@@ -4,6 +4,10 @@
 **Inspected production:** `codex/core/canonical` at `0094febf7f97333d0653eaf9688fe1d24d73327f`.
 **Disposition:** reviewed bounded source-extraction preparation; no production change. Readiness below takes effect only after independent PASS and architecture publication. Full CORE-F remains `WAIT_DEPENDENCY`; CORE-X remains `DEFERRED`.
 
+## Current-source successor
+
+The [post-demographic closure assessment](CORE_F_CURRENT_OWNER_CLOSURE.md) refreshes this historical execution contract against promoted Core b2c2c0e. Demographic owners are now PROMOTED; the next bounded institution/claim package and remaining evidence gates supersede the old next-task wording. The final acceptance and authority/profile boundaries below remain in force.
+
 ## 1. Current facts and authoritative evidence
 
 Remote refs, source blobs, production State and the latest implementation review were inspected. The architecture checkout has older executable source: Master imports only the reviewed documentation delta into current Core, never this branch's executable tree. A stale local Core branch is not the execution baseline. No numbered-phase canonical or active implementation checkout is modified.

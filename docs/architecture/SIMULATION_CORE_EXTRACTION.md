@@ -11,6 +11,36 @@ implementation readiness does not itself start migration.
 Independent verdicts and exact reviewed refs: [review](SIMULATION_CORE_EXTRACTION_REVIEW.md).
 First bounded executable contract: [CORE-A Master handoff](SIMULATION_CORE_A_MASTER_HANDOFF.md).
 
+## CORE-F current owner closure and next package — 2026-10-15
+
+Current promoted Core is `b2c2c0e94c7a8dd9175a8db3fab4fb9d78dcfb2a`.
+Demographic owners are PROMOTED: retained results CoreValidation188/188 cold/warm,
+Unity3177/3177, focused owners17/17 and Smoke5/5. Earlier demographic-ready
+wording below is historical. The docs-only `fe1c5912` reconciliation covers its
+24 named operation cases; it is not complete writer/revision/epoch proof.
+
+[Current closure findings and DAG](CORE_F_CURRENT_OWNER_CLOSURE.md)
+maps all89 family definitions (76 Required/13 ExplicitlyEmpty), actual owner and
+provider types/witnesses, owner members and169 public Runtime roots. Complete
+mapped inventory does not mean complete admitted-writer/alias/epoch proof.
+The current selected role/key/alias shape remains61+22*N+U+P+4*C. Concrete
+unregistered/deferred/profile-specific facades and the conditional expedition
+entry retain their explicit evidence limits; arbitrary external raw Store
+mutation is outside the admitted contract.
+
+After independent PASS and this architecture publication, [institution/claim Master handoff](CORE_F_INSTITUTION_CLAIM_OWNER_MASTER_HANDOFF.md)
+is **READY_FOR_IMPLEMENTATION**: seven source files, three owners, six Required
+families, same Runtime guard, exact access bridges and restored-only Office/Claim
+revision/order preservation after existing validation. No new checkpoint ID.
+
+Remaining DAG: selected owner/definition and rooted writer closure → shared
+runtime/private restore/application → detached net8 host plus v2 image/store
+integration → actual new-process T/T+1/T+2 → Unity/.NET behavior parity → CORE-F
+acceptance. Existing Unity P12 lifecycle is reused; it does not prove .NET
+continuation. Full CORE-F stays **WAIT_DEPENDENCY**, CORE-X **DEFERRED**. Common
+Runtime/P12/SDK/asmdef integration remains serialized; isolated owner work and
+remaining technical preparation can proceed independently. No profile expansion,
+closed-phase reopening, production implementation or cross-host save claim.
 ## CORE-F closure-oriented owner and host path — 2026-10-15
 
 Production Core `0094febf7f97333d0653eaf9688fe1d24d73327f` has A–E,

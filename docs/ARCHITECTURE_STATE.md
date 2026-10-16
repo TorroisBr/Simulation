@@ -655,3 +655,34 @@ semantics. No Unity-only result proves .NET continuation; no cross-host save
 promise or unrelated numbered-phase dependency follows. No production change.
 
 Independent [CORE-F closure-path review](architecture/CORE_F_CLOSURE_PATH_REVIEW.md) passed exact candidate cb70ec79ff6dc4e98da08e026cc73940d204ed00 against architecture4b69e435 and Core0094febf. Demographic owners are PASS / READY_FOR_IMPLEMENTATION after this architecture publication; runtime/restore and fullF remain WAIT_DEPENDENCY. The review-record successor changes no contract, graph input, production source or numbered canonical.
+
+## CORE-F current owner closure and next package — 2026-10-15
+
+Current promoted Core is `b2c2c0e94c7a8dd9175a8db3fab4fb9d78dcfb2a`.
+Demographic owners are PROMOTED: retained results CoreValidation188/188 cold/warm,
+Unity3177/3177, focused owners17/17 and Smoke5/5. Earlier demographic-ready
+wording below is historical. The docs-only `fe1c5912` reconciliation covers its
+24 named operation cases; it is not complete writer/revision/epoch proof.
+
+[Current closure findings and DAG](architecture/CORE_F_CURRENT_OWNER_CLOSURE.md)
+maps all89 family definitions (76 Required/13 ExplicitlyEmpty), actual owner and
+provider types/witnesses, owner members and169 public Runtime roots. Complete
+mapped inventory does not mean complete admitted-writer/alias/epoch proof.
+The current selected role/key/alias shape remains61+22*N+U+P+4*C. Concrete
+unregistered/deferred/profile-specific facades and the conditional expedition
+entry retain their explicit evidence limits; arbitrary external raw Store
+mutation is outside the admitted contract.
+
+After independent PASS and this architecture publication, [institution/claim Master handoff](architecture/CORE_F_INSTITUTION_CLAIM_OWNER_MASTER_HANDOFF.md)
+is **READY_FOR_IMPLEMENTATION**: seven source files, three owners, six Required
+families, same Runtime guard, exact access bridges and restored-only Office/Claim
+revision/order preservation after existing validation. No new checkpoint ID.
+
+Remaining DAG: selected owner/definition and rooted writer closure → shared
+runtime/private restore/application → detached net8 host plus v2 image/store
+integration → actual new-process T/T+1/T+2 → Unity/.NET behavior parity → CORE-F
+acceptance. Existing Unity P12 lifecycle is reused; it does not prove .NET
+continuation. Full CORE-F stays **WAIT_DEPENDENCY**, CORE-X **DEFERRED**. Common
+Runtime/P12/SDK/asmdef integration remains serialized; isolated owner work and
+remaining technical preparation can proceed independently. No profile expansion,
+closed-phase reopening, production implementation or cross-host save claim.
