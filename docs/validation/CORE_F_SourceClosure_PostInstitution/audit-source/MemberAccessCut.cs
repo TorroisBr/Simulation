@@ -109,20 +109,119 @@ foreach (string relativePath in relativeSources)
 Console.WriteLine($"pinned_source_blobs={currentSourceBlobs.Count} compiler_response=PASS");
 
 var metadataReferences = new List<MetadataReference>();
+var metadataReferencePaths = new List<(string Path, MetadataReferenceProperties Properties)>();
 foreach (CommandLineReference reference in parsed.MetadataReferences)
 {
     string path = Resolve(reference.Reference);
     if (File.Exists(path))
+    {
         metadataReferences.Add(MetadataReference.CreateFromFile(path, reference.Properties));
+        metadataReferencePaths.Add((path, reference.Properties));
+    }
 }
 
 var trees = sourcePaths.Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), parsed.ParseOptions, path)).ToArray();
 var compilation = CSharpCompilation.Create(parsed.CompilationName, trees, metadataReferences, parsed.CompilationOptions);
 Console.WriteLine($"semantic_model_ready sources={trees.Length} metadata_references={metadataReferences.Count}");
 
+// Resolve metadata-bound Simulation.Core symbols back to the exact source declarations
+// in the promoted Core project. The retained call-site map is historical evidence;
+// this source-backed projection is generated separately and fails closed if a Core
+// reference cannot be joined to one of the 53 pinned Core compile inputs.
+var coreInputLines = File.ReadAllLines(Path.Combine(Path.GetDirectoryName(sourceInventoryPath)!, "core-build-inputs.csv"));
+var coreInputHeader = ParseCsv(coreInputLines[0]);
+int corePathColumn = coreInputHeader.IndexOf("source_path");
+int coreBlobColumn = coreInputHeader.IndexOf("git_blob");
+if (corePathColumn < 0 || coreBlobColumn < 0)
+    throw new InvalidDataException("Core compile-input inventory is missing required columns.");
+var coreSourcePaths = new List<string>();
+var coreSourceBlobs = new Dictionary<string, string>(StringComparer.Ordinal);
+foreach (string line in coreInputLines.Skip(1).Where(line => line.Length > 0))
+{
+    List<string> values = ParseCsv(line);
+    string relativePath = values[corePathColumn];
+    string expectedBlob = values[coreBlobColumn];
+    string path = Resolve(relativePath);
+    if (!File.Exists(path))
+        throw new FileNotFoundException("A pinned Core compile input is unavailable.");
+    string actualBlob = GitOutput(repositoryRoot, "hash-object", "--", relativePath);
+    if (!StringComparer.Ordinal.Equals(actualBlob, expectedBlob))
+        throw new InvalidOperationException("Current Core compile input differs from the pinned inventory: " + relativePath);
+    coreSourcePaths.Add(path);
+    coreSourceBlobs.Add(relativePath, actualBlob);
+}
+if (coreSourcePaths.Count != 53)
+    throw new InvalidDataException("The selected Core source inventory must contain exactly 53 compile inputs.");
+
+string[] coreAssemblyReferencePaths = metadataReferencePaths
+    .Where(reference => !StringComparer.OrdinalIgnoreCase.Equals(
+        Path.GetFileNameWithoutExtension(reference.Path), "Simulation.Core"))
+    .Select(reference => reference.Path)
+    .ToArray();
+var coreReferences = coreAssemblyReferencePaths
+    .Select(path => MetadataReference.CreateFromFile(path))
+    .ToArray();
+var coreTrees = coreSourcePaths
+    .Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), parsed.ParseOptions, path))
+    .ToArray();
+var coreCompilation = CSharpCompilation.Create("Simulation.Core", coreTrees, coreReferences, parsed.CompilationOptions);
+var coreErrors = coreCompilation.GetDiagnostics()
+    .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+    .ToArray();
+if (coreErrors.Length > 0)
+    throw new InvalidOperationException("Pinned Core source compilation failed: " + string.Join(" | ", coreErrors.Take(8).Select(diagnostic => diagnostic.ToString())));
+
+string DefinitionKey(ISymbol symbol)
+{
+    ISymbol definition = symbol.OriginalDefinition;
+    return definition.Kind + "\0" + definition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+}
+
+var coreDeclarations = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+var coreTypeDeclarations = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+for (int treeIndex = 0; treeIndex < coreTrees.Length; treeIndex++)
+{
+    SemanticModel coreModel = coreCompilation.GetSemanticModel(coreTrees[treeIndex]);
+    foreach (SyntaxNode node in coreTrees[treeIndex].GetRoot().DescendantNodesAndSelf())
+    {
+        ISymbol? declared = coreModel.GetDeclaredSymbol(node);
+        if (declared is null || !SymbolEqualityComparer.Default.Equals(declared.ContainingAssembly, coreCompilation.Assembly))
+            continue;
+        string key = DefinitionKey(declared);
+        if (!coreDeclarations.TryGetValue(key, out SortedSet<string>? sites))
+        {
+            sites = new SortedSet<string>(StringComparer.Ordinal);
+            coreDeclarations.Add(key, sites);
+        }
+        foreach (SyntaxReference declaration in declared.DeclaringSyntaxReferences)
+        {
+            string relativePath = Rel(repositoryRoot, declaration.SyntaxTree.FilePath);
+            int line = declaration.SyntaxTree.GetLineSpan(declaration.Span).StartLinePosition.Line + 1;
+            sites.Add(relativePath + ":" + line.ToString(CultureInfo.InvariantCulture));
+        }
+        if (declared is INamedTypeSymbol namedType)
+        {
+            string typeKey = namedType.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            if (!coreTypeDeclarations.TryGetValue(typeKey, out SortedSet<string>? typeSites))
+            {
+                typeSites = new SortedSet<string>(StringComparer.Ordinal);
+                coreTypeDeclarations.Add(typeKey, typeSites);
+            }
+            foreach (SyntaxReference declaration in namedType.DeclaringSyntaxReferences)
+            {
+                string relativePath = Rel(repositoryRoot, declaration.SyntaxTree.FilePath);
+                int line = declaration.SyntaxTree.GetLineSpan(declaration.Span).StartLinePosition.Line + 1;
+                typeSites.Add(relativePath + ":" + line.ToString(CultureInfo.InvariantCulture));
+            }
+        }
+    }
+}
+Console.WriteLine($"core_source_binding_ready sources={coreTrees.Length} metadata_references={coreReferences.Length} declarations={coreDeclarations.Count} compile_errors=0");
+
 var rows = new Dictionary<string, string[]>(StringComparer.Ordinal);
 var corePairs = new HashSet<string>(StringComparer.Ordinal);
 var unityPairs = new HashSet<string>(StringComparer.Ordinal);
+var unresolvedCoreSymbols = new SortedDictionary<string, string>(StringComparer.Ordinal);
 
 void AddReference(int treeIndex, SemanticModel model, SyntaxNode node, ISymbol? symbol, string referenceKind)
 {
@@ -147,12 +246,54 @@ void AddReference(int treeIndex, SemanticModel model, SyntaxNode node, ISymbol? 
     FileLinePositionSpan lineSpan = node.GetLocation().GetLineSpan();
     string declarationPath = string.Empty;
     string declarationLine = string.Empty;
+    string declarationSites = string.Empty;
+    string declarationBindingKind = string.Empty;
+    string containingSymbol = symbol.ContainingType?.OriginalDefinition
+        .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ?? string.Empty;
     SyntaxReference? declaration = symbol.DeclaringSyntaxReferences.FirstOrDefault();
     if (declaration is not null && declaration.SyntaxTree.FilePath.Length > 0)
     {
         declarationPath = Rel(repositoryRoot, declaration.SyntaxTree.FilePath);
         declarationLine = (declaration.SyntaxTree.GetLineSpan(declaration.Span).StartLinePosition.Line + 1)
             .ToString(CultureInfo.InvariantCulture);
+    }
+    if (isCore)
+    {
+        string definitionKey = DefinitionKey(symbol);
+        if (coreDeclarations.TryGetValue(definitionKey, out SortedSet<string>? sites) && sites.Count > 0)
+        {
+            declarationSites = string.Join("|", sites);
+            declarationBindingKind = "member-declaration";
+            int separator = sites.Min!.LastIndexOf(':');
+            declarationPath = sites.Min[..separator];
+            declarationLine = sites.Min[(separator + 1)..];
+        }
+        else if (symbol is IMethodSymbol implicitConstructor
+            && implicitConstructor.MethodKind == MethodKind.Constructor
+            && implicitConstructor.DeclaringSyntaxReferences.Length == 0
+            && implicitConstructor.ContainingType is not null
+            && coreTypeDeclarations.TryGetValue(
+                implicitConstructor.ContainingType.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                out SortedSet<string>? typeSites)
+            && typeSites.Count > 0)
+        {
+            declarationSites = string.Join("|", typeSites);
+            declarationBindingKind = "implicit-constructor-from-containing-type";
+            int separator = typeSites.Min!.LastIndexOf(':');
+            declarationPath = typeSites.Min[..separator];
+            declarationLine = typeSites.Min[(separator + 1)..];
+        }
+        else
+        {
+            unresolvedCoreSymbols.TryAdd(definitionKey, string.Join(" | ",
+                "kind=" + symbol.Kind,
+                "display=" + symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                "metadata=" + symbol.MetadataName,
+                "container=" + (symbol.ContainingType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ?? string.Empty),
+                "assembly=" + assembly,
+                "caller=" + callerDisplay,
+                "site=" + sourcePath + ":" + (lineSpan.StartLinePosition.Line + 1).ToString(CultureInfo.InvariantCulture)));
+        }
     }
 
     rows.Add(key, new[]
@@ -172,10 +313,13 @@ void AddReference(int treeIndex, SemanticModel model, SyntaxNode node, ISymbol? 
         symbol.Kind.ToString(),
         display,
         symbol.DeclaredAccessibility.ToString(),
+        containingSymbol,
         assembly,
         targetNamespace,
         declarationPath,
         declarationLine,
+        declarationSites,
+        declarationBindingKind,
         referenceKind
     });
 
@@ -201,6 +345,10 @@ for (int treeIndex = 0; treeIndex < trees.Length; treeIndex++)
 }
 Console.WriteLine($"semantic_projection_complete unique_callsite_rows={rows.Count}");
 
+if (unresolvedCoreSymbols.Count > 0)
+    throw new InvalidOperationException("Some Simulation.Core call-site symbols do not bind to pinned source declarations: " +
+        string.Join(" || ", unresolvedCoreSymbols.Take(20).Select(pair => pair.Key.Replace("\0", " ") + " => " + pair.Value)));
+
 string oldCorePairsPath = Path.Combine(Path.GetDirectoryName(sourceInventoryPath)!, "selected-core-member-access.csv");
 var oldCorePairs = File.ReadAllLines(oldCorePairsPath).Skip(1).Where(line => line.Length > 0)
     .Select(ParseCsv).Select(values => values[0] + "\0" + values[6]).ToHashSet(StringComparer.Ordinal);
@@ -217,7 +365,8 @@ string[] columns =
     "target_family", "source_path", "source_blob", "source_scc", "runtime_closure", "restore_closure",
     "source_line", "source_span_start", "source_node_kind", "caller_type", "caller_member",
     "caller_accessibility", "target_symbol_kind", "target_symbol", "target_accessibility",
-    "target_assembly", "target_namespace", "declaration_path", "declaration_line", "reference_kind"
+    "target_containing_symbol", "target_assembly", "target_namespace", "declaration_path",
+    "declaration_line", "declaration_sites", "declaration_binding_kind", "reference_kind"
 };
 string csvPath = Path.Combine(outputDirectory, "selected-member-access-sites.csv");
 using (var writer = new StreamWriter(csvPath, false, new UTF8Encoding(false)))
@@ -250,16 +399,17 @@ File.WriteAllText(manifestPath,
     $"Source commit: {PinnedSourceCommit}; source tree: {PinnedSourceTree}.\n" +
     $"Unity compiler response: {relativeResponse}; SHA-256 {responseHash}; {new FileInfo(responsePath).Length} bytes.\n" +
     $"Unity editor: {File.ReadAllText(Path.Combine(repositoryRoot, "ProjectSettings", "ProjectVersion.txt")).Split('\n')[0].Replace("m_EditorVersion: ", string.Empty).Trim()}.\n" +
-    $"Roslyn semantic projection: {trees.Length} source files; {metadataReferences.Count} resolved metadata references; the editor's official compile/test result is the compilation authority.\n" +
+    $"Roslyn semantic projection: {trees.Length} Unity source files; {metadataReferences.Count} resolved metadata references; the editor's official compile/test result is the Unity compilation authority.\n" +
+    $"Core source declaration binding: {coreTrees.Length} exact compile inputs; {coreReferences.Length} metadata references excluding the prior Simulation.Core binary; compile errors 0; {coreDeclarations.Count} declared source symbols; all selected Simulation.Core call sites must resolve.\n" +
     $"Closure inventory: {runtimeSources} runtime sources; {restoreSources} restore sources.\n" +
     $"Exact prior symbol-pair reconciliation: Simulation.Core {corePairs.Count}/{oldCorePairs.Count}; UnityEngine {unityPairs.Count}/{oldUnityPairs.Count}.\n" +
     $"Call-site rows: Simulation.Core {coreRows}; UnityEngine {unityRows}; total {rows.Count}.\n" +
     $"CSV.GZ: selected-member-access-sites.csv.gz; SHA-256 {compressedHash}; {compressedBytes} bytes.\n" +
     $"Uncompressed CSV: SHA-256 {csvHash}; {csvBytes.Length} bytes.\n" +
-    "Raw compiler response and machine paths are not emitted. Call-site rows identify the concrete caller member, access level, symbol, target assembly, declaration location, and runtime/restore closure. They are evidence for the approved same-assembly/Unity-adapter cut, not a new public API.\n",
+    "Raw compiler response and machine paths are not emitted. Call-site rows identify the concrete caller member, access level, symbol, target containing type, target assembly, exact source declaration sites for Simulation.Core, and runtime/restore closure. Implicit Core constructors bind to their declaring type location and are labeled; UnityEngine metadata declarations remain external by design. These are evidence for the approved same-assembly/Unity-adapter cut, not a new public API.\n",
     new UTF8Encoding(false));
 
-Console.WriteLine($"core_pairs={corePairs.Count} unity_pairs={unityPairs.Count} core_callsites={coreRows} unity_callsites={unityRows} total_callsites={rows.Count} csv_sha256={csvHash} gzip_sha256={compressedHash} gzip_bytes={compressedBytes}");
+Console.WriteLine($"core_pairs={corePairs.Count} unity_pairs={unityPairs.Count} core_callsites={coreRows} unity_callsites={unityRows} total_callsites={rows.Count} unresolved_core_declarations={unresolvedCoreSymbols.Count} csv_sha256={csvHash} gzip_sha256={compressedHash} gzip_bytes={compressedBytes}");
 
 static string GitOutput(string workingDirectory, params string[] arguments)
 {

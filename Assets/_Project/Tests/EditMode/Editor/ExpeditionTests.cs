@@ -608,6 +608,10 @@ public sealed class ExpeditionTests
         ExpeditionSystem system = CreateSystem(fixture);
 
         Assert.That(system.TryStartExpedition(null, context.ActionContext, out _), Is.False);
+        ExplorableSiteRuntime foreignSite = new ExplorableSiteRuntime(
+            fixture.Site.RuntimeId, fixture.Site.Definition, fixture.Site.Location, "foreign-site-instance");
+        Assert.That(system.TryStartExpedition(foreignSite, context.ActionContext, out _), Is.False,
+            "An Expedition target must be the exact registered World Truth object, not merely reuse its runtime ID.");
         Assert.That(system.TryStartExpedition(fixture.Site, new ActionExecutionContext(
             "expedition",
             context.ActionContext.Participants,

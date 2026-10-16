@@ -12,7 +12,7 @@ using UnityEngine;
 /// Exercises the accepted synthetic P12-G political binding source without
 /// adding a Daily-v1 political writer or changing the authored bootstrap.
 /// </summary>
-public sealed class P12GPoliticalBindingRestoreTests
+public sealed partial class P12GPoliticalBindingRestoreTests
 {
     private const string DailyConfigPath = "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset";
     private const string DecisionIdValue = "p12g-fixture-political-decision";
@@ -386,7 +386,7 @@ public sealed class P12GPoliticalBindingRestoreTests
         Assert.That(diagnostic, Does.Contain("source").IgnoreCase);
     }
 
-    private AnchorFixture CreateAnchorFixture(string objectName)
+    internal AnchorFixture CreateAnchorFixture(string objectName)
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(DailyConfigPath);
         Assert.That(config, Is.Not.Null, "The accepted P12 Daily-v1 config must be present.");
@@ -422,11 +422,12 @@ public sealed class P12GPoliticalBindingRestoreTests
         return new AnchorFixture(bootstrap, config, composition, runtime, normalContext, anchorToken, identityRegistry);
     }
 
-    private SyntheticSession CreateSyntheticSession(
+    internal SyntheticSession CreateSyntheticSession(
         AnchorFixture anchor,
         string objectName,
         bool seedPoliticalOwners = true,
-        bool restoredContext = true)
+        bool restoredContext = true,
+        Action<P12DDailyV1OwnerPackage, P12EDailyV1OwnerPackage, P12FDailyV1OwnerPackage> seedAdditionalOwners = null)
     {
         SimulationConfigData config = anchor.Configuration;
         SimulationRuntime anchorRuntime = anchor.Runtime;
@@ -597,6 +598,10 @@ public sealed class P12GPoliticalBindingRestoreTests
             Assert.That(stagedE.PoliticalDecisions.Revision, Is.EqualTo(1L));
             Assert.That(stagedF.PoliticalKnowledge.Revision, Is.EqualTo(2L));
         }
+
+        // Qualification fixtures may populate already-staged owners here, before
+        // the unpublished graph is composed or any owner is admitted to Runtime.
+        seedAdditionalOwners?.Invoke(stagedD, stagedE, stagedF);
 
         SimulationRuntimeAdmissionContext sessionContext = restoredContext
             ? anchor.NormalContext.CreateRestoredContinuationContext()
@@ -1093,7 +1098,7 @@ public sealed class P12GPoliticalBindingRestoreTests
         Assert.That(row.OwnerInstanceIdentity, Is.SameAs(owner), sectionId);
     }
 
-    private static void AssertOwnerVectorFactsEqual(
+    internal static void AssertOwnerVectorFactsEqual(
         IReadOnlyList<OwnerSectionCensusSnapshot> left,
         IReadOnlyList<OwnerSectionCensusSnapshot> right)
     {
@@ -1134,7 +1139,7 @@ public sealed class P12GPoliticalBindingRestoreTests
         }
     }
 
-    private static void AssertDailyV1Parity(
+    internal static void AssertDailyV1Parity(
         SimulationActiveSession expected,
         DailyCaptureEligibilityToken expectedToken,
         SimulationActiveSession actual,
@@ -2817,7 +2822,7 @@ public sealed class P12GPoliticalBindingRestoreTests
         }
     }
 
-    private static DailyCaptureEligibilityToken GetCompletedToken(SimulationRuntime runtime)
+    internal static DailyCaptureEligibilityToken GetCompletedToken(SimulationRuntime runtime)
     {
         Assert.That(runtime.TryGetCompletedDailyCaptureToken(
             out DailyCaptureEligibilityToken token,
@@ -2842,7 +2847,7 @@ public sealed class P12GPoliticalBindingRestoreTests
         field.SetValue(target, value);
     }
 
-    private sealed class SyntheticSession
+    internal sealed class SyntheticSession
     {
         internal AnchorFixture Anchor { get; }
         internal SimulationActiveSession Session { get; }
@@ -2863,7 +2868,7 @@ public sealed class P12GPoliticalBindingRestoreTests
         }
     }
 
-    private sealed class AnchorFixture
+    internal sealed class AnchorFixture
     {
         internal TesteSimulacao Bootstrap { get; }
         internal SimulationConfigData Configuration { get; }

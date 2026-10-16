@@ -797,6 +797,32 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         Assert.That(f, Is.Null);
         Assert.That(failure, Is.EqualTo(P12DNpcRootOwnerSnapshotFailure.InvalidProfileExclusion));
     }
+
+    [Test]
+    public void Capture_RejectsDailyV1LocalTopologyConnectionKnowledge()
+    {
+        NpcRuntime npc = new NpcRuntime("p12d-npc-local-connection-excluded",
+            SimulationTestFactory.CreateNpc("p12d-npc-local-connection-excluded-definition"));
+        Assert.That(npc.LocalTopologyKnowledge.RecordPlaceObservation(new LocalPlaceKnowledgeObservation(
+            npc.RuntimeId, "p12d-excluded-connection-origin", null, "p12d-place-type", "Origin", true,
+            0L, 0L, LocalTopologyKnowledgeSource.DirectObservation)), Is.True);
+        Assert.That(npc.LocalTopologyKnowledge.RecordPlaceObservation(new LocalPlaceKnowledgeObservation(
+            npc.RuntimeId, "p12d-excluded-connection-destination", null, "p12d-place-type", "Destination", true,
+            0L, 0L, LocalTopologyKnowledgeSource.DirectObservation)), Is.True);
+        Assert.That(npc.LocalTopologyKnowledge.RecordConnectionObservation(new LocalConnectionKnowledgeObservation(
+            npc.RuntimeId, "p12d-excluded-local-connection", "p12d-excluded-connection-origin",
+            "p12d-excluded-connection-destination", 1f, "p12d-connection-type", 0L, 0L,
+            LocalTopologyKnowledgeSource.DirectObservation)), Is.True);
+        DailyFixture fixture = CreateDailyFixture(null, npc);
+        DailyCaptureEligibilityToken token = CompleteDailyBoundary(fixture.Runtime);
+
+        Assert.That(P12DNpcRootOwnerSnapshot.TryCapture(fixture.Runtime, token, new object(), token.OwnerSections,
+            out P12DNpcDProjection d, out P12DNpcFProjection f,
+            out P12DNpcRootOwnerSnapshotFailure failure), Is.False);
+        Assert.That(d, Is.Null);
+        Assert.That(f, Is.Null);
+        Assert.That(failure, Is.EqualTo(P12DNpcRootOwnerSnapshotFailure.InvalidProfileExclusion));
+    }
     [Test]
     public void Stage_RejectsDanglingPersonAndMismatchedDestinationWithoutPublication()
     {
