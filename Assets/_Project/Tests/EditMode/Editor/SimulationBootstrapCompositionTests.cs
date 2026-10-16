@@ -1210,6 +1210,20 @@ public sealed class SimulationBootstrapCompositionTests
                 Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(typedOwners[sectionIndex]));
                 Assert.That(witness.Cardinality, Is.EqualTo(expectedCardinalities[sectionIndex]));
                 Assert.That(witness.Revision, Is.EqualTo(expectedRevisions[sectionIndex]));
+                if (sectionIndex < 7)
+                {
+                    // These Required owners have no producer in the selected authored Daily-v1
+                    // admission path. Assert only this initial profile boundary; restored and
+                    // later runtime states may legitimately carry populated owner payloads.
+                    Assert.That(expectedCardinalities[sectionIndex], Is.Zero,
+                        knowledgeSectionPrefixes[sectionIndex] + " starts with exact-zero cardinality in the selected Daily-v1 profile.");
+                    Assert.That(expectedRevisions[sectionIndex], Is.Zero,
+                        knowledgeSectionPrefixes[sectionIndex] + " starts with exact-zero revision in the selected Daily-v1 profile.");
+                    Assert.That(witness.Cardinality, Is.Zero,
+                        knowledgeSectionPrefixes[sectionIndex] + " census preserves the exact-zero selected-profile baseline.");
+                    Assert.That(witness.Revision, Is.Zero,
+                        knowledgeSectionPrefixes[sectionIndex] + " census preserves the exact-zero selected-profile revision.");
+                }
             }
 
             bool isTravelingMerchant = npc.NpcData != null
