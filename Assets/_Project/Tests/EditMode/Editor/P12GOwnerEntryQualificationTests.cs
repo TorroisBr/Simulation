@@ -108,6 +108,20 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     out _, out P12AResult aliasResult), Is.False,
                 "A changed shared ArmedForce alias must fail the authoritative image census before encoding.");
             Assert.That(aliasResult?.Code, Is.EqualTo(P12AResultCode.OwnerGraphRejected));
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
+                    rejectedImage,
+                    rejectedImage.Header.Compatibility,
+                    anchor.Configuration,
+                    anchor.Runtime.Configuration,
+                    anchor.Composition.Calendar,
+                    anchor.NormalContext,
+                    out SimulationActiveSession aliasRejected,
+                    out P12GDailyV1RestoreFailure aliasFailure,
+                    out string aliasDiagnostic),
+                Is.False, "The integrated G restore boundary must reject a split shared ArmedForce alias.");
+            Assert.That(aliasRejected, Is.Null);
+            Assert.That(aliasFailure, Is.EqualTo(P12GDailyV1RestoreFailure.SourceCaptureFailed));
+            Assert.That(aliasDiagnostic, Does.Contain("owner manifest"));
             Assert.That(source.Session.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True);
             Assert.That(CaptureTypedParitySignature(source.Session, sourceToken), Is.EqualTo(sourceSignature));
             Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(

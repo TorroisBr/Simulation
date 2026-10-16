@@ -799,7 +799,7 @@ public sealed class P12DNpcRootOwnerSnapshotTests
     }
 
     [Test]
-    public void Capture_RejectsDailyV1LocalTopologyConnectionKnowledge()
+    public void Capture_RejectsDailyV1LocalTopologyPlaceAndConnectionKnowledge()
     {
         NpcRuntime npc = new NpcRuntime("p12d-npc-local-connection-excluded",
             SimulationTestFactory.CreateNpc("p12d-npc-local-connection-excluded-definition"));
@@ -813,6 +813,8 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             npc.RuntimeId, "p12d-excluded-local-connection", "p12d-excluded-connection-origin",
             "p12d-excluded-connection-destination", 1f, "p12d-connection-type", 0L, 0L,
             LocalTopologyKnowledgeSource.DirectObservation)), Is.True);
+        Assert.That(npc.LocalTopologyKnowledge.PlaceObservations, Has.Count.EqualTo(2));
+        Assert.That(npc.LocalTopologyKnowledge.ConnectionObservations, Has.Count.EqualTo(1));
         DailyFixture fixture = CreateDailyFixture(null, npc);
         DailyCaptureEligibilityToken token = CompleteDailyBoundary(fixture.Runtime);
 
