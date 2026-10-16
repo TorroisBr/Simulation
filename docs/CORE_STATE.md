@@ -810,8 +810,8 @@ Accordingly, `CORE-F-Shared-DailyV1-Application-and-Host` remains
 The next authorized technical task is to finish the family-to-declaration,
 member, constructor, live-instance, writer/epoch, and restore-target mapping,
 then obtain independent review of that completed join before implementation
-readiness. No P12 profile, numbered Phase, or CORE-X status changes. No
-production or test source changed during this evidence refresh.
+readiness. No P12 profile, numbered Phase, or CORE-X status changes. At that
+earlier docs-only evidence refresh, no production or test source changed.
 
 ## CORE-F current selected-owner source/access closure audit — 2026-10-16
 
@@ -829,8 +829,9 @@ writer, and capture/target keys; 24 unique operation IDs; 1,660 source
 references across 142 paths with no unresolved blob; and a passing selected
 Daily-v1 live-owner identity assertion. That assertion compares every
 registered section ID with an independently assembled owner map and checks the
-exact live owner instance by reference identity. Existing exact-tip Unity
-validation remains applicable because production and test source are unchanged.
+exact live owner instance by reference identity. The earlier validation applied
+to the unchanged `ca55c3f` source/test tree at the time; the selected-profile
+test was subsequently strengthened and rerun as recorded below.
 
 The 89-family inventory/capture key joins, current source/blob anchors, and
 selected-profile section-to-live-owner identity are evidenced. This does not
@@ -847,19 +848,100 @@ or invented operation. No producer or false epoch claim is added.
 The specific typed-definition/source gap is current and executable: the
 selected Unity startup constructs `SimulationRuntime` from Unity-side
 `CityRuntime`/`NpcRuntime` and authoring data, while the existing
-`DailyV1DefinitionAdapter` creates `DailyV1EffectiveDefinitions` but is not
-called by that startup path. Runtime owner constructors continue to use
+`DailyV1DefinitionAdapter` is called from `SimulationGenesisPipeline` to create
+`DailyV1EffectiveDefinitions` for profile fingerprinting, but the selected
+startup does not pass that graph to `SimulationRuntime` or owner constructors.
+Runtime owner constructors continue to use
 Unity-dependent model/serialization members. The refreshed compile inventory
 contains 315 Unity sources, 53 Core compile inputs, 220 runtime and 289 restore
 source files; its selected projections contain 2,582 Core symbol references
-(830 distinct symbols) and 288 Unity symbol references in 67 files. The exact
-Unity/Core symbol CSVs identify source/symbol pairs but do not yet bind every
-runtime callsite and access to an approved host adapter/shared helper.
+(830 distinct symbols) and 288 Unity symbol references in 67 files. A new
+Roslyn call-site map binds all 42,625 selected Core/Unity symbol references to
+source line, caller member/accessibility and declaration where available. Its
+projection exactly reconciles 2,582 Core and 288 Unity source/symbol pairs.
+The remaining gap is to assign each callsite in split sources to its approved
+same-assembly Core member, Unity adapter, or compatibility-helper destination.
 
-No shared runtime/restore `READY_FOR_IMPLEMENTATION` claim is made. The next
-bounded work remains within the approved runtime/restore design: close the
-no-writer profile dispositions without inventing gameplay, bind typed
-definition nodes to the exact selected runtime-owner constructors, and
-classify the Unity null/numeric/serialization member cut plus Core internal
-access. No architecture redesign, P12 scope change, or numbered Phase status
-change is introduced. P12 and other Core/Phase States remain unchanged.
+The final call-site integrity/privacy check reproduced 42,625 rows and the
+recorded raw SHA-256 with no workstation/home path or credential-like marker.
+Tool source SHA-256 is
+`2931dab3ea6e16fa00d95fae589c67f7f4f7a8873aab746b41b2978b94fc57f7`, project
+SHA-256 is
+`ba5fb505ce9124c1cbc443051a2d7f06fcf940d13cee4b1639f85c8def67f41c`, and
+manifest SHA-256 is
+`c9eaf9b89144d58618b22f2d6d8651547d9d34f63be5de8f991240dc075effad`. The
+compressed map SHA-256 is
+`2898b762de97b6134ece33f8cdad035a1aa4f30f3026852850b1913e38919e25`; the
+decompressed CSV SHA-256 is
+`2702d6d14e33fb7da6a56beda6cdecdbf71f1559fc951e48b2ae975536305d47`.
+
+No shared runtime/restore `READY_FOR_IMPLEMENTATION` claim is made. The
+approved entry rule requires a writer/epoch path for every admitted owner; 18
+selected Required families currently lack a normal Daily-v1 writer, so their
+exact-zero baseline evidence does not satisfy that dependency. Do not invent
+producers or reclassify owners. Remaining bounded work is to complete the 89
+family-to-member/constructor/capture/restore joins, assign the 67 split files'
+member-access destinations, and bind typed definitions to selected runtime
+constructors. No P12 scope or numbered Phase status changes are introduced.
+
+### CORE-F selected-profile evidence update — candidate `cb31d4d`
+
+Core canonical remains `1998974515b6357c308d861fb608f2db5071a63a`; this is a
+local source-closure candidate, not a Core canonical promotion. Production
+source remains `ca55c3f9fa4d9c99e6a47a25adbbd1956ea04a1d`. The only
+production/test-source delta is an EditMode assertion in
+`SimulationBootstrapCompositionTests.cs`, committed at
+`cb31d4d6f777a78af25670e3e6d43f01578b8809` (candidate tree
+`07a5a406985f83a672007a82fe126048dd30b26d`). No production behavior changed.
+
+The selected `UnityBootstrap-Daily-v1` admission test now asserts exact-zero
+cardinality and revision at the initial profile boundary for all seven Required
+per-NPC site/local-topology/Adventure Intel views, alongside the existing exact
+live-owner identity checks. Those families remain Required and may contain
+nonzero restored/later payloads; the new baseline check is not a hard-zero
+restore rule or a writer/epoch claim. The source-join checker enforces these
+seven assertions. Current generator result: 89/89/89 owner keys, 24 operations,
+1,660 source references across 142 paths with zero unresolved blobs, live-owner
+identity PASS, and selected Required Knowledge zero-baseline PASS.
+
+Unity validation against the exact candidate tree passed: focused admission
+test 1/1; full EditMode 3,179/3,179; filtered Smoke 5/5. The full EditMode
+archive verified against its private run manifest and is stored in
+[`CORE_F_SourceClosure_PostInstitution/Evidence`](validation/CORE_F_SourceClosure_PostInstitution/Evidence).
+The full archive includes the selected-profile case and all five supported
+Smoke identities once each, all Passed. `git diff --check` passed, and the
+validation input snapshot was stable. Focused and filtered reports/logs remain
+in private local retention; no filtered result was edited or published.
+
+The initial exact-zero baseline is now executable for 17 Required families
+without a normal Daily-v1 writer (eight P16/P17 armed-force rows, two political
+rows, seven per-NPC Knowledge views). The Required Expedition row remains
+preserve-only, with no hard-zero claim. This closes an evidence gap but does not
+decide whether the existing profile baseline is an approved no-writer
+disposition under the runtime/restore entry criterion. The member-level
+constructor/access cut and typed-definition consumption gap also remain open;
+Shared Daily-v1 Runtime/Restore stays `WAIT_DEPENDENCY` and is not
+`READY_FOR_IMPLEMENTATION`.
+
+### CORE-F selected call-site access graph — current evidence
+
+The exact `Assembly-CSharp.rsp` hash matches the preserved Unity compiler
+response; all 315 production-source blobs match the pinned source inventory.
+The Roslyn output
+[`selected-member-access-sites.csv.gz`](validation/CORE_F_SourceClosure_PostInstitution/selected-member-access-sites.csv.gz)
+contains 42,625 selected call-site rows (39,305 Core; 3,320 Unity) and
+reconciles exactly to the 2,582 Core and 288 Unity file/symbol pairs. It names
+the source line, caller member/accessibility, referenced member/accessibility,
+and declaration path/line when available. Runtime/restore source inventory
+classifies 222 files for `CoreMove` and 67 for `SplitHostDomain`.
+
+This closes the member-level citation gap, but boundary assignment is still
+open for the 67 split files. The approved §14 design remains the rule: shared
+semantic members move together within Core; Unity calls remain in a thin
+adapter or use an already-approved host-neutral helper; public host access is
+only through `DailyV1Application`. The complete current join must also bind all
+89 owner rows to concrete owner members/constructors, mutation revision/epoch
+callbacks, capture/stage/hydrator targets, and the approved no-writer profile
+dispositions. Shared Daily-v1 Runtime/Restore therefore remains
+`WAIT_DEPENDENCY`; this evidence does not authorize source extraction or widen
+the public API.

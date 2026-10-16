@@ -1,0 +1,11 @@
+CORE-F selected runtime/restore member-access call-site inventory
+Source commit: ca55c3f9fa4d9c99e6a47a25adbbd1956ea04a1d; source tree: e0d3de22bdc7bcc16e16a925f6f8c38f6a6397a5.
+Unity compiler response: Bee/artifacts/1900b0aE.dag/Assembly-CSharp.rsp; SHA-256 1f490838bbb8443791f7ccd5eb856e98ae9c6993ca961517f345fbd37747c555; 60771 bytes.
+Unity editor: 6000.3.9f1.
+Roslyn semantic projection: 315 source files; 332 resolved metadata references; the editor's official compile/test result is the compilation authority.
+Closure inventory: 220 runtime sources; 289 restore sources.
+Exact prior symbol-pair reconciliation: Simulation.Core 2582/2582; UnityEngine 288/288.
+Call-site rows: Simulation.Core 39305; UnityEngine 3320; total 42625.
+CSV.GZ: selected-member-access-sites.csv.gz; SHA-256 2898b762de97b6134ece33f8cdad035a1aa4f30f3026852850b1913e38919e25; 416359 bytes.
+Uncompressed CSV: SHA-256 2702d6d14e33fb7da6a56beda6cdecdbf71f1559fc951e48b2ae975536305d47; 19270108 bytes.
+Raw compiler response and machine paths are not emitted. Call-site rows identify the concrete caller member, access level, symbol, target assembly, declaration location, and runtime/restore closure. They are evidence for the approved same-assembly/Unity-adapter cut, not a new public API.

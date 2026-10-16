@@ -67,3 +67,61 @@ private logs and temporary compiler outputs are not included.
   family, codec, and test anchors; historical validation records are retained.
 - `POST_INSTITUTION_OWNER_MEMBER_ACCESS_JOIN.md`: current live-owner identity
   closure, executable join checks, and exact remaining source/access blockers.
+
+## Current selected-profile revalidation
+
+The source graph above remains the preserved historical compiler snapshot. A
+later bounded test-only candidate, `cb31d4d6f777a78af25670e3e6d43f01578b8809`,
+adds executable initial cardinality/revision-zero assertions for the seven
+Required per-NPC site/local-topology/Adventure Intel Knowledge views in the
+selected Daily-v1 admission profile. It does not reclassify those rows as
+`ExplicitlyEmpty` or assert zero for restored/later runtime states. The refreshed
+owner join and current source/blob references are recorded in
+[`POST_INSTITUTION_OWNER_MEMBER_ACCESS_JOIN.md`](POST_INSTITUTION_OWNER_MEMBER_ACCESS_JOIN.md).
+
+The exact candidate passed the focused admission test (1/1), complete EditMode
+(3,179/3,179), and filtered Smoke (5/5), with stable inputs. The verified full
+EditMode package is
+[`core-f-owner-current-join-all-editmode-20261016.zip`](Evidence/core-f-owner-current-join-all-editmode-20261016.zip)
+with its adjacent manifest. Private original reports and logs remain in
+owner-only local evidence retention. The source-join generator now validates
+the seven exact-zero assertions as well as its existing 89-family/source-blob
+and live-owner identity checks.
+
+## Exact current member-access sites
+
+`audit-source/MemberAccessCut.cs` binds the pinned `Assembly-CSharp.rsp` and
+all 315 source blobs to the existing selected symbol projection. It emits
+[`selected-member-access-sites.csv.gz`](selected-member-access-sites.csv.gz), with
+42,625 source/member/access rows: 39,305 Core references and 3,320 Unity
+references. Every row records a repo-relative callsite, enclosing member and
+accessibility, target symbol/accessibility, declaration location when present,
+and runtime/restore closure. Its manifest records the exact compiler response,
+source tree, pair reconciliation and artifact hash. The source graph contains
+222 `CoreMove` and 67 `SplitHostDomain` files in the restore closure. Its
+adjacent manifest records compressed and uncompressed artifact identities.
+
+The callsite inventory closes the compiler symbol-to-source-member evidence;
+it does not itself choose a Core/Unity boundary for each caller. That remaining
+mapping follows the already-approved §14 rule: semantic members move together
+inside Core, the Unity host uses only `DailyV1Application`, and Unity-specific
+null/numeric/serialization behavior remains an adapter/helper concern. The
+exact remaining owner and access edges are in the join report.
+
+Artifact identity for the generated access map:
+
+- Generator `audit-source/MemberAccessCut.cs`: SHA-256
+  `2931dab3ea6e16fa00d95fae589c67f7f4f7a8873aab746b41b2978b94fc57f7`.
+- Project `audit-source/MemberAccessCut.csproj`: SHA-256
+  `ba5fb505ce9124c1cbc443051a2d7f06fcf940d13cee4b1639f85c8def67f41c`.
+- Manifest `selected-member-access-sites.manifest.txt`: SHA-256
+  `c9eaf9b89144d58618b22f2d6d8651547d9d34f63be5de8f991240dc075effad`.
+- Compressed map: SHA-256
+  `2898b762de97b6134ece33f8cdad035a1aa4f30f3026852850b1913e38919e25`;
+  decompressed CSV: SHA-256
+  `2702d6d14e33fb7da6a56beda6cdecdbf71f1559fc951e48b2ae975536305d47`.
+
+The final decompression check found 42,625 data rows and matched the manifest's
+raw hash. The output scan found no local workstation/home paths or
+credential-like markers. These are source/access inventory identities, not an
+implementation readiness claim.

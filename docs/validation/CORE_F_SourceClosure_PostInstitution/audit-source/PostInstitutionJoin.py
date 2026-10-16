@@ -15,7 +15,7 @@ import re
 import subprocess
 import sys
 
-SOURCE_COMMIT = "ca55c3f9fa4d9c99e6a47a25adbbd1956ea04a1d"
+SOURCE_COMMIT = "cb31d4d6f777a78af25670e3e6d43f01578b8809"
 PATH_RE = re.compile(r"(?:Assets|Packages|src|tests)/[A-Za-z0-9_./-]+\.cs")
 
 
@@ -128,6 +128,36 @@ def verify_live_owner_identity_assertion(repo: pathlib.Path) -> None:
         raise RuntimeError("Live-owner identity assertion is incomplete: " + ", ".join(missing))
 
 
+def verify_selected_profile_knowledge_zero_assertion(repo: pathlib.Path) -> None:
+    test_path = "Assets/_Project/Tests/EditMode/Editor/SimulationBootstrapCompositionTests.cs"
+    source = git_text(repo, test_path)
+    selected_profile = method_body(
+        source,
+        "public void SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne()",
+    )
+    required_fragments = (
+        '"p12f.explorable-site-knowledge/"',
+        '"p12f.local-topology-knowledge.places/"',
+        '"p12f.local-topology-knowledge.connections/"',
+        '"p12f.adventure-intel.opposition/"',
+        '"p12f.adventure-intel.notable-items/"',
+        '"p12f.adventure-intel.common-resources/"',
+        '"p12f.adventure-intel.access/"',
+        "if (sectionIndex < 7)",
+        "expectedCardinalities[sectionIndex], Is.Zero",
+        "expectedRevisions[sectionIndex], Is.Zero",
+        "witness.Cardinality, Is.Zero",
+        "witness.Revision, Is.Zero",
+        "later runtime states may legitimately carry populated owner payloads",
+    )
+    missing = [fragment for fragment in required_fragments if fragment not in selected_profile]
+    if missing:
+        raise RuntimeError(
+            "Selected-profile Required Knowledge exact-zero assertion is incomplete: "
+            + ", ".join(missing)
+        )
+
+
 def write_csv(path: pathlib.Path, columns: list[str], rows: list[dict[str, str]]) -> None:
     with path.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=columns, lineterminator="\n")
@@ -220,6 +250,7 @@ def main() -> int:
         owner_anchors,
     )
     verify_live_owner_identity_assertion(repo)
+    verify_selected_profile_knowledge_zero_assertion(repo)
 
     inventory_by_path = {row["source_path"]: row for row in inventory}
     core_by_path = {row["source_path"]: row for row in core_inputs}
@@ -396,7 +427,7 @@ def main() -> int:
         f"restore_sources={restore_sources} selected_core_access={len(selected_access)} "
         f"selected_unity_engine_access={len(selected_engine_access)} "
         f"current_owner_anchors={len(owner_anchors)} "
-        f"live_owner_identity=PASS"
+        f"live_owner_identity=PASS selected_required_knowledge_zero=PASS"
     )
     return 1 if unresolved else 0
 

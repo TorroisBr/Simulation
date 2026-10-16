@@ -14,7 +14,9 @@ validation artifacts and their historical source identities remain unchanged.
 | `p12f.political-knowledge.holders` codec case | The old crosswalk points to `P12ADRootOwnerCodecTests.cs`. | The actual codec case is `P12AContinuationCodecTests.PoliticalKnowledgeCodecPreservesTypedHoldersObservationsAndProvenance` at line 640, with encode/decode assertions in the same case. Test-source blob: `a484f7eaf0d2f163d4c5d3fcac743931576b1143`. |
 | `p12f.expeditions` encoder | The old crosswalk points to `TryEncodeTravelParties` at line 15. | The correct encoder is `P12AFCommitmentOwnerCodec.TryEncodeExpeditions` at line 104. Source blob: `63a2906f2021873a7a071f27b196e7a0fe8d6d44`. |
 | Fixed exact-empty composer case | The old matrix points to `P12AContinuationCodecTests.cs:874` for `DailyV1ImageComposerBuildsExactEmptyRowsAndRequiresCompleteOwnerSections`. | The current method is at line 1027 in test-source blob `a484f7eaf0d2f163d4c5d3fcac743931576b1143`. The exact-empty codec remains `P12AExactEmptyOwnerCodec.cs` blob `be988ae67d88ab477a949982378a7132b4886a26`. |
+| Seven per-NPC site/local-topology/Adventure Intel Knowledge baseline rows | The existing selected-profile census test matched the owner and witness values and verified owner identity but did not assert the initial baseline independently. | `SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne` now asserts source cardinality/revision and census cardinality/revision are all zero for the seven Required Knowledge prefixes at initial Daily-v1 admission. Test source commit `cb31d4d6f777a78af25670e3e6d43f01578b8809`, source blob `93b0c14c0089b7d1eeb8c37c9c355fc4ff9ee6da1766594a3ab20d749194a840`. The assertions are profile-bound; they do not recast roles or constrain restored/later values. |
 
-These are anchor repairs only. They do not change an owner role, invent a
-writer, assert exact-zero where the contract does not require it, or change any
-production/test source.
+The family/provider/codec anchor corrections preserve the historical matrices.
+The current selected-profile baseline addition changes only the EditMode test
+source; it does not change production behavior or an owner role, invent a
+writer, or constrain restored/later owner values.
