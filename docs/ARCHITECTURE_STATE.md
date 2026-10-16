@@ -686,3 +686,20 @@ continuation. Full CORE-F stays **WAIT_DEPENDENCY**, CORE-X **DEFERRED**. Common
 Runtime/P12/SDK/asmdef integration remains serialized; isolated owner work and
 remaining technical preparation can proceed independently. No profile expansion,
 closed-phase reopening, production implementation or cross-host save claim.
+
+### Independent review and publication provenance
+
+The [independent current-owner/package review](architecture/CORE_F_CURRENT_OWNER_CLOSURE_REVIEW.md)
+records PASS / READY_FOR_IMPLEMENTATION for substantive candidate
+`822aae7964a8bd78a02ccf9c0c714c9cc256dc35` against architecture base
+`a20978d2b61e07a4b131afbb3971aae346511acb` and promoted Core
+`b2c2c0e94c7a8dd9175a8db3fab4fb9d78dcfb2a`.
+The [documentation validation](architecture/CORE_F_CURRENT_OWNER_CLOSURE_VALIDATION.md)
+records source/ledger/hash/link/scope checks; no new runtime test result is claimed.
+This review-record successor adds no technical contract or executable input.
+Final exact-tip applicability, refreshed remote consistency and safe docs-only
+fast-forward remain the publication preflight. After publication the exact
+[institution/claim Master handoff](architecture/CORE_F_INSTITUTION_CLAIM_OWNER_MASTER_HANDOFF.md)
+is current and implementation-ready, subject to normal current-Core applicability
+and serialized hotspot ownership. Shared Application/Host and full CORE-F remain
+WAIT_DEPENDENCY; no extra product/architecture decision is introduced.
