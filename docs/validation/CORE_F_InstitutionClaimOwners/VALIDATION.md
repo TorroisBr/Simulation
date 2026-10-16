@@ -1,6 +1,6 @@
 # CORE-F Institution and Claim Owners — Validation
 
-## Candidate identity
+## Original implementation candidate (historical, before review corrections)
 
 - Canonical base: b2c2c0e94c7a8dd9175a8db3fab4fb9d78dcfb2a
 - Code candidate: 02b2ecdb21641cbcb5a34ab84a091bd0019eadac
@@ -8,7 +8,7 @@
 - Unity input snapshot: candidate commit/tree above; Unity 6000.3.9f1
 - .NET source snapshot: candidate commit/tree above; generated-dependency inventory stable
 
-## Validation results
+## Initial validation results (historical; not the final promotion evidence)
 
 ### Unity
 
@@ -48,9 +48,29 @@ The Smoke filter is an EditMode selection. No PlayMode result is claimed.
 - Unity archive integrity verification passed. The TRX package passed context-bound original-to-projection verification (originalComparisonVerified), with two entries and 188 tests in each cold/warm report.
 - Public archives contain normalized result XML only. Private runner manifests, raw logs, runtime traces, logger binary, and assembly/PDB retention remain in owner-only local evidence storage. Public evidence checks passed without local absolute paths or credential-like values. Original TRX files were not modified.
 
+## Exact-tip revalidation after independent review findings
+
+The review fixes are committed at `ca55c3f9fa4d9c99e6a47a25adbbd1956ea04a1d` (tree `e0d3de22bdc7bcc16e16a925f6f8c38f6a6397a5`), based on the implementation candidate above. The prior implementation and its validation remain historical evidence; this section records the final candidate evidence and is the applicable validation for promotion.
+
+The restore regression now starts from a successful Daily-v1 advance, captures the owner image, encodes and decodes it with the P12 continuation codec, and restores through `TryCreateRestoredSessionFromImage`. It checks target owner-vector recapture, C-F owner parity, the same-day closed office tenure and political-claim recognition history, and two later continuation boundaries. The extra public `InstitutionOfficeOwnerBridge.CreateTenureRecord` API was removed; the approved public `OfficeTenureRecord` constructor is used by the runtime clone and typed owner staging paths.
+
+### Final Unity validation
+
+- Unity `6000.3.9f1`; exact input commit/tree above.
+- Focused `P12GPoliticalBindingRestoreTests`: runner run `8a50e0ce3aa440dd896de1369bc6a446`, **11/11 passed**, with stable inputs. Its original filtered XML remains unchanged in protected local retention. The strict public packager rejects this filtered XML because the ancestor `Simulation` suite `testcasecount` describes full discovery; the final complete report below contains all 11 exact test identities and pass outcomes.
+- Full EditMode: runner run `a049ae0481be45489d9712e5aa4a24cc`, **3179/3179 passed**, 0 failed, skipped or inconclusive. The normalized package is [`core-f-institution-claim-owners-final-editmode.zip`](Evidence/core-f-institution-claim-owners-final-editmode.zip), 167,357 bytes, SHA-256 `003a5c391500e29e0bc78b1137539ffbdd2773f811711f530acab08749663a52`; manifest SHA-256 `5db0b31a01aa44cf427ea34ed3dbd292f0be49a0832793b0a3c40fec0e7d4c97`. Package verification passed against the protected runner manifest and binds the exact commit/tree.
+- Official filtered Smoke: runner run `7700e3bd41154ec58370c33fdf06945b`, **5/5 passed**, 0 failed, skipped or inconclusive, with stable inputs. The original report SHA-256 is `ecdff5d8b48e39647aa032dbc871d9e9ee9a2453686ca53e06422c0e90bc5d8b` (6,367 bytes) and remains unchanged in protected local retention. The public packager rejects the filtered report because its parent `Simulation` suite count reflects full discovery, so no separate normalized Smoke package is claimed. Each of the five exact Smoke identities and its `Passed` outcome occurs exactly once in the packaged full EditMode report: `GMConsolePlayModeSmokeTests.GmConsoleCanPreviewApplyAndRefreshObserver`, `GMConsolePlayModeSmokeTests.GmConsoleNaturalLanguageCanTranslatePreviewApplyAndRefreshObserver`, `WorldObserverPlayModeSmokeTests.ObserverSceneCanRenderAndSelectNode`, `WorldObserverReadModelTests.ObserverPrefabSmokeInitializesWithoutMissingReference`, and `WorldObserverVisualTests.ObserverPrefabSmokeHasNoMissingSerializedReferences`. No filtered XML was edited or reinterpreted.
+
+### Final .NET validation
+
+- CoreValidation `-SkipLab`, run `5d026bdb1d64473fb3d8b004ec8f3151`, exact source commit/tree above, no Unity `Library`: cold **188/188 passed** and warm **188/188 passed**.
+- The cold/warm TRX package is [`core-f-instclaim-final-dotnet-cold-warm.zip`](Evidence/core-f-instclaim-final-dotnet-cold-warm.zip), 85,744 bytes, SHA-256 `2b61e8e0b373b0f486dab2df74d011da95890fe62b7d8b5cfd46c8dc6c4a6166`; manifest SHA-256 `d12070bccffa3c272a208cbc83a6d494b7177cb504be4c8c0029be984d6ad12d`. Private context-bound verification passed with `originalComparisonVerified`; cold and warm reports remain separate.
+
+`git diff --check` passed for the review-fix implementation. The protected pre-existing ProjectSettings edits in the candidate worktree remain unstaged and untouched. The final Unity and .NET packages contain normalized results only; original reports and logs remain in their verified private retention. This validation does not claim CORE-F closure or authorize downstream owner/runtime composition work.
+
 ## Integrity and scope
 
 - git diff --check: **PASS**.
-- The candidate code/test source identity is 02b2ecdb21641cbcb5a34ab84a091bd0019eadac / fbf403849ea90e5b454ff90b0f406d823fafc919.
+- The original implementation code/test source identity was 02b2ecdb21641cbcb5a34ab84a091bd0019eadac / fbf403849ea90e5b454ff90b0f406d823fafc919. The final review-fix source identity and applicable validation are recorded above.
 - The pre-existing local ProjectSettings/EditorBuildSettings.asset, ProjectSettings/ProjectSettings.asset, and ProjectSettings/ShaderGraphSettings.asset changes remain unstaged and untouched. They are not part of the candidate commit.
 - This record validates only the approved CORE-F institution/claim/property-owner extraction. It does not claim CORE-F closure, full runtime extraction, a detached .NET host, or deterministic continuation.
