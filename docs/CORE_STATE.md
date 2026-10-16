@@ -832,8 +832,10 @@ registered section ID with an independently assembled owner map and checks the
 exact live owner instance by reference identity. Existing exact-tip Unity
 validation remains applicable because production and test source are unchanged.
 
-The complete owner instance and source-reference joins are now evidenced.
-Shared runtime/restore remains `WAIT_DEPENDENCY` because the member-level
+The 89-family inventory/capture key joins, current source/blob anchors, and
+selected-profile section-to-live-owner identity are evidenced. This does not
+close every runtime-member/constructor/access join. Shared runtime/restore
+remains `WAIT_DEPENDENCY` because the member-level
 compiler/access cut is still open and 18 Required owner families have no
 normal selected Daily-v1 writer or approved exact-empty disposition: eight
 P16/P17-gated armed-force/manpower/conflict/war/battle rows; the two political
