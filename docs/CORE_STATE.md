@@ -812,3 +812,52 @@ member, constructor, live-instance, writer/epoch, and restore-target mapping,
 then obtain independent review of that completed join before implementation
 readiness. No P12 profile, numbered Phase, or CORE-X status changes. No
 production or test source changed during this evidence refresh.
+
+## CORE-F current selected-owner source/access closure audit — 2026-10-16
+
+Core canonical remains `1998974515b6357c308d861fb608f2db5071a63a`; the
+production/test source identity is unchanged at `ca55c3f9fa4d9c99e6a47a25adbbd1956ea04a1d`
+(tree `e0d3de22bdc7bcc16e16a925f6f8c38f6a6397a5`). The current closure
+addendum and corrections are in
+[`CORE_F_SourceClosure_PostInstitution`](validation/CORE_F_SourceClosure_PostInstitution/POST_INSTITUTION_OWNER_MEMBER_ACCESS_JOIN.md).
+The historical owner matrices remain intact; the current 89-family section
+anchors are in `owner-current-source-anchors.csv`, and stale/wrong joins are
+corrected additively in `OWNER_CURRENT_JOIN_CORRECTIONS.md`.
+
+The refreshed executable evidence check reports 89 matching owner inventory,
+writer, and capture/target keys; 24 unique operation IDs; 1,660 source
+references across 142 paths with no unresolved blob; and a passing selected
+Daily-v1 live-owner identity assertion. That assertion compares every
+registered section ID with an independently assembled owner map and checks the
+exact live owner instance by reference identity. Existing exact-tip Unity
+validation remains applicable because production and test source are unchanged.
+
+The complete owner instance and source-reference joins are now evidenced.
+Shared runtime/restore remains `WAIT_DEPENDENCY` because the member-level
+compiler/access cut is still open and 18 Required owner families have no
+normal selected Daily-v1 writer or approved exact-empty disposition: eight
+P16/P17-gated armed-force/manpower/conflict/war/battle rows; the two political
+knowledge/decision rows whose only populated evidence is synthetic P12-G
+restore; seven per-NPC site/local-topology/adventure knowledge views; and the
+Expedition row, whose contract explicitly preserves payload without a hard-zero
+or invented operation. No producer or false epoch claim is added.
+
+The specific typed-definition/source gap is current and executable: the
+selected Unity startup constructs `SimulationRuntime` from Unity-side
+`CityRuntime`/`NpcRuntime` and authoring data, while the existing
+`DailyV1DefinitionAdapter` creates `DailyV1EffectiveDefinitions` but is not
+called by that startup path. Runtime owner constructors continue to use
+Unity-dependent model/serialization members. The refreshed compile inventory
+contains 315 Unity sources, 53 Core compile inputs, 220 runtime and 289 restore
+source files; its selected projections contain 2,582 Core symbol references
+(830 distinct symbols) and 288 Unity symbol references in 67 files. The exact
+Unity/Core symbol CSVs identify source/symbol pairs but do not yet bind every
+runtime callsite and access to an approved host adapter/shared helper.
+
+No shared runtime/restore `READY_FOR_IMPLEMENTATION` claim is made. The next
+bounded work remains within the approved runtime/restore design: close the
+no-writer profile dispositions without inventing gameplay, bind typed
+definition nodes to the exact selected runtime-owner constructors, and
+classify the Unity null/numeric/serialization member cut plus Core internal
+access. No architecture redesign, P12 scope change, or numbered Phase status
+change is introduced. P12 and other Core/Phase States remain unchanged.

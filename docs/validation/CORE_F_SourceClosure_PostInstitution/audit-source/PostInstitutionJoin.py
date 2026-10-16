@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections import Counter
 import csv
+from functools import lru_cache
 import pathlib
 import re
 import subprocess
@@ -23,6 +24,7 @@ def read_csv(path: pathlib.Path) -> list[dict[str, str]]:
         return list(csv.DictReader(stream))
 
 
+@lru_cache(maxsize=None)
 def git_blob(repo: pathlib.Path, path: str) -> str:
     result = subprocess.run(
         ["git", "-C", str(repo), "rev-parse", f"{SOURCE_COMMIT}:{path}"],
@@ -31,6 +33,99 @@ def git_blob(repo: pathlib.Path, path: str) -> str:
         check=False,
     )
     return result.stdout.strip() if result.returncode == 0 else ""
+
+
+@lru_cache(maxsize=None)
+def git_blob_at(repo: pathlib.Path, revision: str, path: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", f"{revision}:{path}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def git_text(repo: pathlib.Path, path: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo), "show", f"{SOURCE_COMMIT}:{path}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Cannot read pinned source {SOURCE_COMMIT}:{path}")
+    return result.stdout
+
+
+def method_body(source: str, signature: str) -> str:
+    start = source.find(signature)
+    if start < 0:
+        raise RuntimeError(f"Missing source method: {signature}")
+    open_brace = source.find("{", start)
+    if open_brace < 0:
+        raise RuntimeError(f"Missing method body: {signature}")
+    depth = 0
+    for index in range(open_brace, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[open_brace + 1 : index]
+    raise RuntimeError(f"Unclosed method body: {signature}")
+
+
+def owner_anchor_line(
+    source_lines: list[str], authority: str, section_id: str
+) -> tuple[int, str]:
+    if authority in {"FixedRequired", "FixedEmpty", "NpcPrefixes", "CityPrefixes"}:
+        declaration = f"string[] {authority} ="
+        begin = next(
+            (index for index, line in enumerate(source_lines) if declaration in line),
+            -1,
+        )
+        if begin < 0:
+            raise RuntimeError(f"Missing {authority} inventory declaration")
+        end = next(
+            (index for index in range(begin + 1, len(source_lines)) if "};" in source_lines[index]),
+            len(source_lines),
+        )
+        for index in range(begin, end):
+            if f'"{section_id}"' in source_lines[index]:
+                return index + 1, source_lines[index].strip()
+    elif authority == "TryCreate dynamic key validation":
+        for index, line in enumerate(source_lines):
+            if f'"{section_id}"' in line:
+                return index + 1, line.strip()
+    raise RuntimeError(f"No current section anchor for {section_id} ({authority})")
+
+
+def verify_live_owner_identity_assertion(repo: pathlib.Path) -> None:
+    test_path = "Assets/_Project/Tests/EditMode/Editor/SimulationBootstrapCompositionTests.cs"
+    source = git_text(repo, test_path)
+    selected_profile = method_body(
+        source,
+        "public void SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne()",
+    )
+    owner_map_assertion = method_body(
+        source,
+        "private static void AssertSelectedDailyV1RegisteredOwnerIdentityMap(",
+    )
+    registered_owner_assertion = method_body(
+        source,
+        "private static void AssertRegisteredOwnerIdentityMap(",
+    )
+    required_fragments = (
+        "AssertSelectedDailyV1RegisteredOwnerIdentityMap(",
+        "expectedOwnerIds, Is.EqualTo(expectedSectionIds)",
+        "AssertRegisteredOwnerIdentityMap(registeredSections, expectedOwners)",
+        "witness.OwnerInstanceIdentity, Is.SameAs(expected.Value)",
+    )
+    actual = selected_profile + owner_map_assertion + registered_owner_assertion
+    missing = [fragment for fragment in required_fragments if fragment not in actual]
+    if missing:
+        raise RuntimeError("Live-owner identity assertion is incomplete: " + ", ".join(missing))
 
 
 def write_csv(path: pathlib.Path, columns: list[str], rows: list[dict[str, str]]) -> None:
@@ -62,6 +157,69 @@ def main() -> int:
     writer_rows = read_csv(owner_dir / "OWNER_WRITER_MATRIX.csv")
     capture_rows = read_csv(owner_dir / "OWNER_CAPTURE_TARGET_CROSSWALK.csv")
     operation_rows = read_csv(owner_dir / "OPERATION_CASE_MAP.csv")
+    family_rows = read_csv(repo / "docs/architecture/SIMULATION_CORE_F_OWNER_SECTIONS.csv")
+
+    source_diff = subprocess.run(
+        ["git", "-C", str(repo), "diff", "--quiet", SOURCE_COMMIT, "HEAD", "--", "Assets", "Packages", "src", "tests"],
+        check=False,
+    )
+    if source_diff.returncode != 0:
+        raise RuntimeError(
+            "Pinned production/test source differs from HEAD; rebase the source graph before joining it"
+        )
+
+    family_ids = [row["section_or_prefix"] for row in family_rows]
+    writer_ids = [row["section_or_prefix"] for row in writer_rows]
+    capture_ids = [row["section_or_prefix"] for row in capture_rows]
+    operation_ids = [row["operation_id"] for row in operation_rows]
+    if len(family_ids) != 89 or len(set(family_ids)) != 89:
+        raise RuntimeError("The authoritative Daily-v1 owner-family inventory is not 89 unique rows")
+    if set(writer_ids) != set(family_ids) or len(writer_ids) != 89:
+        raise RuntimeError("Owner-writer matrix does not exactly cover the authoritative 89 families")
+    if set(capture_ids) != set(family_ids) or len(capture_ids) != 89:
+        raise RuntimeError("Capture/target crosswalk does not exactly cover the authoritative 89 families")
+    if len(operation_ids) != 24 or len(set(operation_ids)) != 24:
+        raise RuntimeError("The sealed operation case map is not 24 unique operations")
+
+    owner_image_path = "Assets/_Project/Scripts/P12AContinuationImage.cs"
+    owner_image_source = git_text(repo, owner_image_path)
+    owner_image_lines = owner_image_source.splitlines()
+    owner_anchors: list[dict[str, str]] = []
+    for family in family_rows:
+        line, text = owner_anchor_line(
+            owner_image_lines,
+            family["canonical_authority"],
+            family["section_or_prefix"],
+        )
+        owner_anchors.append(
+            {
+                "section_or_prefix": family["section_or_prefix"],
+                "role": family["role"],
+                "shape": family["shape"],
+                "canonical_authority": family["canonical_authority"],
+                "source_path": owner_image_path,
+                "current_source_line": str(line),
+                "current_source_anchor": text,
+                "source_commit": SOURCE_COMMIT,
+                "source_blob": git_blob(repo, owner_image_path),
+            }
+        )
+    write_csv(
+        output / "owner-current-source-anchors.csv",
+        [
+            "section_or_prefix",
+            "role",
+            "shape",
+            "canonical_authority",
+            "source_path",
+            "current_source_line",
+            "current_source_anchor",
+            "source_commit",
+            "source_blob",
+        ],
+        owner_anchors,
+    )
+    verify_live_owner_identity_assertion(repo)
 
     inventory_by_path = {row["source_path"]: row for row in inventory}
     core_by_path = {row["source_path"]: row for row in core_inputs}
@@ -206,6 +364,27 @@ def main() -> int:
         selected_engine_access,
     )
 
+    unresolved_current_blobs = [
+        row
+        for row in refs
+        if not row["current_source_blob"]
+        or row["current_source_blob"] != git_blob_at(repo, "HEAD", row["current_path"])
+    ]
+    if unresolved_current_blobs:
+        raise RuntimeError(
+            f"Current source/blob join failed for {len(unresolved_current_blobs)} owner/operation references"
+        )
+    for source_rows, source_label in ((inventory, "Unity source inventory"), (core_inputs, "Core compile inputs")):
+        mismatched = [
+            row["source_path"]
+            for row in source_rows
+            if row["git_blob"] != git_blob_at(repo, "HEAD", row["source_path"])
+        ]
+        if mismatched:
+            raise RuntimeError(f"{source_label} contains {len(mismatched)} stale source blob anchors")
+
+    verify_live_owner_identity_assertion(repo)
+
     unresolved = sum(row["resolution"] != "RESOLVED" for row in refs)
     runtime_sources = sum(row["runtime_closure"].lower() == "true" for row in inventory)
     restore_sources = sum(row["restore_closure"].lower() == "true" for row in inventory)
@@ -215,7 +394,9 @@ def main() -> int:
         f"unique_reference_paths={len({row['referenced_path'] for row in refs})} "
         f"unresolved_refs={unresolved} runtime_sources={runtime_sources} "
         f"restore_sources={restore_sources} selected_core_access={len(selected_access)} "
-        f"selected_unity_engine_access={len(selected_engine_access)}"
+        f"selected_unity_engine_access={len(selected_engine_access)} "
+        f"current_owner_anchors={len(owner_anchors)} "
+        f"live_owner_identity=PASS"
     )
     return 1 if unresolved else 0
 

@@ -61,3 +61,9 @@ private logs and temporary compiler outputs are not included.
   label, hash and byte length.
 - `preprocessor-symbols.txt` and `analysis-manifest.txt`: normalized parse
   context and graph summary.
+- `owner-current-source-anchors.csv`: current source line/blob anchors for all
+  89 Daily-v1 owner families.
+- `OWNER_CURRENT_JOIN_CORRECTIONS.md`: additive correction of stale/incorrect
+  family, codec, and test anchors; historical validation records are retained.
+- `POST_INSTITUTION_OWNER_MEMBER_ACCESS_JOIN.md`: current live-owner identity
+  closure, executable join checks, and exact remaining source/access blockers.
