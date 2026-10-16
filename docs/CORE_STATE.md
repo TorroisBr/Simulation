@@ -788,6 +788,13 @@ application/session gate, v1 persistence integration for host-kind-v2,
 detached .NET restore, fixed host fixture, and .NET T/T+1/T+2 proof remain
 unimplemented or unproven as specified by the dependent design.
 
+The source-closure artifact set and current-base revalidation passed
+independent exact-tip review at `9a7117037ab418e041bd41296a700a1dc2c3b34d`;
+the durable review is
+[`CORE_F_SOURCE_CLOSURE_POST_INSTITUTION_REVIEW_9A711703.md`](reviews/CORE_F_SOURCE_CLOSURE_POST_INSTITUTION_REVIEW_9A711703.md).
+The review confirms the inventory/blob joins and graph derivations, while
+retaining the evidence boundary below.
+
 Accordingly, `CORE-F-Shared-DailyV1-Application-and-Host` remains
 `WAIT_DEPENDENCY`; this refresh does not make it `READY_FOR_IMPLEMENTATION`.
 The next authorized technical task is the row-level current-source owner and
