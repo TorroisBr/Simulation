@@ -713,9 +713,10 @@ is not Core canonical and does not establish complete selected-owner closure.
 
 [The reviewed owner-entry contract](architecture/CORE_F_OWNER_ENTRY_CONTRACT.md)
 replaces the unconditional writer-for-every-family entry rule. All 18 no-normal-
-writer families remain Required: eight military and two political owners preserve
-admissible inherited state; seven site/topology/adventure Knowledge rows retain
-actual current codec/root restrictions; Expedition retains its existing zero-source/
+writer families remain Required: eight military, two political and five site/
+adventure Knowledge families preserve admissible inherited state. Knowledge does
+not require matching factual site roots. Two LocalTopologyKnowledge rows retain
+their existing empty-only codec; Expedition retains its existing zero-source/
 target G guard. Initial 17 zero witnesses are fixture evidence, not permanent
 emptiness. The actual ExplicitlyEmpty site/identity census prevents healthy Daily
 publication with a registered site, so the generic Expedition writer is not an

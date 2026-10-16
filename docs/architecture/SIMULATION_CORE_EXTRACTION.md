@@ -19,21 +19,22 @@ are historical. The reviewed evidence candidate `9ff22b218cad26069371c871c84f3c3
 is not Core canonical and does not establish complete selected-owner closure.
 
 [The reviewed owner-entry contract](CORE_F_OWNER_ENTRY_CONTRACT.md)
-replaces the unconditional writer-for-every-family entry rule. All18 no-normal-
-writer families remain Required: eight military and two political owners preserve
-admissible inherited state; seven site/topology/adventure Knowledge rows retain
-actual current codec/root restrictions; Expedition retains its existing zero-source/
-target G guard. Initial17 zero witnesses are fixture evidence, not permanent
+replaces the unconditional writer-for-every-family entry rule. All 18 no-normal-
+writer families remain Required: eight military, two political and five site/
+adventure Knowledge families preserve admissible inherited state. Knowledge does
+not require matching factual site roots. Two LocalTopologyKnowledge rows retain
+their existing empty-only codec; Expedition retains its existing zero-source/
+target G guard. Initial 17 zero witnesses are fixture evidence, not permanent
 emptiness. The actual ExplicitlyEmpty site/identity census prevents healthy Daily
 publication with a registered site, so the generic Expedition writer is not an
 admitted selected-profile producer. No normal writer or profile expansion is added.
 
 [The qualification Master handoff](CORE_F_OWNER_ENTRY_QUALIFICATION_MASTER_HANDOFF.md)
 is READY_FOR_IMPLEMENTATION **for one test/evidence package only**, after
-independent PASS and architecture publication: qualify18 dispositions, complete89
+independent PASS and architecture publication: qualify 18 dispositions, complete 89
 current owner chains and the row-linked caller/target destination ledger, then
 reassess the existing production integration contract. The complete shared Runtime/
-Application and .NET host remain WAIT_DEPENDENCY; counts1660/42625 prove no such
+Application and .NET host remain WAIT_DEPENDENCY; counts 1660/42625 prove no such
 readiness. [Definition binding](CORE_F_DEFINITION_BINDING_TECHNICAL_DESIGN.md) fixes canonical
 City/NPC/action/item/market node consumption and Unity conversion/serialization
 boundaries; actual source integration and detached continuation remain required.
