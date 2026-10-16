@@ -6,14 +6,14 @@
       "sha256": "e575d93792d83f68bb5a855297a3e8c78f87b61a0266eeff8ac2a3badc770b8e"
     },
     "Assets/_Project/Tests/EditMode/Editor/P12DNpcRootOwnerSnapshotTests.cs": {
-      "bytes": 78860,
-      "gitBlob": "bf810febe339aa7d0ebd8b134f23859846e56374",
-      "sha256": "267a4d8862c32b0498d19620d5edcc2764bc0c9a825250cc79137e4c10e413f6"
+      "bytes": 79053,
+      "gitBlob": "4cc5a28c5e42d21370c56bd1fabfd39717ce88dc",
+      "sha256": "2e0b81f2ff53727b49ad054dc7282c4fe5708f6431db4c08e79f5e9833503a83"
     },
     "Assets/_Project/Tests/EditMode/Editor/P12GOwnerEntryQualificationTests.cs": {
-      "bytes": 31599,
-      "gitBlob": "3f02e329ba08752726caf242ce1c9e1bdee7a11b",
-      "sha256": "6b7e22e149551b324cf7388e338caf17a34716abde60405ea73424c53565a3ca"
+      "bytes": 32468,
+      "gitBlob": "3a511c82db9df424ab42be27fe3189a4807f7585",
+      "sha256": "afae620cd3a185b8ff5077cf1f2131fc6f9fb5d53f1a1b6cebd70b90b46c1863"
     },
     "Assets/_Project/Tests/EditMode/Editor/P12GOwnerEntryQualificationTests.cs.meta": {
       "bytes": 251,
@@ -34,8 +34,8 @@
   "architectureContractBlob": "2cdcffe0760271cd6e31ee63cf8b23d17760f8f3",
   "architectureContractCommit": "512cf5721927a5b3d6766bc4d19cfd62a6729a41",
   "architectureContractPath": "docs/architecture/CORE_F_OWNER_ENTRY_CONTRACT.md",
-  "candidateCommit": "5b46ee946a1e29813c11c4dd2bc5b34b5b6a25da",
-  "candidateTree": "b3bc684fdbd125cc369f46fdf88c887b163d7164",
+  "candidateCommit": "350d0aaa44f657379da9e1009838896a3da9ffef",
+  "candidateTree": "ff290a1b6daa6b68a5e4f4b312a32fca467d3aea",
   "claims": [
     "All 18 no-writer dispositions remain Required and qualify only by the promoted architecture's preservation/restriction and supported-operation conservation rules.",
     "The 89 owner chains combine exact current source-blob/line anchors with separately retained historical citations, current owner/writer/capture matrices, and exact selected-profile live identity expressions; the grouped cases add only the approved integrated P12-G evidence.",
@@ -105,9 +105,9 @@
       "Assets/_Project/Tests/EditMode/Editor/P12GOwnerEntryQualificationTests.cs",
       "IntegratedOwnerImageRejectionIsAtomicAndValidImageCanBeRetried"
     ],
-    "local_topology_connection_capture_rejection": [
+    "local_topology_place_and_connection_capture_rejection": [
       "Assets/_Project/Tests/EditMode/Editor/P12DNpcRootOwnerSnapshotTests.cs",
-      "Capture_RejectsDailyV1LocalTopologyConnectionKnowledge"
+      "Capture_RejectsDailyV1LocalTopologyPlaceAndConnectionKnowledge"
     ],
     "local_topology_place_capture_rejection": [
       "Assets/_Project/Tests/EditMode/Editor/P12DNpcRootOwnerSnapshotTests.cs",
@@ -139,17 +139,17 @@
     "role_binding": "registeredContract.Role, Is.EqualTo(expectedRole)",
     "schema_binding": "registeredContract.SchemaVersion, Is.EqualTo(expectedContract.SchemaVersion)"
   },
-  "sourceBaselineCommit": "5b46ee946a1e29813c11c4dd2bc5b34b5b6a25da",
-  "sourceBaselineTree": "b3bc684fdbd125cc369f46fdf88c887b163d7164",
+  "sourceBaselineCommit": "350d0aaa44f657379da9e1009838896a3da9ffef",
+  "sourceBaselineTree": "ff290a1b6daa6b68a5e4f4b312a32fca467d3aea",
   "sourceReferenceCommit": "ca55c3f9fa4d9c99e6a47a25adbbd1956ea04a1d",
   "splitHostAccessGroups": 3365,
   "splitHostAccessRows": 18270,
   "splitHostSourceCount": 67,
   "toolingSourceIdentities": {
     "docs/validation/CORE_F_OwnerEntryQualification/audit-source/OwnerEntryQualification.py": {
-      "bytes": 61125,
-      "gitBlob": "94dcd1ea1fba79d0911806f298e18591e9644c55",
-      "sha256": "134e6d4699f8938fed29026e3e132fe06ca602a131be89051ff5492b62d48c26"
+      "bytes": 61143,
+      "gitBlob": "561f2783d55aca4de80e490f71b6f26b13f175d5",
+      "sha256": "72a75063567bcbdff1ac32fb5005999c69a099e5cd4cf9227f4e2141a3bb0a2a"
     },
     "docs/validation/CORE_F_SourceClosure_PostInstitution/audit-source/MemberAccessCut.cs": {
       "bytes": 23553,

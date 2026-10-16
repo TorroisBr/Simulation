@@ -930,7 +930,7 @@ def main() -> int:
         "integrated_rejection_and_retry": ("Assets/_Project/Tests/EditMode/Editor/P12GOwnerEntryQualificationTests.cs", "IntegratedOwnerImageRejectionIsAtomicAndValidImageCanBeRetried"),
         "general_p9_site_daily_rejection": ("Assets/_Project/Tests/EditMode/Editor/P12GOwnerEntryQualificationTests.cs", "GenericP9SiteProfileValidatesButDailyV1AdmissionDoesNotPublishIt"),
         "local_topology_place_capture_rejection": ("Assets/_Project/Tests/EditMode/Editor/P12DNpcRootOwnerSnapshotTests.cs", "Capture_RejectsDailyV1LocalTopologyKnowledge"),
-        "local_topology_connection_capture_rejection": ("Assets/_Project/Tests/EditMode/Editor/P12DNpcRootOwnerSnapshotTests.cs", "Capture_RejectsDailyV1LocalTopologyConnectionKnowledge"),
+        "local_topology_place_and_connection_capture_rejection": ("Assets/_Project/Tests/EditMode/Editor/P12DNpcRootOwnerSnapshotTests.cs", "Capture_RejectsDailyV1LocalTopologyPlaceAndConnectionKnowledge"),
         "expedition_foreign_site_identity_guard": ("Assets/_Project/Tests/EditMode/Editor/ExpeditionTests.cs", ""),
         "political_existing_integrated_round_trip": ("Assets/_Project/Tests/EditMode/Editor/P12GPoliticalBindingRestoreTests.cs", "PopulatedPoliticalOwnersRoundTripFromRealAdvanceAndContinueWithExactParity"),
     }

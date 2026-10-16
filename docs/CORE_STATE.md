@@ -948,14 +948,17 @@ the public API.
 
 ## CORE-F owner-entry qualification — selected Daily-v1 evidence (current review candidate)
 
-The test/source candidate is `5b46ee946a1e29813c11c4dd2bc5b34b5b6a25da`
-(tree `b3bc684fdbd125cc369f46fdf88c887b163d7164`), based on Core canonical
+The refreshed test/source candidate is `350d0aaa44f657379da9e1009838896a3da9ffef`
+(tree `ff290a1b6daa6b68a5e4f4b312a32fca467d3aea`), based on Core canonical
 `1998974515b6357c308d861fb608f2db5071a63a` and the owner-entry contract at
 architecture `512cf5721927a5b3d6766bc4d19cfd62a6729a41`. The reviewable
 qualification and validation record is
 [`CORE-F Owner Entry Qualification`](validation/CORE_F_OwnerEntryQualification/VALIDATION.md).
 The previous candidate and validation packages remain historical evidence;
-they are not the current validation baseline.
+they are not the current validation baseline. The refreshed test-only candidate
+addresses the exact-tip review findings by exercising split-alias rejection at
+the integrated G restore boundary and accurately naming the paired P12-D
+place/connection exclusion fixture. No production source changed.
 
 The current evidence joins 89/89 owner-entry chains, preserves all 18
 dispositions as `Required`, and maps 18,270 row-linked references from 67 split
@@ -971,11 +974,14 @@ working tree.
 
 Unity `6000.3.9f1` / Test Framework `1.6.0` validation against the exact
 candidate tree passed focused restore 15/15, full EditMode 3,184/3,184, and
-official filtered Smoke 5/5. The full normalized result package is durably
-retained and verifies against its protected original. It contains the complete
-case results for the focused suite and all five Smoke identities. Previously
-approved CoreValidation cold/warm evidence is reused because its full
-142-input digest exactly matches the current CoreValidation input set.
+official filtered Smoke 5/5, with zero failed, skipped, or inconclusive cases.
+All three runs share the same stable 1,668-file input digest. The full
+normalized result package verifies against its protected original and contains
+all focused and Smoke case results. Previously approved CoreValidation
+cold/warm evidence is reused because its full 142-input digest exactly matches
+the current CoreValidation input set. The refreshed exact-tip independent
+review is pending; the prior review of the superseded evidence tip requested
+the two test-evidence corrections now recorded in this candidate.
 
 The evidence qualifies the approved owner/source/access and grouped-restore
 claims; it does not alter production source, create a writer, widen Daily-v1,
