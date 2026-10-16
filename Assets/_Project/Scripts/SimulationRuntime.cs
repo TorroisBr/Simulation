@@ -10613,13 +10613,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 continue;
             }
 
-            OfficeTenureRecord clone = InstitutionOfficeOwnerBridge.CreateTenureRecord(
+            OfficeTenureRecord clone = new OfficeTenureRecord(
                 new OfficeId(tenure.OfficeId.Value),
                 new PersonId(tenure.Incumbent.Value),
                 tenure.StartAbsoluteDay,
                 tenure.EndAbsoluteDay,
-                tenure.EndReason,
-                true);
+                tenure.EndReason);
             if (InstitutionOfficeOwnerBridge.TryAddHistoricalTenureForRuntimeOfficeClone(
                     copy,
                     clone,

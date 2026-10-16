@@ -50,23 +50,6 @@ public static class InstitutionOfficeOwnerBridge
         return owner.TenureHistoryInMutationOrder;
     }
 
-    public static OfficeTenureRecord CreateTenureRecord(
-        OfficeId officeId,
-        PersonId incumbent,
-        long? startAbsoluteDay,
-        long? endAbsoluteDay,
-        InstitutionalVacancyRecognitionReason? endReason,
-        bool isClosed)
-    {
-        return new OfficeTenureRecord(
-            officeId,
-            incumbent,
-            startAbsoluteDay,
-            endAbsoluteDay,
-            endReason,
-            isClosed);
-    }
-
     public static bool TryAddHistoricalTenureForRuntimeOfficeClone(
         OfficeStore replayCandidate,
         OfficeTenureRecord record,

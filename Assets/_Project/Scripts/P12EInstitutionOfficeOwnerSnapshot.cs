@@ -348,11 +348,11 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
                     new PersonId(row.PersonIdValue), row.StartAbsoluteDay));
             List<OfficeTenureRecord> tenures = new List<OfficeTenureRecord>(Tenures.RecordCount);
             foreach (P12EOfficeTenureSnapshotRecord row in Tenures.Records)
-                tenures.Add(InstitutionOfficeOwnerBridge.CreateTenureRecord(new OfficeId(row.OfficeIdValue),
+                tenures.Add(new OfficeTenureRecord(new OfficeId(row.OfficeIdValue),
                     new PersonId(row.PersonIdValue), row.StartAbsoluteDay, row.EndAbsoluteDay,
                     row.EndReason.HasValue
                         ? (InstitutionalVacancyRecognitionReason?)row.EndReason.Value
-                        : null, row.IsClosed));
+                        : null));
             if (!InstitutionOfficeOwnerBridge.TryCreateStagedOwners(
                     institutions,
                     Institutions.Revision,

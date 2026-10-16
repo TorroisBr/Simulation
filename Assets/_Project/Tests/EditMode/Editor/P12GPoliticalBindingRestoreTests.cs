@@ -115,16 +115,82 @@ public sealed class P12GPoliticalBindingRestoreTests
             AssertIndependentOwners(source.Session, sourceToken, restored, restoredToken);
             AssertIndependentOwners(restored, restoredToken, control.Session, controlToken);
 
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+                    source.Session,
+                    source.NormalBootstrapContext,
+                    out P12AContinuationImage capturedImage,
+                    out SimulationActiveSession capturedImageCandidate,
+                    out P12GDailyV1RestoreFailure captureFailure,
+                    out string captureDiagnostic),
+                Is.True, captureFailure + ": " + captureDiagnostic);
+            Assert.That(capturedImageCandidate, Is.Not.Null);
+            Assert.That(capturedImage, Is.Not.Null);
+            Assert.That(capturedImage.Header.Day, Is.EqualTo(sourceToken.AbsoluteDay));
+            Assert.That(capturedImage.Header.Sequence, Is.EqualTo(sourceToken.CompletedCoreSequence));
+            Assert.That(P12ADailyV1Census.TryCreateForImage(
+                    capturedImage,
+                    out P12ADailyV1Census imageCensus,
+                    out P12AResult censusResult),
+                Is.True, censusResult?.Code.ToString());
+            Assert.That(P12AContinuationCodec.TryEncode(
+                    capturedImage,
+                    imageCensus.Manifest,
+                    out byte[] encodedImage,
+                    out P12AResult encodeResult),
+                Is.True, encodeResult?.Code.ToString());
+            Assert.That(P12AContinuationCodec.TryDecode(
+                    encodedImage,
+                    imageCensus.Manifest,
+                    capturedImage.Header.Compatibility,
+                    out P12AContinuationImage decodedImage,
+                    out P12AResult decodeResult),
+                Is.True, decodeResult?.Code.ToString());
+
+            List<P12GDailyV1RestoreStage> imageRestoreStages = new List<P12GDailyV1RestoreStage>();
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
+                    decodedImage,
+                    capturedImage.Header.Compatibility,
+                    anchor.Configuration,
+                    anchor.Runtime.Configuration,
+                    anchor.Composition.Calendar,
+                    source.NormalBootstrapContext,
+                    out SimulationActiveSession imageRestored,
+                    out P12GDailyV1RestoreFailure imageRestoreFailure,
+                    out string imageRestoreDiagnostic,
+                    imageRestoreStages.Add),
+                Is.True, imageRestoreFailure + ": " + imageRestoreDiagnostic);
+            Assert.That(imageRestored, Is.Not.Null);
+            Assert.That(imageRestoreStages, Does.Contain(P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured));
+            Assert.That(imageRestoreStages, Does.Contain(P12GDailyV1RestoreStage.BoundaryAdmitted));
+            DailyCaptureEligibilityToken imageRestoredToken = GetCompletedToken(imageRestored.Runtime);
+            Assert.That(imageRestoredToken.BoundaryProvenance,
+                Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
+            AssertDailyV1Parity(source.Session, sourceToken, imageRestored, imageRestoredToken,
+                "persisted-image source/target after real capture, encode/decode, restore, and target recapture");
+            AssertDailyV1Parity(restored, restoredToken, imageRestored, imageRestoredToken,
+                "in-memory and persisted-image restore parity");
+            AssertDailyV1Parity(imageRestored, imageRestoredToken, control.Session, controlToken,
+                "persisted-image target/control before continuation");
+            AssertOwnerVectorFactsEqual(imageRestoredToken.OwnerSections, controlToken.OwnerSections);
+            AssertPoliticalOwnersAreAuthenticAndPopulated(imageRestored, imageRestoredToken);
+            AssertIndependentOwners(source.Session, sourceToken, imageRestored, imageRestoredToken);
+            AssertIndependentOwners(imageRestored, imageRestoredToken, control.Session, controlToken);
+            Assert.That(gameplayProbe.AdvanceDayAfterClockAdvanceInvocationCount, Is.Zero,
+                "Persisted-image capture and restore must not invoke the daily gameplay pipeline.");
+
             for (int boundary = 0; boundary < 2; boundary++)
             {
                 Assert.That(source.Session.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextSourceAdvance),
                     Is.True, nextSourceAdvance.ToString());
                 Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredAdvance),
                     Is.True, restoredAdvance.ToString());
+                Assert.That(imageRestored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure imageRestoredAdvance),
+                    Is.True, imageRestoredAdvance.ToString());
                 Assert.That(control.Session.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextControlAdvance),
                     Is.True, nextControlAdvance.ToString());
                 DailyCaptureEligibilityToken nextSourceToken = GetCompletedToken(source.Session.Runtime);
                 DailyCaptureEligibilityToken nextRestoredToken = GetCompletedToken(restored.Runtime);
+                DailyCaptureEligibilityToken nextImageRestoredToken = GetCompletedToken(imageRestored.Runtime);
                 DailyCaptureEligibilityToken nextControlToken = GetCompletedToken(control.Session.Runtime);
                 Assert.That(nextSourceToken.BoundaryProvenance,
                     Is.EqualTo(DailyCaptureBoundaryProvenance.CompletedAdvance));
@@ -132,11 +198,16 @@ public sealed class P12GPoliticalBindingRestoreTests
                     Is.EqualTo(DailyCaptureBoundaryProvenance.CompletedAdvance));
                 AssertDailyV1Parity(source.Session, nextSourceToken, restored, nextRestoredToken,
                     "continued source/target boundary " + boundary);
+                AssertDailyV1Parity(source.Session, nextSourceToken, imageRestored, nextImageRestoredToken,
+                    "continued persisted-image source/target boundary " + boundary);
                 AssertDailyV1Parity(source.Session, nextSourceToken, control.Session, nextControlToken,
                     "continued source/control boundary " + boundary);
                 AssertDailyV1Parity(restored, nextRestoredToken, control.Session, nextControlToken,
                     "continued target/control boundary " + boundary);
+                AssertDailyV1Parity(imageRestored, nextImageRestoredToken, control.Session, nextControlToken,
+                    "continued persisted-image target/control boundary " + boundary);
                 AssertOwnerVectorFactsEqual(nextRestoredToken.OwnerSections, nextControlToken.OwnerSections);
+                AssertOwnerVectorFactsEqual(nextImageRestoredToken.OwnerSections, nextControlToken.OwnerSections);
             }
         }
     }
