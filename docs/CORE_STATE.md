@@ -957,7 +957,8 @@ The bounded test/evidence candidate is
 
 The candidate evidence joins 89/89 selected owner-entry chains, preserves all
 18 no-writer dispositions as `Required`, and maps 18,270 row-linked references
-from 67 split host files into 3,365 destination groups. The member-access
+from 67 split host files into 3,365 destination groups; all groups have a
+destination and none are unresolved. The member-access
 projection contains 42,625 callsites and resolves all 2,582 Core declaration
 pairs; its Unity-engine projection contains 288 pairs. The post-institution
 join passes for all 89 owner/capture anchors and resolves all 1,660 cited

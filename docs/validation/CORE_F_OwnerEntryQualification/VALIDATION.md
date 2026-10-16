@@ -26,6 +26,8 @@ The deterministic qualification generator completed against the exact candidate 
 | Unresolved Core declarations | 0 |
 | Source-integrity and absolute-path checks | PASS |
 
+Every destination group is assigned; zero groups are unassigned or unresolved. The 3,365 assignments comprise 2,492 same-Core-assembly groups, 191 promoted host-neutral compatibility-helper groups, and 682 Unity-edge groups: 515 object/fake-null, 125 authoring/lifecycle, 25 host identity/path, 12 logging, and 5 input adapter groups. The ledger preserves links to all 18,270 original compiler rows by ordinal and input-row hash.
+
 `MemberAccessCut.cs` compiled and its semantic projection completed with zero compile errors. The post-institution source join passed with 89 owner/capture anchors, 24 operation records, 1,660 references across 142 unique paths, zero unresolved references, 220 runtime source files, and 289 restore source files. The current owner identity and selected Required Knowledge zero checks passed. The two stale political-restore test anchors were refreshed to the current source blobs; no production source identity changed.
 
 The qualification artifacts are bound by `qualification-manifest.json`. Its six declared artifact hashes were verified. The raw member-access projection has SHA-256 `c7714eaaccb0b53712017d93157fa7f94a05911f37f28cd0b4fb094d21f945a8`; the compressed projection has SHA-256 `8eb054a7b59d511d864b2bee707a8d62ead1ea78002be9766a85fbf754467121`. The generated manifest SHA-256 is `42ad8c5543a8380bd002b7517f7b957424e32c8f6ad395247ebc32637296dafc`.
