@@ -61,4 +61,3 @@ private logs and temporary compiler outputs are not included.
   label, hash and byte length.
 - `preprocessor-symbols.txt` and `analysis-manifest.txt`: normalized parse
   context and graph summary.
-
