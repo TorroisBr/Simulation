@@ -4,6 +4,10 @@
 **Inspected production:** `codex/core/canonical` at `0094febf7f97333d0653eaf9688fe1d24d73327f`.
 **Disposition:** reviewed bounded source-extraction preparation; no production change. Readiness below takes effect only after independent PASS and architecture publication. Full CORE-F remains `WAIT_DEPENDENCY`; CORE-X remains `DEFERRED`.
 
+## Owner-entry clarification — 2026-10-16
+
+Apply [CORE_F_OWNER_ENTRY_CONTRACT.md](CORE_F_OWNER_ENTRY_CONTRACT.md) to no-normal-writer families and the current source baseline19989745. All reachable writes retain revision/commit/epoch proof; legitimate Required preservation or existing profile restrictions do not require inventing a producer. The [qualification Master handoff](CORE_F_OWNER_ENTRY_QUALIFICATION_MASTER_HANDOFF.md) is bounded test/evidence work; shared production Runtime/Host remains WAIT_DEPENDENCY. Older next-task descriptions below are historical; final CORE-F acceptance and unchanged P12/CORE-X boundaries remain mandatory.
+
 ## Current-source successor
 
 The [post-demographic closure assessment](CORE_F_CURRENT_OWNER_CLOSURE.md) refreshes this historical execution contract against promoted Core b2c2c0e. Demographic owners are now PROMOTED; the next bounded institution/claim package and remaining evidence gates supersede the old next-task wording. The final acceptance and authority/profile boundaries below remain in force.

@@ -11,6 +11,39 @@ implementation readiness does not itself start migration.
 Independent verdicts and exact reviewed refs: [review](SIMULATION_CORE_EXTRACTION_REVIEW.md).
 First bounded executable contract: [CORE-A Master handoff](SIMULATION_CORE_A_MASTER_HANDOFF.md).
 
+## CORE-F owner-entry disposition and finite qualification — 2026-10-16
+
+Promoted Core is `1998974515b6357c308d861fb608f2db5071a63a`; institution/claim
+owners are delivered. Prior implementation-ready owner-extraction entries below
+are historical. The reviewed evidence candidate `9ff22b218cad26069371c871c84f3c37db4e0f1d`
+is not Core canonical and does not establish complete selected-owner closure.
+
+[The reviewed owner-entry contract](CORE_F_OWNER_ENTRY_CONTRACT.md)
+replaces the unconditional writer-for-every-family entry rule. All18 no-normal-
+writer families remain Required: eight military and two political owners preserve
+admissible inherited state; seven site/topology/adventure Knowledge rows retain
+actual current codec/root restrictions; Expedition retains its existing zero-source/
+target G guard. Initial17 zero witnesses are fixture evidence, not permanent
+emptiness. The actual ExplicitlyEmpty site/identity census prevents healthy Daily
+publication with a registered site, so the generic Expedition writer is not an
+admitted selected-profile producer. No normal writer or profile expansion is added.
+
+[The qualification Master handoff](CORE_F_OWNER_ENTRY_QUALIFICATION_MASTER_HANDOFF.md)
+is READY_FOR_IMPLEMENTATION **for one test/evidence package only**, after
+independent PASS and architecture publication: qualify18 dispositions, complete89
+current owner chains and the row-linked caller/target destination ledger, then
+reassess the existing production integration contract. The complete shared Runtime/
+Application and .NET host remain WAIT_DEPENDENCY; counts1660/42625 prove no such
+readiness. [Definition binding](CORE_F_DEFINITION_BINDING_TECHNICAL_DESIGN.md) fixes canonical
+City/NPC/action/item/market node consumption and Unity conversion/serialization
+boundaries; actual source integration and detached continuation remain required.
+
+DAG: current capabilities → bounded owner/source qualification → shared owner/
+runtime and real definition consumption → shared restore/session + detached net8
+host/v2 image integration → new-process T/T+1/T+2 → Unity/.NET parity → CORE-F.
+Test/evidence and isolated definition preparation can proceed independently;
+Runtime/P12/SDK/asmdef and canonical integration remain serialized. P12's accepted
+scope, closed phases and CORE-X deferral are preserved. No product decision remains.
 ## CORE-F current owner closure and next package — 2026-10-15
 
 Current promoted Core is `b2c2c0e94c7a8dd9175a8db3fab4fb9d78dcfb2a`.
