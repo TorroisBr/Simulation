@@ -761,3 +761,36 @@ hosting or continuation, or change P12/P13, CORE-X, or any numbered Phase
 status. Recompute the member/source/access ledger against this promoted graph
 before treating the dependent shared runtime/restore design as implementation
 ready; it remains `WAIT_DEPENDENCY` until that complete closure is proven.
+
+## CORE-F source closure refreshed after institution/claim promotion — 2026-10-15
+
+The post-promotion source graph is recorded in
+[`CORE_F_SourceClosure_PostInstitution`](validation/CORE_F_SourceClosure_PostInstitution/POST_INSTITUTION_CURRENT_BASE_REVALIDATION.md)
+and its row-level inventories. It uses the unchanged production source
+`ca55c3f9fa4d9c99e6a47a25adbbd1956ea04a1d` (tree
+`e0d3de22bdc7bcc16e16a925f6f8c38f6a6397a5`) now present in Core canonical
+`2764b50b49c0773328ebcc56b2c668a2c609b7ff`, under architecture canonical
+`797eb02f06fc5ca759a7e47283589d97a5efe73d`. The graph was regenerated from the
+matching Unity 6000.3.9f1 compiler response and current Core project source list;
+all 315 Unity source and 53 Core compile-input blob rows match the production
+source commit. It reports 2,837 Unity source edges, 116 SCCs, a largest SCC of
+190 files, 220 runtime-reachable and 289 restore-reachable Unity source files,
+plus separate Core/Unity symbol-edge inventories. This is compile/declaration
+evidence, not an owner or behavioral proof.
+
+The source crosswalk accounts for 15 prior Unity application files moved to the
+Core compile set and the one new Unity genealogy guard-binding source. The
+promoted owner packages remain bounded. The 89-family owner/capture/target and
+24-operation matrices still need exact current-source joins for each live
+owner, constructor, supported writer/epoch, capture, stage, and test identity.
+The remaining definition-bound owner graph, internal member/access cut, shared
+application/session gate, v1 persistence integration for host-kind-v2,
+detached .NET restore, fixed host fixture, and .NET T/T+1/T+2 proof remain
+unimplemented or unproven as specified by the dependent design.
+
+Accordingly, `CORE-F-Shared-DailyV1-Application-and-Host` remains
+`WAIT_DEPENDENCY`; this refresh does not make it `READY_FOR_IMPLEMENTATION`.
+The next authorized technical task is the row-level current-source owner and
+member/access join, then independent design review. No P12 profile, numbered
+Phase, or CORE-X status changes. No production or test source changed during
+this graph refresh.
