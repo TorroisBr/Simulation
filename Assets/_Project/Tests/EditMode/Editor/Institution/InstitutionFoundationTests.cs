@@ -7,6 +7,41 @@ using NUnit.Framework;
 public sealed class InstitutionFoundationTests
 {
     [Test]
+    public void InstitutionOfficeBridgeBindsTheSameStatusOnceAndBlocksFaultedWrites()
+    {
+        InstitutionStore institutions = new InstitutionStore();
+        InstitutionId institutionId = new InstitutionId("status-institution");
+        Assert.That(institutions.TryRegister(new InstitutionRecord(institutionId), out _), Is.True);
+        OfficeStore offices = new OfficeStore(institutions);
+        MutableMutationStatus status = new MutableMutationStatus { CanMutate = true };
+        MutableMutationStatus differentStatus = new MutableMutationStatus { CanMutate = true };
+
+        Assert.That(InstitutionOfficeOwnerBridge.CanBindMutationStatus(institutions, status), Is.True);
+        Assert.That(InstitutionOfficeOwnerBridge.TryBindMutationStatus(institutions, status), Is.True);
+        Assert.That(InstitutionOfficeOwnerBridge.CanBindMutationStatus(offices, status), Is.True);
+        Assert.That(InstitutionOfficeOwnerBridge.TryBindMutationStatus(offices, status), Is.True);
+        Assert.That(InstitutionOfficeOwnerBridge.CanBindMutationStatus(institutions, status), Is.True);
+        Assert.That(InstitutionOfficeOwnerBridge.CanBindMutationStatus(offices, differentStatus), Is.False);
+
+        status.CanMutate = false;
+        Assert.That(institutions.TryRegister(
+            new InstitutionRecord(new InstitutionId("faulted-institution")),
+            out InstitutionFoundationFailure institutionFailure), Is.False);
+        Assert.That(institutionFailure.Code, Is.EqualTo(InstitutionFoundationFailureCode.RuntimeFaulted));
+        Assert.That(offices.TryRegister(
+            new OfficeRecord(new OfficeId("faulted-office"), institutionId),
+            out InstitutionFoundationFailure officeFailure), Is.False);
+        Assert.That(officeFailure.Code, Is.EqualTo(InstitutionFoundationFailureCode.RuntimeFaulted));
+        Assert.That(institutions.Revision, Is.EqualTo(1L));
+        Assert.That(offices.Revision, Is.Zero);
+    }
+
+    private sealed class MutableMutationStatus : IAuthoritativeMutationStatus
+    {
+        public bool CanMutate { get; set; }
+    }
+
+    [Test]
     public void InstitutionId_UsesOrdinalValueSemanticsAndRejectsInvalidValues()
     {
         InstitutionId first = new InstitutionId("crown");
@@ -267,9 +302,9 @@ public sealed class InstitutionFoundationTests
     {
         string directory = Path.Combine(
             Directory.GetCurrentDirectory(),
-            "Assets",
-            "_Project",
-            "Scripts",
+            "Packages",
+            "com.simulation.core",
+            "Runtime",
             "Institution");
 
         string[] files = Directory.GetFiles(directory, "*.cs");

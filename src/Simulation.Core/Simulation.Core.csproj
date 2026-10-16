@@ -12,6 +12,15 @@
   <ItemGroup>
     <Compile Include="../../Packages/com.simulation.core/Runtime/IAuthoritativeMutationStatus.cs" Link="IAuthoritativeMutationStatus.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/MutationStatusBinding.cs" Link="MutationStatusBinding.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionContracts.cs" Link="Institution/InstitutionContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionStores.cs" Link="Institution/InstitutionStores.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionalVacancyRecognition.cs" Link="Institution/InstitutionalVacancyRecognition.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionOfficeOwnerBridge.cs" Link="Institution/InstitutionOfficeOwnerBridge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimContracts.cs" Link="Political/PoliticalClaimContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimStore.cs" Link="Political/PoliticalClaimStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimTransitions.cs" Link="Political/PoliticalClaimTransitions.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimOwnerBridge.cs" Link="Political/PoliticalClaimOwnerBridge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Property/PropertyContracts.cs" Link="Property/PropertyContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationTypes.cs" Link="Configuration/SimulationConfigurationTypes.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationDefaults.cs" Link="Configuration/SimulationConfigurationDefaults.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationResolver.cs" Link="Configuration/SimulationConfigurationResolver.cs" />

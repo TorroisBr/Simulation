@@ -233,7 +233,7 @@ internal sealed class P12EPoliticalClaimOwnerSnapshot
                     new InstitutionId(row.InstitutionId), (PoliticalClaimRecognitionState)row.State,
                     row.RecognitionAbsoluteDay, row.Reason, history));
             }
-            if (!PoliticalClaimStore.TryCreateFromP12EOwnerSnapshot(claimRecords, recognitionRecords, Claims.Revision,
+            if (!PoliticalClaimOwnerBridge.TryCreateStagedOwner(claimRecords, recognitionRecords, Claims.Revision,
                     out PoliticalClaimStore candidate))
                 return Fail(P12EPoliticalClaimSnapshotFailureCode.StageFailed, "Private owner factory rejected validated rows.", out failure);
             staged = candidate;
@@ -251,7 +251,7 @@ internal sealed class P12EPoliticalClaimOwnerSnapshot
         failure = P12EPoliticalClaimSnapshotFailure.Create(P12EPoliticalClaimSnapshotFailureCode.InvalidClaim,
             "Political claim owner snapshot is malformed.");
         if (persons == null || properties == null || institutions == null || offices == null || capturedDay < 0L
-            || !ReferenceEquals(offices.InstitutionStoreForWorldBoundary, institutions))
+            || !InstitutionOfficeOwnerBridge.BelongsTo(offices, institutions))
             return Fail(P12EPoliticalClaimSnapshotFailureCode.InvalidReference, "All exact staged target roots are required.", out failure);
         if (!ValidSection(Claims, PoliticalClaimStoreCensusProvider.ClaimsSectionId)
             || !ValidSection(Recognitions, PoliticalClaimStoreCensusProvider.RecognitionsSectionId))

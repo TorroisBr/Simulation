@@ -5,9 +5,9 @@ using System.Collections.ObjectModel;
 /// <summary>
 /// In-memory registry for institution definitions within one world boundary.
 /// </summary>
-public sealed class InstitutionStore : IAuthoritativeMutationGuardBindable
+public sealed class InstitutionStore
 {
-    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    private readonly MutationStatusBinding mutationStatusBinding = new MutationStatusBinding();
     private readonly Dictionary<string, InstitutionRecord> records =
         new Dictionary<string, InstitutionRecord>(StringComparer.Ordinal);
     private long revision;
@@ -27,7 +27,7 @@ public sealed class InstitutionStore : IAuthoritativeMutationGuardBindable
 
     public bool TryRegister(InstitutionRecord record, out InstitutionFoundationFailure failure)
     {
-        if (!mutationGuardBinding.CanMutate)
+        if (!mutationStatusBinding.CanMutate)
         {
             failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
@@ -89,19 +89,19 @@ public sealed class InstitutionStore : IAuthoritativeMutationGuardBindable
         return true;
     }
 
-    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
-    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
-    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
-    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
+    internal bool CanBindMutationStatus(IAuthoritativeMutationStatus status) => mutationStatusBinding.CanBindTo(status);
+    internal bool TryBindMutationStatus(IAuthoritativeMutationStatus status) => mutationStatusBinding.TryBindTo(status);
+
+
 }
 
 /// <summary>
 /// In-memory office registry and controlled incumbency boundary for one world.
 /// It deliberately has no dependency on mutable simulation runtime adapters.
 /// </summary>
-public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
+public sealed class OfficeStore
 {
-    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    private readonly MutationStatusBinding mutationStatusBinding = new MutationStatusBinding();
     private readonly InstitutionStore institutionStore;
     private readonly Dictionary<string, OfficeRecord> records =
         new Dictionary<string, OfficeRecord>(StringComparer.Ordinal);
@@ -230,7 +230,7 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
 
     public bool TryRegister(OfficeRecord record, out InstitutionFoundationFailure failure)
     {
-        if (!mutationGuardBinding.CanMutate)
+        if (!mutationStatusBinding.CanMutate)
         {
             failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
@@ -336,7 +336,7 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
         long? startAbsoluteDay,
         out InstitutionFoundationFailure failure)
     {
-        if (!mutationGuardBinding.CanMutate)
+        if (!mutationStatusBinding.CanMutate)
         {
             failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
@@ -410,7 +410,7 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
         InstitutionalVacancyRecognitionReason endReason,
         out InstitutionFoundationFailure failure)
     {
-        if (!mutationGuardBinding.CanMutate)
+        if (!mutationStatusBinding.CanMutate)
         {
             failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
@@ -506,7 +506,7 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
         OfficeTenureRecord record,
         out InstitutionFoundationFailure failure)
     {
-        if (!mutationGuardBinding.CanMutate)
+        if (!mutationStatusBinding.CanMutate)
         {
             failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
@@ -617,19 +617,19 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
         return new ReadOnlyCollection<OfficeRecord>(snapshot);
     }
 
-    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    internal bool CanBindMutationStatus(IAuthoritativeMutationStatus status)
     {
-        return mutationGuardBinding.CanBindTo(guard)
-            && institutionStore.CanBindMutationGuard(guard);
+        return mutationStatusBinding.CanBindTo(status)
+            && institutionStore.CanBindMutationStatus(status);
     }
 
-    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    internal bool TryBindMutationStatus(IAuthoritativeMutationStatus status)
     {
-        return CanBindMutationGuard(guard)
-            && institutionStore.TryBindMutationGuard(guard)
-            && mutationGuardBinding.TryBindTo(guard);
+        return CanBindMutationStatus(status)
+            && institutionStore.TryBindMutationStatus(status)
+            && mutationStatusBinding.TryBindTo(status);
     }
 
-    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
-    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
+
+
 }

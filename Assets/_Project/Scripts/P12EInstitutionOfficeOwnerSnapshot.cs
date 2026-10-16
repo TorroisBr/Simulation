@@ -220,14 +220,15 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
         OfficeStore officeOwner = runtime.OfficeStoreForWorldBoundary;
         PersonStore personOwner = runtime.PersonStore;
         if (institutionOwner == null || officeOwner == null || personOwner == null
-            || !ReferenceEquals(officeOwner.InstitutionStoreForWorldBoundary, institutionOwner))
+            || !InstitutionOfficeOwnerBridge.BelongsTo(officeOwner, institutionOwner))
             return Fail(P12EInstitutionOfficeSnapshotFailureCode.InvalidOwnerComposition,
                 "The installed OfficeStore must reference the exact installed InstitutionStore.", out failure);
 
         IReadOnlyList<InstitutionRecord> institutionRows = institutionOwner.Institutions;
         IReadOnlyList<OfficeRecord> officeRows = officeOwner.Offices;
         IReadOnlyList<OfficeIncumbency> incumbencyRows = officeOwner.Incumbencies;
-        IReadOnlyList<OfficeTenureRecord> tenureRows = officeOwner.TenureHistoryInMutationOrder;
+        IReadOnlyList<OfficeTenureRecord> tenureRows =
+            InstitutionOfficeOwnerBridge.GetTenureHistoryInMutationOrder(officeOwner);
         int institutionCount = institutionOwner.Count;
         int officeCount = officeOwner.Count;
         int incumbencyCount = officeOwner.IncumbencyCount;
@@ -300,7 +301,7 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
             || institutionOwner.Count != institutionCount || institutionOwner.Revision != institutionRevision
             || officeOwner.Count != officeCount || officeOwner.IncumbencyCount != incumbencyCount
             || officeOwner.TenureCount != tenureCount || officeOwner.Revision != officeRevision
-            || !ReferenceEquals(officeOwner.InstitutionStoreForWorldBoundary, institutionOwner)
+            || !InstitutionOfficeOwnerBridge.BelongsTo(officeOwner, institutionOwner)
             || !Matches(sharedOwnerSectionVector, InstitutionOfficeCensusProvider.InstitutionsSectionId,
                 institutionOwner, institutionCount, institutionRevision)
             || !Matches(sharedOwnerSectionVector, InstitutionOfficeCensusProvider.OfficesSectionId,
@@ -337,11 +338,6 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
             List<InstitutionRecord> institutions = new List<InstitutionRecord>(Institutions.RecordCount);
             foreach (P12EInstitutionSnapshotRecord row in Institutions.Records)
                 institutions.Add(new InstitutionRecord(new InstitutionId(row.InstitutionIdValue), row.DisplayName));
-            if (!InstitutionStore.TryCreateFromP12EOwnerSnapshot(
-                    institutions, Institutions.Revision, out InstitutionStore institutionCandidate))
-                return Fail(P12EInstitutionOfficeSnapshotFailureCode.StageFailed,
-                    "The private InstitutionStore factory rejected validated values.", out failure);
-
             List<OfficeRecord> offices = new List<OfficeRecord>(Offices.RecordCount);
             foreach (P12EOfficeSnapshotRecord row in Offices.Records)
                 offices.Add(new OfficeRecord(new OfficeId(row.OfficeIdValue),
@@ -352,15 +348,21 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
                     new PersonId(row.PersonIdValue), row.StartAbsoluteDay));
             List<OfficeTenureRecord> tenures = new List<OfficeTenureRecord>(Tenures.RecordCount);
             foreach (P12EOfficeTenureSnapshotRecord row in Tenures.Records)
-                tenures.Add(new OfficeTenureRecord(new OfficeId(row.OfficeIdValue),
+                tenures.Add(InstitutionOfficeOwnerBridge.CreateTenureRecord(new OfficeId(row.OfficeIdValue),
                     new PersonId(row.PersonIdValue), row.StartAbsoluteDay, row.EndAbsoluteDay,
                     row.EndReason.HasValue
                         ? (InstitutionalVacancyRecognitionReason?)row.EndReason.Value
                         : null, row.IsClosed));
-            if (!OfficeStore.TryCreateFromP12EOwnerSnapshot(
-                    institutionCandidate, offices, incumbencies, tenures, Offices.Revision,
+            if (!InstitutionOfficeOwnerBridge.TryCreateStagedOwners(
+                    institutions,
+                    Institutions.Revision,
+                    offices,
+                    incumbencies,
+                    tenures,
+                    Offices.Revision,
+                    out InstitutionStore institutionCandidate,
                     out OfficeStore officeCandidate)
-                || !ReferenceEquals(officeCandidate.InstitutionStoreForWorldBoundary, institutionCandidate))
+                || !InstitutionOfficeOwnerBridge.BelongsTo(officeCandidate, institutionCandidate))
                 return Fail(P12EInstitutionOfficeSnapshotFailureCode.StageFailed,
                     "The private OfficeStore factory rejected the validated owner pair.", out failure);
             stagedInstitutions = institutionCandidate;

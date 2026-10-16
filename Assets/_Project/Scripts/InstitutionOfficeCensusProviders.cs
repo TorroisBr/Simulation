@@ -86,7 +86,7 @@ public static class InstitutionOfficeCensusProvider
     {
         if (institutionOwner == null) throw new ArgumentNullException(nameof(institutionOwner));
         if (officeOwner == null) throw new ArgumentNullException(nameof(officeOwner));
-        if (!ReferenceEquals(officeOwner.InstitutionStoreForWorldBoundary, institutionOwner))
+        if (!InstitutionOfficeOwnerBridge.BelongsTo(officeOwner, institutionOwner))
         {
             throw new ArgumentException(
                 "The Office census owner must belong to the supplied installed Institution owner.",

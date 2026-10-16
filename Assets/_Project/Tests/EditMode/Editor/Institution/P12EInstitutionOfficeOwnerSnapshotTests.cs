@@ -49,8 +49,9 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
         Assert.That(stagedOffices.TenureCount, Is.Zero);
         Assert.That(stagedInstitutions.Revision, Is.Zero);
         Assert.That(stagedOffices.Revision, Is.Zero);
-        Assert.That(stagedOffices.InstitutionStoreForWorldBoundary, Is.SameAs(stagedInstitutions));
-        Assert.That(stagedOffices.CanBindMutationGuard(new AuthoritativeMutationGuard()), Is.True);
+        Assert.That(InstitutionOfficeOwnerBridge.GetInstitutionOwner(stagedOffices), Is.SameAs(stagedInstitutions));
+        Assert.That(InstitutionOfficeOwnerBridge.CanBindMutationStatus(
+            stagedOffices, new AuthoritativeMutationGuard()), Is.True);
     }
 
     [Test]
@@ -78,7 +79,8 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
             Assert.That(runtime.TryVacateOffice(officeId, out _), Is.True);
         }
         Assert.That(runtime.TryAssignIncumbent(officeId, secondPerson, null, out _), Is.True);
-        IReadOnlyList<OfficeTenureRecord> sourceTenures = runtime.OfficeStoreForWorldBoundary.TenureHistoryInMutationOrder;
+        IReadOnlyList<OfficeTenureRecord> sourceTenures =
+            InstitutionOfficeOwnerBridge.GetTenureHistoryInMutationOrder(runtime.OfficeStoreForWorldBoundary);
         Assert.That(sourceTenures, Has.Count.EqualTo(3));
         Assert.That(sourceTenures[0].Equals(sourceTenures[1]), Is.True,
             "Supported equal closed tenure occurrences must remain two separate history rows.");
@@ -115,12 +117,13 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
         Assert.That(stagedOffices.Revision, Is.EqualTo(7L));
         Assert.That(stagedOffices.TryGetIncumbency(officeId, out OfficeIncumbency stagedIncumbency), Is.True);
         Assert.That(stagedIncumbency.Incumbent.Value, Is.EqualTo(secondPerson.Value));
-        IReadOnlyList<OfficeTenureRecord> stagedTenures = stagedOffices.TenureHistoryInMutationOrder;
+        IReadOnlyList<OfficeTenureRecord> stagedTenures =
+            InstitutionOfficeOwnerBridge.GetTenureHistoryInMutationOrder(stagedOffices);
         Assert.That(stagedTenures, Has.Count.EqualTo(3));
         Assert.That(stagedTenures[0].Equals(stagedTenures[1]), Is.True);
         Assert.That(stagedTenures[0].EndReason, Is.EqualTo(InstitutionalVacancyRecognitionReason.ExplicitDecision));
         Assert.That(stagedTenures[2].IsOpen, Is.True);
-        Assert.That(stagedOffices.InstitutionStoreForWorldBoundary, Is.SameAs(stagedInstitutions));
+        Assert.That(InstitutionOfficeOwnerBridge.GetInstitutionOwner(stagedOffices), Is.SameAs(stagedInstitutions));
     }
 
     [Test]
@@ -213,9 +216,10 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
         Assert.That(validRepeatedClosed.TryCreateStagedOwners(persons,
             out _, out OfficeStore stagedOffices, out P12EInstitutionOfficeSnapshotFailure failure),
             Is.True, failure.Message);
-        Assert.That(stagedOffices.TenureHistoryInMutationOrder, Has.Count.EqualTo(2));
-        Assert.That(stagedOffices.TenureHistoryInMutationOrder[0].Equals(
-            stagedOffices.TenureHistoryInMutationOrder[1]), Is.True);
+        IReadOnlyList<OfficeTenureRecord> stagedTenures =
+            InstitutionOfficeOwnerBridge.GetTenureHistoryInMutationOrder(stagedOffices);
+        Assert.That(stagedTenures, Has.Count.EqualTo(2));
+        Assert.That(stagedTenures[0].Equals(stagedTenures[1]), Is.True);
     }
 
     [Test]

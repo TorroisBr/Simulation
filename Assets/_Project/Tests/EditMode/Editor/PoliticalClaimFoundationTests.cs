@@ -5,6 +5,37 @@ using NUnit.Framework;
 public sealed class PoliticalClaimFoundationTests
 {
     [Test]
+    public void PoliticalClaimBridgeBindsOneStatusAndBlocksFaultedWrites()
+    {
+        PoliticalClaimStore store = new PoliticalClaimStore();
+        MutableMutationStatus status = new MutableMutationStatus { CanMutate = true };
+        MutableMutationStatus differentStatus = new MutableMutationStatus { CanMutate = true };
+        Assert.That(PoliticalClaimOwnerBridge.CanBindMutationStatus(store, status), Is.True);
+        Assert.That(PoliticalClaimOwnerBridge.TryBindMutationStatus(store, status), Is.True);
+        Assert.That(PoliticalClaimOwnerBridge.CanBindMutationStatus(store, status), Is.True);
+        Assert.That(PoliticalClaimOwnerBridge.CanBindMutationStatus(store, differentStatus), Is.False);
+
+        status.CanMutate = false;
+        PoliticalClaimRecord record = new PoliticalClaimRecord(
+            new PoliticalClaimId("faulted-claim"),
+            new PersonId("claimant"),
+            PoliticalClaimType.StatusRecognition,
+            PoliticalClaimTarget.ForPerson(new PersonId("target")),
+            PoliticalClaimBasis.Other,
+            "fault test",
+            0L,
+            Array.Empty<string>());
+        Assert.That(store.TryRegister(record, out PoliticalClaimFailure failure), Is.False);
+        Assert.That(failure.Code, Is.EqualTo(PoliticalClaimFailureCode.RuntimeFaulted));
+        Assert.That(store.Revision, Is.Zero);
+    }
+
+    private sealed class MutableMutationStatus : IAuthoritativeMutationStatus
+    {
+        public bool CanMutate { get; set; }
+    }
+
+    [Test]
     public void ClaimTargetFactoriesPreserveTypedTargetIdentity()
     {
         PoliticalClaimTarget office = PoliticalClaimTarget.ForOffice(new OfficeId("office.crown"));

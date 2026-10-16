@@ -817,7 +817,7 @@ public sealed class CrimeKnowledgeStore : IAuthoritativeMutationGuardBindable
             && personStore.CanBindMutationGuard(guard)
             && outcomeStore.CanBindMutationGuard(guard)
             && simulationTime.CanBindMutationGuard(guard)
-            && institutionStore.CanBindMutationGuard(guard);
+            && InstitutionOfficeOwnerBridge.CanBindMutationStatus(institutionStore, guard);
     }
 
     internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
@@ -826,7 +826,7 @@ public sealed class CrimeKnowledgeStore : IAuthoritativeMutationGuardBindable
             && personStore.TryBindMutationGuard(guard)
             && outcomeStore.TryBindMutationGuard(guard)
             && simulationTime.TryBindMutationGuard(guard)
-            && institutionStore.TryBindMutationGuard(guard)
+            && InstitutionOfficeOwnerBridge.TryBindMutationStatus(institutionStore, guard)
             && mutationGuardBinding.TryBindTo(guard);
     }
 
@@ -1271,7 +1271,7 @@ public sealed class CrimeSocialAppraisalWorldState : IAuthoritativeMutationGuard
     {
         return mutationGuardBinding.CanBindTo(guard)
             && PersonStore.CanBindMutationGuard(guard)
-            && InstitutionStore.CanBindMutationGuard(guard)
+            && InstitutionOfficeOwnerBridge.CanBindMutationStatus(InstitutionStore, guard)
             && SimulationTime.CanBindMutationGuard(guard)
             && TheftOutcomes.CanBindMutationGuard(guard)
             && CrimeKnowledge.CanBindMutationGuard(guard)
@@ -1283,7 +1283,7 @@ public sealed class CrimeSocialAppraisalWorldState : IAuthoritativeMutationGuard
     {
         return CanBindMutationGuard(guard)
             && PersonStore.TryBindMutationGuard(guard)
-            && InstitutionStore.TryBindMutationGuard(guard)
+            && InstitutionOfficeOwnerBridge.TryBindMutationStatus(InstitutionStore, guard)
             && SimulationTime.TryBindMutationGuard(guard)
             && TheftOutcomes.TryBindMutationGuard(guard)
             && CrimeKnowledge.TryBindMutationGuard(guard)

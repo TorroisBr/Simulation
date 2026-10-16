@@ -589,10 +589,10 @@ public sealed class PoliticalKnowledgeStore : IAuthoritativeMutationGuardBindabl
     {
         return mutationGuardBinding.CanBindTo(guard)
             && personStore.CanBindMutationGuard(guard)
-            && institutionStore.CanBindMutationGuard(guard)
-            && politicalClaimStore.CanBindMutationGuard(guard)
+            && InstitutionOfficeOwnerBridge.CanBindMutationStatus(institutionStore, guard)
+            && PoliticalClaimOwnerBridge.CanBindMutationStatus(politicalClaimStore, guard)
             && factionStore.CanBindMutationGuard(guard)
-            && officeStore.CanBindMutationGuard(guard)
+            && InstitutionOfficeOwnerBridge.CanBindMutationStatus(officeStore, guard)
             && propertyOwnershipStore.CanBindMutationGuard(guard);
     }
 
@@ -600,10 +600,10 @@ public sealed class PoliticalKnowledgeStore : IAuthoritativeMutationGuardBindabl
     {
         return CanBindMutationGuard(guard)
             && personStore.TryBindMutationGuard(guard)
-            && institutionStore.TryBindMutationGuard(guard)
-            && politicalClaimStore.TryBindMutationGuard(guard)
+            && InstitutionOfficeOwnerBridge.TryBindMutationStatus(institutionStore, guard)
+            && PoliticalClaimOwnerBridge.TryBindMutationStatus(politicalClaimStore, guard)
             && factionStore.TryBindMutationGuard(guard)
-            && officeStore.TryBindMutationGuard(guard)
+            && InstitutionOfficeOwnerBridge.TryBindMutationStatus(officeStore, guard)
             && propertyOwnershipStore.TryBindMutationGuard(guard)
             && mutationGuardBinding.TryBindTo(guard);
     }

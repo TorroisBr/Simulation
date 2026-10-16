@@ -1307,7 +1307,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         OfficeStore resolvedOfficeStore = CloneOfficeStore(
             officeStore,
             resolvedInstitutionStore,
-            resolvedPersonStore);
+            resolvedPersonStore,
+            runtimeAdmissionContext?.IsRestoredContinuation == true);
         PropertyOwnershipStore resolvedPropertyOwnershipStore = ClonePropertyOwnershipStore(
             propertyOwnershipStore,
             resolvedPersonStore,
@@ -1418,7 +1419,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             resolvedInstitutionStore,
             resolvedOfficeStore,
             resolvedPropertyOwnershipStore,
-            simulationTime.AbsoluteDay);
+            simulationTime.AbsoluteDay,
+            runtimeAdmissionContext?.IsRestoredContinuation == true);
         this.factionStore = resolvedFactionStore;
         this.politicalSupportStore = ClonePoliticalSupportStore(
             politicalSupportStore,
@@ -2440,7 +2442,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private bool TryRegisterInstitutionOfficeCensusProviders(ContinuationCensusProtocol protocol)
     {
         if (protocol == null || institutionStore == null || officeStore == null
-            || !ReferenceEquals(officeStore.InstitutionStoreForWorldBoundary, institutionStore))
+            || !InstitutionOfficeOwnerBridge.BelongsTo(officeStore, institutionStore))
         {
             protocol?.FaultClosed();
             return false;
@@ -5901,11 +5903,26 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             authorities,
             new GenealogyMutationGuardBinding(genealogyStore),
             nameof(GenealogyStore));
-        AddRequiredMutationGuardBinding(authorities, institutionStore, nameof(InstitutionStore));
-        AddRequiredMutationGuardBinding(authorities, officeStore, nameof(OfficeStore));
+        AddRequiredMutationGuardBinding(
+            authorities,
+            new CoreOwnerMutationGuardBindable(
+                guard => InstitutionOfficeOwnerBridge.CanBindMutationStatus(institutionStore, guard),
+                guard => InstitutionOfficeOwnerBridge.TryBindMutationStatus(institutionStore, guard)),
+            nameof(InstitutionStore));
+        AddRequiredMutationGuardBinding(
+            authorities,
+            new CoreOwnerMutationGuardBindable(
+                guard => InstitutionOfficeOwnerBridge.CanBindMutationStatus(officeStore, guard),
+                guard => InstitutionOfficeOwnerBridge.TryBindMutationStatus(officeStore, guard)),
+            nameof(OfficeStore));
         AddRequiredMutationGuardBinding(authorities, propertyOwnershipStore, nameof(PropertyOwnershipStore));
         AddRequiredMutationGuardBinding(authorities, estateStore, nameof(EstateStore));
-        AddRequiredMutationGuardBinding(authorities, politicalClaimStore, nameof(PoliticalClaimStore));
+        AddRequiredMutationGuardBinding(
+            authorities,
+            new CoreOwnerMutationGuardBindable(
+                guard => PoliticalClaimOwnerBridge.CanBindMutationStatus(politicalClaimStore, guard),
+                guard => PoliticalClaimOwnerBridge.TryBindMutationStatus(politicalClaimStore, guard)),
+            nameof(PoliticalClaimStore));
         AddRequiredMutationGuardBinding(authorities, factionStore, nameof(FactionStore));
         AddRequiredMutationGuardBinding(authorities, politicalSupportStore, nameof(PoliticalSupportStore));
         AddRequiredMutationGuardBinding(authorities, politicalKnowledgeStore, nameof(PoliticalKnowledgeStore));
@@ -6016,6 +6033,23 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             diagnostic = "The private restored candidate mutation guard could not bind: " + exception.Message;
             return false;
         }
+    }
+
+    private sealed class CoreOwnerMutationGuardBindable : IAuthoritativeMutationGuardBindable
+    {
+        private readonly Func<AuthoritativeMutationGuard, bool> canBind;
+        private readonly Func<AuthoritativeMutationGuard, bool> tryBind;
+
+        internal CoreOwnerMutationGuardBindable(
+            Func<AuthoritativeMutationGuard, bool> canBind,
+            Func<AuthoritativeMutationGuard, bool> tryBind)
+        {
+            this.canBind = canBind ?? throw new ArgumentNullException(nameof(canBind));
+            this.tryBind = tryBind ?? throw new ArgumentNullException(nameof(tryBind));
+        }
+
+        public bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => canBind(guard);
+        public bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => tryBind(guard);
     }
 
     private static void AddRequiredMutationGuardBinding(
@@ -6847,7 +6881,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
-        return PoliticalClaimSystem.TryProposeRecognition(
+        return PoliticalClaimOwnerBridge.TryProposeRecognition(
             politicalClaimStore,
             claimId,
             recognizingInstitutionId,
@@ -6889,7 +6923,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         try
         {
-            bool applied = PoliticalClaimSystem.TryApplyRecognition(
+            bool applied = PoliticalClaimOwnerBridge.TryApplyRecognition(
                 politicalClaimStore,
                 transition,
                 out failure);
@@ -6913,7 +6947,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         out PoliticalClaimResolutionTransition transition,
         out PoliticalClaimFailure failure)
     {
-        return PoliticalClaimSystem.TryProposeResolution(
+        return PoliticalClaimOwnerBridge.TryProposeResolution(
             politicalClaimStore,
             claimId,
             status,
@@ -6953,7 +6987,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         try
         {
-            bool applied = PoliticalClaimSystem.TryApplyResolution(
+            bool applied = PoliticalClaimOwnerBridge.TryApplyResolution(
                 politicalClaimStore,
                 transition,
                 out failure);
@@ -7688,7 +7722,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         OfficeId officeId,
         out OfficeTenureRecord tenure)
     {
-        return officeStore.TryGetLatestClosedTenure(officeId, out tenure);
+        return InstitutionOfficeOwnerBridge.TryGetLatestClosedTenure(officeStore, officeId, out tenure);
     }
 
     public bool TryAssignIncumbent(
@@ -10063,7 +10097,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         InstitutionStore institutionStore,
         OfficeStore officeStore,
         PropertyOwnershipStore propertyOwnershipStore,
-        long currentDay)
+        long currentDay,
+        bool isRestoredContinuation)
     {
         PoliticalClaimStore copy = new PoliticalClaimStore();
         if (source == null)
@@ -10130,7 +10165,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     nameof(source));
             }
 
-            if (copy.TryRegisterRecognition(recognition, out PoliticalClaimFailure recognitionFailure) == false)
+            if (PoliticalClaimOwnerBridge.TryRegisterRecognitionForRuntimeClone(
+                    copy,
+                    recognition,
+                    out PoliticalClaimFailure recognitionFailure) == false)
             {
                 throw new ArgumentException(
                     "The SimulationRuntime PoliticalClaimStore contains invalid recognition: " + recognitionFailure + ".",
@@ -10146,7 +10184,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 nameof(source));
         }
 
-        return copy;
+        return isRestoredContinuation
+            ? PoliticalClaimOwnerBridge.CloneForRestoredContinuation(source)
+            : copy;
     }
 
     private static FactionStore CloneFactionStore(
@@ -10472,9 +10512,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     {
         if (institutionStore != null
             && officeStore != null
-            && ReferenceEquals(
-                institutionStore,
-                officeStore.InstitutionStoreForWorldBoundary) == false)
+            && !InstitutionOfficeOwnerBridge.BelongsTo(officeStore, institutionStore))
         {
             throw new ArgumentException(
                 "The SimulationRuntime InstitutionStore and OfficeStore must belong to the same store pair.",
@@ -10482,7 +10520,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         }
 
         InstitutionStore source = institutionStore
-            ?? officeStore?.InstitutionStoreForWorldBoundary;
+            ?? (officeStore == null ? null : InstitutionOfficeOwnerBridge.GetInstitutionOwner(officeStore));
         if (p12CrimeSocialAppraisalWorldState != null)
         {
             if (!ReferenceEquals(source, p12CrimeSocialAppraisalWorldState.InstitutionStore))
@@ -10521,7 +10559,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private static OfficeStore CloneOfficeStore(
         OfficeStore source,
         InstitutionStore institutionStore,
-        PersonStore personStore)
+        PersonStore personStore,
+        bool isRestoredContinuation)
     {
         OfficeStore copy = new OfficeStore(institutionStore);
         if (source == null)
@@ -10567,27 +10606,45 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             }
         }
 
-        foreach (OfficeTenureRecord tenure in source.TenureHistoryInMutationOrder)
+        foreach (OfficeTenureRecord tenure in InstitutionOfficeOwnerBridge.GetTenureHistoryInMutationOrder(source))
         {
             if (tenure == null || tenure.IsOpen)
             {
                 continue;
             }
 
-            OfficeTenureRecord clone = new OfficeTenureRecord(
+            OfficeTenureRecord clone = InstitutionOfficeOwnerBridge.CreateTenureRecord(
                 new OfficeId(tenure.OfficeId.Value),
                 new PersonId(tenure.Incumbent.Value),
                 tenure.StartAbsoluteDay,
                 tenure.EndAbsoluteDay,
                 tenure.EndReason,
                 true);
-            if (copy.TryAddHistoricalTenure(clone, out InstitutionFoundationFailure failure) == false)
+            if (InstitutionOfficeOwnerBridge.TryAddHistoricalTenureForRuntimeOfficeClone(
+                    copy,
+                    clone,
+                    out InstitutionFoundationFailure failure) == false)
             {
                 throw new ArgumentException(
                     "The SimulationRuntime OfficeStore contains invalid historical tenure: "
                     + failure + ".",
                     nameof(source));
             }
+        }
+
+        if (isRestoredContinuation)
+        {
+            if (!InstitutionOfficeOwnerBridge.TryCloneForRestoredContinuation(
+                source,
+                institutionStore,
+                out OfficeStore restoredClone))
+            {
+                throw new ArgumentException(
+                    "The restored SimulationRuntime OfficeStore could not preserve its validated source revision and tenure order.",
+                    nameof(source));
+            }
+
+            return restoredClone;
         }
 
         return copy;

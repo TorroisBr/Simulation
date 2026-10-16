@@ -243,7 +243,7 @@ public sealed class P12EDailyV1OwnerPackageTests
         Assert.That(package.Institutions.TryGet(institutionId, out InstitutionRecord stagedInstitution), Is.True);
         Assert.That(package.Offices.TryGet(officeId, out OfficeRecord stagedOffice), Is.True);
         Assert.That(stagedOffice.InstitutionId, Is.EqualTo(institutionId));
-        Assert.That(package.Offices.InstitutionStoreForWorldBoundary, Is.SameAs(package.Institutions));
+        Assert.That(InstitutionOfficeOwnerBridge.GetInstitutionOwner(package.Offices), Is.SameAs(package.Institutions));
         Assert.That(package.PoliticalClaims.TryGet(claimId, out PoliticalClaimRecord stagedClaim), Is.True);
         Assert.That(stagedClaim.Target.Kind, Is.EqualTo(PoliticalClaimTargetKind.Office));
         Assert.That(stagedClaim.Target.TargetId, Is.EqualTo(officeId.Value));

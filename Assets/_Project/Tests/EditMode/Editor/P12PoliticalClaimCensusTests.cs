@@ -27,7 +27,21 @@ public sealed class P12PoliticalClaimCensusTests
             PoliticalClaimRecognitionState.Recognized,
             0L,
             "provider fixture");
-        Assert.That(owner.TryRegisterRecognition(recognition, out PoliticalClaimFailure recognitionFailure), Is.True,
+        Assert.That(PoliticalClaimOwnerBridge.TryProposeRecognition(
+            owner,
+            claim.ClaimId,
+            recognition.InstitutionId,
+            recognition.State,
+            recognition.RecognitionAbsoluteDay,
+            0L,
+            "provider fixture",
+            out PoliticalClaimRecognitionTransition transition,
+            out PoliticalClaimFailure recognitionFailure), Is.True,
+            recognitionFailure.ToString());
+        Assert.That(PoliticalClaimOwnerBridge.TryApplyRecognition(
+            owner,
+            transition,
+            out recognitionFailure), Is.True,
             recognitionFailure.ToString());
         AssertWitnesses(providers, owner, 1, 1, 2L);
         AssertWitnesses(providers, owner, 1, 1, 2L);

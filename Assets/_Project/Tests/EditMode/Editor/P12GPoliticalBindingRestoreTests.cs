@@ -475,6 +475,11 @@ public sealed class P12GPoliticalBindingRestoreTests
             out P12FDailyV1OwnerPackage stagedF,
             out P12FDailyV1OwnerPackageFailure fStageFailure), Is.True, fStageFailure.ToString());
 
+        if (seedPoliticalOwners)
+        {
+            SeedInstitutionAndClaimOwners(stagedE, stagedD.Persons, stagedTime.AbsoluteDay);
+        }
+
         PoliticalKnowledgeHolder holder = null;
         PoliticalDecisionId decisionId = null;
         if (seedPoliticalOwners)
@@ -844,6 +849,177 @@ public sealed class P12GPoliticalBindingRestoreTests
             PoliticalKnowledgeHolder.ForPerson(runtime.PoliticalDecisionRecords.Single().Decider.PersonId),
             out PoliticalKnowledgeRuntime facts), Is.True);
         Assert.That(facts.PersonDeathObservations, Has.Count.EqualTo(1));
+
+        InstitutionStore institutions = runtime.InstitutionStoreForWorldBoundary;
+        OfficeStore offices = runtime.OfficeStoreForWorldBoundary;
+        PoliticalClaimStore claims = GetOwner<PoliticalClaimStore>(
+            token.OwnerSections, PoliticalClaimStoreCensusProvider.ClaimsSectionId);
+        Assert.That(institutions.Revision, Is.EqualTo(1L));
+        Assert.That(offices.Revision, Is.EqualTo(3L));
+        Assert.That(InstitutionOfficeOwnerBridge.GetInstitutionOwner(offices), Is.SameAs(institutions));
+        IReadOnlyList<OfficeTenureRecord> tenures =
+            InstitutionOfficeOwnerBridge.GetTenureHistoryInMutationOrder(offices);
+        Assert.That(tenures, Has.Count.EqualTo(1));
+        Assert.That(tenures[0].IsClosed, Is.True);
+        Assert.That(tenures[0].StartAbsoluteDay.HasValue, Is.True);
+        long ownerMutationDay = tenures[0].StartAbsoluteDay.Value;
+        Assert.That(ownerMutationDay, Is.LessThanOrEqualTo(token.AbsoluteDay));
+        Assert.That(tenures[0].EndAbsoluteDay, Is.EqualTo(ownerMutationDay),
+            "The proving tenure closes on its same logical day.");
+        AssertSection(token.OwnerSections, InstitutionOfficeCensusProvider.InstitutionsSectionId,
+            OwnerSectionRole.Required, 1, institutions.Revision, institutions);
+        AssertSection(token.OwnerSections, InstitutionOfficeCensusProvider.OfficesSectionId,
+            OwnerSectionRole.Required, 1, offices.Revision, offices);
+        AssertSection(token.OwnerSections, InstitutionOfficeCensusProvider.IncumbenciesSectionId,
+            OwnerSectionRole.Required, 0, offices.Revision, offices);
+        AssertSection(token.OwnerSections, InstitutionOfficeCensusProvider.TenuresSectionId,
+            OwnerSectionRole.Required, 1, offices.Revision, offices);
+
+        Assert.That(claims.Count, Is.EqualTo(2));
+        Assert.That(claims.RecognitionCount, Is.EqualTo(2));
+        Assert.That(claims.Revision, Is.EqualTo(7L));
+        AssertSection(token.OwnerSections, PoliticalClaimStoreCensusProvider.ClaimsSectionId,
+            OwnerSectionRole.Required, 2, claims.Revision, claims);
+        AssertSection(token.OwnerSections, PoliticalClaimStoreCensusProvider.RecognitionsSectionId,
+            OwnerSectionRole.Required, 2, claims.Revision, claims);
+        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(
+            runtime,
+            token,
+            token.OwnerSections,
+            out P12EInstitutionOfficeOwnerSnapshot institutionSnapshot,
+            out P12EInstitutionOfficeSnapshotFailure institutionFailure), Is.True,
+            institutionFailure?.Message);
+        Assert.That(institutionSnapshot.Offices.Revision, Is.EqualTo(3L));
+        Assert.That(institutionSnapshot.Tenures.Records, Has.Count.EqualTo(1));
+        Assert.That(institutionSnapshot.Tenures.Records[0].StartAbsoluteDay, Is.EqualTo(ownerMutationDay));
+        Assert.That(institutionSnapshot.Tenures.Records[0].EndAbsoluteDay, Is.EqualTo(ownerMutationDay));
+        Assert.That(P12EPoliticalClaimOwnerSnapshot.TryCapture(
+            runtime,
+            token,
+            token.OwnerSections,
+            out P12EPoliticalClaimOwnerSnapshot claimSnapshot,
+            out P12EPoliticalClaimSnapshotFailure claimFailure), Is.True, claimFailure?.Message);
+        Assert.That(claimSnapshot.Claims.Revision, Is.EqualTo(7L));
+        Assert.That(claimSnapshot.Claims.Records, Has.Count.EqualTo(2));
+        P12EPoliticalClaimRow resolvedClaim = claimSnapshot.Claims.Records.Single(
+            row => row.ClaimId == "p12g-claim-resolved-office");
+        Assert.That(resolvedClaim.Status, Is.EqualTo((int)PoliticalClaimStatus.Resolved));
+        Assert.That(resolvedClaim.ResolutionAbsoluteDay, Is.EqualTo(ownerMutationDay));
+        P12EPoliticalClaimRecognitionRow reRecognized = claimSnapshot.Recognitions.Records.Single(
+            row => row.ClaimId == "p12g-claim-resolved-office");
+        Assert.That(reRecognized.State, Is.EqualTo((int)PoliticalClaimRecognitionState.Recognized));
+        Assert.That(reRecognized.History, Has.Count.EqualTo(2));
+        Assert.That(reRecognized.History[0].State, Is.EqualTo((int)PoliticalClaimRecognitionState.Unrecognized));
+        Assert.That(reRecognized.History[1].State, Is.EqualTo((int)PoliticalClaimRecognitionState.Recognized));
+    }
+
+    private static void SeedInstitutionAndClaimOwners(
+        P12EDailyV1OwnerPackage stagedOwners,
+        PersonStore persons,
+        long day)
+    {
+        InstitutionId institutionId = new InstitutionId("p12g-institution");
+        OfficeId officeId = new OfficeId("p12g-office");
+        PersonId claimantId = new PersonId("p12g-political-holder");
+        PersonId targetId = new PersonId("p12g-political-observer");
+        Assert.That(persons.TryGet(claimantId, out _), Is.True);
+        Assert.That(persons.TryGet(targetId, out _), Is.True);
+        Assert.That(stagedOwners.Institutions.TryRegister(
+            new InstitutionRecord(institutionId, "P12-G institution fixture"), out InstitutionFoundationFailure institutionFailure),
+            Is.True, institutionFailure.ToString());
+        Assert.That(stagedOwners.Offices.TryRegister(
+            new OfficeRecord(officeId, institutionId, "P12-G office fixture"), out InstitutionFoundationFailure officeFailure),
+            Is.True, officeFailure.ToString());
+        Assert.That(stagedOwners.Offices.TryAssignIncumbent(
+            officeId, claimantId, day, out InstitutionFoundationFailure assignmentFailure),
+            Is.True, assignmentFailure.ToString());
+        Assert.That(stagedOwners.Offices.TryVacateOffice(
+            officeId, day, InstitutionalVacancyRecognitionReason.ExplicitDecision,
+            out InstitutionFoundationFailure vacancyFailure), Is.True, vacancyFailure.ToString());
+        Assert.That(stagedOwners.Offices.Revision, Is.EqualTo(3L));
+
+        PoliticalClaimId activeClaimId = new PoliticalClaimId("p12g-claim-active-office");
+        PoliticalClaimRecord activeClaim = new PoliticalClaimRecord(
+            activeClaimId,
+            claimantId,
+            PoliticalClaimType.OfficeEntitlement,
+            PoliticalClaimTarget.ForOffice(officeId),
+            PoliticalClaimBasis.OfficeIncumbency,
+            "P12-G active office claim",
+            day,
+            Array.Empty<string>());
+        Assert.That(stagedOwners.PoliticalClaims.TryRegister(activeClaim, out PoliticalClaimFailure activeFailure),
+            Is.True, activeFailure.ToString());
+        ApplySyntheticRecognition(stagedOwners.PoliticalClaims, activeClaimId, institutionId,
+            PoliticalClaimRecognitionState.Unrecognized, day, "initial active recognition");
+        ApplySyntheticRecognition(stagedOwners.PoliticalClaims, activeClaimId, institutionId,
+            PoliticalClaimRecognitionState.Recognized, day, "updated active recognition");
+
+        PoliticalClaimId resolvedClaimId = new PoliticalClaimId("p12g-claim-resolved-office");
+        PoliticalClaimRecord resolvedClaim = new PoliticalClaimRecord(
+            resolvedClaimId,
+            claimantId,
+            PoliticalClaimType.StatusRecognition,
+            PoliticalClaimTarget.ForPerson(targetId),
+            PoliticalClaimBasis.Other,
+            "P12-G resolved claim re-recognition",
+            day,
+            Array.Empty<string>());
+        Assert.That(stagedOwners.PoliticalClaims.TryRegister(resolvedClaim, out PoliticalClaimFailure resolvedFailure),
+            Is.True, resolvedFailure.ToString());
+        ApplySyntheticRecognition(stagedOwners.PoliticalClaims, resolvedClaimId, institutionId,
+            PoliticalClaimRecognitionState.Unrecognized, day, "initial resolved-claim recognition");
+        Assert.That(PoliticalClaimOwnerBridge.TryProposeResolution(
+            stagedOwners.PoliticalClaims,
+            resolvedClaimId,
+            PoliticalClaimStatus.Resolved,
+            day,
+            day,
+            out PoliticalClaimResolutionTransition resolution,
+            out PoliticalClaimFailure proposalFailure), Is.True, proposalFailure.ToString());
+        Assert.That(PoliticalClaimOwnerBridge.TryApplyResolution(
+            stagedOwners.PoliticalClaims, resolution, out PoliticalClaimFailure resolutionFailure),
+            Is.True, resolutionFailure.ToString());
+        ApplySyntheticRecognition(stagedOwners.PoliticalClaims, resolvedClaimId, institutionId,
+            PoliticalClaimRecognitionState.Recognized, day, "re-recognized after resolution");
+        Assert.That(stagedOwners.PoliticalClaims.Revision, Is.EqualTo(7L));
+    }
+
+    private static void ApplySyntheticRecognition(
+        PoliticalClaimStore owner,
+        PoliticalClaimId claimId,
+        InstitutionId institutionId,
+        PoliticalClaimRecognitionState state,
+        long day,
+        string reason)
+    {
+        Assert.That(PoliticalClaimOwnerBridge.TryProposeRecognition(
+            owner,
+            claimId,
+            institutionId,
+            state,
+            day,
+            day,
+            reason,
+            out PoliticalClaimRecognitionTransition transition,
+            out PoliticalClaimFailure proposalFailure), Is.True, proposalFailure.ToString());
+        Assert.That(PoliticalClaimOwnerBridge.TryApplyRecognition(
+            owner, transition, out PoliticalClaimFailure applyFailure), Is.True, applyFailure.ToString());
+    }
+
+    private static void AssertSection(
+        IReadOnlyList<OwnerSectionCensusSnapshot> sections,
+        string sectionId,
+        OwnerSectionRole role,
+        int cardinality,
+        long revision,
+        object owner)
+    {
+        OwnerSectionCensusSnapshot row = sections.Single(candidate => candidate.SectionId == sectionId);
+        Assert.That(row.Role, Is.EqualTo(role), sectionId);
+        Assert.That(row.Cardinality, Is.EqualTo(cardinality), sectionId);
+        Assert.That(row.Revision, Is.EqualTo(revision), sectionId);
+        Assert.That(row.OwnerInstanceIdentity, Is.SameAs(owner), sectionId);
     }
 
     private static void AssertOwnerVectorFactsEqual(
