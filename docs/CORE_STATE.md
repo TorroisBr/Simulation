@@ -795,9 +795,19 @@ the durable review is
 The review confirms the inventory/blob joins and graph derivations, while
 retaining the evidence boundary below.
 
+The first post-promotion owner/member/access join is recorded in
+[`POST_INSTITUTION_OWNER_MEMBER_ACCESS_JOIN.md`](validation/CORE_F_SourceClosure_PostInstitution/POST_INSTITUTION_OWNER_MEMBER_ACCESS_JOIN.md).
+It resolves all 1,660 cited source references across the existing 89-family and
+24-operation matrices to the exact promoted code tree and projects the current
+selected Core/Unity symbol edges. It also confirms the existing matrices do
+not yet directly bind each family to its post-migration owner declaration,
+member, constructor, live instance, and writer/hydrator path. This is partial
+source identity evidence, not semantic closure.
+
 Accordingly, `CORE-F-Shared-DailyV1-Application-and-Host` remains
 `WAIT_DEPENDENCY`; this refresh does not make it `READY_FOR_IMPLEMENTATION`.
-The next authorized technical task is the row-level current-source owner and
-member/access join, then independent design review. No P12 profile, numbered
-Phase, or CORE-X status changes. No production or test source changed during
-this graph refresh.
+The next authorized technical task is to finish the family-to-declaration,
+member, constructor, live-instance, writer/epoch, and restore-target mapping,
+then obtain independent review of that completed join before implementation
+readiness. No P12 profile, numbered Phase, or CORE-X status changes. No
+production or test source changed during this evidence refresh.
