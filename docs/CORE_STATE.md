@@ -725,3 +725,39 @@ slice from this promotion. Selected-owner source/writer/epoch closure, shared
 runtime and restore composition, detached restoration, and the .NET host with
 deterministic continuation remain separately dependency-gated. Full CORE-F
 remains `WAIT_DEPENDENCY`; this promotion changes no P12/P13 or CORE-X status.
+
+## CORE-F institution and claim owners promoted — 2026-10-15
+
+The bounded institution and political-claim owner extraction was promoted to
+`codex/core/canonical` by fast-forward from
+`b2c2c0e94c7a8dd9175a8db3fab4fb9d78dcfb2a` to
+`06b0e4f047923bbaeee7080a8657981ab4e10ee0` (tree
+`dd38559ee53a694ff82f4866f724f009366f2260`). The reviewed implementation and
+test source is `ca55c3f9fa4d9c99e6a47a25adbbd1956ea04a1d` (tree
+`e0d3de22bdc7bcc16e16a925f6f8c38f6a6397a5`); the candidate validation and
+evidence are at `c5d6babf15480b9ac44174ce43d11e1a2eabc397`. Independent
+exact-tip review returned `VALIDATED_CANDIDATE`; its durable record is
+[`CORE_F_INSTITUTION_CLAIM_OWNERS_REVIEW_C5D6BAB.md`](reviews/CORE_F_INSTITUTION_CLAIM_OWNERS_REVIEW_C5D6BAB.md).
+The review-record successor changes no production or test source. Local and
+remote `codex/core/canonical` synchronization was verified at the promotion
+tip.
+
+Final evidence: Unity focused `P12GPoliticalBindingRestoreTests` 11/11, ALL
+EditMode 3179/3179, official Smoke 5/5, .NET CoreValidation 188/188 cold and
+188/188 warm, and `git diff --check` PASS. Normalized Unity and .NET package
+hashes and exact runner identities are recorded in
+[`CORE-F Institution and Claim Owners validation`](validation/CORE_F_InstitutionClaimOwners/VALIDATION.md).
+The standalone focused and Smoke filtered XML reports remain privately
+retained because the strict packager rejects their full-discovery parent-suite
+counts; no XML was modified. All five Smoke identities and pass outcomes are
+present in the verified full EditMode report.
+
+This promotion extracts only the approved institution and political-claim
+owner sources, the shared property contracts required by that slice, adapters,
+and required runtime call-site changes, including the reviewed restored-clone
+revision correction. It does not complete CORE-F,
+close the full selected Daily-v1 owner/runtime graph, authorize detached .NET
+hosting or continuation, or change P12/P13, CORE-X, or any numbered Phase
+status. Recompute the member/source/access ledger against this promoted graph
+before treating the dependent shared runtime/restore design as implementation
+ready; it remains `WAIT_DEPENDENCY` until that complete closure is proven.
