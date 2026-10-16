@@ -945,3 +945,29 @@ callbacks, capture/stage/hydrator targets, and the approved no-writer profile
 dispositions. Shared Daily-v1 Runtime/Restore therefore remains
 `WAIT_DEPENDENCY`; this evidence does not authorize source extraction or widen
 the public API.
+
+## CORE-F owner-entry qualification — selected Daily-v1 evidence
+
+The bounded test/evidence candidate is
+`af411093de1b95cf46ae7cdfad595864bca62ee4` (tree
+`99e74525432efe0d2ff3fed5c60bf12a1922bdaa`), based on Core canonical
+`1998974515b6357c308d861fb608f2db5071a63a` and owner-entry contract
+`512cf5721927a5b3d6766bc4d19cfd62a6729a41`. Its validation record is
+[`CORE-F Owner Entry Qualification`](validation/CORE_F_OwnerEntryQualification/VALIDATION.md).
+
+The candidate evidence joins 89/89 selected owner-entry chains, preserves all
+18 no-writer dispositions as `Required`, and maps 18,270 row-linked references
+from 67 split host files into 3,365 destination groups. The member-access
+projection contains 42,625 callsites and resolves all 2,582 Core declaration
+pairs; its Unity-engine projection contains 288 pairs. The post-institution
+join passes for all 89 owner/capture anchors and resolves all 1,660 cited
+references across 142 paths. Focused Unity passed 15/15, full EditMode passed
+3,184/3,184, and official filtered Smoke passed 5/5 on the exact candidate
+tree. Previously approved CoreValidation cold/warm evidence is reused under
+the exact 142-input equality rule. The normalized full EditMode package
+verifies against its protected original run.
+
+This is a test/evidence qualification only. It adds no production writer or
+runtime behavior and does not widen Daily-v1. Shared
+Runtime/Application/Host remains `WAIT_DEPENDENCY`; this evidence does not
+alone authorize source extraction or establish runtime/restore readiness.

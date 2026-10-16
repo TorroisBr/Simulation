@@ -928,6 +928,7 @@ def main() -> int:
         "docs/validation/CORE_F_OwnerEntryQualification/audit-source/OwnerEntryQualification.py",
         "docs/validation/CORE_F_SourceClosure_PostInstitution/audit-source/MemberAccessCut.cs",
         "docs/validation/CORE_F_SourceClosure_PostInstitution/audit-source/MemberAccessCut.csproj",
+        "docs/validation/CORE_F_SourceClosure_PostInstitution/audit-source/PostInstitutionJoin.py",
     ):
         path = repo / relative_path
         tooling_sources[relative_path] = {

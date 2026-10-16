@@ -17,6 +17,13 @@ import sys
 
 SOURCE_COMMIT = "cb31d4d6f777a78af25670e3e6d43f01578b8809"
 PATH_RE = re.compile(r"(?:Assets|Packages|src|tests)/[A-Za-z0-9_./-]+\.cs")
+APPROVED_TEST_ONLY_DELTAS = {
+    "Assets/_Project/Tests/EditMode/Editor/ExpeditionTests.cs",
+    "Assets/_Project/Tests/EditMode/Editor/P12DNpcRootOwnerSnapshotTests.cs",
+    "Assets/_Project/Tests/EditMode/Editor/P12GOwnerEntryQualificationTests.cs",
+    "Assets/_Project/Tests/EditMode/Editor/P12GOwnerEntryQualificationTests.cs.meta",
+    "Assets/_Project/Tests/EditMode/Editor/P12GPoliticalBindingRestoreTests.cs",
+}
 
 
 def read_csv(path: pathlib.Path) -> list[dict[str, str]]:
@@ -189,13 +196,17 @@ def main() -> int:
     operation_rows = read_csv(owner_dir / "OPERATION_CASE_MAP.csv")
     family_rows = read_csv(repo / "docs/architecture/SIMULATION_CORE_F_OWNER_SECTIONS.csv")
 
-    source_diff = subprocess.run(
-        ["git", "-C", str(repo), "diff", "--quiet", SOURCE_COMMIT, "HEAD", "--", "Assets", "Packages", "src", "tests"],
-        check=False,
-    )
-    if source_diff.returncode != 0:
+    source_changes = subprocess.run(
+        ["git", "-C", str(repo), "diff", "--name-only", SOURCE_COMMIT, "HEAD", "--", "Assets", "Packages", "src", "tests"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    unexpected_source_changes = sorted(set(source_changes) - APPROVED_TEST_ONLY_DELTAS)
+    if unexpected_source_changes:
         raise RuntimeError(
-            "Pinned production/test source differs from HEAD; rebase the source graph before joining it"
+            "Pinned source graph changed outside the exact approved test-only delta: "
+            + ", ".join(unexpected_source_changes)
         )
 
     family_ids = [row["section_or_prefix"] for row in family_rows]
@@ -265,7 +276,11 @@ def main() -> int:
     def resolve(path: str) -> tuple[str, str]:
         if path not in source_cache:
             current_path = migrations.get(path, path)
-            current_blob = git_blob(repo, current_path)
+            current_blob = (
+                git_blob_at(repo, "HEAD", current_path)
+                if current_path in APPROVED_TEST_ONLY_DELTAS
+                else git_blob(repo, current_path)
+            )
             source_cache[path] = (current_path, current_blob)
         return source_cache[path]
 

@@ -1,0 +1,12 @@
+CORE-F selected runtime/restore member-access call-site inventory
+Source commit: ca55c3f9fa4d9c99e6a47a25adbbd1956ea04a1d; source tree: e0d3de22bdc7bcc16e16a925f6f8c38f6a6397a5.
+Unity compiler response: Bee/artifacts/1900b0aE.dag/Assembly-CSharp.rsp; SHA-256 1f490838bbb8443791f7ccd5eb856e98ae9c6993ca961517f345fbd37747c555; 60771 bytes.
+Unity editor: 6000.3.9f1.
+Roslyn semantic projection: 315 Unity source files; 332 resolved metadata references; the editor's official compile/test result is the Unity compilation authority.
+Core source declaration binding: 53 exact compile inputs; 332 metadata references excluding the prior Simulation.Core binary; compile errors 0; 2807 declared source symbols; all selected Simulation.Core call sites must resolve.
+Closure inventory: 220 runtime sources; 289 restore sources.
+Exact prior symbol-pair reconciliation: Simulation.Core 2582/2582; UnityEngine 288/288.
+Call-site rows: Simulation.Core 39305; UnityEngine 3320; total 42625.
+CSV.GZ: selected-member-access-sites.csv.gz; SHA-256 8eb054a7b59d511d864b2bee707a8d62ead1ea78002be9766a85fbf754467121; 609433 bytes.
+Uncompressed CSV: SHA-256 c7714eaaccb0b53712017d93157fa7f94a05911f37f28cd0b4fb094d21f945a8; 28343637 bytes.
+Raw compiler response and machine paths are not emitted. Call-site rows identify the concrete caller member, access level, symbol, target containing type, target assembly, exact source declaration sites for Simulation.Core, and runtime/restore closure. Implicit Core constructors bind to their declaring type location and are labeled; UnityEngine metadata declarations remain external by design. These are evidence for the approved same-assembly/Unity-adapter cut, not a new public API.

@@ -1,0 +1,159 @@
+{
+  "approvedTestSourceIdentities": {
+    "Assets/_Project/Tests/EditMode/Editor/ExpeditionTests.cs": {
+      "bytes": 51895,
+      "gitBlob": "f781480f93a69d6313778c7caf25dcb79020a8c9",
+      "sha256": "e575d93792d83f68bb5a855297a3e8c78f87b61a0266eeff8ac2a3badc770b8e"
+    },
+    "Assets/_Project/Tests/EditMode/Editor/P12DNpcRootOwnerSnapshotTests.cs": {
+      "bytes": 78860,
+      "gitBlob": "bf810febe339aa7d0ebd8b134f23859846e56374",
+      "sha256": "267a4d8862c32b0498d19620d5edcc2764bc0c9a825250cc79137e4c10e413f6"
+    },
+    "Assets/_Project/Tests/EditMode/Editor/P12GOwnerEntryQualificationTests.cs": {
+      "bytes": 31599,
+      "gitBlob": "3f02e329ba08752726caf242ce1c9e1bdee7a11b",
+      "sha256": "6b7e22e149551b324cf7388e338caf17a34716abde60405ea73424c53565a3ca"
+    },
+    "Assets/_Project/Tests/EditMode/Editor/P12GOwnerEntryQualificationTests.cs.meta": {
+      "bytes": 254,
+      "gitBlob": "a4be7b87b46abe780cb0efd6ea9293378549b80b",
+      "sha256": "5d062711b56354f262db6e12c96ae36fb05285286a052f19e0b7fa267055b90d"
+    },
+    "Assets/_Project/Tests/EditMode/Editor/P12GPoliticalBindingRestoreTests.cs": {
+      "bytes": 173433,
+      "gitBlob": "0574140234cf3a27a83239bca7e63afd0e731496",
+      "sha256": "bcd9bbed50ea8170b184d34c9bf9119371e780f4135c4c4ebbf7cb8a6dee16c7"
+    },
+    "Assets/_Project/Tests/EditMode/Editor/SimulationBootstrapCompositionTests.cs": {
+      "bytes": 227108,
+      "gitBlob": "f2d5dcef27419a2915630277b556dfe5948543ff",
+      "sha256": "93b0c14c0089b7d1eeb8c37c9c355fc4ff9ee6da1766594a3ab20d749194a840"
+    }
+  },
+  "architectureContractBlob": "2cdcffe0760271cd6e31ee63cf8b23d17760f8f3",
+  "architectureContractCommit": "512cf5721927a5b3d6766bc4d19cfd62a6729a41",
+  "architectureContractPath": "docs/architecture/CORE_F_OWNER_ENTRY_CONTRACT.md",
+  "candidateCommit": "af411093de1b95cf46ae7cdfad595864bca62ee4",
+  "candidateTree": "99e74525432efe0d2ff3fed5c60bf12a1922bdaa",
+  "claims": [
+    "All 18 no-writer dispositions remain Required and qualify only by the promoted architecture's preservation/restriction and supported-operation conservation rules.",
+    "The 89 owner chains combine current owner/writer/capture matrices with exact selected-profile live identity expressions; the grouped cases add only the approved integrated P12-G evidence.",
+    "The split-host destination ledger links every selected input row by ordinal and row hash and resolves all Simulation.Core targets to source declarations.",
+    "This evidence does not move production source, create writers, widen public APIs, or declare Shared Runtime/Host implementation ready by itself."
+  ],
+  "coreCanonicalBase": "1998974515b6357c308d861fb608f2db5071a63a",
+  "definitionBindingDesign": {
+    "architectureCommit": "512cf5721927a5b3d6766bc4d19cfd62a6729a41",
+    "blob": "7be12e59aadd6a211f731fd52aa636fa073bb2b5",
+    "optionalDescriptorBlob": "99dfea080462c4849e01530535903fbc609acdf7",
+    "optionalDescriptorPath": "docs/architecture/CORE_F_OPTIONAL_DEFINITION_BINDING_DESIGN.md",
+    "path": "docs/architecture/CORE_F_DEFINITION_BINDING_TECHNICAL_DESIGN.md",
+    "readiness": "Design-only; shared Runtime/Application/Host remains WAIT_DEPENDENCY until the complete reviewed integration package is separately ready."
+  },
+  "files": {
+    "member-access/DEFINITION_BINDING_DESIGN.md": {
+      "bytes": 1085,
+      "sha256": "74c31690ed8475832d95c844cff06091c34a8fc6832710cf226174cb76ce1b83"
+    },
+    "member-access/selected-member-access-sites.csv.gz": {
+      "bytes": 609433,
+      "sha256": "8eb054a7b59d511d864b2bee707a8d62ead1ea78002be9766a85fbf754467121"
+    },
+    "member-access/selected-member-access-sites.manifest.txt": {
+      "bytes": 1703,
+      "sha256": "9b7c3b8742580aed4a12f743fcf3f10dbf8cd2bc362b92eada1f17812c3dd0be"
+    },
+    "owner-entry-chain-ledger.csv": {
+      "bytes": 585864,
+      "sha256": "4d373f595056c5e89316247cb90be6e3d51822a41c72ef3e8553ddab4e9fbc94"
+    },
+    "split-host-destination-groups.csv": {
+      "bytes": 2032587,
+      "sha256": "07935891c16061b3d9eaf61fd25cda44f0b8b935d437fda2d017aab34b1e6173"
+    },
+    "split-host-destination-rows.csv": {
+      "bytes": 12553241,
+      "sha256": "637b3f4c70bd0477f74bcaff85e940bbf238a67add1802efa0c12d1b5e986986"
+    }
+  },
+  "format": "CORE-F-OWNER-ENTRY-QUALIFICATION-v1",
+  "memberAccessGzipSha256": "8eb054a7b59d511d864b2bee707a8d62ead1ea78002be9766a85fbf754467121",
+  "memberAccessRawCsvSha256": "c7714eaaccb0b53712017d93157fa7f94a05911f37f28cd0b4fb094d21f945a8",
+  "memberAccessRows": 42625,
+  "newGroupedCases": {
+    "expedition_foreign_site_identity_guard": [
+      "Assets/_Project/Tests/EditMode/Editor/ExpeditionTests.cs",
+      "ExpeditionStartRequiresTargetSiteRouteAndParticipantPresenceTruth"
+    ],
+    "general_p9_site_daily_rejection": [
+      "Assets/_Project/Tests/EditMode/Editor/P12GOwnerEntryQualificationTests.cs",
+      "GenericP9SiteProfileValidatesButDailyV1AdmissionDoesNotPublishIt"
+    ],
+    "integrated_rejection_and_retry": [
+      "Assets/_Project/Tests/EditMode/Editor/P12GOwnerEntryQualificationTests.cs",
+      "IntegratedOwnerImageRejectionIsAtomicAndValidImageCanBeRetried"
+    ],
+    "local_topology_connection_capture_rejection": [
+      "Assets/_Project/Tests/EditMode/Editor/P12DNpcRootOwnerSnapshotTests.cs",
+      "Capture_RejectsDailyV1LocalTopologyConnectionKnowledge"
+    ],
+    "local_topology_place_capture_rejection": [
+      "Assets/_Project/Tests/EditMode/Editor/P12DNpcRootOwnerSnapshotTests.cs",
+      "Capture_RejectsDailyV1LocalTopologyKnowledge"
+    ],
+    "military_and_five_site_adventure_knowledge": [
+      "Assets/_Project/Tests/EditMode/Editor/P12GOwnerEntryQualificationTests.cs",
+      "IntegratedMilitaryAndSiteKnowledgeOwnersPersistRestoreAndContinueWithExactParity"
+    ],
+    "political_existing_integrated_round_trip": [
+      "Assets/_Project/Tests/EditMode/Editor/P12GPoliticalBindingRestoreTests.cs",
+      "PopulatedPoliticalOwnersRoundTripFromRealAdvanceAndContinueWithExactParity"
+    ]
+  },
+  "ownerDispositionRows": 18,
+  "ownerDispositionsBlob": "4e7659ca292cc970887c57cfa3ec37b6f8226f4d",
+  "ownerDispositionsPath": "docs/architecture/CORE_F_OWNER_DISPOSITIONS.csv",
+  "ownerRows": 89,
+  "remoteCoreCanonical": "1998974515b6357c308d861fb608f2db5071a63a",
+  "selectedIdentityMapTestBlob": "f2d5dcef27419a2915630277b556dfe5948543ff",
+  "selectedIdentityOracleChecks": {
+    "documented_dynamic_cardinality": "61 + (22 * npcCount)",
+    "duplicate_key_rejection": "expected.ContainsKey(sectionId), Is.False",
+    "initial_zero_only_boundary": "Assert only this initial profile boundary",
+    "omission_and_same_count_symbol_substitution": "protocolExpectedIds, Is.EqualTo(expectedIds)",
+    "provider_owner_identity": "witness.OwnerInstanceIdentity, Is.SameAs(expected.Value)",
+    "registered_key_set": "registeredIds, Is.EqualTo(expectedIds)",
+    "revision_stability": "repeated.Revision, Is.EqualTo(witness.Revision)",
+    "role_binding": "registeredContract.Role, Is.EqualTo(expectedRole)",
+    "schema_binding": "registeredContract.SchemaVersion, Is.EqualTo(expectedContract.SchemaVersion)"
+  },
+  "sourceBaselineCommit": "af411093de1b95cf46ae7cdfad595864bca62ee4",
+  "sourceBaselineTree": "99e74525432efe0d2ff3fed5c60bf12a1922bdaa",
+  "sourceReferenceCommit": "ca55c3f9fa4d9c99e6a47a25adbbd1956ea04a1d",
+  "splitHostAccessGroups": 3365,
+  "splitHostAccessRows": 18270,
+  "splitHostSourceCount": 67,
+  "toolingSourceIdentities": {
+    "docs/validation/CORE_F_OwnerEntryQualification/audit-source/OwnerEntryQualification.py": {
+      "bytes": 56754,
+      "gitBlob": "bea374ab208f119334f64df134abec3872f3105c",
+      "sha256": "788af2a52a5368369289f92d0743c6649ace2af5628dda6b4555f499be7089dd"
+    },
+    "docs/validation/CORE_F_SourceClosure_PostInstitution/audit-source/MemberAccessCut.cs": {
+      "bytes": 23553,
+      "gitBlob": "6de177ce1a5f5af82b1c77a96c16379910dfe200",
+      "sha256": "34eadb2a1aba95e14e8dcf59b2661921c250d3c8c2d2ccfe4f276cbdcd01e3fc"
+    },
+    "docs/validation/CORE_F_SourceClosure_PostInstitution/audit-source/MemberAccessCut.csproj": {
+      "bytes": 594,
+      "gitBlob": "5c69584243933ed91295078f5d18f3eaf8cdbb0a",
+      "sha256": "ba5fb505ce9124c1cbc443051a2d7f06fcf940d13cee4b1639f85c8def67f41c"
+    },
+    "docs/validation/CORE_F_SourceClosure_PostInstitution/audit-source/PostInstitutionJoin.py": {
+      "bytes": 18230,
+      "gitBlob": "1bccca820c24ce24493441c56ff64bdd4cae9a52",
+      "sha256": "19608f52a88ae4d47a26ff524f5b3f39fdc7c0eb06b40d47e944b17a531a0691"
+    }
+  }
+}
