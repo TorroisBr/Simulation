@@ -799,9 +799,10 @@ The first post-promotion owner/member/access join is recorded in
 [`POST_INSTITUTION_OWNER_MEMBER_ACCESS_JOIN.md`](validation/CORE_F_SourceClosure_PostInstitution/POST_INSTITUTION_OWNER_MEMBER_ACCESS_JOIN.md).
 It resolves all 1,660 cited source references across the existing 89-family and
 24-operation matrices to the exact promoted code tree and projects the current
-selected Core/Unity symbol edges. It also confirms the existing matrices do
-not yet directly bind each family to its post-migration owner declaration,
-member, constructor, live instance, and writer/hydrator path. This is partial
+selected Core/Unity symbol edges. Its generator verifies the complete Unity
+source/symbol multiset, and a same-count substitution is rejected. The existing
+matrices still do not directly bind each family to its post-migration owner
+declaration, member, constructor, live instance, and writer/hydrator path. This is partial
 source identity evidence, not semantic closure.
 
 Accordingly, `CORE-F-Shared-DailyV1-Application-and-Host` remains

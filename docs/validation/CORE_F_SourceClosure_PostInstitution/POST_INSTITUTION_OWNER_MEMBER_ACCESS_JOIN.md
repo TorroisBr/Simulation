@@ -51,6 +51,11 @@ SHA-256 identities:
   `0b2d2d9dc30033684ba7d5263b8b80d676556175eb5ed163544b1e6c0cb06917`.
 - `selected-unity-engine-access.csv` —
   `f3034828c80fac73202ccc4f1d22d0e758ee2d9ff5b8431ad3f7a1d762ce5a5f`.
+- `PostInstitutionJoin.py` —
+  `dad277efb6ea45e438c43d250537afe21a91725dc7847f7692eb357e8b3a8b4f`. Its
+  exact Unity projection guard compares the full `(source_path, unity_symbol)`
+  multiset. A focused positive check and
+  an equal-row-count symbol-substitution rejection both pass.
 
 ## Remaining exact blocker
 

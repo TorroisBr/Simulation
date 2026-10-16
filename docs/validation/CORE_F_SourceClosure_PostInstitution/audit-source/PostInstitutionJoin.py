@@ -7,6 +7,7 @@ implementation readiness, semantic reachability, or access authorization.
 
 from __future__ import annotations
 
+from collections import Counter
 import csv
 import pathlib
 import re
@@ -37,6 +38,15 @@ def write_csv(path: pathlib.Path, columns: list[str], rows: list[dict[str, str]]
         writer = csv.DictWriter(stream, fieldnames=columns, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
+
+
+def require_exact_unity_projection(
+    selected_rows: list[dict[str, str]], retained_rows: list[dict[str, str]]
+) -> None:
+    selected = Counter((row["source_path"], row["unity_symbol"]) for row in selected_rows)
+    retained = Counter((row["source_path"], row["unity_symbol"]) for row in retained_rows)
+    if selected != retained:
+        raise RuntimeError("Selected Unity symbol projection disagrees with the retained edge inventory")
 
 
 def main() -> int:
@@ -170,8 +180,8 @@ def main() -> int:
                 }
             )
 
-    # The graph has a separate edge file; retain that row count as the control
-    # and fail if the inventory projection does not match the selected edges.
+    # The graph has a separate edge file. Compare the full source/symbol
+    # multiset so same-count substitutions cannot pass this integrity check.
     selected_engine_edges = [
         edge
         for edge in unity_symbol_edges
@@ -181,8 +191,7 @@ def main() -> int:
             or inventory_by_path[edge["source_path"]]["restore_closure"].lower() == "true"
         )
     ]
-    if len(selected_engine_access) != len(selected_engine_edges):
-        raise RuntimeError("Selected Unity symbol projection disagrees with the retained edge inventory")
+    require_exact_unity_projection(selected_engine_access, selected_engine_edges)
 
     write_csv(
         output / "selected-unity-engine-access.csv",
