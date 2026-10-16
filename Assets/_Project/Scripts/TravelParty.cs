@@ -572,7 +572,7 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
         this.recordSequence = recordSequence ?? throw new ArgumentNullException(nameof(recordSequence));
         this.domainEventRecorder = domainEventRecorder;
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
         this.transactionService = transactionService ?? new EconomyTransactionService();
         travelSystem.AttachTravelPartyStore(partyStore);
     }

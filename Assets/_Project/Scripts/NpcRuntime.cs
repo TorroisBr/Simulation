@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using UnityEngine;
@@ -897,7 +897,7 @@ public class NpcRuntime : ICapabilityConditionSource
 
         destinationLocation = destination;
         destinationCity = destinationCityProjection;
-        travelDaysRemaining = Mathf.Max(1, travelDays);
+        travelDaysRemaining = UnityMathfCompatibility.Max(1, travelDays);
         travelDaysTotal = travelDaysRemaining;
         travelRouteRuntimeId = string.IsNullOrWhiteSpace(routeRuntimeId) == true ? null : routeRuntimeId;
         travelStartedToday = true;
@@ -984,7 +984,7 @@ public class NpcRuntime : ICapabilityConditionSource
         // baseline before any travel-progress or presence projection writes.
         if (addArrivalMembership && !arrivalCity.TryAddImportantNpcMembership(this)) return false;
 
-        travelDaysRemaining = Mathf.Max(0, travelDaysRemaining - 1);
+        travelDaysRemaining = UnityMathfCompatibility.Max(0, travelDaysRemaining - 1);
 
         if (travelDaysRemaining > 0)
         {
@@ -1124,9 +1124,9 @@ public class NpcRuntime : ICapabilityConditionSource
 
     public void HideForDays(int days)
     {
-        int followingFullDays = Mathf.Max(1, days);
+        int followingFullDays = UnityMathfCompatibility.Max(1, days);
         int durationIncludingCurrentDay = followingFullDays + 1;
-        int next = Mathf.Max(hiddenDaysRemaining, durationIncludingCurrentDay);
+        int next = UnityMathfCompatibility.Max(hiddenDaysRemaining, durationIncludingCurrentDay);
         if (next == hiddenDaysRemaining) return;
         EnsureP12CrimeJusticeMutationAllowed();
         hiddenDaysRemaining = next;
@@ -1141,7 +1141,7 @@ public class NpcRuntime : ICapabilityConditionSource
         }
 
         EnsureP12CrimeJusticeMutationAllowed();
-        hiddenDaysRemaining = Mathf.Max(0, hiddenDaysRemaining - 1);
+        hiddenDaysRemaining = UnityMathfCompatibility.Max(0, hiddenDaysRemaining - 1);
         NotifyP12CrimeJusticeMutationCommitted();
         return hiddenDaysRemaining <= 0;
     }

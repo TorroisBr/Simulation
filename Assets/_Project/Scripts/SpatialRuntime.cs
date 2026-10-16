@@ -204,7 +204,7 @@ public sealed class SpatialNetworkRuntime
     public SpatialNetworkRuntime(RuntimeIdentityRegistry identityRegistry, SimulationLogger logger = null)
     {
         this.identityRegistry = identityRegistry ?? throw new ArgumentNullException(nameof(identityRegistry));
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
     }
 
     internal bool UsesIdentityRegistry(RuntimeIdentityRegistry candidate)

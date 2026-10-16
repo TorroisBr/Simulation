@@ -414,19 +414,63 @@ public static class SimulationGenesisPipeline
         CalendarDefinition resolvedCalendar,
         out IReadOnlyList<string> canonicalRecords)
     {
+        return CreateFingerprint(config, effectiveConfiguration, resolvedCalendar, out canonicalRecords, out _);
+    }
+
+    public static string CreateFingerprint(
+        SimulationConfigData config,
+        EffectiveSimulationConfiguration effectiveConfiguration,
+        CalendarDefinition resolvedCalendar,
+        out IReadOnlyList<string> canonicalRecords,
+        out DailyV1EffectiveDefinitions selectedDefinitions)
+    {
+        selectedDefinitions = null;
         if (config == null) throw new ArgumentNullException(nameof(config));
         if (effectiveConfiguration == null) throw new ArgumentNullException(nameof(effectiveConfiguration));
         if (resolvedCalendar == null) throw new ArgumentNullException(nameof(resolvedCalendar));
         if (!string.Equals(config.GenesisProfileContractIdentity, ProfileContractIdentity, StringComparison.Ordinal)
             && !string.Equals(config.GenesisProfileContractIdentity, GeographyProfileContractIdentity, StringComparison.Ordinal))
+        {
+            // Keep legacy profile identity behavior, while making any successfully resolved typed
+            // graph available to the same composition path that owns the resulting runtime nodes.
+            DailyV1DefinitionAdapter.TryCreate(config, effectiveConfiguration, resolvedCalendar,
+                ResolveStageOrder(config.useAuthoredGeographyProfile), HexCoordinate.ConventionVersion,
+                HexCoordinate.CanonicalOrder, out selectedDefinitions, out _);
             return CreateUnityFingerprintLegacy(config, effectiveConfiguration, resolvedCalendar, out canonicalRecords);
+        }
         if (!DailyV1DefinitionAdapter.TryCreate(config, effectiveConfiguration, resolvedCalendar,
             ResolveStageOrder(config.useAuthoredGeographyProfile), HexCoordinate.ConventionVersion,
-            HexCoordinate.CanonicalOrder, out DailyV1EffectiveDefinitions definitions, out string diagnostic))
+            HexCoordinate.CanonicalOrder, out selectedDefinitions, out string diagnostic))
             throw new InvalidOperationException(diagnostic ?? "The selected Daily-v1 definition graph is invalid.");
-        return DailyV1DefinitionIdentity.CreateP9Fingerprint(definitions, out canonicalRecords);
+        return DailyV1DefinitionIdentity.CreateP9Fingerprint(selectedDefinitions, out canonicalRecords);
 
 
+    }
+
+    public static DailyV1EffectiveDefinitions CreateSelectedDefinitions(SimulationConfigData config)
+    {
+        if (config == null) throw new ArgumentNullException(nameof(config));
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: config.CreateConfigurationOverrides());
+        CalendarDefinition calendar = config.Calendar ?? CalendarDefinition.CreateDefault();
+        return CreateSelectedDefinitions(config, effective, calendar);
+    }
+
+    public static DailyV1EffectiveDefinitions CreateSelectedDefinitions(
+        SimulationConfigData config,
+        EffectiveSimulationConfiguration effective,
+        CalendarDefinition calendar)
+    {
+        if (config == null) throw new ArgumentNullException(nameof(config));
+        if (effective == null) throw new ArgumentNullException(nameof(effective));
+        if (calendar == null) throw new ArgumentNullException(nameof(calendar));
+        if (!calendar.TryValidate(out string calendarDiagnostic))
+            throw new InvalidOperationException("Authored CalendarDefinition is invalid: " + calendarDiagnostic);
+        if (!DailyV1DefinitionAdapter.TryCreate(config, effective, calendar,
+            ResolveStageOrder(config.useAuthoredGeographyProfile), HexCoordinate.ConventionVersion,
+            HexCoordinate.CanonicalOrder, out DailyV1EffectiveDefinitions definitions, out string diagnostic))
+            throw new InvalidOperationException(diagnostic ?? "The selected typed definition graph is invalid.");
+        return definitions;
     }
 
     private static void Add(List<string> fields, string kind, params object[] values)

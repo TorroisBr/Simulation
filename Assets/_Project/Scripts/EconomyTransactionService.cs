@@ -352,12 +352,12 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         float observedSellerBalance = sellerAccount != null ? sellerAccount.Balance : 0f;
         float observedCounterpartyBalance = counterpartyAccount != null ? counterpartyAccount.Balance : 0f;
         EconomyTransactionResult result = ValidateSale(seller, market, item, requestedQuantity, mode);
-        int snapshotQuantity = result.Success ? result.Quantity : Mathf.Min(Mathf.Max(0, requestedQuantity), observedInventory);
-        float normalizedSalePrice = IsValidNonNegativeFiniteAmount(observedPrice) ? Mathf.Max(0.01f, observedPrice) : observedPrice;
+        int snapshotQuantity = result.Success ? result.Quantity : UnityMathfCompatibility.Min(UnityMathfCompatibility.Max(0, requestedQuantity), observedInventory);
+        float normalizedSalePrice = IsValidNonNegativeFiniteAmount(observedPrice) ? UnityMathfCompatibility.Max(0.01f, observedPrice) : observedPrice;
         if (!result.Success && mode == MarketLiquidityMode.AccountBacked && counterpartyAccount != null
             && IsValidNonNegativeFiniteAmount(normalizedSalePrice))
         {
-            snapshotQuantity = Mathf.Min(snapshotQuantity, GetAffordableQuantity(observedCounterpartyBalance, normalizedSalePrice));
+            snapshotQuantity = UnityMathfCompatibility.Min(snapshotQuantity, GetAffordableQuantity(observedCounterpartyBalance, normalizedSalePrice));
         }
         float snapshotTotal = normalizedSalePrice * snapshotQuantity;
         KeyedSaleSnapshot snapshot = new KeyedSaleSnapshot(actorChoiceInputId, requestId, actorPersonId, proposalId,
@@ -517,16 +517,16 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         if (npc == null || !npc.IsAlive || market == null || item == null)
             return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, mode == MarketLiquidityMode.AccountBacked ? MoneyEffect.Transfer : MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.InvalidInput);
         if (requested <= 0) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.InvalidQuantity);
-        int quantity = Mathf.Min(requested, npc.Inventory.GetAmount(item));
+        int quantity = UnityMathfCompatibility.Min(requested, npc.Inventory.GetAmount(item));
         float price = market.GetPriceForSale(item);
         if (quantity <= 0) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.InsufficientInventory);
         if (float.IsNaN(price) || float.IsInfinity(price) || price < 0f) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.InvalidPrice);
-        price = Mathf.Max(.01f, price);
+        price = UnityMathfCompatibility.Max(.01f, price);
         MarketCounterpartyRuntime cp = market.Counterparty;
         if (mode == MarketLiquidityMode.AccountBacked)
         {
             if (cp.MoneyAccount == null) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.Transfer, EconomyTransactionFailureReason.InvalidInput);
-            quantity = Mathf.Min(quantity, GetAffordableQuantity(cp.MoneyAccount.Balance, price));
+            quantity = UnityMathfCompatibility.Min(quantity, GetAffordableQuantity(cp.MoneyAccount.Balance, price));
             if (quantity <= 0) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.Transfer, EconomyTransactionFailureReason.InsufficientCounterpartyFunds);
         }
         float total = quantity * price;
@@ -944,7 +944,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 actorRuntimeId: npc.RuntimeId);
         }
 
-        float unitPrice = Mathf.Max(0.01f, marketItem.CurrentPrice);
+        float unitPrice = UnityMathfCompatibility.Max(0.01f, marketItem.CurrentPrice);
 
         if (IsValidNonNegativeFiniteAmount(unitPrice) == false)
         {
@@ -956,7 +956,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         }
 
         int affordableQuantity = GetAffordableQuantity(npc.MoneyAccount.Balance, unitPrice);
-        int quantity = Mathf.Min(requestedQuantity, marketItem.Amount, affordableQuantity);
+        int quantity = UnityMathfCompatibility.Min(requestedQuantity, marketItem.Amount, affordableQuantity);
 
         if (quantity <= 0)
         {
@@ -1146,7 +1146,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         }
 
         int availableQuantity = npc.Inventory.GetAmount(item);
-        int quantity = Mathf.Min(requestedQuantity, availableQuantity);
+        int quantity = UnityMathfCompatibility.Min(requestedQuantity, availableQuantity);
 
         if (quantity <= 0)
         {
@@ -1168,7 +1168,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 actorRuntimeId: npc.RuntimeId);
         }
 
-        float unitPrice = Mathf.Max(0.01f, salePrice);
+        float unitPrice = UnityMathfCompatibility.Max(0.01f, salePrice);
 
         if (IsValidNonNegativeFiniteAmount(unitPrice) == false)
         {
@@ -1182,7 +1182,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         if (accountBacked == true)
         {
             int affordableQuantity = GetAffordableQuantity(counterparty.MoneyAccount.Balance, unitPrice);
-            quantity = Mathf.Min(quantity, affordableQuantity);
+            quantity = UnityMathfCompatibility.Min(quantity, affordableQuantity);
 
             if (quantity <= 0)
             {
@@ -1416,9 +1416,9 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 actorRuntimeId: population.PopulationEconomicRuntimeId);
         }
 
-        unitPrice = Mathf.Max(0.01f, unitPrice);
+        unitPrice = UnityMathfCompatibility.Max(0.01f, unitPrice);
         int affordableQuantity = GetAffordableQuantity(population.MoneyAccount.Balance, unitPrice);
-        int quantity = Mathf.Min(requestedQuantity, marketItem.Amount, affordableQuantity);
+        int quantity = UnityMathfCompatibility.Min(requestedQuantity, marketItem.Amount, affordableQuantity);
 
         if (quantity <= 0)
         {
@@ -1780,7 +1780,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             return int.MaxValue;
         }
 
-        return Mathf.Max(0, Mathf.FloorToInt(affordableAmount));
+        return UnityMathfCompatibility.Max(0, UnityMathfCompatibility.FloorToInt(affordableAmount));
     }
 
     private static bool IsValidNonNegativeFiniteAmount(float amount)

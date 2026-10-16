@@ -196,7 +196,7 @@ public sealed class ScheduledDirectiveStore : IAuthoritativeMutationGuardBindabl
     public ScheduledDirectiveStore(SimulationTime simulationTime, SimulationLogger logger = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
         readOnlyDirectives = directives.AsReadOnly();
     }
 
@@ -498,7 +498,7 @@ public sealed class ScheduledDirectiveSystem : IAuthoritativeMutationGuardBindab
     {
         this.directiveStore = directiveStore ?? throw new ArgumentNullException(nameof(directiveStore));
         this.identityRegistry = identityRegistry ?? throw new ArgumentNullException(nameof(identityRegistry));
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
     }
 
     public void PrepareDay(long absoluteDay)

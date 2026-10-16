@@ -321,7 +321,9 @@ public sealed class P10BGeneratedRuinGenesisTests
         Assert.That(simulation.Bootstrap.ExplorableSites.Sites, Has.Count.EqualTo(config.ExplorableSites.Count + 1));
         ExplorableSiteRuntime site = simulation.Bootstrap.ExplorableSites.Sites[
             simulation.Bootstrap.ExplorableSites.Sites.Count - 1];
-        Assert.That(site.Definition, Is.SameAs(config.authoredP10RuinSite));
+        Assert.That(site.Definition.DefinitionId, Is.EqualTo(config.authoredP10RuinSite.DefinitionId));
+        Assert.That(site.Definition.DisplayName, Is.EqualTo(config.authoredP10RuinSite.siteName));
+        Assert.That(site.Definition.Kind.Value, Is.EqualTo((int)config.authoredP10RuinSite.kind));
         Assert.That(site.SiteInstanceId, Does.StartWith("site-p10b-v1-"));
         Assert.That(simulation.Runtime.LocalTopologyStore, Is.Not.Null);
         Assert.That(simulation.Runtime.LocalTopologyStore.Topologies, Has.Count.EqualTo(1));

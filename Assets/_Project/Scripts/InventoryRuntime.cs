@@ -17,8 +17,8 @@ public class InventoryItemRuntime
     public InventoryItemRuntime(ItemData item, int amount, float averageUnitCost = 0f)
     {
         this.item = item;
-        this.amount = Mathf.Max(0, amount);
-        this.averageUnitCost = Mathf.Max(0f, averageUnitCost);
+        this.amount = UnityMathfCompatibility.Max(0, amount);
+        this.averageUnitCost = UnityMathfCompatibility.Max(0f, averageUnitCost);
     }
 
     internal void Add(int amountToAdd, float unitCost = 0f)
@@ -30,7 +30,7 @@ public class InventoryItemRuntime
 
         if (amount <= 0)
         {
-            averageUnitCost = Mathf.Max(0f, unitCost);
+            averageUnitCost = UnityMathfCompatibility.Max(0f, unitCost);
             amount = amountToAdd;
             return;
         }

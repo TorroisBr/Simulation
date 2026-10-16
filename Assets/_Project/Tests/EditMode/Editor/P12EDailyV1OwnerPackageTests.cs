@@ -325,7 +325,7 @@ public sealed class P12EDailyV1OwnerPackageTests
         NpcStatusData wantedStatus = SimulationTestFactory.CreateStatus(prefix + "-wanted");
         NpcStatusData arrestedStatus = SimulationTestFactory.CreateStatus(prefix + "-arrested");
         NpcStatusData hiddenStatus = SimulationTestFactory.CreateStatus(prefix + "-hidden");
-        SimulationLogger logger = new SimulationLogger(null);
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(null);
         JusticeSystem justice = new JusticeSystem(
             freeStatus, wantedStatus, arrestedStatus, hiddenStatus, null, logger);
         ExplorableSiteStore sites = new ExplorableSiteStore();
@@ -394,7 +394,7 @@ public sealed class P12EDailyV1OwnerPackageTests
                 Array.Empty<ItemData>(),
                 fixture.Npcs.Select(npc => npc.NpcData).ToArray(),
                 Array.Empty<NpcActionData>(), Array.Empty<NpcStatusData>(),
-                Array.Empty<ExplorableSiteData>(), Array.Empty<string>(),
+                Array.Empty<DailyV1ExplorableSiteDefinition>(), Array.Empty<string>(),
                 out P12DDailyV1OwnerPackage stagedD, out _))
             return false;
 

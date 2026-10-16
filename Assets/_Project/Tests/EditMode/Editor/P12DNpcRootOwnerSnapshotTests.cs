@@ -773,7 +773,7 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         ExplorableSiteStore sites = new ExplorableSiteStore();
         SpatialLocationRuntime siteLocation = new SpatialLocationRuntime("p12d-populated-site-location");
         Assert.That(sites.Add(new ExplorableSiteRuntime("p12d-populated-site",
-            SimulationTestFactory.CreateExplorableSite("p12d-populated-site-definition"), siteLocation)), Is.True);
+            SimulationTestFactory.CreateExplorableSiteDefinition("p12d-populated-site-definition"), siteLocation)), Is.True);
         NpcRuntime npc = new NpcRuntime("p12d-npc-site-exclusion",
             SimulationTestFactory.CreateNpc("p12d-npc-site-exclusion-definition"));
         Assert.Throws<InvalidOperationException>(() => CreateDailyFixture(null, npc, siteStore: sites));
@@ -1171,7 +1171,7 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             fixture.Npcs.Select(value => value.NpcData).ToArray(),
             Array.Empty<NpcActionData>(),
             Array.Empty<NpcStatusData>(),
-            Array.Empty<ExplorableSiteData>(),
+            Array.Empty<DailyV1ExplorableSiteDefinition>(),
             Array.Empty<string>(),
             out package,
             out failure);

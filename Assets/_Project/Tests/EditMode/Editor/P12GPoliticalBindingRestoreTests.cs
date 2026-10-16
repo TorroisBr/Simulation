@@ -146,6 +146,37 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     out P12AResult decodeResult),
                 Is.True, decodeResult?.Code.ToString());
 
+            DailyV1HostEnvironmentIdentity hostIdentity = new DailyV1HostEnvironmentIdentity(1,
+                ".NET 8.0", "8.0.1.0", "Windows", "win-x64", "x64", "net8.0",
+                new[] { new P12AAssemblyIdentityV2("Simulation.Core", "1.0.0.0",
+                    "4b37a0ac-246b-47c5-9bbc-fd79704e0666") }, "numeric", 1);
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureDotNetV2Image(
+                    source.Session, source.NormalBootstrapContext, hostIdentity,
+                    out P12AContinuationImage dotNetImage,
+                    out SimulationActiveSession dotNetCaptureCandidate,
+                    out P12GDailyV1RestoreFailure dotNetCaptureFailure,
+                    out string dotNetCaptureDiagnostic),
+                Is.True, dotNetCaptureFailure + ": " + dotNetCaptureDiagnostic);
+            Assert.That(dotNetCaptureCandidate, Is.Not.Null);
+            Assert.That(dotNetImage.Header.CompatibilityV2, Is.Not.Null);
+            Assert.That(P12AContinuationCodec.TryEncode(dotNetImage, imageCensus.Manifest,
+                out byte[] dotNetBytes, out P12AResult dotNetEncodeResult), Is.True,
+                dotNetEncodeResult?.Code.ToString());
+            Assert.That(P12AContinuationCodec.TryDecodeDotNetV2(dotNetBytes, imageCensus.Manifest,
+                dotNetImage.Header.CompatibilityV2, out P12AContinuationImage dotNetDecoded,
+                out P12AResult dotNetDecodeResult), Is.True, dotNetDecodeResult?.Code.ToString());
+            List<P12GDailyV1RestoreStage> dotNetRestoreStages = new List<P12GDailyV1RestoreStage>();
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromDotNetV2Image(
+                    dotNetDecoded, dotNetImage.Header.CompatibilityV2, anchor.Configuration, anchor.Runtime.Configuration,
+                    anchor.Composition.Calendar, anchor.Composition.SelectedDefinitions,
+                    source.NormalBootstrapContext, out SimulationActiveSession dotNetRestored,
+                    out P12GDailyV1RestoreFailure dotNetRestoreFailure,
+                    out string dotNetRestoreDiagnostic, dotNetRestoreStages.Add),
+                Is.True, dotNetRestoreFailure + ": " + dotNetRestoreDiagnostic);
+            Assert.That(dotNetRestored, Is.Not.Null);
+            Assert.That(dotNetRestoreStages, Does.Contain(P12GDailyV1RestoreStage.BoundaryAdmitted));
+            Assert.That(EncodeCompletedImage(dotNetRestored, source.NormalBootstrapContext), Is.Not.Empty);
+
             List<P12GDailyV1RestoreStage> imageRestoreStages = new List<P12GDailyV1RestoreStage>();
             Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
                     decodedImage,
@@ -153,6 +184,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     anchor.Configuration,
                     anchor.Runtime.Configuration,
                     anchor.Composition.Calendar,
+                    anchor.Composition.SelectedDefinitions,
                     source.NormalBootstrapContext,
                     out SimulationActiveSession imageRestored,
                     out P12GDailyV1RestoreFailure imageRestoreFailure,
@@ -404,6 +436,14 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         SimulationBootstrapComposition composition = bootstrap.Bootstrap;
         SimulationRuntime runtime = bootstrap.Runtime;
         Assert.That(composition, Is.Not.Null);
+        Assert.That(composition.SelectedDefinitions, Is.Not.Null,
+            "Daily-v1 composition must retain its immutable selected-definition graph.");
+        Assert.That(composition.SelectedDefinitions.ExplorableSites, Is.Empty,
+            "The accepted Daily-v1 proving profile remains exact-empty for P10 sites.");
+        Assert.That(composition.SelectedDefinitions.Traits, Is.Empty,
+            "The accepted Daily-v1 proving profile does not admit TraitData.");
+        Assert.That(composition.SelectedDefinitions.CapabilityAttributes, Is.Empty,
+            "The accepted Daily-v1 proving profile does not admit CapabilityAttributeData.");
         Assert.That(runtime, Is.SameAs(composition.Runtime));
         SimulationRuntimeAdmissionContext normalContext =
             ((IFactualReadRuntimeState)runtime).AdmissionContext;
@@ -488,7 +528,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             npcDefinitions,
             config.Actions,
             config.Statuses,
-            Array.Empty<ExplorableSiteData>(),
+            Array.Empty<DailyV1ExplorableSiteDefinition>(),
             capturedF.TravelPartyIds,
             out P12DDailyV1OwnerPackage stagedD,
             out P12DDailyV1OwnerPackageFailure dFailure), Is.True, dFailure.ToString());
@@ -510,7 +550,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         SimulationTime stagedTime = new SimulationTime(anchorToken.AbsoluteDay);
         // PoliticalWorldRevision is a constructor seed for this unpublished
         // runtime root; no registered-owner write is needed after census.
-        SimulationLogger logger = new SimulationLogger(config.LogSettings);
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(config.LogSettings);
         HistoryStore history = new HistoryStore();
         DomainEventStore eventStore = new DomainEventStore(history, new HistoryPolicy(), logger);
         NpcDecisionStore decisions = new NpcDecisionStore();
@@ -818,7 +858,8 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             stagedC.RuntimeIdAllocator,
             stagedD.EmptyExplorableSites,
             stagedF.Expeditions,
-            expeditions);
+            expeditions,
+            anchor.Composition.SelectedDefinitions);
         return new SimulationActiveSession(
             composition,
             logger,

@@ -107,7 +107,7 @@ public sealed class RuntimeGuardSystemEntrypointTests
         TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture();
         ExplorableSiteRuntime site = new ExplorableSiteRuntime(
             "site-guard-test",
-            SimulationTestFactory.CreateExplorableSite("site-guard-test"),
+            SimulationTestFactory.CreateExplorableSiteDefinition("site-guard-test"),
             fixture.World.B.Location);
         SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, null);
         ExplorableSiteKnowledgeSystem siteKnowledge = new ExplorableSiteKnowledgeSystem();

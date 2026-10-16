@@ -34,7 +34,7 @@ public sealed class RuntimeIdentityCensusTests
             () => registry.RegisterRoute(new SpatialRouteRuntime(
                 "route-one", new SpatialLocationRuntime("route-origin"), new SpatialLocationRuntime("route-destination"), 2)),
             () => registry.RegisterExplorableSite(new ExplorableSiteRuntime(
-                "site-one", SimulationTestFactory.CreateExplorableSite("site-definition-one"), new SpatialLocationRuntime("site-location-one"))),
+                "site-one", SimulationTestFactory.CreateExplorableSiteDefinition("site-definition-one"), new SpatialLocationRuntime("site-location-one"))),
             () => registry.RegisterLocalPlace(new LocalPlaceRuntime("local-place-one")),
             () => registry.RegisterLocalConnection(new LocalTopologyConnectionRuntime(
                 "local-connection-one", new LocalPlaceRuntime("connection-origin"), new LocalPlaceRuntime("connection-destination"), 1f)),
@@ -118,7 +118,7 @@ public sealed class RuntimeIdentityCensusTests
         Assert.Throws<ArgumentException>(() => new SpatialRouteRuntime(
             "", new SpatialLocationRuntime("blank-route-origin"), new SpatialLocationRuntime("blank-route-destination"), 1));
         Assert.Throws<ArgumentException>(() => new ExplorableSiteRuntime(
-            "", SimulationTestFactory.CreateExplorableSite("blank-site-definition"), new SpatialLocationRuntime("blank-site-location")));
+            "", SimulationTestFactory.CreateExplorableSiteDefinition("blank-site-definition"), new SpatialLocationRuntime("blank-site-location")));
         Assert.Throws<ArgumentException>(() => new LocalPlaceRuntime(" "));
         Assert.Throws<ArgumentException>(() => new LocalTopologyConnectionRuntime(
             "", new LocalPlaceRuntime("blank-connection-origin"), new LocalPlaceRuntime("blank-connection-destination"), 1f));

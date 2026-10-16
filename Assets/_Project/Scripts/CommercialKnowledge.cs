@@ -91,8 +91,8 @@ public sealed class CommercialMarketObservation
         this.locationRuntimeId = locationRuntimeId;
         itemDefinitionId = itemDefinition.DefinitionId;
         this.itemDefinition = itemDefinition;
-        this.observedPrice = Mathf.Max(0f, observedPrice);
-        this.observedStock = Mathf.Max(0, observedStock);
+        this.observedPrice = UnityMathfCompatibility.Max(0f, observedPrice);
+        this.observedStock = UnityMathfCompatibility.Max(0, observedStock);
         this.observedDay = observedDay;
         this.receivedDay = receivedDay;
         this.source = source;

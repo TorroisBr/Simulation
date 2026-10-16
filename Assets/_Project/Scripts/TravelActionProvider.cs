@@ -54,10 +54,10 @@ public class TravelActionProvider : INpcActionProvider
             && npcRuntime.MerchantTradePlan.IsActive == true
             && npcRuntime.MerchantTradePlan.TargetCity == plan.TargetCity)
         {
-            planUtility += Mathf.Min(30f, npcRuntime.MerchantTradePlan.PendingTravelDays * 10f);
+            planUtility += UnityMathfCompatibility.Min(30f, npcRuntime.MerchantTradePlan.PendingTravelDays * 10f);
         }
 
-        utility = Mathf.Max(utility, Mathf.Clamp(planUtility, 0f, 100f));
+        utility = UnityMathfCompatibility.Max(utility, UnityMathfCompatibility.Clamp(planUtility, 0f, 100f));
         NpcActionRuntime actionRuntime = new NpcActionRuntime(action, plan.TargetCity, null, plan.Reason, travelCost, 0f);
         actionRuntime.SetOriginDecisionId(plan.OriginDecisionId);
         return actionRuntime;

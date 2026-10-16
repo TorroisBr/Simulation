@@ -178,6 +178,47 @@ public sealed class DailyV1ExplorableSiteConfig
     }
 }
 
+/// <summary>Immutable copied values for one admitted ExplorableSiteData definition.</summary>
+public sealed class DailyV1ExplorableSiteData
+{
+    public string id { get; }
+    public string siteName { get; }
+    public DailyV1EnumValue kind { get; }
+
+    public DailyV1ExplorableSiteData(string id, string siteName, DailyV1EnumValue kind)
+    {
+        this.id = id;
+        this.siteName = siteName;
+        this.kind = kind;
+    }
+}
+
+/// <summary>Optional pure local-place descriptor; validation remains at the current consumer boundary.</summary>
+public sealed class DailyV1LocalPlaceTypeDefinition
+{
+    public string DefinitionId { get; }
+    public string DisplayName { get; }
+
+    public DailyV1LocalPlaceTypeDefinition(string definitionId, string displayName)
+    {
+        DefinitionId = definitionId;
+        DisplayName = displayName;
+    }
+}
+
+/// <summary>Optional pure local-connection descriptor; validation remains at the current consumer boundary.</summary>
+public sealed class DailyV1LocalConnectionTypeDefinition
+{
+    public string DefinitionId { get; }
+    public string DisplayName { get; }
+
+    public DailyV1LocalConnectionTypeDefinition(string definitionId, string displayName)
+    {
+        DefinitionId = definitionId;
+        DisplayName = displayName;
+    }
+}
+
 /// <summary>Immutable typed projection of InitialWantedRecordConfig from the selected source inventory.</summary>
 public sealed class DailyV1InitialWantedRecordConfig
 {

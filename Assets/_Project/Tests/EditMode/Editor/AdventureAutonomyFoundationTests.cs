@@ -383,7 +383,7 @@ public sealed class AdventureAutonomyFoundationTests
         public Fixture()
         {
             SpatialLocationRuntime location = new SpatialLocationRuntime("location-site");
-            Site = new ExplorableSiteRuntime("site-runtime", SimulationTestFactory.CreateExplorableSite("site-def"), location);
+            Site = new ExplorableSiteRuntime("site-runtime", SimulationTestFactory.CreateExplorableSiteDefinition("site-def"), location);
             Registry.RegisterExplorableSite(Site);
             Actor = new NpcRuntime("npc-actor", SimulationTestFactory.CreateNpc("actor"));
             Actor.SetCurrentPresence(location);

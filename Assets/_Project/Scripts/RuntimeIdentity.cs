@@ -419,7 +419,7 @@ public sealed class RuntimeIdentityRegistry
 
     public RuntimeIdentityRegistry(SimulationLogger logger = null)
     {
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
     }
 
     public bool RegisterNpc(NpcRuntime npcRuntime)

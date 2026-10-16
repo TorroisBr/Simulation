@@ -98,7 +98,7 @@ internal sealed class P12DDailyV1OwnerPackage
         IReadOnlyList<NpcData> npcDefinitions,
         IReadOnlyList<NpcActionData> actionDefinitions,
         IReadOnlyList<NpcStatusData> statusDefinitions,
-        IReadOnlyList<ExplorableSiteData> admittedDailySiteDefinitions,
+        IReadOnlyList<DailyV1ExplorableSiteDefinition> admittedDailySiteDefinitions,
         IReadOnlyList<string> stagedTravelPartyIds,
         out P12DDailyV1OwnerPackage package,
         out P12DDailyV1OwnerPackageFailure failure,
@@ -356,7 +356,7 @@ internal sealed class P12DDailyV1OwnerPackage
         IReadOnlyList<NpcData> npcDefinitions,
         IReadOnlyList<NpcActionData> actionDefinitions,
         IReadOnlyList<NpcStatusData> statusDefinitions,
-        IReadOnlyList<ExplorableSiteData> admittedDailySiteDefinitions,
+        IReadOnlyList<DailyV1ExplorableSiteDefinition> admittedDailySiteDefinitions,
         IReadOnlyList<string> stagedTravelPartyIds,
         out P12DDailyV1OwnerPackage package,
         out P12DDailyV1OwnerPackageFailure failure)

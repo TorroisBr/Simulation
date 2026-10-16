@@ -9398,7 +9398,7 @@ public sealed class SimulationRuntimeAdmissionTests
                                 .FirstOrDefault();
                             Assert.That(targetLocation, Is.Not.Null,
                                 "The synthetic site must bind to an already-staged legacy location.");
-                            ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite(
+                            DailyV1ExplorableSiteDefinition definition = SimulationTestFactory.CreateExplorableSiteDefinition(
                                 "p12g-private-target-late-site-definition",
                                 ExplorableSiteKind.Generic);
                             injectedSite = new ExplorableSiteRuntime(
@@ -10711,7 +10711,7 @@ public sealed class SimulationRuntimeAdmissionTests
         field.SetValue(target, value);
     }
 
-    private sealed class SlotInspectionFailureFileOperations : IP12AContinuationFileOperations
+    private sealed class SlotInspectionFailureFileOperations : IAtomicFileSlotOperations
     {
         public void CreateDirectory(string path) => throw new NotSupportedException();
         public bool Exists(string path) => throw new NotSupportedException();

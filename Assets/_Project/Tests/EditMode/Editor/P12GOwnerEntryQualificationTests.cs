@@ -41,12 +41,16 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                 anchor.Configuration,
                 anchor.Runtime.Configuration,
                 anchor.Composition.Calendar,
+                anchor.Composition.SelectedDefinitions,
                 anchor.NormalContext,
                 out SimulationActiveSession restored,
                 out P12GDailyV1RestoreFailure restoreFailure,
                 out string restoreDiagnostic),
             Is.True, restoreFailure + ": " + restoreDiagnostic);
         Assert.That(restored, Is.Not.Null);
+        Assert.That(restored.Composition.SelectedDefinitions,
+            Is.SameAs(anchor.Composition.SelectedDefinitions),
+            "Detached restore must consume the canonical typed graph selected by the admitted profile.");
         DailyCaptureEligibilityToken restoredToken = GetCompletedToken(restored.Runtime);
         Assert.That(restoredToken.BoundaryProvenance,
             Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
@@ -114,6 +118,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     anchor.Configuration,
                     anchor.Runtime.Configuration,
                     anchor.Composition.Calendar,
+                    anchor.Composition.SelectedDefinitions,
                     anchor.NormalContext,
                     out SimulationActiveSession aliasRejected,
                     out P12GDailyV1RestoreFailure aliasFailure,
@@ -130,6 +135,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     anchor.Configuration,
                     anchor.Runtime.Configuration,
                     anchor.Composition.Calendar,
+                    anchor.Composition.SelectedDefinitions,
                     anchor.NormalContext,
                     out SimulationActiveSession aliasRetry,
                     out P12GDailyV1RestoreFailure aliasRetryFailure,
@@ -145,6 +151,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                 anchor.Configuration,
                 anchor.Runtime.Configuration,
                 anchor.Composition.Calendar,
+                anchor.Composition.SelectedDefinitions,
                 anchor.NormalContext,
                 out SimulationActiveSession rejected,
                 out P12GDailyV1RestoreFailure rejectionFailure,
@@ -164,6 +171,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                 anchor.Configuration,
                 anchor.Runtime.Configuration,
                 anchor.Composition.Calendar,
+                anchor.Composition.SelectedDefinitions,
                 anchor.NormalContext,
                 out SimulationActiveSession retried,
                 out P12GDailyV1RestoreFailure retryFailure,

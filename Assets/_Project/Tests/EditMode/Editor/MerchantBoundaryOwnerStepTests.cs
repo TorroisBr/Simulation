@@ -225,7 +225,7 @@ public sealed class MerchantBoundaryOwnerStepTests
 
         SimulationTime time = new SimulationTime(6L);
         RecordFixture records = SimulationTestFactory.CreateRecordFixture(6L);
-        SimulationLogger logger = new SimulationLogger(new SimulationLogSettings { trade = true });
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(new SimulationLogSettings { trade = true });
         MerchantSystem system = new MerchantSystem(
             new EffectiveMerchantTradeConfiguration(enabled: true),
             new EffectiveCommercialKnowledgeConfiguration(), world.CreateTravelSystem(time),
@@ -308,7 +308,7 @@ public sealed class MerchantBoundaryOwnerStepTests
             world.B.Location.RuntimeId, item, 150f, 10, 6L, 6L));
 
         SimulationTime time = new SimulationTime(6L);
-        SimulationLogger logger = new SimulationLogger(new SimulationLogSettings { trade = true });
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(new SimulationLogSettings { trade = true });
         MerchantSystem system = new MerchantSystem(
             new EffectiveMerchantTradeConfiguration(enabled: true),
             new EffectiveCommercialKnowledgeConfiguration(), world.CreateTravelSystem(time),

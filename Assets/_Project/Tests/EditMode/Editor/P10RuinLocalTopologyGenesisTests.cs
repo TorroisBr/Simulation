@@ -73,7 +73,7 @@ public sealed class P10RuinLocalTopologyGenesisTests
     [Test]
     public void SemanticSiteOwnerAndTopologyIdsIgnoreRuntimeHandlesAndRejectDuplicateDefinitionOwners()
     {
-        ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite("p10-semantic-site", ExplorableSiteKind.Ruin);
+        DailyV1ExplorableSiteDefinition definition = SimulationTestFactory.CreateExplorableSiteDefinition("p10-semantic-site", ExplorableSiteKind.Ruin);
         ExplorableSiteRuntime firstSite = new ExplorableSiteRuntime(
             "site-runtime-first", definition, new SpatialLocationRuntime("location-runtime-first"), P10RuinLocalTopologyGenesis.CreateLegacySiteInstanceId(definition.DefinitionId));
         ExplorableSiteRuntime secondSite = new ExplorableSiteRuntime(
@@ -107,7 +107,7 @@ public sealed class P10RuinLocalTopologyGenesisTests
     [Test]
     public void SemanticTopologyRejectsMissingOrDuplicateStableMemberIdsBeforeStorePublication()
     {
-        ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite("p10-invalid-semantic-site", ExplorableSiteKind.Ruin);
+        DailyV1ExplorableSiteDefinition definition = SimulationTestFactory.CreateExplorableSiteDefinition("p10-invalid-semantic-site", ExplorableSiteKind.Ruin);
         ExplorableSiteRuntime site = new ExplorableSiteRuntime(
             "site-runtime-invalid", definition, new SpatialLocationRuntime("location-runtime-invalid"), P10RuinLocalTopologyGenesis.CreateLegacySiteInstanceId(definition.DefinitionId));
         var identity = new RuntimeIdentityRegistry();
@@ -153,7 +153,7 @@ public sealed class P10RuinLocalTopologyGenesisTests
     [Test]
     public void PublishedSemanticTopologyRejectsMissingAndGloballyDuplicateMemberIds()
     {
-        ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite("p10-published-site", ExplorableSiteKind.Ruin);
+        DailyV1ExplorableSiteDefinition definition = SimulationTestFactory.CreateExplorableSiteDefinition("p10-published-site", ExplorableSiteKind.Ruin);
         ExplorableSiteRuntime site = new ExplorableSiteRuntime(
             "site-runtime-published", definition, new SpatialLocationRuntime("location-runtime-published"), P10RuinLocalTopologyGenesis.CreateLegacySiteInstanceId(definition.DefinitionId));
         var identity = new RuntimeIdentityRegistry();

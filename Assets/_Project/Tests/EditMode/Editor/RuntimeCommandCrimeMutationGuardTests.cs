@@ -1107,7 +1107,7 @@ public sealed class CrimeHiddenStatusBoundaryOwnerTests
     public void HiddenStatusBoundaryStepPreservesRepeatedRosterOccurrencesAndSingleMarkerRemoval()
     {
         NpcStatusData hidden = SimulationTestFactory.CreateStatus("crime-boundary-duplicate-hidden");
-        SimulationLogger logger = new SimulationLogger(null);
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(null);
         CrimeSystem crime = new CrimeSystem(null, null, hidden, logger: logger);
         NpcRuntime hiddenNpc = CreateActor("crime-boundary-duplicate-roster");
         hiddenNpc.HideForDays(1);

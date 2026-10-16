@@ -47,7 +47,7 @@ public class GuardSystem : INpcActionProvider
             return null;
         }
 
-        utility = Mathf.Max(utility, 55f + bounty * 0.25f);
+        utility = UnityMathfCompatibility.Max(utility, 55f + bounty * 0.25f);
         return new NpcActionRuntime(action, target);
     }
 
@@ -88,7 +88,7 @@ public class GuardSystem : INpcActionProvider
 
             if (bestTarget == null
                 || bounty > bestBounty
-                || (Mathf.Approximately(bounty, bestBounty)
+                || (UnityMathfCompatibility.Approximately(bounty, bestBounty)
                     && string.CompareOrdinal(candidate.RuntimeId, bestTarget.RuntimeId) < 0))
             {
                 bestTarget = candidate;

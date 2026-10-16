@@ -421,7 +421,7 @@ public sealed class LocalTopologyPublicationAtomicityTests
     {
         ExplorableSiteRuntime site = new ExplorableSiteRuntime(
             runtimeId,
-            SimulationTestFactory.CreateExplorableSite("definition-" + runtimeId),
+            SimulationTestFactory.CreateExplorableSiteDefinition("definition-" + runtimeId),
             new SpatialLocationRuntime(locationRuntimeId));
         Assert.That(registry.RegisterExplorableSite(site), Is.True);
         return site;

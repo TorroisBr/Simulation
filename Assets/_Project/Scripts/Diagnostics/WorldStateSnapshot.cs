@@ -3849,7 +3849,7 @@ public static class WorldStateSnapshotBuilder
                 site.RuntimeId,
                 site.DefinitionId,
                 site.Location?.RuntimeId,
-                site.Definition != null ? site.Definition.kind : ExplorableSiteKind.Generic));
+                site.Definition != null ? (ExplorableSiteKind)site.Definition.Kind.Value : ExplorableSiteKind.Generic));
         }
 
         return result;

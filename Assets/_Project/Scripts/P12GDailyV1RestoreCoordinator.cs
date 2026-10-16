@@ -135,7 +135,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null,
         Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest = null)
     {
-        return TryCreateRestoredSessionCore(sourceSession, bootstrapAdmissionContext, false, out _, out restoredSession,
+        return TryCreateRestoredSessionCore(sourceSession, bootstrapAdmissionContext, false, null, out _, out restoredSession,
             out failure, out diagnostic, stageObserver, privateCandidateObserver,
             genealogySnapshotOverrideForTest, propertyEstateSnapshotOverrideForTest,
             politicalClaimSnapshotOverrideForTest, politicalSupportSnapshotOverrideForTest,
@@ -167,14 +167,37 @@ internal static partial class P12GDailyV1RestoreCoordinator
         out P12GDailyV1RestoreFailure failure,
         out string diagnostic)
     {
-        return TryCreateRestoredSessionCore(sourceSession, bootstrapAdmissionContext, true, out image, out restoredSession,
+        return TryCreateRestoredSessionCore(sourceSession, bootstrapAdmissionContext, true, null, out image, out restoredSession,
             out failure, out diagnostic, null, null, null, null, null, null, null, null, null);
+    }
+
+    internal static bool TryCreateRestoredSessionAndCaptureDotNetV2Image(
+        SimulationActiveSession sourceSession,
+        SimulationRuntimeAdmissionContext bootstrapAdmissionContext,
+        DailyV1HostEnvironmentIdentity hostIdentity,
+        out P12AContinuationImage image,
+        out SimulationActiveSession restoredSession,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic)
+    {
+        if (hostIdentity == null)
+        {
+            image = null;
+            restoredSession = null;
+            failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
+            diagnostic = "A fixed .NET-v2 host identity is required for this capture path.";
+            return false;
+        }
+        return TryCreateRestoredSessionCore(sourceSession, bootstrapAdmissionContext, true,
+            hostIdentity, out image, out restoredSession, out failure, out diagnostic,
+            null, null, null, null, null, null, null, null, null);
     }
 
     private static bool TryCreateRestoredSessionCore(
         SimulationActiveSession sourceSession,
         SimulationRuntimeAdmissionContext bootstrapAdmissionContext,
         bool captureContinuationImage,
+        DailyV1HostEnvironmentIdentity dotNetIdentity,
         out P12AContinuationImage continuationImage,
         out SimulationActiveSession restoredSession,
         out P12GDailyV1RestoreFailure failure,
@@ -343,7 +366,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     npcDefinitions,
                     sourceSession.Configuration.Actions,
                     sourceSession.Configuration.Statuses,
-                    Array.Empty<ExplorableSiteData>(),
+                    Array.Empty<DailyV1ExplorableSiteDefinition>(),
                     capturedF.TravelPartyIds,
                     out P12DDailyV1OwnerPackage stagedD,
                     out P12DDailyV1OwnerPackageFailure dFailure,
@@ -360,7 +383,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
             stageObserver?.Invoke(P12GDailyV1RestoreStage.DStaged);
 
             SimulationTime stagedTime = new SimulationTime(sourceToken.AbsoluteDay);
-            SimulationLogger logger = new SimulationLogger(sourceSession.Configuration.LogSettings);
+            SimulationLogger logger = UnitySimulationLoggerAdapter.Create(sourceSession.Configuration.LogSettings);
             HistoryStore history = new HistoryStore();
             DomainEventStore eventStore = new DomainEventStore(history, new HistoryPolicy(), logger);
             NpcDecisionStore decisions = new NpcDecisionStore();
@@ -431,6 +454,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     sourceSession.Configuration,
                     sourceRuntime.Configuration,
                     sourceComposition.Calendar,
+                    sourceComposition.SelectedDefinitions,
                     bootstrapAdmissionContext,
                     sourceRuntime.PoliticalWorldRevision,
                     sourceSession.ReportState.LastEconomySnapshotDay,
@@ -623,6 +647,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 && !TryComposeContinuationImage(sourceSession, sourceToken, sourceOwnerSections,
                     worldIdentitySnapshot, allocatorSnapshot, recordSequenceSnapshot, spatialSnapshot,
                     manifestSnapshot, randomSnapshot, stagedD, stagedE, capturedF,
+                    dotNetIdentity,
                     out continuationImage, out P12AResult imageResult))
             {
                 failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
@@ -663,38 +688,52 @@ internal static partial class P12GDailyV1RestoreCoordinator
         P12DDailyV1OwnerPackage d,
         P12EDailyV1OwnerPackage e,
         P12FDailyV1OwnerCapture f,
+        DailyV1HostEnvironmentIdentity dotNetIdentity,
         out P12AContinuationImage image,
         out P12AResult result)
     {
         image = null;
         result = new P12AResult(P12AResultCode.CaptureRejected);
+        P12ACompatibilityDescriptor compatibility = null;
+        P12ACompatibilityDescriptorV2 compatibilityV2 = null;
         if (sourceSession == null || token == null || ownerSections == null
             || !ReferenceEquals(token.OwnerSections, ownerSections)
             || !sourceSession.Runtime.TryValidateCompletedDailyCaptureToken(token, out _)
             || !P12ADailyV1Census.TryCreate(ownerSections, out P12ADailyV1Census census, out result)
             || !P12ACSpatialAuthorityCodec.TryComputeFingerprint(spatialAuthority,
-                out string p8Fingerprint)
-            || !P12ACompatibilityDescriptorFactory.TryCreate(sourceSession.Configuration,
-                sourceSession.Runtime.Configuration, sourceSession.Composition.Calendar,
-                sourceSession.Composition.ProfileFingerprint,
-                p9Manifest, p8Fingerprint,
-                out P12ACompatibilityDescriptor compatibility))
+                out string p8Fingerprint))
         {
             if (result == null) result = new P12AResult(P12AResultCode.IncompatibleContentOrConfiguration);
             return false;
         }
 
-        P12AContinuationHeader header = new P12AContinuationHeader(
-            token.WorldId.Value,
-            token.AbsoluteDay,
-            token.CompletedCoreSequence,
-            sourceSession.ReportState.LastEconomySnapshotDay,
-            p9Manifest.SelectedP9ContractIdentity,
-            p9Manifest.Fingerprint,
-            "P8-A",
-            p8Fingerprint,
-            sourceSession.Runtime.PoliticalWorldRevision,
-            compatibility);
+        bool compatibilityCreated = dotNetIdentity == null
+            ? P12ACompatibilityDescriptorFactory.TryCreate(sourceSession.Configuration,
+                sourceSession.Runtime.Configuration, sourceSession.Composition.Calendar,
+                sourceSession.Composition.SelectedDefinitions,
+                sourceSession.Composition.ProfileFingerprint,
+                p9Manifest, p8Fingerprint, out compatibility)
+            : P12ACompatibilityDescriptorFactory.TryCreateDotNetV2(sourceSession.Configuration,
+                sourceSession.Composition.Calendar, sourceSession.Composition.SelectedDefinitions,
+                sourceSession.Composition.ProfileFingerprint, p9Manifest, p8Fingerprint,
+                dotNetIdentity, out compatibilityV2);
+        if (!compatibilityCreated)
+        {
+            result = new P12AResult(P12AResultCode.IncompatibleContentOrConfiguration);
+            return false;
+        }
+
+        P12AContinuationHeader header = dotNetIdentity == null
+            ? new P12AContinuationHeader(token.WorldId.Value, token.AbsoluteDay,
+                token.CompletedCoreSequence, sourceSession.ReportState.LastEconomySnapshotDay,
+                p9Manifest.SelectedP9ContractIdentity, p9Manifest.Fingerprint,
+                "P8-A", p8Fingerprint, sourceSession.Runtime.PoliticalWorldRevision,
+                compatibility)
+            : P12AContinuationHeader.ForDotNetV2(token.WorldId.Value, token.AbsoluteDay,
+                token.CompletedCoreSequence, sourceSession.ReportState.LastEconomySnapshotDay,
+                p9Manifest.SelectedP9ContractIdentity, p9Manifest.Fingerprint,
+                "P8-A", p8Fingerprint, sourceSession.Runtime.PoliticalWorldRevision,
+                compatibilityV2);
         if (!header.IsValid
             || !P12ACausalRootImageAdapter.TryEncode(header, worldIdentity, allocator,
                 recordSequence, spatialAuthority, p9Manifest, randomRoot,
@@ -992,6 +1031,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
         SimulationConfigData config,
         EffectiveSimulationConfiguration effective,
         CalendarDefinition calendar,
+        DailyV1EffectiveDefinitions selectedDefinitions,
         SimulationRuntimeAdmissionContext sourceAdmissionContext,
         long politicalWorldRevision,
         long lastEconomySnapshotDay,
@@ -1013,7 +1053,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
     {
         candidate = null;
         diagnostic = null;
-        if (config == null || effective == null || calendar == null || sourceAdmissionContext == null)
+        if (config == null || effective == null || calendar == null || selectedDefinitions == null || sourceAdmissionContext == null)
         {
             diagnostic = "The selected Daily-v1 host configuration and admission roots are required.";
             return false;
@@ -1192,7 +1232,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
             stagedC.RuntimeIdAllocator,
             stagedD.EmptyExplorableSites,
             stagedF.Expeditions,
-            expeditions);
+            expeditions,
+            selectedDefinitions);
 
         candidate = new SimulationActiveSession(
             composition,

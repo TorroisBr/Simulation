@@ -29,7 +29,8 @@ public sealed class SimulationBootstrapComposition
         RuntimeIdAllocator runtimeIdAllocator,
         ExplorableSiteStore sites,
         ExpeditionStore expeditions,
-        ExpeditionSystem expeditionSystem)
+        ExpeditionSystem expeditionSystem,
+        DailyV1EffectiveDefinitions selectedDefinitions = null)
     {
         WorldId = worldId ?? throw new ArgumentNullException(nameof(worldId));
         if (runtime == null)
@@ -43,6 +44,7 @@ public sealed class SimulationBootstrapComposition
             throw new ArgumentException("Bootstrap expedition owner and system must share the installed ExpeditionStore.");
 
         Manifest = manifest;
+        SelectedDefinitions = selectedDefinitions;
         SimulationTime = time;
         Calendar = calendar;
         RuntimeIdAllocator = runtimeIdAllocator ?? throw new ArgumentNullException(nameof(runtimeIdAllocator));
@@ -152,6 +154,8 @@ public sealed class SimulationBootstrapComposition
     /// <summary>The stable identity allocated for this composed world continuation.</summary>
     public WorldId WorldId { get; }
     public SimulationGenesisManifest Manifest { get; }
+    /// <summary>Canonical immutable definition nodes used by this composed runtime, when available.</summary>
+    public DailyV1EffectiveDefinitions SelectedDefinitions { get; }
     public SimulationTime SimulationTime { get; }
     public CalendarDefinition Calendar { get; }
     internal RuntimeIdAllocator RuntimeIdAllocator { get; }

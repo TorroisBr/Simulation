@@ -91,6 +91,21 @@ public sealed class P12AContinuationCodecTests
             Assert.That(loadResult.Code, Is.EqualTo(P12AResultCode.Loaded));
             Assert.That(P12AContinuationCodec.TryEncode(loaded, Manifest, out byte[] roundTrip, out _), Is.True);
             Assert.That(roundTrip, Is.EqualTo(durable));
+
+            var injectedOperations = new ReadCountingFileOperations();
+            Assert.That(P12AContinuationStore.TryHasSlot(root, injectedOperations,
+                out bool injectedExists, out P12AResult inspectResult), Is.True, inspectResult?.Code.ToString());
+            Assert.That(injectedExists, Is.True);
+            Assert.That(injectedOperations.OpenReadCount, Is.EqualTo(1),
+                "Explicit slot inspection must use the host-supplied atomic file operations.");
+            Assert.That(P12AContinuationStore.TryLoad(Manifest, descriptor, root, injectedOperations,
+                out P12AContinuationImage injectedImage, out P12AResult injectedLoadResult), Is.True,
+                injectedLoadResult?.Code.ToString());
+            Assert.That(injectedLoadResult.Code, Is.EqualTo(P12AResultCode.Loaded));
+            Assert.That(P12AContinuationCodec.TryEncode(injectedImage, Manifest, out byte[] injectedRoundTrip, out _), Is.True);
+            Assert.That(injectedRoundTrip, Is.EqualTo(durable));
+            Assert.That(injectedOperations.OpenReadCount, Is.GreaterThan(1),
+                "Explicit image loading must use the same host-supplied file operations as slot inspection.");
         }
         finally
         {
@@ -199,6 +214,50 @@ public sealed class P12AContinuationCodecTests
                 out saveRejection), Is.False);
             Assert.That(saveRejection.Code, Is.EqualTo(P12AResultCode.CorruptOrTruncated));
             Assert.That(File.ReadAllBytes(slot), Is.EqualTo(originalSlot));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Test]
+    public void DotNetV2DescriptorRoundTripsThroughExplicitAtomicSlotAndUnityRejectsBeforeStaging()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "P12AContinuationStoreTests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            P12ACompatibilityDescriptorV2 expected = DotNetDescriptorV2("content");
+            P12AContinuationImage image = Image(expected, new byte[] { 9, 8, 7 });
+            Assert.That(P12AContinuationCodec.TryEncode(image, Manifest, out byte[] bytes, out P12AResult encoded),
+                Is.True, encoded?.Code.ToString());
+
+            Assert.That(P12AContinuationCodec.TryDecodeDotNetV2(bytes, Manifest, expected,
+                out P12AContinuationImage decoded, out P12AResult result), Is.True, result?.Code.ToString());
+            Assert.That(result.Code, Is.EqualTo(P12AResultCode.Decoded));
+            Assert.That(decoded.Header.Compatibility, Is.Null);
+            Assert.That(decoded.Header.CompatibilityV2.CanonicalBytes, Is.EqualTo(expected.CanonicalBytes));
+            Assert.That(P12AContinuationCodec.TryEncode(decoded, Manifest, out byte[] roundTrip, out _), Is.True);
+            Assert.That(roundTrip, Is.EqualTo(bytes));
+
+            Assert.That(P12AContinuationCodec.TryDecode(bytes, Manifest, Descriptor(), out _,
+                out P12AResult unityRejection), Is.False);
+            Assert.That(unityRejection.Code, Is.EqualTo(P12AResultCode.UnsupportedSchema));
+
+            Assert.That(P12AContinuationStore.TrySaveDotNetV2(bytes, Manifest, expected, root,
+                SystemAtomicFileSlotOperations.Instance, out P12AResult saved), Is.True, saved?.Code.ToString());
+            Assert.That(saved.Code, Is.EqualTo(P12AResultCode.Saved));
+            Assert.That(P12AContinuationStore.TryLoadDotNetV2(Manifest, expected, root,
+                SystemAtomicFileSlotOperations.Instance, out P12AContinuationImage loaded,
+                out P12AResult loadedResult), Is.True, loadedResult?.Code.ToString());
+            Assert.That(loadedResult.Code, Is.EqualTo(P12AResultCode.Loaded));
+            Assert.That(P12AContinuationCodec.TryEncode(loaded, Manifest, out byte[] storedRoundTrip, out _), Is.True);
+            Assert.That(storedRoundTrip, Is.EqualTo(bytes));
+
+            P12ACompatibilityDescriptorV2 changedContent = DotNetDescriptorV2("different-content");
+            Assert.That(P12AContinuationCodec.TryDecodeDotNetV2(bytes, Manifest, changedContent,
+                out _, out P12AResult contentMismatch), Is.False);
+            Assert.That(contentMismatch.Code, Is.EqualTo(P12AResultCode.IncompatibleContentOrConfiguration));
         }
         finally
         {
@@ -1339,6 +1398,32 @@ public sealed class P12AContinuationCodecTests
         return image;
     }
 
+    private P12AContinuationImage Image(P12ACompatibilityDescriptorV2 descriptor, byte[] payload)
+    {
+        P12CP9GenesisManifestSnapshot manifest = GetP9Manifest();
+        P12AContinuationImage image = new P12AContinuationImage(
+            P12AContinuationHeader.ForDotNetV2("world:00112233445566778899aabbccddeeff", 12, 4, 10,
+                manifest.SelectedP9ContractIdentity, manifest.Fingerprint, "P8-A", "p8", 73L,
+                descriptor), CausalRoots(), new[]
+            {
+                Section("a.required", OwnerSectionRole.Required, new P12AOwnerRow("owner:alpha", 7, payload)),
+                Section("z.empty", OwnerSectionRole.ExplicitlyEmpty)
+            });
+        payload[0] = 0xff;
+        return image;
+    }
+
+    private P12ACompatibilityDescriptorV2 DotNetDescriptorV2(string contentFingerprint)
+    {
+        P12CP9GenesisManifestSnapshot manifest = GetP9Manifest();
+        return new P12ACompatibilityDescriptorV2("UnityBootstrap-Daily-v1", 1, 1,
+            ".NET 8.0", "8.0.1.0", "Windows", "win-x64", "x64", "net8.0",
+            new[] { new P12AAssemblyIdentityV2("Simulation.Core", "1.0.0.0",
+                "4b37a0ac-246b-47c5-9bbc-fd79704e0666") },
+            "numeric", 1, "config", contentFingerprint, "providers", "daily", 1,
+            "calendar", manifest.Fingerprint, "p8");
+    }
+
     private static P12AOwnerSection Section(string id, OwnerSectionRole role, params P12AOwnerRow[] rows)
     { return new P12AOwnerSection(id, 1, 0, role, null, 0, rows); }
 
@@ -1414,15 +1499,34 @@ public sealed class P12AContinuationCodecTests
         }
     }
 
-    private sealed class ReplaceFailureFileOperations : IP12AContinuationFileOperations
+    private sealed class ReplaceFailureFileOperations : IAtomicFileSlotOperations
     {
-        private readonly IP12AContinuationFileOperations inner = P12AContinuationFileOperations.Instance;
+        private readonly IAtomicFileSlotOperations inner = SystemAtomicFileSlotOperations.Instance;
         public void CreateDirectory(string path) => inner.CreateDirectory(path);
         public bool Exists(string path) => inner.Exists(path);
         public Stream CreateNewTemporary(string path) => inner.CreateNewTemporary(path);
         public Stream OpenRead(string path) => inner.OpenRead(path);
         public void FlushToDisk(Stream stream) => inner.FlushToDisk(stream);
         public void Replace(string source, string destination) => throw new IOException("Injected replace failure.");
+        public void Move(string source, string destination) => inner.Move(source, destination);
+        public void Delete(string path) => inner.Delete(path);
+    }
+
+    private sealed class ReadCountingFileOperations : IAtomicFileSlotOperations
+    {
+        private readonly IAtomicFileSlotOperations inner = SystemAtomicFileSlotOperations.Instance;
+        internal int OpenReadCount { get; private set; }
+
+        public void CreateDirectory(string path) => inner.CreateDirectory(path);
+        public bool Exists(string path) => inner.Exists(path);
+        public Stream CreateNewTemporary(string path) => inner.CreateNewTemporary(path);
+        public Stream OpenRead(string path)
+        {
+            OpenReadCount++;
+            return inner.OpenRead(path);
+        }
+        public void FlushToDisk(Stream stream) => inner.FlushToDisk(stream);
+        public void Replace(string source, string destination) => inner.Replace(source, destination);
         public void Move(string source, string destination) => inner.Move(source, destination);
         public void Delete(string path) => inner.Delete(path);
     }

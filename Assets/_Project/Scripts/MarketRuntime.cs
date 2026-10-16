@@ -19,8 +19,8 @@ public class MarketItemRuntime
     public MarketItemRuntime(ItemData item, int amount, int desiredAmount)
     {
         this.item = item;
-        this.amount = Mathf.Max(0, amount);
-        this.desiredAmount = Mathf.Max(1, desiredAmount);
+        this.amount = UnityMathfCompatibility.Max(0, amount);
+        this.desiredAmount = UnityMathfCompatibility.Max(1, desiredAmount);
         UpdatePrice();
     }
 
@@ -219,7 +219,7 @@ public class MarketRuntime
             return marketItem.CurrentPrice;
         }
 
-        return item != null ? Mathf.Max(0.01f, item.basePrice) : 0f;
+        return item != null ? UnityMathfCompatibility.Max(0.01f, item.basePrice) : 0f;
     }
 
     internal float GetPriceForSale(ItemData item)
@@ -280,7 +280,7 @@ public class MarketRuntime
             return 0;
         }
 
-        int amountToRemove = Mathf.Min(amount, marketItem.Amount);
+        int amountToRemove = UnityMathfCompatibility.Min(amount, marketItem.Amount);
 
         if (amountToRemove <= 0)
         {
@@ -379,7 +379,7 @@ public class MarketRuntime
             return marketItem;
         }
 
-        marketItem = new MarketItemRuntime(item, 0, Mathf.Max(1, desiredAmount));
+        marketItem = new MarketItemRuntime(item, 0, UnityMathfCompatibility.Max(1, desiredAmount));
         EnsureItems().Add(marketItem);
         return marketItem;
     }

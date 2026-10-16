@@ -51,7 +51,7 @@ public class NpcActionRuntime
     {
         this.action = action;
         this.targetNpc = targetNpc;
-        this.amount = Mathf.Max(0, amount);
+        this.amount = UnityMathfCompatibility.Max(0, amount);
     }
 
     public NpcActionRuntime(NpcActionData action, NpcRuntime targetNpc, ItemData targetItem, int amount, float expectedUnitPrice)
@@ -59,8 +59,8 @@ public class NpcActionRuntime
         this.action = action;
         this.targetNpc = targetNpc;
         this.targetItem = targetItem;
-        this.amount = Mathf.Max(0, amount);
-        this.expectedUnitPrice = Mathf.Max(0f, expectedUnitPrice);
+        this.amount = UnityMathfCompatibility.Max(0, amount);
+        this.expectedUnitPrice = UnityMathfCompatibility.Max(0f, expectedUnitPrice);
     }
 
     /// <summary>Creates an unpublished action payload without replaying its setters.</summary>
@@ -109,7 +109,7 @@ public class NpcActionRuntime
 
     public void SetSuccessChanceMultiplier(float multiplier)
     {
-        float normalized = Mathf.Max(0f, multiplier);
+        float normalized = UnityMathfCompatibility.Max(0f, multiplier);
         if (successChanceMultiplier.Equals(normalized)) return;
         if (!CanCommitP12Mutation()) return;
         successChanceMultiplier = normalized;
@@ -211,7 +211,7 @@ public class NpcActionRuntime
         this.targetCity = targetCity;
         this.targetItem = targetItem;
         this.travelReason = travelReason;
-        expectedUnitPrice = Mathf.Max(0f, expectedCost);
+        expectedUnitPrice = UnityMathfCompatibility.Max(0f, expectedCost);
         this.expectedNetValue = expectedNetValue;
     }
 }
@@ -323,8 +323,8 @@ public class NpcTravelPlanRuntime
             targetLocation,
             targetCityProjection,
             reason,
-            Mathf.Max(0f, utility),
-            Mathf.Max(0f, expectedCost),
+            UnityMathfCompatibility.Max(0f, utility),
+            UnityMathfCompatibility.Max(0f, expectedCost),
             string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId);
         InstallOwnerState(next);
     }
@@ -536,14 +536,14 @@ public class MerchantTradePlanRuntime
 
     public void Set(ItemData item, CityRuntime originCity, CityRuntime targetCity, int plannedAmount, float purchasePricePerItem, string originDecisionId = null)
     {
-        int normalizedAmount = Mathf.Max(0, plannedAmount);
+        int normalizedAmount = UnityMathfCompatibility.Max(0, plannedAmount);
         InstallOwnerState(new MerchantTradePlanState(
             item,
             originCity,
             targetCity,
             normalizedAmount,
             normalizedAmount,
-            Mathf.Max(0f, purchasePricePerItem),
+            UnityMathfCompatibility.Max(0f, purchasePricePerItem),
             0,
             0,
             string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId));
@@ -590,7 +590,7 @@ public class MerchantTradePlanRuntime
             return false;
         }
 
-        int nextRemainingAmount = Mathf.Max(0, RemainingAmount - amountSold);
+        int nextRemainingAmount = UnityMathfCompatibility.Max(0, RemainingAmount - amountSold);
         bool completed = nextRemainingAmount <= 0;
         MerchantTradePlanState next = completed
             ? new MerchantTradePlanState(null, null, null, 0, 0, 0f, 0, 0, null)

@@ -107,20 +107,38 @@ public static class SimulationTestFactory
         return site;
     }
 
+    public static DailyV1ExplorableSiteDefinition CreateExplorableSiteDefinition(
+        string id,
+        ExplorableSiteKind kind = ExplorableSiteKind.Generic,
+        string siteName = null)
+    {
+        string displayName = siteName ?? id + " display";
+        DailyV1ExplorableSiteData values = new DailyV1ExplorableSiteData(
+            id, displayName, new DailyV1EnumValue((int)kind, kind.ToString()));
+        ConstructorInfo constructor = typeof(DailyV1ExplorableSiteDefinition).GetConstructor(
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            null,
+            new[] { typeof(string), typeof(string), typeof(DailyV1ExplorableSiteData) },
+            null);
+        if (constructor == null)
+            throw new InvalidOperationException("DailyV1ExplorableSiteDefinition must retain its internal graph-node constructor.");
+        return (DailyV1ExplorableSiteDefinition)constructor.Invoke(new object[] { "ExplorableSiteData", id, values });
+    }
+
     public static LocalPlaceTypeData CreateLocalPlaceType(string id, string displayName = null)
     {
-        LocalPlaceTypeData type = Track(ScriptableObject.CreateInstance<LocalPlaceTypeData>());
-        type.id = id;
-        type.displayName = displayName ?? id + " display";
-        return type;
+        LocalPlaceTypeData value = Track(ScriptableObject.CreateInstance<LocalPlaceTypeData>());
+        value.id = id;
+        value.displayName = displayName ?? id + " display";
+        return value;
     }
 
     public static LocalConnectionTypeData CreateLocalConnectionType(string id, string displayName = null)
     {
-        LocalConnectionTypeData type = Track(ScriptableObject.CreateInstance<LocalConnectionTypeData>());
-        type.id = id;
-        type.displayName = displayName ?? id + " display";
-        return type;
+        LocalConnectionTypeData value = Track(ScriptableObject.CreateInstance<LocalConnectionTypeData>());
+        value.id = id;
+        value.displayName = displayName ?? id + " display";
+        return value;
     }
 
     public static SimulationConfigData CreateSimulationConfig()

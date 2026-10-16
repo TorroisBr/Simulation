@@ -39,6 +39,9 @@
       <Compile Include="DailyV1DefinitionProviderVectors.cs" Link="Definitions/DailyV1DefinitionProviderVectors.cs" />
       <Compile Include="SimulationConfigurationResolverPrecedenceTests.cs" Link="Configuration/SimulationConfigurationResolverPrecedenceTests.cs" />
       <Compile Include="DailyV1TypedDefinitionGraphTests.cs" Link="Definitions/DailyV1TypedDefinitionGraphTests.cs" />
+    <Compile Include="ActionExecutionTests.cs" Link="Application/ActionExecutionTests.cs" />
+      <Compile Include="DailyV1ApplicationHostTests.cs" Link="Application/DailyV1ApplicationHostTests.cs" />
+    <Compile Include="SimulationLoggerHostPortTests.cs" Link="Application/SimulationLoggerHostPortTests.cs" />
       <Compile Include="DailyV1SelectedMemberCoverageTests.cs" Link="Definitions/DailyV1SelectedMemberCoverageTests.cs" />
       <None Include="../../docs/architecture/CORE_F_SELECTED_VALUE_MEMBERS.csv" Link="Fixtures/CORE_F_SELECTED_VALUE_MEMBERS.csv" CopyToOutputDirectory="PreserveNewest" />
       <None Include="../../Assets/_Project/Scripts/CoreAdapters/DailyV1DefinitionAdapter.cs" Link="Fixtures/DailyV1DefinitionAdapter.source.cs" CopyToOutputDirectory="PreserveNewest" />

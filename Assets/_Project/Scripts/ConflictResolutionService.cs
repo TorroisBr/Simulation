@@ -20,7 +20,7 @@ public sealed class ConflictResolutionService
         this.resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
         this.consequenceResolver = consequenceResolver ?? new DefaultConflictConsequenceResolver(resolver.RandomSource);
         this.domainEventRecorder = domainEventRecorder;
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
     }
 
     public ConflictResolutionResult Compute(

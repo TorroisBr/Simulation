@@ -40,16 +40,19 @@ public static class P10RuinLocalTopologyGenesis
 
     public static P10RuinLocalTopologyCandidate CreateCandidate(
         SimulationConfigData config,
-        SpatialAuthorityStore spatialAuthority)
+        SpatialAuthorityStore spatialAuthority,
+        DailyV1EffectiveDefinitions selectedDefinitions)
     {
         if (config == null) throw new ArgumentNullException(nameof(config));
         if (spatialAuthority == null) throw new ArgumentNullException(nameof(spatialAuthority));
         if (!config.useAuthoredGeographyProfile)
             throw new InvalidOperationException("P10 Ruin composition requires the selected P9-B geography profile.");
-        ExplorableSiteData ruinDefinition = config.authoredP10RuinSite;
-        if (ruinDefinition == null
+        ExplorableSiteData authoredRuin = config.authoredP10RuinSite;
+        if (authoredRuin == null || selectedDefinitions == null
+            || !selectedDefinitions.ExplorableSites.TryGetValue(authoredRuin.DefinitionId,
+                out DailyV1ExplorableSiteDefinition ruinDefinition)
             || string.IsNullOrWhiteSpace(ruinDefinition.DefinitionId)
-            || ruinDefinition.kind != ExplorableSiteKind.Ruin)
+            || ruinDefinition.Kind.Value != (int)ExplorableSiteKind.Ruin)
             throw new InvalidOperationException("P10 requires one authored Ruin definition with a stable DefinitionId.");
         foreach (ExplorableSiteConfig existingSite in config.ExplorableSites)
             if (existingSite?.site != null
@@ -68,6 +71,14 @@ public static class P10RuinLocalTopologyGenesis
             throw new InvalidOperationException("P10 could not resolve the selected P9-B Location and its registered P8 anchor from the composed spatial authority.");
 
         return new P10RuinLocalTopologyCandidate(ruinDefinition, selectedLocation, selectedAnchor, PlaceInputs, ConnectionInputs);
+    }
+
+    public static P10RuinLocalTopologyCandidate CreateCandidate(
+        SimulationConfigData config,
+        SpatialAuthorityStore spatialAuthority)
+    {
+        return CreateCandidate(config, spatialAuthority,
+            config == null ? null : SimulationGenesisPipeline.CreateSelectedDefinitions(config));
     }
 
     public static bool TryCompose(
@@ -101,7 +112,7 @@ public static class P10RuinLocalTopologyGenesis
             return false;
         }
         foreach (ExplorableSiteRuntime existing in siteStore.Sites)
-            if (existing != null && (existing.Definition.kind == ExplorableSiteKind.Ruin
+            if (existing != null && (existing.Definition.Kind.Value == (int)ExplorableSiteKind.Ruin
                 || string.Equals(existing.DefinitionId, candidate.SiteDefinition.DefinitionId, StringComparison.Ordinal)))
             {
                 diagnostic = "P10 Ruin cardinality or DefinitionId conflicts with a composed ExplorableSite.";
@@ -225,14 +236,14 @@ public static class P10RuinLocalTopologyGenesis
 }
 public sealed class P10RuinLocalTopologyCandidate
 {
-    public ExplorableSiteData SiteDefinition { get; }
+    public DailyV1ExplorableSiteDefinition SiteDefinition { get; }
     public LocationRecord Location { get; }
     public HexRecord Anchor { get; }
     public IReadOnlyList<P10LocalPlaceInput> Places { get; }
     public IReadOnlyList<P10LocalConnectionInput> Connections { get; }
 
     internal P10RuinLocalTopologyCandidate(
-        ExplorableSiteData siteDefinition,
+        DailyV1ExplorableSiteDefinition siteDefinition,
         LocationRecord location,
         HexRecord anchor,
         IEnumerable<P10LocalPlaceInput> places,

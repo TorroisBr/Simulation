@@ -663,7 +663,7 @@ public sealed class NpcDecisionStore
 
     public NpcDecisionStore(SimulationLogger logger = null)
     {
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
         readOnlyDecisions = decisions.AsReadOnly();
     }
 
@@ -825,7 +825,7 @@ public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
         this.recordSequence = recordSequence ?? throw new ArgumentNullException(nameof(recordSequence));
         this.decisionStore = decisionStore ?? throw new ArgumentNullException(nameof(decisionStore));
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
     }
 
     /// <summary>

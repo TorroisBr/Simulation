@@ -753,7 +753,7 @@ public sealed class GMConsolePanelTests
             City = SimulationTestFactory.CreateCity("gm-city", "gm-city-location");
             Site = new ExplorableSiteRuntime(
                 "gm-site",
-                SimulationTestFactory.CreateExplorableSite("gm-site-definition"),
+                SimulationTestFactory.CreateExplorableSiteDefinition("gm-site-definition"),
                 new SpatialLocationRuntime("gm-site-location"));
             Actor = new NpcRuntime("gm-actor", SimulationTestFactory.CreateNpc("gm-actor-definition"));
             Defender = new NpcRuntime("gm-defender", SimulationTestFactory.CreateNpc("gm-defender-definition"));

@@ -16,21 +16,41 @@ internal static class P12ACompatibilityDescriptorFactory
 
     internal static bool TryCreate(SimulationConfigData configuration,
         EffectiveSimulationConfiguration effectiveConfiguration, CalendarDefinition calendar,
+        DailyV1EffectiveDefinitions selectedDefinitions,
         string configurationFingerprint, P12CP9GenesisManifestSnapshot p9Manifest,
         string p8Fingerprint, out P12ACompatibilityDescriptor descriptor)
     {
         descriptor = null;
         if (configuration == null || effectiveConfiguration == null || calendar == null
+            || selectedDefinitions == null
             || string.IsNullOrWhiteSpace(configurationFingerprint)
             || p9Manifest == null || !p9Manifest.TryValidate(out _)
             || string.IsNullOrWhiteSpace(p8Fingerprint)) return false;
 
         try
         {
-            string providerFingerprint = FingerprintProviders();
-            string calendarFingerprint = FingerprintCalendar(calendar);
+            if (!P12ADailyV1ContentAdapter.TryCapture(configuration,
+                    out DailyV1SelectedContentProjection contentProjection, out string contentDiagnostic))
+                throw new InvalidOperationException(contentDiagnostic ?? "The Daily-v1 content projection is invalid.");
+            DailyV1EffectiveDefinitions identityDefinitions = selectedDefinitions.ContentProjection == null
+                ? selectedDefinitions.WithContentProjection(contentProjection)
+                : selectedDefinitions;
+            if (!string.Equals(identityDefinitions.ContentFingerprint, contentProjection.Fingerprint,
+                    StringComparison.Ordinal)
+                || !DailyV1CompatibilityFingerprint.TryCreate(identityDefinitions,
+                    configurationFingerprint,
+                    P12ADailyV1Census.FixedRequiredSectionIds,
+                    P12ADailyV1Census.FixedEmptySectionIds,
+                    P12ADailyV1Census.NpcSectionPrefixes,
+                    P12ADailyV1Census.CitySectionPrefixes,
+                    p9Manifest.Fingerprint, p8Fingerprint,
+                    out DailyV1CompatibilityFingerprint semanticIdentity)) return false;
+            string currentCalendarFingerprint = DailyV1DefinitionIdentity.CreateCalendarFingerprint(
+                new DailyV1CalendarDefinition(calendar.MonthsPerYear, calendar.WeeksPerMonth,
+                    calendar.DaysPerWeek, calendar.monthLengths));
+            if (!string.Equals(currentCalendarFingerprint, semanticIdentity.CalendarFingerprint,
+                    StringComparison.Ordinal)) return false;
             if (!TryGetProjectAssemblyMvids(out string[] assemblyIds)) return false;
-            string contentFingerprint = FingerprintContentCatalog(configuration);
 #if ENABLE_IL2CPP
             const string backend = "IL2CPP";
 #else
@@ -49,13 +69,13 @@ internal static class P12ACompatibilityDescriptorFactory
                 assemblyIds,
                 numericProfileId,
                 1,
-                contentFingerprint,
-                providerFingerprint,
-                "simulation-calendar/v1",
-                1,
-                calendarFingerprint,
-                p9Manifest.Fingerprint,
-                p8Fingerprint);
+                semanticIdentity.ContentFingerprint,
+                semanticIdentity.ProviderFingerprint,
+                DailyV1CompatibilityFingerprint.CalendarId,
+                DailyV1CompatibilityFingerprint.CalendarVersion,
+                semanticIdentity.CalendarFingerprint,
+                semanticIdentity.P9Fingerprint,
+                semanticIdentity.P8Fingerprint);
             return true;
         }
         catch (Exception exception) when (exception is ArgumentException
@@ -69,21 +89,53 @@ internal static class P12ACompatibilityDescriptorFactory
         }
     }
 
-    private static string FingerprintProviders()
+    internal static bool TryCreateDotNetV2(SimulationConfigData configuration,
+        CalendarDefinition calendar, DailyV1EffectiveDefinitions selectedDefinitions,
+        string configurationFingerprint, P12CP9GenesisManifestSnapshot p9Manifest,
+        string p8Fingerprint, DailyV1HostEnvironmentIdentity hostIdentity,
+        out P12ACompatibilityDescriptorV2 descriptor)
     {
-        return DailyV1DefinitionIdentity.CreateProviderFingerprint(
-            P12ADailyV1Census.FixedRequiredSectionIds,
-            P12ADailyV1Census.FixedEmptySectionIds,
-            P12ADailyV1Census.NpcSectionPrefixes,
-            P12ADailyV1Census.CitySectionPrefixes);
-    }
+        descriptor = null;
+        if (configuration == null || calendar == null || selectedDefinitions == null
+            || string.IsNullOrWhiteSpace(configurationFingerprint)
+            || p9Manifest == null || !p9Manifest.TryValidate(out _)
+            || string.IsNullOrWhiteSpace(p8Fingerprint) || hostIdentity == null) return false;
 
-    private static string FingerprintContentCatalog(SimulationConfigData configuration)
-    {
-        if (!P12ADailyV1ContentAdapter.TryCapture(configuration,
-            out DailyV1SelectedContentProjection projection, out string diagnostic))
-            throw new InvalidOperationException(diagnostic ?? "The Daily-v1 content projection is invalid.");
-        return projection.Fingerprint;
+        try
+        {
+            if (!P12ADailyV1ContentAdapter.TryCapture(configuration,
+                    out DailyV1SelectedContentProjection contentProjection, out _)) return false;
+            DailyV1EffectiveDefinitions identityDefinitions = selectedDefinitions.ContentProjection == null
+                ? selectedDefinitions.WithContentProjection(contentProjection)
+                : selectedDefinitions;
+            if (!string.Equals(identityDefinitions.ContentFingerprint, contentProjection.Fingerprint,
+                    StringComparison.Ordinal)
+                || !string.Equals(DailyV1DefinitionIdentity.CreateCalendarFingerprint(
+                        new DailyV1CalendarDefinition(calendar.MonthsPerYear, calendar.WeeksPerMonth,
+                            calendar.DaysPerWeek, calendar.monthLengths)),
+                    DailyV1DefinitionIdentity.CreateCalendarFingerprint(identityDefinitions.Calendar),
+                    StringComparison.Ordinal)
+                || !DailyV1CompatibilityFingerprint.TryCreate(identityDefinitions,
+                    configurationFingerprint,
+                    P12ADailyV1Census.FixedRequiredSectionIds,
+                    P12ADailyV1Census.FixedEmptySectionIds,
+                    P12ADailyV1Census.NpcSectionPrefixes,
+                    P12ADailyV1Census.CitySectionPrefixes,
+                    p9Manifest.Fingerprint, p8Fingerprint,
+                    out DailyV1CompatibilityFingerprint semanticIdentity)) return false;
+
+            descriptor = semanticIdentity.CreateDotNetV2Descriptor(hostIdentity);
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException
+            || exception is P12ALimitException || exception is CryptographicException
+            || exception is IOException || exception is NotSupportedException
+            || exception is TargetInvocationException || exception is UnauthorizedAccessException)
+        {
+            descriptor = null;
+            return false;
+        }
     }
 
     private static bool TryGetProjectAssemblyMvids(out string[] mvids)
@@ -162,13 +214,6 @@ internal static class P12ACompatibilityDescriptorFactory
             writer.Flush();
             return "p12.numeric.ieee754-binary32-binary64/canonical-le-wire-v1/" + Sha256(stream.ToArray());
         }
-    }
-
-    private static string FingerprintCalendar(CalendarDefinition calendar)
-    {
-        if (!calendar.TryValidate(out _)) throw new ArgumentException(nameof(calendar));
-        return DailyV1DefinitionIdentity.CreateCalendarFingerprint(new DailyV1CalendarDefinition(
-            calendar.MonthsPerYear, calendar.WeeksPerMonth, calendar.DaysPerWeek, calendar.monthLengths));
     }
 
     private static string Sha256(byte[] bytes)

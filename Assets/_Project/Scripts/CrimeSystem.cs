@@ -42,7 +42,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         this.justiceSystem = justiceSystem;
         this.travelSystem = travelSystem;
         this.hiddenStatus = hiddenStatus;
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
         this.transactionService = transactionService ?? new EconomyTransactionService();
         this.configuration = configuration ?? new EffectiveCrimeConfiguration(true, true);
         this.randomSource = randomSource ?? new DeterministicRandomSource();
@@ -251,7 +251,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         }
 
         CrimeActionSettings settings = GetCrimeSettings(actionRuntime.Action);
-        int sentencePenalty = Mathf.Max(0, settings.failedEscapeSentencePenalty);
+        int sentencePenalty = UnityMathfCompatibility.Max(0, settings.failedEscapeSentencePenalty);
 
         if (justiceSystem == null || justiceSystem.RegisterFailedEscape(npcRuntime, sentencePenalty) == false)
         {
@@ -655,7 +655,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
                 continue;
             }
 
-            remaining = Mathf.Max(0, remaining - 1);
+            remaining = UnityMathfCompatibility.Max(0, remaining - 1);
             remainingByNpc[npcRuntime] = remaining;
             if (remaining <= 0)
             {
@@ -799,7 +799,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return null;
         }
 
-        utility = Mathf.Max(0f, utility) + GetMoneyPressureBonus(npcRuntime) + Mathf.Min(8f, amount * 0.2f);
+        utility = UnityMathfCompatibility.Max(0f, utility) + GetMoneyPressureBonus(npcRuntime) + UnityMathfCompatibility.Min(8f, amount * 0.2f);
         NpcActionRuntime runtime = new NpcActionRuntime(action, target, amount);
         if (npcRuntime.PersonId != null && target.PersonId != null)
         {
@@ -822,7 +822,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         }
 
         float bounty = justiceSystem.GetBounty(npcRuntime, npcRuntime.CurrentCity);
-        utility = Mathf.Max(utility, 20f + bounty * 0.15f);
+        utility = UnityMathfCompatibility.Max(utility, 20f + bounty * 0.15f);
         return new NpcActionRuntime(action);
     }
 
@@ -842,7 +842,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return null;
         }
 
-        utility = Mathf.Max(utility, option.Utility);
+        utility = UnityMathfCompatibility.Max(utility, option.Utility);
         return new NpcActionRuntime(action, option.TargetCity, null, 0, option.TravelCost);
     }
 
@@ -862,12 +862,12 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return null;
         }
 
-        float remainingSentenceUrgency = Mathf.Clamp01((remainingDays - 1f) / 7f);
-        utility = Mathf.Clamp(10f + remainingSentenceUrgency * 20f, 10f, 30f);
+        float remainingSentenceUrgency = UnityMathfCompatibility.Clamp01((remainingDays - 1f) / 7f);
+        utility = UnityMathfCompatibility.Clamp(10f + remainingSentenceUrgency * 20f, 10f, 30f);
 
         NpcActionRuntime actionRuntime = new NpcActionRuntime(action);
         int failedAttempts = justiceSystem.GetFailedEscapeAttempts(npcRuntime);
-        actionRuntime.SetSuccessChanceMultiplier(Mathf.Pow(EscapeSuccessMultiplierPerFailure, failedAttempts));
+        actionRuntime.SetSuccessChanceMultiplier(UnityMathfCompatibility.Pow(EscapeSuccessMultiplierPerFailure, failedAttempts));
         return actionRuntime;
     }
 
@@ -878,7 +878,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return NpcActionResult.Failed();
         }
 
-        int amount = Mathf.Min(actionRuntime.Amount, Mathf.FloorToInt(actionRuntime.TargetNpc.Money));
+        int amount = UnityMathfCompatibility.Min(actionRuntime.Amount, UnityMathfCompatibility.FloorToInt(actionRuntime.TargetNpc.Money));
         if (theftOutcomeSink != null
             && (npcRuntime.PersonId == null
                 || actionRuntime.TargetNpc.PersonId == null
@@ -985,7 +985,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return NpcActionResult.Failed();
         }
 
-        int hiddenDays = Mathf.Max(1, GetCrimeSettings(actionRuntime.Action).hiddenDays);
+        int hiddenDays = UnityMathfCompatibility.Max(1, GetCrimeSettings(actionRuntime.Action).hiddenDays);
         npcRuntime.HideForDays(hiddenDays);
         npcRuntime.AddStatus(hiddenStatus);
         logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} esta escondido.");
@@ -1109,7 +1109,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
                 continue;
             }
 
-            float score = (safetyGain - travelCost) / Mathf.Max(1, travelDays);
+            float score = (safetyGain - travelCost) / UnityMathfCompatibility.Max(1, travelDays);
 
             if (score <= 0f)
             {
@@ -1120,7 +1120,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
 
             if (bestOption == null
                 || utility > bestOption.Utility
-                || (Mathf.Approximately(utility, bestOption.Utility)
+                || (UnityMathfCompatibility.Approximately(utility, bestOption.Utility)
                     && string.CompareOrdinal(
                         targetCity.RuntimeId,
                         bestOption.TargetCity?.RuntimeId ?? string.Empty) < 0))
@@ -1154,8 +1154,8 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
 
     private int GetConfiguredAmount(NpcActionData action, NpcRuntime targetRuntime)
     {
-        int configuredAmount = Mathf.Max(0, GetCrimeSettings(action).amount);
-        return Mathf.Min(configuredAmount, Mathf.FloorToInt(targetRuntime.Money));
+        int configuredAmount = UnityMathfCompatibility.Max(0, GetCrimeSettings(action).amount);
+        return UnityMathfCompatibility.Min(configuredAmount, UnityMathfCompatibility.FloorToInt(targetRuntime.Money));
     }
 
     private float GetMoneyPressureBonus(NpcRuntime npcRuntime)
@@ -1165,12 +1165,12 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return 0f;
         }
 
-        return Mathf.Clamp((50f - npcRuntime.Money) * 0.35f, 0f, 18f);
+        return UnityMathfCompatibility.Clamp((50f - npcRuntime.Money) * 0.35f, 0f, 18f);
     }
 
     private float GetStealTargetWeight(NpcRuntime candidate)
     {
-        return candidate != null ? Mathf.Max(1f, candidate.Money) : 0f;
+        return candidate != null ? UnityMathfCompatibility.Max(1f, candidate.Money) : 0f;
     }
 
     private CrimeActionSettings GetCrimeSettings(NpcActionData action)

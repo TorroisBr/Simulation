@@ -38,10 +38,10 @@ public sealed class CoreFDailyV1ValueBaselineTests
         Assert.That(p9, Is.EqualTo(RetainedValue(retained, "p9")), "Typed P9 fingerprint must preserve the pre-refactor identity.");
         CollectionAssert.AreEqual(RetainedRecords(retained, "p9-record="), p9Records,
             "Typed P9 builder must preserve every ordered pre-refactor record.");
-        MethodInfo catalogMethod = typeof(P12ACompatibilityDescriptorFactory).GetMethod(
-            "FingerprintContentCatalog", BindingFlags.NonPublic | BindingFlags.Static);
-        Assert.That(catalogMethod, Is.Not.Null);
-        string p12 = (string)catalogMethod.Invoke(null, new object[] { authoring });
+        Assert.That(P12ADailyV1ContentAdapter.TryCapture(authoring,
+            out DailyV1SelectedContentProjection contentProjection, out string contentDiagnostic),
+            Is.True, contentDiagnostic);
+        string p12 = contentProjection.Fingerprint;
 
         byte[] catalogBytes = CaptureCatalogBytes(authoring);
         Assert.That(Sha256(catalogBytes), Is.EqualTo(p12), "The retained P12 bytes must be the production encoder output.");
@@ -52,8 +52,14 @@ public sealed class CoreFDailyV1ValueBaselineTests
         List<string> orderedValues = CaptureSelectedMemberValues(authoring);
         CollectionAssert.AreEqual(RetainedRecords(retained, "member="), orderedValues,
             "The selected 164-field/718-occurrence input vector changed from the retained Unity baseline.");
-        string provider = InvokePrivateFingerprint("FingerprintProviders");
-        string calendarIdentity = InvokePrivateFingerprint("FingerprintCalendar", calendar);
+        string provider = DailyV1DefinitionIdentity.CreateProviderFingerprint(
+            P12ADailyV1Census.FixedRequiredSectionIds,
+            P12ADailyV1Census.FixedEmptySectionIds,
+            P12ADailyV1Census.NpcSectionPrefixes,
+            P12ADailyV1Census.CitySectionPrefixes);
+        string calendarIdentity = DailyV1DefinitionIdentity.CreateCalendarFingerprint(
+            new DailyV1CalendarDefinition(calendar.MonthsPerYear, calendar.WeeksPerMonth,
+                calendar.DaysPerWeek, calendar.monthLengths));
         string outputPath = Path.Combine(Directory.GetCurrentDirectory(), "Library", "CORE_F_WP1_VALUES_BASELINE.txt");
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
         using (StreamWriter output = new StreamWriter(outputPath, false, new UTF8Encoding(false, true)))
@@ -92,14 +98,6 @@ public sealed class CoreFDailyV1ValueBaselineTests
         Assert.That(P12ADailyV1ContentAdapter.TryCapture(root,
             out DailyV1SelectedContentProjection projection, out string diagnostic), Is.True, diagnostic);
         return projection.Bytes;
-    }
-
-    private static string InvokePrivateFingerprint(string methodName, params object[] arguments)
-    {
-        MethodInfo method = typeof(P12ACompatibilityDescriptorFactory).GetMethod(
-            methodName, BindingFlags.NonPublic | BindingFlags.Static);
-        Assert.That(method, Is.Not.Null, methodName);
-        return (string)method.Invoke(null, arguments);
     }
 
     private static List<string> CaptureSelectedMemberValues(SimulationConfigData root)

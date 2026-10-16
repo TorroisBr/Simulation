@@ -186,7 +186,7 @@ public sealed class ExplorableSiteStore : IAuthoritativeMutationGuardBindable
     /// </summary>
     internal static bool TryCreateFromOwnerSnapshot(
         ExplorableSiteOwnerSnapshot snapshot,
-        IEnumerable<ExplorableSiteData> compatibleDefinitions,
+        IEnumerable<DailyV1ExplorableSiteDefinition> compatibleDefinitions,
         IEnumerable<SpatialLocationRuntime> legacyLocations,
         out ExplorableSiteStore stagedStore,
         out ExplorableSiteSnapshotFailure failure)
@@ -216,9 +216,9 @@ public sealed class ExplorableSiteStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
-        Dictionary<string, ExplorableSiteData> definitionsById =
-            new Dictionary<string, ExplorableSiteData>(StringComparer.Ordinal);
-        foreach (ExplorableSiteData definition in compatibleDefinitions)
+        Dictionary<string, DailyV1ExplorableSiteDefinition> definitionsById =
+            new Dictionary<string, DailyV1ExplorableSiteDefinition>(StringComparer.Ordinal);
+        foreach (DailyV1ExplorableSiteDefinition definition in compatibleDefinitions)
         {
             if (definition == null || string.IsNullOrWhiteSpace(definition.DefinitionId))
             {
@@ -288,7 +288,7 @@ public sealed class ExplorableSiteStore : IAuthoritativeMutationGuardBindable
             }
 
 
-            if (!definitionsById.TryGetValue(siteRecord.DefinitionId, out ExplorableSiteData definition)
+            if (!definitionsById.TryGetValue(siteRecord.DefinitionId, out DailyV1ExplorableSiteDefinition definition)
                 || !string.Equals(definition.DefinitionId, siteRecord.DefinitionId, StringComparison.Ordinal))
             {
                 failure = ExplorableSiteSnapshotFailure.Create(

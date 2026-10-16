@@ -45,10 +45,9 @@ public sealed class DeterministicWorldCommandNaturalLanguageTranslatorTests
         cityData.cityName = "Winterhold";
         city = new CityRuntime("city-winterhold", cityData, new SpatialLocationRuntime("winterhold-location"));
 
-        ExplorableSiteData siteData = Create<ExplorableSiteData>();
-        siteData.id = "black-cavern-definition";
-        siteData.siteName = "Caverna Negra";
-        site = new ExplorableSiteRuntime("site-black-cavern", siteData, new SpatialLocationRuntime("black-cavern-location"));
+        DailyV1ExplorableSiteDefinition siteDefinition = SimulationTestFactory.CreateExplorableSiteDefinition(
+            "black-cavern-definition", ExplorableSiteKind.Generic, "Caverna Negra");
+        site = new ExplorableSiteRuntime("site-black-cavern", siteDefinition, new SpatialLocationRuntime("black-cavern-location"));
 
         ExplorableSiteStore siteStore = new ExplorableSiteStore();
         Assert.That(siteStore.Add(site), Is.True);

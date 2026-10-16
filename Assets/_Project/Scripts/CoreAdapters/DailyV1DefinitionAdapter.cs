@@ -30,8 +30,14 @@ public static class DailyV1DefinitionAdapter
             List<DailyV1NpcJobData> jobs = new List<DailyV1NpcJobData>();
             List<DailyV1NpcActionData> actions = new List<DailyV1NpcActionData>();
             List<DailyV1NpcStatusData> statuses = new List<DailyV1NpcStatusData>();
+            List<KeyValuePair<string, string>> traits = new List<KeyValuePair<string, string>>();
+            List<KeyValuePair<string, string>> capabilityAttributes = new List<KeyValuePair<string, string>>();
+            List<DailyV1ExplorableSiteData> explorableSites = new List<DailyV1ExplorableSiteData>();
             foreach (ScriptableObject asset in assets.Values)
             {
+                // CaptureAssets owns alias detection; recheck Unity fake-null at the adapter edge
+                // before reading an admitted Unity object or converting it to a Core value.
+                if (asset == null) throw new InvalidOperationException("The selected profile contains a destroyed definition asset.");
                 string id = AssetId(asset);
                 if (asset.GetType() == typeof(CityData)) cities.Add(ConvertCityData(asset));
                 else if (asset.GetType() == typeof(ItemData)) items.Add(ConvertItemData(asset));
@@ -39,16 +45,31 @@ public static class DailyV1DefinitionAdapter
                 else if (asset.GetType() == typeof(NpcJobData)) jobs.Add(ConvertNpcJobData(asset));
                 else if (asset.GetType() == typeof(NpcActionData)) actions.Add(ConvertNpcActionData(asset));
                 else if (asset.GetType() == typeof(NpcStatusData)) statuses.Add(ConvertNpcStatusData(asset));
-                // Trait, capability-attribute, and explorablesite assets are part of the closed
-                // serialized profile graph, but their selected semantics are represented as IDs
-                // in the typed Core values. The content projection captures their full values.
+                else if (asset.GetType() == typeof(TraitData))
+                {
+                    TraitData trait = (TraitData)asset;
+                    if (!trait.TryValidate(out string traitDiagnostic)) throw new InvalidOperationException(traitDiagnostic);
+                    traits.Add(new KeyValuePair<string, string>(id, trait.DisplayName));
+                }
+                else if (asset.GetType() == typeof(CapabilityAttributeData))
+                {
+                    CapabilityAttributeData attribute = (CapabilityAttributeData)asset;
+                    if (!attribute.TryValidate(out string attributeDiagnostic)) throw new InvalidOperationException(attributeDiagnostic);
+                    capabilityAttributes.Add(new KeyValuePair<string, string>(id, attribute.DisplayName));
+                }
+                else if (asset.GetType() == typeof(ExplorableSiteData))
+                {
+                    ExplorableSiteData site = (ExplorableSiteData)asset;
+                    explorableSites.Add(new DailyV1ExplorableSiteData(id, site.siteName, EnumValue(site.kind)));
+                }
             }
             DailyV1CalendarDefinition resolvedCalendar = new DailyV1CalendarDefinition(
                 calendar.MonthsPerYear, calendar.WeeksPerMonth, calendar.DaysPerWeek, calendar.monthLengths);
             definitions = DailyV1EffectiveDefinitions.CreateSelectedSchema(configValues, effective, resolvedCalendar,
                 cities, items, npcs, jobs, actions, statuses, stageOrder,
                 SimulationGenesisPipeline.ProfileContractIdentity, SimulationGenesisPipeline.GeographyProfileContractIdentity,
-                SimulationGenesisPipeline.GeographyStageId, hexConvention, hexCanonicalOrder);
+                SimulationGenesisPipeline.GeographyStageId, hexConvention, hexCanonicalOrder,
+                traits, capabilityAttributes, explorableSites);
             return true;
         }
         catch (Exception exception) when (exception is ArgumentException || exception is InvalidOperationException
@@ -133,7 +154,7 @@ public static class DailyV1DefinitionAdapter
         if (value is UnityEngine.Object unityObject)
         {
             if (!(unityObject is ScriptableObject asset)) throw new InvalidOperationException("The selected profile contains an unsupported Unity object reference.");
-            if (asset == null) return;
+            if (asset == null) throw new InvalidOperationException("The selected profile contains a destroyed definition asset.");
             string key = AssetKey(asset);
             if (assets.TryGetValue(key, out ScriptableObject previous))
             {

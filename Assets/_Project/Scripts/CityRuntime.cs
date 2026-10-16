@@ -247,7 +247,7 @@ public class CityRuntime
             applied = Market.AddStock(source.item, source.amountPerDay);
             rejection = applied == source.amountPerDay ? string.Empty : "AggregateStockOverflow";
         }
-        int requested = Math.Max(0, Mathf.RoundToInt(Population.CurrentPopulation / 1000f * itemConfig.consumptionPer1000Population));
+        int requested = Math.Max(0, UnityMathfCompatibility.RoundToInt(Population.CurrentPopulation / 1000f * itemConfig.consumptionPer1000Population));
         int actual = Market.RemoveStockUpTo(source.item, requested);
         int closing = Market.GetAmount(source.item);
         lastMaterialFlow = new LocalDailyMaterialFlowResult(cityData.settlementSemanticId, source.productionSourceId,
@@ -272,7 +272,7 @@ public class CityRuntime
         CityProductionConfig representative = cityData.productionConfigs.Find(row => row != null
             && row.sourceKind == CityProductionSourceKind.ExogenousDaily);
         MarketItemConfig itemConfig = cityData.marketItems[0];
-        int requested = Math.Max(0, Mathf.RoundToInt(Population.CurrentPopulation / 1000f
+        int requested = Math.Max(0, UnityMathfCompatibility.RoundToInt(Population.CurrentPopulation / 1000f
             * itemConfig.consumptionPer1000Population));
         int actual = Market.RemoveStockUpTo(itemConfig.item, requested);
         int closing = Market.GetAmount(itemConfig.item);
@@ -468,7 +468,7 @@ public class CityRuntime
             foreach (MarketItemConfig row in cityData != null ? cityData.marketItems ?? new List<MarketItemConfig>() : new List<MarketItemConfig>())
             {
                 if (row?.item == null || row.consumptionPer1000Population <= 0f) continue;
-                int desired = Mathf.RoundToInt(preparedPopulation / 1000f * row.consumptionPer1000Population);
+                int desired = UnityMathfCompatibility.RoundToInt(preparedPopulation / 1000f * row.consumptionPer1000Population);
                 int consumed = 0;
                 float unitPrice = 0f, paid = 0f;
                 MarketItemRuntime item = FindPreparedItem(marketState, row.item);
@@ -480,7 +480,7 @@ public class CityRuntime
                     }
                     else if (populationAccount != null && settlementAccount != null)
                     {
-                        unitPrice = Mathf.Max(0.01f, item.CurrentPrice);
+                        unitPrice = UnityMathfCompatibility.Max(0.01f, item.CurrentPrice);
                         if (float.IsNaN(unitPrice) || float.IsInfinity(unitPrice)) unitPrice = 0f;
                         if (unitPrice <= 0f)
                         {
@@ -492,7 +492,7 @@ public class CityRuntime
                         float affordableRaw = populationBalance / unitPrice;
                         int affordable = populationBalance >= unitPrice
                             ? (float.IsInfinity(affordableRaw) || affordableRaw >= int.MaxValue
-                                ? int.MaxValue : Mathf.Max(0, Mathf.FloorToInt(affordableRaw))) : 0;
+                                ? int.MaxValue : UnityMathfCompatibility.Max(0, UnityMathfCompatibility.FloorToInt(affordableRaw))) : 0;
                         consumed = Math.Min(desired, Math.Min(item.Amount, affordable));
                         paid = unitPrice * consumed;
                         float nextPopulationBalance = populationBalance - paid;
@@ -947,7 +947,7 @@ public class CityRuntime
         this.runtimeId = runtimeId;
         this.cityData = cityData;
         this.location = location;
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
         this.marketCounterparty = marketCounterparty != null
             ? NormalizeMarketCounterparty(marketCounterparty, runtimeId)
             : CreateConfiguredMarketCounterparty(runtimeId, cityData);
@@ -1039,7 +1039,7 @@ public class CityRuntime
                 continue;
             }
 
-            int desiredConsumption = Mathf.RoundToInt(Population.CurrentPopulation / 1000f * config.consumptionPer1000Population);
+            int desiredConsumption = UnityMathfCompatibility.RoundToInt(Population.CurrentPopulation / 1000f * config.consumptionPer1000Population);
             if (desiredConsumption <= 0)
             {
                 results.Add(new CityConsumptionResult(
@@ -1340,7 +1340,7 @@ public class CityRuntime
 
     private SettlementPopulationRuntime CreatePopulationRuntime()
     {
-        int initialPopulation = cityData != null ? Mathf.Max(0, cityData.initialPopulation) : 0;
+        int initialPopulation = cityData != null ? UnityMathfCompatibility.Max(0, cityData.initialPopulation) : 0;
         return new SettlementPopulationRuntime(runtimeId, initialPopulation);
     }
 }

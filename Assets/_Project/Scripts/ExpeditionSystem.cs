@@ -74,7 +74,7 @@ public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
         this.localTopologyKnowledgeSystem = new LocalTopologyKnowledgeSystem();
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
         this.domainEventRecorder = domainEventRecorder;
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
         this.placeContentStore = placeContentStore;
         this.localTopologyStore = localTopologyStore;
     }

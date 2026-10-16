@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
 
 public class TravelSystem : IAuthoritativeMutationGuardBindable
 {
@@ -41,7 +40,7 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
         this.getCityRuntimeByLocation = getCityRuntimeByLocation;
         this.travelConfiguration = travelConfiguration ?? new EffectiveTravelConfiguration(0f);
         this.domainEventRecorder = domainEventRecorder;
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
         this.transactionService = transactionService ?? new EconomyTransactionService();
     }
 
@@ -503,7 +502,7 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
 
     public float GetTravelCost(int travelDays)
     {
-        return Mathf.Max(1, travelDays) * travelConfiguration.TravelCostPerDay;
+        return UnityMathfCompatibility.Max(1, travelDays) * travelConfiguration.TravelCostPerDay;
     }
 
     public bool TryGetDirectRoute(

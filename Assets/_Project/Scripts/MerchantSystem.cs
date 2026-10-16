@@ -38,7 +38,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         this.simulationTime = simulationTime ?? throw new System.ArgumentNullException(nameof(simulationTime));
         knowledgePolicy = new CommercialKnowledgePolicy(knowledgeConfiguration);
         this.decisionRecorder = decisionRecorder;
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
         this.transactionService = transactionService ?? new EconomyTransactionService();
     }
 
@@ -352,7 +352,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
 
             if (reposition != null)
             {
-                utility = Mathf.Max(0f, reposition.TradeOpportunity.Score);
+                utility = UnityMathfCompatibility.Max(0f, reposition.TradeOpportunity.Score);
                 NpcActionRuntime repositionAction = new NpcActionRuntime(
                     action,
                     reposition.OriginCity,
@@ -373,7 +373,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return null;
         }
 
-        utility = Mathf.Max(utility, 20f + scouting.Score);
+        utility = UnityMathfCompatibility.Max(utility, 20f + scouting.Score);
         NpcActionRuntime scoutingAction = new NpcActionRuntime(
             action,
             scouting.TargetCity,
@@ -691,9 +691,9 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         }
 
         float reserveAmount = buyerRuntime.Money * tradeConfiguration.LocalReserveRatio;
-        float spendableMoney = Mathf.Max(0f, buyerRuntime.Money - reserveAmount);
-        int affordableAmount = Mathf.FloorToInt(spendableMoney / unitPrice);
-        amountSold = Mathf.Min(actionRuntime.Amount, sellerRuntime.Inventory.GetAmount(actionRuntime.TargetItem), affordableAmount);
+        float spendableMoney = UnityMathfCompatibility.Max(0f, buyerRuntime.Money - reserveAmount);
+        int affordableAmount = UnityMathfCompatibility.FloorToInt(spendableMoney / unitPrice);
+        amountSold = UnityMathfCompatibility.Min(actionRuntime.Amount, sellerRuntime.Inventory.GetAmount(actionRuntime.TargetItem), affordableAmount);
 
         if (amountSold <= 0)
         {
@@ -782,7 +782,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         }
 
         float baseUtility = 30f;
-        utility = Mathf.Max(utility, baseUtility + opportunity.Score);
+        utility = UnityMathfCompatibility.Max(utility, baseUtility + opportunity.Score);
         NpcActionRuntime buyAction = new NpcActionRuntime(action, opportunity.TargetCity, opportunity.Item, opportunity.Amount, opportunity.BuyPrice);
         buyAction.SetCommercialDecisionEvidence(opportunity.Evidence);
         return buyAction;
@@ -817,7 +817,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return null;
         }
 
-        utility = Mathf.Max(utility, 25f + localSale.Score);
+        utility = UnityMathfCompatibility.Max(utility, 25f + localSale.Score);
         NpcActionRuntime sellAction = new NpcActionRuntime(action, npcRuntime.CurrentCity, localSale.Item, localSale.Amount, localSale.SellPrice);
         sellAction.SetCommercialDecisionEvidence(localSale.Evidence);
         return sellAction;
@@ -846,7 +846,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
 
         if (localBuyer != null)
         {
-            utility = Mathf.Max(utility, 85f + localBuyer.Score);
+            utility = UnityMathfCompatibility.Max(utility, 85f + localBuyer.Score);
             NpcActionRuntime buyerSaleAction = new NpcActionRuntime(action, localBuyer.TargetNpc, plan.Item, localBuyer.Amount, localBuyer.SellPrice);
             buyerSaleAction.SetCommercialDecisionEvidence(localBuyer.Evidence);
             return buyerSaleAction;
@@ -881,7 +881,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
 
         if (profitPerItem >= GetMinimumProfitPerItem(npcRuntime))
         {
-            utility = Mathf.Max(utility, 80f + profitPerItem * 5f);
+            utility = UnityMathfCompatibility.Max(utility, 80f + profitPerItem * 5f);
             NpcActionRuntime plannedSaleAction = new NpcActionRuntime(action, npcRuntime.CurrentCity, plan.Item, amount, localPrice);
             plannedSaleAction.SetCommercialDecisionEvidence(saleEvidence);
             return plannedSaleAction;
@@ -889,7 +889,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
 
         if (plan.WaitDaysAtDestination >= tradeConfiguration.MaxUnprofitablePlanWaitDays)
         {
-            utility = Mathf.Max(utility, 35f);
+            utility = UnityMathfCompatibility.Max(utility, 35f);
             NpcActionRuntime liquidationAction = new NpcActionRuntime(action, npcRuntime.CurrentCity, plan.Item, amount, localPrice);
             liquidationAction.SetCommercialDecisionEvidence(saleEvidence);
             return liquidationAction;
@@ -1008,7 +1008,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
                     continue;
                 }
 
-                int availableAmount = Mathf.Min(tradeConfiguration.MaxTradeAmount, originObservation.ObservedStock, Mathf.FloorToInt(moneyAvailableForGoods / buyPrice));
+                int availableAmount = UnityMathfCompatibility.Min(tradeConfiguration.MaxTradeAmount, originObservation.ObservedStock, UnityMathfCompatibility.FloorToInt(moneyAvailableForGoods / buyPrice));
 
                 if (availableAmount <= 0)
                 {
@@ -1037,7 +1037,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
                 }
 
                 int totalTravelDays = additionalTravelDays + travelDays;
-                float freshness = Mathf.Min(originFreshness, targetFreshness);
+                float freshness = UnityMathfCompatibility.Min(originFreshness, targetFreshness);
                 float score = CalculateTradeScore(netProfit, totalTravelDays)
                     * freshness
                     * GetTradePreferenceMultiplier(npcRuntime, originObservation.ItemDefinition);
@@ -1223,7 +1223,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         }
 
         int sellerAmount = sellerRuntime.Inventory.GetAmount(item);
-        int maxAmount = Mathf.Min(requestedAmount, sellerAmount);
+        int maxAmount = UnityMathfCompatibility.Min(requestedAmount, sellerAmount);
 
         if (maxAmount <= 0)
         {
@@ -1256,9 +1256,9 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             }
 
             float reserveAmount = candidate.Money * tradeConfiguration.LocalReserveRatio;
-            float spendableMoney = Mathf.Max(0f, candidate.Money - reserveAmount);
-            int affordableAmount = Mathf.FloorToInt(spendableMoney / unitPrice);
-            int amount = Mathf.Min(maxAmount, affordableAmount);
+            float spendableMoney = UnityMathfCompatibility.Max(0f, candidate.Money - reserveAmount);
+            int affordableAmount = UnityMathfCompatibility.FloorToInt(spendableMoney / unitPrice);
+            int amount = UnityMathfCompatibility.Min(maxAmount, affordableAmount);
 
             if (amount <= 0)
             {
@@ -1328,7 +1328,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
                 continue;
             }
 
-            int amount = Mathf.Min(tradeConfiguration.MaxTradeAmount, inventoryItem.Amount);
+            int amount = UnityMathfCompatibility.Min(tradeConfiguration.MaxTradeAmount, inventoryItem.Amount);
             amount = LimitMarketSaleAmountFromKnowledge(npcRuntime, npcRuntime.CurrentCity, localPrice, amount);
 
             if (amount <= 0)
@@ -1444,8 +1444,8 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
                 : 0L;
             float informationNeed = unknownObservationCount * 20f
                 + staleObservationCount * 12f
-                + Mathf.Min(30f, (float)oldestAgeDays) * 0.5f;
-            float score = informationNeed / Mathf.Max(1f, route.TravelDays + travelCost / 10f);
+                + UnityMathfCompatibility.Min(30f, (float)oldestAgeDays) * 0.5f;
+            float score = informationNeed / UnityMathfCompatibility.Max(1f, route.TravelDays + travelCost / 10f);
 
             if (score <= 0f)
             {
@@ -1470,7 +1470,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
 
             if (bestOpportunity == null
                 || opportunity.Score > bestOpportunity.Score
-                || (Mathf.Approximately(opportunity.Score, bestOpportunity.Score) == true
+                || (UnityMathfCompatibility.Approximately(opportunity.Score, bestOpportunity.Score) == true
                     && string.CompareOrdinal(opportunity.Evidence.KnownRouteRuntimeId, bestOpportunity.Evidence.KnownRouteRuntimeId) < 0))
             {
                 bestOpportunity = opportunity;
@@ -1560,9 +1560,9 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return requestedAmount;
         }
 
-        return Mathf.Min(
+        return UnityMathfCompatibility.Min(
             requestedAmount,
-            Mathf.FloorToInt(observation.ObservedPurchasingPower / expectedUnitPrice));
+            UnityMathfCompatibility.FloorToInt(observation.ObservedPurchasingPower / expectedUnitPrice));
     }
 
     private CommercialDecisionEvidence CreateCommercialEvidence(
@@ -1618,9 +1618,9 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
     private float CalculateLocalMerchantUnitPrice(NpcRuntime buyerRuntime, ItemData item, float retailPrice)
     {
         float preferenceMultiplier = GetTradePreferenceMultiplier(buyerRuntime, item);
-        float preferredPriceBonus = Mathf.Min(0.15f, Mathf.Max(0f, preferenceMultiplier - 1f) * 0.1f);
-        return Mathf.Max(0.01f, retailPrice)
-            * Mathf.Clamp(tradeConfiguration.LocalWholesalePriceMultiplier + preferredPriceBonus, 0.5f, 0.85f);
+        float preferredPriceBonus = UnityMathfCompatibility.Min(0.15f, UnityMathfCompatibility.Max(0f, preferenceMultiplier - 1f) * 0.1f);
+        return UnityMathfCompatibility.Max(0.01f, retailPrice)
+            * UnityMathfCompatibility.Clamp(tradeConfiguration.LocalWholesalePriceMultiplier + preferredPriceBonus, 0.5f, 0.85f);
     }
 
     private static bool ShouldPreferOpportunity(
@@ -1635,7 +1635,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return true;
         }
 
-        if (!Mathf.Approximately(score, current.Score))
+        if (!UnityMathfCompatibility.Approximately(score, current.Score))
         {
             return false;
         }
@@ -1668,12 +1668,12 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return 0;
         }
 
-        return Mathf.Min(tradeConfiguration.MaxTradeAmount, plan.RemainingAmount, npcRuntime.Inventory.GetAmount(plan.Item));
+        return UnityMathfCompatibility.Min(tradeConfiguration.MaxTradeAmount, plan.RemainingAmount, npcRuntime.Inventory.GetAmount(plan.Item));
     }
 
     private float CalculateTradeScore(float netProfit, int travelDays)
     {
-        return netProfit / Mathf.Max(1, travelDays);
+        return netProfit / UnityMathfCompatibility.Max(1, travelDays);
     }
 
     private float GetTradePreferenceMultiplier(NpcRuntime npcRuntime, ItemData item)
@@ -1687,7 +1687,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         {
             if (preference != null && preference.item == item)
             {
-                return Mathf.Max(0.01f, preference.utilityMultiplier);
+                return UnityMathfCompatibility.Max(0.01f, preference.utilityMultiplier);
             }
         }
 
@@ -1708,7 +1708,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         float configuredValue = npcRuntime?.NpcData?.job != null
             ? npcRuntime.NpcData.job.minimumProfitPerItem
             : 1f;
-        return Mathf.Max(0f, configuredValue);
+        return UnityMathfCompatibility.Max(0f, configuredValue);
     }
 
     private bool IsTravelingMerchant(NpcRuntime npcRuntime)

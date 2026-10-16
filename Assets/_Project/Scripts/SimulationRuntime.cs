@@ -11399,7 +11399,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         }
 
         float contextualMultiplier = actionRuntime != null ? actionRuntime.SuccessChanceMultiplier : 1f;
-        float effectiveChance = Mathf.Clamp01(action.baseSuccessChance * Mathf.Max(0f, contextualMultiplier));
+        float effectiveChance = UnityMathfCompatibility.Clamp01(action.baseSuccessChance * UnityMathfCompatibility.Max(0f, contextualMultiplier));
         string actorKey = npcRuntime?.RuntimeId ?? "unknown-actor";
         string decisionKey = actionRuntime?.OriginDecisionId
             ?? actionRuntime?.Action?.DefinitionId

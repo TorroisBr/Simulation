@@ -570,7 +570,7 @@ internal sealed class SpatialTravelFixture
     {
         return new ExplorableSiteRuntime(
             id + "-runtime",
-            SimulationTestFactory.CreateExplorableSite(id),
+            SimulationTestFactory.CreateExplorableSiteDefinition(id),
             location);
     }
 

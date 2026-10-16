@@ -91,7 +91,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
             roots.Cities, roots.Npcs, roots.People,
             justiceConfiguration.FreeStatus, justiceConfiguration.WantedStatus,
             justiceConfiguration.ArrestedStatus, justiceConfiguration.HiddenStatus,
-            records.EventRecorder, new SimulationLogger(null),
+            records.EventRecorder, UnitySimulationLoggerAdapter.Create(null),
             out JusticeSystem staged, out P12EJusticeSnapshotFailure stageFailure),
             Is.True, stageFailure?.Message);
 
@@ -197,7 +197,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
             roots.Cities, roots.Npcs, roots.People,
             configuration.FreeStatus, configuration.WantedStatus,
             configuration.ArrestedStatus, configuration.HiddenStatus,
-            null, new SimulationLogger(null),
+            null, UnitySimulationLoggerAdapter.Create(null),
             out JusticeSystem staged, out failure), Is.True, failure?.Message);
         Assert.That(staged.P12WantedRecordCount, Is.Zero);
         Assert.That(staged.P12PrisonSentenceCount, Is.Zero);
@@ -277,7 +277,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
             mismatchConfiguration.WantedStatus,
             mismatchConfiguration.ArrestedStatus,
             mismatchConfiguration.HiddenStatus,
-            null, new SimulationLogger(null), out JusticeSystem rejected,
+            null, UnitySimulationLoggerAdapter.Create(null), out JusticeSystem rejected,
             out P12EJusticeSnapshotFailure failure), Is.False);
         Assert.That(rejected, Is.Null);
         Assert.That(failure.Code, Is.EqualTo(P12EJusticeSnapshotFailureCode.InvalidReference));
@@ -319,7 +319,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         Assert.That(dangling.TryStage(new[] { city }, new[] { danglingNpc }, new PersonStore(),
             configuration.FreeStatus, configuration.WantedStatus,
             configuration.ArrestedStatus, configuration.HiddenStatus,
-            null, new SimulationLogger(null), out JusticeSystem rejected,
+            null, UnitySimulationLoggerAdapter.Create(null), out JusticeSystem rejected,
             out P12EJusticeSnapshotFailure failure), Is.False);
         Assert.That(rejected, Is.Null);
         Assert.That(failure.Code, Is.EqualTo(P12EJusticeSnapshotFailureCode.InvalidReference));
@@ -338,7 +338,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         Assert.That(storeOnlyBinding.TryStage(new[] { city }, new[] { storeBoundNpc }, storeBoundPeople,
             configuration.FreeStatus, configuration.WantedStatus,
             configuration.ArrestedStatus, configuration.HiddenStatus,
-            null, new SimulationLogger(null), out rejected, out failure), Is.False);
+            null, UnitySimulationLoggerAdapter.Create(null), out rejected, out failure), Is.False);
         Assert.That(rejected, Is.Null);
         Assert.That(failure.Code, Is.EqualTo(P12EJusticeSnapshotFailureCode.InvalidReference));
 
@@ -355,7 +355,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         Assert.That(npcOnlyBinding.TryStage(new[] { city }, new[] { npcBoundNpc }, npcBoundPeople,
             configuration.FreeStatus, configuration.WantedStatus,
             configuration.ArrestedStatus, configuration.HiddenStatus,
-            null, new SimulationLogger(null), out rejected, out failure), Is.False);
+            null, UnitySimulationLoggerAdapter.Create(null), out rejected, out failure), Is.False);
         Assert.That(rejected, Is.Null);
         Assert.That(failure.Code, Is.EqualTo(P12EJusticeSnapshotFailureCode.InvalidReference));
     }
@@ -515,7 +515,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
             roots.Cities, roots.Npcs, roots.People,
             configuration.FreeStatus, configuration.WantedStatus,
             configuration.ArrestedStatus, configuration.HiddenStatus,
-            null, new SimulationLogger(null), out JusticeSystem staged,
+            null, UnitySimulationLoggerAdapter.Create(null), out JusticeSystem staged,
             out P12EJusticeSnapshotFailure failure), Is.True, failure?.Message);
 
         List<WantedRecordRuntime> wanted = ReadOwnerRows<WantedRecordRuntime>(staged, "wantedRecords");
@@ -608,7 +608,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         Assert.That(snapshot.TryStage(roots.Cities, roots.Npcs, roots.People,
             configuration.FreeStatus, configuration.WantedStatus,
             configuration.ArrestedStatus, configuration.HiddenStatus,
-            null, new SimulationLogger(null), out JusticeSystem staged,
+            null, UnitySimulationLoggerAdapter.Create(null), out JusticeSystem staged,
             out P12EJusticeSnapshotFailure failure), Is.False);
         Assert.That(staged, Is.Null);
         Assert.That(failure.Code, Is.EqualTo(expectedCode));
@@ -767,7 +767,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
 
         internal JusticeSystem CreateOwner() => new JusticeSystem(
             FreeStatus, WantedStatus, ArrestedStatus, HiddenStatus,
-            null, new SimulationLogger(null));
+            null, UnitySimulationLoggerAdapter.Create(null));
     }
 
     private sealed class StagedRoots

@@ -834,7 +834,7 @@ public sealed class DomainEventStore
     {
         this.historyStore = historyStore ?? throw new ArgumentNullException(nameof(historyStore));
         this.historyPolicy = historyPolicy ?? throw new ArgumentNullException(nameof(historyPolicy));
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
         readOnlyEvents = events.AsReadOnly();
     }
 
@@ -984,7 +984,7 @@ public sealed class DomainEventRecorder : IDomainEventRecorder
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
         this.recordSequence = recordSequence ?? throw new ArgumentNullException(nameof(recordSequence));
         this.eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
     }
 
     public bool Record(Func<string, long, long, DomainEvent> createEvent)

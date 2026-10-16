@@ -249,7 +249,7 @@ public sealed class P12CPrivateRootCompositionTests
             npcDefinitions,
             config.Actions,
             config.Statuses,
-            Array.Empty<ExplorableSiteData>(),
+            Array.Empty<DailyV1ExplorableSiteDefinition>(),
             capturedF.TravelPartyIds,
             out P12DDailyV1OwnerPackage stagedD,
             out P12DDailyV1OwnerPackageFailure dFailure), Is.True, dFailure.ToString());
@@ -266,7 +266,7 @@ public sealed class P12CPrivateRootCompositionTests
             config.arrestedStatus,
             config.hiddenStatus,
             null,
-            new SimulationLogger(null));
+            UnitySimulationLoggerAdapter.Create(null));
         Assert.That(P12EDailyV1OwnerPackage.TryCaptureAndStage(
             sourceRuntime,
             captureToken,

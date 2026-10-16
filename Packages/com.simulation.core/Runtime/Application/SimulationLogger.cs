@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using UnityEngine;
 
 public class SimulationLogger
 {
@@ -11,6 +10,8 @@ public class SimulationLogger
     private const string BeginDayOperationKind = "logger.begin-day";
     private const string BeginDayOperationVersion = "1";
     private readonly SimulationLogSettings settings;
+    private readonly string persistentDataRoot;
+    private readonly Action<DailyV1LogSeverity, string> logOutput;
     private List<string> reportLines = new List<string>();
     private Dictionary<string, LoggerBeginDayReceipt> beginDayStepReceipts =
         new Dictionary<string, LoggerBeginDayReceipt>(StringComparer.Ordinal);
@@ -20,12 +21,17 @@ public class SimulationLogger
 
     public string FullLog => string.Join(Environment.NewLine, reportLines);
 
-    public SimulationLogger(SimulationLogSettings settings)
+    public SimulationLogger(SimulationLogSettings settings, string persistentDataRoot,
+        Action<DailyV1LogSeverity, string> logOutput)
     {
+        if (string.IsNullOrWhiteSpace(persistentDataRoot))
+            throw new ArgumentException("An explicit persistent data root is required.", nameof(persistentDataRoot));
+        this.persistentDataRoot = persistentDataRoot;
+        this.logOutput = logOutput ?? throw new ArgumentNullException(nameof(logOutput));
         this.settings = settings ?? new SimulationLogSettings();
     }
 
-    public void BeginSimulation(string simulationName, IEnumerable<SimulationModule> modules, int cityCount, int npcCount)
+    public void BeginSimulation<TModule>(string simulationName, IEnumerable<TModule> modules, int cityCount, int npcCount)
     {
         reportLines.Clear();
         AddReportLine("SIMULATION: " + (string.IsNullOrEmpty(simulationName) == true ? "Unnamed" : simulationName));
@@ -34,14 +40,14 @@ public class SimulationLogger
 
         if (modules != null)
         {
-            foreach (SimulationModule module in modules)
+            foreach (TModule module in modules)
             {
                 AddReportLine("- " + module);
             }
         }
 
-        AddReportLine("Cities: " + Mathf.Max(0, cityCount));
-        AddReportLine("NPCs: " + Mathf.Max(0, npcCount));
+        AddReportLine("Cities: " + UnityMathfCompatibility.Max(0, cityCount));
+        AddReportLine("NPCs: " + UnityMathfCompatibility.Max(0, npcCount));
         AddReportLine(string.Empty);
     }
 
@@ -75,7 +81,7 @@ public class SimulationLogger
             || string.IsNullOrEmpty(message)) return false;
 
         keyedOccurrenceReceipts ??= new Dictionary<string, LoggerKeyedOccurrenceReceipt>(StringComparer.Ordinal);
-        string descriptorFingerprint = SpatialStableKey.Encode(operationFingerprint,
+        string descriptorFingerprint = StableKeyEncoding.Encode(operationFingerprint,
             category.ToString(), message);
         if (keyedOccurrenceReceipts.TryGetValue(operationIdentity,
                 out LoggerKeyedOccurrenceReceipt existing))
@@ -134,7 +140,7 @@ public class SimulationLogger
         reportLines = commit.NextLines;
         keyedOccurrenceReceipts = commit.NextReceipts;
         beginDayStepRevision = commit.Receipt.OwnerRevisionAfter;
-        if (commit.EmitUnityLog) Debug.Log(commit.Receipt.Message);
+        if (commit.EmitOutput) logOutput(DailyV1LogSeverity.Log, commit.Receipt.Message);
         failure = TimelineFailure.None;
         return true;
     }
@@ -271,15 +277,15 @@ public class SimulationLogger
             return false;
         }
 
-        string expectedOccurrence = SpatialStableKey.Encode(
+        string expectedOccurrence = StableKeyEncoding.Encode(
             manifest.WorldId, manifest.ProfileId, manifest.AbsoluteDay.ToString(CultureInfo.InvariantCulture));
         if (!string.Equals(expectedOccurrence, manifest.BoundaryOccurrenceId, StringComparison.Ordinal))
         {
             return false;
         }
 
-        identity = SpatialStableKey.Encode(manifest.BoundaryOccurrenceId, step.StepId);
-        fingerprint = SpatialStableKey.Encode(
+        identity = StableKeyEncoding.Encode(manifest.BoundaryOccurrenceId, step.StepId);
+        fingerprint = StableKeyEncoding.Encode(
             manifest.BoundaryOccurrenceId,
             manifest.ContinuationId,
             manifest.SubphaseKind,
@@ -360,7 +366,7 @@ public class SimulationLogger
         }
 
         AddReportLine(message);
-        Debug.Log(message);
+        logOutput(DailyV1LogSeverity.Log, message);
     }
 
     public void LogWarning(string message)
@@ -368,7 +374,7 @@ public class SimulationLogger
         if (string.IsNullOrEmpty(message) == false)
         {
             AddReportLine("[WARNING] " + message);
-            Debug.LogWarning(message);
+            logOutput(DailyV1LogSeverity.Warning, message);
         }
     }
 
@@ -377,7 +383,7 @@ public class SimulationLogger
         if (string.IsNullOrEmpty(message) == false)
         {
             AddReportLine("[ERROR] " + message);
-            Debug.LogError(message);
+            logOutput(DailyV1LogSeverity.Error, message);
         }
     }
 
@@ -395,14 +401,14 @@ public class SimulationLogger
             safeFileName += ".txt";
         }
 
-        string directoryPath = Path.Combine(Application.persistentDataPath, "SimulationLogs");
+        string directoryPath = Path.Combine(persistentDataRoot, "SimulationLogs");
         string filePath = Path.Combine(directoryPath, safeFileName);
 
         try
         {
             Directory.CreateDirectory(directoryPath);
             File.WriteAllText(filePath, FullLog);
-            Debug.Log("Diario salvo em: " + filePath);
+            logOutput(DailyV1LogSeverity.Log, "Diario salvo em: " + filePath);
             return filePath;
         }
         catch (Exception exception)
@@ -479,12 +485,12 @@ public sealed class LoggerBeginDayReceipt
 [Serializable]
 internal sealed class LoggerKeyedOccurrenceReceipt
 {
-    [SerializeField] private string operationIdentity;
-    [SerializeField] private string descriptorFingerprint;
-    [SerializeField] private string message;
-    [SerializeField] private long ownerRevisionBefore;
-    [SerializeField] private long ownerRevisionAfter;
-    [SerializeField] private bool outputEnabled;
+    private string operationIdentity;
+    private string descriptorFingerprint;
+    private string message;
+    private long ownerRevisionBefore;
+    private long ownerRevisionAfter;
+    private bool outputEnabled;
 
     internal string OperationIdentity => operationIdentity;
     internal string DescriptorFingerprint => descriptorFingerprint;
@@ -516,7 +522,7 @@ public sealed class LoggerKeyedOccurrenceCommit
     internal Dictionary<string, LoggerKeyedOccurrenceReceipt> ExpectedReceipts { get; }
     internal Dictionary<string, LoggerKeyedOccurrenceReceipt> NextReceipts { get; }
     internal List<string> NextLines { get; }
-    internal bool EmitUnityLog { get; }
+    internal bool EmitOutput { get; }
 
         internal LoggerKeyedOccurrenceCommit(SimulationLogger owner,
         LoggerKeyedOccurrenceReceipt receipt, bool isReplay,
@@ -534,7 +540,7 @@ public sealed class LoggerKeyedOccurrenceCommit
         ExpectedReceipts = expectedReceipts;
         NextReceipts = nextReceipts;
         NextLines = nextLines;
-        EmitUnityLog = emitUnityLog;
+        EmitOutput = emitUnityLog;
     }
 
     public bool TryCommit(out TimelineFailure failure) =>

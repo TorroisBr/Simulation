@@ -61,9 +61,18 @@ internal static class P12AContinuationCodec
 
     internal static bool TryDecode(byte[] bytes, P12ADailyV1SectionManifest manifest,
         P12ACompatibilityDescriptor expected, out P12AContinuationImage image, out P12AResult result)
+        => TryDecodeCore(bytes, manifest, expected, null, out image, out result);
+
+    internal static bool TryDecodeDotNetV2(byte[] bytes, P12ADailyV1SectionManifest manifest,
+        P12ACompatibilityDescriptorV2 expected, out P12AContinuationImage image, out P12AResult result)
+        => TryDecodeCore(bytes, manifest, null, expected, out image, out result);
+
+    private static bool TryDecodeCore(byte[] bytes, P12ADailyV1SectionManifest manifest,
+        P12ACompatibilityDescriptor expectedV1, P12ACompatibilityDescriptorV2 expectedV2,
+        out P12AContinuationImage image, out P12AResult result)
     {
         image = null; result = new P12AResult(P12AResultCode.CorruptOrTruncated);
-        if (bytes == null || expected == null) return false;
+        if (bytes == null || ((expectedV1 == null) == (expectedV2 == null))) return false;
         if (bytes.Length < 56 || bytes.Length > MaxFrameBytes)
         { result = new P12AResult(bytes.Length > MaxFrameBytes ? P12AResultCode.LimitExceeded : P12AResultCode.CorruptOrTruncated); return false; }
         int contentLength = bytes.Length - 32;
@@ -82,7 +91,8 @@ internal static class P12AContinuationCodec
                 if (stream.Length - stream.Position < headerLength) return false;
                 byte[] headerBytes = reader.ReadBytes((int)headerLength);
                 if (headerBytes.Length != headerLength
-                    || !ReadHeader(headerBytes, expected, out P12AContinuationHeader header, out result)) return false;
+                    || !ReadHeader(headerBytes, expectedV1, expectedV2,
+                        out P12AContinuationHeader header, out result)) return false;
                 if (sectionCount == 0) return false;
                 List<P12AOwnerSection> sections = new List<P12AOwnerSection>((int)sectionCount - 1);
                 P12ACausalRootPayload causalRoots = null;
@@ -122,7 +132,8 @@ internal static class P12AContinuationCodec
 
     private static byte[] HeaderBytes(P12AContinuationHeader header)
     {
-        byte[] descriptor = header.Compatibility.CanonicalBytes;
+        byte[] descriptor = header.CompatibilityBytes;
+        if (descriptor == null) throw new ArgumentException("A continuation descriptor is required.");
         long encodedLength = 40L + descriptor.Length
             + P12AWire.GetEncodedStringFieldLength(P12AContinuationHeader.Profile)
             + P12AWire.GetEncodedStringFieldLength(header.WorldId)
@@ -148,7 +159,8 @@ internal static class P12AContinuationCodec
         }
     }
 
-    private static bool ReadHeader(byte[] bytes, P12ACompatibilityDescriptor expected,
+    private static bool ReadHeader(byte[] bytes, P12ACompatibilityDescriptor expectedV1,
+        P12ACompatibilityDescriptorV2 expectedV2,
         out P12AContinuationHeader header, out P12AResult result)
     {
         header = null; result = new P12AResult(P12AResultCode.CorruptOrTruncated);
@@ -169,13 +181,28 @@ internal static class P12AContinuationCodec
             if (length < 0 || length > MaxHeaderBytes || stream.Length - stream.Position < length) return false;
             byte[] descriptor = reader.ReadBytes((int)length);
             if (descriptor.Length != length || stream.Position != stream.Length) return false;
-            if (descriptor.Length >= 4 && descriptor[0] == 0xFE && descriptor[1] == 0xFF && descriptor[2] == 0xFF && descriptor[3] == 0xFF) { result = new P12AResult(P12ACompatibilityAdmission.ClassifyUnityV2(descriptor)); return false; }
-            if (!P12ACompatibilityDescriptor.TryReadCanonical(descriptor, out P12ACompatibilityDescriptor actual))
-            { result = new P12AResult(P12AResultCode.CorruptOrTruncated); return false; }
-            if (!expected.Matches(descriptor))
-            { result = new P12AResult(expected.MismatchCode(actual)); return false; }
-            header = new P12AContinuationHeader(world, day, sequence, reportDay,
-                p9, p9hash, p8, p8hash, politicalWorldRevision, expected);
+            P12ACompatibilityDescriptor actualV1 = null;
+            P12ACompatibilityDescriptorV2 actualV2 = null;
+            if (expectedV1 != null)
+            {
+                P12AResultCode admission = P12ACompatibilityAdmission.AdmitUnityV1(descriptor, expectedV1);
+                if (admission != P12AResultCode.Decoded)
+                { result = new P12AResult(admission); return false; }
+                if (!P12ACompatibilityDescriptor.TryReadCanonical(descriptor, out actualV1))
+                { result = new P12AResult(P12AResultCode.CorruptOrTruncated); return false; }
+            }
+            else
+            {
+                P12AResultCode admission = P12ACompatibilityAdmission.AdmitDotNetV2(
+                    descriptor, expectedV2, out actualV2);
+                if (admission != P12AResultCode.Decoded)
+                { result = new P12AResult(admission); return false; }
+            }
+            header = expectedV1 != null
+                ? new P12AContinuationHeader(world, day, sequence, reportDay,
+                    p9, p9hash, p8, p8hash, politicalWorldRevision, expectedV1)
+                : P12AContinuationHeader.ForDotNetV2(world, day, sequence, reportDay,
+                    p9, p9hash, p8, p8hash, politicalWorldRevision, actualV2);
             if (!header.IsValid) { header = null; result = new P12AResult(P12AResultCode.InvalidOwnerValue); return false; }
             return true;
         }

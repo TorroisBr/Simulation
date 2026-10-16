@@ -122,7 +122,7 @@ public class TesteSimulacao : MonoBehaviour
     private readonly List<INpcActionProvider> actionProviders = new List<INpcActionProvider>();
     private Dictionary<CityData, List<CityRuntime>> cityRuntimesByDefinition = new Dictionary<CityData, List<CityRuntime>>();
     private Dictionary<NpcData, List<NpcRuntime>> npcRuntimesByDefinition = new Dictionary<NpcData, List<NpcRuntime>>();
-    private Dictionary<ExplorableSiteData, List<ExplorableSiteRuntime>> explorableSiteRuntimesByDefinition = new Dictionary<ExplorableSiteData, List<ExplorableSiteRuntime>>();
+    private Dictionary<string, List<ExplorableSiteRuntime>> explorableSiteRuntimesByDefinition = new Dictionary<string, List<ExplorableSiteRuntime>>(System.StringComparer.Ordinal);
     private ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem;
     private ExpeditionStore expeditionStore;
     private Dictionary<SpatialLocationRuntime, CityRuntime> cityRuntimeByLocation = new Dictionary<SpatialLocationRuntime, CityRuntime>();
@@ -161,6 +161,7 @@ public class TesteSimulacao : MonoBehaviour
     private WorldId unpublishedWorldId;
     private long lastEconomySnapshotDay;
     private SimulationBootstrapComposition draftComposition;
+    private DailyV1EffectiveDefinitions selectedDefinitions;
     private SimulationActiveSession activeSession;
     private readonly object activeSessionGate = new object();
     private int activeSessionOperationCount;
@@ -281,14 +282,14 @@ public class TesteSimulacao : MonoBehaviour
         => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath);
 
     internal bool TryLoadSavedDailyV1ContinuationFromPathForTest(string persistentDataPath,
-        IP12AContinuationFileOperations fileOperations)
+        IAtomicFileSlotOperations fileOperations)
         => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath, fileOperations);
 
     private bool TryLoadSavedDailyV1BeforeGenesis(string persistentDataPath)
-        => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath, P12AContinuationFileOperations.Instance);
+        => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath, SystemAtomicFileSlotOperations.Instance);
 
     private bool TryLoadSavedDailyV1BeforeGenesis(string persistentDataPath,
-        IP12AContinuationFileOperations fileOperations)
+        IAtomicFileSlotOperations fileOperations)
     {
         if (!P12AContinuationStore.TryHasSlot(persistentDataPath, fileOperations, out bool exists, out _))
         {
@@ -317,12 +318,14 @@ public class TesteSimulacao : MonoBehaviour
 
         EffectiveSimulationConfiguration effective;
         CalendarDefinition calendar;
+        DailyV1EffectiveDefinitions currentDefinitions;
         try
         {
             SimulationGenesisPipeline.ValidateProfile(simulationConfig);
             ValidateP14SourceAdmission(simulationConfig, runtimeAdmissionContext);
             effective = ResolveRuntimeConfiguration();
             calendar = ResolveCalendarDefinition();
+            currentDefinitions = SimulationGenesisPipeline.CreateSelectedDefinitions(simulationConfig, effective, calendar);
         }
         catch (Exception exception) when (exception is ArgumentException
             || exception is InvalidOperationException || exception is OverflowException)
@@ -334,7 +337,7 @@ public class TesteSimulacao : MonoBehaviour
         }
 
         if (!P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
-                image, compatibility, simulationConfig, effective, calendar,
+                image, compatibility, simulationConfig, effective, calendar, currentDefinitions,
                 runtimeAdmissionContext, out SimulationActiveSession candidate,
                 out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic))
         {
@@ -503,14 +506,15 @@ public class TesteSimulacao : MonoBehaviour
                         simulationTime = new SimulationTime();
                         authoritativeRandomSource = new DeterministicRandomSource(simulationConfig.useFixedSimulationSeed ? simulationConfig.simulationSeed : 0);
                         lastEconomySnapshotDay = 0;
-                        logger = new SimulationLogger(simulationConfig.LogSettings);
+                        logger = UnitySimulationLoggerAdapter.Create(simulationConfig.LogSettings);
                         logger.BeginSimulation(simulationConfig.simulationName, simulationConfig.EnabledModules, simulationConfig.Cities.Count, simulationConfig.Npcs.Count);
                         calendarDefinition = ResolveCalendarDefinition();
                         enabledModules = new SimulationModuleSet(simulationConfig, logger);
                         effectiveConfiguration = ResolveRuntimeConfiguration();
                         genesisSpatialAuthority = new SpatialAuthorityStore();
                         profileFingerprint = SimulationGenesisPipeline.CreateFingerprint(
-                            simulationConfig, effectiveConfiguration, calendarDefinition, out profileProvenanceRecords);
+                            simulationConfig, effectiveConfiguration, calendarDefinition,
+                            out profileProvenanceRecords, out selectedDefinitions);
                         selectedP9ProfileFingerprint = profileFingerprint;
                         AppendScenarioDiagnostics(effectiveConfiguration);
                         runtimeIdAllocator = new RuntimeIdAllocator();
@@ -541,7 +545,7 @@ public class TesteSimulacao : MonoBehaviour
                         break;
                     case SimulationGenesisPipeline.P10BGeneratedRuinStageId:
                         p10BPreparedRuin = P10BGeneratedRuinGenesis.Prepare(
-                            simulationConfig, selectedP9ProfileFingerprint, genesisSpatialAuthority,
+                            simulationConfig, selectedP9ProfileFingerprint, selectedDefinitions, genesisSpatialAuthority,
                             runtimeIdentityRegistry, out string p10BDiagnostic);
                         if (p10BPreparedRuin == null)
                             throw new System.InvalidOperationException("P10-B generated Ruin preparation failed: " + p10BDiagnostic);
@@ -615,7 +619,7 @@ public class TesteSimulacao : MonoBehaviour
                                 simulationRuntime.LegacySpatialAnchorBindingStore, out string p10BCommitDiagnostic))
                             throw new System.InvalidOperationException("P10-B atomic topology publication failed: " + p10BCommitDiagnostic);
                         if (p10BPreparedRuin != null)
-                            AddExplorableSiteRuntimeByDefinition(p10BPreparedRuin.Site.Definition, p10BPreparedRuin.Site);
+                            AddExplorableSiteRuntimeByDefinition(p10BPreparedRuin.Site.DefinitionId, p10BPreparedRuin.Site);
                         npcChronicleFormatter = CreateNpcChronicleFormatter(
                             runtimeIdentityRegistry,
                             spatialNetwork,
@@ -635,7 +639,7 @@ public class TesteSimulacao : MonoBehaviour
                             npcChronicleFormatter, travelPartyStore, travelPartySystem, simulationRuntime,
                             runtimeIdentityRegistry,
                             runtimeIdAllocator,
-                            explorableSiteStore, expeditionStore, expeditionSystem);
+                            explorableSiteStore, expeditionStore, expeditionSystem, selectedDefinitions);
                         break;
                     default:
                         throw new System.InvalidOperationException("Undeclared authored genesis stage: " + stageId);
@@ -847,6 +851,7 @@ public class TesteSimulacao : MonoBehaviour
             if (!P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
                     image, compatibility, expectedSession.Configuration,
                     expectedSession.Runtime.Configuration, expectedSession.Composition.Calendar,
+                    expectedSession.Composition.SelectedDefinitions,
                     runtimeAdmissionContext, out SimulationActiveSession candidate,
                     out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic))
             {
@@ -1074,7 +1079,7 @@ public class TesteSimulacao : MonoBehaviour
 
     private void ComposeP10RuinLocalTopology()
     {
-        p10RuinCandidate = P10RuinLocalTopologyGenesis.CreateCandidate(simulationConfig, genesisSpatialAuthority);
+        p10RuinCandidate = P10RuinLocalTopologyGenesis.CreateCandidate(simulationConfig, genesisSpatialAuthority, selectedDefinitions);
         genesisLocalTopologyStore = new LocalTopologyStore(runtimeIdentityRegistry);
         if (!P10RuinLocalTopologyGenesis.TryCompose(
                 p10RuinCandidate,
@@ -1089,7 +1094,7 @@ public class TesteSimulacao : MonoBehaviour
                 out genesisLegacySpatialAnchorBindingStore,
                 out string diagnostic))
             throw new System.InvalidOperationException("P10 Ruin topology genesis stage failed before publication: " + diagnostic);
-        AddExplorableSiteRuntimeByDefinition(p10RuinRuntime.Definition, p10RuinRuntime);
+        AddExplorableSiteRuntimeByDefinition(p10RuinRuntime.DefinitionId, p10RuinRuntime);
     }
 
     private void ComposeAuthoredGeography()
@@ -1166,6 +1171,17 @@ public class TesteSimulacao : MonoBehaviour
                 "P14-A authored material-flow profile is not admitted by the Unity bootstrap daily profile.");
     }
 
+    private bool IsCanonicalP10RuinDefinition(ExplorableSiteRuntime site)
+    {
+        return site != null
+            && simulationConfig?.authoredP10RuinSite != null
+            && selectedDefinitions != null
+            && selectedDefinitions.ExplorableSites.TryGetValue(
+                simulationConfig.authoredP10RuinSite.DefinitionId,
+                out DailyV1ExplorableSiteDefinition expected)
+            && ReferenceEquals(site.Definition, expected);
+    }
+
     private void ValidateCandidateProfile()
     {
         bool p10b = SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig);
@@ -1179,8 +1195,8 @@ public class TesteSimulacao : MonoBehaviour
         if (p10SiteCount == 1)
         {
             if (p10RuinCandidate == null || p10RuinRuntime == null
-                || p10RuinRuntime.Definition != simulationConfig.authoredP10RuinSite
-                || p10RuinRuntime.Definition.kind != ExplorableSiteKind.Ruin
+                || !IsCanonicalP10RuinDefinition(p10RuinRuntime)
+                || p10RuinRuntime.Definition.Kind.Value != (int)ExplorableSiteKind.Ruin
                 || !simulationRuntime.SpatialAuthorityStore.TryGet(p10RuinCandidate.Location.Id, out LocationRecord selectedLocation)
                 || selectedLocation.AnchorHexId != p10RuinCandidate.Anchor.Id
                 || !simulationRuntime.LegacySpatialAnchorBindingStore.TryGet(
@@ -1299,7 +1315,7 @@ public class TesteSimulacao : MonoBehaviour
                 throw new System.InvalidOperationException("Authored NPC inventory contains unexpected output rows.");
             foreach (ExplorableSiteData known in row.InitialKnownExplorableSites)
             {
-                if (!explorableSiteRuntimesByDefinition.TryGetValue(known, out List<ExplorableSiteRuntime> sites)
+                if (!explorableSiteRuntimesByDefinition.TryGetValue(known?.DefinitionId, out List<ExplorableSiteRuntime> sites)
                     || sites.Count != 1 || !runtime.ExplorableSiteKnowledge.KnowsSite(sites[0].RuntimeId))
                     throw new System.InvalidOperationException("Authored initial Knowledge output is incomplete.");
                 if (!runtime.ExplorableSiteKnowledge.TryGetObservation(sites[0].RuntimeId, out ExplorableSiteKnowledgeObservation observation)
@@ -1308,8 +1324,11 @@ public class TesteSimulacao : MonoBehaviour
                     || observation.LocationRuntimeId != sites[0].Location.RuntimeId)
                     throw new System.InvalidOperationException("Authored initial Knowledge provenance does not match its selected site.");
             }
-            int expectedKnowledgeCount = new System.Collections.Generic.HashSet<ExplorableSiteData>(row.InitialKnownExplorableSites).Count;
-            if (runtime.ExplorableSiteKnowledge.Observations.Count != expectedKnowledgeCount)
+            System.Collections.Generic.HashSet<string> expectedKnowledgeIds =
+                new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal);
+            foreach (ExplorableSiteData known in row.InitialKnownExplorableSites)
+                if (known != null && !string.IsNullOrWhiteSpace(known.DefinitionId)) expectedKnowledgeIds.Add(known.DefinitionId);
+            if (runtime.ExplorableSiteKnowledge.Observations.Count != expectedKnowledgeIds.Count)
                 throw new System.InvalidOperationException("Authored initial Knowledge contains unexpected observations.");
         }
 
@@ -1333,8 +1352,8 @@ public class TesteSimulacao : MonoBehaviour
         if (p10SiteCount == 1 && !p10b)
         {
             if (p10RuinCandidate == null || p10RuinRuntime == null
-                || p10RuinRuntime.Definition != simulationConfig.authoredP10RuinSite
-                || p10RuinRuntime.Definition.kind != ExplorableSiteKind.Ruin
+                || !IsCanonicalP10RuinDefinition(p10RuinRuntime)
+                || p10RuinRuntime.Definition.Kind.Value != (int)ExplorableSiteKind.Ruin
                 || !simulationRuntime.SpatialAuthorityStore.TryGet(p10RuinCandidate.Location.Id, out LocationRecord selectedLocation)
                 || selectedLocation.AnchorHexId != p10RuinCandidate.Anchor.Id
                 || !simulationRuntime.LegacySpatialAnchorBindingStore.TryGet(
@@ -1368,7 +1387,7 @@ public class TesteSimulacao : MonoBehaviour
                 foreach (RuinLocalTopologyGeneration.Place place in p10BPreparedRuin.GeneratedTopology.Places)
                     if (place.IsEntry) generatedEntryCount++;
             if (p10BPreparedRuin == null
-                || p10BPreparedRuin.Site.Definition != simulationConfig.authoredP10RuinSite
+                || !IsCanonicalP10RuinDefinition(p10BPreparedRuin.Site)
                 || p10BPreparedRuin.Site.SiteInstanceId != p10BPreparedRuin.Request.SiteInstanceId
                 || p10BPreparedRuin.GeneratedTopology.Places.Count < 6
                 || p10BPreparedRuin.GeneratedTopology.Places.Count > 10
@@ -1525,7 +1544,8 @@ public class TesteSimulacao : MonoBehaviour
             EffectiveSimulationConfiguration effective = ResolveRuntimeConfiguration();
             string profileFingerprint = SimulationGenesisPipeline.CreateFingerprint(
                 simulationConfig, effective, calendar,
-                out System.Collections.Generic.IReadOnlyList<string> provenance);
+                out System.Collections.Generic.IReadOnlyList<string> provenance,
+                out DailyV1EffectiveDefinitions selectedDefinitions);
             SimulationGenesisManifest genesisManifest = new SimulationGenesisManifest(
                 simulationConfig, effective, calendar, profileFingerprint, profileFingerprint,
                 provenance, false, false);
@@ -1564,6 +1584,7 @@ public class TesteSimulacao : MonoBehaviour
                 return false;
             }
             if (!P12ACompatibilityDescriptorFactory.TryCreate(simulationConfig, effective, calendar,
+                    selectedDefinitions,
                     profileFingerprint, p9Manifest, p8Fingerprint, out compatibility))
             {
                 diagnostic = "The current runtime compatibility descriptor could not be formed.";
@@ -2036,6 +2057,11 @@ public class TesteSimulacao : MonoBehaviour
                 continue;
             }
 
+            if (selectedDefinitions == null
+                || !selectedDefinitions.ExplorableSites.TryGetValue(siteConfig.site.DefinitionId,
+                    out DailyV1ExplorableSiteDefinition siteDefinition))
+                throw new System.InvalidOperationException("The selected typed definition graph does not contain the authored ExplorableSite node.");
+
             ExplorableSiteRuntime siteRuntime;
 
             try
@@ -2043,7 +2069,7 @@ public class TesteSimulacao : MonoBehaviour
                 SpatialLocationRuntime location = new SpatialLocationRuntime(runtimeIdAllocator.AllocateLocationId());
                 siteRuntime = new ExplorableSiteRuntime(
                     runtimeIdAllocator,
-                    siteConfig.site,
+                    siteDefinition,
                     location);
 
                 if (runtimeIdentityRegistry.RegisterExplorableSite(siteRuntime) == false)
@@ -2064,7 +2090,7 @@ public class TesteSimulacao : MonoBehaviour
                     continue;
                 }
 
-                AddExplorableSiteRuntimeByDefinition(siteConfig.site, siteRuntime);
+                AddExplorableSiteRuntimeByDefinition(siteDefinition.DefinitionId, siteRuntime);
                 CreateExplorableSiteRoutes(siteConfig, siteRuntime);
             }
             catch (System.ArgumentException exception)
@@ -2276,7 +2302,7 @@ public class TesteSimulacao : MonoBehaviour
 
     private void RebuildSystems(EffectiveSimulationConfiguration configuration)
     {
-        logger = logger ?? new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
+        logger = logger ?? UnitySimulationLoggerAdapter.Create(simulationConfig != null ? simulationConfig.LogSettings : null);
         economyTransactionService = economyTransactionService ?? new EconomyTransactionService();
         travelSystem = new TravelSystem(
             spatialNetwork,
@@ -2433,7 +2459,7 @@ public class TesteSimulacao : MonoBehaviour
                 }
 
                 if (explorableSiteRuntimesByDefinition.TryGetValue(
-                    siteDefinition,
+                    siteDefinition.DefinitionId,
                     out List<ExplorableSiteRuntime> siteRuntimes) == false
                     || siteRuntimes.Count == 0)
                 {
@@ -2456,13 +2482,14 @@ public class TesteSimulacao : MonoBehaviour
     }
 
     private void AddExplorableSiteRuntimeByDefinition(
-        ExplorableSiteData siteData,
+        string definitionId,
         ExplorableSiteRuntime siteRuntime)
     {
-        if (explorableSiteRuntimesByDefinition.TryGetValue(siteData, out List<ExplorableSiteRuntime> runtimes) == false)
+        if (string.IsNullOrWhiteSpace(definitionId)) return;
+        if (explorableSiteRuntimesByDefinition.TryGetValue(definitionId, out List<ExplorableSiteRuntime> runtimes) == false)
         {
             runtimes = new List<ExplorableSiteRuntime>();
-            explorableSiteRuntimesByDefinition.Add(siteData, runtimes);
+            explorableSiteRuntimesByDefinition.Add(definitionId, runtimes);
         }
 
         runtimes.Add(siteRuntime);

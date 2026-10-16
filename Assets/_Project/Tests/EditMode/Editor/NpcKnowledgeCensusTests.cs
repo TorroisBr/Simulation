@@ -355,7 +355,7 @@ public sealed class NpcKnowledgeCensusTests
         RuntimeIdentityRegistry registry = new RuntimeIdentityRegistry();
         SpatialLocationRuntime location = new SpatialLocationRuntime("fanout-location");
         ExplorableSiteRuntime site = new ExplorableSiteRuntime(
-            "fanout-site", SimulationTestFactory.CreateExplorableSite("fanout-site-def"), location);
+            "fanout-site", SimulationTestFactory.CreateExplorableSiteDefinition("fanout-site-def"), location);
         Assert.That(registry.RegisterExplorableSite(site), Is.True);
         NpcRuntime npc = new NpcRuntime("fanout-npc", SimulationTestFactory.CreateNpc("fanout-npc-def"));
         npc.SetCurrentPresence(location);

@@ -91,7 +91,7 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
                 continue;
             }
 
-            utilities.Add(actionRuntime, Mathf.Max(0f, utility));
+            utilities.Add(actionRuntime, UnityMathfCompatibility.Max(0f, utility));
         }
 
         return utilities;

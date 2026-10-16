@@ -24,6 +24,27 @@ internal sealed class P12AContinuationHeader
         string p9ProfileStage, string p9ManifestFingerprint, string p8Profile, string p8GeographyFingerprint,
         long politicalWorldRevision,
         P12ACompatibilityDescriptor compatibility)
+        : this(worldId, day, sequence, lastEconomySnapshotDay, p9ProfileStage,
+            p9ManifestFingerprint, p8Profile, p8GeographyFingerprint,
+            politicalWorldRevision, compatibility, null)
+    {
+    }
+
+    internal static P12AContinuationHeader ForDotNetV2(string worldId, long day, long sequence,
+        long lastEconomySnapshotDay,
+        string p9ProfileStage, string p9ManifestFingerprint, string p8Profile, string p8GeographyFingerprint,
+        long politicalWorldRevision,
+        P12ACompatibilityDescriptorV2 compatibility)
+    {
+        return new P12AContinuationHeader(worldId, day, sequence, lastEconomySnapshotDay, p9ProfileStage,
+            p9ManifestFingerprint, p8Profile, p8GeographyFingerprint,
+            politicalWorldRevision, null, compatibility);
+    }
+
+    private P12AContinuationHeader(string worldId, long day, long sequence, long lastEconomySnapshotDay,
+        string p9ProfileStage, string p9ManifestFingerprint, string p8Profile, string p8GeographyFingerprint,
+        long politicalWorldRevision, P12ACompatibilityDescriptor compatibility,
+        P12ACompatibilityDescriptorV2 compatibilityV2)
     {
         WorldId = worldId; Day = day; Sequence = sequence; LastEconomySnapshotDay = lastEconomySnapshotDay;
         PoliticalWorldRevision = politicalWorldRevision;
@@ -31,6 +52,7 @@ internal sealed class P12AContinuationHeader
         P8Profile = p8Profile;
         P8GeographyFingerprint = p8GeographyFingerprint;
         Compatibility = compatibility;
+        CompatibilityV2 = compatibilityV2;
     }
     internal string WorldId { get; }
     internal long Day { get; }
@@ -43,6 +65,10 @@ internal sealed class P12AContinuationHeader
     internal string P8Profile { get; }
     internal string P8GeographyFingerprint { get; }
     internal P12ACompatibilityDescriptor Compatibility { get; }
+    internal P12ACompatibilityDescriptorV2 CompatibilityV2 { get; }
+    internal byte[] CompatibilityBytes => Compatibility != null
+        ? Compatibility.CanonicalBytes
+        : CompatibilityV2?.CanonicalBytes;
     internal bool IsValid => global::WorldId.TryParse(WorldId, out global::WorldId parsedWorldId)
         && string.Equals(parsedWorldId.Value, WorldId, StringComparison.Ordinal)
         && Day >= 0 && Sequence > 0
@@ -50,10 +76,15 @@ internal sealed class P12AContinuationHeader
         && !string.IsNullOrWhiteSpace(P9ProfileStage)
         && !string.IsNullOrWhiteSpace(P9ManifestFingerprint)
         && !string.IsNullOrWhiteSpace(P8Profile)
-        && !string.IsNullOrWhiteSpace(P8GeographyFingerprint) && Compatibility != null
-        && Compatibility.P9Fingerprint == P9ManifestFingerprint
-        && Compatibility.P8Fingerprint == P8GeographyFingerprint
-        && Compatibility.ProfileId == Profile && Compatibility.ProfileVersion == ProfileVersion;
+        && !string.IsNullOrWhiteSpace(P8GeographyFingerprint)
+        && ((Compatibility != null && CompatibilityV2 == null
+                && Compatibility.P9Fingerprint == P9ManifestFingerprint
+                && Compatibility.P8Fingerprint == P8GeographyFingerprint
+                && Compatibility.ProfileId == Profile && Compatibility.ProfileVersion == ProfileVersion)
+            || (Compatibility == null && CompatibilityV2 != null
+                && CompatibilityV2.P9Fingerprint == P9ManifestFingerprint
+                && CompatibilityV2.P8Fingerprint == P8GeographyFingerprint
+                && CompatibilityV2.ProfileId == Profile && CompatibilityV2.ProfileVersion == ProfileVersion));
 }
 
 /// <summary>

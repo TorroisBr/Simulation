@@ -16,7 +16,7 @@ public sealed class P18DDailyBoundaryStepProviderTests
         const string worldId = "p18d-provider-world";
         const string profileId = "p18d-provider-profile";
         PlaceContentStore placeContent = new PlaceContentStore();
-        SimulationLogger logger = new SimulationLogger(new SimulationLogSettings { showDay = true });
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(new SimulationLogSettings { showDay = true });
         PlaceContentDailyBoundaryStepProvider placeProvider =
             new PlaceContentDailyBoundaryStepProvider(placeContent);
         LoggerDailyBoundaryStepProvider loggerProvider = new LoggerDailyBoundaryStepProvider(logger);
@@ -57,7 +57,7 @@ public sealed class P18DDailyBoundaryStepProviderTests
     public void LoggerProviderFreezesNoOutputDispositionAndRejectsForeignSteps()
     {
         LoggerDailyBoundaryStepProvider provider = new LoggerDailyBoundaryStepProvider(
-            new SimulationLogger(new SimulationLogSettings { showDay = false }));
+            UnitySimulationLoggerAdapter.Create(new SimulationLogSettings { showDay = false }));
         DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "profile", 2L);
 
         Assert.That(provider.TryCreateSteps(operation, 3,

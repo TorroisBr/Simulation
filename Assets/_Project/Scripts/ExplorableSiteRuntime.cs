@@ -5,22 +5,22 @@ public sealed class ExplorableSiteRuntime
 {
     private readonly string runtimeId;
     private readonly string siteInstanceId;
-    private readonly ExplorableSiteData definition;
+    private readonly DailyV1ExplorableSiteDefinition definition;
     private readonly SpatialLocationRuntime location;
 
     public string RuntimeId => runtimeId;
     public string SiteInstanceId => siteInstanceId;
-    public ExplorableSiteData Definition => definition;
-    public ExplorableSiteData SiteData => definition;
+    public DailyV1ExplorableSiteDefinition Definition => definition;
+    public DailyV1ExplorableSiteDefinition SiteData => definition;
     public string DefinitionId => definition.DefinitionId;
     public SpatialLocationRuntime Location => location;
 
-    public ExplorableSiteRuntime(string runtimeId, ExplorableSiteData definition, SpatialLocationRuntime location)
+    public ExplorableSiteRuntime(string runtimeId, DailyV1ExplorableSiteDefinition definition, SpatialLocationRuntime location)
         : this(runtimeId, definition, location, runtimeId)
     {
     }
 
-    public ExplorableSiteRuntime(string runtimeId, ExplorableSiteData definition, SpatialLocationRuntime location, string siteInstanceId)
+    public ExplorableSiteRuntime(string runtimeId, DailyV1ExplorableSiteDefinition definition, SpatialLocationRuntime location, string siteInstanceId)
     {
         if (string.IsNullOrWhiteSpace(siteInstanceId) == true)
         {
@@ -63,12 +63,12 @@ public sealed class ExplorableSiteRuntime
         this.location = location;
     }
 
-    public ExplorableSiteRuntime(RuntimeIdAllocator idAllocator, ExplorableSiteData definition, SpatialLocationRuntime location)
+    public ExplorableSiteRuntime(RuntimeIdAllocator idAllocator, DailyV1ExplorableSiteDefinition definition, SpatialLocationRuntime location)
         : this((idAllocator ?? throw new ArgumentNullException(nameof(idAllocator))).AllocateExplorableSiteId(), definition, location)
     {
     }
 
-    public ExplorableSiteRuntime(RuntimeIdAllocator idAllocator, ExplorableSiteData definition, SpatialLocationRuntime location, string siteInstanceId)
+    public ExplorableSiteRuntime(RuntimeIdAllocator idAllocator, DailyV1ExplorableSiteDefinition definition, SpatialLocationRuntime location, string siteInstanceId)
         : this((idAllocator ?? throw new ArgumentNullException(nameof(idAllocator))).AllocateExplorableSiteId(), definition, location, siteInstanceId)
     {
     }

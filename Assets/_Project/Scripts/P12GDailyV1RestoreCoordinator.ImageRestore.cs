@@ -4,17 +4,51 @@ using System.Linq;
 
 internal static partial class P12GDailyV1RestoreCoordinator
 {
-    /// <summary>
-    /// Builds a private Daily-v1 candidate solely from a fully decoded persisted
-    /// image and the current authored host profile. No source session, token,
-    /// owner vector, or capture attempt participates in this path.
-    /// </summary>
     internal static bool TryCreateRestoredSessionFromImage(
         P12AContinuationImage image,
         P12ACompatibilityDescriptor expectedCompatibility,
         SimulationConfigData configuration,
         EffectiveSimulationConfiguration effective,
         CalendarDefinition calendar,
+        DailyV1EffectiveDefinitions selectedDefinitions,
+        SimulationRuntimeAdmissionContext bootstrapAdmissionContext,
+        out SimulationActiveSession restoredSession,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic,
+        Action<P12GDailyV1RestoreStage> stageObserver = null)
+        => TryCreateRestoredSessionFromImageCore(image, expectedCompatibility, null,
+            configuration, effective, calendar, selectedDefinitions, bootstrapAdmissionContext,
+            out restoredSession, out failure, out diagnostic, stageObserver);
+
+    internal static bool TryCreateRestoredSessionFromDotNetV2Image(
+        P12AContinuationImage image,
+        P12ACompatibilityDescriptorV2 expectedCompatibility,
+        SimulationConfigData configuration,
+        EffectiveSimulationConfiguration effective,
+        CalendarDefinition calendar,
+        DailyV1EffectiveDefinitions selectedDefinitions,
+        SimulationRuntimeAdmissionContext bootstrapAdmissionContext,
+        out SimulationActiveSession restoredSession,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic,
+        Action<P12GDailyV1RestoreStage> stageObserver = null)
+        => TryCreateRestoredSessionFromImageCore(image, null, expectedCompatibility,
+            configuration, effective, calendar, selectedDefinitions, bootstrapAdmissionContext,
+            out restoredSession, out failure, out diagnostic, stageObserver);
+
+    /// <summary>
+    /// Builds a private Daily-v1 candidate solely from a fully decoded persisted
+    /// image and the current authored host profile. No source session, token,
+    /// owner vector, or capture attempt participates in this path.
+    /// </summary>
+    private static bool TryCreateRestoredSessionFromImageCore(
+        P12AContinuationImage image,
+        P12ACompatibilityDescriptor expectedCompatibilityV1,
+        P12ACompatibilityDescriptorV2 expectedCompatibilityV2,
+        SimulationConfigData configuration,
+        EffectiveSimulationConfiguration effective,
+        CalendarDefinition calendar,
+        DailyV1EffectiveDefinitions selectedDefinitions,
         SimulationRuntimeAdmissionContext bootstrapAdmissionContext,
         out SimulationActiveSession restoredSession,
         out P12GDailyV1RestoreFailure failure,
@@ -24,13 +58,21 @@ internal static partial class P12GDailyV1RestoreCoordinator
         restoredSession = null;
         failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
         diagnostic = "A validated persisted Daily-v1 image and current host profile are required.";
-        if (image == null || expectedCompatibility == null || configuration == null
-            || effective == null || calendar == null || bootstrapAdmissionContext == null
+        bool descriptorMatches = image?.Header != null && image.Header.IsValid
+            && (expectedCompatibilityV1 != null
+                ? image.Header.Compatibility != null
+                    && expectedCompatibilityV1.Matches(image.Header.Compatibility.CanonicalBytes)
+                : expectedCompatibilityV2 != null && image.Header.CompatibilityV2 != null
+                    && P12ACompatibilityAdmission.AdmitDotNetV2(
+                        image.Header.CompatibilityV2.CanonicalBytes,
+                        expectedCompatibilityV2, out _) == P12AResultCode.Decoded);
+        if (image == null || (expectedCompatibilityV1 == null) == (expectedCompatibilityV2 == null)
+            || configuration == null
+            || effective == null || calendar == null || selectedDefinitions == null || bootstrapAdmissionContext == null
             || bootstrapAdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || bootstrapAdmissionContext.IsRestoredContinuation
             || !bootstrapAdmissionContext.IsOwnedByCurrentThread()
-            || image.Header == null || !image.Header.IsValid
-            || !expectedCompatibility.Matches(image.Header.Compatibility.CanonicalBytes))
+            || !descriptorMatches)
             return false;
 
         try
@@ -87,7 +129,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     decoded.SpatialNetwork, decoded.Persons, decoded.Genealogy, decoded.Sites,
                     stagedIdentities, stagedC.WorldIdentity, cityDefinitions, itemDefinitions,
                     npcDefinitions, configuration.Actions, statusDefinitions,
-                    Array.Empty<ExplorableSiteData>(), stagedPartyIds,
+                    Array.Empty<DailyV1ExplorableSiteDefinition>(), stagedPartyIds,
                     out P12DDailyV1OwnerPackage stagedD,
                     out P12DDailyV1OwnerPackageFailure dFailure)
                 || stagedD == null || stagedD.StagingAttempt != null)
@@ -99,7 +141,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
             stageObserver?.Invoke(P12GDailyV1RestoreStage.DStaged);
 
             SimulationTime stagedTime = new SimulationTime(image.Header.Day);
-            SimulationLogger logger = new SimulationLogger(configuration.LogSettings);
+            SimulationLogger logger = UnitySimulationLoggerAdapter.Create(configuration.LogSettings);
             logger.BeginSimulation(configuration.simulationName, configuration.EnabledModules,
                 configuration.Cities.Count, configuration.Npcs.Count);
             HistoryStore history = new HistoryStore();
@@ -139,7 +181,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
             stageObserver?.Invoke(P12GDailyV1RestoreStage.FStaged);
             stageObserver?.Invoke(P12GDailyV1RestoreStage.OwnersStaged);
 
-            if (!TryBuildRestoredSession(configuration, effective, calendar,
+            if (!TryBuildRestoredSession(configuration, effective, calendar, selectedDefinitions,
                     bootstrapAdmissionContext, image.Header.PoliticalWorldRevision,
                     image.Header.LastEconomySnapshotDay, stagedC, stagedD, stagedE, stagedF,
                     stagedTime, eventStore, history, decisions, decisionRecorder,

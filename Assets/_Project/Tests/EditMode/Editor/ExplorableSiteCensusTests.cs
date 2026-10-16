@@ -142,7 +142,7 @@ public sealed class ExplorableSiteCensusTests
 
         Assert.That(ExplorableSiteStore.TryCreateFromOwnerSnapshot(
             first,
-            new ExplorableSiteData[0],
+            new DailyV1ExplorableSiteDefinition[0],
             new SpatialLocationRuntime[0],
             out ExplorableSiteStore staged,
             out ExplorableSiteSnapshotFailure failure), Is.True, failure.Message);
@@ -157,8 +157,8 @@ public sealed class ExplorableSiteCensusTests
     public void OwnerSnapshot_PreservesOrderedIdentityDefinitionSharedLocationAndExactRevision()
     {
         ExplorableSiteStore owner = new ExplorableSiteStore();
-        ExplorableSiteData firstDefinition = SimulationTestFactory.CreateExplorableSite("snapshot-definition-first");
-        ExplorableSiteData secondDefinition = SimulationTestFactory.CreateExplorableSite("snapshot-definition-second");
+        DailyV1ExplorableSiteDefinition firstDefinition = SimulationTestFactory.CreateExplorableSiteDefinition("snapshot-definition-first");
+        DailyV1ExplorableSiteDefinition secondDefinition = SimulationTestFactory.CreateExplorableSiteDefinition("snapshot-definition-second");
         SpatialLocationRuntime sharedLocation = new SpatialLocationRuntime("snapshot-shared-location");
         ExplorableSiteRuntime first = new ExplorableSiteRuntime(
             "snapshot-site-first", firstDefinition, sharedLocation, "snapshot-instance-first");
@@ -247,7 +247,7 @@ public sealed class ExplorableSiteCensusTests
     public void OwnerSnapshotCapture_RejectsDuplicateSiteInstanceIdsWithoutChangingLiveOwner()
     {
         ExplorableSiteStore owner = new ExplorableSiteStore();
-        ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite("snapshot-duplicate-instance-definition");
+        DailyV1ExplorableSiteDefinition definition = SimulationTestFactory.CreateExplorableSiteDefinition("snapshot-duplicate-instance-definition");
         SpatialLocationRuntime location = new SpatialLocationRuntime("snapshot-duplicate-instance-location");
         ExplorableSiteRuntime first = new ExplorableSiteRuntime(
             "snapshot-duplicate-instance-site-first", definition, location, "snapshot-duplicate-instance-id");
@@ -273,7 +273,7 @@ public sealed class ExplorableSiteCensusTests
     public void OwnerSnapshot_IsDetachedFromLaterSiteMutationsAndExposesReadOnlyRows()
     {
         ExplorableSiteStore owner = new ExplorableSiteStore();
-        ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite("snapshot-detached-definition");
+        DailyV1ExplorableSiteDefinition definition = SimulationTestFactory.CreateExplorableSiteDefinition("snapshot-detached-definition");
         SpatialLocationRuntime location = new SpatialLocationRuntime("snapshot-detached-location");
         Assert.That(owner.Add(new ExplorableSiteRuntime(
             "snapshot-detached-first", definition, location, "snapshot-detached-instance-first")), Is.True);
@@ -298,8 +298,8 @@ public sealed class ExplorableSiteCensusTests
     [Test]
     public void OwnerSnapshot_RejectsInvalidIdentityDefinitionLocationAndRevisionFacts()
     {
-        ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite("snapshot-valid-definition");
-        ExplorableSiteData wrongDefinition = SimulationTestFactory.CreateExplorableSite("snapshot-other-definition");
+        DailyV1ExplorableSiteDefinition definition = SimulationTestFactory.CreateExplorableSiteDefinition("snapshot-valid-definition");
+        DailyV1ExplorableSiteDefinition wrongDefinition = SimulationTestFactory.CreateExplorableSiteDefinition("snapshot-other-definition");
         SpatialLocationRuntime location = new SpatialLocationRuntime("snapshot-valid-location");
         ExplorableSiteOwnerSnapshotRecord valid = new ExplorableSiteOwnerSnapshotRecord(
             "snapshot-valid-site", "snapshot-valid-instance", definition.DefinitionId, location.RuntimeId);
@@ -339,7 +339,7 @@ public sealed class ExplorableSiteCensusTests
             AssertStageRejected(invalid, new[] { definition }, new[] { location });
         }
 
-        ExplorableSiteData duplicateDefinition = SimulationTestFactory.CreateExplorableSite(definition.DefinitionId);
+        DailyV1ExplorableSiteDefinition duplicateDefinition = SimulationTestFactory.CreateExplorableSiteDefinition(definition.DefinitionId);
         ExplorableSiteOwnerSnapshot validSnapshot = new ExplorableSiteOwnerSnapshot(
             ExplorableSiteOwnerSnapshot.CurrentSchemaVersion, 1, new[] { valid });
         AssertStageRejected(validSnapshot, new[] { definition, duplicateDefinition }, new[] { location });
@@ -353,7 +353,7 @@ public sealed class ExplorableSiteCensusTests
     public void OwnerSnapshot_LateStagingFailureDoesNotPublishPartialOwnerOrChangeInputs()
     {
         ExplorableSiteStore activeOwner = new ExplorableSiteStore();
-        ExplorableSiteData activeDefinition = SimulationTestFactory.CreateExplorableSite("snapshot-active-definition");
+        DailyV1ExplorableSiteDefinition activeDefinition = SimulationTestFactory.CreateExplorableSiteDefinition("snapshot-active-definition");
         SpatialLocationRuntime activeLocation = new SpatialLocationRuntime("snapshot-active-location");
         ExplorableSiteRuntime activeSite = new ExplorableSiteRuntime(
             "snapshot-active-site", activeDefinition, activeLocation, "snapshot-active-instance");
@@ -367,7 +367,7 @@ public sealed class ExplorableSiteCensusTests
         };
         ExplorableSiteOwnerSnapshot invalid = new ExplorableSiteOwnerSnapshot(
             ExplorableSiteOwnerSnapshot.CurrentSchemaVersion, 2, stagedRows);
-        ExplorableSiteData[] definitions = { activeDefinition };
+        DailyV1ExplorableSiteDefinition[] definitions = { activeDefinition };
         SpatialLocationRuntime[] locations = { activeLocation };
 
         Assert.That(ExplorableSiteStore.TryCreateFromOwnerSnapshot(
@@ -387,7 +387,7 @@ public sealed class ExplorableSiteCensusTests
 
     private static void AssertStageRejected(
         ExplorableSiteOwnerSnapshot snapshot,
-        ExplorableSiteData[] definitions,
+        DailyV1ExplorableSiteDefinition[] definitions,
         SpatialLocationRuntime[] locations)
     {
         Assert.That(ExplorableSiteStore.TryCreateFromOwnerSnapshot(
@@ -411,7 +411,7 @@ public sealed class ExplorableSiteCensusTests
     {
         return new ExplorableSiteRuntime(
             runtimeId,
-            SimulationTestFactory.CreateExplorableSite("definition-" + runtimeId),
+            SimulationTestFactory.CreateExplorableSiteDefinition("definition-" + runtimeId),
             new SpatialLocationRuntime(locationRuntimeId));
     }
 

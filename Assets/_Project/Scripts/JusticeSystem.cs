@@ -152,7 +152,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         this.arrestedStatus = arrestedStatus;
         this.hiddenStatus = hiddenStatus;
         this.domainEventRecorder = domainEventRecorder;
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
     }
 
     public void BeginDay()
@@ -2948,8 +2948,8 @@ public class WantedRecordRuntime : IAuthoritativeMutationGuardBindable
     {
         this.target = target;
         this.city = city;
-        this.bounty = Mathf.Max(0f, bounty);
-        this.sentenceDays = Mathf.Max(1, sentenceDays);
+        this.bounty = UnityMathfCompatibility.Max(0f, bounty);
+        this.sentenceDays = UnityMathfCompatibility.Max(1, sentenceDays);
     }
 
     internal static bool TryCreateFromP12EOwnerSnapshot(
@@ -2975,8 +2975,8 @@ public class WantedRecordRuntime : IAuthoritativeMutationGuardBindable
     public void AddPenalty(float additionalBounty, int additionalSentenceDays)
     {
         ThrowIfFaulted();
-        float nextBounty = bounty + Mathf.Max(0f, additionalBounty);
-        int nextSentenceDays = Mathf.Max(1, sentenceDays + Mathf.Max(0, additionalSentenceDays));
+        float nextBounty = bounty + UnityMathfCompatibility.Max(0f, additionalBounty);
+        int nextSentenceDays = UnityMathfCompatibility.Max(1, sentenceDays + UnityMathfCompatibility.Max(0, additionalSentenceDays));
         if (nextBounty == bounty && nextSentenceDays == sentenceDays) return;
         EnsureP12MutationAllowed();
         bounty = nextBounty;
@@ -3060,7 +3060,7 @@ public class PrisonSentenceRuntime : IAuthoritativeMutationGuardBindable
         this.target = target;
         this.city = city;
         this.warrant = warrant;
-        remainingDays = Mathf.Max(1, sentenceDays);
+        remainingDays = UnityMathfCompatibility.Max(1, sentenceDays);
         wasArrestedToday = true;
     }
 
@@ -3090,7 +3090,7 @@ public class PrisonSentenceRuntime : IAuthoritativeMutationGuardBindable
     public void AdvanceDay()
     {
         ThrowIfFaulted();
-        int next = Mathf.Max(0, remainingDays - 1);
+        int next = UnityMathfCompatibility.Max(0, remainingDays - 1);
         if (next == remainingDays) return;
         EnsureP12MutationAllowed();
         remainingDays = next;
@@ -3103,7 +3103,7 @@ public class PrisonSentenceRuntime : IAuthoritativeMutationGuardBindable
 
         EnsureP12MutationAllowed();
         failedEscapeAttempts++;
-        remainingDays += Mathf.Max(0, additionalSentenceDays);
+        remainingDays += UnityMathfCompatibility.Max(0, additionalSentenceDays);
         NotifyP12MutationCommitted();
     }
 

@@ -333,7 +333,7 @@ public sealed class LocalTopologyFoundationTests
     {
         return new ExplorableSiteRuntime(
             runtimeId,
-            SimulationTestFactory.CreateExplorableSite("definition-" + runtimeId),
+            SimulationTestFactory.CreateExplorableSiteDefinition("definition-" + runtimeId),
             new SpatialLocationRuntime(locationRuntimeId));
     }
 }
