@@ -738,3 +738,12 @@ host/v2 image integration → new-process T/T+1/T+2 → Unity/.NET parity → CO
 Test/evidence and isolated definition preparation can proceed independently;
 Runtime/P12/SDK/asmdef and canonical integration remain serialized. P12's accepted
 scope, closed phases and CORE-X deferral are preserved. No product decision remains.
+
+Independent technical review: PASS on substantive candidate
+`a9fe0f05e3631ef26a7bc96018057c5a6451775f`; [cumulative review](architecture/CORE_F_OWNER_ENTRY_REVIEW.md)
+retains the prior Knowledge-disposition MAJOR and its resolution. [Static source/
+documentation validation](validation/CORE_F_OwnerEntryContract/VALIDATION.md) binds
+current source blobs, all 18 Required roles and the pinned reference corpus.
+Architecture publication makes the bounded test/evidence handoff executable;
+no Core or numbered-phase canonical change, Unity run, .NET continuation result,
+production Runtime readiness or profile expansion follows.
