@@ -60,3 +60,23 @@ Validation after the review correction:
 - `git diff --check`: PASS.
 - The new Unity regressions were not executed. The approved Unity evidence workflow remains blocked before test execution by the existing evidence-directory ACL restriction. No ACL or runner-mode changes were made.
 - No full CORE-F integration validation, independent follow-up review, or canonical promotion is claimed.
+
+## Independent review follow-up — rejected finite contributor at saturated revision
+
+An additional P14 review finding showed that selected mixed-source preparation still required the finite-source owner to be installable when its contribution had already been rejected for aggregate stock overflow. At `long.MaxValue`, this incorrectly rejected the accepted exogenous contribution even though the finite owner had no planned mutation. `P14CMixedSourceProductionPreparation.CanInstall()` now checks finite-source installability only when the finite contribution is positive; `Install()` already leaves the finite owner untouched for an exact-zero contribution.
+
+Added `SelectedMixedOverflowCommitsExogenousContributionWhenFiniteOwnerCannotAdvance`: the selected mixed-source fixture places Market stock at `int.MaxValue - 3` and finite-source revision at `long.MaxValue`. It verifies the exogenous quantity of two is committed, the finite quantity of three is reported as `AggregateStockOverflow`, finite reserve and revision remain unchanged, Market revision advances once, and one post-install callback observes the final stock.
+
+Corrected source-only tree: `9c2a4f7b70783cb82217faf8ff7c11b4264d70e6` (base `b12aeb21564c88e16fca12b3c85ee3bfd5058e94` plus `Assets/_Project/Scripts/CityRuntime.cs`, `FiniteProductionSourceStore.cs`, `FiniteSourceProductionService.cs`, `MarketRuntime.cs`, `P14CMixedSourceProductionPreparation.cs`, `Assets/_Project/Tests/EditMode/Editor/P14CMixedSourceProductionTests.cs`, `Packages/com.simulation.core/Runtime/Economy/DailyV1InventoryMarketOwners.cs` and `tests/Simulation.Core.Tests/DailyV1InventoryMarketOwnerTests.cs`; excludes this progress record, generated outputs, protected files and unrelated changes).
+
+| SHA-256 | Changed repository-relative path |
+| --- | --- |
+| `C677A3D20223BE2D5BDA060C4B7B8BCFC750E22021EA063E5B3F23F0F977E879` | `Assets/_Project/Scripts/P14CMixedSourceProductionPreparation.cs` |
+| `C29FD5F4CD1DCAE85E3FF4A1B92D2750785629A55AFE8B0656CA4FE96E904CFB` | `Assets/_Project/Tests/EditMode/Editor/P14CMixedSourceProductionTests.cs` |
+
+Validation for this follow-up:
+
+- Focused `DailyV1InventoryMarketOwnerTests`: 7/7 PASS.
+- `git diff --check` for the candidate source/test changes: PASS.
+- The new Unity P14 regression and prior Unity regressions remain UNRUN; no Unity validation is claimed for this source tree.
+- No full CORE-F integration validation, independent review of this follow-up, or canonical promotion is claimed.

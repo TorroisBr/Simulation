@@ -337,6 +337,49 @@ public sealed class P14CMixedSourceProductionTests
     }
 
     [Test]
+    public void SelectedMixedOverflowCommitsExogenousContributionWhenFiniteOwnerCannotAdvance()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p14-selected-mixed-overflow-max-revision-item");
+        using (SelectedCityFixture fixture = CreateSelectedMixedCity(
+            "p14-selected-mixed-overflow-max-revision-city", item, int.MaxValue - 3, 0f))
+        {
+            CityRuntime city = fixture.City;
+            DailyV1ItemDefinition itemNode = fixture.Definitions.Items[item.DefinitionId];
+            FiniteProductionSourceState finite = city.FiniteProductionSources.Source;
+            SetPrivateLong(finite, "revision", long.MaxValue);
+
+            List<string> notifications = new List<string>();
+            city.Market.BindP12MutationBoundary(() => true, () => notifications.Add(
+                city.Market.Revision + ":" + city.Market.SelectedDailyV1Owner.GetAmount(itemNode)));
+            BoundaryContinuationManifest manifest = CreateSelectedManifest(
+                city, CityDailyEconomyStepKind.Production);
+
+            Assert.That(city.TryPrepareDailyEconomyStep(manifest, manifest.Steps[0],
+                out IBoundaryContinuationStepCommit prepared, out TimelineFailure prepareFailure), Is.True,
+                prepareFailure.ToString());
+            Assert.That(prepared.TryCommit(out TimelineFailure commitFailure), Is.True,
+                commitFailure.ToString());
+
+            Assert.That(city.TryResolveDailyEconomyReceipt(manifest, manifest.Steps[0],
+                out CityDailyEconomyReceipt receipt, out _), Is.True);
+            Assert.That(receipt.SourceOutcomes.Count, Is.EqualTo(2));
+            Assert.That(receipt.SourceOutcomes[0].ProductionSourceId, Is.EqualTo("a-exogenous"));
+            Assert.That(receipt.SourceOutcomes[0].AppliedQuantity, Is.EqualTo(2));
+            Assert.That(receipt.SourceOutcomes[1].ProductionSourceId, Is.EqualTo("b-finite"));
+            Assert.That(receipt.SourceOutcomes[1].PlannedQuantity, Is.EqualTo(3));
+            Assert.That(receipt.SourceOutcomes[1].AppliedQuantity, Is.Zero);
+            Assert.That(receipt.SourceOutcomes[1].RejectionReason, Is.EqualTo("AggregateStockOverflow"));
+
+            Assert.That(city.Market.SelectedDailyV1Owner.GetAmount(itemNode), Is.EqualTo(int.MaxValue - 1));
+            Assert.That(city.Market.Revision, Is.EqualTo(1));
+            Assert.That(finite.RemainingReserve, Is.EqualTo(7));
+            Assert.That(finite.Revision, Is.EqualTo(long.MaxValue));
+            Assert.That(notifications, Is.EqualTo(new[] { "1:" + (int.MaxValue - 1) }),
+                "The accepted exogenous contribution installs atomically and emits one post-install Market callback.");
+        }
+    }
+
+    [Test]
     public void ExhaustedFiniteContributorIsExactZeroWithoutFiniteOwnerMutation()
     {
         ItemData item = SimulationTestFactory.CreateItem("p14c-exhausted-item");
@@ -555,6 +598,18 @@ public sealed class P14CMixedSourceProductionTests
             sourceKind = CityProductionSourceKind.ExogenousDaily
         });
 
+        return CreateSelectedCityFixture(id, authoredCity);
+    }
+
+    private static SelectedCityFixture CreateSelectedMixedCity(string id, ItemData item,
+        int openingStock, float consumptionPer1000)
+    {
+        return CreateSelectedCityFixture(id,
+            CreateCity(id, item, openingStock, consumptionPer1000, reverseSourceRows: true));
+    }
+
+    private static SelectedCityFixture CreateSelectedCityFixture(string id, CityData authoredCity)
+    {
         SimulationConfigData authoring = UnityEngine.ScriptableObject.CreateInstance<SimulationConfigData>();
         authoring.simulationName = "Selected Daily-v1 P12 mutation fixture";
         authoring.cities = new List<CityData> { authoredCity };
