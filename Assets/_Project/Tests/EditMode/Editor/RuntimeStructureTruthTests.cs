@@ -63,13 +63,13 @@ public sealed class RuntimeStructureTruthTests
     public void FaultedGuardAndRevisionOverflowRejectWithoutChangingStructureState()
     {
         StructureStore guarded = new StructureStore(CreateSpatialAuthority());
-        Type guardType = typeof(StructureStore).Assembly.GetType("AuthoritativeMutationGuard");
+        Type guardType = typeof(PersonRuntime).Assembly.GetType("AuthoritativeMutationGuard");
         Assert.That(guardType, Is.Not.Null);
         object guard = Activator.CreateInstance(guardType, true);
         MethodInfo bind = typeof(StructureStore).GetMethod("TryBindMutationGuard", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That((bool)bind.Invoke(guarded, new[] { guard }), Is.True);
         MethodInfo markFaulted = guardType.GetMethod("MarkFaulted", BindingFlags.Instance | BindingFlags.NonPublic);
-        Type reasonType = typeof(StructureStore).Assembly.GetType("AuthoritativeMutationFaultReason");
+        Type reasonType = typeof(PersonRuntime).Assembly.GetType("AuthoritativeMutationFaultReason");
         object reason = Enum.Parse(reasonType, "RollbackRestoreFailed");
         markFaulted.Invoke(guard, new[] { reason });
         AssertRejectedUnchanged(guarded, CreateRecord("structure-a", "location-a", 1L, 0L), 1L, true,

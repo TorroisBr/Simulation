@@ -1363,7 +1363,7 @@ internal static class P12DNpcRootOwnerSnapshot
             PersonRuntime person = npc.BoundPersonRuntime;
             if (!TryRequireSection(token, PersonLifeResidenceCensusProvider.SectionIdFor(person.PersonId),
                     PersonLifeResidenceCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                    person, 1, person.LifeResidenceRevision))
+                    person, 1, PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person)))
                 return false;
         }
 

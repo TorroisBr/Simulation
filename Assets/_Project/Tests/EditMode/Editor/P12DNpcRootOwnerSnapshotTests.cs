@@ -139,8 +139,8 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             new PersonId("p12d-owner-package-dormant-parent"), 0L);
         PersonRuntime materializedChild = new PersonRuntime(
             new PersonId("p12d-owner-package-materialized-child"), 10L);
-        Assert.That(dormantParent.TrySetResidenceSettlementRuntimeId(city.RuntimeId), Is.True);
-        Assert.That(materializedChild.TrySetResidenceSettlementRuntimeId(city.RuntimeId), Is.True);
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(dormantParent, city.RuntimeId), Is.True);
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(materializedChild, city.RuntimeId), Is.True);
 
         PersonStore sourcePersons = new PersonStore();
         Assert.That(sourcePersons.TryRegister(dormantParent, out _), Is.True);
@@ -215,7 +215,9 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             SimulationTestFactory.CreateNpc("p12d-owner-package-late-failure-npc-definition"), city, 0f);
         PersonRuntime danglingResident = new PersonRuntime(
             new PersonId("p12d-owner-package-dangling-resident"), 0L);
-        Assert.That(danglingResident.TrySetResidenceSettlementRuntimeId("p12d-owner-package-absent-city"), Is.True);
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            danglingResident,
+            "p12d-owner-package-absent-city"), Is.True);
         PersonStore sourcePersons = new PersonStore();
         Assert.That(sourcePersons.TryRegister(danglingResident, out _), Is.True);
         GenealogyStore sourceGenealogy = new GenealogyStore();
@@ -529,7 +531,7 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             SimulationTestFactory.CreateNpc("p12d-npc-person-definition"), city, 0f);
         PersonId personId = new PersonId("p12d-person-id");
         PersonRuntime person = new PersonRuntime(personId, 17L);
-        Assert.That(person.TrySetResidenceSettlementRuntimeId(city.RuntimeId), Is.True);
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(person, city.RuntimeId), Is.True);
         PersonStore sourcePeople = new PersonStore();
         Assert.That(sourcePeople.TryRegister(person, out _), Is.True);
         Assert.That(sourcePeople.TryBindMaterializedNpc(personId, npc.RuntimeId, out _), Is.True);
@@ -563,8 +565,13 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         }
 
         PersonStore stagedPeople = new PersonStore();
-        PersonRuntime stagedPerson = PersonRuntime.CreateForOwnerSnapshot(
-            personId, 17L, null, city.RuntimeId, null, person.LifeResidenceRevision);
+        PersonRuntime stagedPerson = PersonRuntimeOwnerBridge.CreateForOwnerSnapshot(
+            personId,
+            17L,
+            null,
+            city.RuntimeId,
+            null,
+            PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person));
         Assert.That(stagedPeople.TryRegister(stagedPerson, out _), Is.True);
         Assert.That(stagedPeople.TryBindMaterializedNpc(personId, npc.RuntimeId, out _), Is.True);
         long[] membershipRevisions = stagedCities.Select(value => value.ImportantNpcRevision).ToArray();
@@ -597,7 +604,9 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         Assert.That(stagedPeople.TryGetByMaterializedNpcRuntimeId(npc.RuntimeId, out PersonRuntime indexed), Is.True);
         Assert.That(indexed, Is.SameAs(stagedPerson));
         Assert.That(indexed.BirthAbsoluteDay, Is.EqualTo(17L));
-        Assert.That(indexed.LifeResidenceRevision, Is.EqualTo(person.LifeResidenceRevision));
+        Assert.That(
+            PersonRuntimeOwnerBridge.GetLifeResidenceRevision(indexed),
+            Is.EqualTo(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person)));
         Assert.That(restored.CurrentCity, Is.SameAs(stagedCities[0]));
         Assert.That(stagedCities[0].ImportantNpcs, Is.EqualTo(new[] { restored }));
     }

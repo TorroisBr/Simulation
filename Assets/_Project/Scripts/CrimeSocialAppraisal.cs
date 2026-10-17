@@ -324,14 +324,14 @@ public sealed class TheftOutcomeStore : ITheftOutcomeSink, IAuthoritativeMutatio
     {
         return mutationGuardBinding.CanBindTo(guard)
             && personStore.CanBindMutationGuard(guard)
-            && simulationTime.CanBindMutationGuard(guard);
+            && SimulationTimeOwnerBridge.CanBindMutationStatus(simulationTime, guard);
     }
 
     internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
     {
         return CanBindMutationGuard(guard)
             && personStore.TryBindMutationGuard(guard)
-            && simulationTime.TryBindMutationGuard(guard)
+            && SimulationTimeOwnerBridge.TryBindMutationStatus(simulationTime, guard)
             && mutationGuardBinding.TryBindTo(guard);
     }
 
@@ -816,7 +816,7 @@ public sealed class CrimeKnowledgeStore : IAuthoritativeMutationGuardBindable
         return mutationGuardBinding.CanBindTo(guard)
             && personStore.CanBindMutationGuard(guard)
             && outcomeStore.CanBindMutationGuard(guard)
-            && simulationTime.CanBindMutationGuard(guard)
+            && SimulationTimeOwnerBridge.CanBindMutationStatus(simulationTime, guard)
             && InstitutionOfficeOwnerBridge.CanBindMutationStatus(institutionStore, guard);
     }
 
@@ -825,7 +825,7 @@ public sealed class CrimeKnowledgeStore : IAuthoritativeMutationGuardBindable
         return CanBindMutationGuard(guard)
             && personStore.TryBindMutationGuard(guard)
             && outcomeStore.TryBindMutationGuard(guard)
-            && simulationTime.TryBindMutationGuard(guard)
+            && SimulationTimeOwnerBridge.TryBindMutationStatus(simulationTime, guard)
             && InstitutionOfficeOwnerBridge.TryBindMutationStatus(institutionStore, guard)
             && mutationGuardBinding.TryBindTo(guard);
     }
@@ -1272,7 +1272,7 @@ public sealed class CrimeSocialAppraisalWorldState : IAuthoritativeMutationGuard
         return mutationGuardBinding.CanBindTo(guard)
             && PersonStore.CanBindMutationGuard(guard)
             && InstitutionOfficeOwnerBridge.CanBindMutationStatus(InstitutionStore, guard)
-            && SimulationTime.CanBindMutationGuard(guard)
+            && SimulationTimeOwnerBridge.CanBindMutationStatus(SimulationTime, guard)
             && TheftOutcomes.CanBindMutationGuard(guard)
             && CrimeKnowledge.CanBindMutationGuard(guard)
             && SocialReactions.CanBindMutationGuard(guard)
@@ -1284,7 +1284,7 @@ public sealed class CrimeSocialAppraisalWorldState : IAuthoritativeMutationGuard
         return CanBindMutationGuard(guard)
             && PersonStore.TryBindMutationGuard(guard)
             && InstitutionOfficeOwnerBridge.TryBindMutationStatus(InstitutionStore, guard)
-            && SimulationTime.TryBindMutationGuard(guard)
+            && SimulationTimeOwnerBridge.TryBindMutationStatus(SimulationTime, guard)
             && TheftOutcomes.TryBindMutationGuard(guard)
             && CrimeKnowledge.TryBindMutationGuard(guard)
             && SocialReactions.TryBindMutationGuard(guard)

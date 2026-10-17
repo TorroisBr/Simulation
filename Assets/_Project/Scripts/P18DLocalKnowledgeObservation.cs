@@ -432,8 +432,7 @@ public sealed class NpcLocalKnowledgeObservationRuntime
         bool marketEligible = actor.IsAlive && !actor.IsTraveling
             && (!includeCurrentLocation || currentLocation != null);
         bool merchant = marketEligible && merchantKnowledgeEnabled && currentCity != null
-            && actor.NpcData != null && actor.NpcData.job != null
-            && actor.NpcData.job.jobType == NpcJobType.Merchant;
+            && actor.HasJobType(NpcJobType.Merchant);
 
         List<string> locationIds = new List<string>();
         List<CommercialMarketObservation> marketObservations =

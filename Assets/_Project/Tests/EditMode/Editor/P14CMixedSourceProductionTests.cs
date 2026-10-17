@@ -63,6 +63,68 @@ public sealed class P14CMixedSourceProductionTests
     }
 
     [Test]
+    public void SelectedDefinitionMixedSourceFlowUsesAdmittedCityValuesWithoutRetainedAuthoringCity()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p14c-selected-item");
+        CityData authoredCity = CreateCity(
+            "p14c-selected-city", item, 5, 4f, reverseSourceRows: true);
+        SimulationConfigData authoring = UnityEngine.ScriptableObject.CreateInstance<SimulationConfigData>();
+        authoring.simulationName = "P14-C selected typed graph fixture";
+        authoring.cities = new List<CityData> { authoredCity };
+
+        try
+        {
+            SimulationConfigurationResolutionResult resolution = SimulationConfigurationResolver.Resolve(
+                null, null, authoring.CreateConfigurationOverrides());
+            Assert.That(resolution.IsValid, Is.True,
+                string.Join("; ", resolution.Validation.Errors));
+            CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(
+                authoring.calendar, out string calendarDiagnostic);
+            Assert.That(string.IsNullOrEmpty(calendarDiagnostic), Is.True, calendarDiagnostic);
+            Assert.That(DailyV1DefinitionAdapter.TryCreate(authoring, resolution.Configuration,
+                calendar, SimulationGenesisPipeline.ResolveStageOrder(includeAuthoredGeography: true),
+                "axial-hex-v1", "q-then-r", out DailyV1EffectiveDefinitions definitions,
+                out DailyV1DefinitionAdapter.SelectedBindings bindings, out string diagnostic),
+                Is.True, diagnostic);
+            Assert.That(definitions.Cities.TryGetValue(authoredCity.DefinitionId,
+                out DailyV1CityDefinition cityDefinition), Is.True);
+            Assert.That(bindings.TryGet(authoredCity, out DailyV1CityDefinition boundDefinition), Is.True);
+            Assert.That(boundDefinition, Is.SameAs(cityDefinition));
+
+            // After admission, the runtime must use the captured graph values;
+            // the authoring object remains only an exact identity bridge.
+            authoredCity.materialFlowProfile = LocalMaterialFlowProfile.ExogenousDaily;
+            authoredCity.settlementSemanticId = "changed-after-admission";
+            authoredCity.productionConfigs[0].amountPerDay = 999;
+            authoredCity.productionConfigs[1].initialReserve = 999;
+            authoredCity.marketItems[0].initialAmount = 999;
+            authoredCity.marketItems[0].item = null;
+
+            CityRuntime city = CityRuntime.CreateSelectedDailyV1(
+                "runtime.p14c.selected", cityDefinition, definitions, bindings,
+                new SpatialLocationRuntime("location.p14c.selected"));
+            Assert.That(city.CityData, Is.SameAs(authoredCity),
+                "P12 retains the exact authoring object only as its identity bridge.");
+
+            SimulateDirect(city, 3L);
+
+            LocalDailyMaterialFlowResult flow = city.LastMaterialFlow;
+            Assert.That(flow, Is.Not.Null);
+            Assert.That(flow.OpeningStock, Is.EqualTo(5));
+            Assert.That(flow.AppliedSourceQuantity, Is.EqualTo(5));
+            Assert.That(flow.ActualFreeConsumption, Is.EqualTo(4));
+            Assert.That(flow.ClosingStock, Is.EqualTo(6));
+            Assert.That(city.FiniteProductionSources.Source.RemainingReserve, Is.EqualTo(4));
+            Assert.That(city.FiniteProductionSources.Source.Revision, Is.EqualTo(1));
+            Assert.That(city.Market.GetAmount(item), Is.EqualTo(6));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(authoring);
+        }
+    }
+
+    [Test]
     public void SourceOrderFingerprintAndDailyResultsIgnoreAuthoredRowOrder()
     {
         ItemData item = SimulationTestFactory.CreateItem("p14c-order-item");

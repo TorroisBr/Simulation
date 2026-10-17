@@ -881,7 +881,7 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
         return mutationGuardBinding.CanBindTo(guard)
             && partyStore.CanBindMutationGuard(guard)
             && travelSystem.CanBindMutationGuard(guard)
-            && simulationTime.CanBindMutationGuard(guard);
+            && SimulationTimeOwnerBridge.CanBindMutationStatus(simulationTime, guard);
     }
 
     internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
@@ -898,7 +898,7 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
 
         return partyStore.TryBindMutationGuard(guard)
             && travelSystem.TryBindMutationGuard(guard)
-            && simulationTime.TryBindMutationGuard(guard);
+            && SimulationTimeOwnerBridge.TryBindMutationStatus(simulationTime, guard);
     }
 
     bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)

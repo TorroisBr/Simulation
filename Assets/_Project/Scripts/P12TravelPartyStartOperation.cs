@@ -50,8 +50,12 @@ public sealed partial class SimulationRuntime
                     StringComparison.Ordinal)
                 || witness.SchemaVersion != RuntimeIdAllocatorCensusProvider.SchemaVersion
                 || witness.Cardinality != 1
-                || !ReferenceEquals(witness.OwnerInstanceIdentity, runtimeIdAllocator.CensusOwnerIdentity)
-                || witness.Revision != runtimeIdAllocator.GetCensusRevision(RuntimeIdAllocatorCensusCounter.TravelParties)
+                || !RuntimeIdAllocatorOwnerBridge.TryMatchCurrentCensus(
+                    runtimeIdAllocator,
+                    RuntimeIdAllocatorCensusCounter.TravelParties,
+                    witness.OwnerInstanceIdentity,
+                    witness.Revision,
+                    out _)
                 || !protocol.RegisterExpectedSection(
                     new OwnerSectionContract(
                         RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId,
@@ -159,7 +163,12 @@ public sealed partial class SimulationRuntime
 
             OwnerSectionCensusWitness partyCounterWitness =
                 runtimeIdAllocatorTravelPartyCounterCensusProvider.GetCurrentCensus();
-            long partyCounterRevision = runtimeIdAllocator.GetCensusRevision(RuntimeIdAllocatorCensusCounter.TravelParties);
+            bool partyCounterMatches = RuntimeIdAllocatorOwnerBridge.TryMatchCurrentCensus(
+                runtimeIdAllocator,
+                RuntimeIdAllocatorCensusCounter.TravelParties,
+                partyCounterWitness == null ? null : partyCounterWitness.OwnerInstanceIdentity,
+                partyCounterWitness == null ? -1L : partyCounterWitness.Revision,
+                out long partyCounterRevision);
             if (partyCounterWitness == null
                 || !string.Equals(
                     partyCounterWitness.SectionId,
@@ -167,8 +176,7 @@ public sealed partial class SimulationRuntime
                     StringComparison.Ordinal)
                 || partyCounterWitness.SchemaVersion != RuntimeIdAllocatorCensusProvider.SchemaVersion
                 || partyCounterWitness.Cardinality != 1
-                || !ReferenceEquals(partyCounterWitness.OwnerInstanceIdentity, runtimeIdAllocator.CensusOwnerIdentity)
-                || partyCounterWitness.Revision != partyCounterRevision
+                || !partyCounterMatches
                 || partyCounterRevision > long.MaxValue - 2L)
                 throw new InvalidOperationException();
             AddP12TravelPartyStartSection(
@@ -177,13 +185,17 @@ public sealed partial class SimulationRuntime
                 RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId);
 
             OwnerSectionCensusWitness eventWitness = runtimeIdAllocatorEventCounterCensusProvider.GetCurrentCensus();
-            long eventRevision = runtimeIdAllocator.GetCensusRevision(RuntimeIdAllocatorCensusCounter.Events);
+            bool eventCounterMatches = RuntimeIdAllocatorOwnerBridge.TryMatchCurrentCensus(
+                runtimeIdAllocator,
+                RuntimeIdAllocatorCensusCounter.Events,
+                eventWitness == null ? null : eventWitness.OwnerInstanceIdentity,
+                eventWitness == null ? -1L : eventWitness.Revision,
+                out long eventRevision);
             if (eventWitness == null
                 || !string.Equals(eventWitness.SectionId, RuntimeIdAllocatorCensusProvider.EventsSectionId, StringComparison.Ordinal)
                 || eventWitness.SchemaVersion != RuntimeIdAllocatorCensusProvider.SchemaVersion
                 || eventWitness.Cardinality != 1
-                || !ReferenceEquals(eventWitness.OwnerInstanceIdentity, runtimeIdAllocator.CensusOwnerIdentity)
-                || eventWitness.Revision != eventRevision)
+                || !eventCounterMatches)
                 throw new InvalidOperationException();
             AddP12TravelPartyStartSection(
                 sectionIds,
@@ -191,13 +203,16 @@ public sealed partial class SimulationRuntime
                 RuntimeIdAllocatorCensusProvider.EventsSectionId);
 
             OwnerSectionCensusWitness sequenceWitness = simulationRecordSequenceCensusProvider.GetCurrentCensus();
-            long sequenceRevision = simulationRecordSequence.CensusRevision;
+            bool sequenceCensusMatches = SimulationRecordSequenceOwnerBridge.TryMatchCurrentCensus(
+                simulationRecordSequence,
+                sequenceWitness == null ? null : sequenceWitness.OwnerInstanceIdentity,
+                sequenceWitness == null ? -1L : sequenceWitness.Revision,
+                out long sequenceRevision);
             if (sequenceWitness == null
                 || !string.Equals(sequenceWitness.SectionId, SimulationRecordSequenceCensusProvider.SectionId, StringComparison.Ordinal)
                 || sequenceWitness.SchemaVersion != SimulationRecordSequenceCensusProvider.SchemaVersion
                 || sequenceWitness.Cardinality != 1
-                || !ReferenceEquals(sequenceWitness.OwnerInstanceIdentity, simulationRecordSequence.CensusOwnerIdentity)
-                || sequenceWitness.Revision != sequenceRevision)
+                || !sequenceCensusMatches)
                 throw new InvalidOperationException();
             AddP12TravelPartyStartSection(
                 sectionIds,

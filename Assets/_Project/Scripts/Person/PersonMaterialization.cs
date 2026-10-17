@@ -241,7 +241,7 @@ public static class PersonMaterializationSystem
 
         if (string.IsNullOrWhiteSpace(personResidence) == true
             && string.IsNullOrWhiteSpace(npcResidence) == false
-            && person.TrySetResidenceSettlementRuntimeId(npcResidence) == false)
+            && PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(person, npcResidence) == false)
         {
             bool bindingRestored = world.PersonStore.TryRollbackMaterializedNpcBinding(personId, npcRuntimeId);
             if (bindingRestored) world.MarkNpcMembershipPersonStoreRevisionCommitted();

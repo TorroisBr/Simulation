@@ -150,10 +150,15 @@ public sealed class SimulationRecordSequenceP12InvalidationTests
         SimulationRuntime runtime = CreateRuntime(records, records.Sequence, records.Allocator);
         IOwnerSectionCensusProvider provider = RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(records.Allocator);
         OwnerSectionCensusWitness initial = provider.GetCurrentCensus();
+        RuntimeIdAllocatorOwnerBridge.CaptureCensusIdentity(
+            records.Allocator,
+            RuntimeIdAllocatorCensusCounter.Events,
+            out object allocatorOwnerIdentity,
+            out _);
 
         Assert.That(initial.SectionId, Is.EqualTo(RuntimeIdAllocatorCensusProvider.EventsSectionId));
         Assert.That(initial.SchemaVersion, Is.EqualTo(RuntimeIdAllocatorCensusProvider.SchemaVersion));
-        Assert.That(initial.OwnerInstanceIdentity, Is.SameAs(records.Allocator.CensusOwnerIdentity));
+        Assert.That(initial.OwnerInstanceIdentity, Is.SameAs(allocatorOwnerIdentity));
         Assert.That(initial.Cardinality, Is.EqualTo(1));
         Assert.That(initial.Revision, Is.Zero);
         Assert.That(runtime.HasSameRuntimeIdAllocatorEventCounterOwner(provider), Is.True);
@@ -178,10 +183,15 @@ public sealed class SimulationRecordSequenceP12InvalidationTests
         IOwnerSectionCensusProvider provider =
             RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(records.Allocator);
         OwnerSectionCensusWitness initial = provider.GetCurrentCensus();
+        RuntimeIdAllocatorOwnerBridge.CaptureCensusIdentity(
+            records.Allocator,
+            RuntimeIdAllocatorCensusCounter.Decisions,
+            out object allocatorOwnerIdentity,
+            out _);
 
         Assert.That(initial.SectionId, Is.EqualTo(RuntimeIdAllocatorCensusProvider.DecisionsSectionId));
         Assert.That(initial.SchemaVersion, Is.EqualTo(RuntimeIdAllocatorCensusProvider.SchemaVersion));
-        Assert.That(initial.OwnerInstanceIdentity, Is.SameAs(records.Allocator.CensusOwnerIdentity));
+        Assert.That(initial.OwnerInstanceIdentity, Is.SameAs(allocatorOwnerIdentity));
         Assert.That(initial.Cardinality, Is.EqualTo(1));
         Assert.That(initial.Revision, Is.Zero);
         Assert.That(runtime.HasSameRuntimeIdAllocatorDecisionCounterOwner(provider), Is.True);

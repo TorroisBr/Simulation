@@ -370,7 +370,7 @@ public sealed class ActorChoiceStoreTests
 
     private static object CreateMutationGuard()
     {
-        Type guardType = typeof(ActorChoiceStore).Assembly.GetType("AuthoritativeMutationGuard");
+        Type guardType = typeof(PersonRuntime).Assembly.GetType("AuthoritativeMutationGuard");
         Assert.That(guardType, Is.Not.Null);
         return Activator.CreateInstance(guardType, true);
     }

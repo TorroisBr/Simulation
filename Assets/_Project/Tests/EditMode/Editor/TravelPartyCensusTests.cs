@@ -144,7 +144,7 @@ public sealed class TravelPartyCensusTests
     {
         TravelPartyStore store = new TravelPartyStore();
         TravelPartyCensusProvider provider = new TravelPartyCensusProvider(store);
-        Type guardType = typeof(TravelPartyStore).Assembly.GetType("AuthoritativeMutationGuard");
+        Type guardType = typeof(PersonRuntime).Assembly.GetType("AuthoritativeMutationGuard");
         object guard = Activator.CreateInstance(guardType, nonPublic: true);
         guardType.GetMethod("MarkFaulted", BindingFlags.Instance | BindingFlags.NonPublic)
             .Invoke(guard, new object[] { AuthoritativeMutationFaultReason.IntegrityRestoreFailed });

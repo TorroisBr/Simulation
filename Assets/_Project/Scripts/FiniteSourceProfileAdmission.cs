@@ -150,4 +150,7 @@ public static class FiniteSourceProfileAdmission
 
         return true;
     }
+
+    public static bool TryValidateMixedSourceCity(DailyV1CityData city, out string rejectionReason)
+        => DailyV1MixedSourceProfileAdmission.TryValidate(city, out rejectionReason);
 }

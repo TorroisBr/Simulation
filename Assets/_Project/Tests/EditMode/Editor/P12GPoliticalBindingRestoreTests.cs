@@ -828,6 +828,27 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             p12CrimeSocialAppraisalWorldState: stagedE.CrimeSocialAppraisal);
 
         NpcChronicleService chronicles = new NpcChronicleService(decisions, eventStore);
+        Assert.That(DailyV1DefinitionAdapter.TryCreateBindings(
+                config,
+                anchor.Composition.SelectedDefinitions,
+                out DailyV1DefinitionAdapter.SelectedBindings selectedBindings,
+                out string bindingDiagnostic), Is.True, bindingDiagnostic);
+        foreach (CityRuntime city in stagedD.Cities)
+        {
+            Assert.That(selectedBindings.TryGet(
+                    city.CityData, anchor.Composition.SelectedDefinitions,
+                    out DailyV1CityDefinition cityNode), Is.True);
+            Assert.That(city.TryBindSelectedDailyV1Definition(
+                cityNode, anchor.Composition.SelectedDefinitions, selectedBindings), Is.True);
+        }
+        foreach (NpcRuntime npc in stagedD.Npcs)
+        {
+            Assert.That(selectedBindings.TryGet(
+                    npc.NpcData, anchor.Composition.SelectedDefinitions,
+                    out DailyV1NpcDefinition npcNode), Is.True);
+            Assert.That(npc.TryBindSelectedDailyV1Definition(
+                npcNode, anchor.Composition.SelectedDefinitions, selectedBindings), Is.True);
+        }
         NpcChronicleFormatter formatter = TesteSimulacao.CreateNpcChronicleFormatter(
             stagedD.RuntimeIdentities,
             stagedD.SpatialNetwork,
@@ -1307,10 +1328,14 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         AppendValue(signature, "C/spatial-scale-unit", spatial.ScaleContext.Unit);
 
         SimulationRecordSequenceSnapshot sequence = session.Composition.RecordSequence.CaptureSnapshot();
+        SimulationRecordSequenceOwnerBridge.CaptureCensusIdentity(
+            session.Composition.RecordSequence,
+            out object sequenceOwnerIdentity,
+            out _);
         OwnerSectionCensusSnapshot sequenceOwner = token.OwnerSections.Single(row =>
             row.SectionId == SimulationRecordSequenceCensusProvider.SectionId);
         Assert.That(sequenceOwner.OwnerInstanceIdentity,
-            Is.SameAs(session.Composition.RecordSequence.CensusOwnerIdentity),
+            Is.SameAs(sequenceOwnerIdentity),
             "The runtime token must census the exact composition record-sequence root.");
         AppendValue(signature, "C/sequence-schema", sequence.SchemaId);
         AppendValue(signature, "C/sequence-version", sequence.SchemaVersion);
@@ -1324,11 +1349,16 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             "Runtime and bootstrap must retain the exact event-counter allocator root.");
         Assert.That(session.Runtime.HasSameRuntimeIdAllocatorDecisionCounterOwner(decisionCounterProvider), Is.True,
             "Runtime and bootstrap must retain the exact decision-counter allocator root.");
+        RuntimeIdAllocatorOwnerBridge.CaptureCensusIdentity(
+            session.Composition.RuntimeIdAllocator,
+            RuntimeIdAllocatorCensusCounter.Events,
+            out object allocatorOwnerIdentity,
+            out _);
         foreach (OwnerSectionCensusSnapshot allocatorOwner in token.OwnerSections.Where(row =>
                      row.SectionId.StartsWith("p12c.runtime-id-allocator.", StringComparison.Ordinal)))
         {
             Assert.That(allocatorOwner.OwnerInstanceIdentity,
-                Is.SameAs(session.Composition.RuntimeIdAllocator.CensusOwnerIdentity),
+                Is.SameAs(allocatorOwnerIdentity),
                 allocatorOwner.SectionId + " must identify the exact composition allocator root.");
         }
         AppendValue(signature, "C/allocator-schema", allocator.SchemaId);

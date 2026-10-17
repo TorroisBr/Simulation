@@ -3391,9 +3391,9 @@ public static class WorldStateSnapshotBuilder
 
         return new WorldStateActionSnapshot(
             action.DefinitionId,
-            action.actionName,
-            action.actionCategory,
-            action.actionType,
+            npc.GetConfiguredActionName(action),
+            (NpcActionCategory)npc.GetConfiguredActionCategoryOrder(action),
+            npc.GetConfiguredActionType(action),
             actionRuntime?.TargetNpc?.RuntimeId,
             actionRuntime?.TargetCity?.RuntimeId,
             actionRuntime?.TargetItem?.DefinitionId,

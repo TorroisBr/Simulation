@@ -51,9 +51,11 @@ public sealed class P12TravelPartyStartOperationTests
 
         Assert.That(before.SectionId, Is.EqualTo(RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId));
         Assert.That(before.SchemaVersion, Is.EqualTo(RuntimeIdAllocatorCensusProvider.SchemaVersion));
-        object allocatorIdentity = typeof(RuntimeIdAllocator)
-            .GetProperty("CensusOwnerIdentity", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(fixture.Records.Allocator);
+        RuntimeIdAllocatorOwnerBridge.CaptureCensusIdentity(
+            fixture.Records.Allocator,
+            RuntimeIdAllocatorCensusCounter.TravelParties,
+            out object allocatorIdentity,
+            out _);
         Assert.That(before.OwnerInstanceIdentity, Is.SameAs(allocatorIdentity));
         Assert.That(before.Cardinality, Is.EqualTo(1));
         Assert.That(before.Revision, Is.EqualTo(0));

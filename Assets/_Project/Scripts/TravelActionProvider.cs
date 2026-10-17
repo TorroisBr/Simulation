@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class TravelActionProvider : INpcActionProvider
+public class TravelActionProvider : INpcActionProvider, ISelectedDefinitionNpcActionProvider
 {
     private readonly TravelSystem travelSystem;
     private readonly MerchantSystem merchantSystem;
@@ -14,6 +14,12 @@ public class TravelActionProvider : INpcActionProvider
     public bool HandlesAction(NpcActionData action)
     {
         return action != null && action.actionType == NpcActionType.Travel;
+    }
+
+    bool ISelectedDefinitionNpcActionProvider.HandlesAction(NpcRuntime npcRuntime, NpcActionData action)
+    {
+        return npcRuntime != null && action != null
+            && npcRuntime.GetConfiguredActionType(action) == NpcActionType.Travel;
     }
 
     internal bool IsBoundTo(TravelSystem candidate)

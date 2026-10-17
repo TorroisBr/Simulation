@@ -45,6 +45,15 @@ public sealed class SimulationBootstrapComposition
 
         Manifest = manifest;
         SelectedDefinitions = selectedDefinitions;
+        if (runtime.RequiresSelectedDailyV1DefinitionBindings
+            && (selectedDefinitions == null
+                || !HasExactSelectedRuntimeDefinitionBindings(selectedDefinitions, runtime)))
+        {
+            runtime.FaultRuntimeAdmission();
+            throw new ArgumentException(
+                "Every selected Daily-v1 City and NPC runtime must retain the exact typed graph node admitted for its authoring object.",
+                nameof(selectedDefinitions));
+        }
         SimulationTime = time;
         Calendar = calendar;
         RuntimeIdAllocator = runtimeIdAllocator ?? throw new ArgumentNullException(nameof(runtimeIdAllocator));
@@ -147,6 +156,31 @@ public sealed class SimulationBootstrapComposition
         Expeditions = expeditions;
         ExpeditionSystem = expeditionSystem;
         ExpeditionCensusProvider = new ExpeditionCensusProvider(expeditions);
+    }
+
+    private static bool HasExactSelectedRuntimeDefinitionBindings(
+        DailyV1EffectiveDefinitions definitions,
+        SimulationRuntime runtime)
+    {
+        if (definitions == null || runtime == null || runtime.Cities == null || runtime.NpcRuntimes == null)
+            return false;
+        foreach (CityRuntime city in runtime.Cities)
+        {
+            if (city == null || city.SelectedDailyV1Definition == null
+                || !ReferenceEquals(city.SelectedDailyV1DefinitionGraph, definitions)
+                || !definitions.Cities.TryGetValue(city.DefinitionId, out DailyV1CityDefinition node)
+                || !ReferenceEquals(node, city.SelectedDailyV1Definition))
+                return false;
+        }
+        foreach (NpcRuntime npc in runtime.NpcRuntimes)
+        {
+            if (npc == null || npc.SelectedDailyV1Definition == null
+                || !ReferenceEquals(npc.SelectedDailyV1DefinitionGraph, definitions)
+                || !definitions.Npcs.TryGetValue(npc.DefinitionId, out DailyV1NpcDefinition node)
+                || !ReferenceEquals(node, npc.SelectedDailyV1Definition))
+                return false;
+        }
+        return true;
     }
 
     public string ProfileContractIdentity => Manifest.ContractIdentity;

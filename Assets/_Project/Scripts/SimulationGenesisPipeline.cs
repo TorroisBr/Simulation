@@ -461,6 +461,16 @@ public static class SimulationGenesisPipeline
         EffectiveSimulationConfiguration effective,
         CalendarDefinition calendar)
     {
+        return CreateSelectedDefinitions(config, effective, calendar, out _);
+    }
+
+    internal static DailyV1EffectiveDefinitions CreateSelectedDefinitions(
+        SimulationConfigData config,
+        EffectiveSimulationConfiguration effective,
+        CalendarDefinition calendar,
+        out DailyV1DefinitionAdapter.SelectedBindings selectedBindings)
+    {
+        selectedBindings = null;
         if (config == null) throw new ArgumentNullException(nameof(config));
         if (effective == null) throw new ArgumentNullException(nameof(effective));
         if (calendar == null) throw new ArgumentNullException(nameof(calendar));
@@ -468,9 +478,139 @@ public static class SimulationGenesisPipeline
             throw new InvalidOperationException("Authored CalendarDefinition is invalid: " + calendarDiagnostic);
         if (!DailyV1DefinitionAdapter.TryCreate(config, effective, calendar,
             ResolveStageOrder(config.useAuthoredGeographyProfile), HexCoordinate.ConventionVersion,
-            HexCoordinate.CanonicalOrder, out DailyV1EffectiveDefinitions definitions, out string diagnostic))
+            HexCoordinate.CanonicalOrder, out DailyV1EffectiveDefinitions definitions,
+            out selectedBindings, out string diagnostic))
             throw new InvalidOperationException(diagnostic ?? "The selected typed definition graph is invalid.");
         return definitions;
+    }
+
+    internal static bool TryValidateSelectedDefinitionBindings(
+        DailyV1EffectiveDefinitions definitions,
+        out string diagnostic)
+    {
+        diagnostic = "A selected Daily-v1 definition graph is required.";
+        if (definitions == null) return false;
+
+        DailyV1SimulationConfigData config = definitions.Configuration;
+        foreach (string id in config.cities ?? System.Array.Empty<string>())
+            if (!IsBound(definitions.Cities, id)) return Unbound("configuration.cities", id, "City", out diagnostic);
+        foreach (string id in config.actions ?? System.Array.Empty<string>())
+            if (!IsBound(definitions.Actions, id)) return Unbound("configuration.actions", id, "NpcAction", out diagnostic);
+        foreach (string id in config.statuses ?? System.Array.Empty<string>())
+            if (!IsBound(definitions.Statuses, id)) return Unbound("configuration.statuses", id, "NpcStatus", out diagnostic);
+        foreach (string id in config.jobs ?? System.Array.Empty<string>())
+            if (!IsBound(definitions.Jobs, id)) return Unbound("configuration.jobs", id, "NpcJob", out diagnostic);
+        foreach (DailyV1ExplorableSiteConfig row in config.explorableSites ?? System.Array.Empty<DailyV1ExplorableSiteConfig>())
+        {
+            if (row == null) continue;
+            if (!IsBound(definitions.ExplorableSites, row.site)) return Unbound("configuration.explorableSites.site", row.site, "ExplorableSite", out diagnostic);
+            if (!IsBound(definitions.Cities, row.anchorCity)) return Unbound("configuration.explorableSites.anchorCity", row.anchorCity, "City", out diagnostic);
+        }
+        if (!IsBound(definitions.ExplorableSites, config.authoredP10RuinSite))
+            return Unbound("configuration.authoredP10RuinSite", config.authoredP10RuinSite, "ExplorableSite", out diagnostic);
+
+        foreach (DailyV1CityDefinition definition in definitions.Cities.Values)
+        {
+            DailyV1CityData city = definition.Values;
+            foreach (DailyV1MarketItemConfig row in city.marketItems ?? System.Array.Empty<DailyV1MarketItemConfig>())
+                if (row != null && !IsBound(definitions.Items, row.item)) return Unbound("CityData.marketItems.item", row.item, "Item", out diagnostic);
+            foreach (DailyV1CityProductionConfig row in city.productionConfigs ?? System.Array.Empty<DailyV1CityProductionConfig>())
+                if (row != null && !IsBound(definitions.Items, row.item)) return Unbound("CityData.productionConfigs.item", row.item, "Item", out diagnostic);
+            foreach (DailyV1CityConnection row in city.connections ?? System.Array.Empty<DailyV1CityConnection>())
+                if (row != null && !IsBound(definitions.Cities, row.destination)) return Unbound("CityData.connections.destination", row.destination, "City", out diagnostic);
+        }
+
+        foreach (DailyV1NpcDefinition definition in definitions.Npcs.Values)
+        {
+            DailyV1NpcData npc = definition.Values;
+            if (!IsBound(definitions.Jobs, npc.job)) return Unbound("NpcData.job", npc.job, "NpcJob", out diagnostic);
+            foreach (DailyV1NPCDefaultAction row in npc.acoesPadrao ?? System.Array.Empty<DailyV1NPCDefaultAction>())
+                if (row != null && !IsBound(definitions.Actions, row.action)) return Unbound("NpcData.acoesPadrao.action", row.action, "NpcAction", out diagnostic);
+            foreach (string id in npc.statusPadrao ?? System.Array.Empty<string>())
+                if (!IsBound(definitions.Statuses, id)) return Unbound("NpcData.statusPadrao", id, "NpcStatus", out diagnostic);
+            foreach (DailyV1CapabilityAttributeValue row in npc.capabilityValues ?? System.Array.Empty<DailyV1CapabilityAttributeValue>())
+                if (row != null && !IsBound(definitions.CapabilityAttributes, row.attribute)) return Unbound("NpcData.capabilityValues.attribute", row.attribute, "CapabilityAttribute", out diagnostic);
+            foreach (string id in npc.traits ?? System.Array.Empty<string>())
+                if (!IsBound(definitions.Traits, id)) return Unbound("NpcData.traits", id, "Trait", out diagnostic);
+        }
+
+        foreach (DailyV1ItemDefinition definition in definitions.Items.Values)
+            foreach (DailyV1CapabilityAttributeModifier row in definition.Values.capabilityModifiers ?? System.Array.Empty<DailyV1CapabilityAttributeModifier>())
+                if (row != null && !IsBound(definitions.CapabilityAttributes, row.attribute)) return Unbound("ItemData.capabilityModifiers.attribute", row.attribute, "CapabilityAttribute", out diagnostic);
+
+        foreach (DailyV1JobDefinition definition in definitions.Jobs.Values)
+        {
+            DailyV1NpcJobData job = definition.Values;
+            if (!IsBound(definitions.Actions, job.workAction)) return Unbound("NpcJobData.workAction", job.workAction, "NpcAction", out diagnostic);
+            foreach (DailyV1TradeItemPreference row in job.preferredTradeItems ?? System.Array.Empty<DailyV1TradeItemPreference>())
+                if (row != null && !IsBound(definitions.Items, row.item)) return Unbound("NpcJobData.preferredTradeItems.item", row.item, "Item", out diagnostic);
+        }
+
+        foreach (DailyV1ActionDefinition definition in definitions.Actions.Values)
+        {
+            DailyV1NpcActionData action = definition.Values;
+            if (!ValidateStatusReferences(definitions, action.statusNecessariosParaFazerAcao, "NpcActionData.statusNecessariosParaFazerAcao", out diagnostic)
+                || !ValidateStatusReferences(definitions, action.statusToAdd, "NpcActionData.statusToAdd", out diagnostic)
+                || !ValidateStatusReferences(definitions, action.statusToRemove, "NpcActionData.statusToRemove", out diagnostic)
+                || !ValidateStatusReferences(definitions, action.targetStatusToAdd, "NpcActionData.targetStatusToAdd", out diagnostic)
+                || !ValidateStatusReferences(definitions, action.targetStatusToRemove, "NpcActionData.targetStatusToRemove", out diagnostic))
+                return false;
+            foreach (DailyV1StatusWeightModifier row in action.statusModifiers ?? System.Array.Empty<DailyV1StatusWeightModifier>())
+                if (row != null && !IsBound(definitions.Statuses, row.status)) return Unbound("NpcActionData.statusModifiers.status", row.status, "NpcStatus", out diagnostic);
+        }
+
+        foreach (DailyV1NpcSimulationConfig row in config.npcs ?? System.Array.Empty<DailyV1NpcSimulationConfig>())
+        {
+            if (row == null) continue;
+            if (!IsBound(definitions.Npcs, row.npc)) return Unbound("configuration.npcs", row.npc, "Npc", out diagnostic);
+            if (!IsBound(definitions.Cities, row.startingCity)) return Unbound("NpcSimulationConfig.startingCity", row.startingCity, "City", out diagnostic);
+            foreach (DailyV1NpcInitialInventoryItemConfig item in row.initialInventory ?? System.Array.Empty<DailyV1NpcInitialInventoryItemConfig>())
+                if (item != null && !IsBound(definitions.Items, item.item)) return Unbound("NpcSimulationConfig.initialInventory.item", item.item, "Item", out diagnostic);
+            foreach (string id in row.initialKnownExplorableSites ?? System.Array.Empty<string>())
+                if (!IsBound(definitions.ExplorableSites, id)) return Unbound("NpcSimulationConfig.initialKnownExplorableSites", id, "ExplorableSite", out diagnostic);
+        }
+
+        foreach (DailyV1InitialWantedRecordConfig row in config.initialWarrants ?? System.Array.Empty<DailyV1InitialWantedRecordConfig>())
+        {
+            if (row == null) continue;
+            if (!IsBound(definitions.Npcs, row.target)) return Unbound("InitialWantedRecordConfig.target", row.target, "Npc", out diagnostic);
+            if (!IsBound(definitions.Cities, row.city)) return Unbound("InitialWantedRecordConfig.city", row.city, "City", out diagnostic);
+        }
+        foreach (DailyV1ScheduledDirectiveConfig row in config.scheduledDirectives ?? System.Array.Empty<DailyV1ScheduledDirectiveConfig>())
+        {
+            if (row == null) continue;
+            if (!IsBound(definitions.Npcs, row.actor)) return Unbound("ScheduledDirectiveConfig.actor", row.actor, "Npc", out diagnostic);
+            if (!IsBound(definitions.Actions, row.action)) return Unbound("ScheduledDirectiveConfig.action", row.action, "NpcAction", out diagnostic);
+        }
+
+        if (!IsBound(definitions.Statuses, config.freeStatus)) return Unbound("SimulationConfigData.freeStatus", config.freeStatus, "NpcStatus", out diagnostic);
+        if (!IsBound(definitions.Statuses, config.wantedStatus)) return Unbound("SimulationConfigData.wantedStatus", config.wantedStatus, "NpcStatus", out diagnostic);
+        if (!IsBound(definitions.Statuses, config.arrestedStatus)) return Unbound("SimulationConfigData.arrestedStatus", config.arrestedStatus, "NpcStatus", out diagnostic);
+        if (!IsBound(definitions.Statuses, config.hiddenStatus)) return Unbound("SimulationConfigData.hiddenStatus", config.hiddenStatus, "NpcStatus", out diagnostic);
+
+        diagnostic = null;
+        return true;
+    }
+
+    private static bool ValidateStatusReferences(
+        DailyV1EffectiveDefinitions definitions,
+        System.Collections.Generic.IReadOnlyList<string> ids,
+        string source,
+        out string diagnostic)
+    {
+        foreach (string id in ids ?? System.Array.Empty<string>())
+            if (!IsBound(definitions.Statuses, id)) return Unbound(source, id, "NpcStatus", out diagnostic);
+        diagnostic = null;
+        return true;
+    }
+
+    private static bool IsBound<T>(System.Collections.Generic.IReadOnlyDictionary<string, T> family, string id)
+        where T : class => string.IsNullOrWhiteSpace(id) || family.ContainsKey(id);
+
+    private static bool Unbound(string source, string id, string family, out string diagnostic)
+    {
+        diagnostic = "Selected reference '" + source + "' does not resolve to a " + family + " definition: '" + id + "'.";
+        return false;
     }
 
     private static void Add(List<string> fields, string kind, params object[] values)
@@ -776,71 +916,98 @@ public sealed class SimulationGenesisManifest
         string fingerprint,
         IReadOnlyList<string> canonicalRecords,
         bool includeP10RuinLocalTopology,
-        bool includeP10BGeneratedRuin = false)
+        bool includeP10BGeneratedRuin = false,
+        DailyV1EffectiveDefinitions selectedDefinitions = null)
     {
+        DailyV1SimulationConfigData selectedConfiguration = selectedDefinitions?.Configuration;
+        if (selectedDefinitions != null && selectedConfiguration == null)
+            throw new ArgumentException("The selected Daily-v1 manifest requires its captured configuration.", nameof(selectedDefinitions));
+        if (selectedDefinitions != null && (includeP10RuinLocalTopology || includeP10BGeneratedRuin))
+            throw new ArgumentException("P10 compositions require their own selected profile manifest, not the Daily-v1 definition graph.", nameof(selectedDefinitions));
+        bool useAuthoredGeographyProfile = selectedConfiguration != null
+            ? selectedConfiguration.useAuthoredGeographyProfile
+            : config.useAuthoredGeographyProfile;
         SchemaVersion = includeP10BGeneratedRuin ? 1 : includeP10RuinLocalTopology
             ? P10RuinLocalTopologyGenesis.ContractSchemaVersion
-            : config.useAuthoredGeographyProfile ? 2 : 1;
+            : useAuthoredGeographyProfile ? 2 : 1;
         Fingerprint = fingerprint;
         SelectedP9ProfileFingerprint = selectedP9Fingerprint;
-        SelectedP9ContractIdentity = config.useAuthoredGeographyProfile
-            ? SimulationGenesisPipeline.GeographyProfileContractIdentity
-            : SimulationGenesisPipeline.ProfileContractIdentity;
-        SelectedP9SchemaVersion = config.useAuthoredGeographyProfile ? 2 : 1;
-        EffectiveConfiguration = effectiveConfiguration;
-        Seed = config.useFixedSimulationSeed ? config.simulationSeed : 0;
-        SeedSource = config.useFixedSimulationSeed ? "authored-fixed" : "default-zero";
+        SelectedP9ContractIdentity = useAuthoredGeographyProfile
+            ? selectedDefinitions?.GeographyProfileContractIdentity ?? SimulationGenesisPipeline.GeographyProfileContractIdentity
+            : selectedDefinitions?.ProfileContractIdentity ?? SimulationGenesisPipeline.ProfileContractIdentity;
+        SelectedP9SchemaVersion = useAuthoredGeographyProfile ? 2 : 1;
+        EffectiveConfiguration = selectedDefinitions?.EffectiveConfiguration ?? effectiveConfiguration;
+        bool useFixedSeed = selectedConfiguration != null
+            ? selectedConfiguration.useFixedSimulationSeed
+            : config.useFixedSimulationSeed;
+        Seed = useFixedSeed
+            ? selectedConfiguration != null ? selectedConfiguration.simulationSeed : config.simulationSeed
+            : 0;
+        SeedSource = useFixedSeed ? "authored-fixed" : "default-zero";
         ContractIdentity = includeP10BGeneratedRuin ? SimulationGenesisPipeline.P10BGeneratedRuinProfileContractIdentity
             : includeP10RuinLocalTopology ? P10RuinLocalTopologyGenesis.ContractIdentity
             : SelectedP9ContractIdentity;
-        StageOrder = SimulationGenesisPipeline.ResolveStageOrder(config.useAuthoredGeographyProfile, includeP10RuinLocalTopology, includeP10BGeneratedRuin);
+        StageOrder = selectedDefinitions?.StageOrder
+            ?? SimulationGenesisPipeline.ResolveStageOrder(useAuthoredGeographyProfile, includeP10RuinLocalTopology, includeP10BGeneratedRuin);
         CanonicalProvenanceRecords = canonicalRecords;
-        CalendarMonthsPerYear = calendar.MonthsPerYear;
-        CalendarWeeksPerMonth = calendar.WeeksPerMonth;
-        CalendarDaysPerWeek = calendar.DaysPerWeek;
-        MonthLengths = Array.AsReadOnly(new List<int>(calendar.monthLengths ?? new List<int>()).ToArray());
+        DailyV1CalendarDefinition selectedCalendar = selectedDefinitions?.Calendar;
+        CalendarMonthsPerYear = selectedCalendar != null ? selectedCalendar.monthsPerYear : calendar.MonthsPerYear;
+        CalendarWeeksPerMonth = selectedCalendar != null ? selectedCalendar.weeksPerMonth : calendar.WeeksPerMonth;
+        CalendarDaysPerWeek = selectedCalendar != null ? selectedCalendar.daysPerWeek : calendar.DaysPerWeek;
+        MonthLengths = selectedCalendar != null
+            ? Array.AsReadOnly(new List<int>(selectedCalendar.monthLengths ?? Array.Empty<int>()).ToArray())
+            : Array.AsReadOnly(new List<int>(calendar.monthLengths ?? new List<int>()).ToArray());
         var ids = new HashSet<string>(StringComparer.Ordinal);
-        foreach (CityData city in config.Cities)
+        if (selectedDefinitions != null)
         {
-            ids.Add("city/" + city.DefinitionId);
-            foreach (MarketItemConfig market in city.marketItems) AddId(ids, "item", market.item);
-            foreach (CityProductionConfig production in city.productionConfigs) AddId(ids, "item", production.item);
+            AddSelectedDailyV1DefinitionIds(ids, selectedDefinitions,
+                includeP10RuinLocalTopology || includeP10BGeneratedRuin);
         }
-        foreach (ExplorableSiteConfig site in config.ExplorableSites) ids.Add("site/" + site.site.DefinitionId);
-        if (includeP10RuinLocalTopology || includeP10BGeneratedRuin)
-            ids.Add("site/" + config.authoredP10RuinSite.DefinitionId);
-        if (config.useAuthoredGeographyProfile)
+        else
         {
-            ids.Add("hex/" + config.authoredHexId);
-            ids.Add("location/" + config.authoredLocationId);
-            ids.Add("terrain/" + config.authoredTerrainDefinitionId);
+            foreach (CityData city in config.Cities)
+            {
+                ids.Add("city/" + city.DefinitionId);
+                foreach (MarketItemConfig market in city.marketItems) AddId(ids, "item", market.item);
+                foreach (CityProductionConfig production in city.productionConfigs) AddId(ids, "item", production.item);
+            }
+            foreach (ExplorableSiteConfig site in config.ExplorableSites) ids.Add("site/" + site.site.DefinitionId);
+            if (includeP10RuinLocalTopology || includeP10BGeneratedRuin)
+                ids.Add("site/" + config.authoredP10RuinSite.DefinitionId);
+            if (useAuthoredGeographyProfile)
+            {
+                ids.Add("hex/" + config.authoredHexId);
+                ids.Add("location/" + config.authoredLocationId);
+                ids.Add("terrain/" + config.authoredTerrainDefinitionId);
+            }
+            foreach (NpcSimulationConfig npc in config.Npcs)
+            {
+                ids.Add("npc/" + npc.npc.DefinitionId);
+                AddId(ids, "job", npc.npc.job);
+                foreach (NPCDefaultAction action in npc.npc.acoesPadrao) AddId(ids, "action", action.action);
+                foreach (NpcStatusData status in npc.npc.statusPadrao) AddId(ids, "status", status);
+                foreach (TraitData trait in npc.npc.traits) if (trait != null) ids.Add("trait/" + trait.DefinitionId);
+                foreach (CapabilityAttributeValue value in npc.npc.capabilityValues)
+                    if (value?.Attribute != null) ids.Add("capability-attribute/" + value.Attribute.DefinitionId);
+                foreach (NpcInitialInventoryItemConfig item in npc.InitialInventory) AddId(ids, "item", item.item);
+            }
+            foreach (NpcActionData action in config.Actions)
+            {
+                ids.Add("action/" + action.DefinitionId);
+                AddStatusIds(ids, action.statusNecessariosParaFazerAcao);
+                AddStatusIds(ids, action.statusToAdd);
+                AddStatusIds(ids, action.statusToRemove);
+                AddStatusIds(ids, action.targetStatusToAdd);
+                AddStatusIds(ids, action.targetStatusToRemove);
+                foreach (StatusWeightModifier weight in action.statusModifiers) AddId(ids, "status", weight?.status);
+            }
+            foreach (NpcStatusData status in config.Statuses) AddId(ids, "status", status);
+            AddId(ids, "status", config.freeStatus); AddId(ids, "status", config.wantedStatus);
+            AddId(ids, "status", config.arrestedStatus); AddId(ids, "status", config.hiddenStatus);
+            foreach (NpcJobData job in config.Jobs) AddJobIds(ids, job);
+            foreach (NpcSimulationConfig npc in config.Npcs) AddJobIds(ids, npc.npc.job);
         }
-        foreach (NpcSimulationConfig npc in config.Npcs)
-        {
-            ids.Add("npc/" + npc.npc.DefinitionId);
-            AddId(ids, "job", npc.npc.job);
-            foreach (NPCDefaultAction action in npc.npc.acoesPadrao) AddId(ids, "action", action.action);
-            foreach (NpcStatusData status in npc.npc.statusPadrao) AddId(ids, "status", status);
-            foreach (TraitData trait in npc.npc.traits) if (trait != null) ids.Add("trait/" + trait.DefinitionId);
-            foreach (CapabilityAttributeValue value in npc.npc.capabilityValues)
-                if (value?.Attribute != null) ids.Add("capability-attribute/" + value.Attribute.DefinitionId);
-            foreach (NpcInitialInventoryItemConfig item in npc.InitialInventory) AddId(ids, "item", item.item);
-        }
-        foreach (NpcActionData action in config.Actions)
-        {
-            ids.Add("action/" + action.DefinitionId);
-            AddStatusIds(ids, action.statusNecessariosParaFazerAcao);
-            AddStatusIds(ids, action.statusToAdd);
-            AddStatusIds(ids, action.statusToRemove);
-            AddStatusIds(ids, action.targetStatusToAdd);
-            AddStatusIds(ids, action.targetStatusToRemove);
-            foreach (StatusWeightModifier weight in action.statusModifiers) AddId(ids, "status", weight?.status);
-        }
-        foreach (NpcStatusData status in config.Statuses) AddId(ids, "status", status);
-        AddId(ids, "status", config.freeStatus); AddId(ids, "status", config.wantedStatus);
-        AddId(ids, "status", config.arrestedStatus); AddId(ids, "status", config.hiddenStatus);
-        foreach (NpcJobData job in config.Jobs) AddJobIds(ids, job);
-        foreach (NpcSimulationConfig npc in config.Npcs) AddJobIds(ids, npc.npc.job);
+
         var orderedIds = new List<string>(ids);
         orderedIds.Sort(StringComparer.Ordinal);
         AuthoredDefinitionIds = orderedIds.AsReadOnly();
@@ -862,7 +1029,7 @@ public sealed class SimulationGenesisManifest
             "authored-world -> authored-actors", "authored-world -> validate-profile",
             "authored-actors -> validate-profile", "validate-profile -> publish"
         };
-        if (config.useAuthoredGeographyProfile)
+        if (useAuthoredGeographyProfile)
         {
             dependencies.Add("resolve-profile -> authored-geography");
             dependencies.Add("authored-world -> authored-geography");
@@ -936,6 +1103,98 @@ public sealed class SimulationGenesisManifest
     private static IReadOnlyList<T> CopySnapshotList<T>(IReadOnlyList<T> source)
     {
         return source == null ? null : Array.AsReadOnly(new List<T>(source).ToArray());
+    }
+
+    private static void AddSelectedDailyV1DefinitionIds(
+        HashSet<string> ids,
+        DailyV1EffectiveDefinitions definitions,
+        bool includeP10Site)
+    {
+        DailyV1SimulationConfigData configuration = definitions.Configuration;
+        foreach (string cityId in configuration.cities ?? Array.Empty<string>())
+        {
+            AddDefinitionId(ids, "city", cityId);
+            if (!definitions.Cities.TryGetValue(cityId, out DailyV1CityDefinition cityNode)) continue;
+            foreach (DailyV1MarketItemConfig market in cityNode.Values.marketItems ?? Array.Empty<DailyV1MarketItemConfig>())
+                AddDefinitionId(ids, "item", market?.item);
+            foreach (DailyV1CityProductionConfig production in cityNode.Values.productionConfigs ?? Array.Empty<DailyV1CityProductionConfig>())
+                AddDefinitionId(ids, "item", production?.item);
+        }
+
+        foreach (DailyV1ExplorableSiteConfig site in configuration.explorableSites ?? Array.Empty<DailyV1ExplorableSiteConfig>())
+            AddDefinitionId(ids, "site", site?.site);
+        if (includeP10Site && !string.IsNullOrWhiteSpace(configuration.authoredP10RuinSite))
+            AddDefinitionId(ids, "site", configuration.authoredP10RuinSite);
+        if (configuration.useAuthoredGeographyProfile)
+        {
+            AddDefinitionId(ids, "hex", configuration.authoredHexId);
+            AddDefinitionId(ids, "location", configuration.authoredLocationId);
+            AddDefinitionId(ids, "terrain", configuration.authoredTerrainDefinitionId);
+        }
+
+        foreach (DailyV1NpcSimulationConfig npcConfig in configuration.npcs ?? Array.Empty<DailyV1NpcSimulationConfig>())
+        {
+            if (npcConfig == null) continue;
+            AddDefinitionId(ids, "npc", npcConfig.npc);
+            if (definitions.Npcs.TryGetValue(npcConfig.npc, out DailyV1NpcDefinition npcNode))
+            {
+                DailyV1NpcData npc = npcNode.Values;
+                AddSelectedDailyV1JobIds(ids, npc.job, definitions);
+                foreach (DailyV1NPCDefaultAction action in npc.acoesPadrao ?? Array.Empty<DailyV1NPCDefaultAction>())
+                    AddDefinitionId(ids, "action", action?.action);
+                foreach (string statusId in npc.statusPadrao ?? Array.Empty<string>()) AddDefinitionId(ids, "status", statusId);
+                foreach (string traitId in npc.traits ?? Array.Empty<string>()) AddDefinitionId(ids, "trait", traitId);
+                foreach (DailyV1CapabilityAttributeValue value in npc.capabilityValues ?? Array.Empty<DailyV1CapabilityAttributeValue>())
+                    AddDefinitionId(ids, "capability-attribute", value?.attribute);
+            }
+            foreach (DailyV1NpcInitialInventoryItemConfig item in
+                npcConfig.initialInventory ?? Array.Empty<DailyV1NpcInitialInventoryItemConfig>())
+                AddDefinitionId(ids, "item", item?.item);
+        }
+
+        foreach (string actionId in configuration.actions ?? Array.Empty<string>())
+        {
+            AddDefinitionId(ids, "action", actionId);
+            if (!definitions.Actions.TryGetValue(actionId, out DailyV1ActionDefinition actionNode)) continue;
+            DailyV1NpcActionData action = actionNode.Values;
+            AddSelectedStatusIds(ids, action.statusNecessariosParaFazerAcao);
+            AddSelectedStatusIds(ids, action.statusToAdd);
+            AddSelectedStatusIds(ids, action.statusToRemove);
+            AddSelectedStatusIds(ids, action.targetStatusToAdd);
+            AddSelectedStatusIds(ids, action.targetStatusToRemove);
+            foreach (DailyV1StatusWeightModifier weight in action.statusModifiers ?? Array.Empty<DailyV1StatusWeightModifier>())
+                AddDefinitionId(ids, "status", weight?.status);
+        }
+
+        foreach (string statusId in configuration.statuses ?? Array.Empty<string>()) AddDefinitionId(ids, "status", statusId);
+        AddDefinitionId(ids, "status", configuration.freeStatus);
+        AddDefinitionId(ids, "status", configuration.wantedStatus);
+        AddDefinitionId(ids, "status", configuration.arrestedStatus);
+        AddDefinitionId(ids, "status", configuration.hiddenStatus);
+        foreach (string jobId in configuration.jobs ?? Array.Empty<string>()) AddSelectedDailyV1JobIds(ids, jobId, definitions);
+        foreach (DailyV1NpcSimulationConfig npcConfig in configuration.npcs ?? Array.Empty<DailyV1NpcSimulationConfig>())
+            if (npcConfig != null && definitions.Npcs.TryGetValue(npcConfig.npc, out DailyV1NpcDefinition npcNode))
+                AddSelectedDailyV1JobIds(ids, npcNode.Values.job, definitions);
+    }
+
+    private static void AddSelectedDailyV1JobIds(HashSet<string> ids, string jobId, DailyV1EffectiveDefinitions definitions)
+    {
+        AddDefinitionId(ids, "job", jobId);
+        if (string.IsNullOrWhiteSpace(jobId) || !definitions.Jobs.TryGetValue(jobId, out DailyV1JobDefinition jobNode)) return;
+        AddDefinitionId(ids, "action", jobNode.Values.workAction);
+        foreach (DailyV1TradeItemPreference preference in
+            jobNode.Values.preferredTradeItems ?? Array.Empty<DailyV1TradeItemPreference>())
+            AddDefinitionId(ids, "item", preference?.item);
+    }
+
+    private static void AddSelectedStatusIds(HashSet<string> ids, IReadOnlyList<string> values)
+    {
+        foreach (string value in values ?? Array.Empty<string>()) AddDefinitionId(ids, "status", value);
+    }
+
+    private static void AddDefinitionId(HashSet<string> ids, string kind, string definitionId)
+    {
+        if (!string.IsNullOrWhiteSpace(definitionId)) ids.Add(kind + "/" + definitionId);
     }
 
     private static void AddId(HashSet<string> ids, string kind, ItemData value)

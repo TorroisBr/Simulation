@@ -10577,10 +10577,13 @@ public sealed class SimulationRuntimeAdmissionTests
             string slot = P12AContinuationStore.SlotPath(storageRoot);
             System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(slot));
             System.IO.File.WriteAllBytes(slot, new byte[] { 1, 2, 3, 4 });
+            CountingReadFileOperations loadFileOperations = new CountingReadFileOperations();
             UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Error,
                 "P12-A continuation load failed; genesis was not started. CorruptOrTruncated");
-            Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(storageRoot), Is.True,
+            Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(storageRoot, loadFileOperations), Is.True,
                 "A present slot is handled even when rejected, so Start cannot fall through to genesis.");
+            Assert.That(loadFileOperations.OpenReadCount, Is.EqualTo(2),
+                "The same injected file-operation port must handle slot inspection and continuation loading.");
             Assert.That(ReadPrivateField<bool>(target, "bootstrapFailed"), Is.True);
             Assert.That(ReadPrivateField<SimulationActiveSession>(target, "activeSession"), Is.Null);
             Assert.That(genesisIdentityAllocations, Is.Zero);
@@ -10721,6 +10724,25 @@ public sealed class SimulationRuntimeAdmissionTests
         public void Replace(string source, string destination) => throw new NotSupportedException();
         public void Move(string source, string destination) => throw new NotSupportedException();
         public void Delete(string path) => throw new NotSupportedException();
+    }
+
+    private sealed class CountingReadFileOperations : IAtomicFileSlotOperations
+    {
+        private readonly IAtomicFileSlotOperations inner = SystemAtomicFileSlotOperations.Instance;
+        internal int OpenReadCount { get; private set; }
+
+        public void CreateDirectory(string path) => inner.CreateDirectory(path);
+        public bool Exists(string path) => inner.Exists(path);
+        public Stream CreateNewTemporary(string path) => inner.CreateNewTemporary(path);
+        public Stream OpenRead(string path)
+        {
+            OpenReadCount++;
+            return inner.OpenRead(path);
+        }
+        public void FlushToDisk(Stream stream) => inner.FlushToDisk(stream);
+        public void Replace(string source, string destination) => inner.Replace(source, destination);
+        public void Move(string source, string destination) => inner.Move(source, destination);
+        public void Delete(string path) => inner.Delete(path);
     }
 
     private sealed class AdmissionProbeActionProvider : INpcActionProvider

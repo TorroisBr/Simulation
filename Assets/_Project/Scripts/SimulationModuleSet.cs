@@ -15,6 +15,15 @@ public class SimulationModuleSet
         }
     }
 
+    public SimulationModuleSet(IEnumerable<DailyV1EnumValue> selectedModules)
+    {
+        if (selectedModules == null)
+            return;
+        foreach (DailyV1EnumValue module in selectedModules)
+            if (module != null)
+                requestedModules.Add((SimulationModule)module.Value);
+    }
+
     // This is a bootstrap compatibility view only. EffectiveSimulationConfiguration
     // is the semantic authority after composition.
     public bool IsEnabled(SimulationModule module)

@@ -118,13 +118,18 @@ public enum PersonStoreFailure
     RevisionOverflow = 10
 }
 
+internal interface IPersonStoreMutationAdmission
+{
+    bool CanMutatePersonStore(PersonStore store);
+}
+
 /// <summary>
 /// World-owned registry of lightweight Persons and their optional materialization binding.
 /// </summary>
 public sealed class PersonStore : IAuthoritativeMutationGuardBindable
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
-    private FactualReadAdmission factualReadAdmission;
+    private IPersonStoreMutationAdmission factualReadAdmission;
     private readonly Dictionary<PersonId, PersonRuntime> personsById =
         new Dictionary<PersonId, PersonRuntime>();
     private readonly Dictionary<string, PersonRuntime> personsByNpcRuntimeId =
@@ -160,7 +165,7 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
                     person.DeathAbsoluteDay,
                     person.ResidenceSettlementRuntimeId,
                     person.MaterializedNpcRuntimeId,
-                    person.LifeResidenceRevision));
+                    PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person)));
         }
 
         return new PersonStoreOwnerSnapshot(
@@ -281,7 +286,7 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
                 return false;
             }
 
-            PersonRuntime person = PersonRuntime.CreateForOwnerSnapshot(
+            PersonRuntime person = PersonRuntimeOwnerBridge.CreateForOwnerSnapshot(
                 personId,
                 row.BirthAbsoluteDay,
                 row.DeathAbsoluteDay,
@@ -481,7 +486,7 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
-        if (person.TryBindMaterializedNpc(npcRuntimeId) == false)
+        if (PersonRuntimeOwnerBridge.TryBindMaterializedNpc(person, npcRuntimeId) == false)
         {
             failure = PersonStoreFailure.AlreadyMaterialized;
             return false;
@@ -508,7 +513,7 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
             || personsByNpcRuntimeId.TryGetValue(npcRuntimeId, out PersonRuntime indexedPerson) == false
             || ReferenceEquals(indexedPerson, person) == false
             || CanAdvanceRevision() == false
-            || person.TryUnbindMaterializedNpc(npcRuntimeId) == false)
+            || PersonRuntimeOwnerBridge.TryUnbindMaterializedNpc(person, npcRuntimeId) == false)
         {
             return false;
         }
@@ -548,13 +553,13 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
         return TryBindMutationGuard(guard);
     }
 
-    internal bool CanBindFactualReadAdmission(FactualReadAdmission admission)
+    internal bool CanBindFactualReadAdmission(IPersonStoreMutationAdmission admission)
     {
         return admission != null
             && (factualReadAdmission == null || ReferenceEquals(factualReadAdmission, admission));
     }
 
-    internal bool TryBindFactualReadAdmission(FactualReadAdmission admission)
+    internal bool TryBindFactualReadAdmission(IPersonStoreMutationAdmission admission)
     {
         if (!CanBindFactualReadAdmission(admission))
             return false;
@@ -563,7 +568,7 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
         return true;
     }
 
-    internal void TryUnbindFactualReadAdmission(FactualReadAdmission admission)
+    internal void TryUnbindFactualReadAdmission(IPersonStoreMutationAdmission admission)
     {
         if (ReferenceEquals(factualReadAdmission, admission))
             factualReadAdmission = null;

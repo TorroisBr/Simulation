@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Collections.ObjectModel;
 using UnityEngine;
 
@@ -24,6 +25,9 @@ public class NpcRuntime : ICapabilityConditionSource
     [NonSerialized]private PersonId personIdentity;
     [NonSerialized]private PersonRuntime personRuntime;
     [SerializeField]private NpcData npcData;
+    [NonSerialized]private DailyV1NpcDefinition selectedDailyV1Definition;
+    [NonSerialized]private DailyV1EffectiveDefinitions selectedDefinitionGraph;
+    [NonSerialized]private DailyV1DefinitionAdapter.SelectedBindings selectedDefinitionBindings;
     [SerializeField]private string residenceSettlementRuntimeId;
 	[SerializeField]private List<NpcStatusData> currentStatus = new List<NpcStatusData>();
 	[SerializeField]private NpcActionData currentAction;
@@ -72,8 +76,52 @@ public class NpcRuntime : ICapabilityConditionSource
             return personIdentity;
         }
     }
-    public NpcData NpcData => npcData;
-    public string DefinitionId => npcData != null ? npcData.DefinitionId : string.Empty;
+    /// <summary>
+    /// Compatibility bridge for Unity and the existing P12 owner codec. A
+    /// selected runtime keeps its exact admitted binding, but does not take
+    /// authored NpcData as a constructor input or retain it as runtime state.
+    /// </summary>
+    public NpcData NpcData
+    {
+        get
+        {
+            if (selectedDailyV1Definition != null
+                && selectedDefinitionBindings != null
+                && selectedDefinitionBindings.TryGetAsset(selectedDailyV1Definition, out NpcData selectedAsset)
+                && selectedAsset != null)
+                return selectedAsset;
+            return npcData;
+        }
+    }
+    public string DefinitionId => selectedDailyV1Definition != null
+        ? selectedDailyV1Definition.DefinitionId
+        : npcData != null ? npcData.DefinitionId : string.Empty;
+    internal DailyV1NpcDefinition SelectedDailyV1Definition => selectedDailyV1Definition;
+    internal DailyV1EffectiveDefinitions SelectedDailyV1DefinitionGraph => selectedDefinitionGraph;
+    internal bool HasJobType(NpcJobType jobType)
+    {
+        if (selectedDailyV1Definition == null)
+            return npcData != null && npcData.job != null && npcData.job.jobType == jobType;
+        DailyV1NpcJobData job = GetSelectedDailyV1Job();
+        return job != null && job.jobType != null && job.jobType.Value == (int)jobType;
+    }
+    internal bool HasMerchantBehavior(MerchantBehavior behavior)
+    {
+        if (selectedDailyV1Definition == null)
+            return npcData != null && npcData.job != null && npcData.job.merchantBehavior == behavior;
+        DailyV1NpcJobData job = GetSelectedDailyV1Job();
+        return job != null && job.merchantBehavior != null && job.merchantBehavior.Value == (int)behavior;
+    }
+    internal float MinimumProfitPerItem
+    {
+        get
+        {
+            if (selectedDailyV1Definition == null)
+                return npcData != null && npcData.job != null ? npcData.job.minimumProfitPerItem : 1f;
+            DailyV1NpcJobData job = GetSelectedDailyV1Job();
+            return job != null ? job.minimumProfitPerItem : 1f;
+        }
+    }
     public string ResidenceSettlementRuntimeId => personRuntime != null
         ? personRuntime.ResidenceSettlementRuntimeId
         : residenceSettlementRuntimeId;
@@ -149,7 +197,446 @@ public class NpcRuntime : ICapabilityConditionSource
     internal LocalTopologyKnowledgeRuntime ExistingLocalTopologyKnowledge => localTopologyKnowledge;
     public AdventureSiteIntelKnowledgeRuntime AdventureSiteIntelKnowledge => adventureSiteIntelKnowledge ?? (adventureSiteIntelKnowledge = new AdventureSiteIntelKnowledgeRuntime(runtimeId));
     internal AdventureSiteIntelKnowledgeRuntime ExistingAdventureSiteIntelKnowledge => adventureSiteIntelKnowledge;
-	public string NpcName => npcData != null ? npcData.name : "NPC desconhecido";
+	public string NpcName => selectedDailyV1Definition != null
+        ? selectedDailyV1Definition.Values.name
+        : npcData != null ? npcData.name : "NPC desconhecido";
+
+    internal bool HasConfiguredDefaultAction(NpcActionData action)
+    {
+        if (selectedDailyV1Definition == null)
+            return npcData != null && npcData.acoesPadrao != null
+                && npcData.acoesPadrao.Exists(row => row != null && row.action == action);
+        if (action == null || selectedDefinitionGraph == null || selectedDefinitionBindings == null
+            || !selectedDefinitionBindings.TryGet(action, out DailyV1ActionDefinition actionNode)
+            || !selectedDefinitionGraph.Actions.TryGetValue(actionNode.DefinitionId, out DailyV1ActionDefinition admittedAction)
+            || !ReferenceEquals(actionNode, admittedAction))
+            return false;
+        foreach (DailyV1NPCDefaultAction row in selectedDailyV1Definition.Values.acoesPadrao ?? Array.Empty<DailyV1NPCDefaultAction>())
+            if (row != null && selectedDefinitionGraph.Actions.TryGetValue(row.action, out DailyV1ActionDefinition configuredAction)
+                && ReferenceEquals(configuredAction, actionNode))
+                return true;
+        return false;
+    }
+
+    internal float GetConfiguredActionBaseUtility(NpcActionData action)
+    {
+        if (selectedDailyV1Definition == null)
+            return action != null ? action.baseUtility : 0f;
+        if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode))
+            return 0f;
+        return actionNode.Values.baseUtility;
+    }
+
+    internal bool HasConfiguredRequiredActionStatuses(NpcActionData action, IReadOnlyList<NpcStatusData> activeStatuses)
+    {
+        if (selectedDailyV1Definition == null)
+        {
+            if (action?.statusNecessariosParaFazerAcao == null)
+                return true;
+            foreach (NpcStatusData requiredStatus in action.statusNecessariosParaFazerAcao)
+            {
+                if (requiredStatus != null && (activeStatuses == null || !activeStatuses.Contains(requiredStatus)))
+                    return false;
+            }
+            return true;
+        }
+
+        if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode))
+            return false;
+        foreach (string requiredStatusId in actionNode.Values.statusNecessariosParaFazerAcao ?? Array.Empty<string>())
+        {
+            // The authoring contract ignores null references in this list. Preserve that
+            // behavior while resolving every non-null requirement through the admitted graph.
+            if (requiredStatusId == null)
+                continue;
+            if (!selectedDefinitionGraph.Statuses.TryGetValue(requiredStatusId, out DailyV1StatusDefinition requiredNode))
+                return false;
+
+            bool present = false;
+            foreach (NpcStatusData activeStatus in activeStatuses ?? Array.Empty<NpcStatusData>())
+            {
+                if (activeStatus != null
+                    && selectedDefinitionBindings.TryGet(activeStatus, out DailyV1StatusDefinition activeNode)
+                    && ReferenceEquals(activeNode, requiredNode))
+                {
+                    present = true;
+                    break;
+                }
+            }
+            if (!present)
+                return false;
+        }
+        return true;
+    }
+
+    internal bool TryGetConfiguredActionStatusChanges(
+        NpcActionData action,
+        out IReadOnlyList<NpcStatusData> statusToRemove,
+        out IReadOnlyList<NpcStatusData> statusToAdd,
+        out IReadOnlyList<NpcStatusData> targetStatusToRemove,
+        out IReadOnlyList<NpcStatusData> targetStatusToAdd)
+    {
+        statusToRemove = null;
+        statusToAdd = null;
+        targetStatusToRemove = null;
+        targetStatusToAdd = null;
+        if (selectedDailyV1Definition == null)
+        {
+            statusToRemove = action?.statusToRemove;
+            statusToAdd = action?.statusToAdd;
+            targetStatusToRemove = action?.targetStatusToRemove;
+            targetStatusToAdd = action?.targetStatusToAdd;
+            return action != null;
+        }
+        if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
+            || !TryResolveSelectedStatuses(actionNode.Values.statusToRemove, out List<NpcStatusData> resolvedStatusToRemove)
+            || !TryResolveSelectedStatuses(actionNode.Values.statusToAdd, out List<NpcStatusData> resolvedStatusToAdd)
+            || !TryResolveSelectedStatuses(actionNode.Values.targetStatusToRemove, out List<NpcStatusData> resolvedTargetStatusToRemove)
+            || !TryResolveSelectedStatuses(actionNode.Values.targetStatusToAdd, out List<NpcStatusData> resolvedTargetStatusToAdd))
+            return false;
+
+        statusToRemove = resolvedStatusToRemove;
+        statusToAdd = resolvedStatusToAdd;
+        targetStatusToRemove = resolvedTargetStatusToRemove;
+        targetStatusToAdd = resolvedTargetStatusToAdd;
+        return true;
+    }
+
+    private bool TryResolveSelectedStatuses(IReadOnlyList<string> definitionIds, out List<NpcStatusData> statuses)
+    {
+        statuses = new List<NpcStatusData>();
+        foreach (string definitionId in definitionIds ?? Array.Empty<string>())
+        {
+            // As in the authoring path, a null entry has no status effect.
+            if (definitionId == null)
+                continue;
+            if (!selectedDefinitionGraph.Statuses.TryGetValue(definitionId, out DailyV1StatusDefinition statusNode)
+                || !selectedDefinitionBindings.TryGetAsset(statusNode, out NpcStatusData statusAsset)
+                || statusAsset == null)
+                return false;
+            statuses.Add(statusAsset);
+        }
+        return true;
+    }
+
+    internal CrimeActionSettings GetConfiguredCrimeActionSettings(NpcActionData action)
+    {
+        if (selectedDailyV1Definition == null)
+            return action != null && action.crimeSettings != null ? action.crimeSettings : new CrimeActionSettings();
+        if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
+            || actionNode.Values.crimeSettings == null)
+            return new CrimeActionSettings();
+
+        DailyV1CrimeActionSettings settings = actionNode.Values.crimeSettings;
+        return new CrimeActionSettings
+        {
+            amount = settings.amount,
+            bounty = settings.bounty,
+            sentenceDays = settings.sentenceDays,
+            hiddenDays = settings.hiddenDays,
+            escapeBountyPenalty = settings.escapeBountyPenalty,
+            failedEscapeSentencePenalty = settings.failedEscapeSentencePenalty
+        };
+    }
+
+    internal string GetConfiguredActionName(NpcActionData action)
+    {
+        if (selectedDailyV1Definition == null)
+            return action?.actionName ?? string.Empty;
+        return TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
+            ? actionNode.Values.actionName ?? string.Empty
+            : string.Empty;
+    }
+
+    internal string GetConfiguredNormalActionLogText(NpcActionData action)
+    {
+        if (selectedDailyV1Definition == null)
+            return action?.normalActionLogText ?? string.Empty;
+        return TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
+            ? actionNode.Values.normalActionLogText ?? string.Empty
+            : string.Empty;
+    }
+
+    internal bool GetConfiguredActionCanFail(NpcActionData action)
+    {
+        if (selectedDailyV1Definition == null)
+            return action != null && action.canFail;
+        return TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
+            ? actionNode.Values.canFail
+            : false;
+    }
+
+    internal float GetConfiguredActionBaseSuccessChance(NpcActionData action)
+    {
+        if (selectedDailyV1Definition == null)
+            return action != null ? action.baseSuccessChance : 1f;
+        return TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
+            ? actionNode.Values.baseSuccessChance
+            : 0f;
+    }
+
+    internal int GetConfiguredActionTypeOrder(NpcActionData action)
+    {
+        if (selectedDailyV1Definition == null)
+            return (int)(action?.actionType ?? NpcActionType.Normal);
+        return TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
+            ? actionNode.Values.actionType?.Value ?? int.MinValue
+            : int.MinValue;
+    }
+
+    internal int GetConfiguredActionCategoryOrder(NpcActionData action)
+    {
+        if (selectedDailyV1Definition == null)
+            return (int)(action?.actionCategory ?? NpcActionCategory.General);
+        return TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
+            ? actionNode.Values.actionCategory?.Value ?? int.MinValue
+            : int.MinValue;
+    }
+
+    internal NpcActionType GetConfiguredActionType(NpcActionData action)
+    {
+        return (NpcActionType)GetConfiguredActionTypeOrder(action);
+    }
+
+    internal bool UsesSelectedDailyV1Definitions => selectedDailyV1Definition != null;
+
+    internal bool TryGetConfiguredJobActionUtility(NpcActionData action, out float utility)
+    {
+        utility = 0f;
+        if (selectedDailyV1Definition == null)
+        {
+            if (npcData == null || npcData.job == null || npcData.job.workAction != action)
+                return false;
+            utility = npcData.job.workUtility;
+            return true;
+        }
+
+        if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode))
+            return false;
+        DailyV1NpcJobData job = GetSelectedDailyV1Job();
+        if (job == null || string.IsNullOrWhiteSpace(job.workAction)
+            || !selectedDefinitionGraph.Actions.TryGetValue(job.workAction, out DailyV1ActionDefinition configuredAction)
+            || !ReferenceEquals(configuredAction, actionNode))
+            return false;
+        utility = job.workUtility;
+        return true;
+    }
+
+    internal bool TryGetConfiguredDefaultActionUtility(NpcActionData action, out float utility)
+    {
+        utility = 0f;
+        if (selectedDailyV1Definition == null)
+        {
+            NPCDefaultAction configured = npcData?.acoesPadrao?.Find(row => row != null && row.action == action);
+            if (configured == null) return false;
+            utility = configured.baseUtility;
+            return true;
+        }
+
+        if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode))
+            return false;
+        foreach (DailyV1NPCDefaultAction row in selectedDailyV1Definition.Values.acoesPadrao ?? Array.Empty<DailyV1NPCDefaultAction>())
+        {
+            if (row != null && selectedDefinitionGraph.Actions.TryGetValue(row.action, out DailyV1ActionDefinition configuredAction)
+                && ReferenceEquals(configuredAction, actionNode))
+            {
+                utility = row.baseUtility;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    internal float ApplyConfiguredActionStatusModifiers(NpcActionData action, float utility)
+    {
+        if (selectedDailyV1Definition == null)
+        {
+            if (action?.statusModifiers == null) return utility;
+            foreach (StatusWeightModifier modifier in action.statusModifiers)
+                if (modifier != null && modifier.status != null && CurrentStatus.Contains(modifier.status))
+                    utility *= modifier.multiplier;
+            return utility;
+        }
+
+        if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode))
+            return 0f;
+
+        foreach (DailyV1StatusWeightModifier modifier in actionNode.Values.statusModifiers ?? Array.Empty<DailyV1StatusWeightModifier>())
+        {
+            if (modifier == null || string.IsNullOrWhiteSpace(modifier.status)
+                || !selectedDefinitionGraph.Statuses.TryGetValue(modifier.status, out DailyV1StatusDefinition statusNode)
+                || !selectedDefinitionBindings.TryGetAsset(statusNode, out NpcStatusData statusAsset)
+                || statusAsset == null
+                || !CurrentStatus.Contains(statusAsset))
+                continue;
+            utility *= modifier.multiplier;
+        }
+        return utility;
+    }
+
+    private bool TryGetSelectedDailyV1Action(NpcActionData action, out DailyV1ActionDefinition actionNode)
+    {
+        actionNode = null;
+        return selectedDailyV1Definition != null && action != null
+            && selectedDefinitionGraph != null && selectedDefinitionBindings != null
+            && selectedDefinitionBindings.TryGet(action, out actionNode)
+            && selectedDefinitionGraph.Actions.TryGetValue(actionNode.DefinitionId, out DailyV1ActionDefinition admittedAction)
+            && ReferenceEquals(actionNode, admittedAction);
+    }
+
+    internal bool TryGetSelectedDailyV1Actions(List<NpcActionData> actions)
+    {
+        if (actions == null)
+            return false;
+        actions.Clear();
+        if (selectedDailyV1Definition == null || selectedDefinitionGraph == null
+            || selectedDefinitionBindings == null)
+            return false;
+
+        List<NpcActionData> resolved = new List<NpcActionData>(selectedDefinitionGraph.Actions.Count);
+        foreach (DailyV1ActionDefinition node in selectedDefinitionGraph.Actions.Values)
+        {
+            if (node == null
+                || !selectedDefinitionGraph.Actions.TryGetValue(node.DefinitionId, out DailyV1ActionDefinition admittedNode)
+                || !ReferenceEquals(node, admittedNode)
+                || !selectedDefinitionBindings.TryGetAsset(node, out NpcActionData actionAsset)
+                || actionAsset == null)
+                return false;
+            resolved.Add(actionAsset);
+        }
+
+        actions.AddRange(resolved);
+        return true;
+    }
+
+    internal bool TryGetSelectedDailyV1ActionByDefinitionId(string definitionId, out NpcActionData action)
+    {
+        action = null;
+        return selectedDailyV1Definition != null
+            && !string.IsNullOrWhiteSpace(definitionId)
+            && selectedDefinitionGraph != null
+            && selectedDefinitionBindings != null
+            && selectedDefinitionGraph.Actions.TryGetValue(definitionId, out DailyV1ActionDefinition node)
+            && selectedDefinitionBindings.TryGetAsset(node, out action)
+            && action != null;
+    }
+
+    internal bool TryGetSelectedDailyV1Item(ItemData item, out DailyV1ItemDefinition itemNode)
+    {
+        itemNode = null;
+        return selectedDailyV1Definition != null && item != null
+            && selectedDefinitionGraph != null && selectedDefinitionBindings != null
+            && selectedDefinitionBindings.TryGet(item, out itemNode)
+            && selectedDefinitionGraph.Items.TryGetValue(itemNode.DefinitionId, out DailyV1ItemDefinition admittedItem)
+            && ReferenceEquals(itemNode, admittedItem);
+    }
+
+    internal bool TryGetSelectedDailyV1CapabilityAttribute(string definitionId, out CapabilityAttributeData attribute)
+    {
+        attribute = null;
+        return selectedDailyV1Definition != null && selectedDefinitionGraph != null && selectedDefinitionBindings != null
+            && !string.IsNullOrWhiteSpace(definitionId)
+            && selectedDefinitionGraph.CapabilityAttributes.TryGetValue(definitionId, out DailyV1CapabilityAttributeDefinition node)
+            && selectedDefinitionBindings.TryGetAsset(node, out attribute)
+            && attribute != null;
+    }
+
+    internal bool HasTrait(TraitData trait)
+    {
+        if (selectedDailyV1Definition == null)
+            return npcData != null && npcData.traits != null && npcData.traits.Contains(trait);
+        if (trait == null || selectedDefinitionGraph == null || selectedDefinitionBindings == null
+            || !selectedDefinitionBindings.TryGet(trait, out DailyV1TraitDefinition traitNode)
+            || !selectedDefinitionGraph.Traits.TryGetValue(traitNode.DefinitionId, out DailyV1TraitDefinition admittedTrait)
+            || !ReferenceEquals(traitNode, admittedTrait))
+            return false;
+        foreach (string traitId in selectedDailyV1Definition.Values.traits ?? Array.Empty<string>())
+            if (string.Equals(traitId, traitNode.DefinitionId, StringComparison.Ordinal))
+                return true;
+        return false;
+    }
+
+    internal float GetCapabilityAttributeValue(CapabilityAttributeData attribute)
+    {
+        if (attribute == null) return 0f;
+        if (selectedDailyV1Definition == null)
+        {
+            if (npcData?.capabilityValues == null) return 0f;
+            foreach (CapabilityAttributeValue row in npcData.capabilityValues)
+                if (row != null && row.Attribute == attribute)
+                    return Mathf.Max(0f, row.Value);
+            return 0f;
+        }
+        if (selectedDefinitionGraph == null || selectedDefinitionBindings == null
+            || !selectedDefinitionBindings.TryGet(attribute, out DailyV1CapabilityAttributeDefinition attributeNode)
+            || !selectedDefinitionGraph.CapabilityAttributes.TryGetValue(attributeNode.DefinitionId, out DailyV1CapabilityAttributeDefinition admittedAttribute)
+            || !ReferenceEquals(attributeNode, admittedAttribute))
+            return 0f;
+        foreach (DailyV1CapabilityAttributeValue row in selectedDailyV1Definition.Values.capabilityValues ?? Array.Empty<DailyV1CapabilityAttributeValue>())
+            if (row != null && string.Equals(row.attribute, attributeNode.DefinitionId, StringComparison.Ordinal))
+                return Mathf.Max(0f, row.value);
+        return 0f;
+    }
+
+    internal void AppendPreferredTradeItemDefinitionIds(List<string> destination)
+    {
+        if (destination == null) return;
+        if (selectedDailyV1Definition == null)
+        {
+            foreach (TradeItemPreference row in npcData?.job?.PreferredTradeItems ?? new List<TradeItemPreference>())
+                if (row?.item != null) destination.Add(row.item.DefinitionId);
+            return;
+        }
+        DailyV1NpcJobData job = GetSelectedDailyV1Job();
+        foreach (DailyV1TradeItemPreference row in job?.preferredTradeItems ?? Array.Empty<DailyV1TradeItemPreference>())
+            if (row != null && !string.IsNullOrWhiteSpace(row.item)
+                && selectedDefinitionGraph.Items.ContainsKey(row.item))
+                destination.Add(row.item);
+    }
+
+    internal bool TryGetPreferredTradeItemMultiplier(ItemData item, out float multiplier)
+    {
+        multiplier = 1f;
+        if (item == null) return false;
+        if (selectedDailyV1Definition == null)
+        {
+            foreach (TradeItemPreference row in npcData?.job?.PreferredTradeItems ?? new List<TradeItemPreference>())
+            {
+                if (row != null && row.item == item)
+                {
+                    multiplier = row.utilityMultiplier;
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (selectedDefinitionGraph == null || selectedDefinitionBindings == null
+            || !selectedDefinitionBindings.TryGet(item, out DailyV1ItemDefinition itemNode)
+            || !selectedDefinitionGraph.Items.TryGetValue(itemNode.DefinitionId, out DailyV1ItemDefinition admittedItem)
+            || !ReferenceEquals(itemNode, admittedItem))
+            return false;
+        DailyV1NpcJobData job = GetSelectedDailyV1Job();
+        foreach (DailyV1TradeItemPreference row in job?.preferredTradeItems ?? Array.Empty<DailyV1TradeItemPreference>())
+        {
+            if (row != null && string.Equals(row.item, itemNode.DefinitionId, StringComparison.Ordinal)
+                && selectedDefinitionGraph.Items.TryGetValue(row.item, out DailyV1ItemDefinition configuredItem)
+                && ReferenceEquals(configuredItem, itemNode))
+            {
+                multiplier = row.utilityMultiplier;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private DailyV1NpcJobData GetSelectedDailyV1Job()
+    {
+        string jobId = selectedDailyV1Definition?.Values.job;
+        return selectedDefinitionGraph != null && !string.IsNullOrWhiteSpace(jobId)
+            && selectedDefinitionGraph.Jobs.TryGetValue(jobId, out DailyV1JobDefinition jobNode)
+            ? jobNode.Values
+            : null;
+    }
 
     internal bool CanBindRuntimeMutationGuard(AuthoritativeMutationGuard guard)
     {
@@ -298,21 +785,98 @@ public class NpcRuntime : ICapabilityConditionSource
 	}
 
 	public NpcRuntime(string runtimeId, NpcData npcData, CityRuntime startingCity, float initialMoney)
+		: this(runtimeId, npcData, startingCity, initialMoney, null)
+	{
+	}
+
+	internal static NpcRuntime CreateSelectedDailyV1(
+		string runtimeId,
+		NpcData npcData,
+		DailyV1NpcDefinition selectedDefinition,
+		DailyV1EffectiveDefinitions selectedDefinitions,
+		DailyV1DefinitionAdapter.SelectedBindings selectedBindings,
+		CityRuntime startingCity,
+		float initialMoney)
+	{
+		if (selectedDefinition == null)
+			throw new ArgumentNullException(nameof(selectedDefinition));
+		if (selectedDefinitions == null)
+			throw new ArgumentNullException(nameof(selectedDefinitions));
+		if (selectedBindings == null)
+			throw new ArgumentNullException(nameof(selectedBindings));
+		if (npcData == null
+			|| !selectedBindings.TryGet(npcData, out DailyV1NpcDefinition assetNode)
+			|| !ReferenceEquals(assetNode, selectedDefinition))
+			throw new ArgumentException("Selected NPC compatibility identity must resolve to the exact admitted graph node.", nameof(npcData));
+		return CreateSelectedDailyV1(runtimeId, selectedDefinition, selectedDefinitions, selectedBindings,
+			startingCity, initialMoney);
+	}
+
+	internal static NpcRuntime CreateSelectedDailyV1(
+		string runtimeId,
+		DailyV1NpcDefinition selectedDefinition,
+		DailyV1EffectiveDefinitions selectedDefinitions,
+		DailyV1DefinitionAdapter.SelectedBindings selectedBindings,
+		CityRuntime startingCity,
+		float initialMoney)
+	{
+		if (selectedDefinition == null)
+			throw new ArgumentNullException(nameof(selectedDefinition));
+		if (selectedDefinitions == null)
+			throw new ArgumentNullException(nameof(selectedDefinitions));
+		if (selectedBindings == null)
+			throw new ArgumentNullException(nameof(selectedBindings));
+		return new NpcRuntime(runtimeId, null, startingCity, initialMoney,
+			selectedDefinition, selectedDefinitions, selectedBindings);
+	}
+
+	private NpcRuntime(string runtimeId, NpcData npcData, CityRuntime startingCity, float initialMoney,
+		DailyV1NpcDefinition selectedDefinition,
+		DailyV1EffectiveDefinitions selectedDefinitions = null,
+		DailyV1DefinitionAdapter.SelectedBindings selectedBindings = null)
 	{
 		if (string.IsNullOrWhiteSpace(runtimeId) == true)
         {
             throw new ArgumentException("NpcRuntime requires a non-empty RuntimeId.", nameof(runtimeId));
         }
+		if (selectedDefinition != null
+			&& (selectedDefinitions == null || selectedBindings == null
+				|| !selectedBindings.TryGetAsset(selectedDefinition, out NpcData exactAsset)
+				|| exactAsset == null
+				|| (npcData != null && !ReferenceEquals(exactAsset, npcData))
+				|| !string.Equals(selectedDefinition.DefinitionId, exactAsset.DefinitionId, StringComparison.Ordinal)
+				|| !selectedDefinitions.Npcs.TryGetValue(selectedDefinition.DefinitionId, out DailyV1NpcDefinition graphNode)
+				|| !ReferenceEquals(graphNode, selectedDefinition)))
+		{
+			throw new ArgumentException(
+				"The selected NPC runtime must bind the exact typed definition identity admitted for its authoring object.",
+				nameof(selectedDefinition));
+		}
 
 		this.runtimeId = runtimeId;
-        this.npcData = npcData;
+		this.npcData = selectedDefinition == null ? npcData : null;
+		selectedDailyV1Definition = selectedDefinition;
+		selectedDefinitionGraph = selectedDefinitions;
+		selectedDefinitionBindings = selectedBindings;
         spatialKnowledge = new SpatialKnowledgeRuntime(runtimeId);
         explorableSiteKnowledge = new ExplorableSiteKnowledgeRuntime(runtimeId);
         localTopologyKnowledge = new LocalTopologyKnowledgeRuntime(runtimeId);
         adventureSiteIntelKnowledge = new AdventureSiteIntelKnowledgeRuntime(runtimeId);
         moneyAccount = new MoneyAccountRuntime(initialMoney);
 
-        if (npcData != null && npcData.statusPadrao != null)
+		if (selectedDefinition != null)
+		{
+			foreach (string statusId in selectedDefinition.Values.statusPadrao ?? Array.Empty<string>())
+			{
+				if (!selectedDefinitions.Statuses.TryGetValue(statusId, out DailyV1StatusDefinition statusNode)
+					|| !selectedBindings.TryGetAsset(statusNode, out NpcStatusData statusAsset))
+					throw new ArgumentException(
+						"A selected NPC status did not resolve through its exact admitted typed graph node.",
+						nameof(selectedDefinition));
+				currentStatus.Add(statusAsset);
+			}
+		}
+		else if (npcData != null && npcData.statusPadrao != null)
         {
             currentStatus.AddRange(npcData.statusPadrao);
         }
@@ -352,6 +916,29 @@ public class NpcRuntime : ICapabilityConditionSource
         candidate.currentCity = currentCity;
         candidate.currentLocation = currentLocation;
         staged = candidate;
+        return true;
+    }
+
+    internal bool TryBindSelectedDailyV1Definition(
+        DailyV1NpcDefinition definition,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1DefinitionAdapter.SelectedBindings bindings)
+    {
+		if (definition == null || definitions == null || bindings == null
+			|| !bindings.TryGetAsset(definition, out NpcData assetIdentity)
+			|| assetIdentity == null
+			|| (npcData != null && !ReferenceEquals(assetIdentity, npcData))
+			|| !string.Equals(definition.DefinitionId, assetIdentity.DefinitionId, StringComparison.Ordinal)
+            || !definitions.Npcs.TryGetValue(definition.DefinitionId, out DailyV1NpcDefinition graphNode)
+            || !ReferenceEquals(graphNode, definition))
+            return false;
+        if (selectedDailyV1Definition != null)
+            return ReferenceEquals(selectedDailyV1Definition, definition)
+                && ReferenceEquals(selectedDefinitionGraph, definitions)
+                && ReferenceEquals(selectedDefinitionBindings, bindings);
+        selectedDailyV1Definition = definition;
+        selectedDefinitionGraph = definitions;
+        selectedDefinitionBindings = bindings;
         return true;
     }
 
@@ -680,7 +1267,7 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         }
 
-        if (!personRuntime.RecordDeathAfterValidation(personDeathTransition.DeathAbsoluteDay))
+        if (!PersonRuntimeOwnerBridge.RecordDeathAfterValidation(personRuntime, personDeathTransition.DeathAbsoluteDay))
             return false;
 
         if (severity > injurySeverity)
@@ -1086,7 +1673,7 @@ public class NpcRuntime : ICapabilityConditionSource
     {
         if (personRuntime != null)
         {
-            return personRuntime.TrySetResidenceSettlementRuntimeId(settlementRuntimeId);
+            return PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(personRuntime, settlementRuntimeId);
         }
 
         string normalized = string.IsNullOrWhiteSpace(settlementRuntimeId) == true

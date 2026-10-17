@@ -1203,13 +1203,43 @@ internal static partial class P12GDailyV1RestoreCoordinator
             p12CrimeSocialAppraisalWorldState: stagedE.CrimeSocialAppraisal);
 
         NpcChronicleService chronicles = new NpcChronicleService(decisions, eventStore);
+        if (!DailyV1DefinitionAdapter.TryCreateBindings(
+                config, selectedDefinitions,
+                out DailyV1DefinitionAdapter.SelectedBindings selectedBindings,
+                out string bindingDiagnostic))
+        {
+            diagnostic = "The detached candidate could not rebind the selected Unity assets to the source typed graph: "
+                + bindingDiagnostic;
+            return false;
+        }
+        foreach (CityRuntime city in stagedD.Cities)
+        {
+            if (city == null
+                || !selectedBindings.TryGet(city.CityData, selectedDefinitions, out DailyV1CityDefinition cityNode)
+                || !city.TryBindSelectedDailyV1Definition(cityNode, selectedDefinitions, selectedBindings))
+            {
+                diagnostic = "A detached City did not retain the exact admitted typed definition node.";
+                return false;
+            }
+        }
+        foreach (NpcRuntime npc in stagedD.Npcs)
+        {
+            if (npc == null
+                || !selectedBindings.TryGet(npc.NpcData, selectedDefinitions, out DailyV1NpcDefinition npcNode)
+                || !npc.TryBindSelectedDailyV1Definition(npcNode, selectedDefinitions, selectedBindings))
+            {
+                diagnostic = "A detached NPC did not retain the exact admitted typed definition node.";
+                return false;
+            }
+        }
         NpcChronicleFormatter formatter = TesteSimulacao.CreateNpcChronicleFormatter(
             stagedD.RuntimeIdentities,
             stagedD.SpatialNetwork,
             cityByLocation,
             stagedD.EmptyExplorableSites,
             stagedD.Cities,
-            config);
+            config,
+            selectedDefinitions);
         SimulationBootstrapComposition composition = new SimulationBootstrapComposition(
             stagedC.WorldIdentity,
             stagedC.GenesisManifest,

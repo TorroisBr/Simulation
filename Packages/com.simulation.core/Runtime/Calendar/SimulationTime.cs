@@ -11,10 +11,10 @@ public enum SimulationTimeAdvanceFailure
 internal delegate bool SimulationTimeAdvanceDispatcher(out SimulationTimeAdvanceFailure failure);
 
 [Serializable]
-public sealed class SimulationTime : IAuthoritativeMutationGuardBindable
+public sealed class SimulationTime
 {
     private long absoluteDay;
-    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    private readonly MutationStatusBinding mutationStatusBinding = new MutationStatusBinding();
     [NonSerialized] private Func<long> absoluteDayProjection;
     [NonSerialized] private SimulationTimeAdvanceDispatcher runtimeAdvanceDispatcher;
 
@@ -59,7 +59,7 @@ public sealed class SimulationTime : IAuthoritativeMutationGuardBindable
 
     internal bool TryValidateAdvance(out SimulationTimeAdvanceFailure failure)
     {
-        if (!mutationGuardBinding.CanMutate)
+        if (!mutationStatusBinding.CanMutate)
         {
             failure = SimulationTimeAdvanceFailure.RuntimeFaulted;
             return false;
@@ -110,23 +110,13 @@ public sealed class SimulationTime : IAuthoritativeMutationGuardBindable
         return true;
     }
 
-    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    internal bool CanBindMutationStatus(IAuthoritativeMutationStatus status)
     {
-        return mutationGuardBinding.CanBindTo(guard);
+        return mutationStatusBinding.CanBindTo(status);
     }
 
-    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    internal bool TryBindMutationStatus(IAuthoritativeMutationStatus status)
     {
-        return mutationGuardBinding.TryBindTo(guard);
-    }
-
-    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
-    {
-        return CanBindMutationGuard(guard);
-    }
-
-    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
-    {
-        return TryBindMutationGuard(guard);
+        return mutationStatusBinding.TryBindTo(status);
     }
 }

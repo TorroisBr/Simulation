@@ -248,8 +248,8 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
     }
 
     private static bool IsEligibleMerchant(NpcRuntime npc) => npc != null && npc.IsAlive
-        && !npc.IsTraveling && npc.CurrentCity != null && npc.NpcData != null
-        && npc.NpcData.job != null && npc.NpcData.job.jobType == NpcJobType.Merchant;
+        && !npc.IsTraveling && npc.CurrentCity != null
+        && npc.HasJobType(NpcJobType.Merchant);
 
     private static int CompareMerchants(NpcRuntime left, NpcRuntime right)
     {

@@ -1,24 +1,6 @@
 using System;
 using System.Collections.Generic;
 
-internal enum RuntimeIdAllocatorCensusCounter
-{
-    Npcs,
-    Cities,
-    Locations,
-    Routes,
-    Events,
-    Directives,
-    Decisions,
-    TravelParties,
-    Organizations,
-    ExplorableSites,
-    Expeditions,
-    LocalPlaces,
-    LocalConnections,
-    NotableItems
-}
-
 /// <summary>Fixed passive census providers for the selected runtime ID allocator.</summary>
 public static class RuntimeIdAllocatorCensusProvider
 {
@@ -53,12 +35,17 @@ public static class RuntimeIdAllocatorCensusProvider
 
         public OwnerSectionCensusWitness GetCurrentCensus()
         {
+            RuntimeIdAllocatorOwnerBridge.CaptureCensusIdentity(
+                owner,
+                counter,
+                out object ownerInstanceIdentity,
+                out long revision);
             return new OwnerSectionCensusWitness(
                 sectionId,
                 SchemaVersion,
-                owner.CensusOwnerIdentity,
+                ownerInstanceIdentity,
                 1,
-                owner.GetCensusRevision(counter));
+                revision);
         }
     }
 

@@ -351,7 +351,7 @@ internal static class P12CContinuationRootStager
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.CDeterministicRandomStaged);
 
-            if (!RuntimeIdAllocator.TryCreateStagedFromSnapshot(
+            if (!RuntimeIdAllocatorOwnerBridge.TryCreateStagedFromSnapshot(
                 allocatorSnapshot,
                 out RuntimeIdAllocator stagedAllocator,
                 out diagnostic))
@@ -360,7 +360,7 @@ internal static class P12CContinuationRootStager
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.CRuntimeIdAllocatorStaged);
 
-            if (!SimulationRecordSequence.TryCreateStagedFromSnapshot(
+            if (!SimulationRecordSequenceOwnerBridge.TryCreateStagedFromSnapshot(
                 recordSequenceSnapshot,
                 out SimulationRecordSequence stagedRecordSequence,
                 out diagnostic))

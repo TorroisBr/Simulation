@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 
-public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBindable
+public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvider, IAuthoritativeMutationGuardBindable
 {
     private const int LocalMarketSellGoodsActionVersion = 1;
     private const string PlanUrgencyStepId = "merchant-plan-urgency";
@@ -423,20 +423,28 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             || action.actionType == NpcActionType.SellGoods;
     }
 
+    bool ISelectedDefinitionNpcActionProvider.HandlesAction(NpcRuntime npcRuntime, NpcActionData action)
+    {
+        if (npcRuntime == null || action == null) return false;
+        NpcActionType actionType = npcRuntime.GetConfiguredActionType(action);
+        return actionType == NpcActionType.BuyGoods || actionType == NpcActionType.SellGoods;
+    }
+
     public NpcActionRuntime CreateAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
     {
-        if (action == null)
+        if (npcRuntime == null || action == null)
         {
             utility = 0f;
             return null;
         }
 
-        if (action.actionType == NpcActionType.BuyGoods)
+        NpcActionType actionType = npcRuntime.GetConfiguredActionType(action);
+        if (actionType == NpcActionType.BuyGoods)
         {
             return CreateBuyGoodsAction(npcRuntime, action, ref utility);
         }
 
-        if (action.actionType == NpcActionType.SellGoods)
+        if (actionType == NpcActionType.SellGoods)
         {
             return CreateSellGoodsAction(npcRuntime, action, ref utility);
         }
@@ -457,12 +465,13 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return NpcActionResult.Failed();
         }
 
-        if (actionRuntime.Action.actionType == NpcActionType.BuyGoods)
+        NpcActionType actionType = npcRuntime.GetConfiguredActionType(actionRuntime.Action);
+        if (actionType == NpcActionType.BuyGoods)
         {
             return TryExecuteBuyGoods(npcRuntime, actionRuntime) == true ? NpcActionResult.Succeeded() : NpcActionResult.Failed();
         }
 
-        if (actionRuntime.Action.actionType == NpcActionType.SellGoods)
+        if (actionType == NpcActionType.SellGoods)
         {
             return TryExecuteSellGoods(npcRuntime, actionRuntime) == true ? NpcActionResult.Succeeded() : NpcActionResult.Failed();
         }
@@ -492,7 +501,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             || actorPersonId == null
             || actionRuntime == null
             || actionRuntime.Action == null
-            || actionRuntime.Action.actionType != NpcActionType.SellGoods
+            || seller.GetConfiguredActionType(actionRuntime.Action) != NpcActionType.SellGoods
             || actionRuntime.TargetNpc != null
             || actionRuntime.TargetItem == null
             || actionRuntime.Amount <= 0
@@ -567,7 +576,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
     {
         return mutationGuardBinding.CanBindTo(guard)
-            && simulationTime.CanBindMutationGuard(guard)
+            && SimulationTimeOwnerBridge.CanBindMutationStatus(simulationTime, guard)
             && (travelSystem == null || travelSystem.CanBindMutationGuard(guard));
     }
 
@@ -578,7 +587,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return false;
         }
 
-        return simulationTime.TryBindMutationGuard(guard)
+        return SimulationTimeOwnerBridge.TryBindMutationStatus(simulationTime, guard)
             && (travelSystem == null || travelSystem.TryBindMutationGuard(guard));
     }
 
@@ -1485,12 +1494,12 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         List<string> definitionIds = new List<string>();
         HashSet<string> uniqueDefinitionIds = new HashSet<string>(StringComparer.Ordinal);
 
-        if (npcRuntime?.NpcData?.job != null)
+        if (npcRuntime != null)
         {
-            foreach (TradeItemPreference preference in npcRuntime.NpcData.job.PreferredTradeItems)
-            {
-                AddRelevantItemDefinitionId(definitionIds, uniqueDefinitionIds, preference?.item?.DefinitionId);
-            }
+            List<string> preferredItemDefinitionIds = new List<string>();
+            npcRuntime.AppendPreferredTradeItemDefinitionIds(preferredItemDefinitionIds);
+            foreach (string definitionId in preferredItemDefinitionIds)
+                AddRelevantItemDefinitionId(definitionIds, uniqueDefinitionIds, definitionId);
         }
 
         foreach (CommercialMarketObservation observation in npcRuntime.CommercialKnowledge.Observations)
@@ -1678,49 +1687,34 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
 
     private float GetTradePreferenceMultiplier(NpcRuntime npcRuntime, ItemData item)
     {
-        if (npcRuntime == null || npcRuntime.NpcData == null || npcRuntime.NpcData.job == null || item == null)
-        {
-            return 1f;
-        }
-
-        foreach (TradeItemPreference preference in npcRuntime.NpcData.job.PreferredTradeItems)
-        {
-            if (preference != null && preference.item == item)
-            {
-                return UnityMathfCompatibility.Max(0.01f, preference.utilityMultiplier);
-            }
-        }
-
-        return 1f;
+        return npcRuntime != null && npcRuntime.TryGetPreferredTradeItemMultiplier(item, out float multiplier)
+            ? UnityMathfCompatibility.Max(0.01f, multiplier)
+            : 1f;
     }
 
     private bool IsMerchant(NpcRuntime npcRuntime)
     {
         return npcRuntime != null
             && npcRuntime.IsAlive == true
-            && npcRuntime.NpcData != null
-            && npcRuntime.NpcData.job != null
-            && npcRuntime.NpcData.job.jobType == NpcJobType.Merchant;
+            && npcRuntime.HasJobType(NpcJobType.Merchant);
     }
 
     private float GetMinimumProfitPerItem(NpcRuntime npcRuntime)
     {
-        float configuredValue = npcRuntime?.NpcData?.job != null
-            ? npcRuntime.NpcData.job.minimumProfitPerItem
-            : 1f;
+        float configuredValue = npcRuntime != null ? npcRuntime.MinimumProfitPerItem : 1f;
         return UnityMathfCompatibility.Max(0f, configuredValue);
     }
 
     private bool IsTravelingMerchant(NpcRuntime npcRuntime)
     {
         return IsMerchant(npcRuntime) == true
-            && npcRuntime.NpcData.job.merchantBehavior == MerchantBehavior.Traveling;
+            && npcRuntime.HasMerchantBehavior(MerchantBehavior.Traveling);
     }
 
     private bool IsLocalMerchant(NpcRuntime npcRuntime)
     {
         return IsMerchant(npcRuntime) == true
-            && npcRuntime.NpcData.job.merchantBehavior == MerchantBehavior.Local;
+            && npcRuntime.HasMerchantBehavior(MerchantBehavior.Local);
     }
 
     private string CreatePlanUrgencyOwnerRevision() => SpatialStableKey.Encode(

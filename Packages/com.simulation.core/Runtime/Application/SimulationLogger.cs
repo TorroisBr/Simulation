@@ -140,7 +140,7 @@ public class SimulationLogger
         reportLines = commit.NextLines;
         keyedOccurrenceReceipts = commit.NextReceipts;
         beginDayStepRevision = commit.Receipt.OwnerRevisionAfter;
-        if (commit.EmitOutput) logOutput(DailyV1LogSeverity.Log, commit.Receipt.Message);
+        if (commit.EmitOutput) EmitOutput(DailyV1LogSeverity.Log, commit.Receipt.Message);
         failure = TimelineFailure.None;
         return true;
     }
@@ -366,7 +366,7 @@ public class SimulationLogger
         }
 
         AddReportLine(message);
-        logOutput(DailyV1LogSeverity.Log, message);
+        EmitOutput(DailyV1LogSeverity.Log, message);
     }
 
     public void LogWarning(string message)
@@ -374,7 +374,7 @@ public class SimulationLogger
         if (string.IsNullOrEmpty(message) == false)
         {
             AddReportLine("[WARNING] " + message);
-            logOutput(DailyV1LogSeverity.Warning, message);
+            EmitOutput(DailyV1LogSeverity.Warning, message);
         }
     }
 
@@ -383,7 +383,7 @@ public class SimulationLogger
         if (string.IsNullOrEmpty(message) == false)
         {
             AddReportLine("[ERROR] " + message);
-            logOutput(DailyV1LogSeverity.Error, message);
+            EmitOutput(DailyV1LogSeverity.Error, message);
         }
     }
 
@@ -408,7 +408,7 @@ public class SimulationLogger
         {
             Directory.CreateDirectory(directoryPath);
             File.WriteAllText(filePath, FullLog);
-            logOutput(DailyV1LogSeverity.Log, "Diario salvo em: " + filePath);
+            EmitOutput(DailyV1LogSeverity.Log, "Diario salvo em: " + filePath);
             return filePath;
         }
         catch (Exception exception)
@@ -429,6 +429,19 @@ public class SimulationLogger
         }
 
         return value.Trim();
+    }
+
+    private void EmitOutput(DailyV1LogSeverity severity, string message)
+    {
+        // Host output is observational. A failing sink must not undo or escape
+        // after the logger has committed its report, receipt, and revision.
+        try
+        {
+            logOutput(severity, message);
+        }
+        catch (Exception)
+        {
+        }
     }
 
     public bool IsEnabled(SimulationLogCategory category)

@@ -202,7 +202,7 @@ public sealed class PersonSpatialPresenceTests
         Assert.That(positions.TrySetAt(person, StablePositionReference.ForHex(new HexId("hex.a")), out _), Is.True);
         long revision = positions.Revision;
 
-        System.Type guardType = typeof(PersonSpatialPositionStore).Assembly.GetType("AuthoritativeMutationGuard");
+        System.Type guardType = typeof(PersonRuntime).Assembly.GetType("AuthoritativeMutationGuard");
         object guard = System.Activator.CreateInstance(guardType, true);
         MethodInfo bind = typeof(PersonSpatialPositionStore).GetMethod("TryBindMutationGuard", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That((bool)bind.Invoke(positions, new[] { guard }), Is.True);

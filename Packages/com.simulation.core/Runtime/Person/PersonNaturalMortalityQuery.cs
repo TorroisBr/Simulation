@@ -123,7 +123,7 @@ public static class PersonNaturalMortalityQuery
             return false;
         }
 
-        if (PersonAgeQuery.TryCalculate(
+        if (PersonAgeCalculator.TryCalculate(
                 person,
                 currentAbsoluteDay,
                 calendar,

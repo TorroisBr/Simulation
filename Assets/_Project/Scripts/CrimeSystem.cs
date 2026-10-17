@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Linq;
 using UnityEngine;
 
-public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutonomousNpcActionPolicy, IAuthoritativeMutationGuardBindable
+public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvider, INpcActionFailureHandler, IAutonomousNpcActionPolicy, IAuthoritativeMutationGuardBindable
 {
     private const float EscapeSuccessMultiplierPerFailure = 0.8f;
     private const string HiddenStatusStepId = "crime-hidden-statuses";
@@ -165,6 +165,16 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             || action.actionType == NpcActionType.EscapePrison;
     }
 
+    bool ISelectedDefinitionNpcActionProvider.HandlesAction(NpcRuntime npcRuntime, NpcActionData action)
+    {
+        if (npcRuntime == null || action == null) return false;
+        NpcActionType actionType = npcRuntime.GetConfiguredActionType(action);
+        return actionType == NpcActionType.Steal
+            || actionType == NpcActionType.Hide
+            || actionType == NpcActionType.FleeCity
+            || actionType == NpcActionType.EscapePrison;
+    }
+
     public NpcActionRuntime CreateAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
     {
         if (mutationGuardBinding.CanMutate == false)
@@ -173,28 +183,29 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return null;
         }
 
-        if (action == null || configuration.Enabled == false)
+        if (npcRuntime == null || action == null || configuration.Enabled == false)
         {
             utility = 0f;
             return null;
         }
 
-        if (action.actionType == NpcActionType.Steal)
+        NpcActionType actionType = npcRuntime.GetConfiguredActionType(action);
+        if (actionType == NpcActionType.Steal)
         {
             return CreateStealAction(npcRuntime, action, ref utility);
         }
 
-        if (action.actionType == NpcActionType.Hide)
+        if (actionType == NpcActionType.Hide)
         {
             return CreateHideAction(npcRuntime, action, ref utility);
         }
 
-        if (action.actionType == NpcActionType.FleeCity)
+        if (actionType == NpcActionType.FleeCity)
         {
             return CreateFleeCityAction(npcRuntime, action, ref utility);
         }
 
-        if (action.actionType == NpcActionType.EscapePrison)
+        if (actionType == NpcActionType.EscapePrison)
         {
             return CreateEscapePrisonAction(npcRuntime, action, ref utility);
         }
@@ -210,27 +221,28 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return NpcActionResult.Failed("Runtime mutation is faulted.");
         }
 
-        if (configuration.Enabled == false || actionRuntime == null || actionRuntime.Action == null)
+        if (configuration.Enabled == false || npcRuntime == null || actionRuntime == null || actionRuntime.Action == null)
         {
             return NpcActionResult.Failed();
         }
 
-        if (actionRuntime.Action.actionType == NpcActionType.Steal)
+        NpcActionType actionType = npcRuntime.GetConfiguredActionType(actionRuntime.Action);
+        if (actionType == NpcActionType.Steal)
         {
             return TryExecuteSteal(npcRuntime, actionRuntime);
         }
 
-        if (actionRuntime.Action.actionType == NpcActionType.Hide)
+        if (actionType == NpcActionType.Hide)
         {
             return TryExecuteHide(npcRuntime, actionRuntime);
         }
 
-        if (actionRuntime.Action.actionType == NpcActionType.FleeCity)
+        if (actionType == NpcActionType.FleeCity)
         {
             return TryExecuteFleeCity(npcRuntime, actionRuntime);
         }
 
-        if (actionRuntime.Action.actionType == NpcActionType.EscapePrison)
+        if (actionType == NpcActionType.EscapePrison)
         {
             return TryExecuteEscapePrison(npcRuntime, actionRuntime);
         }
@@ -245,12 +257,13 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return null;
         }
 
-        if (actionRuntime == null || actionRuntime.Action == null || actionRuntime.Action.actionType != NpcActionType.EscapePrison)
+        if (npcRuntime == null || actionRuntime == null || actionRuntime.Action == null
+            || npcRuntime.GetConfiguredActionType(actionRuntime.Action) != NpcActionType.EscapePrison)
         {
             return null;
         }
 
-        CrimeActionSettings settings = GetCrimeSettings(actionRuntime.Action);
+        CrimeActionSettings settings = npcRuntime.GetConfiguredCrimeActionSettings(actionRuntime.Action);
         int sentencePenalty = UnityMathfCompatibility.Max(0, settings.failedEscapeSentencePenalty);
 
         if (justiceSystem == null || justiceSystem.RegisterFailedEscape(npcRuntime, sentencePenalty) == false)
@@ -791,7 +804,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return null;
         }
 
-        int amount = GetConfiguredAmount(action, target);
+        int amount = GetConfiguredAmount(action, npcRuntime, target);
 
         if (amount <= 0)
         {
@@ -900,7 +913,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return NpcActionResult.Failed();
         }
 
-        CrimeActionSettings settings = GetCrimeSettings(actionRuntime.Action);
+        CrimeActionSettings settings = npcRuntime.GetConfiguredCrimeActionSettings(actionRuntime.Action);
         logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} roubou {actionRuntime.TargetNpc.NpcName} e levou {amount} moedas.");
         if (theftOutcome != null
             && theftOutcomeSink.TryAcceptTheftOutcome(theftOutcome) == false)
@@ -985,7 +998,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return NpcActionResult.Failed();
         }
 
-        int hiddenDays = UnityMathfCompatibility.Max(1, GetCrimeSettings(actionRuntime.Action).hiddenDays);
+        int hiddenDays = UnityMathfCompatibility.Max(1, npcRuntime.GetConfiguredCrimeActionSettings(actionRuntime.Action).hiddenDays);
         npcRuntime.HideForDays(hiddenDays);
         npcRuntime.AddStatus(hiddenStatus);
         logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} esta escondido.");
@@ -1011,7 +1024,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
 
     private NpcActionResult TryExecuteEscapePrison(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
     {
-        CrimeActionSettings settings = GetCrimeSettings(actionRuntime.Action);
+        CrimeActionSettings settings = npcRuntime.GetConfiguredCrimeActionSettings(actionRuntime.Action);
 
         if (justiceSystem.EscapePrison(npcRuntime, settings.escapeBountyPenalty, actionRuntime.OriginDecisionId) == false)
         {
@@ -1144,17 +1157,12 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
 
     private bool HasNpcDefaultAction(NpcRuntime npcRuntime, NpcActionData action)
     {
-        if (npcRuntime == null || npcRuntime.NpcData == null || npcRuntime.NpcData.acoesPadrao == null)
-        {
-            return false;
-        }
-
-        return npcRuntime.NpcData.acoesPadrao.Exists(x => x != null && x.action == action);
+        return npcRuntime != null && npcRuntime.HasConfiguredDefaultAction(action);
     }
 
-    private int GetConfiguredAmount(NpcActionData action, NpcRuntime targetRuntime)
+    private int GetConfiguredAmount(NpcActionData action, NpcRuntime actionOwner, NpcRuntime targetRuntime)
     {
-        int configuredAmount = UnityMathfCompatibility.Max(0, GetCrimeSettings(action).amount);
+        int configuredAmount = UnityMathfCompatibility.Max(0, actionOwner.GetConfiguredCrimeActionSettings(action).amount);
         return UnityMathfCompatibility.Min(configuredAmount, UnityMathfCompatibility.FloorToInt(targetRuntime.Money));
     }
 
@@ -1171,11 +1179,6 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
     private float GetStealTargetWeight(NpcRuntime candidate)
     {
         return candidate != null ? UnityMathfCompatibility.Max(1f, candidate.Money) : 0f;
-    }
-
-    private CrimeActionSettings GetCrimeSettings(NpcActionData action)
-    {
-        return action != null && action.crimeSettings != null ? action.crimeSettings : new CrimeActionSettings();
     }
 
     private class FleeDestinationOption

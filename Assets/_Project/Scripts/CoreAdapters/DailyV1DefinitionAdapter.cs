@@ -15,7 +15,17 @@ public static class DailyV1DefinitionAdapter
         CalendarDefinition calendar, IReadOnlyList<string> stageOrder, string hexConvention,
         string hexCanonicalOrder, out DailyV1EffectiveDefinitions definitions, out string diagnostic)
     {
+        return TryCreate(source, effective, calendar, stageOrder, hexConvention, hexCanonicalOrder,
+            out definitions, out _, out diagnostic);
+    }
+
+    internal static bool TryCreate(SimulationConfigData source, EffectiveSimulationConfiguration effective,
+        CalendarDefinition calendar, IReadOnlyList<string> stageOrder, string hexConvention,
+        string hexCanonicalOrder, out DailyV1EffectiveDefinitions definitions,
+        out SelectedBindings selectedBindings, out string diagnostic)
+    {
         definitions = null;
+        selectedBindings = null;
         diagnostic = null;
         if (source == null || effective == null || calendar == null || stageOrder == null)
         { diagnostic = "The selected Daily-v1 definition inputs are incomplete."; return false; }
@@ -70,6 +80,11 @@ public static class DailyV1DefinitionAdapter
                 SimulationGenesisPipeline.ProfileContractIdentity, SimulationGenesisPipeline.GeographyProfileContractIdentity,
                 SimulationGenesisPipeline.GeographyStageId, hexConvention, hexCanonicalOrder,
                 traits, capabilityAttributes, explorableSites);
+            if (!SelectedBindings.TryCreate(assets.Values, definitions, out selectedBindings, out diagnostic))
+            {
+                definitions = null;
+                return false;
+            }
             return true;
         }
         catch (Exception exception) when (exception is ArgumentException || exception is InvalidOperationException
@@ -77,8 +92,165 @@ public static class DailyV1DefinitionAdapter
             || exception is EncoderFallbackException)
         {
             definitions = null;
+            selectedBindings = null;
             diagnostic = exception.Message;
             return false;
+        }
+    }
+
+    internal static bool TryCreateBindings(SimulationConfigData source,
+        DailyV1EffectiveDefinitions definitions, out SelectedBindings selectedBindings, out string diagnostic)
+    {
+        selectedBindings = null;
+        diagnostic = null;
+        if (source == null || definitions == null)
+        {
+            diagnostic = "The selected authoring root and typed definition graph are required for runtime binding.";
+            return false;
+        }
+        try
+        {
+            PrimeLazyDefaults(source);
+            SortedDictionary<string, ScriptableObject> assets = CaptureAssets(source);
+            return SelectedBindings.TryCreate(assets.Values, definitions, out selectedBindings, out diagnostic);
+        }
+        catch (Exception exception) when (exception is ArgumentException || exception is InvalidOperationException
+            || exception is OverflowException || exception is TargetInvocationException
+            || exception is EncoderFallbackException)
+        {
+            selectedBindings = null;
+            diagnostic = exception.Message;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Exact Unity-object bridge for the immutable typed graph produced from one selected
+    /// configuration. The dictionaries use reference identity; DefinitionId is checked as
+    /// a consistency field and is never used to merge two authoring objects.
+    /// </summary>
+    internal sealed class SelectedBindings
+    {
+        private readonly Dictionary<object, DailyV1DefinitionRecord> nodesByAsset =
+            new Dictionary<object, DailyV1DefinitionRecord>(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<DailyV1DefinitionRecord, object> assetsByNode =
+            new Dictionary<DailyV1DefinitionRecord, object>(ReferenceEqualityComparer.Instance);
+
+        internal bool TryGet(CityData asset, out DailyV1CityDefinition node) => TryGetNode(asset, out node);
+        internal bool TryGet(ItemData asset, out DailyV1ItemDefinition node) => TryGetNode(asset, out node);
+        internal bool TryGet(NpcData asset, out DailyV1NpcDefinition node) => TryGetNode(asset, out node);
+        internal bool TryGet(NpcJobData asset, out DailyV1JobDefinition node) => TryGetNode(asset, out node);
+        internal bool TryGet(NpcActionData asset, out DailyV1ActionDefinition node) => TryGetNode(asset, out node);
+        internal bool TryGet(NpcStatusData asset, out DailyV1StatusDefinition node) => TryGetNode(asset, out node);
+        internal bool TryGet(TraitData asset, out DailyV1TraitDefinition node) => TryGetNode(asset, out node);
+        internal bool TryGet(CapabilityAttributeData asset, out DailyV1CapabilityAttributeDefinition node) => TryGetNode(asset, out node);
+        internal bool TryGet(ExplorableSiteData asset, out DailyV1ExplorableSiteDefinition node) => TryGetNode(asset, out node);
+
+        internal bool TryGetAsset(DailyV1ItemDefinition node, out ItemData asset) => TryGetAssetNode(node, out asset);
+        internal bool TryGetAsset(DailyV1CityDefinition node, out CityData asset) => TryGetAssetNode(node, out asset);
+        internal bool TryGetAsset(DailyV1NpcDefinition node, out NpcData asset) => TryGetAssetNode(node, out asset);
+        internal bool TryGetAsset(DailyV1ActionDefinition node, out NpcActionData asset) => TryGetAssetNode(node, out asset);
+        internal bool TryGetAsset(DailyV1StatusDefinition node, out NpcStatusData asset) => TryGetAssetNode(node, out asset);
+        internal bool TryGetAsset(DailyV1CapabilityAttributeDefinition node, out CapabilityAttributeData asset) => TryGetAssetNode(node, out asset);
+
+        internal bool TryGet(CityData asset, DailyV1EffectiveDefinitions graph, out DailyV1CityDefinition node)
+        {
+            node = null;
+            return TryGet(asset, out node) && graph != null
+                && graph.Cities.TryGetValue(node.DefinitionId, out DailyV1CityDefinition admitted)
+                && ReferenceEquals(admitted, node);
+        }
+
+        internal bool TryGet(NpcData asset, DailyV1EffectiveDefinitions graph, out DailyV1NpcDefinition node)
+        {
+            node = null;
+            return TryGet(asset, out node) && graph != null
+                && graph.Npcs.TryGetValue(node.DefinitionId, out DailyV1NpcDefinition admitted)
+                && ReferenceEquals(admitted, node);
+        }
+
+        internal static bool TryCreate(IEnumerable<ScriptableObject> assets,
+            DailyV1EffectiveDefinitions graph, out SelectedBindings bindings, out string diagnostic)
+        {
+            bindings = null;
+            diagnostic = null;
+            if (assets == null || graph == null)
+            {
+                diagnostic = "A selected asset inventory and typed definition graph are required for exact binding.";
+                return false;
+            }
+
+            var candidate = new SelectedBindings();
+            foreach (ScriptableObject asset in assets)
+            {
+                if (asset == null)
+                {
+                    diagnostic = "The selected definition binding inventory contains a destroyed Unity asset.";
+                    return false;
+                }
+
+                string id = AssetId(asset);
+                DailyV1DefinitionRecord node = ResolveNode(asset, id, graph);
+                if (node == null || !string.Equals(node.DefinitionId, id, StringComparison.Ordinal))
+                {
+                    diagnostic = "Selected Unity asset has no exact typed graph node: "
+                        + asset.GetType().Name + "/" + id + ".";
+                    return false;
+                }
+                if (candidate.nodesByAsset.ContainsKey(asset))
+                {
+                    diagnostic = "The selected Unity asset inventory contains the same object more than once.";
+                    return false;
+                }
+                candidate.nodesByAsset.Add(asset, node);
+                candidate.assetsByNode.Add(node, asset);
+            }
+
+            bindings = candidate;
+            return true;
+        }
+
+        private bool TryGetAssetNode<TNode, TAsset>(TNode node, out TAsset asset)
+            where TNode : DailyV1DefinitionRecord
+            where TAsset : ScriptableObject
+        {
+            asset = null;
+            if (node == null || !assetsByNode.TryGetValue(node, out object value)
+                || !(value is TAsset typedAsset) || typedAsset == null
+                || !string.Equals(AssetId(typedAsset), node.DefinitionId, StringComparison.Ordinal))
+                return false;
+            asset = typedAsset;
+            return true;
+        }
+
+
+        private bool TryGetNode<T>(ScriptableObject asset, out T node) where T : DailyV1DefinitionRecord
+        {
+            node = null;
+            if (asset == null || !nodesByAsset.TryGetValue(asset, out DailyV1DefinitionRecord record)
+                || !(record is T typed)
+                || !string.Equals(AssetId(asset), typed.DefinitionId, StringComparison.Ordinal))
+                return false;
+            node = typed;
+            return true;
+        }
+
+        private static DailyV1DefinitionRecord ResolveNode(ScriptableObject asset, string id,
+            DailyV1EffectiveDefinitions graph)
+        {
+            Type type = asset.GetType();
+            if (type == typeof(CityData) && graph.Cities.TryGetValue(id, out DailyV1CityDefinition city)) return city;
+            if (type == typeof(ItemData) && graph.Items.TryGetValue(id, out DailyV1ItemDefinition item)) return item;
+            if (type == typeof(NpcData) && graph.Npcs.TryGetValue(id, out DailyV1NpcDefinition npc)) return npc;
+            if (type == typeof(NpcJobData) && graph.Jobs.TryGetValue(id, out DailyV1JobDefinition job)) return job;
+            if (type == typeof(NpcActionData) && graph.Actions.TryGetValue(id, out DailyV1ActionDefinition action)) return action;
+            if (type == typeof(NpcStatusData) && graph.Statuses.TryGetValue(id, out DailyV1StatusDefinition status)) return status;
+            if (type == typeof(TraitData) && graph.Traits.TryGetValue(id, out DailyV1TraitDefinition trait)) return trait;
+            if (type == typeof(CapabilityAttributeData)
+                && graph.CapabilityAttributes.TryGetValue(id, out DailyV1CapabilityAttributeDefinition attribute)) return attribute;
+            if (type == typeof(ExplorableSiteData)
+                && graph.ExplorableSites.TryGetValue(id, out DailyV1ExplorableSiteDefinition site)) return site;
+            return null;
         }
     }
 

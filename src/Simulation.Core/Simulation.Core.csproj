@@ -13,6 +13,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/IAuthoritativeMutationStatus.cs" Link="IAuthoritativeMutationStatus.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/ActionExecution.cs" Link="ActionExecution.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/MutationStatusBinding.cs" Link="MutationStatusBinding.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Mutation/AuthoritativeMutationGuard.cs" Link="Mutation/AuthoritativeMutationGuard.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionContracts.cs" Link="Institution/InstitutionContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionStores.cs" Link="Institution/InstitutionStores.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionalVacancyRecognition.cs" Link="Institution/InstitutionalVacancyRecognition.cs" />
@@ -27,19 +28,40 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationResolver.cs" Link="Configuration/SimulationConfigurationResolver.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationValidator.cs" Link="Configuration/SimulationConfigurationValidator.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationValidationResult.cs" Link="Configuration/SimulationConfigurationValidationResult.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationCompositionValidator.cs" Link="Configuration/SimulationCompositionValidator.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1EffectiveDefinitions.cs" Link="Definitions/DailyV1EffectiveDefinitions.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1ContentProjection.cs" Link="Definitions/DailyV1ContentProjection.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1TypedDefinitionValues.cs" Link="Definitions/DailyV1TypedDefinitionValues.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1DefinitionIdentity.cs" Link="Definitions/DailyV1DefinitionIdentity.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/GeographyRecords.cs" Link="Geography/GeographyRecords.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialPassageIdentity.cs" Link="Geography/SpatialPassageIdentity.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialRuntimeValues.cs" Link="Geography/SpatialRuntimeValues.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialGeography.cs" Link="Geography/SpatialGeography.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationHost.cs" Link="Application/DailyV1ApplicationHost.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/SimulationRuntimeAdmissionContext.cs" Link="Application/SimulationRuntimeAdmissionContext.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/SimulationLogger.cs" Link="Application/SimulationLogger.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/SimulationRecordSequence.cs" Link="Persistence/SimulationRecordSequence.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/SimulationRecordSequenceOwnerBridge.cs" Link="Persistence/SimulationRecordSequenceOwnerBridge.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/CalendarDefinition.cs" Link="Calendar/CalendarDefinition.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/SimulationCalendar.cs" Link="Calendar/SimulationCalendar.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/SimulationDate.cs" Link="Calendar/SimulationDate.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/SimulationTime.cs" Link="Calendar/SimulationTime.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/SimulationTimeOwnerBridge.cs" Link="Calendar/SimulationTimeOwnerBridge.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Determinism/DeterministicRandom.cs" Link="Determinism/DeterministicRandom.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/StableKeyEncoding.cs" Link="Identity/StableKeyEncoding.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/PersonId.cs" Link="Identity/PersonId.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/WorldIdentity.cs" Link="Identity/WorldIdentity.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocator.cs" Link="Identity/RuntimeIdAllocator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocatorCensusCounter.cs" Link="Identity/RuntimeIdAllocatorCensusCounter.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocatorOwnerBridge.cs" Link="Identity/RuntimeIdAllocatorOwnerBridge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonRuntime.cs" Link="Person/PersonRuntime.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonStore.cs" Link="Person/PersonStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonRuntimeOwnerBridge.cs" Link="Person/PersonRuntimeOwnerBridge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonAgeCalculator.cs" Link="Person/PersonAgeCalculator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonMaturityCalculator.cs" Link="Person/PersonMaturityCalculator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonChronologyOwnerBridge.cs" Link="Person/PersonChronologyOwnerBridge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonChronologyResults.cs" Link="Person/PersonChronologyResults.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonNaturalMortalityQuery.cs" Link="Person/PersonNaturalMortalityQuery.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Temporal/LogicalTimeline.cs" Link="Temporal/LogicalTimeline.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/AggregateDemographyPolicyContracts.cs" Link="Population/AggregateDemographyPolicyContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/DemographicSampling.cs" Link="Population/DemographicSampling.cs" />
@@ -57,7 +79,11 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Genealogy/GenealogyOwnerBridge.cs" Link="Genealogy/GenealogyOwnerBridge.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Genealogy/GenealogyStore.cs" Link="Genealogy/GenealogyStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketItemDefinition.cs" Link="Economy/MarketItemDefinition.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/CityMaterialFlowProfiles.cs" Link="Economy/CityMaterialFlowProfiles.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1MixedSourceProfileAdmission.cs" Link="Economy/DailyV1MixedSourceProfileAdmission.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketPriceCalculator.cs" Link="Economy/MarketPriceCalculator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/CityProductionResult.cs" Link="Economy/CityProductionResult.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/CityConsumptionResult.cs" Link="Economy/CityConsumptionResult.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/FiniteSourceProductionKernel.cs" Link="Economy/FiniteSourceProductionKernel.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/FiniteSourceScenarioRuntime.cs" Link="Economy/FiniteSourceScenarioRuntime.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ContinuationWire.cs" Link="Persistence/ContinuationWire.cs" />

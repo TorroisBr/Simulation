@@ -1,7 +1,7 @@
 using System.Linq;
 using UnityEngine;
 
-public class GuardSystem : INpcActionProvider
+public class GuardSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvider
 {
     private readonly JusticeSystem justiceSystem;
     private readonly NpcStatusData hiddenStatus;
@@ -25,6 +25,12 @@ public class GuardSystem : INpcActionProvider
     public bool HandlesAction(NpcActionData action)
     {
         return action != null && action.actionType == NpcActionType.Arrest;
+    }
+
+    bool ISelectedDefinitionNpcActionProvider.HandlesAction(NpcRuntime npcRuntime, NpcActionData action)
+    {
+        return npcRuntime != null && action != null
+            && npcRuntime.GetConfiguredActionType(action) == NpcActionType.Arrest;
     }
 
     public NpcActionRuntime CreateAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
@@ -123,9 +129,7 @@ public class GuardSystem : INpcActionProvider
     {
         return npcRuntime != null
             && npcRuntime.IsAlive == true
-            && npcRuntime.NpcData != null
-            && npcRuntime.NpcData.job != null
-            && npcRuntime.NpcData.job.jobType == NpcJobType.Guard;
+            && npcRuntime.HasJobType(NpcJobType.Guard);
     }
 
     private bool IsHidden(NpcRuntime npcRuntime)

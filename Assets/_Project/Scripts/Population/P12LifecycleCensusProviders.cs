@@ -25,7 +25,7 @@ public sealed class PersonLifeResidenceCensusProvider : IOwnerSectionCensusProvi
             SchemaVersion,
             owner,
             1,
-            owner.LifeResidenceRevision);
+            PersonRuntimeOwnerBridge.GetLifeResidenceRevision(owner));
     }
 
     public static string SectionIdFor(PersonId personId)

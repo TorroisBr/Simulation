@@ -121,8 +121,8 @@ public sealed class WorldObserverTravelerReadModel
         TravelPartyRuntime travelParty = null)
     {
         RuntimeId = npc.RuntimeId;
-        DisplayName = npc.NpcData != null && string.IsNullOrWhiteSpace(npc.NpcData.name) == false
-            ? npc.NpcData.name
+        DisplayName = string.IsNullOrWhiteSpace(npc.NpcName) == false
+            ? npc.NpcName
             : npc.RuntimeId;
         IsTraveling = npc.IsTraveling;
         CurrentLocationRuntimeId = npc.CurrentLocation?.RuntimeId;

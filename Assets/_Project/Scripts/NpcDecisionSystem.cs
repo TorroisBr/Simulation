@@ -48,12 +48,13 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             return null;
         }
 
-        List<NpcActionData> validActions = GetAllValidActions(npcRuntime.CurrentStatus, availableActions);
+        List<NpcActionData> validActions = GetAllValidActions(npcRuntime, availableActions);
         Dictionary<NpcActionRuntime, float> utilities = CalculateActionUtilities(
             npcRuntime,
             validActions,
             true);
         return ChooseWeightedAction(
+            npcRuntime,
             utilities,
             "npc-decision|" + npcRuntime.RuntimeId + "|" + currentAbsoluteDay);
     }
@@ -65,7 +66,8 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             return null;
         }
 
-        if (npcRuntime == null || npcRuntime.IsAlive == false || action == null || HasAllRequiredStatus(action, npcRuntime.CurrentStatus) == false)
+        if (npcRuntime == null || npcRuntime.IsAlive == false || action == null
+            || npcRuntime.HasConfiguredRequiredActionStatuses(action, npcRuntime.CurrentStatus) == false)
         {
             return null;
         }
@@ -99,63 +101,19 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
 
     private float CalculateBaseActionUtility(NpcRuntime npcRuntime, NpcActionData action)
     {
-        float utility = action.baseUtility;
+        float utility = npcRuntime.GetConfiguredActionBaseUtility(action);
 
-        if (TryGetJobUtility(npcRuntime.NpcData, action, out float jobUtility) == true)
+        if (npcRuntime.TryGetConfiguredJobActionUtility(action, out float jobUtility) == true)
         {
             utility = jobUtility;
         }
 
-        if (TryGetNpcUtility(npcRuntime.NpcData, action, out float npcUtility) == true)
+        if (npcRuntime.TryGetConfiguredDefaultActionUtility(action, out float npcUtility) == true)
         {
             utility = npcUtility;
         }
 
-        if (action.statusModifiers != null)
-        {
-            foreach (StatusWeightModifier modifier in action.statusModifiers)
-            {
-                if (modifier != null && modifier.status != null && npcRuntime.CurrentStatus.Contains(modifier.status) == true)
-                {
-                    utility *= modifier.multiplier;
-                }
-            }
-        }
-
-        return utility;
-    }
-
-    private bool TryGetJobUtility(NpcData npcData, NpcActionData action, out float utility)
-    {
-        utility = 0f;
-
-        if (npcData == null || npcData.job == null || npcData.job.workAction != action)
-        {
-            return false;
-        }
-
-        utility = npcData.job.workUtility;
-        return true;
-    }
-
-    private bool TryGetNpcUtility(NpcData npcData, NpcActionData action, out float utility)
-    {
-        utility = 0f;
-
-        if (npcData == null || npcData.acoesPadrao == null)
-        {
-            return false;
-        }
-
-        NPCDefaultAction defaultAction = npcData.acoesPadrao.Find(x => x != null && x.action == action);
-
-        if (defaultAction == null)
-        {
-            return false;
-        }
-
-        utility = defaultAction.baseUtility;
-        return true;
+        return npcRuntime.ApplyConfiguredActionStatusModifiers(action, utility);
     }
 
     private NpcActionRuntime CreateRuntimeAction(
@@ -164,12 +122,13 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
         ref float utility,
         bool autonomous)
     {
-        if (action.actionType == NpcActionType.Normal)
+        NpcActionType configuredType = npcRuntime.GetConfiguredActionType(action);
+        if (configuredType == NpcActionType.Normal)
         {
             return new NpcActionRuntime(action);
         }
 
-        INpcActionProvider actionProvider = GetProviderForAction(action);
+        INpcActionProvider actionProvider = GetProviderForAction(npcRuntime, action);
 
         if (actionProvider == null)
         {
@@ -190,6 +149,11 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
 
     public INpcActionProvider GetProviderForAction(NpcActionData action)
     {
+        return GetProviderForAction(null, action);
+    }
+
+    internal INpcActionProvider GetProviderForAction(NpcRuntime npcRuntime, NpcActionData action)
+    {
         if (mutationGuardBinding.CanMutate == false || action == null)
         {
             return null;
@@ -197,7 +161,13 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
 
         foreach (INpcActionProvider actionProvider in actionProviders)
         {
-            if (actionProvider.HandlesAction(action) == true)
+            bool handles = npcRuntime != null && npcRuntime.UsesSelectedDailyV1Definitions
+                ? actionProvider is ISelectedDefinitionNpcActionProvider selectedProvider
+                    ? selectedProvider.HandlesAction(npcRuntime, action)
+                    : npcRuntime.GetConfiguredActionType(action) == action.actionType
+                        && actionProvider.HandlesAction(action)
+                : actionProvider.HandlesAction(action);
+            if (handles)
             {
                 return actionProvider;
             }
@@ -267,7 +237,7 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
         return TryBindMutationGuard(guard);
     }
 
-    private List<NpcActionData> GetAllValidActions(IReadOnlyList<NpcStatusData> npcCurrentStatus, List<NpcActionData> availableActions)
+    private List<NpcActionData> GetAllValidActions(NpcRuntime npcRuntime, List<NpcActionData> availableActions)
     {
         List<NpcActionData> validActions = new List<NpcActionData>();
 
@@ -278,7 +248,7 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
 
         foreach (NpcActionData action in availableActions)
         {
-            if (action == null || HasAllRequiredStatus(action, npcCurrentStatus) == false)
+            if (action == null || npcRuntime.HasConfiguredRequiredActionStatuses(action, npcRuntime.CurrentStatus) == false)
             {
                 continue;
             }
@@ -286,39 +256,17 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             validActions.Add(action);
         }
 
-        validActions.Sort(CompareActions);
+        validActions.Sort((left, right) => CompareActions(npcRuntime, left, right));
         return validActions;
     }
 
-    private bool HasAllRequiredStatus(NpcActionData action, IReadOnlyList<NpcStatusData> npcCurrentStatus)
-    {
-        if (action.statusNecessariosParaFazerAcao == null)
-        {
-            return true;
-        }
-
-        foreach (NpcStatusData requiredStatus in action.statusNecessariosParaFazerAcao)
-        {
-            if (requiredStatus == null)
-            {
-                continue;
-            }
-
-            if (npcCurrentStatus == null || npcCurrentStatus.Contains(requiredStatus) == false)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     private NpcActionRuntime ChooseWeightedAction(
+        NpcRuntime npcRuntime,
         Dictionary<NpcActionRuntime, float> utilities,
         string randomStreamKey)
     {
         List<KeyValuePair<NpcActionRuntime, float>> orderedUtilities = new List<KeyValuePair<NpcActionRuntime, float>>(utilities);
-        orderedUtilities.Sort(CompareUtilities);
+        orderedUtilities.Sort((left, right) => CompareUtilities(npcRuntime, left, right));
         float totalWeight = 0f;
 
         foreach (KeyValuePair<NpcActionRuntime, float> pair in orderedUtilities)
@@ -355,7 +303,7 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
         return null;
     }
 
-    private static int CompareActions(NpcActionData left, NpcActionData right)
+    private static int CompareActions(NpcRuntime npcRuntime, NpcActionData left, NpcActionData right)
     {
         int idComparison = string.CompareOrdinal(left?.DefinitionId ?? string.Empty, right?.DefinitionId ?? string.Empty);
         if (idComparison != 0)
@@ -363,19 +311,23 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             return idComparison;
         }
 
-        int nameComparison = string.CompareOrdinal(left?.actionName ?? string.Empty, right?.actionName ?? string.Empty);
+        int nameComparison = string.CompareOrdinal(
+            npcRuntime?.GetConfiguredActionName(left) ?? left?.actionName ?? string.Empty,
+            npcRuntime?.GetConfiguredActionName(right) ?? right?.actionName ?? string.Empty);
         if (nameComparison != 0)
         {
             return nameComparison;
         }
 
-        return (left?.actionType ?? NpcActionType.Normal).CompareTo(right?.actionType ?? NpcActionType.Normal);
+        return (npcRuntime?.GetConfiguredActionTypeOrder(left) ?? (int)(left?.actionType ?? NpcActionType.Normal))
+            .CompareTo(npcRuntime?.GetConfiguredActionTypeOrder(right) ?? (int)(right?.actionType ?? NpcActionType.Normal));
     }
 
     private static int CompareUtilities(
+        NpcRuntime npcRuntime,
         KeyValuePair<NpcActionRuntime, float> left,
         KeyValuePair<NpcActionRuntime, float> right)
     {
-        return CompareActions(left.Key?.Action, right.Key?.Action);
+        return CompareActions(npcRuntime, left.Key?.Action, right.Key?.Action);
     }
 }

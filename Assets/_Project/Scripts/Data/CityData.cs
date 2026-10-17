@@ -33,12 +33,6 @@ public sealed class MarketLiquidityConfig
     public float initialPurchasingPower;
 }
 
-public enum ConsumptionPaymentMode
-{
-    Free,
-    AccountBacked
-}
-
 [Serializable]
 public sealed class PopulationConsumptionConfig
 {
@@ -64,20 +58,6 @@ public class CityProductionConfig
     public string productionSourceId;
     public string contentRevision = "1";
     public CityProductionSourceKind sourceKind = CityProductionSourceKind.Unspecified;
-}
-
-public enum CityProductionSourceKind
-{
-    Unspecified,
-    ExogenousDaily,
-    FiniteReserveDaily
-}
-
-public enum LocalMaterialFlowProfile
-{
-    ExogenousDaily,
-    FiniteReserveDaily,
-    MixedSourcesDaily
 }
 
 [Serializable]

@@ -116,7 +116,11 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         Assert.That(records.Events.Events, Is.Empty, "Staging must not emit domain events.");
         Assert.That(RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(records.Allocator)
             .GetCurrentCensus().Revision, Is.Zero, "Staging must not allocate EventIds.");
-        Assert.That(records.Sequence.CensusRevision, Is.Zero, "Staging must not allocate record sequences.");
+        SimulationRecordSequenceOwnerBridge.CaptureCensusIdentity(
+            records.Sequence,
+            out _,
+            out long sequenceRevision);
+        Assert.That(sequenceRevision, Is.Zero, "Staging must not allocate record sequences.");
         int admissionCalls = 0;
         int committedCalls = 0;
         Assert.That(staged.TryBindP12CrimeJusticeMutationBoundary(

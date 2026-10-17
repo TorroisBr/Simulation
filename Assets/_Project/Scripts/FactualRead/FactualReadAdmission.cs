@@ -58,7 +58,7 @@ internal sealed class FactualReadReadLease : IDisposable
 /// One non-reentrant owner-thread read admission bound to the exact composed
 /// FactionStore and PersonStore. It does not represent a global P12 epoch.
 /// </summary>
-internal sealed class FactualReadAdmission
+internal sealed class FactualReadAdmission : IPersonStoreMutationAdmission
 {
     private readonly IFactualReadRuntimeState runtimeState;
     private readonly SimulationRuntimeAdmissionContext admissionContext;
@@ -161,6 +161,11 @@ internal sealed class FactualReadAdmission
     {
         return storesBound && ReferenceEquals(store, personStore)
             && IsOwnerThreadCurrent() && !readActive;
+    }
+
+    bool IPersonStoreMutationAdmission.CanMutatePersonStore(PersonStore store)
+    {
+        return CanMutatePersonStore(store);
     }
 
     internal void EndRead()

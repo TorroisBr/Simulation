@@ -1116,7 +1116,7 @@ public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
     {
         return mutationGuardBinding.CanBindTo(guard)
             && (worldRuntime == null || ReferenceEquals(worldRuntime.MutationGuard, guard))
-            && simulationTime.CanBindMutationGuard(guard)
+            && SimulationTimeOwnerBridge.CanBindMutationStatus(simulationTime, guard)
             && CanBindNested(expeditionStore, guard)
             && CanBindNested(explorableSiteStore, guard)
             && CanBindNested(travelPartySystem, guard)
@@ -1133,7 +1133,7 @@ public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
             return false;
         }
 
-        return simulationTime.TryBindMutationGuard(guard)
+        return SimulationTimeOwnerBridge.TryBindMutationStatus(simulationTime, guard)
             && TryBindNested(expeditionStore, guard)
             && TryBindNested(explorableSiteStore, guard)
             && TryBindNested(travelPartySystem, guard)

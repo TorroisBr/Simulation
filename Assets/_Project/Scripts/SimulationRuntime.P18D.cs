@@ -91,8 +91,8 @@ public sealed partial class SimulationRuntime
             p18dActivityLifecycleStore, inputOwner, boundaryOwner,
             profile.WorldId, profile.ProfileId);
         p18dActivityLifecycleStore.BindTimeline(p18dTimeline);
-        if (!simulationTime.TryBindAbsoluteDayProjection(
-                () => p18dTimeline.CurrentInstant.AbsoluteDay))
+        if (!SimulationTimeOwnerBridge.TryBindAbsoluteDayProjection(
+                simulationTime, () => p18dTimeline.CurrentInstant.AbsoluteDay))
             throw new ArgumentException("SimulationTime cannot be projected from this intraday timeline.", nameof(profile));
 
         p18dActorDecisionRequestState = new ActorDecisionRequestState();
@@ -511,7 +511,12 @@ public sealed partial class SimulationRuntime
 
         NpcActionData definition = null;
         int matchingDefinitions = 0;
-        if (configuredActions != null)
+        if (execution.Actor.UsesSelectedDailyV1Definitions)
+        {
+            if (execution.Actor.TryGetSelectedDailyV1ActionByDefinitionId(input.ActionDefinitionId, out definition))
+                matchingDefinitions = 1;
+        }
+        else if (configuredActions != null)
         {
             foreach (NpcActionData action in configuredActions)
             {
@@ -524,8 +529,8 @@ public sealed partial class SimulationRuntime
             }
         }
         if (matchingDefinitions != 1 || definition == null
-            || definition.actionType != NpcActionType.SellGoods
-            || !IsActionEnabledForRuntime(definition))
+            || execution.Actor.GetConfiguredActionType(definition) != NpcActionType.SellGoods
+            || !IsActionEnabledForRuntime(execution.Actor, definition))
         {
             return CompleteP18DActorChoiceRejection(execution,
                 ActorChoiceFailure.ActionUnavailable, out failure);
@@ -534,7 +539,7 @@ public sealed partial class SimulationRuntime
         NpcActionRuntime actionRuntime = npcDecisionSystem.CreateRequestedAction(
             execution.Actor, definition);
         if (actionRuntime == null || !ReferenceEquals(actionRuntime.Action, definition)
-            || actionRuntime.Action.actionType != NpcActionType.SellGoods
+            || execution.Actor.GetConfiguredActionType(actionRuntime.Action) != NpcActionType.SellGoods
             || actionRuntime.TargetCity != execution.Actor.CurrentCity
             || actionRuntime.TargetNpc != null || actionRuntime.TargetItem == null
             || actionRuntime.Amount <= 0)

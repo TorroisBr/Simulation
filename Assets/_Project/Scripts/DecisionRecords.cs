@@ -1,119 +1,39 @@
 using System;
 using System.Collections.Generic;
 
-public sealed class SimulationRecordSequenceSnapshot
+/// <summary>
+/// Ephemeral owner-issued cardinality evidence. This witness is not owner state
+/// export and its owner identity is valid only for the live runtime instance.
+/// Reading the owner is not synchronized; P12-B may consume this witness only
+/// on the bound simulation thread while the registered operation set is idle.
+/// </summary>
+public sealed class OwnerSectionCensusWitness
 {
-    public const string CurrentSchemaId = "simulation-record-sequence";
-    public const int CurrentSchemaVersion = 1;
-
-    public string SchemaId { get; }
-    public int SchemaVersion { get; }
-    public long NextSequence { get; }
-
-    public SimulationRecordSequenceSnapshot(string schemaId, int schemaVersion, long nextSequence)
+    internal OwnerSectionCensusWitness(
+        string sectionId,
+        int schemaVersion,
+        object ownerInstanceIdentity,
+        int cardinality,
+        long revision)
     {
-        SchemaId = schemaId;
+        if (string.IsNullOrWhiteSpace(sectionId)) throw new ArgumentException("Section identity is required.", nameof(sectionId));
+        if (schemaVersion <= 0) throw new ArgumentOutOfRangeException(nameof(schemaVersion));
+        OwnerInstanceIdentity = ownerInstanceIdentity ?? throw new ArgumentNullException(nameof(ownerInstanceIdentity));
+        if (cardinality < 0) throw new ArgumentOutOfRangeException(nameof(cardinality));
+        if (revision < 0L) throw new ArgumentOutOfRangeException(nameof(revision));
+
+        SectionId = sectionId;
         SchemaVersion = schemaVersion;
-        NextSequence = nextSequence;
-    }
-}
-
-public sealed class SimulationRecordSequence
-{
-    private long nextSequence = 1L;
-    private readonly object censusOwnerIdentity = new object();
-    private Func<bool> p12MutationAdmission;
-    private Action p12MutationCommitted;
-
-    internal object CensusOwnerIdentity => censusOwnerIdentity;
-    internal long CensusRevision => nextSequence - 1L;
-
-    public SimulationRecordSequence()
-    {
+        Cardinality = cardinality;
+        Revision = revision;
     }
 
-    public SimulationRecordSequenceSnapshot CaptureSnapshot()
-    {
-        return new SimulationRecordSequenceSnapshot(
-            SimulationRecordSequenceSnapshot.CurrentSchemaId,
-            SimulationRecordSequenceSnapshot.CurrentSchemaVersion,
-            nextSequence);
-    }
-
-    internal static bool TryCreateStagedFromSnapshot(
-        SimulationRecordSequenceSnapshot snapshot,
-        out SimulationRecordSequence sequence,
-        out string diagnostic)
-    {
-        sequence = null;
-        diagnostic = null;
-
-        if (snapshot == null)
-        {
-            diagnostic = "Simulation record sequence snapshot is null.";
-            return false;
-        }
-
-        if (string.Equals(snapshot.SchemaId, SimulationRecordSequenceSnapshot.CurrentSchemaId, StringComparison.Ordinal) == false
-            || snapshot.SchemaVersion != SimulationRecordSequenceSnapshot.CurrentSchemaVersion)
-        {
-            diagnostic = "Simulation record sequence snapshot schema is unsupported.";
-            return false;
-        }
-
-        if (snapshot.NextSequence < 1L || snapshot.NextSequence == long.MaxValue)
-        {
-            diagnostic = "Simulation record sequence snapshot contains an invalid or exhausted next sequence.";
-            return false;
-        }
-
-        sequence = new SimulationRecordSequence(snapshot.NextSequence);
-        return true;
-    }
-
-    private SimulationRecordSequence(long restoredNextSequence)
-    {
-        nextSequence = restoredNextSequence;
-    }
-
-    public long Allocate()
-    {
-        if (nextSequence == long.MaxValue)
-        {
-            throw new InvalidOperationException("Simulation record sequence is exhausted.");
-        }
-
-        if (p12MutationAdmission != null && !CanCommitP12Mutation())
-        {
-            throw new InvalidOperationException("The P12 record-sequence mutation was rejected before allocation.");
-        }
-
-        long allocated = nextSequence;
-        nextSequence++;
-        NotifyP12MutationCommitted();
-        return allocated;
-    }
-
-    internal void BindP12MutationBoundary(Func<bool> admission, Action committed)
-    {
-        if (admission == null) throw new ArgumentNullException(nameof(admission));
-        if (committed == null) throw new ArgumentNullException(nameof(committed));
-        if (p12MutationAdmission != null || p12MutationCommitted != null)
-            throw new InvalidOperationException("SimulationRecordSequence is already bound to a P12 mutation boundary.");
-        p12MutationAdmission = admission;
-        p12MutationCommitted = committed;
-    }
-
-    private bool CanCommitP12Mutation()
-    {
-        try { return p12MutationAdmission(); }
-        catch { return false; }
-    }
-
-    private void NotifyP12MutationCommitted()
-    {
-        p12MutationCommitted?.Invoke();
-    }
+    public string SectionId { get; }
+    public int SchemaVersion { get; }
+    /// <summary>Opaque reference-identity token; it is not serialized or persisted.</summary>
+    public object OwnerInstanceIdentity { get; }
+    public int Cardinality { get; }
+    public long Revision { get; }
 }
 
 public enum NpcDecisionType
@@ -760,41 +680,6 @@ public sealed class NpcDecisionStore
 
         indexedDecisions.Add(decision);
     }
-}
-
-/// <summary>
-/// Ephemeral owner-issued cardinality evidence. This witness is not owner state
-/// export and its owner identity is valid only for the live runtime instance.
-/// Reading the owner is not synchronized; P12-B may consume this witness only
-/// on the bound simulation thread while the registered operation set is idle.
-/// </summary>
-public sealed class OwnerSectionCensusWitness
-{
-    internal OwnerSectionCensusWitness(
-        string sectionId,
-        int schemaVersion,
-        object ownerInstanceIdentity,
-        int cardinality,
-        long revision)
-    {
-        if (string.IsNullOrWhiteSpace(sectionId)) throw new ArgumentException("Section identity is required.", nameof(sectionId));
-        if (schemaVersion <= 0) throw new ArgumentOutOfRangeException(nameof(schemaVersion));
-        OwnerInstanceIdentity = ownerInstanceIdentity ?? throw new ArgumentNullException(nameof(ownerInstanceIdentity));
-        if (cardinality < 0) throw new ArgumentOutOfRangeException(nameof(cardinality));
-        if (revision < 0L) throw new ArgumentOutOfRangeException(nameof(revision));
-
-        SectionId = sectionId;
-        SchemaVersion = schemaVersion;
-        Cardinality = cardinality;
-        Revision = revision;
-    }
-
-    public string SectionId { get; }
-    public int SchemaVersion { get; }
-    /// <summary>Opaque reference-identity token; it is not serialized or persisted.</summary>
-    public object OwnerInstanceIdentity { get; }
-    public int Cardinality { get; }
-    public long Revision { get; }
 }
 
 public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider

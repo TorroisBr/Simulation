@@ -228,7 +228,7 @@ public sealed class RuntimeGuardSystemEntryPointTests
 
     private static object CreateGuard(bool faulted)
     {
-        Type guardType = typeof(SimulationRuntime).Assembly.GetType("AuthoritativeMutationGuard", true);
+        Type guardType = typeof(PersonRuntime).Assembly.GetType("AuthoritativeMutationGuard", true);
         object guard = Activator.CreateInstance(guardType, true);
         if (faulted)
         {
@@ -260,7 +260,7 @@ public sealed class RuntimeGuardSystemEntryPointTests
 
     private static void MarkRuntimeFaulted(SimulationRuntime world)
     {
-        Type reasonType = typeof(SimulationRuntime).Assembly.GetType("AuthoritativeMutationFaultReason", true);
+        Type reasonType = typeof(PersonRuntime).Assembly.GetType("AuthoritativeMutationFaultReason", true);
         object reason = Enum.Parse(reasonType, "RollbackRestoreFailed");
         typeof(SimulationRuntime).GetMethod("MarkAuthoritativeMutationFaulted", BindingFlags.Instance | BindingFlags.NonPublic)
             .Invoke(world, new[] { reason });
@@ -1150,7 +1150,7 @@ public sealed class CrimeHiddenStatusBoundaryOwnerTests
 
     private static object CreateFaultedGuard()
     {
-        Type guardType = typeof(SimulationRuntime).Assembly.GetType("AuthoritativeMutationGuard", true);
+        Type guardType = typeof(PersonRuntime).Assembly.GetType("AuthoritativeMutationGuard", true);
         object guard = Activator.CreateInstance(guardType, true);
         Type reasonType = guardType.Assembly.GetType("AuthoritativeMutationFaultReason", true);
         object reason = Enum.Parse(reasonType, "RollbackRestoreFailed");

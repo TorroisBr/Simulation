@@ -217,7 +217,8 @@ public sealed class CommercialKnowledgeSharingSystem : IAuthoritativeMutationGua
 
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
     {
-        return mutationGuardBinding.CanBindTo(guard) && simulationTime.CanBindMutationGuard(guard);
+        return mutationGuardBinding.CanBindTo(guard)
+            && SimulationTimeOwnerBridge.CanBindMutationStatus(simulationTime, guard);
     }
 
     internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
@@ -227,7 +228,7 @@ public sealed class CommercialKnowledgeSharingSystem : IAuthoritativeMutationGua
             return false;
         }
 
-        return simulationTime.TryBindMutationGuard(guard);
+        return SimulationTimeOwnerBridge.TryBindMutationStatus(simulationTime, guard);
     }
 
     bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
@@ -375,9 +376,7 @@ public sealed class CommercialKnowledgeSharingSystem : IAuthoritativeMutationGua
             && npcRuntime.IsAlive == true
             && npcRuntime.IsTraveling == false
             && npcRuntime.CurrentCity != null
-            && npcRuntime.NpcData != null
-            && npcRuntime.NpcData.job != null
-            && npcRuntime.NpcData.job.jobType == NpcJobType.Merchant;
+            && npcRuntime.HasJobType(NpcJobType.Merchant);
     }
 
     private sealed class ShareableObservation

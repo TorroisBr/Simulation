@@ -15,12 +15,6 @@ public enum SimulationRuntimeAdvanceFailure
     CompletedBoundarySequenceOverflow = 6
 }
 
-public enum SimulationRuntimeAdmissionProfile
-{
-    None = 0,
-    UnityBootstrapDailyV1 = 1
-}
-
 internal enum DailyCaptureEligibilityFailure
 {
     None = 0,
@@ -181,72 +175,6 @@ public sealed class P17AWarObservation
         P16PositionStableKey = p16State.PositionStableKey;
         P16CurrentSupply = p16State.CurrentQuantity;
         P16OwnerRevision = p16State.OwnerRevision;
-    }
-}
-
-/// <summary>Explicit profile and Unity Start-thread identity for the bounded P12 daily adapter.</summary>
-public sealed class SimulationRuntimeAdmissionContext
-{
-    public SimulationRuntimeAdmissionProfile Profile { get; }
-    internal bool IsRestoredContinuation { get; }
-    internal Thread ExpectedOwnerThread { get; }
-    internal int ExpectedOwnerThreadId { get; }
-
-    public SimulationRuntimeAdmissionContext(
-        SimulationRuntimeAdmissionProfile profile,
-        Thread expectedOwnerThread,
-        int expectedOwnerThreadId)
-        : this(profile, expectedOwnerThread, expectedOwnerThreadId, false)
-    {
-    }
-
-    private SimulationRuntimeAdmissionContext(
-        SimulationRuntimeAdmissionProfile profile,
-        Thread expectedOwnerThread,
-        int expectedOwnerThreadId,
-        bool isRestoredContinuation)
-    {
-        if (profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
-            throw new ArgumentOutOfRangeException(nameof(profile));
-        if (expectedOwnerThread == null)
-            throw new ArgumentNullException(nameof(expectedOwnerThread));
-        if (expectedOwnerThreadId <= 0
-            || expectedOwnerThread.ManagedThreadId != expectedOwnerThreadId)
-            throw new ArgumentException(
-                "The expected managed thread id must match the captured Unity Start thread.",
-                nameof(expectedOwnerThreadId));
-
-        Profile = profile;
-        IsRestoredContinuation = isRestoredContinuation;
-        ExpectedOwnerThread = expectedOwnerThread;
-        ExpectedOwnerThreadId = expectedOwnerThreadId;
-    }
-
-    internal SimulationRuntimeAdmissionContext CreateRestoredContinuationContext()
-    {
-        if (Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1 || IsRestoredContinuation)
-            throw new InvalidOperationException("A restored continuation context must derive from the selected Daily-v1 bootstrap context.");
-
-        return new SimulationRuntimeAdmissionContext(
-            Profile,
-            ExpectedOwnerThread,
-            ExpectedOwnerThreadId,
-            true);
-    }
-
-    public static SimulationRuntimeAdmissionContext CaptureUnityBootstrapDailyV1()
-    {
-        Thread ownerThread = Thread.CurrentThread;
-        return new SimulationRuntimeAdmissionContext(
-            SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
-            ownerThread,
-            ownerThread.ManagedThreadId);
-    }
-
-    internal bool IsOwnedByCurrentThread()
-    {
-        return ReferenceEquals(ExpectedOwnerThread, Thread.CurrentThread)
-            && ExpectedOwnerThreadId == Thread.CurrentThread.ManagedThreadId;
     }
 }
 
@@ -1135,7 +1063,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
         initialAbsoluteDay = this.simulationTime.AbsoluteDay;
-        if (this.simulationTime.CanBindMutationGuard(mutationGuard) == false)
+        if (!SimulationTimeOwnerBridge.CanBindMutationStatus(this.simulationTime, mutationGuard))
         {
             throw new ArgumentException(
                 "The supplied SimulationTime is already bound to another SimulationRuntime.",
@@ -1502,7 +1430,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         HashSet<string> settlementIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (CityRuntime city in materialFlowCities)
         {
-            if (!settlementIds.Add(city.CityData.settlementSemanticId))
+            if (!settlementIds.Add(city.SettlementSemanticId))
                 throw new LocalDailyMaterialFlowRejectedException("P14-A settlement semantic identities must be unique.");
             city.ValidateLocalDailyMaterialFlowAnchor(this.legacySpatialAnchorBindingStore, this.spatialAuthorityStore);
         }
@@ -1607,7 +1535,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         if (runtimeAdmissionContext != null)
         {
             if (npcRosterCensusProtocol == null
-                || !simulationTime.TryBindRuntimeAdvanceDispatcher(TryAdvanceFromRuntimeOwnedClock))
+                || !SimulationTimeOwnerBridge.TryBindRuntimeAdvanceDispatcher(
+                    simulationTime, TryAdvanceFromRuntimeOwnedClock))
             {
                 npcRosterCensusProtocol?.FaultClosed();
                 throw new InvalidOperationException(
@@ -2349,27 +2278,31 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         {
             try
             {
-                simulationRecordSequence.BindP12MutationBoundary(
+                SimulationRecordSequenceOwnerBridge.BindP12MutationBoundary(
+                    simulationRecordSequence,
                     CanCommitP12SimulationRecordSequenceMutation,
                     NotifyP12SimulationRecordSequenceMutation);
 
                 if (runtimeIdAllocatorEventCounterCensusProvider != null)
                 {
-                    runtimeIdAllocator.BindP12EventIdMutationBoundary(
+                    RuntimeIdAllocatorOwnerBridge.BindP12EventIdMutationBoundary(
+                        runtimeIdAllocator,
                         CanCommitP12RuntimeIdEventCounterMutation,
                         NotifyP12RuntimeIdEventCounterMutation);
                 }
 
                 if (runtimeIdAllocatorDecisionCounterCensusProvider != null)
                 {
-                    runtimeIdAllocator.BindP12DecisionIdMutationBoundary(
+                    RuntimeIdAllocatorOwnerBridge.BindP12DecisionIdMutationBoundary(
+                        runtimeIdAllocator,
                         CanCommitP12RuntimeIdDecisionCounterMutation,
                         NotifyP12RuntimeIdDecisionCounterMutation);
                 }
 
                 if (runtimeIdAllocatorTravelPartyCounterCensusProvider != null)
                 {
-                    runtimeIdAllocator.BindP12TravelPartyIdMutationBoundary(
+                    RuntimeIdAllocatorOwnerBridge.BindP12TravelPartyIdMutationBoundary(
+                        runtimeIdAllocator,
                         CanCommitP12RuntimeIdTravelPartyCounterMutation,
                         NotifyP12RuntimeIdTravelPartyCounterMutation);
                 }
@@ -2782,8 +2715,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     StringComparison.Ordinal)
                 || witness.SchemaVersion != SimulationRecordSequenceCensusProvider.SchemaVersion
                 || witness.Cardinality != 1
-                || !ReferenceEquals(witness.OwnerInstanceIdentity, simulationRecordSequence.CensusOwnerIdentity)
-                || witness.Revision != simulationRecordSequence.CensusRevision
+                || !SimulationRecordSequenceOwnerBridge.TryMatchCurrentCensus(
+                    simulationRecordSequence,
+                    witness.OwnerInstanceIdentity,
+                    witness.Revision,
+                    out _)
                 || !protocol.RegisterExpectedSection(
                     new OwnerSectionContract(
                         SimulationRecordSequenceCensusProvider.SectionId,
@@ -2875,8 +2811,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     StringComparison.Ordinal)
                 || witness.SchemaVersion != RuntimeIdAllocatorCensusProvider.SchemaVersion
                 || witness.Cardinality != 1
-                || !ReferenceEquals(witness.OwnerInstanceIdentity, runtimeIdAllocator.CensusOwnerIdentity)
-                || witness.Revision != runtimeIdAllocator.GetCensusRevision(RuntimeIdAllocatorCensusCounter.Events)
+                || !RuntimeIdAllocatorOwnerBridge.TryMatchCurrentCensus(
+                    runtimeIdAllocator,
+                    RuntimeIdAllocatorCensusCounter.Events,
+                    witness.OwnerInstanceIdentity,
+                    witness.Revision,
+                    out _)
                 || !protocol.RegisterExpectedSection(
                     new OwnerSectionContract(
                         RuntimeIdAllocatorCensusProvider.EventsSectionId,
@@ -2921,8 +2861,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     StringComparison.Ordinal)
                 || witness.SchemaVersion != RuntimeIdAllocatorCensusProvider.SchemaVersion
                 || witness.Cardinality != 1
-                || !ReferenceEquals(witness.OwnerInstanceIdentity, runtimeIdAllocator.CensusOwnerIdentity)
-                || witness.Revision != runtimeIdAllocator.GetCensusRevision(RuntimeIdAllocatorCensusCounter.Decisions)
+                || !RuntimeIdAllocatorOwnerBridge.TryMatchCurrentCensus(
+                    runtimeIdAllocator,
+                    RuntimeIdAllocatorCensusCounter.Decisions,
+                    witness.OwnerInstanceIdentity,
+                    witness.Revision,
+                    out _)
                 || !protocol.RegisterExpectedSection(
                     new OwnerSectionContract(
                         RuntimeIdAllocatorCensusProvider.DecisionsSectionId,
@@ -4200,9 +4144,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     StringComparison.Ordinal)
                 || eventCounterWitness.SchemaVersion != RuntimeIdAllocatorCensusProvider.SchemaVersion
                 || eventCounterWitness.Cardinality != 1
-                || !ReferenceEquals(eventCounterWitness.OwnerInstanceIdentity, runtimeIdAllocator.CensusOwnerIdentity)
-                || eventCounterWitness.Revision
-                    != runtimeIdAllocator.GetCensusRevision(RuntimeIdAllocatorCensusCounter.Events))
+                || !RuntimeIdAllocatorOwnerBridge.TryMatchCurrentCensus(
+                    runtimeIdAllocator,
+                    RuntimeIdAllocatorCensusCounter.Events,
+                    eventCounterWitness.OwnerInstanceIdentity,
+                    eventCounterWitness.Revision,
+                    out _))
                 throw new InvalidOperationException();
             sectionIds.Add(RuntimeIdAllocatorCensusProvider.EventsSectionId);
 
@@ -4215,8 +4162,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     StringComparison.Ordinal)
                 || sequenceWitness.SchemaVersion != SimulationRecordSequenceCensusProvider.SchemaVersion
                 || sequenceWitness.Cardinality != 1
-                || !ReferenceEquals(sequenceWitness.OwnerInstanceIdentity, simulationRecordSequence.CensusOwnerIdentity)
-                || sequenceWitness.Revision != simulationRecordSequence.CensusRevision)
+                || !SimulationRecordSequenceOwnerBridge.TryMatchCurrentCensus(
+                    simulationRecordSequence,
+                    sequenceWitness.OwnerInstanceIdentity,
+                    sequenceWitness.Revision,
+                    out _))
                 throw new InvalidOperationException();
             sectionIds.Add(SimulationRecordSequenceCensusProvider.SectionId);
         }
@@ -5883,7 +5833,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private void BindCoreMutationGuardAuthorities()
     {
         List<IAuthoritativeMutationGuardBindable> authorities = new List<IAuthoritativeMutationGuardBindable>();
-        AddRequiredMutationGuardBinding(authorities, simulationTime, nameof(SimulationTime));
         AddRequiredMutationGuardBinding(authorities, personStore, nameof(PersonStore));
         AddRequiredMutationGuardBinding(authorities, actorChoiceStore, nameof(ActorChoiceStore));
         AddRequiredMutationGuardBinding(authorities, spatialAuthorityStore, nameof(SpatialAuthorityStore));
@@ -5959,6 +5908,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             }
         }
 
+        if (!SimulationTimeOwnerBridge.CanBindMutationStatus(simulationTime, mutationGuard))
+        {
+            throw new InvalidOperationException(
+                "A mutable SimulationRuntime input became bound to another runtime during composition.");
+        }
+
         foreach (IAuthoritativeMutationGuardBindable authority in authorities)
         {
             if (authority == null || authority.CanBindMutationGuard(mutationGuard) == false)
@@ -5966,6 +5921,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 throw new InvalidOperationException(
                     "A mutable SimulationRuntime input became bound to another runtime during composition.");
             }
+        }
+
+        if (!SimulationTimeOwnerBridge.TryBindMutationStatus(simulationTime, mutationGuard))
+        {
+            throw new InvalidOperationException(
+                "A mutable SimulationRuntime input could not bind to its runtime mutation guard.");
         }
 
         foreach (IAuthoritativeMutationGuardBindable authority in authorities)
@@ -6472,7 +6433,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             if (!TryBeginP12PopulationOperation(
                     PersonDeathCensusOperationId,
                     sectionIds,
-                    () => transition.ExpectedPerson.CanAdvanceP12LifeResidenceRevision(personRevisionIncrements)
+                    () => PersonRuntimeOwnerBridge.CanAdvanceP12LifeResidenceRevision(
+                        transition.ExpectedPerson,
+                        personRevisionIncrements)
                         && (materializedNpc == null
                             || materializedNpc.CanAdvanceP12LifecycleRevisions(
                                 1, 0, actionChanged ? 1 : 0))
@@ -8169,7 +8132,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             if (!TryBeginP12PopulationOperation(
                     PersonResidenceBindCensusOperationId,
                     new[] { sectionId },
-                    () => person.CanAdvanceP12LifeResidenceRevision(1),
+                    () => PersonRuntimeOwnerBridge.CanAdvanceP12LifeResidenceRevision(person, 1),
                     out P12PopulationOperationScope p12Scope))
             {
                 failure = PersonResidenceMembershipFailure.RuntimeFaulted;
@@ -8480,6 +8443,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
     private bool IsDailyCaptureProfile => runtimeAdmissionContext != null
         && runtimeAdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1;
+
+    internal bool RequiresSelectedDailyV1DefinitionBindings => IsDailyCaptureProfile;
 
     private bool HasActiveDailyOperationContext()
     {
@@ -9010,7 +8975,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 return false;
             }
             if (!TryPreflightDailyCoreSequenceCapacity(1L, out failure)) return false;
-            if (!simulationTime.TryValidateAdvance(out SimulationTimeAdvanceFailure timeFailure))
+            if (!SimulationTimeOwnerBridge.TryValidateAdvance(
+                    simulationTime, out SimulationTimeAdvanceFailure timeFailure))
             {
                 failure = timeFailure == SimulationTimeAdvanceFailure.AbsoluteDayOverflow
                     ? SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
@@ -9037,7 +9003,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 }
 
                 if (!IsDailyCaptureProfile
-                    && !simulationTime.TryValidateAdvance(out SimulationTimeAdvanceFailure timeFailure))
+                    && !SimulationTimeOwnerBridge.TryValidateAdvance(
+                        simulationTime, out SimulationTimeAdvanceFailure timeFailure))
                 {
                     failure = timeFailure == SimulationTimeAdvanceFailure.AbsoluteDayOverflow
                         ? SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
@@ -9117,7 +9084,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
-        if (simulationTime.TryAdvanceDayFromRuntime(out SimulationTimeAdvanceFailure timeFailure) == false)
+        if (!SimulationTimeOwnerBridge.TryAdvanceDayFromRuntime(
+                simulationTime, out SimulationTimeAdvanceFailure timeFailure))
         {
             failure = timeFailure == SimulationTimeAdvanceFailure.RuntimeFaulted
                 ? SimulationRuntimeAdvanceFailure.RuntimeFaulted
@@ -9564,7 +9532,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         NpcActionData requestedDefinition = null;
         int matchingDefinitions = 0;
-        if (configuredActions != null)
+        if (npcRuntime.UsesSelectedDailyV1Definitions)
+        {
+            if (npcRuntime.TryGetSelectedDailyV1ActionByDefinitionId(input.ActionDefinitionId, out requestedDefinition))
+                matchingDefinitions = 1;
+        }
+        else if (configuredActions != null)
         {
             foreach (NpcActionData configuredAction in configuredActions)
             {
@@ -9582,8 +9555,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         if (matchingDefinitions != 1
             || requestedDefinition == null
-            || requestedDefinition.actionType != NpcActionType.SellGoods
-            || !IsActionEnabledForRuntime(requestedDefinition))
+            || npcRuntime.GetConfiguredActionType(requestedDefinition) != NpcActionType.SellGoods
+            || !IsActionEnabledForRuntime(npcRuntime, requestedDefinition))
         {
             RejectActorChoice(input, actorTurnRosterOrdinal, ActorChoiceFailure.ActionUnavailable);
             return true;
@@ -9592,7 +9565,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         NpcActionRuntime requestedAction = npcDecisionSystem.CreateRequestedAction(npcRuntime, requestedDefinition);
         if (requestedAction == null
             || !ReferenceEquals(requestedAction.Action, requestedDefinition)
-            || requestedAction.Action.actionType != NpcActionType.SellGoods
+            || npcRuntime.GetConfiguredActionType(requestedAction.Action) != NpcActionType.SellGoods
             || requestedAction.TargetCity != npcRuntime.CurrentCity
             || requestedAction.TargetNpc != null
             || requestedAction.TargetItem == null
@@ -10842,7 +10815,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 return false;
             }
             if (!TryPreflightDailyCoreSequenceCapacity(dayCount, out failure)) return false;
-            if (!simulationTime.TryValidateAdvance(out SimulationTimeAdvanceFailure initialTimeFailure))
+            if (!SimulationTimeOwnerBridge.TryValidateAdvance(
+                    simulationTime, out SimulationTimeAdvanceFailure initialTimeFailure))
             {
                 failure = initialTimeFailure == SimulationTimeAdvanceFailure.AbsoluteDayOverflow
                     ? SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
@@ -10870,7 +10844,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
             if (runtimeAdmissionContext != null
                 && !IsDailyCaptureProfile
-                && !simulationTime.TryValidateAdvance(out SimulationTimeAdvanceFailure initialTimeFailure))
+                && !SimulationTimeOwnerBridge.TryValidateAdvance(
+                    simulationTime, out SimulationTimeAdvanceFailure initialTimeFailure))
             {
                 failure = initialTimeFailure == SimulationTimeAdvanceFailure.AbsoluteDayOverflow
                     ? SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
@@ -11099,7 +11074,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         NpcActionRuntime chosenAction = npcDecisionSystem.ChooseAction(
             npcRuntime,
-            GetConfiguredActionsEnabledForRuntime(),
+            GetConfiguredActionsEnabledForRuntime(npcRuntime),
             CurrentDay);
         decisionRecorder?.RecordChosenAction(npcRuntime, chosenAction, NpcDecisionOrigin.Autonomous);
         npcRuntime.SetCurrentActionRuntime(chosenAction);
@@ -11169,7 +11144,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private void ProcessRequestedActionDirective(NpcRuntime npcRuntime, ScheduledDirective directive)
     {
         NpcActionRuntime requestedAction = npcDecisionSystem != null
-            && IsActionEnabledForRuntime(directive.Action)
+            && IsActionEnabledForRuntime(npcRuntime, directive.Action)
             ? npcDecisionSystem.CreateRequestedAction(npcRuntime, directive.Action)
             : null;
 
@@ -11209,9 +11184,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return;
         }
 
-        CrimeActionSettings settings = directive.Action != null && directive.Action.crimeSettings != null
-            ? directive.Action.crimeSettings
-            : new CrimeActionSettings();
+        if (!npcRuntime.TryGetConfiguredActionStatusChanges(directive.Action, out _, out _, out _, out _))
+        {
+            SkipDirective(directive, "Admitted Escape status effects are unavailable.");
+            return;
+        }
+        CrimeActionSettings settings = npcRuntime.GetConfiguredCrimeActionSettings(directive.Action);
 
         npcRuntime.SetCurrentActionRuntime(new NpcActionRuntime(directive.Action));
 
@@ -11250,23 +11228,26 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
     private NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)
     {
-        if (IsActionEnabledForRuntime(action) == false)
+        if (npcRuntime == null || action == null || IsActionEnabledForRuntime(npcRuntime, action) == false)
         {
             return NpcActionResult.Failed();
         }
 
-        INpcActionProvider actionProvider = action.actionType == NpcActionType.Normal
+        NpcActionType actionType = npcRuntime.GetConfiguredActionType(action);
+        if (!npcRuntime.TryGetConfiguredActionStatusChanges(action, out _, out _, out _, out _))
+            return NpcActionResult.Failed();
+        INpcActionProvider actionProvider = actionType == NpcActionType.Normal
             ? null
-            : npcDecisionSystem?.GetProviderForAction(action);
+            : npcDecisionSystem?.GetProviderForAction(npcRuntime, action);
 
-        if (action.actionType != NpcActionType.Normal && actionProvider == null)
+        if (actionType != NpcActionType.Normal && actionProvider == null)
         {
             return NpcActionResult.Failed();
         }
 
         if (runtimeAdmissionContext != null
             && travelSystem != null
-            && action.actionType == NpcActionType.Travel
+            && actionType == NpcActionType.Travel
             && !(actionProvider is TravelActionProvider))
         {
             FaultRuntimeAdmission();
@@ -11307,7 +11288,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return NpcActionResult.Failed(CreateFailureMessage(npcRuntime, actionRuntime, action));
         }
 
-        if (action.actionType == NpcActionType.Normal)
+        if (actionType == NpcActionType.Normal)
         {
             return NpcActionResult.Succeeded(CreateNormalActionMessage(npcRuntime, action));
         }
@@ -11344,18 +11325,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         return actionProvider.TryExecuteAction(npcRuntime, actionRuntime);
     }
 
-    private List<NpcActionData> GetConfiguredActionsEnabledForRuntime()
+    private List<NpcActionData> GetConfiguredActionsEnabledForRuntime(NpcRuntime npcRuntime)
     {
         List<NpcActionData> enabledActions = new List<NpcActionData>();
 
-        if (configuredActions == null)
+        List<NpcActionData> actionDefinitions = new List<NpcActionData>();
+        if (npcRuntime != null && npcRuntime.UsesSelectedDailyV1Definitions)
         {
-            return enabledActions;
+            if (!npcRuntime.TryGetSelectedDailyV1Actions(actionDefinitions))
+                return enabledActions;
+        }
+        else if (configuredActions != null)
+        {
+            actionDefinitions.AddRange(configuredActions);
         }
 
-        foreach (NpcActionData action in configuredActions)
+        foreach (NpcActionData action in actionDefinitions)
         {
-            if (IsActionEnabledForRuntime(action))
+            if (IsActionEnabledForRuntime(npcRuntime, action))
             {
                 enabledActions.Add(action);
             }
@@ -11364,14 +11351,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         return enabledActions;
     }
 
-    private bool IsActionEnabledForRuntime(NpcActionData action)
+    private bool IsActionEnabledForRuntime(NpcRuntime npcRuntime, NpcActionData action)
     {
         if (action == null)
         {
             return false;
         }
 
-        switch (action.actionType)
+        switch (npcRuntime != null ? npcRuntime.GetConfiguredActionType(action) : action.actionType)
         {
             case NpcActionType.BuyGoods:
             case NpcActionType.SellGoods:
@@ -11393,18 +11380,26 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         NpcActionData action,
         NpcActionRuntime actionRuntime)
     {
-        if (action == null || action.canFail == false)
+        if (action == null || (npcRuntime != null
+            ? npcRuntime.GetConfiguredActionCanFail(action)
+            : action.canFail) == false)
         {
             return true;
         }
 
         float contextualMultiplier = actionRuntime != null ? actionRuntime.SuccessChanceMultiplier : 1f;
-        float effectiveChance = UnityMathfCompatibility.Clamp01(action.baseSuccessChance * UnityMathfCompatibility.Max(0f, contextualMultiplier));
+        float configuredSuccessChance = npcRuntime != null
+            ? npcRuntime.GetConfiguredActionBaseSuccessChance(action)
+            : action.baseSuccessChance;
+        float effectiveChance = UnityMathfCompatibility.Clamp01(
+            configuredSuccessChance * UnityMathfCompatibility.Max(0f, contextualMultiplier));
         string actorKey = npcRuntime?.RuntimeId ?? "unknown-actor";
         string decisionKey = actionRuntime?.OriginDecisionId
             ?? actionRuntime?.Action?.DefinitionId
             ?? "unbound";
-        string actionKey = action?.DefinitionId ?? action?.actionType.ToString() ?? "unknown";
+        string actionKey = action?.DefinitionId
+            ?? (npcRuntime != null ? npcRuntime.GetConfiguredActionType(action).ToString() : action?.actionType.ToString())
+            ?? "unknown";
         float randomValue = randomSource.NextUnit(
             "action-success|" + actorKey + "|" + decisionKey + "|" + actionKey + "|" + CurrentDay);
         return randomValue <= effectiveChance;
@@ -11412,15 +11407,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
     private void ApplySuccessStatusChanges(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)
     {
-        ApplyStatusChanges(npcRuntime, action.statusToRemove, action.statusToAdd);
+        if (npcRuntime == null
+            || !npcRuntime.TryGetConfiguredActionStatusChanges(
+                action,
+                out IReadOnlyList<NpcStatusData> statusToRemove,
+                out IReadOnlyList<NpcStatusData> statusToAdd,
+                out IReadOnlyList<NpcStatusData> targetStatusToRemove,
+                out IReadOnlyList<NpcStatusData> targetStatusToAdd))
+            throw new InvalidOperationException("The admitted action status effects could not be resolved from the selected definition graph.");
+
+        ApplyStatusChanges(npcRuntime, statusToRemove, statusToAdd);
 
         if (actionRuntime != null && actionRuntime.TargetNpc != null)
         {
-            ApplyStatusChanges(actionRuntime.TargetNpc, action.targetStatusToRemove, action.targetStatusToAdd);
+            ApplyStatusChanges(actionRuntime.TargetNpc, targetStatusToRemove, targetStatusToAdd);
         }
     }
 
-    private void ApplyStatusChanges(NpcRuntime npcRuntime, List<NpcStatusData> statusToRemove, List<NpcStatusData> statusToAdd)
+    private void ApplyStatusChanges(NpcRuntime npcRuntime, IReadOnlyList<NpcStatusData> statusToRemove, IReadOnlyList<NpcStatusData> statusToAdd)
     {
         if (npcRuntime == null)
         {
@@ -11453,11 +11457,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         if (actionRuntime.TargetNpc != null)
         {
-            logger?.Log(SimulationLogCategory.NpcAction, $"{npcRuntime.NpcName} escolheu {GetActionName(actionRuntime.Action)} {actionRuntime.TargetNpc.NpcName}.");
+            logger?.Log(SimulationLogCategory.NpcAction, $"{npcRuntime.NpcName} escolheu {GetActionName(npcRuntime, actionRuntime.Action)} {actionRuntime.TargetNpc.NpcName}.");
         }
         else if (actionRuntime.TargetCity != null)
         {
-            logger?.Log(SimulationLogCategory.NpcAction, $"{npcRuntime.NpcName} escolheu {GetActionName(actionRuntime.Action)} {actionRuntime.TargetCity.CityName}.");
+            logger?.Log(SimulationLogCategory.NpcAction, $"{npcRuntime.NpcName} escolheu {GetActionName(npcRuntime, actionRuntime.Action)} {actionRuntime.TargetCity.CityName}.");
         }
     }
 
@@ -11466,28 +11470,34 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         string actorName = npcRuntime != null ? npcRuntime.NpcName : "NPC desconhecido";
         string targetName = actionRuntime != null && actionRuntime.TargetNpc != null ? $" {actionRuntime.TargetNpc.NpcName}" : string.Empty;
         string targetCityName = actionRuntime != null && actionRuntime.TargetCity != null ? $" {actionRuntime.TargetCity.CityName}" : string.Empty;
-        return $"{actorName} tentou {GetActionName(action)}{targetName}{targetCityName}, mas falhou.";
+        return $"{actorName} tentou {GetActionName(npcRuntime, action)}{targetName}{targetCityName}, mas falhou.";
     }
 
     private string CreateNormalActionMessage(NpcRuntime npcRuntime, NpcActionData action)
     {
         string actorName = npcRuntime != null ? npcRuntime.NpcName : "NPC desconhecido";
 
-        if (action != null && string.IsNullOrEmpty(action.normalActionLogText) == false)
+        string normalActionLogText = npcRuntime != null
+            ? npcRuntime.GetConfiguredNormalActionLogText(action)
+            : action?.normalActionLogText;
+        if (string.IsNullOrEmpty(normalActionLogText) == false)
         {
-            return $"{actorName} {action.normalActionLogText}";
+            return $"{actorName} {normalActionLogText}";
         }
 
-        return $"{actorName} realizou {GetActionName(action)}.";
+        return $"{actorName} realizou {GetActionName(npcRuntime, action)}.";
     }
 
-    private string GetActionName(NpcActionData action)
+    private string GetActionName(NpcRuntime npcRuntime, NpcActionData action)
     {
         if (action == null)
         {
             return "acao desconhecida";
         }
 
-        return string.IsNullOrEmpty(action.actionName) == false ? action.actionName : action.actionType.ToString();
+        string actionName = npcRuntime != null ? npcRuntime.GetConfiguredActionName(action) : action.actionName;
+        return string.IsNullOrEmpty(actionName) == false
+            ? actionName
+            : (npcRuntime != null ? npcRuntime.GetConfiguredActionType(action) : action.actionType).ToString();
     }
 }

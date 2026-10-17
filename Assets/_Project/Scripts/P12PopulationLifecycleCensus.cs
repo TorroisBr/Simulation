@@ -202,12 +202,13 @@ public sealed partial class SimulationRuntime
         foreach (PersonRuntime person in personStore.Persons)
         {
             if (person == null) return false;
-            if (person.IsP12LifecycleBound)
+            if (PersonRuntimeOwnerBridge.IsP12LifecycleBound(person))
             {
                 if (!p12LifecycleBoundPeople.Contains(person)) return false;
                 continue;
             }
-            person.BindP12LifecycleMutationBoundary(
+            PersonRuntimeOwnerBridge.BindP12LifecycleMutationBoundary(
+                person,
                 CanCommitP12PersonLifecycleMutation,
                 NotifyP12PersonLifecycleMutation);
             p12LifecycleBoundPeople.Add(person);
@@ -618,7 +619,7 @@ public sealed partial class SimulationRuntime
             if (actionChanged)
                 sectionIds.Add(NpcCurrentActionCensusProvider.SectionIdFor(npc.RuntimeId));
             localRevisionCapacity = () => PopulationOwnerBridge.CanAdvanceP12AggregateRevision(settlement.Population)
-                && person.CanAdvanceP12LifeResidenceRevision(residentDeath ? 2 : 1)
+                && PersonRuntimeOwnerBridge.CanAdvanceP12LifeResidenceRevision(person, residentDeath ? 2 : 1)
                 && (!residentDeath || npc.CanAdvanceP12LifecycleRevisions(
                     1, 0, actionChanged ? 1 : 0));
             return true;
@@ -671,7 +672,7 @@ public sealed partial class SimulationRuntime
             sectionIds.Add(PersonLifeResidenceCensusProvider.SectionIdFor(person.PersonId));
             localRevisionCapacity = () => PopulationOwnerBridge.CanAdvanceP12AggregateRevision(origin.Population)
                 && PopulationOwnerBridge.CanAdvanceP12AggregateRevision(destination.Population)
-                && person.CanAdvanceP12LifeResidenceRevision(1);
+                && PersonRuntimeOwnerBridge.CanAdvanceP12LifeResidenceRevision(person, 1);
             return true;
         }
 

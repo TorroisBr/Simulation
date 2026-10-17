@@ -3,8 +3,8 @@ using System;
 /// <summary>Passive census evidence for one sequence cursor, without exposing its mutable owner.</summary>
 public sealed class SimulationRecordSequenceCensusProvider : IOwnerSectionCensusProvider
 {
-    public const string SectionId = "p12c.simulation-record-sequence";
-    public const int SchemaVersion = 1;
+    public const string SectionId = SimulationRecordSequenceOwnerBridge.SectionId;
+    public const int SchemaVersion = SimulationRecordSequenceOwnerBridge.SchemaVersion;
 
     private readonly SimulationRecordSequence sequence;
 
@@ -15,11 +15,15 @@ public sealed class SimulationRecordSequenceCensusProvider : IOwnerSectionCensus
 
     public OwnerSectionCensusWitness GetCurrentCensus()
     {
+        SimulationRecordSequenceOwnerBridge.CaptureCensusIdentity(
+            sequence,
+            out object ownerInstanceIdentity,
+            out long revision);
         return new OwnerSectionCensusWitness(
             SectionId,
             SchemaVersion,
-            sequence.CensusOwnerIdentity,
+            ownerInstanceIdentity,
             1,
-            sequence.CensusRevision);
+            revision);
     }
 }

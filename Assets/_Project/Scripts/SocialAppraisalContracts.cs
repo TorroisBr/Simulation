@@ -927,14 +927,14 @@ public sealed class SocialReactionStore : IAuthoritativeMutationGuardBindable
     {
         return mutationGuardBinding.CanBindTo(guard)
             && (personStore == null || personStore.CanBindMutationGuard(guard))
-            && (simulationTime == null || simulationTime.CanBindMutationGuard(guard));
+            && (simulationTime == null || SimulationTimeOwnerBridge.CanBindMutationStatus(simulationTime, guard));
     }
 
     internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
     {
         return CanBindMutationGuard(guard)
             && (personStore == null || personStore.TryBindMutationGuard(guard))
-            && (simulationTime == null || simulationTime.TryBindMutationGuard(guard))
+            && (simulationTime == null || SimulationTimeOwnerBridge.TryBindMutationStatus(simulationTime, guard))
             && mutationGuardBinding.TryBindTo(guard);
     }
 

@@ -14,6 +14,7 @@
     <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <ProjectReference Include="../../src/Simulation.Core/Simulation.Core.csproj" />
+    <ProjectReference Include="../../src/Simulation.DailyV1.DotNetHostIdentity/Simulation.DailyV1.DotNetHostIdentity.csproj" />
     <None Include="../../docs/validation/CORE_F_SharedRuntimeSource/NUMERIC_ORACLE_VECTORS.csv" Link="Fixtures/CORE_F_NUMERIC_ORACLE_VECTORS.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../docs/validation/CORE_F_SharedRuntimeSource/JSON_PAYLOAD_ORACLE.csv" Link="Fixtures/CORE_F_JSON_PAYLOAD_ORACLE.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../docs/validation/CORE_F_SharedRuntimeSource/UNITY_ORACLE_CAPTURE_RESULTS_d8b4c40e.csv" Link="Fixtures/CORE_F_UNITY_ORACLE_CAPTURE_RESULTS.csv" CopyToOutputDirectory="PreserveNewest" />
@@ -23,6 +24,8 @@
   <ItemGroup>
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarCoreTests.cs" Link="Calendar/CalendarCoreTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarParityTests.cs" Link="Calendar/CalendarParityTests.cs" />
+    <Compile Include="SimulationTimeCoreTests.cs" />
+    <Compile Include="SimulationRuntimeAdmissionContextTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/DeterministicRandomCoreTests.cs" Link="Determinism/DeterministicRandomCoreTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/DeterministicDemographyPolicyTests.cs" Link="Population/DeterministicDemographyPolicyTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/DeterministicRandomRootSnapshotTests.cs" Link="Determinism/DeterministicRandomRootSnapshotTests.cs" />
@@ -33,6 +36,7 @@
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceProductionKernelTests.cs" Link="Economy/FiniteSourceProductionKernelTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioParityVectors.cs" Link="Economy/FiniteSourceScenarioParityVectors.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioRuntimeTests.cs" Link="Economy/FiniteSourceScenarioRuntimeTests.cs" />
+    <Compile Include="DailyV1MixedSourceProfileAdmissionTests.cs" Link="Economy/DailyV1MixedSourceProfileAdmissionTests.cs" />
       <Compile Include="DailyV1DefinitionIdentityTests.cs" Link="Definitions/DailyV1DefinitionIdentityTests.cs" />
       <Compile Include="DailyV1ContentProjectionTests.cs" Link="Definitions/DailyV1ContentProjectionTests.cs" />
       <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/DailyV1CapturedSelectedContentFixture.cs" Link="Definitions/DailyV1CapturedSelectedContentFixture.cs" />
@@ -41,6 +45,13 @@
       <Compile Include="DailyV1TypedDefinitionGraphTests.cs" Link="Definitions/DailyV1TypedDefinitionGraphTests.cs" />
     <Compile Include="ActionExecutionTests.cs" Link="Application/ActionExecutionTests.cs" />
       <Compile Include="DailyV1ApplicationHostTests.cs" Link="Application/DailyV1ApplicationHostTests.cs" />
+      <Compile Include="DailyV1DotNetHostEnvironmentIdentityFactoryTests.cs" Link="Application/DailyV1DotNetHostEnvironmentIdentityFactoryTests.cs" />
+      <Compile Include="SimulationRecordSequenceCoreTests.cs" Link="Persistence/SimulationRecordSequenceCoreTests.cs" />
+      <Compile Include="RuntimeIdAllocatorCoreTests.cs" Link="Identity/RuntimeIdAllocatorCoreTests.cs" />
+      <Compile Include="PersonRuntimeCoreTests.cs" Link="Person/PersonRuntimeCoreTests.cs" />
+      <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Person/PersonOwnerSnapshotTests.cs" Link="Person/PersonOwnerSnapshotTests.cs" />
+      <Compile Include="PersonChronologyCoreTests.cs" Link="Person/PersonChronologyCoreTests.cs" />
+      <Compile Include="PersonNaturalMortalityCoreTests.cs" Link="Person/PersonNaturalMortalityCoreTests.cs" />
     <Compile Include="SimulationLoggerHostPortTests.cs" Link="Application/SimulationLoggerHostPortTests.cs" />
       <Compile Include="DailyV1SelectedMemberCoverageTests.cs" Link="Definitions/DailyV1SelectedMemberCoverageTests.cs" />
       <None Include="../../docs/architecture/CORE_F_SELECTED_VALUE_MEMBERS.csv" Link="Fixtures/CORE_F_SELECTED_VALUE_MEMBERS.csv" CopyToOutputDirectory="PreserveNewest" />

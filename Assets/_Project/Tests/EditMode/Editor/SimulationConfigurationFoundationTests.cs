@@ -269,9 +269,9 @@ public sealed class SimulationConfigurationFoundationTests
     {
         string directory = Path.Combine(
             Directory.GetCurrentDirectory(),
-            "Assets",
-            "_Project",
-            "Scripts",
+            "Packages",
+            "com.simulation.core",
+            "Runtime",
             "Configuration");
 
         string[] files = Directory.GetFiles(directory, "*.cs", SearchOption.AllDirectories);

@@ -395,7 +395,7 @@ public static class PersonBirthLifecycleSystem
         PersonRuntime candidate = new PersonRuntime(
             transition.PersonId,
             transition.BirthAbsoluteDay);
-        if (candidate.TrySetResidenceSettlementRuntimeId(settlement.RuntimeId) == false)
+        if (PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(candidate, settlement.RuntimeId) == false)
         {
             failure = PersonBirthLifecycleFailure.InvalidTransition;
             return false;
