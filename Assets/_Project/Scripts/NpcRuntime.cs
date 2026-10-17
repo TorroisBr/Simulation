@@ -468,6 +468,63 @@ public class NpcRuntime : ICapabilityConditionSource
         return true;
     }
 
+    internal bool TryGetSelectedDailyV1ActionNodes(List<DailyV1ActionDefinition> actions)
+    {
+        if (actions == null)
+            return false;
+        actions.Clear();
+        if (selectedDailyV1Definition == null || selectedDefinitionGraph == null)
+            return false;
+
+        List<DailyV1ActionDefinition> resolved = new List<DailyV1ActionDefinition>(selectedDefinitionGraph.Actions.Count);
+        foreach (DailyV1ActionDefinition node in selectedDefinitionGraph.Actions.Values)
+        {
+            if (node == null
+                || !selectedDefinitionGraph.Actions.TryGetValue(node.DefinitionId, out DailyV1ActionDefinition admittedNode)
+                || !ReferenceEquals(node, admittedNode))
+                return false;
+            resolved.Add(node);
+        }
+
+        actions.AddRange(resolved);
+        return true;
+    }
+
+    internal bool TryGetSelectedDailyV1ActionAsset(
+        DailyV1ActionDefinition action,
+        out NpcActionData actionAsset)
+    {
+        actionAsset = null;
+        return selectedDailyV1Definition != null
+            && selectedDefinitionGraph != null
+            && selectedDefinitionBindings != null
+            && action != null
+            && selectedDefinitionGraph.Actions.TryGetValue(action.DefinitionId, out DailyV1ActionDefinition admittedNode)
+            && ReferenceEquals(action, admittedNode)
+            && selectedDefinitionBindings.TryGetAsset(action, out actionAsset)
+            && actionAsset != null;
+    }
+
+    internal bool TryGetSelectedDailyV1ActiveStatusNodes(List<DailyV1StatusDefinition> statuses)
+    {
+        if (statuses == null)
+            return false;
+        statuses.Clear();
+        if (selectedDailyV1Definition == null || selectedDefinitionGraph == null || selectedDefinitionBindings == null)
+            return false;
+
+        foreach (NpcStatusData statusAsset in CurrentStatus)
+        {
+            if (statusAsset != null
+                && selectedDefinitionBindings.TryGet(statusAsset, out DailyV1StatusDefinition statusNode)
+                && selectedDefinitionGraph.Statuses.TryGetValue(statusNode.DefinitionId, out DailyV1StatusDefinition admittedNode)
+                && ReferenceEquals(statusNode, admittedNode))
+                statuses.Add(statusNode);
+        }
+
+        return true;
+    }
+
     internal bool TryGetSelectedDailyV1ActionByDefinitionId(string definitionId, out NpcActionData action)
     {
         action = null;

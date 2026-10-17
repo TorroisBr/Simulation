@@ -34,6 +34,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1TypedDefinitionValues.cs" Link="Definitions/DailyV1TypedDefinitionValues.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1DefinitionIdentity.cs" Link="Definitions/DailyV1DefinitionIdentity.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1NpcDefinitionRules.cs" Link="Definitions/DailyV1NpcDefinitionRules.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1NpcActionDecision.cs" Link="Definitions/DailyV1NpcActionDecision.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/GeographyRecords.cs" Link="Geography/GeographyRecords.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialPassageIdentity.cs" Link="Geography/SpatialPassageIdentity.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialRuntimeValues.cs" Link="Geography/SpatialRuntimeValues.cs" />

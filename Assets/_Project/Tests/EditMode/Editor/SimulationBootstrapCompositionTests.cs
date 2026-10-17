@@ -2535,6 +2535,12 @@ public sealed class SimulationBootstrapCompositionTests
             "Normal action construction must use the admitted action type after the authoring object changes.");
         Assert.That(admittedActionRuntime.Action, Is.SameAs(defaultAction),
             "Selected dispatch retains the exact admitted Unity action identity for the existing provider and persistence bridge.");
+        NpcActionRuntime selectedDecision = decisions.ChooseSelectedDailyV1Action(
+            runtime, new List<DailyV1ActionDefinition> { graph.Actions[defaultAction.DefinitionId] }, 17L);
+        Assert.That(selectedDecision, Is.Not.Null,
+            "Selected action eligibility and utility must be evaluated from the admitted Core definition node.");
+        Assert.That(selectedDecision.Action, Is.SameAs(defaultAction),
+            "The chosen normal action retains the exact admitted Unity identity used by actuation and the P12 current-action slot.");
         Assert.That(runtime.HasConfiguredRequiredActionStatuses(defaultAction, runtime.CurrentStatus), Is.True,
             "Action eligibility must retain its admitted required-status reference after authoring edits.");
         Assert.That(runtime.HasConfiguredRequiredActionStatuses(defaultAction, new List<NpcStatusData>()), Is.False,

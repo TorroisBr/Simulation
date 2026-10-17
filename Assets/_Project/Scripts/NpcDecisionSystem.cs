@@ -59,6 +59,63 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             "npc-decision|" + npcRuntime.RuntimeId + "|" + currentAbsoluteDay);
     }
 
+    internal NpcActionRuntime ChooseSelectedDailyV1Action(
+        NpcRuntime npcRuntime,
+        List<DailyV1ActionDefinition> availableActions,
+        long currentAbsoluteDay)
+    {
+        if (mutationGuardBinding.CanMutate == false || npcRuntime == null || npcRuntime.IsAlive == false)
+            return null;
+
+        List<DailyV1StatusDefinition> activeStatuses = new List<DailyV1StatusDefinition>();
+        if (!npcRuntime.TryGetSelectedDailyV1ActiveStatusNodes(activeStatuses)
+            || !DailyV1NpcActionDecision.TryCreateCandidates(
+                npcRuntime.SelectedDailyV1Definition,
+                npcRuntime.SelectedDailyV1DefinitionGraph,
+                availableActions,
+                activeStatuses,
+                out List<DailyV1NpcActionCandidate> candidates))
+            return null;
+
+        Dictionary<DailyV1ActionDefinition, NpcActionRuntime> providerActions =
+            new Dictionary<DailyV1ActionDefinition, NpcActionRuntime>();
+        foreach (DailyV1NpcActionCandidate candidate in candidates)
+        {
+            if ((NpcActionType)(candidate.Action.Values.actionType?.Value ?? int.MinValue) == NpcActionType.Normal)
+                continue;
+
+            if (!npcRuntime.TryGetSelectedDailyV1ActionAsset(candidate.Action, out NpcActionData actionAsset))
+            {
+                candidate.Utility = 0f;
+                continue;
+            }
+
+            float utility = candidate.Utility;
+            NpcActionRuntime providerAction = CreateRuntimeAction(npcRuntime, actionAsset, ref utility, true);
+            if (providerAction == null)
+            {
+                candidate.Utility = 0f;
+                continue;
+            }
+
+            candidate.Utility = UnityMathfCompatibility.Max(0f, utility);
+            providerActions.Add(candidate.Action, providerAction);
+        }
+
+        string randomStreamKey = "npc-decision|" + npcRuntime.RuntimeId + "|" + currentAbsoluteDay;
+        DailyV1ActionDefinition selected = DailyV1NpcActionDecision.ChooseWeightedAction(
+            candidates, randomSource, randomStreamKey);
+        if (selected == null)
+            return null;
+
+        if (providerActions.TryGetValue(selected, out NpcActionRuntime selectedProviderAction))
+            return selectedProviderAction;
+
+        return npcRuntime.TryGetSelectedDailyV1ActionAsset(selected, out NpcActionData selectedAsset)
+            ? new NpcActionRuntime(selectedAsset)
+            : null;
+    }
+
     public NpcActionRuntime CreateRequestedAction(NpcRuntime npcRuntime, NpcActionData action)
     {
         if (mutationGuardBinding.CanMutate == false)

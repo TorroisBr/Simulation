@@ -11072,10 +11072,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return;
         }
 
-        NpcActionRuntime chosenAction = npcDecisionSystem.ChooseAction(
-            npcRuntime,
-            GetConfiguredActionsEnabledForRuntime(npcRuntime),
-            CurrentDay);
+        NpcActionRuntime chosenAction = npcRuntime != null && npcRuntime.UsesSelectedDailyV1Definitions
+            ? npcDecisionSystem.ChooseSelectedDailyV1Action(
+                npcRuntime,
+                GetSelectedConfiguredActionsEnabledForRuntime(npcRuntime),
+                CurrentDay)
+            : npcDecisionSystem.ChooseAction(
+                npcRuntime,
+                GetConfiguredActionsEnabledForRuntime(npcRuntime),
+                CurrentDay);
         decisionRecorder?.RecordChosenAction(npcRuntime, chosenAction, NpcDecisionOrigin.Autonomous);
         npcRuntime.SetCurrentActionRuntime(chosenAction);
     }
@@ -11349,6 +11354,42 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         }
 
         return enabledActions;
+    }
+
+    private List<DailyV1ActionDefinition> GetSelectedConfiguredActionsEnabledForRuntime(NpcRuntime npcRuntime)
+    {
+        List<DailyV1ActionDefinition> enabledActions = new List<DailyV1ActionDefinition>();
+        List<DailyV1ActionDefinition> actionDefinitions = new List<DailyV1ActionDefinition>();
+        if (npcRuntime == null || !npcRuntime.UsesSelectedDailyV1Definitions
+            || !npcRuntime.TryGetSelectedDailyV1ActionNodes(actionDefinitions))
+            return enabledActions;
+
+        foreach (DailyV1ActionDefinition action in actionDefinitions)
+            if (IsSelectedActionEnabledForRuntime(action))
+                enabledActions.Add(action);
+        return enabledActions;
+    }
+
+    private bool IsSelectedActionEnabledForRuntime(DailyV1ActionDefinition action)
+    {
+        if (action == null)
+            return false;
+
+        switch ((NpcActionType)(action.Values.actionType?.Value ?? int.MinValue))
+        {
+            case NpcActionType.BuyGoods:
+            case NpcActionType.SellGoods:
+                return configuration.MerchantTrade.Enabled;
+            case NpcActionType.Steal:
+            case NpcActionType.Hide:
+            case NpcActionType.FleeCity:
+            case NpcActionType.EscapePrison:
+                return configuration.Crime.Enabled;
+            case NpcActionType.Arrest:
+                return configuration.GuardCrime.Enabled;
+            default:
+                return true;
+        }
     }
 
     private bool IsActionEnabledForRuntime(NpcRuntime npcRuntime, NpcActionData action)
