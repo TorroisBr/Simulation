@@ -653,6 +653,71 @@ public sealed class EconomyTransactionTests
     }
 
     [Test]
+    public void SelectedDailyV1PurchaseAndSaleUseCanonicalItemNodeWithoutMarketAssetProjection()
+    {
+        ItemData itemAsset = SimulationTestFactory.CreateItem("selected-typed-trade-item", 10f);
+        CityData cityAsset = SimulationTestFactory.CreateCityData("selected-typed-trade-city",
+            SimulationTestFactory.CreateMarketItem(itemAsset, 8, 8));
+        NpcData npcAsset = SimulationTestFactory.CreateNpc("selected-typed-trade-npc");
+        SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
+        authoring.simulationName = "Selected typed trade fixture";
+        authoring.cities.Add(cityAsset);
+        authoring.npcs.Add(new NpcSimulationConfig
+        {
+            npc = npcAsset,
+            startingCity = cityAsset,
+            initialMoney = 50f
+        });
+
+        SimulationConfigurationResolutionResult resolution = SimulationConfigurationResolver.Resolve(
+            null, null, authoring.CreateConfigurationOverrides());
+        Assert.That(resolution.IsValid, Is.True, string.Join("; ", resolution.Validation.Errors));
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(authoring.calendar, out string calendarDiagnostic);
+        Assert.That(string.IsNullOrEmpty(calendarDiagnostic), Is.True, calendarDiagnostic);
+        Assert.That(DailyV1DefinitionAdapter.TryCreate(authoring, resolution.Configuration, calendar,
+            SimulationGenesisPipeline.ResolveStageOrder(includeAuthoredGeography: true), "axial-hex-v1", "q-then-r",
+            out DailyV1EffectiveDefinitions definitions,
+            out DailyV1DefinitionAdapter.SelectedBindings bindings, out string diagnostic), Is.True, diagnostic);
+        Assert.That(definitions.Items.TryGetValue(itemAsset.DefinitionId, out DailyV1ItemDefinition item), Is.True);
+        Assert.That(definitions.Cities.TryGetValue(cityAsset.DefinitionId, out DailyV1CityDefinition city), Is.True);
+        Assert.That(definitions.Npcs.TryGetValue(npcAsset.DefinitionId, out DailyV1NpcDefinition npcDefinition), Is.True);
+
+        MarketRuntime market = new MarketRuntime(city, definitions, counterparty: null);
+        NpcRuntime npc = NpcRuntime.CreateSelectedDailyV1(
+            "runtime.selected-typed-trade", npcDefinition, definitions, bindings, null, 50f);
+        Assert.That(npc.Inventory.SelectedDailyV1Owner.Definitions, Is.SameAs(definitions));
+        Assert.That(market.SelectedDailyV1Owner.Definitions, Is.SameAs(definitions));
+        Assert.That(market.Items, Is.Empty,
+            "This selected Market has no Unity ItemData projection binding; typed operations must use the Core owner directly.");
+
+        Assert.That(DailyV1DefinitionAdapter.TryCreate(authoring, resolution.Configuration, calendar,
+            SimulationGenesisPipeline.ResolveStageOrder(includeAuthoredGeography: true), "axial-hex-v1", "q-then-r",
+            out DailyV1EffectiveDefinitions lookalikeGraph, out _, out string lookalikeDiagnostic), Is.True,
+            lookalikeDiagnostic);
+        DailyV1ItemDefinition lookalikeItem = lookalikeGraph.Items[item.DefinitionId];
+        float balanceBeforeLookalike = npc.Money;
+        Assert.That(market.BuySelectedItem(npc, lookalikeItem, 1).FailureReason,
+            Is.EqualTo(EconomyTransactionFailureReason.InvalidInput));
+        Assert.That(npc.Money, Is.EqualTo(balanceBeforeLookalike));
+        Assert.That(npc.Inventory.Revision, Is.Zero);
+        Assert.That(market.Revision, Is.Zero);
+
+        EconomyTransactionResult purchase = market.BuySelectedItem(npc, item, 2);
+        EconomyTransactionResult sale = market.SellSelectedItem(npc, item, 1);
+
+        Assert.That(purchase.Success, Is.True, purchase.FailureReason.ToString());
+        Assert.That(sale.Success, Is.True, sale.FailureReason.ToString());
+        Assert.That(purchase.ItemDefinitionId, Is.EqualTo(item.DefinitionId));
+        Assert.That(sale.ItemDefinitionId, Is.EqualTo(item.DefinitionId));
+        Assert.That(npc.Inventory.GetSelectedAmount(item), Is.EqualTo(1));
+        Assert.That(market.SelectedDailyV1Owner.GetAmount(item), Is.EqualTo(7));
+        Assert.That(market.SelectedDailyV1Owner.Items[0].Item, Is.SameAs(item));
+        Assert.That(npc.Inventory.Revision, Is.EqualTo(2));
+        Assert.That(market.Revision, Is.EqualTo(2));
+        Assert.That(npc.Money, Is.EqualTo(50f - purchase.TotalPrice + sale.TotalPrice).Within(0.001f));
+    }
+
+    [Test]
     public void AccountBackedPurchaseTransfersMoneyAndCapturesSettlementIds()
     {
         ItemData item = SimulationTestFactory.CreateItem("account-purchase-item", 10f);

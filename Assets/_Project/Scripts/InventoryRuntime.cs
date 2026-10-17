@@ -114,7 +114,7 @@ public class InventoryRuntime
         if (selectedOwner != null)
         {
             return TryGetSelectedNode(item, out DailyV1ItemDefinition node)
-                ? Project(selectedOwner.GetItem(node)) : null;
+                ? Project(GetSelectedItem(node)) : null;
         }
         InventoryItemRuntime value = (items ?? (items = new List<InventoryItemRuntime>())).Find(x => x != null && x.Item == item);
         return value == null ? null : new InventoryItemRuntime(value.Item, value.Amount, value.AverageUnitCost);
@@ -122,14 +122,14 @@ public class InventoryRuntime
 
     public int GetAmount(ItemData item)
     {
-        if (selectedOwner != null) return TryGetSelectedNode(item, out DailyV1ItemDefinition node) ? selectedOwner.GetAmount(node) : 0;
+        if (selectedOwner != null) return TryGetSelectedNode(item, out DailyV1ItemDefinition node) ? GetSelectedAmount(node) : 0;
         InventoryItemRuntime inventoryItem = (items ?? (items = new List<InventoryItemRuntime>())).Find(x => x != null && x.Item == item);
         return inventoryItem != null ? inventoryItem.Amount : 0;
     }
 
     public float GetAverageUnitCost(ItemData item)
     {
-        if (selectedOwner != null) return TryGetSelectedNode(item, out DailyV1ItemDefinition node) ? selectedOwner.GetAverageUnitCost(node) : 0f;
+        if (selectedOwner != null) return TryGetSelectedNode(item, out DailyV1ItemDefinition node) ? GetSelectedAverageUnitCost(node) : 0f;
         InventoryItemRuntime inventoryItem = (items ?? (items = new List<InventoryItemRuntime>())).Find(x => x != null && x.Item == item);
         return inventoryItem != null ? inventoryItem.AverageUnitCost : 0f;
     }
@@ -148,6 +148,14 @@ public class InventoryRuntime
         selectedOwner != null && selectedOwner.TryAddItem(item, amount, unitCost);
     internal bool RemoveSelectedItem(DailyV1ItemDefinition item, int amount) =>
         selectedOwner != null && selectedOwner.RemoveItem(item, amount);
+
+    /// <summary>Prepares selected owner state from the canonical item node, without crossing the Unity authoring adapter.</summary>
+    internal PreparedInventoryState PrepareSelectedReplacement(
+        DailyV1ItemDefinition item, int removed, float addCost, bool add, int added)
+    {
+        if (selectedOwner == null) return new PreparedInventoryState((DailyV1InventoryPreparedState)null);
+        return new PreparedInventoryState(selectedOwner.PrepareReplacement(item, removed, addCost, add, added));
+    }
 
     /// <summary>Creates an unpublished owner from exact rows without replaying inventory writes.</summary>
     internal static bool TryCreateFromOwnerSnapshot(
@@ -181,7 +189,7 @@ public class InventoryRuntime
         if (definitions == null) return false;
         DailyV1InventoryOwner owner = new DailyV1InventoryOwner(definitions);
         if (!owner.TryCreatePreparedFromOwnerSnapshot(rows, ownerRevision, out DailyV1InventoryOwner restored)) return false;
-        staged = new InventoryRuntime { selectedOwner = restored, selectedDefinitions = definitions };
+        staged = new InventoryRuntime(restored);
         return true;
     }
 
@@ -214,7 +222,7 @@ public class InventoryRuntime
     public bool CanAddItem(ItemData item, int amount, float unitCost = 0f)
     {
         if (selectedOwner != null) return TryGetSelectedNode(item, out DailyV1ItemDefinition node)
-            && selectedOwner.CanAddItem(node, amount, unitCost);
+            && CanAddSelectedItem(node, amount, unitCost);
         if (item == null
             || amount <= 0
             || revision == long.MaxValue
@@ -256,7 +264,7 @@ public class InventoryRuntime
     public bool TryAddItem(ItemData item, int amount, float unitCost = 0f)
     {
         if (selectedOwner != null) return TryGetSelectedNode(item, out DailyV1ItemDefinition node)
-            && selectedOwner.TryAddItem(node, amount, unitCost);
+            && TryAddSelectedItem(node, amount, unitCost);
         if (CanAddItem(item, amount, unitCost) == false || CanCommitP12Mutation() == false)
             return false;
 
@@ -281,7 +289,7 @@ public class InventoryRuntime
     public bool RemoveItem(ItemData item, int amount)
     {
         if (selectedOwner != null) return TryGetSelectedNode(item, out DailyV1ItemDefinition node)
-            && selectedOwner.RemoveItem(node, amount);
+            && RemoveSelectedItem(node, amount);
         InventoryItemRuntime inventoryItem = items != null
             ? items.Find(x => x != null && x.Item == item)
             : null;
@@ -391,7 +399,7 @@ public class InventoryRuntime
         if (selectedOwner != null)
         {
             if (!TryGetSelectedNode(item, out DailyV1ItemDefinition node)) return new PreparedInventoryState((DailyV1InventoryPreparedState)null);
-            return new PreparedInventoryState(selectedOwner.PrepareReplacement(node, removed, addCost, add, added));
+            return PrepareSelectedReplacement(node, removed, addCost, add, added);
         }
         List<InventoryItemRuntime> replacement = new List<InventoryItemRuntime>((items ?? (items = new List<InventoryItemRuntime>())).Count + (add ? 1 : 0));
         bool found = false;
