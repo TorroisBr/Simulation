@@ -168,8 +168,12 @@ public class CityRuntime
             || !string.IsNullOrWhiteSpace(RuntimeSettlementSemanticId)
             || !string.IsNullOrWhiteSpace(RuntimeMaterialFlowLocationId)
             || !string.IsNullOrWhiteSpace(RuntimeMarketStoreSemanticId)
-            || (RuntimeProductionConfigs != null && RuntimeProductionConfigs.Exists(source =>
-                source != null && (!string.IsNullOrWhiteSpace(source.productionSourceId) || source.initialReserve != 0))));
+            || (selectedDailyV1Definition != null
+                ? (selectedDailyV1Definition.Values.productionConfigs ?? Array.Empty<DailyV1CityProductionConfig>())
+                    .Any(source => source != null
+                        && (!string.IsNullOrWhiteSpace(source.productionSourceId) || source.initialReserve != 0))
+                : (RuntimeProductionConfigs != null && RuntimeProductionConfigs.Exists(source =>
+                    source != null && (!string.IsNullOrWhiteSpace(source.productionSourceId) || source.initialReserve != 0)))));
     public LocalDailyMaterialFlowResult LastMaterialFlow => lastMaterialFlow;
     public FiniteProductionSourceStore FiniteProductionSources => finiteProductionSources;
 
@@ -235,10 +239,17 @@ public class CityRuntime
         if (string.IsNullOrWhiteSpace(RuntimeSettlementSemanticId)
             || string.IsNullOrWhiteSpace(RuntimeMaterialFlowLocationId)
             || string.IsNullOrWhiteSpace(RuntimeMarketStoreSemanticId)
-            || RuntimeProductionConfigs == null)
+            || (selectedDailyV1Definition != null
+                ? selectedDailyV1Definition.Values.productionConfigs == null
+                : RuntimeProductionConfigs == null))
             throw new LocalDailyMaterialFlowRejectedException("P14 requires settlement, LocationId, market store, and authored source configuration.");
         if (!Enum.IsDefined(typeof(LocalMaterialFlowProfile), RuntimeMaterialFlowProfile))
             throw new LocalDailyMaterialFlowRejectedException("Unsupported P14 local material flow profile.");
+        if (selectedDailyV1Definition != null)
+        {
+            ValidateSelectedLocalDailyMaterialFlowAnchor(bindings, spatial);
+            return;
+        }
         bool mixedSources = RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.MixedSourcesDaily;
         if (mixedSources)
         {
@@ -273,6 +284,59 @@ public class CityRuntime
             || !string.Equals(bound?.Value, RuntimeMaterialFlowLocationId, StringComparison.Ordinal)
             || spatial == null || !spatial.TryGet(bound, out _))
             throw new LocalDailyMaterialFlowRejectedException("P14-A City anchor must resolve and match its authored stable LocationId.");
+    }
+
+    private void ValidateSelectedLocalDailyMaterialFlowAnchor(
+        LegacySpatialAnchorBindingStore bindings,
+        SpatialAuthorityStore spatial)
+    {
+        DailyV1CityData city = selectedDailyV1Definition?.Values;
+        if (city == null || selectedDefinitionGraph == null || city.productionConfigs == null)
+            throw new LocalDailyMaterialFlowRejectedException("P14 requires selected City source configuration and its admitted definition graph.");
+
+        bool mixedSources = RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.MixedSourcesDaily;
+        if (mixedSources)
+        {
+            if (!FiniteSourceProfileAdmission.TryValidateMixedSourceCity(city, out string rejection))
+                throw new LocalDailyMaterialFlowRejectedException(rejection);
+        }
+        else if (city.productionConfigs.Count != 1)
+            throw new LocalDailyMaterialFlowRejectedException("P14-A/P14-B require exactly one authored source.");
+
+        DailyV1CityProductionConfig source = mixedSources
+            ? city.productionConfigs.FirstOrDefault(row => row != null
+                && (CityProductionSourceKind)(row.sourceKind?.Value ?? 0) == CityProductionSourceKind.ExogenousDaily)
+            : city.productionConfigs[0];
+        if (source == null
+            || !TryResolveSelectedItemDefinition(source.item, out DailyV1ItemDefinition sourceItem)
+            || source.amountPerDay <= 0
+            || string.IsNullOrWhiteSpace(source.productionSourceId)
+            || string.IsNullOrWhiteSpace(source.contentRevision))
+            throw new LocalDailyMaterialFlowRejectedException("P14-A source identity, admitted item, positive quantity, and content revision are required.");
+
+        if (!mixedSources && RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.ExogenousDaily
+            && source.initialReserve != 0)
+            throw new LocalDailyMaterialFlowRejectedException("Finite reserve data requires the finite-reserve profile.");
+        if (!mixedSources && RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily
+            && source.initialReserve < 0)
+            throw new LocalDailyMaterialFlowRejectedException("Finite source reserve cannot be negative.");
+
+        DailyV1PopulationConsumptionConfig consumption = city.populationConsumption;
+        DailyV1MarketOwner marketOwner = Market?.SelectedDailyV1Owner;
+        if (consumption?.paymentMode == null
+            || consumption.paymentMode.Value != (int)ConsumptionPaymentMode.Free
+            || city.marketItems == null || city.marketItems.Count != 1
+            || city.marketItems[0] == null
+            || !string.Equals(city.marketItems[0].item, source.item, StringComparison.Ordinal)
+            || marketOwner == null || marketOwner.Items.Count != 1
+            || !ReferenceEquals(marketOwner.Items[0]?.Item, sourceItem))
+            throw new LocalDailyMaterialFlowRejectedException("P14-A requires one selected Market owner row matching its source item and free population consumption.");
+
+        SpatialAnchorOwnerId owner = new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.City, RuntimeId);
+        if (bindings == null || !bindings.TryGet(owner, out LocationId bound)
+            || !string.Equals(bound?.Value, RuntimeMaterialFlowLocationId, StringComparison.Ordinal)
+            || spatial == null || !spatial.TryGet(bound, out _))
+            throw new LocalDailyMaterialFlowRejectedException("P14-A City anchor must resolve and match its admitted stable LocationId.");
     }
 
     internal void SimulateLocalDailyMaterialFlow(long absoluteDay, string calendarVersion)
@@ -512,9 +576,25 @@ public class CityRuntime
                 foreach (CityDailyMaterialFlowSourceOutcome outcome in mixedProductionPreparation.Outcomes)
                     if (outcome.AppliedQuantity > 0)
                     {
-                        CityProductionConfig sourceConfig = RuntimeProductionConfigs.Find(row => row != null
-                            && string.Equals(row.productionSourceId, outcome.ProductionSourceId, StringComparison.Ordinal));
-                        productionResults.Add(new CityProductionResult(RuntimeId, sourceConfig.item.DefinitionId,
+                        string itemDefinitionId;
+                        if (selectedDailyV1Definition != null)
+                        {
+                            DailyV1CityProductionConfig sourceConfig = selectedDailyV1Definition.Values.productionConfigs
+                                .FirstOrDefault(row => row != null
+                                    && string.Equals(row.productionSourceId, outcome.ProductionSourceId, StringComparison.Ordinal));
+                            if (sourceConfig == null
+                                || !TryResolveSelectedItemDefinition(sourceConfig.item, out DailyV1ItemDefinition itemNode))
+                                return false;
+                            itemDefinitionId = itemNode.DefinitionId;
+                        }
+                        else
+                        {
+                            CityProductionConfig sourceConfig = RuntimeProductionConfigs.Find(row => row != null
+                                && string.Equals(row.productionSourceId, outcome.ProductionSourceId, StringComparison.Ordinal));
+                            if (sourceConfig?.item == null) return false;
+                            itemDefinitionId = sourceConfig.item.DefinitionId;
+                        }
+                        productionResults.Add(new CityProductionResult(RuntimeId, itemDefinitionId,
                             outcome.AppliedQuantity, Market.StockOwnerRuntimeId));
                     }
             }
@@ -1260,8 +1340,11 @@ public class CityRuntime
     }
 
     private bool HasAuthoredFiniteReserve() => HasConfiguredDefinition
-        && RuntimeProductionConfigs != null
-        && RuntimeProductionConfigs.Exists(row => row != null && row.initialReserve != 0);
+        && (selectedDailyV1Definition != null
+            ? (selectedDailyV1Definition.Values.productionConfigs ?? Array.Empty<DailyV1CityProductionConfig>())
+                .Any(row => row != null && row.initialReserve != 0)
+            : RuntimeProductionConfigs != null
+                && RuntimeProductionConfigs.Exists(row => row != null && row.initialReserve != 0));
 
     private bool TryResolveSelectedItemDefinition(string definitionId, out DailyV1ItemDefinition item)
     {
@@ -1545,19 +1628,31 @@ public class CityRuntime
             || finiteProductionSources != null || HasAuthoredFiniteReserve()))
         {
             bool mixed = RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.MixedSourcesDaily;
-            if (RuntimeProductionConfigs == null)
-                throw new LocalDailyMaterialFlowRejectedException("Finite-reserve profile requires authored source configuration.");
-            if (mixed)
+            if (selectedDefinition != null)
             {
-                string mixedRejection;
-                bool validMixedSourceCity = selectedDefinition != null
-                    ? FiniteSourceProfileAdmission.TryValidateMixedSourceCity(selectedDefinition.Values, out mixedRejection)
-                    : FiniteSourceProfileAdmission.TryValidateMixedSourceCity(cityData, out mixedRejection);
-                if (!validMixedSourceCity)
-                    throw new LocalDailyMaterialFlowRejectedException(mixedRejection);
+                DailyV1CityData selectedCity = selectedDefinition.Values;
+                if (selectedCity.productionConfigs == null)
+                    throw new LocalDailyMaterialFlowRejectedException("Finite-reserve profile requires selected source configuration.");
+                if (mixed)
+                {
+                    if (!FiniteSourceProfileAdmission.TryValidateMixedSourceCity(selectedCity, out string mixedRejection))
+                        throw new LocalDailyMaterialFlowRejectedException(mixedRejection);
+                }
+                else if (selectedCity.productionConfigs.Count != 1)
+                    throw new LocalDailyMaterialFlowRejectedException("Finite-reserve profile requires exactly one authored source.");
             }
-            else if (RuntimeProductionConfigs.Count != 1)
-                throw new LocalDailyMaterialFlowRejectedException("Finite-reserve profile requires exactly one authored source.");
+            else
+            {
+                if (RuntimeProductionConfigs == null)
+                    throw new LocalDailyMaterialFlowRejectedException("Finite-reserve profile requires authored source configuration.");
+                if (mixed)
+                {
+                    if (!FiniteSourceProfileAdmission.TryValidateMixedSourceCity(cityData, out string mixedRejection))
+                        throw new LocalDailyMaterialFlowRejectedException(mixedRejection);
+                }
+                else if (RuntimeProductionConfigs.Count != 1)
+                    throw new LocalDailyMaterialFlowRejectedException("Finite-reserve profile requires exactly one authored source.");
+            }
             if (selectedDefinition != null)
             {
                 DailyV1CityProductionConfig finiteSource = mixed

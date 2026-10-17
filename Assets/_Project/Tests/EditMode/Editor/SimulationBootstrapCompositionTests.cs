@@ -2589,6 +2589,32 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(utility, Is.EqualTo(13f),
             "The selected graph's action base, NPC override, and admitted active-status multiplier retain their original precedence.");
 
+        Assert.That(runtime.SelectedDailyV1StatusOwner, Is.Not.Null);
+        Assert.That(runtime.SelectedDailyV1StatusOwner.Statuses,
+            Is.EqualTo(new[] { graph.Statuses[status.DefinitionId] }),
+            "Selected current-status identity is owned by the admitted Core graph.");
+        Assert.That(runtime.TryGetConfiguredActionStatusNodes(defaultAction,
+            out IReadOnlyList<DailyV1StatusDefinition> typedStatusToRemove,
+            out IReadOnlyList<DailyV1StatusDefinition> typedStatusToAdd,
+            out IReadOnlyList<DailyV1StatusDefinition> typedTargetStatusToRemove,
+            out IReadOnlyList<DailyV1StatusDefinition> typedTargetStatusToAdd), Is.True);
+        Assert.That(typedStatusToRemove, Is.EqualTo(new[] { graph.Statuses[status.DefinitionId] }));
+        Assert.That(typedStatusToAdd, Is.EqualTo(new[] { graph.Statuses[actionEffectStatus.DefinitionId] }));
+        int committedStatusMutations = 0;
+        Assert.That(runtime.TryBindP12CrimeJusticeMutationBoundary(_ => true, _ => committedStatusMutations++), Is.True);
+        long crimeJusticeRevision = runtime.P12CrimeJusticeRevision;
+        Assert.That(runtime.ApplySelectedDailyV1StatusChanges(typedStatusToRemove, typedStatusToAdd), Is.True);
+        Assert.That(runtime.CurrentStatus, Is.EqualTo(new[] { actionEffectStatus }),
+            "The Core owner mutation updates the exact Unity status projection used by existing systems and P12.");
+        Assert.That(runtime.SelectedDailyV1StatusOwner.Statuses,
+            Is.EqualTo(new[] { graph.Statuses[actionEffectStatus.DefinitionId] }));
+        Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(crimeJusticeRevision + 2),
+            "The existing P12 owner revision still advances once for each actual ordered status write.");
+        Assert.That(committedStatusMutations, Is.EqualTo(2));
+        Assert.That(runtime.ApplySelectedDailyV1StatusChanges(typedStatusToRemove, typedStatusToAdd), Is.True);
+        Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(crimeJusticeRevision + 2),
+            "No-op removal/addition does not advance the P12 owner revision.");
+
         List<DailyV1ActionDefinition> typedActions = new List<DailyV1ActionDefinition>
         {
             graph.Actions[defaultAction.DefinitionId]

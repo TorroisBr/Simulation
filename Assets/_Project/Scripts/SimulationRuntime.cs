@@ -11189,7 +11189,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return;
         }
 
-        if (!npcRuntime.TryGetConfiguredActionStatusChanges(directive.Action, out _, out _, out _, out _))
+        if (npcRuntime.UsesSelectedDailyV1Definitions
+                ? !npcRuntime.TryGetConfiguredActionStatusNodes(directive.Action, out _, out _, out _, out _)
+                : !npcRuntime.TryGetConfiguredActionStatusChanges(directive.Action, out _, out _, out _, out _))
         {
             SkipDirective(directive, "Admitted Escape status effects are unavailable.");
             return;
@@ -11239,7 +11241,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         }
 
         NpcActionType actionType = npcRuntime.GetConfiguredActionType(action);
-        if (!npcRuntime.TryGetConfiguredActionStatusChanges(action, out _, out _, out _, out _))
+        if (npcRuntime.UsesSelectedDailyV1Definitions
+                ? !npcRuntime.TryGetConfiguredActionStatusNodes(action, out _, out _, out _, out _)
+                : !npcRuntime.TryGetConfiguredActionStatusChanges(action, out _, out _, out _, out _))
             return NpcActionResult.Failed();
         INpcActionProvider actionProvider = actionType == NpcActionType.Normal
             ? null
@@ -11448,8 +11452,28 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
     private void ApplySuccessStatusChanges(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)
     {
-        if (npcRuntime == null
-            || !npcRuntime.TryGetConfiguredActionStatusChanges(
+        if (npcRuntime == null)
+            throw new InvalidOperationException("The admitted action status effects could not be resolved from the selected definition graph.");
+
+        if (npcRuntime.UsesSelectedDailyV1Definitions)
+        {
+            if (!npcRuntime.TryGetConfiguredActionStatusNodes(
+                    action,
+                    out IReadOnlyList<DailyV1StatusDefinition> statusToRemoveNodes,
+                    out IReadOnlyList<DailyV1StatusDefinition> statusToAddNodes,
+                    out IReadOnlyList<DailyV1StatusDefinition> targetStatusToRemoveNodes,
+                    out IReadOnlyList<DailyV1StatusDefinition> targetStatusToAddNodes)
+                || !npcRuntime.ApplySelectedDailyV1StatusChanges(statusToRemoveNodes, statusToAddNodes))
+                throw new InvalidOperationException("The admitted action status effects could not be resolved from the selected definition graph.");
+
+            if (actionRuntime != null && actionRuntime.TargetNpc != null
+                && !actionRuntime.TargetNpc.ApplySelectedDailyV1StatusChanges(
+                    targetStatusToRemoveNodes, targetStatusToAddNodes))
+                throw new InvalidOperationException("The selected target has no matching admitted status owner.");
+            return;
+        }
+
+        if (!npcRuntime.TryGetConfiguredActionStatusChanges(
                 action,
                 out IReadOnlyList<NpcStatusData> statusToRemove,
                 out IReadOnlyList<NpcStatusData> statusToAdd,

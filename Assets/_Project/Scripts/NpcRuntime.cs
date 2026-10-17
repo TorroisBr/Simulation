@@ -28,6 +28,7 @@ public class NpcRuntime : ICapabilityConditionSource
     [NonSerialized]private DailyV1NpcDefinition selectedDailyV1Definition;
     [NonSerialized]private DailyV1EffectiveDefinitions selectedDefinitionGraph;
     [NonSerialized]private DailyV1DefinitionAdapter.SelectedBindings selectedDefinitionBindings;
+    [NonSerialized]private DailyV1NpcStatusOwner selectedDailyV1StatusOwner;
     [SerializeField]private string residenceSettlementRuntimeId;
 	[SerializeField]private List<NpcStatusData> currentStatus = new List<NpcStatusData>();
 	[SerializeField]private NpcActionData currentAction;
@@ -98,6 +99,7 @@ public class NpcRuntime : ICapabilityConditionSource
         : npcData != null ? npcData.DefinitionId : string.Empty;
     internal DailyV1NpcDefinition SelectedDailyV1Definition => selectedDailyV1Definition;
     internal DailyV1EffectiveDefinitions SelectedDailyV1DefinitionGraph => selectedDefinitionGraph;
+    internal DailyV1NpcStatusOwner SelectedDailyV1StatusOwner => selectedDailyV1StatusOwner;
     internal bool HasJobType(NpcJobType jobType)
     {
         if (selectedDailyV1Definition == null)
@@ -232,11 +234,8 @@ public class NpcRuntime : ICapabilityConditionSource
         }
 
         if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)) return false;
-        List<DailyV1StatusDefinition> activeNodes = new List<DailyV1StatusDefinition>();
-        foreach (NpcStatusData activeStatus in activeStatuses ?? Array.Empty<NpcStatusData>())
-            if (activeStatus != null && selectedDefinitionBindings.TryGet(activeStatus, out DailyV1StatusDefinition activeNode))
-                activeNodes.Add(activeNode);
-        return DailyV1NpcDefinitionRules.HasRequiredActionStatuses(selectedDefinitionGraph, actionNode, activeNodes);
+        return DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+            selectedDefinitionGraph, actionNode, selectedDailyV1StatusOwner?.Statuses);
     }
 
     internal bool TryGetConfiguredActionStatusChanges(
@@ -275,6 +274,72 @@ public class NpcRuntime : ICapabilityConditionSource
         targetStatusToRemove = resolvedTargetStatusToRemove;
         targetStatusToAdd = resolvedTargetStatusToAdd;
         return true;
+    }
+
+    internal bool TryGetConfiguredActionStatusNodes(
+        NpcActionData action,
+        out IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
+        out IReadOnlyList<DailyV1StatusDefinition> statusToAdd,
+        out IReadOnlyList<DailyV1StatusDefinition> targetStatusToRemove,
+        out IReadOnlyList<DailyV1StatusDefinition> targetStatusToAdd)
+    {
+        statusToRemove = null;
+        statusToAdd = null;
+        targetStatusToRemove = null;
+        targetStatusToAdd = null;
+        return selectedDailyV1Definition != null
+            && selectedDailyV1StatusOwner != null
+            && TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
+            && DailyV1NpcDefinitionRules.TryGetActionStatusChanges(selectedDefinitionGraph, actionNode,
+                out statusToRemove, out statusToAdd, out targetStatusToRemove, out targetStatusToAdd);
+    }
+
+    internal bool ApplySelectedDailyV1StatusChanges(
+        IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
+        IReadOnlyList<DailyV1StatusDefinition> statusToAdd)
+    {
+        if (selectedDailyV1StatusOwner == null) return false;
+        foreach (DailyV1StatusDefinition status in statusToRemove ?? Array.Empty<DailyV1StatusDefinition>())
+            RemoveSelectedDailyV1Status(status);
+        foreach (DailyV1StatusDefinition status in statusToAdd ?? Array.Empty<DailyV1StatusDefinition>())
+            AddSelectedDailyV1Status(status);
+        return true;
+    }
+
+    private void AddSelectedDailyV1Status(DailyV1StatusDefinition status)
+    {
+        if (selectedDailyV1StatusOwner == null || selectedDailyV1StatusOwner.Contains(status)) return;
+        EnsureP12CrimeJusticeMutationAllowed();
+        if (!selectedDailyV1StatusOwner.TryAdd(status)) return;
+        RefreshSelectedStatusProjection();
+        NotifyP12CrimeJusticeMutationCommitted();
+    }
+
+    private void RemoveSelectedDailyV1Status(DailyV1StatusDefinition status)
+    {
+        if (selectedDailyV1StatusOwner == null || !selectedDailyV1StatusOwner.Contains(status)) return;
+        EnsureP12CrimeJusticeMutationAllowed();
+        if (!selectedDailyV1StatusOwner.TryRemove(status)) return;
+        RefreshSelectedStatusProjection();
+        NotifyP12CrimeJusticeMutationCommitted();
+    }
+
+    private void RefreshSelectedStatusProjection()
+    {
+        if (selectedDailyV1StatusOwner == null || selectedDefinitionBindings == null)
+            throw new InvalidOperationException("The selected NPC status owner has no admitted Unity compatibility bindings.");
+
+        List<NpcStatusData> projection = new List<NpcStatusData>(selectedDailyV1StatusOwner.Statuses.Count);
+        foreach (DailyV1StatusDefinition status in selectedDailyV1StatusOwner.Statuses)
+        {
+            if (!selectedDefinitionBindings.TryGetAsset(status, out NpcStatusData asset) || asset == null)
+                throw new InvalidOperationException("A selected NPC status lost its exact Unity compatibility binding.");
+            projection.Add(asset);
+        }
+
+        if (currentStatus == null) currentStatus = new List<NpcStatusData>();
+        currentStatus.Clear();
+        currentStatus.AddRange(projection);
     }
 
     private bool TryResolveSelectedStatusAssets(
@@ -422,15 +487,8 @@ public class NpcRuntime : ICapabilityConditionSource
 
         if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode))
             return 0f;
-        List<DailyV1StatusDefinition> activeStatusNodes = new List<DailyV1StatusDefinition>();
-        foreach (NpcStatusData activeStatus in CurrentStatus)
-            if (activeStatus != null
-                && selectedDefinitionBindings.TryGet(activeStatus, out DailyV1StatusDefinition activeNode)
-                && selectedDefinitionGraph.Statuses.TryGetValue(activeNode.DefinitionId, out DailyV1StatusDefinition admittedNode)
-                && ReferenceEquals(activeNode, admittedNode))
-                activeStatusNodes.Add(activeNode);
         return DailyV1NpcDefinitionRules.ApplyStatusModifiers(
-            selectedDefinitionGraph, actionNode, activeStatusNodes, utility);
+            selectedDefinitionGraph, actionNode, selectedDailyV1StatusOwner?.Statuses, utility);
     }
 
     private bool TryGetSelectedDailyV1Action(NpcActionData action, out DailyV1ActionDefinition actionNode)
@@ -512,18 +570,10 @@ public class NpcRuntime : ICapabilityConditionSource
         if (statuses == null)
             return false;
         statuses.Clear();
-        if (selectedDailyV1Definition == null || selectedDefinitionGraph == null || selectedDefinitionBindings == null)
+        if (selectedDailyV1Definition == null || selectedDefinitionGraph == null
+            || selectedDefinitionBindings == null || selectedDailyV1StatusOwner == null)
             return false;
-
-        foreach (NpcStatusData statusAsset in CurrentStatus)
-        {
-            if (statusAsset != null
-                && selectedDefinitionBindings.TryGet(statusAsset, out DailyV1StatusDefinition statusNode)
-                && selectedDefinitionGraph.Statuses.TryGetValue(statusNode.DefinitionId, out DailyV1StatusDefinition admittedNode)
-                && ReferenceEquals(statusNode, admittedNode))
-                statuses.Add(statusNode);
-        }
-
+        statuses.AddRange(selectedDailyV1StatusOwner.Statuses);
         return true;
     }
 
@@ -878,6 +928,7 @@ public class NpcRuntime : ICapabilityConditionSource
 
 		if (selectedDefinition != null)
 		{
+			List<DailyV1StatusDefinition> selectedStatuses = new List<DailyV1StatusDefinition>();
 			foreach (string statusId in selectedDefinition.Values.statusPadrao ?? Array.Empty<string>())
 			{
 				if (!selectedDefinitions.Statuses.TryGetValue(statusId, out DailyV1StatusDefinition statusNode)
@@ -885,8 +936,14 @@ public class NpcRuntime : ICapabilityConditionSource
 					throw new ArgumentException(
 						"A selected NPC status did not resolve through its exact admitted typed graph node.",
 						nameof(selectedDefinition));
+				selectedStatuses.Add(statusNode);
 				currentStatus.Add(statusAsset);
 			}
+			if (!DailyV1NpcStatusOwner.TryCreate(selectedDefinitions, selectedStatuses,
+				out selectedDailyV1StatusOwner))
+				throw new ArgumentException(
+					"The selected NPC status owner could not install its exact admitted definition identities.",
+					nameof(selectedDefinition));
 		}
 		else if (npcData != null && npcData.statusPadrao != null)
         {
@@ -947,14 +1004,40 @@ public class NpcRuntime : ICapabilityConditionSource
         if (selectedDailyV1Definition != null)
             return ReferenceEquals(selectedDailyV1Definition, definition)
                 && ReferenceEquals(selectedDefinitionGraph, definitions)
-                && ReferenceEquals(selectedDefinitionBindings, bindings);
+                && ReferenceEquals(selectedDefinitionBindings, bindings)
+                && selectedDailyV1StatusOwner != null;
+
+        if (!TryCreateSelectedStatusOwnerFromAssets(definitions, bindings, currentStatus,
+                out DailyV1NpcStatusOwner stagedStatusOwner))
+            return false;
         selectedDailyV1Definition = definition;
         selectedDefinitionGraph = definitions;
         selectedDefinitionBindings = bindings;
+        selectedDailyV1StatusOwner = stagedStatusOwner;
         if (ExistingInventory != null
             && ExistingInventory.SelectedDailyV1Owner != null
             && !ExistingInventory.TryBindSelectedDailyV1Owner(definitions, bindings)) return false;
         return true;
+    }
+
+    private static bool TryCreateSelectedStatusOwnerFromAssets(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1DefinitionAdapter.SelectedBindings bindings,
+        IReadOnlyList<NpcStatusData> assets,
+        out DailyV1NpcStatusOwner owner)
+    {
+        owner = null;
+        if (definitions == null || bindings == null || assets == null) return false;
+        List<DailyV1StatusDefinition> nodes = new List<DailyV1StatusDefinition>(assets.Count);
+        foreach (NpcStatusData asset in assets)
+        {
+            if (asset == null || !bindings.TryGet(asset, out DailyV1StatusDefinition node)
+                || !definitions.Statuses.TryGetValue(node.DefinitionId, out DailyV1StatusDefinition admitted)
+                || !ReferenceEquals(node, admitted))
+                return false;
+            nodes.Add(node);
+        }
+        return DailyV1NpcStatusOwner.TryCreate(definitions, nodes, out owner);
     }
 
     internal bool TryAssignPersonId(PersonId personId)
@@ -1345,6 +1428,13 @@ public class NpcRuntime : ICapabilityConditionSource
     public void AddStatus(NpcStatusData status)
     {
         if (status == null) return;
+        if (selectedDailyV1Definition != null)
+        {
+            if (selectedDailyV1StatusOwner == null || selectedDefinitionBindings == null
+                || !selectedDefinitionBindings.TryGet(status, out DailyV1StatusDefinition statusNode)) return;
+            AddSelectedDailyV1Status(statusNode);
+            return;
+        }
         if (currentStatus == null) currentStatus = new List<NpcStatusData>();
         if (currentStatus.Contains(status)) return;
         EnsureP12CrimeJusticeMutationAllowed();
@@ -1354,6 +1444,13 @@ public class NpcRuntime : ICapabilityConditionSource
 
     public void RemoveStatus(NpcStatusData status)
     {
+        if (selectedDailyV1Definition != null)
+        {
+            if (status == null || selectedDailyV1StatusOwner == null || selectedDefinitionBindings == null
+                || !selectedDefinitionBindings.TryGet(status, out DailyV1StatusDefinition statusNode)) return;
+            RemoveSelectedDailyV1Status(statusNode);
+            return;
+        }
         if (status == null || currentStatus == null || !currentStatus.Contains(status)) return;
         EnsureP12CrimeJusticeMutationAllowed();
         currentStatus.Remove(status);

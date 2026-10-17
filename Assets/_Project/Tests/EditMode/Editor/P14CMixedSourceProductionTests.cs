@@ -118,6 +118,8 @@ public sealed class P14CMixedSourceProductionTests
             Assert.That(typedPrepared.SelectedState.ReadOnlyRows[0].Item,
                 Is.SameAs(definitions.Items[item.DefinitionId]));
 
+            ValidateSelectedCityAnchor(city, "location.p14c-selected-city");
+
             SimulateDirect(city, 3L);
 
             LocalDailyMaterialFlowResult flow = city.LastMaterialFlow;
@@ -135,6 +137,45 @@ public sealed class P14CMixedSourceProductionTests
         finally
         {
             UnityEngine.Object.DestroyImmediate(authoring);
+        }
+    }
+
+    [Test]
+    public void SelectedMixedProductionReceiptUsesAdmittedGraphAfterAuthoringItemsAreDetached()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p14c-selected-receipt-item");
+        using (SelectedCityFixture fixture = CreateSelectedMixedCity(
+            "p14c-selected-receipt-city", item, 5, 0f))
+        {
+            CityRuntime city = fixture.City;
+            CityData authored = fixture.Authoring.cities[0];
+            authored.materialFlowProfile = LocalMaterialFlowProfile.ExogenousDaily;
+            foreach (CityProductionConfig source in authored.productionConfigs)
+            {
+                source.item = null;
+                source.productionSourceId = "mutated-after-admission";
+                source.amountPerDay = 999;
+            }
+            authored.marketItems[0].item = null;
+
+            ValidateSelectedCityAnchor(city, "location.p14c-selected-receipt-city");
+            BoundaryContinuationManifest manifest = CreateSelectedManifest(
+                city, CityDailyEconomyStepKind.Production);
+            Assert.That(city.TryPrepareDailyEconomyStep(manifest, manifest.Steps[0],
+                out IBoundaryContinuationStepCommit prepared, out TimelineFailure prepareFailure), Is.True,
+                prepareFailure.ToString());
+            Assert.That(prepared.TryCommit(out TimelineFailure commitFailure), Is.True,
+                commitFailure.ToString());
+            Assert.That(city.TryResolveDailyEconomyReceipt(manifest, manifest.Steps[0],
+                out CityDailyEconomyReceipt receipt, out TimelineFailure receiptFailure), Is.True,
+                receiptFailure.ToString());
+
+            Assert.That(receipt.ProductionResults, Has.Count.EqualTo(2));
+            Assert.That(receipt.ProductionResults, Has.All.Property(nameof(CityProductionResult.ItemDefinitionId))
+                .EqualTo(item.DefinitionId));
+            Assert.That(receipt.SourceOutcomes, Has.Count.EqualTo(2));
+            Assert.That(city.Market.SelectedDailyV1Owner.Items[0].Item,
+                Is.SameAs(fixture.Definitions.Items[item.DefinitionId]));
         }
     }
 
@@ -649,6 +690,20 @@ public sealed class P14CMixedSourceProductionTests
                 out BoundaryContinuationStep step, out TimelineFailure failure))
             throw new InvalidOperationException(failure.ToString());
         return new BoundaryContinuationManifest(operation, "daily-economy", "1", "selected-config", new[] { step });
+    }
+
+    private static void ValidateSelectedCityAnchor(CityRuntime city, string locationId)
+    {
+        SpatialAuthorityStore spatial = new SpatialAuthorityStore();
+        HexId hexId = new HexId("hex." + city.RuntimeId);
+        Assert.That(spatial.TryRegisterHex(new HexRecord(hexId), out SpatialAuthorityFailure hexFailure), Is.True,
+            hexFailure.ToString());
+        Assert.That(spatial.TryRegisterLocation(new LocationRecord(new LocationId(locationId), hexId),
+            out SpatialAuthorityFailure locationFailure), Is.True, locationFailure.ToString());
+        LegacySpatialAnchorBindingStore bindings = new LegacySpatialAnchorBindingStore(spatial);
+        Assert.That(bindings.TryBindCity(city.RuntimeId, new LocationId(locationId),
+            out SpatialAnchorBindingFailure bindingFailure), Is.True, bindingFailure.ToString());
+        Assert.DoesNotThrow(() => city.ValidateLocalDailyMaterialFlowAnchor(bindings, spatial));
     }
 
     private sealed class SelectedCityFixture : IDisposable
