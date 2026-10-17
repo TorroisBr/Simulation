@@ -33,6 +33,56 @@ public sealed class DailyV1InventoryMarketOwnerTests
     }
 
     [Test]
+    public void InventoryPreparedReplacementRejectsInvalidAmountsCostsAndOverflowWithoutMutation()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ItemDefinition item = definitions.Items["FERRO"];
+        DailyV1InventoryOwner owner = new DailyV1InventoryOwner(definitions);
+        Assert.That(owner.TryAddItem(item, 3, 2f), Is.True);
+        long revision = owner.Revision;
+        int amount = owner.GetAmount(item);
+        float cost = owner.GetAverageUnitCost(item);
+
+        Assert.That(owner.PrepareReplacement(item, -1, 0f, false, 0), Is.Null, "Negative removal is not a valid prepared operation.");
+        Assert.That(owner.PrepareReplacement(item, amount + 1, 0f, false, 0), Is.Null, "Over-removal must reject instead of silently deleting the row.");
+        Assert.That(owner.PrepareReplacement(item, 0, float.NaN, false, 0), Is.Null);
+        Assert.That(owner.PrepareReplacement(item, 0, float.PositiveInfinity, true, 1), Is.Null);
+        Assert.That(owner.PrepareReplacement(item, 0, -1f, true, 1), Is.Null);
+        Assert.That(owner.PrepareReplacement(item, 0, 1f, true, -1), Is.Null);
+        Assert.That(owner.PrepareReplacement(item, 0, float.MaxValue, true, 2), Is.Null,
+            "Overflow in weighted cost calculation must not produce an installable row.");
+        Assert.That(owner.PrepareReplacement(item, 0, 1f, true, int.MaxValue), Is.Null,
+            "Addition overflow must be rejected before an installable state is produced.");
+
+        Assert.That(owner.Revision, Is.EqualTo(revision));
+        Assert.That(owner.GetAmount(item), Is.EqualTo(amount));
+        Assert.That(owner.GetAverageUnitCost(item), Is.EqualTo(cost));
+    }
+
+    [Test]
+    public void InventoryInstallRevalidatesPreparedRowsAndLeavesOwnerUnchangedOnRejection()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ItemDefinition item = definitions.Items["FERRO"];
+        DailyV1InventoryOwner owner = new DailyV1InventoryOwner(definitions);
+        Assert.That(owner.TryAddItem(item, 3, 2f), Is.True);
+        long revision = owner.Revision;
+        int amount = owner.GetAmount(item);
+
+        DailyV1InventoryPreparedState negativeAmount = owner.PrepareReplacement(item, 1, 0f, false, 0);
+        negativeAmount.Rows[0] = new DailyV1InventoryItemState(item, -1, 2f);
+        Assert.That(owner.TryInstall(revision, negativeAmount), Is.False);
+        Assert.That(owner.Revision, Is.EqualTo(revision));
+        Assert.That(owner.GetAmount(item), Is.EqualTo(amount));
+
+        DailyV1InventoryPreparedState invalidCost = owner.PrepareReplacement(item, 1, 0f, false, 0);
+        invalidCost.Rows[0] = new DailyV1InventoryItemState(item, amount - 1, float.NaN);
+        Assert.That(owner.TryInstall(revision, invalidCost), Is.False);
+        Assert.That(owner.Revision, Is.EqualTo(revision));
+        Assert.That(owner.GetAmount(item), Is.EqualTo(amount));
+    }
+
+    [Test]
     public void MarketInitializationAndPreparedInstallRetainCanonicalItemIdentity()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -96,6 +146,31 @@ public sealed class DailyV1InventoryMarketOwnerTests
             foreignRow.DesiredAmount, foreignRow.CurrentPrice, out DailyV1MarketItemState foreignCandidate), Is.True);
         Assert.That(owner.TryCreatePreparedState(new[] { foreignCandidate }, out _), Is.False,
             "A foreign graph node with the same stable ID cannot be installed into this owner.");
+        Assert.That(owner.Revision, Is.EqualTo(revision + 1));
+    }
+
+    [Test]
+    public void MarketRejectsChangedPreparedRowsWithoutRevisionIncrement()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1MarketOwner owner = new DailyV1MarketOwner(definitions);
+        Assert.That(owner.TryInitializeFromCity(definitions.Cities["CAMPO_VERDE"]), Is.True);
+        DailyV1MarketItemState[] original = owner.Items.ToArray();
+        long revision = owner.Revision;
+        DailyV1MarketItemState[] changed = original.Select(row =>
+        {
+            Assert.That(DailyV1MarketItemState.TryCreate(row.Item, row.Amount + 1,
+                row.DesiredAmount, row.CurrentPrice, out DailyV1MarketItemState created), Is.True);
+            return created;
+        }).ToArray();
+        Assert.That(owner.TryCreatePreparedState(changed, out DailyV1MarketPreparedState prepared), Is.True);
+
+        Assert.That(owner.TryInstall(revision, 0, prepared), Is.False,
+            "Changed authoritative stock must not install without a local revision invalidation.");
+        Assert.That(owner.Revision, Is.EqualTo(revision));
+        Assert.That(owner.Items.Select(row => row.Amount), Is.EqualTo(original.Select(row => row.Amount)));
+        Assert.That(owner.TryInstall(revision, 1, prepared), Is.True,
+            "The same prepared transaction remains valid when paired with its required revision increment.");
         Assert.That(owner.Revision, Is.EqualTo(revision + 1));
     }
 }

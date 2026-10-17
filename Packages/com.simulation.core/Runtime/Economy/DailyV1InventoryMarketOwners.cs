@@ -111,28 +111,39 @@ public sealed class DailyV1InventoryOwner
     public bool CanInstall(long expectedRevision) => revision == expectedRevision && revision < long.MaxValue;
     public bool TryInstall(long expectedRevision, DailyV1InventoryPreparedState replacement)
     {
-        if (replacement == null || !CanInstall(expectedRevision)) return false;
+        if (replacement == null || !CanInstall(expectedRevision) || !IsValidPreparedState(replacement)) return false;
         rows = replacement.Rows; readOnlyRows = replacement.ReadOnlyRows; revision = expectedRevision + 1; return true;
     }
 
     public DailyV1InventoryPreparedState PrepareReplacement(DailyV1ItemDefinition item, int removed, float addCost, bool add, int added)
     {
-        if (!IsAdmitted(item)) return null;
+        if (!IsAdmitted(item) || removed < 0 || added < 0
+            || float.IsNaN(addCost) || float.IsInfinity(addCost) || addCost < 0f
+            || (add && added <= 0) || (!add && added != 0)) return null;
+        DailyV1InventoryItemState existingItem = Find(item);
+        if (removed > 0 && (existingItem == null || removed > existingItem.Amount)) return null;
+        long nextAmount = (long)(existingItem?.Amount ?? 0) - removed + added;
+        if (nextAmount < 0 || nextAmount > int.MaxValue) return null;
         List<DailyV1InventoryItemState> next = new List<DailyV1InventoryItemState>((rows ?? (rows = new List<DailyV1InventoryItemState>())).Count + (add ? 1 : 0));
         bool found = false;
         foreach (DailyV1InventoryItemState existing in rows)
         {
-            if (existing == null) { next.Add(null); continue; }
+            if (existing == null) return null;
             if (found || !ReferenceEquals(existing.Item, item)) { next.Add(Copy(existing)); continue; }
             found = true;
-            int amount = existing.Amount - removed + added;
+            int amount = (int)nextAmount;
             if (amount > 0)
             {
                 float cost = add ? (existing.AverageUnitCost * existing.Amount + addCost * added) / amount : existing.AverageUnitCost;
+                if (float.IsNaN(cost) || float.IsInfinity(cost) || cost < 0f) return null;
                 next.Add(new DailyV1InventoryItemState(item, amount, cost));
             }
         }
-        if (add && !found) next.Add(new DailyV1InventoryItemState(item, added, addCost));
+        if (add && !found)
+        {
+            if (nextAmount <= 0) return null;
+            next.Add(new DailyV1InventoryItemState(item, (int)nextAmount, addCost));
+        }
         return new DailyV1InventoryPreparedState(next);
     }
 
@@ -154,6 +165,20 @@ public sealed class DailyV1InventoryOwner
     }
 
     private bool IsAdmitted(DailyV1ItemDefinition item) => item != null && definitions.Items.TryGetValue(item.DefinitionId, out DailyV1ItemDefinition admitted) && ReferenceEquals(admitted, item);
+    private bool IsValidPreparedState(DailyV1InventoryPreparedState prepared)
+    {
+        if (prepared.Rows == null || prepared.ReadOnlyRows == null || prepared.Rows.Count != prepared.ReadOnlyRows.Count) return false;
+        for (int i = 0; i < prepared.Rows.Count; i++)
+        {
+            DailyV1InventoryItemState row = prepared.Rows[i];
+            if (row == null || !ReferenceEquals(row, prepared.ReadOnlyRows[i]) || !IsAdmitted(row.Item)
+                || row.Amount < 0 || float.IsNaN(row.AverageUnitCost) || float.IsInfinity(row.AverageUnitCost)
+                || row.AverageUnitCost < 0f) return false;
+            for (int earlier = 0; earlier < i; earlier++)
+                if (ReferenceEquals(prepared.Rows[earlier].Item, row.Item)) return false;
+        }
+        return true;
+    }
     private DailyV1InventoryItemState Find(DailyV1ItemDefinition item) { if (!IsAdmitted(item)) return null; foreach (DailyV1InventoryItemState row in rows ?? (rows = new List<DailyV1InventoryItemState>())) if (row != null && ReferenceEquals(row.Item, item)) return row; return null; }
     private int FindIndex(DailyV1ItemDefinition item) { for (int i = 0; i < (rows?.Count ?? 0); i++) if (rows[i] != null && ReferenceEquals(rows[i].Item, item)) return i; return -1; }
     private List<DailyV1InventoryItemState> EnsureRows() { if (rows == null) rows = new List<DailyV1InventoryItemState>(); return rows; }
@@ -267,7 +292,7 @@ public sealed class DailyV1MarketOwner
     public bool CanInstall(long expectedRevision, long increments) => revision == expectedRevision && increments >= 0 && increments <= long.MaxValue - expectedRevision;
     public bool CanInstallMaterialFlow(long expectedRevision, long increments) => CanInstall(expectedRevision, increments) && CanCommit();
     public bool TryInstall(long expectedRevision, long increments, DailyV1MarketPreparedState replacement)
-    { if (replacement == null || !CanInstall(expectedRevision, increments)) return false; rows = replacement.Rows; readOnlyRows = replacement.ReadOnlyRows; revision = expectedRevision + increments; return true; }
+    { if (replacement == null || increments <= 0 || !CanInstall(expectedRevision, increments)) return false; rows = replacement.Rows; readOnlyRows = replacement.ReadOnlyRows; revision = expectedRevision + increments; return true; }
     public void NotifyMaterialFlowInstalled() => NotifyCommitted();
 
     /// <summary>Validates and snapshots a detached replacement while preserving selected row order.</summary>
