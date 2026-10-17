@@ -102,15 +102,13 @@ public class NpcRuntime : ICapabilityConditionSource
     {
         if (selectedDailyV1Definition == null)
             return npcData != null && npcData.job != null && npcData.job.jobType == jobType;
-        DailyV1NpcJobData job = GetSelectedDailyV1Job();
-        return job != null && job.jobType != null && job.jobType.Value == (int)jobType;
+        return DailyV1NpcDefinitionRules.HasJobType(selectedDailyV1Definition, selectedDefinitionGraph, (int)jobType);
     }
     internal bool HasMerchantBehavior(MerchantBehavior behavior)
     {
         if (selectedDailyV1Definition == null)
             return npcData != null && npcData.job != null && npcData.job.merchantBehavior == behavior;
-        DailyV1NpcJobData job = GetSelectedDailyV1Job();
-        return job != null && job.merchantBehavior != null && job.merchantBehavior.Value == (int)behavior;
+        return DailyV1NpcDefinitionRules.HasMerchantBehavior(selectedDailyV1Definition, selectedDefinitionGraph, (int)behavior);
     }
     internal float MinimumProfitPerItem
     {
@@ -118,8 +116,7 @@ public class NpcRuntime : ICapabilityConditionSource
         {
             if (selectedDailyV1Definition == null)
                 return npcData != null && npcData.job != null ? npcData.job.minimumProfitPerItem : 1f;
-            DailyV1NpcJobData job = GetSelectedDailyV1Job();
-            return job != null ? job.minimumProfitPerItem : 1f;
+            return DailyV1NpcDefinitionRules.MinimumProfitPerItem(selectedDailyV1Definition, selectedDefinitionGraph);
         }
     }
     public string ResidenceSettlementRuntimeId => personRuntime != null
@@ -206,25 +203,18 @@ public class NpcRuntime : ICapabilityConditionSource
         if (selectedDailyV1Definition == null)
             return npcData != null && npcData.acoesPadrao != null
                 && npcData.acoesPadrao.Exists(row => row != null && row.action == action);
-        if (action == null || selectedDefinitionGraph == null || selectedDefinitionBindings == null
-            || !selectedDefinitionBindings.TryGet(action, out DailyV1ActionDefinition actionNode)
-            || !selectedDefinitionGraph.Actions.TryGetValue(actionNode.DefinitionId, out DailyV1ActionDefinition admittedAction)
-            || !ReferenceEquals(actionNode, admittedAction))
+        if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode))
             return false;
-        foreach (DailyV1NPCDefaultAction row in selectedDailyV1Definition.Values.acoesPadrao ?? Array.Empty<DailyV1NPCDefaultAction>())
-            if (row != null && selectedDefinitionGraph.Actions.TryGetValue(row.action, out DailyV1ActionDefinition configuredAction)
-                && ReferenceEquals(configuredAction, actionNode))
-                return true;
-        return false;
+        return DailyV1NpcDefinitionRules.HasConfiguredDefaultAction(selectedDailyV1Definition, selectedDefinitionGraph, actionNode);
     }
 
     internal float GetConfiguredActionBaseUtility(NpcActionData action)
     {
         if (selectedDailyV1Definition == null)
             return action != null ? action.baseUtility : 0f;
-        if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode))
-            return 0f;
-        return actionNode.Values.baseUtility;
+        return TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
+            ? DailyV1NpcDefinitionRules.GetActionBaseUtility(selectedDefinitionGraph, actionNode)
+            : 0f;
     }
 
     internal bool HasConfiguredRequiredActionStatuses(NpcActionData action, IReadOnlyList<NpcStatusData> activeStatuses)
@@ -241,32 +231,12 @@ public class NpcRuntime : ICapabilityConditionSource
             return true;
         }
 
-        if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode))
-            return false;
-        foreach (string requiredStatusId in actionNode.Values.statusNecessariosParaFazerAcao ?? Array.Empty<string>())
-        {
-            // The authoring contract ignores null references in this list. Preserve that
-            // behavior while resolving every non-null requirement through the admitted graph.
-            if (requiredStatusId == null)
-                continue;
-            if (!selectedDefinitionGraph.Statuses.TryGetValue(requiredStatusId, out DailyV1StatusDefinition requiredNode))
-                return false;
-
-            bool present = false;
-            foreach (NpcStatusData activeStatus in activeStatuses ?? Array.Empty<NpcStatusData>())
-            {
-                if (activeStatus != null
-                    && selectedDefinitionBindings.TryGet(activeStatus, out DailyV1StatusDefinition activeNode)
-                    && ReferenceEquals(activeNode, requiredNode))
-                {
-                    present = true;
-                    break;
-                }
-            }
-            if (!present)
-                return false;
-        }
-        return true;
+        if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)) return false;
+        List<DailyV1StatusDefinition> activeNodes = new List<DailyV1StatusDefinition>();
+        foreach (NpcStatusData activeStatus in activeStatuses ?? Array.Empty<NpcStatusData>())
+            if (activeStatus != null && selectedDefinitionBindings.TryGet(activeStatus, out DailyV1StatusDefinition activeNode))
+                activeNodes.Add(activeNode);
+        return DailyV1NpcDefinitionRules.HasRequiredActionStatuses(selectedDefinitionGraph, actionNode, activeNodes);
     }
 
     internal bool TryGetConfiguredActionStatusChanges(
@@ -289,10 +259,15 @@ public class NpcRuntime : ICapabilityConditionSource
             return action != null;
         }
         if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
-            || !TryResolveSelectedStatuses(actionNode.Values.statusToRemove, out List<NpcStatusData> resolvedStatusToRemove)
-            || !TryResolveSelectedStatuses(actionNode.Values.statusToAdd, out List<NpcStatusData> resolvedStatusToAdd)
-            || !TryResolveSelectedStatuses(actionNode.Values.targetStatusToRemove, out List<NpcStatusData> resolvedTargetStatusToRemove)
-            || !TryResolveSelectedStatuses(actionNode.Values.targetStatusToAdd, out List<NpcStatusData> resolvedTargetStatusToAdd))
+            || !DailyV1NpcDefinitionRules.TryGetActionStatusChanges(selectedDefinitionGraph, actionNode,
+                out IReadOnlyList<DailyV1StatusDefinition> statusToRemoveNodes,
+                out IReadOnlyList<DailyV1StatusDefinition> statusToAddNodes,
+                out IReadOnlyList<DailyV1StatusDefinition> targetStatusToRemoveNodes,
+                out IReadOnlyList<DailyV1StatusDefinition> targetStatusToAddNodes)
+            || !TryResolveSelectedStatusAssets(statusToRemoveNodes, out List<NpcStatusData> resolvedStatusToRemove)
+            || !TryResolveSelectedStatusAssets(statusToAddNodes, out List<NpcStatusData> resolvedStatusToAdd)
+            || !TryResolveSelectedStatusAssets(targetStatusToRemoveNodes, out List<NpcStatusData> resolvedTargetStatusToRemove)
+            || !TryResolveSelectedStatusAssets(targetStatusToAddNodes, out List<NpcStatusData> resolvedTargetStatusToAdd))
             return false;
 
         statusToRemove = resolvedStatusToRemove;
@@ -302,15 +277,16 @@ public class NpcRuntime : ICapabilityConditionSource
         return true;
     }
 
-    private bool TryResolveSelectedStatuses(IReadOnlyList<string> definitionIds, out List<NpcStatusData> statuses)
+    private bool TryResolveSelectedStatusAssets(
+        IReadOnlyList<DailyV1StatusDefinition> statusNodes,
+        out List<NpcStatusData> statuses)
     {
         statuses = new List<NpcStatusData>();
-        foreach (string definitionId in definitionIds ?? Array.Empty<string>())
+        foreach (DailyV1StatusDefinition statusNode in statusNodes ?? Array.Empty<DailyV1StatusDefinition>())
         {
-            // As in the authoring path, a null entry has no status effect.
-            if (definitionId == null)
-                continue;
-            if (!selectedDefinitionGraph.Statuses.TryGetValue(definitionId, out DailyV1StatusDefinition statusNode)
+            if (statusNode == null
+                || !selectedDefinitionGraph.Statuses.TryGetValue(statusNode.DefinitionId, out DailyV1StatusDefinition admittedNode)
+                || !ReferenceEquals(admittedNode, statusNode)
                 || !selectedDefinitionBindings.TryGetAsset(statusNode, out NpcStatusData statusAsset)
                 || statusAsset == null)
                 return false;
@@ -323,11 +299,10 @@ public class NpcRuntime : ICapabilityConditionSource
     {
         if (selectedDailyV1Definition == null)
             return action != null && action.crimeSettings != null ? action.crimeSettings : new CrimeActionSettings();
-        if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
-            || actionNode.Values.crimeSettings == null)
+        if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode))
             return new CrimeActionSettings();
-
-        DailyV1CrimeActionSettings settings = actionNode.Values.crimeSettings;
+        DailyV1CrimeActionSettings settings = DailyV1NpcDefinitionRules.GetCrimeActionSettings(selectedDefinitionGraph, actionNode);
+        if (settings == null) return new CrimeActionSettings();
         return new CrimeActionSettings
         {
             amount = settings.amount,
@@ -344,7 +319,7 @@ public class NpcRuntime : ICapabilityConditionSource
         if (selectedDailyV1Definition == null)
             return action?.actionName ?? string.Empty;
         return TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
-            ? actionNode.Values.actionName ?? string.Empty
+            ? DailyV1NpcDefinitionRules.GetActionName(selectedDefinitionGraph, actionNode)
             : string.Empty;
     }
 
@@ -353,7 +328,7 @@ public class NpcRuntime : ICapabilityConditionSource
         if (selectedDailyV1Definition == null)
             return action?.normalActionLogText ?? string.Empty;
         return TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
-            ? actionNode.Values.normalActionLogText ?? string.Empty
+            ? DailyV1NpcDefinitionRules.GetNormalActionLogText(selectedDefinitionGraph, actionNode)
             : string.Empty;
     }
 
@@ -362,7 +337,7 @@ public class NpcRuntime : ICapabilityConditionSource
         if (selectedDailyV1Definition == null)
             return action != null && action.canFail;
         return TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
-            ? actionNode.Values.canFail
+            ? DailyV1NpcDefinitionRules.GetActionCanFail(selectedDefinitionGraph, actionNode)
             : false;
     }
 
@@ -371,7 +346,7 @@ public class NpcRuntime : ICapabilityConditionSource
         if (selectedDailyV1Definition == null)
             return action != null ? action.baseSuccessChance : 1f;
         return TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
-            ? actionNode.Values.baseSuccessChance
+            ? DailyV1NpcDefinitionRules.GetActionBaseSuccessChance(selectedDefinitionGraph, actionNode)
             : 0f;
     }
 
@@ -380,7 +355,7 @@ public class NpcRuntime : ICapabilityConditionSource
         if (selectedDailyV1Definition == null)
             return (int)(action?.actionType ?? NpcActionType.Normal);
         return TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
-            ? actionNode.Values.actionType?.Value ?? int.MinValue
+            ? DailyV1NpcDefinitionRules.GetActionTypeOrder(selectedDefinitionGraph, actionNode)
             : int.MinValue;
     }
 
@@ -389,7 +364,7 @@ public class NpcRuntime : ICapabilityConditionSource
         if (selectedDailyV1Definition == null)
             return (int)(action?.actionCategory ?? NpcActionCategory.General);
         return TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
-            ? actionNode.Values.actionCategory?.Value ?? int.MinValue
+            ? DailyV1NpcDefinitionRules.GetActionCategoryOrder(selectedDefinitionGraph, actionNode)
             : int.MinValue;
     }
 
@@ -413,13 +388,8 @@ public class NpcRuntime : ICapabilityConditionSource
 
         if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode))
             return false;
-        DailyV1NpcJobData job = GetSelectedDailyV1Job();
-        if (job == null || string.IsNullOrWhiteSpace(job.workAction)
-            || !selectedDefinitionGraph.Actions.TryGetValue(job.workAction, out DailyV1ActionDefinition configuredAction)
-            || !ReferenceEquals(configuredAction, actionNode))
-            return false;
-        utility = job.workUtility;
-        return true;
+        return DailyV1NpcDefinitionRules.TryGetWorkActionUtility(
+            selectedDailyV1Definition, selectedDefinitionGraph, actionNode, out utility);
     }
 
     internal bool TryGetConfiguredDefaultActionUtility(NpcActionData action, out float utility)
@@ -435,16 +405,8 @@ public class NpcRuntime : ICapabilityConditionSource
 
         if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode))
             return false;
-        foreach (DailyV1NPCDefaultAction row in selectedDailyV1Definition.Values.acoesPadrao ?? Array.Empty<DailyV1NPCDefaultAction>())
-        {
-            if (row != null && selectedDefinitionGraph.Actions.TryGetValue(row.action, out DailyV1ActionDefinition configuredAction)
-                && ReferenceEquals(configuredAction, actionNode))
-            {
-                utility = row.baseUtility;
-                return true;
-            }
-        }
-        return false;
+        return DailyV1NpcDefinitionRules.TryGetDefaultActionUtility(
+            selectedDailyV1Definition, selectedDefinitionGraph, actionNode, out utility);
     }
 
     internal float ApplyConfiguredActionStatusModifiers(NpcActionData action, float utility)
@@ -460,18 +422,15 @@ public class NpcRuntime : ICapabilityConditionSource
 
         if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode))
             return 0f;
-
-        foreach (DailyV1StatusWeightModifier modifier in actionNode.Values.statusModifiers ?? Array.Empty<DailyV1StatusWeightModifier>())
-        {
-            if (modifier == null || string.IsNullOrWhiteSpace(modifier.status)
-                || !selectedDefinitionGraph.Statuses.TryGetValue(modifier.status, out DailyV1StatusDefinition statusNode)
-                || !selectedDefinitionBindings.TryGetAsset(statusNode, out NpcStatusData statusAsset)
-                || statusAsset == null
-                || !CurrentStatus.Contains(statusAsset))
-                continue;
-            utility *= modifier.multiplier;
-        }
-        return utility;
+        List<DailyV1StatusDefinition> activeStatusNodes = new List<DailyV1StatusDefinition>();
+        foreach (NpcStatusData activeStatus in CurrentStatus)
+            if (activeStatus != null
+                && selectedDefinitionBindings.TryGet(activeStatus, out DailyV1StatusDefinition activeNode)
+                && selectedDefinitionGraph.Statuses.TryGetValue(activeNode.DefinitionId, out DailyV1StatusDefinition admittedNode)
+                && ReferenceEquals(activeNode, admittedNode))
+                activeStatusNodes.Add(activeNode);
+        return DailyV1NpcDefinitionRules.ApplyStatusModifiers(
+            selectedDefinitionGraph, actionNode, activeStatusNodes, utility);
     }
 
     private bool TryGetSelectedDailyV1Action(NpcActionData action, out DailyV1ActionDefinition actionNode)
@@ -550,10 +509,7 @@ public class NpcRuntime : ICapabilityConditionSource
             || !selectedDefinitionGraph.Traits.TryGetValue(traitNode.DefinitionId, out DailyV1TraitDefinition admittedTrait)
             || !ReferenceEquals(traitNode, admittedTrait))
             return false;
-        foreach (string traitId in selectedDailyV1Definition.Values.traits ?? Array.Empty<string>())
-            if (string.Equals(traitId, traitNode.DefinitionId, StringComparison.Ordinal))
-                return true;
-        return false;
+        return DailyV1NpcDefinitionRules.HasTrait(selectedDailyV1Definition, selectedDefinitionGraph, traitNode);
     }
 
     internal float GetCapabilityAttributeValue(CapabilityAttributeData attribute)
@@ -572,10 +528,8 @@ public class NpcRuntime : ICapabilityConditionSource
             || !selectedDefinitionGraph.CapabilityAttributes.TryGetValue(attributeNode.DefinitionId, out DailyV1CapabilityAttributeDefinition admittedAttribute)
             || !ReferenceEquals(attributeNode, admittedAttribute))
             return 0f;
-        foreach (DailyV1CapabilityAttributeValue row in selectedDailyV1Definition.Values.capabilityValues ?? Array.Empty<DailyV1CapabilityAttributeValue>())
-            if (row != null && string.Equals(row.attribute, attributeNode.DefinitionId, StringComparison.Ordinal))
-                return UnityMathfCompatibility.Max(0f, row.value);
-        return 0f;
+        return DailyV1NpcDefinitionRules.GetCapabilityAttributeValue(
+            selectedDailyV1Definition, selectedDefinitionGraph, attributeNode);
     }
 
     internal void AppendPreferredTradeItemDefinitionIds(List<string> destination)
@@ -587,11 +541,8 @@ public class NpcRuntime : ICapabilityConditionSource
                 if (row?.item != null) destination.Add(row.item.DefinitionId);
             return;
         }
-        DailyV1NpcJobData job = GetSelectedDailyV1Job();
-        foreach (DailyV1TradeItemPreference row in job?.preferredTradeItems ?? Array.Empty<DailyV1TradeItemPreference>())
-            if (row != null && !string.IsNullOrWhiteSpace(row.item)
-                && selectedDefinitionGraph.Items.ContainsKey(row.item))
-                destination.Add(row.item);
+        DailyV1NpcDefinitionRules.AppendPreferredTradeItemDefinitionIds(
+            selectedDailyV1Definition, selectedDefinitionGraph, destination);
     }
 
     internal bool TryGetPreferredTradeItemMultiplier(ItemData item, out float multiplier)
@@ -615,27 +566,8 @@ public class NpcRuntime : ICapabilityConditionSource
             || !selectedDefinitionGraph.Items.TryGetValue(itemNode.DefinitionId, out DailyV1ItemDefinition admittedItem)
             || !ReferenceEquals(itemNode, admittedItem))
             return false;
-        DailyV1NpcJobData job = GetSelectedDailyV1Job();
-        foreach (DailyV1TradeItemPreference row in job?.preferredTradeItems ?? Array.Empty<DailyV1TradeItemPreference>())
-        {
-            if (row != null && string.Equals(row.item, itemNode.DefinitionId, StringComparison.Ordinal)
-                && selectedDefinitionGraph.Items.TryGetValue(row.item, out DailyV1ItemDefinition configuredItem)
-                && ReferenceEquals(configuredItem, itemNode))
-            {
-                multiplier = row.utilityMultiplier;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private DailyV1NpcJobData GetSelectedDailyV1Job()
-    {
-        string jobId = selectedDailyV1Definition?.Values.job;
-        return selectedDefinitionGraph != null && !string.IsNullOrWhiteSpace(jobId)
-            && selectedDefinitionGraph.Jobs.TryGetValue(jobId, out DailyV1JobDefinition jobNode)
-            ? jobNode.Values
-            : null;
+        return DailyV1NpcDefinitionRules.TryGetPreferredTradeItemMultiplier(
+            selectedDailyV1Definition, selectedDefinitionGraph, itemNode, out multiplier);
     }
 
     internal bool CanBindRuntimeMutationGuard(AuthoritativeMutationGuard guard)
