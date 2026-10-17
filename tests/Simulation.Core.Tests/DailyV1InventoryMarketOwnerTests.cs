@@ -173,4 +173,52 @@ public sealed class DailyV1InventoryMarketOwnerTests
             "The same prepared transaction remains valid when paired with its required revision increment.");
         Assert.That(owner.Revision, Is.EqualTo(revision + 1));
     }
+
+    [Test]
+    public void MarketTypedPreparedOperationsRetainNodeIdentityAndRejectInvalidChangesAtomically()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1EffectiveDefinitions otherDefinitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1MarketOwner owner = new DailyV1MarketOwner(definitions);
+        Assert.That(owner.TryInitializeFromCity(definitions.Cities["CAMPO_VERDE"]), Is.True);
+        DailyV1MarketItemState original = owner.Items[0];
+        long revision = owner.Revision;
+
+        Assert.That(owner.TryCreatePreparedSnapshot(out DailyV1MarketPreparedState snapshot), Is.True);
+        Assert.That(owner.TryGetPreparedItem(snapshot, original.Item, out DailyV1MarketItemState copied), Is.True);
+        Assert.That(copied.Item, Is.SameAs(original.Item));
+        Assert.That(owner.TryCountPreparedItems(snapshot, original.Item, out int count), Is.True);
+        Assert.That(count, Is.EqualTo(1));
+        Assert.That(owner.TryGetPreparedItem(snapshot, otherDefinitions.Items[original.Item.DefinitionId], out _), Is.False,
+            "A same-ID node from another definitions graph cannot address this prepared owner state.");
+
+        Assert.That(owner.TryApplyPreparedStockDelta(snapshot, original.Item, -original.Amount - 1,
+            original.DesiredAmount, out _, out _), Is.False, "Over-removal must reject without changing the owner.");
+        Assert.That(owner.TryApplyPreparedStockDelta(snapshot, original.Item, int.MaxValue,
+            original.DesiredAmount, out _, out _), Is.False, "Overflow must reject without changing the owner.");
+        Assert.That(owner.Revision, Is.EqualTo(revision));
+        Assert.That(owner.Items[0].Amount, Is.EqualTo(original.Amount));
+
+        Assert.That(owner.TryApplyPreparedStockDelta(snapshot, original.Item, 7,
+            original.DesiredAmount, out DailyV1MarketPreparedState replacement,
+            out DailyV1MarketItemState changed), Is.True);
+        Assert.That(changed.Item, Is.SameAs(original.Item));
+        Assert.That(changed.Amount, Is.EqualTo(original.Amount + 7));
+        Assert.That(owner.Items[0].Amount, Is.EqualTo(original.Amount), "Preparation cannot mutate live owner state.");
+        Assert.That(owner.TryInstall(revision, 1, replacement), Is.True);
+        Assert.That(owner.Items[0].Item, Is.SameAs(original.Item));
+        Assert.That(owner.Items[0].Amount, Is.EqualTo(original.Amount + 7));
+        Assert.That(owner.Revision, Is.EqualTo(revision + 1));
+
+        Assert.That(DailyV1MarketItemState.TryCreate(original.Item, original.Amount,
+            original.DesiredAmount, 12345f, out DailyV1MarketItemState stalePrice), Is.True);
+        Assert.That(owner.TryCreatePreparedState(new[] { stalePrice }, out DailyV1MarketPreparedState staleSnapshot), Is.True);
+        Assert.That(owner.TryPreparePriceRefresh(staleSnapshot,
+            out DailyV1MarketPreparedState refreshed, out bool changedPrice), Is.True);
+        Assert.That(changedPrice, Is.True);
+        Assert.That(owner.TryGetPreparedItem(refreshed, original.Item, out DailyV1MarketItemState refreshedRow), Is.True);
+        Assert.That(refreshedRow.CurrentPrice, Is.EqualTo(MarketPriceCalculator.CalculateCurrentPrice(
+            original.Item.Values.basePrice, original.DesiredAmount, original.Amount)));
+        Assert.That(owner.Revision, Is.EqualTo(revision + 1), "Price preparation is detached until installation.");
+    }
 }

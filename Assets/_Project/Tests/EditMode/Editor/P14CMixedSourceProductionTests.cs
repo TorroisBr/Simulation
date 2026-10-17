@@ -111,6 +111,12 @@ public sealed class P14CMixedSourceProductionTests
             Assert.That(selectedMarket.Definitions, Is.SameAs(definitions));
             Assert.That(selectedMarket.Items, Has.Count.EqualTo(1));
             Assert.That(selectedMarket.Items[0].Item, Is.SameAs(definitions.Items[item.DefinitionId]));
+            PreparedMarketState typedPrepared = city.Market.CreatePreparedSnapshot();
+            Assert.That(typedPrepared.SelectedState, Is.Not.Null,
+                "Selected prepared Market work must stay in the typed Core owner state rather than projecting through ItemData rows.");
+            Assert.That(typedPrepared.Items, Is.Null);
+            Assert.That(typedPrepared.SelectedState.ReadOnlyRows[0].Item,
+                Is.SameAs(definitions.Items[item.DefinitionId]));
 
             SimulateDirect(city, 3L);
 

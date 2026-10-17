@@ -534,13 +534,55 @@ public class MarketRuntime
         List<MarketItemRuntime> replacement = new List<MarketItemRuntime>();
         if (selectedOwner != null)
         {
-            foreach (MarketItemRuntime item in Items)
-                replacement.Add(item == null ? null : new MarketItemRuntime(item));
-            return new PreparedMarketState(replacement);
+            if (!selectedOwner.TryCreatePreparedSnapshot(out DailyV1MarketPreparedState selectedSnapshot))
+                throw new InvalidOperationException("Selected Daily-v1 Market owner could not create a valid typed prepared snapshot.");
+            return new PreparedMarketState(selectedSnapshot);
         }
         foreach (MarketItemRuntime item in items ?? (items = new List<MarketItemRuntime>()))
             replacement.Add(item == null ? null : new MarketItemRuntime(item));
         return new PreparedMarketState(replacement);
+    }
+
+    internal bool TryGetPreparedItem(PreparedMarketState state, DailyV1ItemDefinition item,
+        out DailyV1MarketItemState preparedItem)
+    {
+        preparedItem = null;
+        return selectedOwner != null && state?.SelectedState != null
+            && selectedOwner.TryGetPreparedItem(state.SelectedState, item, out preparedItem);
+    }
+
+    internal bool TryCountPreparedItems(PreparedMarketState state, DailyV1ItemDefinition item,
+        out int count)
+    {
+        count = 0;
+        return selectedOwner != null && state?.SelectedState != null
+            && selectedOwner.TryCountPreparedItems(state.SelectedState, item, out count);
+    }
+
+    internal bool TryApplyPreparedStockDelta(PreparedMarketState state,
+        DailyV1ItemDefinition item, int delta, int desiredAmount,
+        out PreparedMarketState replacement, out DailyV1MarketItemState updatedItem)
+    {
+        replacement = null;
+        updatedItem = null;
+        if (selectedOwner == null || state?.SelectedState == null
+            || !selectedOwner.TryApplyPreparedStockDelta(state.SelectedState, item, delta,
+                desiredAmount, out DailyV1MarketPreparedState selectedReplacement,
+                out updatedItem)) return false;
+        replacement = new PreparedMarketState(selectedReplacement);
+        return true;
+    }
+
+    internal bool TryPreparePriceRefresh(PreparedMarketState state,
+        out PreparedMarketState replacement, out bool changed)
+    {
+        replacement = null;
+        changed = false;
+        if (selectedOwner == null || state?.SelectedState == null
+            || !selectedOwner.TryPreparePriceRefresh(state.SelectedState,
+                out DailyV1MarketPreparedState selectedReplacement, out changed)) return false;
+        replacement = new PreparedMarketState(selectedReplacement);
+        return true;
     }
 
     private bool TryCreateSelectedPreparedState(IReadOnlyList<MarketItemRuntime> projectedRows,
