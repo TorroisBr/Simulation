@@ -84,6 +84,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketPriceCalculator.cs" Link="Economy/MarketPriceCalculator.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/CityProductionResult.cs" Link="Economy/CityProductionResult.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/CityConsumptionResult.cs" Link="Economy/CityConsumptionResult.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/LocalDailyMaterialFlow.cs" Link="Economy/LocalDailyMaterialFlow.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/FiniteSourceProductionKernel.cs" Link="Economy/FiniteSourceProductionKernel.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/FiniteSourceScenarioRuntime.cs" Link="Economy/FiniteSourceScenarioRuntime.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ContinuationWire.cs" Link="Persistence/ContinuationWire.cs" />
