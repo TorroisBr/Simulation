@@ -419,7 +419,8 @@ internal sealed class P12DCityRootOwnerSnapshot
 
         PopulationEconomyRuntime populationEconomy = new PopulationEconomyRuntime(
             CityRuntimeId,
-            new PopulationConsumptionConfig { paymentMode = ConsumptionPaymentMode.Free },
+            ConsumptionPaymentMode.Free,
+            0f,
             MarketLiquidityMode.Open);
         if (!string.Equals(
                 populationEconomy.PopulationEconomicRuntimeId,

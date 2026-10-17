@@ -252,7 +252,8 @@ public sealed class P12DCityRootOwnerSnapshotTests
             "city-root-account-population-location");
         PopulationEconomyRuntime accountPopulationEconomy = new PopulationEconomyRuntime(
             accountPopulationCity.RuntimeId,
-            new PopulationConsumptionConfig { paymentMode = ConsumptionPaymentMode.AccountBacked, initialPurchasingPower = 10f },
+            ConsumptionPaymentMode.AccountBacked,
+            10f,
             MarketLiquidityMode.AccountBacked);
         typeof(CityRuntime).GetField("populationEconomy", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(accountPopulationCity, accountPopulationEconomy);

@@ -26,8 +26,8 @@ public class CityRuntime
     [NonSerialized] private DailyV1DefinitionAdapter.SelectedBindings selectedDefinitionBindings;
     [NonSerialized] private List<MarketItemConfig> selectedMarketItems;
     [NonSerialized] private List<CityProductionConfig> selectedProductionConfigs;
-    [NonSerialized] private MarketLiquidityConfig selectedMarketLiquidity;
-    [NonSerialized] private PopulationConsumptionConfig selectedPopulationConsumption;
+    [NonSerialized] private DailyV1MarketLiquidityConfig selectedMarketLiquidity;
+    [NonSerialized] private DailyV1PopulationConsumptionConfig selectedPopulationConsumption;
     [NonSerialized] private Dictionary<string, CityDailyEconomyReceipt> dailyEconomyReceipts =
         new Dictionary<string, CityDailyEconomyReceipt>(StringComparer.Ordinal);
     [NonSerialized] private long dailyEconomyReceiptRevision;
@@ -132,12 +132,18 @@ public class CityRuntime
     private List<CityProductionConfig> RuntimeProductionConfigs => selectedDailyV1Definition != null
         ? selectedProductionConfigs
         : cityData != null ? cityData.productionConfigs : null;
-    private MarketLiquidityConfig RuntimeMarketLiquidity => selectedDailyV1Definition != null
-        ? selectedMarketLiquidity
-        : cityData != null ? cityData.MarketLiquidity : null;
-    private PopulationConsumptionConfig RuntimePopulationConsumption => selectedDailyV1Definition != null
-        ? selectedPopulationConsumption
-        : cityData != null ? cityData.PopulationConsumption : null;
+    private MarketLiquidityMode RuntimeMarketLiquidityMode => selectedDailyV1Definition != null
+        ? (MarketLiquidityMode)(selectedMarketLiquidity?.liquidityMode?.Value ?? (int)MarketLiquidityMode.Open)
+        : cityData != null ? cityData.MarketLiquidity.liquidityMode : MarketLiquidityMode.Open;
+    private float RuntimeMarketLiquidityPurchasingPower => selectedDailyV1Definition != null
+        ? selectedMarketLiquidity?.initialPurchasingPower ?? 0f
+        : cityData != null ? cityData.MarketLiquidity.initialPurchasingPower : 0f;
+    private ConsumptionPaymentMode RuntimePopulationPaymentMode => selectedDailyV1Definition != null
+        ? (ConsumptionPaymentMode)(selectedPopulationConsumption?.paymentMode?.Value ?? (int)ConsumptionPaymentMode.Free)
+        : cityData != null ? cityData.PopulationConsumption.paymentMode : ConsumptionPaymentMode.Free;
+    private float RuntimePopulationPurchasingPower => selectedDailyV1Definition != null
+        ? selectedPopulationConsumption?.initialPurchasingPower ?? 0f
+        : cityData != null ? cityData.PopulationConsumption.initialPurchasingPower : 0f;
     private int RuntimeInitialPopulation => selectedDailyV1Definition != null
         ? selectedDailyV1Definition.Values.initialPopulation
         : cityData != null ? cityData.initialPopulation : 0;
@@ -750,8 +756,10 @@ public class CityRuntime
 
     private string CaptureDailyEconomyConfiguration()
     {
-        MarketLiquidityConfig liquidity = HasConfiguredDefinition ? RuntimeMarketLiquidity : null;
-        PopulationConsumptionConfig consumption = HasConfiguredDefinition ? RuntimePopulationConsumption : null;
+        MarketLiquidityMode liquidityMode = RuntimeMarketLiquidityMode;
+        float liquidityPurchasingPower = HasConfiguredDefinition ? RuntimeMarketLiquidityPurchasingPower : 0f;
+        ConsumptionPaymentMode populationPaymentMode = RuntimePopulationPaymentMode;
+        float populationPurchasingPower = HasConfiguredDefinition ? RuntimePopulationPurchasingPower : 0f;
         List<string> parts = new List<string> { RuntimeId, DefinitionId,
             HasConfiguredDefinition ? RuntimeMaterialFlowProfile.ToString() : LocalMaterialFlowProfile.ExogenousDaily.ToString(),
             HasConfiguredDefinition ? RuntimeSettlementSemanticId ?? string.Empty : string.Empty,
@@ -759,10 +767,10 @@ public class CityRuntime
             HasConfiguredDefinition ? RuntimeMarketStoreSemanticId ?? string.Empty : string.Empty,
             HasConfiguredDefinition ? RuntimeInitialPopulation.ToString(CultureInfo.InvariantCulture) : "0",
             PopulationEconomy.PaymentMode.ToString(),
-            liquidity != null ? liquidity.liquidityMode.ToString() : "Open",
-            liquidity != null ? liquidity.initialPurchasingPower.ToString("R", CultureInfo.InvariantCulture) : "0",
-            consumption != null ? consumption.paymentMode.ToString() : "Free",
-            consumption != null ? consumption.initialPurchasingPower.ToString("R", CultureInfo.InvariantCulture) : "0" };
+            liquidityMode.ToString(),
+            liquidityPurchasingPower.ToString("R", CultureInfo.InvariantCulture),
+            populationPaymentMode.ToString(),
+            populationPurchasingPower.ToString("R", CultureInfo.InvariantCulture) };
         IEnumerable<CityProductionConfig> sourceRows = HasConfiguredDefinition
             ? RuntimeProductionConfigs ?? new List<CityProductionConfig>()
             : new List<CityProductionConfig>();
@@ -1466,35 +1474,31 @@ public class CityRuntime
     private MarketCounterpartyRuntime CreateConfiguredMarketCounterparty(
         string cityRuntimeId)
     {
-        MarketLiquidityConfig liquidity = RuntimeMarketLiquidity;
-
-        if (liquidity == null || liquidity.liquidityMode == MarketLiquidityMode.Open)
+        MarketLiquidityMode liquidityMode = RuntimeMarketLiquidityMode;
+        if (!HasConfiguredDefinition || liquidityMode == MarketLiquidityMode.Open)
         {
             return MarketCounterpartyRuntime.CreateOpen(cityRuntimeId);
         }
 
-        if (liquidity.liquidityMode != MarketLiquidityMode.AccountBacked)
+        if (liquidityMode != MarketLiquidityMode.AccountBacked)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(cityRuntimeId),
-                liquidity.liquidityMode,
+                liquidityMode,
                 "CityData contains an unsupported MarketLiquidityMode.");
         }
 
-        MoneyAccountRuntime account = new MoneyAccountRuntime(liquidity.initialPurchasingPower);
+        MoneyAccountRuntime account = new MoneyAccountRuntime(RuntimeMarketLiquidityPurchasingPower);
         return MarketCounterpartyRuntime.CreateAccountBacked(cityRuntimeId, account);
     }
-
     private PopulationEconomyRuntime CreateConfiguredPopulationEconomy()
     {
-        PopulationConsumptionConfig consumption = RuntimePopulationConsumption
-            ?? new PopulationConsumptionConfig();
         return new PopulationEconomyRuntime(
             runtimeId,
-            consumption,
+            RuntimePopulationPaymentMode,
+            RuntimePopulationPurchasingPower,
             MarketCounterparty.LiquidityMode);
     }
-
     private SettlementPopulationRuntime CreatePopulationRuntime()
     {
         int configuredPopulation = RuntimeInitialPopulation;
@@ -1522,8 +1526,8 @@ public class CityRuntime
         if (!TryCreateSelectedDefinitionInputs(definition, definitions, bindings,
                 out List<MarketItemConfig> marketItems,
                 out List<CityProductionConfig> productionConfigs,
-                out MarketLiquidityConfig marketLiquidity,
-                out PopulationConsumptionConfig populationConsumption))
+                out DailyV1MarketLiquidityConfig marketLiquidity,
+                out DailyV1PopulationConsumptionConfig populationConsumption))
             return false;
         selectedDailyV1Definition = definition;
         selectedDefinitionGraph = definitions;
@@ -1551,8 +1555,8 @@ public class CityRuntime
         DailyV1DefinitionAdapter.SelectedBindings bindings,
         out List<MarketItemConfig> marketItems,
         out List<CityProductionConfig> productionConfigs,
-        out MarketLiquidityConfig marketLiquidity,
-        out PopulationConsumptionConfig populationConsumption)
+        out DailyV1MarketLiquidityConfig marketLiquidity,
+        out DailyV1PopulationConsumptionConfig populationConsumption)
     {
         marketItems = null;
         productionConfigs = null;
@@ -1614,18 +1618,8 @@ public class CityRuntime
             }
         }
 
-        DailyV1MarketLiquidityConfig liquidity = values.marketLiquidity;
-        marketLiquidity = liquidity == null ? null : new MarketLiquidityConfig
-        {
-            liquidityMode = (MarketLiquidityMode)(liquidity.liquidityMode?.Value ?? 0),
-            initialPurchasingPower = liquidity.initialPurchasingPower
-        };
-        DailyV1PopulationConsumptionConfig consumption = values.populationConsumption;
-        populationConsumption = consumption == null ? null : new PopulationConsumptionConfig
-        {
-            paymentMode = (ConsumptionPaymentMode)(consumption.paymentMode?.Value ?? 0),
-            initialPurchasingPower = consumption.initialPurchasingPower
-        };
+        marketLiquidity = values.marketLiquidity;
+        populationConsumption = values.populationConsumption;
         return true;
     }
 }

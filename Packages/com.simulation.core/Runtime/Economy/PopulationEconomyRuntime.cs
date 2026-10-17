@@ -15,50 +15,46 @@ public sealed class PopulationEconomyRuntime
 
     public PopulationEconomyRuntime(
         string cityRuntimeId,
-        PopulationConsumptionConfig config,
+        ConsumptionPaymentMode paymentMode,
+        float initialPurchasingPower,
         MarketLiquidityMode marketLiquidityMode)
     {
-        if (string.IsNullOrWhiteSpace(cityRuntimeId) == true)
+        if (string.IsNullOrWhiteSpace(cityRuntimeId))
         {
             throw new ArgumentException(
                 "PopulationEconomyRuntime requires a non-empty city RuntimeId.",
                 nameof(cityRuntimeId));
         }
 
-        if (config == null)
-        {
-            config = new PopulationConsumptionConfig();
-        }
-
-        if (Enum.IsDefined(typeof(ConsumptionPaymentMode), config.paymentMode) == false)
+        if (!Enum.IsDefined(typeof(ConsumptionPaymentMode), paymentMode))
         {
             throw new ArgumentOutOfRangeException(
-                nameof(config),
-                config.paymentMode,
+                nameof(paymentMode),
+                paymentMode,
                 "PopulationConsumptionConfig contains an unsupported payment mode.");
         }
 
-        if (config.paymentMode == ConsumptionPaymentMode.AccountBacked
+        if (paymentMode == ConsumptionPaymentMode.AccountBacked
             && marketLiquidityMode != MarketLiquidityMode.AccountBacked)
         {
             throw new InvalidOperationException(
                 "Account-backed population consumption requires an account-backed city market.");
         }
 
-        if (config.paymentMode == ConsumptionPaymentMode.AccountBacked
-            && IsValidNonNegativeFiniteAmount(config.initialPurchasingPower) == false)
+        if (paymentMode == ConsumptionPaymentMode.AccountBacked
+            && !IsValidNonNegativeFiniteAmount(initialPurchasingPower))
         {
             throw new ArgumentOutOfRangeException(
-                nameof(config),
-                config.initialPurchasingPower,
+                nameof(initialPurchasingPower),
+                initialPurchasingPower,
                 "PopulationConsumptionConfig requires finite, non-negative initial purchasing power.");
         }
 
         this.cityRuntimeId = cityRuntimeId;
         populationEconomicRuntimeId = "population-" + cityRuntimeId;
-        paymentMode = config.paymentMode;
+        this.paymentMode = paymentMode;
         moneyAccount = paymentMode == ConsumptionPaymentMode.AccountBacked
-            ? new MoneyAccountRuntime(config.initialPurchasingPower)
+            ? new MoneyAccountRuntime(initialPurchasingPower)
             : null;
     }
 
