@@ -690,59 +690,6 @@ public class CityRuntime
                 }
             }
 
-    private void SimulateSelectedLocalDailyMaterialFlow(long absoluteDay, string calendarVersion)
-    {
-        DailyV1CityData city = selectedDailyV1Definition.Values;
-        if (city.productionConfigs == null || city.productionConfigs.Count == 0
-            || city.productionConfigs[0] == null)
-            throw new LocalDailyMaterialFlowRejectedException("Selected local material flow requires an authored source.");
-        DailyV1CityProductionConfig source = city.productionConfigs[0];
-        if (!TryResolveSelectedItemDefinition(source.item, out DailyV1ItemDefinition item))
-            throw new LocalDailyMaterialFlowRejectedException("Selected local material flow source has no admitted item definition.");
-        DailyV1MarketItemConfig itemConfig = city.marketItems?.FirstOrDefault(candidate => candidate != null
-            && string.Equals(candidate.item, item.DefinitionId, StringComparison.Ordinal));
-        if (itemConfig == null || (ConsumptionPaymentMode)(city.populationConsumption?.paymentMode?.Value ?? 0)
-                != ConsumptionPaymentMode.Free)
-            throw new LocalDailyMaterialFlowRejectedException("Selected local material flow requires a matching market item and free population consumption.");
-
-        if (RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily
-            && !IsFiniteSourceConfigurationCurrent())
-            throw new LocalDailyMaterialFlowRejectedException("Finite source configuration must match its constructed source owner.");
-
-        int opening = Market.GetSelectedAmount(item);
-        int applied;
-        string rejection;
-        if (RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily)
-        {
-            FiniteSourceProductionResult production = new FiniteSourceProductionService().TryProduceDaily(
-                finiteProductionSources, Market, RuntimeSettlementSemanticId,
-                RuntimeMarketStoreSemanticId, RuntimeMaterialFlowLocationId,
-                item, absoluteDay, finiteProductionSources.Source.Revision, Market.Revision);
-            applied = production.Quantity;
-            rejection = production.Status == FiniteSourceProductionStatus.Applied
-                ? string.Empty : production.RejectionReason;
-        }
-        else
-        {
-            applied = Market.AddSelectedStock(item, source.amountPerDay);
-            rejection = applied == source.amountPerDay ? string.Empty : "AggregateStockOverflow";
-        }
-
-        int requested = Math.Max(0, UnityMathfCompatibility.RoundToInt(Population.CurrentPopulation / 1000f
-            * itemConfig.consumptionPer1000Population));
-        int actual = Market.RemoveSelectedStock(item, requested);
-        int closing = Market.GetSelectedAmount(item);
-        lastMaterialFlow = new LocalDailyMaterialFlowResult(RuntimeSettlementSemanticId,
-            source.productionSourceId, RuntimeMarketStoreSemanticId, RuntimeMaterialFlowLocationId,
-            item.DefinitionId, source.contentRevision, "Economy.Enabled=true;PaymentMode=Free",
-            "simulation-calendar", calendarVersion, true, Population.CurrentPopulation,
-            itemConfig.consumptionPer1000Population, absoluteDay, opening,
-            source.amountPerDay, applied, rejection, requested, actual, closing);
-        logger?.Log(SimulationLogCategory.EconomyProduction,
-            $"{CityName} source {source.productionSourceId}: {applied}/{source.amountPerDay}");
-        if (actual > 0)
-            logger?.Log(SimulationLogCategory.EconomyConsumption, $"{CityName} consumed {actual} {item.Values.itemName}");
-    }
         }
         else if (kind == CityDailyEconomyStepKind.Consumption)
         {
@@ -909,6 +856,60 @@ public class CityRuntime
             finiteProductionPreparation, mixedProductionPreparation);
         failure = TimelineFailure.None;
         return true;
+    }
+
+    private void SimulateSelectedLocalDailyMaterialFlow(long absoluteDay, string calendarVersion)
+    {
+        DailyV1CityData city = selectedDailyV1Definition.Values;
+        if (city.productionConfigs == null || city.productionConfigs.Count == 0
+            || city.productionConfigs[0] == null)
+            throw new LocalDailyMaterialFlowRejectedException("Selected local material flow requires an authored source.");
+        DailyV1CityProductionConfig source = city.productionConfigs[0];
+        if (!TryResolveSelectedItemDefinition(source.item, out DailyV1ItemDefinition item))
+            throw new LocalDailyMaterialFlowRejectedException("Selected local material flow source has no admitted item definition.");
+        DailyV1MarketItemConfig itemConfig = city.marketItems?.FirstOrDefault(candidate => candidate != null
+            && string.Equals(candidate.item, item.DefinitionId, StringComparison.Ordinal));
+        if (itemConfig == null || (ConsumptionPaymentMode)(city.populationConsumption?.paymentMode?.Value ?? 0)
+                != ConsumptionPaymentMode.Free)
+            throw new LocalDailyMaterialFlowRejectedException("Selected local material flow requires a matching market item and free population consumption.");
+
+        if (RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily
+            && !IsFiniteSourceConfigurationCurrent())
+            throw new LocalDailyMaterialFlowRejectedException("Finite source configuration must match its constructed source owner.");
+
+        int opening = Market.GetSelectedAmount(item);
+        int applied;
+        string rejection;
+        if (RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily)
+        {
+            FiniteSourceProductionResult production = new FiniteSourceProductionService().TryProduceDaily(
+                finiteProductionSources, Market, RuntimeSettlementSemanticId,
+                RuntimeMarketStoreSemanticId, RuntimeMaterialFlowLocationId,
+                item, absoluteDay, finiteProductionSources.Source.Revision, Market.Revision);
+            applied = production.Quantity;
+            rejection = production.Status == FiniteSourceProductionStatus.Applied
+                ? string.Empty : production.RejectionReason;
+        }
+        else
+        {
+            applied = Market.AddSelectedStock(item, source.amountPerDay);
+            rejection = applied == source.amountPerDay ? string.Empty : "AggregateStockOverflow";
+        }
+
+        int requested = Math.Max(0, UnityMathfCompatibility.RoundToInt(Population.CurrentPopulation / 1000f
+            * itemConfig.consumptionPer1000Population));
+        int actual = Market.RemoveSelectedStock(item, requested);
+        int closing = Market.GetSelectedAmount(item);
+        lastMaterialFlow = new LocalDailyMaterialFlowResult(RuntimeSettlementSemanticId,
+            source.productionSourceId, RuntimeMarketStoreSemanticId, RuntimeMaterialFlowLocationId,
+            item.DefinitionId, source.contentRevision, "Economy.Enabled=true;PaymentMode=Free",
+            "simulation-calendar", calendarVersion, true, Population.CurrentPopulation,
+            itemConfig.consumptionPer1000Population, absoluteDay, opening,
+            source.amountPerDay, applied, rejection, requested, actual, closing);
+        logger?.Log(SimulationLogCategory.EconomyProduction,
+            $"{CityName} source {source.productionSourceId}: {applied}/{source.amountPerDay}");
+        if (actual > 0)
+            logger?.Log(SimulationLogCategory.EconomyConsumption, $"{CityName} consumed {actual} {item.Values.itemName}");
     }
 
     public bool TryResolveDailyEconomyReceipt(
