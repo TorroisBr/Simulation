@@ -267,14 +267,9 @@ public class MarketRuntime
 
     internal float GetSelectedPriceForSale(DailyV1ItemDefinition item)
     {
-        if (selectedOwner == null || item == null) return 0f;
-        DailyV1MarketItemState row = selectedOwner.GetItem(item);
-        return row != null
-            ? row.CurrentPrice
-            : selectedOwner.Definitions.Items.TryGetValue(item.DefinitionId, out DailyV1ItemDefinition admitted)
-                && ReferenceEquals(item, admitted)
-                    ? MarketPriceCalculator.CalculateCurrentPrice(item.Values.basePrice, 100, 0)
-                    : 0f;
+        // Keep the selected path on the Core owner's pricing contract for both
+        // existing rows and admitted items that have not yet been stocked.
+        return selectedOwner?.GetPrice(item) ?? 0f;
     }
 
     /// <summary>Prepares selected market rows from the canonical item node, without projecting through Unity ItemData.</summary>

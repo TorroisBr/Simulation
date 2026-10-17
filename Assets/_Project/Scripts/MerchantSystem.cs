@@ -555,21 +555,43 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             return false;
         }
 
-        receipt = transactionService.TryExecuteKeyedMarketSale(
-            proposalId,
-            fingerprint,
-            actorChoiceInputId,
-            requestId,
-            actorPersonId.Value,
-            actionSemanticId,
-            LocalMarketSellGoodsActionVersion,
-            profileId,
-            logicalTickValue,
-            marketSiteId,
-            seller,
-            market,
-            actionRuntime.TargetItem,
-            actionRuntime.Amount);
+        if (seller.SelectedDailyV1DefinitionGraph != null)
+        {
+            seller.TryGetSelectedDailyV1Item(actionRuntime.TargetItem, out DailyV1ItemDefinition selectedItem);
+            receipt = transactionService.TryExecuteKeyedMarketSale(
+                proposalId,
+                fingerprint,
+                actorChoiceInputId,
+                requestId,
+                actorPersonId.Value,
+                actionSemanticId,
+                LocalMarketSellGoodsActionVersion,
+                profileId,
+                logicalTickValue,
+                marketSiteId,
+                seller,
+                market,
+                selectedItem,
+                actionRuntime.Amount);
+        }
+        else
+        {
+            receipt = transactionService.TryExecuteKeyedMarketSale(
+                proposalId,
+                fingerprint,
+                actorChoiceInputId,
+                requestId,
+                actorPersonId.Value,
+                actionSemanticId,
+                LocalMarketSellGoodsActionVersion,
+                profileId,
+                logicalTickValue,
+                marketSiteId,
+                seller,
+                market,
+                actionRuntime.TargetItem,
+                actionRuntime.Amount);
+        }
         return receipt != null;
     }
 
@@ -616,11 +638,24 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             return false;
         }
 
-        EconomyTransactionResult transaction = transactionService.TryExecuteMarketPurchase(
-            npcRuntime,
-            npcRuntime.CurrentCity.Market,
-            actionRuntime.TargetItem,
-            actionRuntime.Amount);
+        EconomyTransactionResult transaction;
+        if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
+        {
+            npcRuntime.TryGetSelectedDailyV1Item(actionRuntime.TargetItem, out DailyV1ItemDefinition selectedItem);
+            transaction = transactionService.TryExecuteMarketPurchase(
+                npcRuntime,
+                npcRuntime.CurrentCity.Market,
+                selectedItem,
+                actionRuntime.Amount);
+        }
+        else
+        {
+            transaction = transactionService.TryExecuteMarketPurchase(
+                npcRuntime,
+                npcRuntime.CurrentCity.Market,
+                actionRuntime.TargetItem,
+                actionRuntime.Amount);
+        }
 
         if (transaction.Success == false || transaction.Quantity <= 0)
         {
@@ -709,12 +744,26 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             return false;
         }
 
-        EconomyTransactionResult transaction = transactionService.TryExecuteNpcTrade(
-            buyerRuntime,
-            sellerRuntime,
-            actionRuntime.TargetItem,
-            amountSold,
-            unitPrice);
+        EconomyTransactionResult transaction;
+        if (sellerRuntime.SelectedDailyV1DefinitionGraph != null)
+        {
+            sellerRuntime.TryGetSelectedDailyV1Item(actionRuntime.TargetItem, out DailyV1ItemDefinition selectedItem);
+            transaction = transactionService.TryExecuteNpcTrade(
+                buyerRuntime,
+                sellerRuntime,
+                selectedItem,
+                amountSold,
+                unitPrice);
+        }
+        else
+        {
+            transaction = transactionService.TryExecuteNpcTrade(
+                buyerRuntime,
+                sellerRuntime,
+                actionRuntime.TargetItem,
+                amountSold,
+                unitPrice);
+        }
 
         if (transaction.Success == false)
         {
@@ -731,11 +780,24 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
     private bool TryExecuteSellGoodsToMarket(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, bool saleBelongsToPlan, MerchantTradePlanRuntime plan, float planPurchasePrice)
     {
         float averageUnitCost = npcRuntime.Inventory.GetAverageUnitCost(actionRuntime.TargetItem);
-        EconomyTransactionResult transaction = transactionService.TryExecuteMarketSale(
-            npcRuntime,
-            npcRuntime.CurrentCity.Market,
-            actionRuntime.TargetItem,
-            actionRuntime.Amount);
+        EconomyTransactionResult transaction;
+        if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
+        {
+            npcRuntime.TryGetSelectedDailyV1Item(actionRuntime.TargetItem, out DailyV1ItemDefinition selectedItem);
+            transaction = transactionService.TryExecuteMarketSale(
+                npcRuntime,
+                npcRuntime.CurrentCity.Market,
+                selectedItem,
+                actionRuntime.Amount);
+        }
+        else
+        {
+            transaction = transactionService.TryExecuteMarketSale(
+                npcRuntime,
+                npcRuntime.CurrentCity.Market,
+                actionRuntime.TargetItem,
+                actionRuntime.Amount);
+        }
 
         if (transaction.Success == false || transaction.Quantity <= 0)
         {

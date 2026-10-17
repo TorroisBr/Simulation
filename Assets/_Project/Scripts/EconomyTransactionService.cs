@@ -321,13 +321,35 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         string logicalTick, string marketSiteId, NpcRuntime seller, MarketRuntime market,
         ItemData item, int requestedQuantity)
     {
+        return ExecuteKeyedMarketSale(proposalId, fingerprint, actorChoiceInputId, requestId,
+            actorPersonId, actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
+            seller, market, new TradeItem(item), requestedQuantity);
+    }
+
+    internal KeyedSaleReceipt TryExecuteKeyedMarketSale(
+        string proposalId, string fingerprint, string actorChoiceInputId, string requestId,
+        string actorPersonId, string actionSemanticId, int actionVersion, string profileId,
+        string logicalTick, string marketSiteId, NpcRuntime seller, MarketRuntime market,
+        DailyV1ItemDefinition item, int requestedQuantity)
+    {
+        return ExecuteKeyedMarketSale(proposalId, fingerprint, actorChoiceInputId, requestId,
+            actorPersonId, actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
+            seller, market, new TradeItem(item), requestedQuantity);
+    }
+
+    private KeyedSaleReceipt ExecuteKeyedMarketSale(
+        string proposalId, string fingerprint, string actorChoiceInputId, string requestId,
+        string actorPersonId, string actionSemanticId, int actionVersion, string profileId,
+        string logicalTick, string marketSiteId, NpcRuntime seller, MarketRuntime market,
+        TradeItem item, int requestedQuantity)
+    {
         if (string.IsNullOrWhiteSpace(proposalId) || string.IsNullOrWhiteSpace(fingerprint))
             return KeyedSaleReceipt.Rejected(proposalId, fingerprint, null, EconomyTransactionFailureReason.InvalidInput);
 
         string canonicalFingerprint = CreateRequestFingerprint(
             proposalId, fingerprint, actorChoiceInputId, requestId, actorPersonId,
             actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
-            item != null ? item.DefinitionId : null, requestedQuantity);
+            item.IsValid ? item.DefinitionId : null, requestedQuantity);
 
         for (int i = 0; i < keyedSaleReceipts.Count; i++)
         {
@@ -357,9 +379,9 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         long marketRev = market != null ? market.Revision : -1;
         long sellerMoneyRev = sellerAccount != null ? sellerAccount.Revision : -1;
         long counterpartyMoneyRev = counterpartyAccount != null ? counterpartyAccount.Revision : -1;
-        float observedPrice = market != null && item != null ? market.GetPriceForSale(item) : 0f;
-        int observedStock = market != null && item != null ? market.GetAmount(item) : 0;
-        int observedInventory = seller != null && item != null ? seller.Inventory.GetAmount(item) : 0;
+        float observedPrice = market != null && item.IsValid ? GetMarketSalePrice(market, item) : 0f;
+        int observedStock = market != null && item.IsValid ? GetMarketAmount(market, item) : 0;
+        int observedInventory = seller != null && item.IsValid ? GetInventoryAmount(seller.Inventory, item) : 0;
         float observedSellerBalance = sellerAccount != null ? sellerAccount.Balance : 0f;
         float observedCounterpartyBalance = counterpartyAccount != null ? counterpartyAccount.Balance : 0f;
         EconomyTransactionResult result = ValidateSale(seller, market, item, requestedQuantity, mode);
@@ -375,12 +397,12 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
             seller != null ? seller.RuntimeId : null,
             seller != null && seller.CurrentCity != null ? seller.CurrentCity.RuntimeId : null,
-            market != null ? market.StockOwnerRuntimeId : null, item != null ? item.DefinitionId : null,
+            market != null ? market.StockOwnerRuntimeId : null, item.IsValid ? item.DefinitionId : null,
             mode, observedPrice, observedStock, observedInventory, observedSellerBalance, observedCounterpartyBalance,
             requestedQuantity, snapshotQuantity, seller != null && seller.IsAlive,
             snapshotQuantity > 0 && sellerAccount != null && sellerAccount.CanCredit(snapshotTotal),
             snapshotQuantity > 0 && mode == MarketLiquidityMode.AccountBacked && counterpartyAccount != null && counterpartyAccount.CanDebit(snapshotTotal),
-            snapshotQuantity > 0 && market != null && item != null && market.CanAddStock(item, snapshotQuantity),
+            snapshotQuantity > 0 && market != null && item.IsValid && CanAddMarketStock(market, item, snapshotQuantity),
             invRev, marketRev, sellerMoneyRev, counterpartyMoneyRev);
         if (!result.Success)
         {
@@ -391,8 +413,9 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
 
         int quantity = result.Quantity;
         float total = result.TotalPrice;
-        PreparedInventoryState inventoryReplacement = seller.Inventory.PrepareReplacement(item, quantity, 0f, false, 0);
-        PreparedMarketState marketReplacement = market.PrepareReplacement(item, quantity, 100);
+        PreparedInventoryState inventoryReplacement = PrepareInventoryReplacement(
+            seller.Inventory, item, quantity, 0f, false, 0);
+        PreparedMarketState marketReplacement = PrepareMarketReplacement(market, item, quantity, 100);
         float sellerBalanceReplacement = sellerAccount.Balance + total;
         float counterpartyBalanceReplacement = counterpartyAccount != null ? counterpartyAccount.Balance - total : 0f;
         KeyedSaleReceipt committed = KeyedSaleReceipt.Committed(proposalId, canonicalFingerprint, fingerprint, snapshot, result);
@@ -522,14 +545,14 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         keyedSaleReceiptsRevision = nextRevision;
     }
 
-    private static EconomyTransactionResult ValidateSale(NpcRuntime npc, MarketRuntime market, ItemData item, int requested, MarketLiquidityMode mode)
+    private static EconomyTransactionResult ValidateSale(NpcRuntime npc, MarketRuntime market, TradeItem item, int requested, MarketLiquidityMode mode)
     {
         // Reuse the established sale preconditions and calculations without applying its mutations.
-        if (npc == null || !npc.IsAlive || market == null || item == null)
+        if (npc == null || !npc.IsAlive || market == null || !item.IsValid || !CanUseTradeItem(npc, market, item))
             return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, mode == MarketLiquidityMode.AccountBacked ? MoneyEffect.Transfer : MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.InvalidInput);
         if (requested <= 0) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.InvalidQuantity);
-        int quantity = UnityMathfCompatibility.Min(requested, npc.Inventory.GetAmount(item));
-        float price = market.GetPriceForSale(item);
+        int quantity = UnityMathfCompatibility.Min(requested, GetInventoryAmount(npc.Inventory, item));
+        float price = GetMarketSalePrice(market, item);
         if (quantity <= 0) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.InsufficientInventory);
         if (float.IsNaN(price) || float.IsInfinity(price) || price < 0f) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.InvalidPrice);
         price = UnityMathfCompatibility.Max(.01f, price);
@@ -544,7 +567,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         if (float.IsNaN(total) || float.IsInfinity(total)) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.InvalidPrice);
         if (mode == MarketLiquidityMode.AccountBacked && !cp.MoneyAccount.CanDebit(total)) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.Transfer, EconomyTransactionFailureReason.InsufficientCounterpartyFunds);
         if (!npc.MoneyAccount.CanCredit(total)) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, mode == MarketLiquidityMode.AccountBacked ? MoneyEffect.Transfer : MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.CreditRejected);
-        if (!market.CanAddStock(item, quantity)) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.MarketCapacity);
+        if (!CanAddMarketStock(market, item, quantity)) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.MarketCapacity);
         return EconomyTransactionResult.CreateSuccess(EconomyTransactionType.OpenMarketSale, mode == MarketLiquidityMode.AccountBacked ? MoneyEffect.Transfer : MoneyEffect.ExplicitSource, total, item.DefinitionId, requested, quantity, price, total,
             sourceRuntimeId: mode == MarketLiquidityMode.AccountBacked ? cp.CounterpartyRuntimeId : null,
             destinationRuntimeId: mode == MarketLiquidityMode.AccountBacked ? npc.RuntimeId : null,
@@ -634,10 +657,31 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         int quantity,
         float unitPrice)
     {
+        return ExecuteNpcTrade(buyer, seller, new TradeItem(item), quantity, unitPrice);
+    }
+
+    internal EconomyTransactionResult TryExecuteNpcTrade(
+        NpcRuntime buyer,
+        NpcRuntime seller,
+        DailyV1ItemDefinition item,
+        int quantity,
+        float unitPrice)
+    {
+        return ExecuteNpcTrade(buyer, seller, new TradeItem(item), quantity, unitPrice);
+    }
+
+    private EconomyTransactionResult ExecuteNpcTrade(
+        NpcRuntime buyer,
+        NpcRuntime seller,
+        TradeItem item,
+        int quantity,
+        float unitPrice)
+    {
         EconomyTransactionType transactionType = EconomyTransactionType.NpcToNpcTrade;
         MoneyEffect moneyEffect = MoneyEffect.Transfer;
 
-        if (buyer == null || seller == null || item == null || buyer.IsAlive == false || seller.IsAlive == false)
+        if (buyer == null || seller == null || !item.IsValid || buyer.IsAlive == false || seller.IsAlive == false
+            || !CanUseTradeItem(buyer, seller, item))
         {
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
@@ -689,7 +733,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 sellerRuntimeId: seller.RuntimeId);
         }
 
-        if (seller.Inventory.GetAmount(item) < quantity)
+        if (GetInventoryAmount(seller.Inventory, item) < quantity)
         {
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
@@ -699,7 +743,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 sellerRuntimeId: seller.RuntimeId);
         }
 
-        if (buyer.Inventory.CanAddItem(item, quantity, unitPrice) == false)
+        if (CanAddInventoryItem(buyer.Inventory, item, quantity, unitPrice) == false)
         {
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
@@ -791,7 +835,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             }
 
             long sellerInventoryRevision = seller.Inventory.Revision;
-            bool sellerInventoryRemoved = seller.Inventory.RemoveItem(item, quantity);
+            bool sellerInventoryRemoved = RemoveInventoryItem(seller.Inventory, item, quantity);
             if (seller.Inventory.Revision != sellerInventoryRevision)
                 NotifyNpcTradeOwnerMutation(censusTracking, sellerInventorySectionId, seller.Inventory.HasP12MutationBoundary);
             if (sellerInventoryRemoved == false)
@@ -814,7 +858,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             }
 
             long buyerInventoryRevision = buyer.Inventory.Revision;
-            bool buyerInventoryAdded = buyer.Inventory.TryAddItem(item, quantity, unitPrice);
+            bool buyerInventoryAdded = TryAddInventoryItem(buyer.Inventory, item, quantity, unitPrice);
             if (buyer.Inventory.Revision != buyerInventoryRevision)
                 NotifyNpcTradeOwnerMutation(censusTracking, buyerInventorySectionId, buyer.Inventory.HasP12MutationBoundary);
             if (!buyerInventoryAdded)
@@ -1391,6 +1435,16 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             && ReferenceEquals(item.Definition, admitted);
     }
 
+    private static bool CanUseTradeItem(NpcRuntime buyer, NpcRuntime seller, TradeItem item)
+    {
+        if (item.Definition == null) return true;
+        DailyV1EffectiveDefinitions buyerDefinitions = buyer?.Inventory?.SelectedDailyV1Owner?.Definitions;
+        DailyV1EffectiveDefinitions sellerDefinitions = seller?.Inventory?.SelectedDailyV1Owner?.Definitions;
+        return buyerDefinitions != null && ReferenceEquals(buyerDefinitions, sellerDefinitions)
+            && buyerDefinitions.Items.TryGetValue(item.Definition.DefinitionId, out DailyV1ItemDefinition admitted)
+            && ReferenceEquals(item.Definition, admitted);
+    }
+
     private static bool TryGetMarketStock(MarketRuntime market, TradeItem item, out int amount, out float price)
     {
         amount = 0;
@@ -1415,6 +1469,11 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         item.Definition != null
             ? inventory.GetSelectedAmount(item.Definition)
             : inventory.GetAmount(item.AuthoringItem);
+
+    private static int GetMarketAmount(MarketRuntime market, TradeItem item) =>
+        item.Definition != null
+            ? market.GetSelectedAmount(item.Definition)
+            : market.GetAmount(item.AuthoringItem);
 
     private static bool CanAddInventoryItem(InventoryRuntime inventory, TradeItem item, int amount, float unitCost) =>
         item.Definition != null
@@ -1450,6 +1509,18 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         item.Definition != null
             ? market.RemoveSelectedStock(item.Definition, amount)
             : market.RemoveStockUpTo(item.AuthoringItem, amount);
+
+    private static PreparedInventoryState PrepareInventoryReplacement(
+        InventoryRuntime inventory, TradeItem item, int removed, float addedUnitCost, bool add, int added) =>
+        item.Definition != null
+            ? inventory.PrepareSelectedReplacement(item.Definition, removed, addedUnitCost, add, added)
+            : inventory.PrepareReplacement(item.AuthoringItem, removed, addedUnitCost, add, added);
+
+    private static PreparedMarketState PrepareMarketReplacement(
+        MarketRuntime market, TradeItem item, int delta, int desiredAmount) =>
+        item.Definition != null
+            ? market.PrepareSelectedReplacement(item.Definition, delta, desiredAmount)
+            : market.PrepareReplacement(item.AuthoringItem, delta, desiredAmount);
 
     public EconomyTransactionResult TryExecutePopulationConsumption(
         PopulationEconomyRuntime population,
