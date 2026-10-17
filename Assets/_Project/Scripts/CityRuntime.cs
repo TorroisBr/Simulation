@@ -804,9 +804,13 @@ public class CityRuntime
 
         bool mixedProfileOperation = HasConfiguredDefinition
             && RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.MixedSourcesDaily;
+        bool requiresDirectMarketMutationAdmission = marketIncrements > 0
+            && mixedProductionPreparation == null
+            && finiteProductionPreparation == null
+            && (mixedProfileOperation || selectedDailyV1Definition != null);
         if (!Market.CanInstall(marketRevision, marketIncrements)
             || (mixedProductionPreparation != null && !mixedProductionPreparation.CanInstall())
-            || (mixedProfileOperation && mixedProductionPreparation == null && marketIncrements > 0
+            || (requiresDirectMarketMutationAdmission
                 && !Market.CanInstallMaterialFlow(marketRevision, marketIncrements))
             || (populationAccount != null && !MoneyAccountOwnerBridge.CanInstall(populationAccount, populationRevision, populationIncrements, populationBalance))
             || (settlementAccount != null && !MoneyAccountOwnerBridge.CanInstall(settlementAccount, settlementRevision, settlementIncrements, settlementBalance))) return false;
@@ -887,8 +891,10 @@ public class CityRuntime
                     || !commit.MixedSource.CanInstall())
                 : commit.FiniteSource == null
                     ? (!Market.CanInstall(commit.MarketRevision, commit.MarketIncrements)
-                        || (HasConfiguredDefinition && RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.MixedSourcesDaily
-                            && commit.MarketIncrements > 0
+                        || (commit.MarketIncrements > 0
+                            && (selectedDailyV1Definition != null
+                                || (HasConfiguredDefinition
+                                    && RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.MixedSourcesDaily))
                             && !Market.CanInstallMaterialFlow(commit.MarketRevision, commit.MarketIncrements)))
                     : (!ReferenceEquals(commit.MarketState, commit.FiniteSource.MarketState)
                         || !commit.FiniteSource.CanInstall()))
@@ -902,11 +908,11 @@ public class CityRuntime
         {
             if (!commit.FiniteSource.Install()) return false;
         }
-        else if (commit.MarketState != null)
+        else if (commit.MarketState != null && commit.MarketIncrements > 0)
         {
             Market.InstallPrepared(commit.MarketRevision, commit.MarketIncrements, commit.MarketState);
-            if (HasConfiguredDefinition && RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.MixedSourcesDaily
-                && commit.MarketIncrements > 0)
+            if (selectedDailyV1Definition != null
+                || (HasConfiguredDefinition && RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.MixedSourcesDaily))
                 Market.NotifyMaterialFlowInstalled();
         }
         if (commit.PopulationAccount != null) MoneyAccountOwnerBridge.InstallPrepared(commit.PopulationAccount, commit.PopulationRevision, commit.PopulationIncrements, commit.PopulationBalance);

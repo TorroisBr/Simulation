@@ -2,7 +2,7 @@
 
 Status: implementation candidate only. This record does not claim independent review, full package validation, CORE-F completion, or canonical promotion.
 
-## Source identity
+## Initial candidate source identity (`fa593fd`)
 
 - Base commit: `b12aeb21564c88e16fca12b3c85ee3bfd5058e94`
 - Candidate branch: `codex/core/CORE-F-owner-consumer-boundary-20261017`
@@ -31,3 +31,32 @@ Original diagnostic output and prior validation artifacts remain in the local wo
 ## Scope boundary
 
 This WIP implements a bounded typed Inventory/Market consumer boundary and selected City/P14 mixed-source integration. It does not complete the CORE-F shared application/host package, does not claim independent exact-tip review, and is not eligible for canonical promotion on this record.
+## Independent review follow-up
+
+Review base: `fa593fd251d65da90d4dfbcfb2beb89d364cdd72`. The review identified two actionable CityRuntime findings:
+
+1. A selected no-op PriceRefresh or Consumption step retained a prepared Market snapshot with zero revision increments. The receipt commit attempted to install that unchanged snapshot, which the selected owner correctly rejects.
+2. Selected non-mixed direct prepared Market replacements did not check P12 material-flow admission and did not notify the P12 mutation boundary after installation.
+
+The correction skips prepared Market installation when revision increments are zero, while still recording the ordinary receipt. Selected direct prepared writes now check `CanInstallMaterialFlow` during preparation and again at commit, then notify exactly once after a successful install. Mixed-source and finite-source preparation helpers retain their existing install and notification ownership. An added direct-path regression asserts that selected non-mixed stock writes use owner admission and one post-mutation notification per actual write; this Unity regression has not yet been executed.
+
+Corrected source-only tree: `bf4e70bdb4d0b7f4aeeb2e23c18091a2be99c6cf` (base `b12aeb21564c88e16fca12b3c85ee3bfd5058e94` plus the seven source/test paths below; excludes this record and generated or protected files).
+
+| SHA-256 | Repository-relative path |
+| --- | --- |
+| `C66E11D99ECE4A8EB55360609E98ADDBA27EE1C12085B07624EB0085FADE81D5` | `Assets/_Project/Scripts/CityRuntime.cs` |
+| `3F2A6B2DBB7AAA2AF2A5C848D30C4E06E78883AA83EB22C934FAEDEEA558755A` | `Assets/_Project/Scripts/FiniteProductionSourceStore.cs` |
+| `84C3744303CA337538F4857A8F491FE8760C6791C3C55DA5E0F78ABD1E746322` | `Assets/_Project/Scripts/FiniteSourceProductionService.cs` |
+| `32CEBB03234554F738C8A594A6EA6F5DE8EBE3709B12168456EE4D93D3DE7360` | `Assets/_Project/Scripts/MarketRuntime.cs` |
+| `13F2585623375C0614547474F498248BD7A753923C287AF364041F8682A30BDF` | `Assets/_Project/Tests/EditMode/Editor/P14CMixedSourceProductionTests.cs` |
+| `18BB541C90905396CE972F71BF825555BE7550CAD64DFB55A2A7412FC7107E3B` | `Packages/com.simulation.core/Runtime/Economy/DailyV1InventoryMarketOwners.cs` |
+| `4B04C3159A1CDCAD484D91B53B882EC2D30AA16568D28640A5544FC16DBE6591` | `tests/Simulation.Core.Tests/DailyV1InventoryMarketOwnerTests.cs` |
+
+Regression coverage added: no-op selected PriceRefresh and Consumption receipt commits; P12 admission denial before preparation and after preparation; successful selected prepared install with exactly one post-install callback; and direct selected non-mixed production/consumption owner admission and callback ordering.
+
+Validation after the review correction:
+
+- Focused `DailyV1InventoryMarketOwnerTests`: 7/7 PASS.
+- `git diff --check`: PASS.
+- The new Unity regressions were not executed. The approved Unity evidence workflow remains blocked before test execution by the existing evidence-directory ACL restriction. No ACL or runner-mode changes were made.
+- No full CORE-F integration validation, independent follow-up review, or canonical promotion is claimed.
