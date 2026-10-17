@@ -473,7 +473,7 @@ public class NpcRuntime : ICapabilityConditionSource
         if (actions == null)
             return false;
         actions.Clear();
-        if (selectedDailyV1Definition == null || selectedDefinitionGraph == null)
+        if (selectedDailyV1Definition == null || selectedDefinitionGraph == null || selectedDefinitionBindings == null)
             return false;
 
         List<DailyV1ActionDefinition> resolved = new List<DailyV1ActionDefinition>(selectedDefinitionGraph.Actions.Count);
@@ -481,7 +481,9 @@ public class NpcRuntime : ICapabilityConditionSource
         {
             if (node == null
                 || !selectedDefinitionGraph.Actions.TryGetValue(node.DefinitionId, out DailyV1ActionDefinition admittedNode)
-                || !ReferenceEquals(node, admittedNode))
+                || !ReferenceEquals(node, admittedNode)
+                || !selectedDefinitionBindings.TryGetAsset(node, out NpcActionData actionAsset)
+                || actionAsset == null)
                 return false;
             resolved.Add(node);
         }

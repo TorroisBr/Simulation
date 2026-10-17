@@ -2588,6 +2588,16 @@ public sealed class SimulationBootstrapCompositionTests
         float utility = (float)calculateUtility.Invoke(decisions, new object[] { runtime, defaultAction });
         Assert.That(utility, Is.EqualTo(13f),
             "The selected graph's action base, NPC override, and admitted active-status multiplier retain their original precedence.");
+
+        List<DailyV1ActionDefinition> typedActions = new List<DailyV1ActionDefinition>
+        {
+            graph.Actions[defaultAction.DefinitionId]
+        };
+        Object.DestroyImmediate(defaultAction);
+        Assert.That(runtime.TryGetSelectedDailyV1ActionNodes(typedActions), Is.False,
+            "Selected action admission must fail closed if any graph action has lost its live exact Unity binding.");
+        Assert.That(typedActions, Is.Empty,
+            "An incomplete selected action binding must not leave typed candidates available for a weighted decision.");
     }
 
     [Test]
