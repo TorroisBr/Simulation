@@ -564,8 +564,11 @@ internal static class P12DNpcRootOwnerSnapshot
             return false;
         }
 
+        int liveInventoryCardinality = inventory.SelectedDailyV1Owner != null
+            ? inventory.SelectedDailyV1Owner.Items.Count
+            : inventory.Items.Count;
         if (!inventory.TryGetCensusCardinality(out int inventoryCardinality)
-            || inventoryCardinality != inventory.Items.Count
+            || inventoryCardinality != liveInventoryCardinality
             || inventory.Revision < 0L || account.Revision < 0L
             || (float.IsNaN(account.Balance) || float.IsInfinity(account.Balance))
             || account.Balance < 0f
@@ -623,19 +626,42 @@ internal static class P12DNpcRootOwnerSnapshot
         }
 
         List<P12DNpcInventoryRowValue> inventoryRows =
-            new List<P12DNpcInventoryRowValue>(inventory.Items.Count);
+            new List<P12DNpcInventoryRowValue>(liveInventoryCardinality);
         HashSet<string> itemIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (InventoryItemRuntime item in inventory.Items)
+        if (inventory.SelectedDailyV1Owner != null)
         {
-            if (item == null || item.Item == null || string.IsNullOrWhiteSpace(item.Item.DefinitionId)
-                || item.Amount < 0 || (float.IsNaN(item.AverageUnitCost) || float.IsInfinity(item.AverageUnitCost)) || item.AverageUnitCost < 0f
-                || !itemIds.Add(item.Item.DefinitionId))
+            DailyV1InventoryOwner selectedInventory = inventory.SelectedDailyV1Owner;
+            foreach (DailyV1InventoryItemState item in selectedInventory.Items)
             {
-                failure = P12DNpcRootOwnerSnapshotFailure.UnsupportedValue;
-                return false;
+                if (item == null || item.Item == null || string.IsNullOrWhiteSpace(item.Item.DefinitionId)
+                    || !selectedInventory.Definitions.Items.TryGetValue(item.Item.DefinitionId,
+                        out DailyV1ItemDefinition admittedItem)
+                    || !ReferenceEquals(admittedItem, item.Item)
+                    || item.Amount < 0 || float.IsNaN(item.AverageUnitCost)
+                    || float.IsInfinity(item.AverageUnitCost) || item.AverageUnitCost < 0f
+                    || !itemIds.Add(item.Item.DefinitionId))
+                {
+                    failure = P12DNpcRootOwnerSnapshotFailure.UnsupportedValue;
+                    return false;
+                }
+                inventoryRows.Add(new P12DNpcInventoryRowValue(
+                    item.Item.DefinitionId, item.Amount, item.AverageUnitCost));
             }
-            inventoryRows.Add(new P12DNpcInventoryRowValue(
-                item.Item.DefinitionId, item.Amount, item.AverageUnitCost));
+        }
+        else
+        {
+            foreach (InventoryItemRuntime item in inventory.Items)
+            {
+                if (item == null || item.Item == null || string.IsNullOrWhiteSpace(item.Item.DefinitionId)
+                    || item.Amount < 0 || (float.IsNaN(item.AverageUnitCost) || float.IsInfinity(item.AverageUnitCost)) || item.AverageUnitCost < 0f
+                    || !itemIds.Add(item.Item.DefinitionId))
+                {
+                    failure = P12DNpcRootOwnerSnapshotFailure.UnsupportedValue;
+                    return false;
+                }
+                inventoryRows.Add(new P12DNpcInventoryRowValue(
+                    item.Item.DefinitionId, item.Amount, item.AverageUnitCost));
+            }
         }
 
         if (!commercial.TryCopyOwnerSnapshot(
@@ -795,11 +821,12 @@ internal static class P12DNpcRootOwnerSnapshot
         IReadOnlyList<string> stagedRouteRuntimeIds,
         IReadOnlyList<string> stagedTravelPartyIds,
         out IReadOnlyList<NpcRuntime> stagedNpcRoster,
-        out P12DNpcRootOwnerSnapshotFailure failure)
+        out P12DNpcRootOwnerSnapshotFailure failure,
+        DailyV1EffectiveDefinitions selectedDefinitions = null)
         => TryStageCore(sourceRuntime, token, dProjection, fProjection,
             cityMembershipLinkers, stagedPersonStore, npcDefinitions, actionDefinitions,
             statusDefinitions, itemDefinitions, stagedLocations, stagedRouteRuntimeIds,
-            stagedTravelPartyIds, true, out stagedNpcRoster, out failure);
+            stagedTravelPartyIds, true, out stagedNpcRoster, out failure, selectedDefinitions);
 
     internal static bool TryStageForImage(
         IReadOnlyList<P12DNpcDRow> dRows,
@@ -815,7 +842,8 @@ internal static class P12DNpcRootOwnerSnapshot
         IReadOnlyList<string> stagedTravelPartyIds,
         IReadOnlyList<P12AOwnerSection> ownerSections,
         out IReadOnlyList<NpcRuntime> stagedNpcRoster,
-        out P12DNpcRootOwnerSnapshotFailure failure)
+        out P12DNpcRootOwnerSnapshotFailure failure,
+        DailyV1EffectiveDefinitions selectedDefinitions = null)
     {
         stagedNpcRoster = null;
         failure = P12DNpcRootOwnerSnapshotFailure.InvalidCaptureEvidence;
@@ -840,7 +868,7 @@ internal static class P12DNpcRootOwnerSnapshot
             new P12DNpcFProjection(null, null, null, null, fRows),
             cityMembershipLinkers, stagedPersonStore, npcDefinitions, actionDefinitions,
             statusDefinitions, itemDefinitions, stagedLocations, stagedRouteRuntimeIds,
-            stagedTravelPartyIds, false, out stagedNpcRoster, out failure);
+            stagedTravelPartyIds, false, out stagedNpcRoster, out failure, selectedDefinitions);
     }
 
     private static bool TryStageCore(
@@ -859,7 +887,8 @@ internal static class P12DNpcRootOwnerSnapshot
         IReadOnlyList<string> stagedTravelPartyIds,
         bool requireCaptureEvidence,
         out IReadOnlyList<NpcRuntime> stagedNpcRoster,
-        out P12DNpcRootOwnerSnapshotFailure failure)
+        out P12DNpcRootOwnerSnapshotFailure failure,
+        DailyV1EffectiveDefinitions selectedDefinitions = null)
     {
         stagedNpcRoster = null;
         failure = P12DNpcRootOwnerSnapshotFailure.InvalidCaptureEvidence;
@@ -1009,19 +1038,46 @@ internal static class P12DNpcRootOwnerSnapshot
             }
 
             List<InventoryItemRuntime> inventoryRows =
-                new List<InventoryItemRuntime>(d.InventoryRows.Count);
+                selectedDefinitions == null ? new List<InventoryItemRuntime>(d.InventoryRows.Count) : null;
+            List<DailyV1InventoryItemState> selectedInventoryRows = selectedDefinitions != null
+                ? new List<DailyV1InventoryItemState>(d.InventoryRows.Count) : null;
             foreach (P12DNpcInventoryRowValue row in d.InventoryRows)
             {
-                if (row == null || string.IsNullOrWhiteSpace(row.ItemDefinitionId)
-                    || !itemsByDefinition.TryGetValue(row.ItemDefinitionId, out ItemData item))
+                if (row == null || string.IsNullOrWhiteSpace(row.ItemDefinitionId))
                 {
                     failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
                     return false;
                 }
-                inventoryRows.Add(new InventoryItemRuntime(item, row.Amount, row.AverageUnitCost));
+                if (selectedDefinitions != null)
+                {
+                    if (!selectedDefinitions.Items.TryGetValue(row.ItemDefinitionId,
+                            out DailyV1ItemDefinition itemNode)
+                        || itemNode == null || row.Amount < 0
+                        || float.IsNaN(row.AverageUnitCost) || float.IsInfinity(row.AverageUnitCost)
+                        || row.AverageUnitCost < 0f)
+                    {
+                        failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+                        return false;
+                    }
+                    selectedInventoryRows.Add(new DailyV1InventoryItemState(
+                        itemNode, row.Amount, row.AverageUnitCost));
+                }
+                else
+                {
+                    if (!itemsByDefinition.TryGetValue(row.ItemDefinitionId, out ItemData item))
+                    {
+                        failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+                        return false;
+                    }
+                    inventoryRows.Add(new InventoryItemRuntime(item, row.Amount, row.AverageUnitCost));
+                }
             }
-            if (!InventoryRuntime.TryCreateFromOwnerSnapshot(
-                    inventoryRows, d.InventoryRevision, out InventoryRuntime inventory)
+            bool inventoryCreated = selectedDefinitions != null
+                ? InventoryRuntime.TryCreateSelectedFromOwnerSnapshot(
+                    selectedDefinitions, selectedInventoryRows, d.InventoryRevision, out InventoryRuntime inventory)
+                : InventoryRuntime.TryCreateFromOwnerSnapshot(
+                    inventoryRows, d.InventoryRevision, out inventory);
+            if (!inventoryCreated
                 || !MoneyAccountOwnerBridge.TryCreateFromOwnerSnapshot(
                     d.MoneyBalance, d.MoneyRevision, out MoneyAccountRuntime moneyAccount))
             {

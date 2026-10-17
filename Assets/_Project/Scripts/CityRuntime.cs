@@ -1117,9 +1117,11 @@ public class CityRuntime
             ? NormalizeMarketCounterparty(marketCounterparty, runtimeId)
             : CreateConfiguredMarketCounterparty(runtimeId);
         population = CreatePopulationRuntime();
-        market = HasConfiguredDefinition
-            ? new MarketRuntime(RuntimeMarketItems, this.marketCounterparty)
-            : new MarketRuntime(new List<MarketItemConfig>(), this.marketCounterparty);
+        market = selectedDefinition != null
+            ? new MarketRuntime(selectedDefinition, selectedDefinitions, this.marketCounterparty, selectedBindings)
+            : HasConfiguredDefinition
+                ? new MarketRuntime(RuntimeMarketItems, this.marketCounterparty)
+                : new MarketRuntime(new List<MarketItemConfig>(), this.marketCounterparty);
         if (HasConfiguredDefinition && (RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily
             || RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.MixedSourcesDaily
             || finiteProductionSources != null || HasAuthoredFiniteReserve()))
@@ -1532,6 +1534,8 @@ public class CityRuntime
         selectedDailyV1Definition = definition;
         selectedDefinitionGraph = definitions;
         selectedDefinitionBindings = bindings;
+        if (market != null && market.SelectedDailyV1Owner != null
+            && !market.TryBindSelectedDailyV1Owner(definitions, bindings)) return false;
         selectedMarketItems = marketItems;
         selectedProductionConfigs = productionConfigs;
         selectedMarketLiquidity = marketLiquidity;

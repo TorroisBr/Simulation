@@ -105,6 +105,12 @@ public sealed class P14CMixedSourceProductionTests
                 new SpatialLocationRuntime("location.p14c.selected"));
             Assert.That(city.CityData, Is.SameAs(authoredCity),
                 "P12 retains the exact authoring object only as its identity bridge.");
+            DailyV1MarketOwner selectedMarket = city.Market.SelectedDailyV1Owner;
+            Assert.That(selectedMarket, Is.Not.Null,
+                "The selected City Market owner must be shared Core state, not an ItemData-backed duplicate.");
+            Assert.That(selectedMarket.Definitions, Is.SameAs(definitions));
+            Assert.That(selectedMarket.Items, Has.Count.EqualTo(1));
+            Assert.That(selectedMarket.Items[0].Item, Is.SameAs(definitions.Items[item.DefinitionId]));
 
             SimulateDirect(city, 3L);
 
@@ -117,6 +123,8 @@ public sealed class P14CMixedSourceProductionTests
             Assert.That(city.FiniteProductionSources.Source.RemainingReserve, Is.EqualTo(4));
             Assert.That(city.FiniteProductionSources.Source.Revision, Is.EqualTo(1));
             Assert.That(city.Market.GetAmount(item), Is.EqualTo(6));
+            Assert.That(selectedMarket.Items[0].Item, Is.SameAs(definitions.Items[item.DefinitionId]));
+            Assert.That(selectedMarket.Items[0].Amount, Is.EqualTo(6));
         }
         finally
         {

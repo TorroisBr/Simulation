@@ -531,7 +531,8 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             Array.Empty<DailyV1ExplorableSiteDefinition>(),
             capturedF.TravelPartyIds,
             out P12DDailyV1OwnerPackage stagedD,
-            out P12DDailyV1OwnerPackageFailure dFailure), Is.True, dFailure.ToString());
+            out P12DDailyV1OwnerPackageFailure dFailure,
+            selectedDefinitions: anchorComposition.SelectedDefinitions), Is.True, dFailure.ToString());
 
         if (seedPoliticalOwners)
         {
@@ -775,6 +776,28 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             actionProviders.Add(new GuardSystem(stagedE.Justice, config.hiddenStatus, effective.GuardCrime));
         NpcDecisionSystem decisionSystem = new NpcDecisionSystem(actionProviders, stagedC.DeterministicRandom);
 
+        NpcChronicleService chronicles = new NpcChronicleService(decisions, eventStore);
+        Assert.That(DailyV1DefinitionAdapter.TryCreateBindings(
+                config,
+                anchor.Composition.SelectedDefinitions,
+                out DailyV1DefinitionAdapter.SelectedBindings selectedBindings,
+                out string bindingDiagnostic), Is.True, bindingDiagnostic);
+        foreach (CityRuntime city in stagedD.Cities)
+        {
+            Assert.That(selectedBindings.TryGet(
+                    city.CityData, anchor.Composition.SelectedDefinitions,
+                    out DailyV1CityDefinition cityNode), Is.True);
+            Assert.That(city.TryBindSelectedDailyV1Definition(
+                cityNode, anchor.Composition.SelectedDefinitions, selectedBindings), Is.True);
+        }
+        foreach (NpcRuntime npc in stagedD.Npcs)
+        {
+            Assert.That(selectedBindings.TryGet(
+                    npc.NpcData, anchor.Composition.SelectedDefinitions,
+                    out DailyV1NpcDefinition npcNode), Is.True);
+            Assert.That(npc.TryBindSelectedDailyV1Definition(
+                npcNode, anchor.Composition.SelectedDefinitions, selectedBindings), Is.True);
+        }
         SimulationRuntime runtime = new SimulationRuntime(
             simulationTime: stagedTime,
             cities: stagedD.Cities,
@@ -827,35 +850,14 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             requireP12RuntimeIdentitySpatialCensusOwners: true,
             p12CrimeSocialAppraisalWorldState: stagedE.CrimeSocialAppraisal);
 
-        NpcChronicleService chronicles = new NpcChronicleService(decisions, eventStore);
-        Assert.That(DailyV1DefinitionAdapter.TryCreateBindings(
-                config,
-                anchor.Composition.SelectedDefinitions,
-                out DailyV1DefinitionAdapter.SelectedBindings selectedBindings,
-                out string bindingDiagnostic), Is.True, bindingDiagnostic);
-        foreach (CityRuntime city in stagedD.Cities)
-        {
-            Assert.That(selectedBindings.TryGet(
-                    city.CityData, anchor.Composition.SelectedDefinitions,
-                    out DailyV1CityDefinition cityNode), Is.True);
-            Assert.That(city.TryBindSelectedDailyV1Definition(
-                cityNode, anchor.Composition.SelectedDefinitions, selectedBindings), Is.True);
-        }
-        foreach (NpcRuntime npc in stagedD.Npcs)
-        {
-            Assert.That(selectedBindings.TryGet(
-                    npc.NpcData, anchor.Composition.SelectedDefinitions,
-                    out DailyV1NpcDefinition npcNode), Is.True);
-            Assert.That(npc.TryBindSelectedDailyV1Definition(
-                npcNode, anchor.Composition.SelectedDefinitions, selectedBindings), Is.True);
-        }
         NpcChronicleFormatter formatter = TesteSimulacao.CreateNpcChronicleFormatter(
             stagedD.RuntimeIdentities,
             stagedD.SpatialNetwork,
             cityByLocation,
             stagedD.EmptyExplorableSites,
             stagedD.Cities,
-            config);
+            config,
+            anchor.Composition.SelectedDefinitions);
         TravelPartySystem exactGroupTravel = travelParties;
         SimulationBootstrapComposition composition = new SimulationBootstrapComposition(
             stagedC.WorldIdentity,
@@ -1209,6 +1211,8 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         string context)
     {
         AssertOwnerVectorFactsEqual(expectedToken.OwnerSections, actualToken.OwnerSections);
+        AssertSelectedInventoryAndMarketIdentity(expected);
+        AssertSelectedInventoryAndMarketIdentity(actual);
         Assert.That(actual.Composition.Calendar, Is.SameAs(expected.Composition.Calendar),
             "Continuation must preserve the exact CalendarDefinition object supplied to the source composition.");
         Assert.That(actual.Composition.Manifest.EffectiveConfiguration,
@@ -1219,6 +1223,36 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             context + ". Explicit C-F coverage: " + string.Join(" | ", DailyV1TypedParityCoverage));
         AssertPoliticalOwnersAreAuthenticAndPopulated(expected, expectedToken);
         AssertPoliticalOwnersAreAuthenticAndPopulated(actual, actualToken);
+    }
+
+    private static void AssertSelectedInventoryAndMarketIdentity(SimulationActiveSession session)
+    {
+        DailyV1EffectiveDefinitions definitions = session?.Composition?.SelectedDefinitions;
+        Assert.That(definitions, Is.Not.Null, "Daily-v1 owner state must retain the admitted typed definition graph.");
+        foreach (CityRuntime city in session.Runtime.Cities)
+        {
+            DailyV1MarketOwner owner = city?.Market?.SelectedDailyV1Owner;
+            Assert.That(owner, Is.Not.Null, "Selected Daily-v1 City stock must be owned by shared Core state.");
+            Assert.That(owner.Definitions, Is.SameAs(definitions));
+            foreach (DailyV1MarketItemState row in owner.Items)
+            {
+                Assert.That(row?.Item, Is.Not.Null);
+                Assert.That(definitions.Items[row.Item.DefinitionId], Is.SameAs(row.Item),
+                    "Market rows must retain the exact admitted graph node after capture/restore.");
+            }
+        }
+        foreach (NpcRuntime npc in session.Runtime.NpcRuntimes)
+        {
+            DailyV1InventoryOwner owner = npc?.ExistingInventory?.SelectedDailyV1Owner;
+            Assert.That(owner, Is.Not.Null, "Selected Daily-v1 NPC inventory must be owned by shared Core state.");
+            Assert.That(owner.Definitions, Is.SameAs(definitions));
+            foreach (DailyV1InventoryItemState row in owner.Items)
+            {
+                Assert.That(row?.Item, Is.Not.Null);
+                Assert.That(definitions.Items[row.Item.DefinitionId], Is.SameAs(row.Item),
+                    "Inventory rows must retain the exact admitted graph node after capture/restore.");
+            }
+        }
     }
 
     /// <summary>

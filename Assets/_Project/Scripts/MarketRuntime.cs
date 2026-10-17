@@ -10,11 +10,13 @@ public class MarketItemRuntime
     [SerializeField] private int amount;
     [SerializeField] private int desiredAmount;
     [SerializeField] private float currentPrice;
+    [NonSerialized] private DailyV1ItemDefinition selectedDefinition;
 
     public ItemData Item => item;
     public int Amount => amount;
     public int DesiredAmount => desiredAmount;
     public float CurrentPrice => currentPrice;
+    internal DailyV1ItemDefinition SelectedDefinition => selectedDefinition;
 
     public MarketItemRuntime(ItemData item, int amount, int desiredAmount)
     {
@@ -24,17 +26,20 @@ public class MarketItemRuntime
         UpdatePrice();
     }
 
-    private MarketItemRuntime(ItemData item, int amount, int desiredAmount, float currentPrice)
+    private MarketItemRuntime(ItemData item, int amount, int desiredAmount, float currentPrice,
+        DailyV1ItemDefinition selectedDefinition = null)
     {
         this.item = item;
         this.amount = amount;
         this.desiredAmount = desiredAmount;
         this.currentPrice = currentPrice;
+        this.selectedDefinition = selectedDefinition;
     }
 
     internal static MarketItemRuntime CreatePreparedFiniteStockRow(
-        ItemData item, int amount, int desiredAmount, float currentPrice) =>
-        new MarketItemRuntime(item, amount, desiredAmount, currentPrice);
+        ItemData item, int amount, int desiredAmount, float currentPrice,
+        DailyV1ItemDefinition selectedDefinition = null) =>
+        new MarketItemRuntime(item, amount, desiredAmount, currentPrice, selectedDefinition);
 
     internal static bool TryCreateFromOwnerSnapshot(
         ItemData item,
@@ -66,6 +71,7 @@ public class MarketItemRuntime
         amount = source.amount;
         desiredAmount = source.desiredAmount;
         currentPrice = source.currentPrice;
+        selectedDefinition = source.selectedDefinition;
     }
 
     internal bool AddAmount(int amountToAdd)
@@ -105,7 +111,8 @@ public class MarketItemRuntime
     private float CalculatePrice()
     {
         if (item == null) return 0f;
-        return MarketPriceCalculator.CalculateCurrentPrice(item.basePrice, desiredAmount, amount);
+        float basePrice = selectedDefinition != null ? selectedDefinition.Values.basePrice : item.basePrice;
+        return MarketPriceCalculator.CalculateCurrentPrice(basePrice, desiredAmount, amount);
     }
 }
 
@@ -119,12 +126,31 @@ public class MarketRuntime
     [NonSerialized] private Func<bool> p12MutationAdmission;
     [NonSerialized] private Action p12MutationCommitted;
     [NonSerialized] private EconomyTransactionService p12TransactionService;
+    [NonSerialized] private DailyV1MarketOwner selectedOwner;
+    [NonSerialized] private DailyV1EffectiveDefinitions selectedDefinitions;
+    [NonSerialized] private DailyV1DefinitionAdapter.SelectedBindings selectedBindings;
 
-    public IReadOnlyList<MarketItemRuntime> Items => readOnlyItems ?? (readOnlyItems = (items ?? (items = new List<MarketItemRuntime>())).AsReadOnly());
-    public long Revision => revision;
-    public MarketCounterpartyRuntime Counterparty => counterparty ?? (counterparty = MarketCounterpartyRuntime.CreateOpen());
+    public IReadOnlyList<MarketItemRuntime> Items
+    {
+        get
+        {
+            if (selectedOwner == null) return readOnlyItems ?? (readOnlyItems = (items ?? (items = new List<MarketItemRuntime>())).AsReadOnly());
+            List<MarketItemRuntime> projection = new List<MarketItemRuntime>(selectedOwner.Items.Count);
+            if (selectedBindings == null) return projection.AsReadOnly();
+            foreach (DailyV1MarketItemState row in selectedOwner.Items)
+            {
+                if (row == null || !selectedBindings.TryGetAsset(row.Item, out ItemData asset)) return Array.Empty<MarketItemRuntime>();
+                projection.Add(MarketItemRuntime.CreatePreparedFiniteStockRow(
+                    asset, row.Amount, row.DesiredAmount, row.CurrentPrice, row.Item));
+            }
+            return projection.AsReadOnly();
+        }
+    }
+    public long Revision => selectedOwner != null ? selectedOwner.Revision : revision;
+    public MarketCounterpartyRuntime Counterparty => selectedOwner != null ? selectedOwner.Counterparty : counterparty ?? (counterparty = MarketCounterpartyRuntime.CreateOpen());
     internal MarketCounterpartyRuntime InstalledCounterparty => counterparty;
     public string StockOwnerRuntimeId => Counterparty.CounterpartyRuntimeId;
+    internal DailyV1MarketOwner SelectedDailyV1Owner => selectedOwner;
 
     public MarketRuntime()
     {
@@ -157,6 +183,64 @@ public class MarketRuntime
             EnsureItems().Add(new MarketItemRuntime(config.item, config.initialAmount, config.desiredAmount));
         }
     }
+
+    internal MarketRuntime(DailyV1CityDefinition city, DailyV1EffectiveDefinitions definitions,
+        MarketCounterpartyRuntime counterparty, DailyV1DefinitionAdapter.SelectedBindings bindings)
+    {
+        if (city == null || definitions == null || bindings == null
+            || !definitions.Cities.TryGetValue(city.DefinitionId, out DailyV1CityDefinition admitted)
+            || !ReferenceEquals(city, admitted)) throw new ArgumentException("A selected Market requires the admitted Daily-v1 City node and graph.");
+        selectedDefinitions = definitions;
+        selectedBindings = bindings;
+        selectedOwner = new DailyV1MarketOwner(definitions, counterparty);
+        if (!selectedOwner.TryInitializeFromCity(city)) throw new ArgumentException("The selected Market rows could not be created from the canonical definition graph.");
+        this.counterparty = counterparty ?? selectedOwner.Counterparty;
+    }
+
+    internal static bool TryCreateSelectedFromOwnerSnapshot(DailyV1EffectiveDefinitions definitions,
+        IReadOnlyList<DailyV1MarketItemState> rows, long ownerRevision,
+        MarketCounterpartyRuntime snapshotCounterparty, out MarketRuntime market)
+    {
+        market = null;
+        if (definitions == null) return false;
+        DailyV1MarketOwner owner = new DailyV1MarketOwner(definitions, snapshotCounterparty);
+        if (!owner.TryCreateFromOwnerSnapshot(rows, ownerRevision, snapshotCounterparty, out DailyV1MarketOwner restored)) return false;
+        market = new MarketRuntime { selectedDefinitions = definitions, selectedOwner = restored, counterparty = snapshotCounterparty };
+        return true;
+    }
+
+    internal bool TryBindSelectedDailyV1Owner(DailyV1EffectiveDefinitions definitions,
+        DailyV1DefinitionAdapter.SelectedBindings bindings)
+    {
+        if (definitions == null || bindings == null || selectedOwner == null
+            || !ReferenceEquals(selectedOwner.Definitions, definitions)
+            || (selectedDefinitions != null && !ReferenceEquals(selectedDefinitions, definitions))) return false;
+        selectedDefinitions = definitions; selectedBindings = bindings; return true;
+    }
+
+    private bool TryGetSelectedNode(ItemData item, out DailyV1ItemDefinition node)
+    {
+        node = null;
+        return selectedOwner != null && selectedBindings != null && item != null
+            && selectedBindings.TryGet(item, out node)
+            && selectedDefinitions.Items.TryGetValue(node.DefinitionId, out DailyV1ItemDefinition admitted)
+            && ReferenceEquals(node, admitted);
+    }
+
+    private MarketItemRuntime Project(DailyV1MarketItemState row)
+    {
+        return row != null && selectedBindings != null && selectedBindings.TryGetAsset(row.Item, out ItemData asset)
+            ? MarketItemRuntime.CreatePreparedFiniteStockRow(asset, row.Amount, row.DesiredAmount, row.CurrentPrice, row.Item) : null;
+    }
+
+    internal DailyV1MarketItemState GetSelectedItem(DailyV1ItemDefinition item) => selectedOwner?.GetItem(item);
+    internal int GetSelectedAmount(DailyV1ItemDefinition item) => selectedOwner?.GetAmount(item) ?? 0;
+    internal float GetSelectedPrice(DailyV1ItemDefinition item) => selectedOwner?.GetPrice(item) ?? 0f;
+    internal bool CanAddSelectedStock(DailyV1ItemDefinition item, int amount) => selectedOwner != null && selectedOwner.CanAddStock(item, amount);
+    internal int AddSelectedStock(DailyV1ItemDefinition item, int amount, int desiredAmount = 100) =>
+        selectedOwner != null ? selectedOwner.AddStock(item, amount, desiredAmount) : 0;
+    internal int RemoveSelectedStock(DailyV1ItemDefinition item, int amount) =>
+        selectedOwner != null ? selectedOwner.RemoveStockUpTo(item, amount) : 0;
 
     internal static bool TryCreateFromOwnerSnapshot(
         IReadOnlyList<MarketItemRuntime> snapshotRows,
@@ -200,18 +284,21 @@ public class MarketRuntime
 
     public MarketItemRuntime GetItem(ItemData item)
     {
+        if (selectedOwner != null) return TryGetSelectedNode(item, out DailyV1ItemDefinition node) ? Project(selectedOwner.GetItem(node)) : null;
         MarketItemRuntime value = (items ?? (items = new List<MarketItemRuntime>())).Find(x => x != null && x.Item == item);
         return value == null ? null : new MarketItemRuntime(value);
     }
 
     public int GetAmount(ItemData item)
     {
+        if (selectedOwner != null) return TryGetSelectedNode(item, out DailyV1ItemDefinition node) ? selectedOwner.GetAmount(node) : 0;
         MarketItemRuntime marketItem = (items ?? (items = new List<MarketItemRuntime>())).Find(x => x != null && x.Item == item);
         return marketItem != null ? marketItem.Amount : 0;
     }
 
     public float GetPrice(ItemData item)
     {
+        if (selectedOwner != null) return TryGetSelectedNode(item, out DailyV1ItemDefinition node) ? selectedOwner.GetPrice(node) : 0f;
         MarketItemRuntime marketItem = (items ?? (items = new List<MarketItemRuntime>())).Find(x => x != null && x.Item == item);
 
         if (marketItem != null)
@@ -224,6 +311,7 @@ public class MarketRuntime
 
     internal float GetPriceForSale(ItemData item)
     {
+        if (selectedOwner != null) return TryGetSelectedNode(item, out DailyV1ItemDefinition node) ? selectedOwner.GetPrice(node) : 0f;
         MarketItemRuntime marketItem = GetItem(item);
 
         if (marketItem != null)
@@ -236,6 +324,8 @@ public class MarketRuntime
 
     public int AddStock(ItemData item, int amount, int desiredAmount = 100)
     {
+        if (selectedOwner != null) return TryGetSelectedNode(item, out DailyV1ItemDefinition node)
+            ? selectedOwner.AddStock(node, amount, desiredAmount) : 0;
         if (item == null || amount <= 0 || revision == long.MaxValue)
         {
             return 0;
@@ -262,6 +352,8 @@ public class MarketRuntime
 
     public bool CanAddStock(ItemData item, int amount)
     {
+        if (selectedOwner != null) return TryGetSelectedNode(item, out DailyV1ItemDefinition node)
+            && selectedOwner.CanAddStock(node, amount);
         if (item == null || amount <= 0)
         {
             return false;
@@ -273,6 +365,8 @@ public class MarketRuntime
 
     public int RemoveStockUpTo(ItemData item, int amount)
     {
+        if (selectedOwner != null) return TryGetSelectedNode(item, out DailyV1ItemDefinition node)
+            ? selectedOwner.RemoveStockUpTo(node, amount) : 0;
         MarketItemRuntime marketItem = (items ?? (items = new List<MarketItemRuntime>())).Find(x => x != null && x.Item == item);
 
         if (marketItem == null || amount <= 0 || revision == long.MaxValue)
@@ -322,6 +416,7 @@ public class MarketRuntime
 
     public void UpdatePrices()
     {
+        if (selectedOwner != null) { selectedOwner.UpdatePrices(); return; }
         List<MarketItemRuntime> currentItems = items ?? (items = new List<MarketItemRuntime>());
         bool changed = false;
         foreach (MarketItemRuntime item in currentItems)
@@ -341,6 +436,12 @@ public class MarketRuntime
     {
         if (admission == null) throw new ArgumentNullException(nameof(admission));
         if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (selectedOwner != null)
+        {
+            if (!selectedOwner.TryBindMutationBoundary(admission, committed))
+                throw new InvalidOperationException("Selected Daily-v1 Market owner is already bound to a P12 mutation boundary.");
+            p12MutationAdmission = admission; p12MutationCommitted = committed; return;
+        }
         if (p12MutationAdmission != null || p12MutationCommitted != null)
             throw new InvalidOperationException("MarketRuntime is already bound to a P12 mutation boundary.");
 
@@ -384,19 +485,28 @@ public class MarketRuntime
         return marketItem;
     }
 
-    internal bool CanInstall(long expectedRevision) => revision == expectedRevision && revision < long.MaxValue;
+    internal bool CanInstall(long expectedRevision) => selectedOwner != null
+        ? selectedOwner.CanInstall(expectedRevision) : revision == expectedRevision && revision < long.MaxValue;
 
-    internal bool CanInstall(long expectedRevision, long revisionIncrements) =>
+    internal bool CanInstall(long expectedRevision, long revisionIncrements) => selectedOwner != null
+        ? selectedOwner.CanInstall(expectedRevision, revisionIncrements) :
         revision == expectedRevision && revisionIncrements >= 0
         && revisionIncrements <= long.MaxValue - expectedRevision;
 
     internal bool CanInstallMaterialFlow(long expectedRevision, long revisionIncrements) =>
-        CanInstall(expectedRevision, revisionIncrements) && CanCommitP12OwnerMutation();
+        selectedOwner != null ? selectedOwner.CanInstallMaterialFlow(expectedRevision, revisionIncrements)
+            : CanInstall(expectedRevision, revisionIncrements) && CanCommitP12OwnerMutation();
 
     internal void NotifyMaterialFlowInstalled() => NotifyP12OwnerMutation();
 
     internal void InstallPrepared(long expectedRevision, PreparedMarketState replacement)
     {
+        if (selectedOwner != null)
+        {
+            if (replacement?.SelectedState == null || !selectedOwner.TryInstall(expectedRevision, 1L, replacement.SelectedState))
+                throw new InvalidOperationException("Selected Daily-v1 Market prepared install was stale or invalid.");
+            return;
+        }
         items = replacement.Items;
         readOnlyItems = replacement.ReadOnlyItems;
         revision = expectedRevision + 1;
@@ -404,6 +514,16 @@ public class MarketRuntime
 
     internal void InstallPrepared(long expectedRevision, long revisionIncrements, PreparedMarketState replacement)
     {
+        if (selectedOwner != null)
+        {
+            DailyV1MarketPreparedState selectedReplacement = replacement?.SelectedState;
+            if (selectedReplacement == null
+                && !TryCreateSelectedPreparedState(replacement?.Items, out selectedReplacement))
+                throw new InvalidOperationException("Selected Daily-v1 Market replacement did not map to its admitted Core definition graph.");
+            if (!selectedOwner.TryInstall(expectedRevision, revisionIncrements, selectedReplacement))
+                throw new InvalidOperationException("Selected Daily-v1 Market prepared install was stale or invalid.");
+            return;
+        }
         items = replacement.Items;
         readOnlyItems = replacement.ReadOnlyItems;
         revision = expectedRevision + revisionIncrements;
@@ -412,13 +532,47 @@ public class MarketRuntime
     internal PreparedMarketState CreatePreparedSnapshot()
     {
         List<MarketItemRuntime> replacement = new List<MarketItemRuntime>();
+        if (selectedOwner != null)
+        {
+            foreach (MarketItemRuntime item in Items)
+                replacement.Add(item == null ? null : new MarketItemRuntime(item));
+            return new PreparedMarketState(replacement);
+        }
         foreach (MarketItemRuntime item in items ?? (items = new List<MarketItemRuntime>()))
             replacement.Add(item == null ? null : new MarketItemRuntime(item));
         return new PreparedMarketState(replacement);
     }
 
+    private bool TryCreateSelectedPreparedState(IReadOnlyList<MarketItemRuntime> projectedRows,
+        out DailyV1MarketPreparedState prepared)
+    {
+        prepared = null;
+        if (selectedOwner == null || selectedBindings == null || selectedDefinitions == null || projectedRows == null)
+            return false;
+        List<DailyV1MarketItemState> rows = new List<DailyV1MarketItemState>(projectedRows.Count);
+        foreach (MarketItemRuntime row in projectedRows)
+        {
+            if (row == null || row.Item == null || row.Amount < 0 || row.DesiredAmount <= 0
+                || row.CurrentPrice <= 0f || float.IsNaN(row.CurrentPrice) || float.IsInfinity(row.CurrentPrice))
+                return false;
+            DailyV1ItemDefinition node = row.SelectedDefinition;
+            if (node == null && !selectedBindings.TryGet(row.Item, out node)) return false;
+            if (!selectedDefinitions.Items.TryGetValue(node.DefinitionId, out DailyV1ItemDefinition admitted)
+                || !ReferenceEquals(admitted, node)
+                || !DailyV1MarketItemState.TryCreate(node, row.Amount, row.DesiredAmount,
+                    row.CurrentPrice, out DailyV1MarketItemState typedRow)) return false;
+            rows.Add(typedRow);
+        }
+        return selectedOwner.TryCreatePreparedState(rows, out prepared);
+    }
+
     internal PreparedMarketState PrepareReplacement(ItemData item, int delta, int desiredAmount)
     {
+        if (selectedOwner != null)
+        {
+            if (!TryGetSelectedNode(item, out DailyV1ItemDefinition node)) return new PreparedMarketState((DailyV1MarketPreparedState)null);
+            return new PreparedMarketState(selectedOwner.PrepareReplacement(node, delta, desiredAmount));
+        }
         List<MarketItemRuntime> replacement = new List<MarketItemRuntime>((items ?? (items = new List<MarketItemRuntime>())).Count + 1);
         bool found = false;
         foreach (MarketItemRuntime existing in items)
@@ -444,6 +598,15 @@ public class MarketRuntime
         snapshot = null;
         rejectionReason = "IdentityMismatch";
         if (source == null || string.IsNullOrWhiteSpace(locationId)) return false;
+        if (selectedOwner != null)
+        {
+            FiniteSourceSnapshot selectedSource = new FiniteSourceSnapshot(source.ProductionSourceId,
+                source.SettlementSemanticId, source.MarketStoreSemanticId, source.ItemDefinitionId,
+                source.ContentRevision, source.DailyOutputLimit, source.InitialReserve,
+                source.RemainingReserve, source.Revision, source.LastProcessedDay);
+            return selectedOwner.TryCreateFiniteSourceScenario(locationId, selectedSource,
+                out runtime, out snapshot, out rejectionReason);
+        }
 
         FiniteSourceSnapshot coreSource = new FiniteSourceSnapshot(
             source.ProductionSourceId, source.SettlementSemanticId, source.MarketStoreSemanticId,
@@ -467,6 +630,13 @@ public class MarketRuntime
         out PreparedMarketState replacement,
         out string rejectionReason)
     {
+        if (selectedOwner != null)
+        {
+            if (!selectedOwner.TryPrepareFiniteStockIncrease(currentSnapshot, preparedAdvance, nextSnapshot,
+                    out DailyV1MarketPreparedState selectedReplacement, out rejectionReason))
+            { replacement = null; return false; }
+            replacement = new PreparedMarketState(selectedReplacement); return true;
+        }
         replacement = null;
         rejectionReason = "InvalidMarketInput";
         if (currentSnapshot == null || preparedAdvance == null || nextSnapshot == null
@@ -606,7 +776,9 @@ public class MarketRuntime
         == BitConverter.ToInt32(BitConverter.GetBytes(right), 0);
 
     internal bool CanInstallFiniteStock(long expectedRevision, PreparedMarketState replacement) =>
-        replacement != null && CanInstall(expectedRevision) && CanCommitP12OwnerMutation();
+        replacement != null && CanInstall(expectedRevision) && (selectedOwner != null
+            ? selectedOwner.HasMutationBoundary ? CanInstallMaterialFlow(expectedRevision, 1L) : true
+            : CanCommitP12OwnerMutation());
 
     internal void InstallFiniteStock(long expectedRevision, PreparedMarketState replacement) =>
         InstallPrepared(expectedRevision, replacement);
@@ -625,5 +797,7 @@ internal sealed class PreparedMarketState
 {
     internal readonly List<MarketItemRuntime> Items;
     internal readonly ReadOnlyCollection<MarketItemRuntime> ReadOnlyItems;
+    internal readonly DailyV1MarketPreparedState SelectedState;
     internal PreparedMarketState(List<MarketItemRuntime> items) { Items = items; ReadOnlyItems = items.AsReadOnly(); }
+    internal PreparedMarketState(DailyV1MarketPreparedState selectedState) { SelectedState = selectedState; }
 }

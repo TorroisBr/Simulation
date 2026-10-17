@@ -2757,13 +2757,13 @@ public class TesteSimulacao : MonoBehaviour
             npcConfig.initialInventory ?? System.Array.Empty<DailyV1NpcInitialInventoryItemConfig>())
         {
             if (inventoryConfig == null) continue;
-            ItemData item = null;
-            if (!string.IsNullOrWhiteSpace(inventoryConfig.item)
-                && (!definitions.Items.TryGetValue(inventoryConfig.item, out DailyV1ItemDefinition itemDefinition)
-                    || !bindings.TryGetAsset(itemDefinition, out item)))
+            if (string.IsNullOrWhiteSpace(inventoryConfig.item)) continue;
+            if (!definitions.Items.TryGetValue(inventoryConfig.item, out DailyV1ItemDefinition item))
                 throw new System.InvalidOperationException(
                     "A selected NPC inventory item did not resolve through the exact admitted typed definition graph.");
-            npcRuntime.Inventory.AddItem(item, inventoryConfig.amount, inventoryConfig.averageUnitCost);
+            if (!npcRuntime.TryAddSelectedDailyV1InventoryItem(item, inventoryConfig.amount, inventoryConfig.averageUnitCost))
+                throw new System.InvalidOperationException(
+                    "A selected NPC inventory row could not be installed through its canonical Daily-v1 item node.");
         }
     }
 

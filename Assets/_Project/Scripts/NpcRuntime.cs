@@ -490,6 +490,21 @@ public class NpcRuntime : ICapabilityConditionSource
             && ReferenceEquals(itemNode, admittedItem);
     }
 
+    internal bool TryAddSelectedDailyV1InventoryItem(DailyV1ItemDefinition item, int amount, float averageUnitCost)
+    {
+        return selectedDailyV1Definition != null && selectedDefinitionGraph != null
+            && selectedDefinitionGraph.Items.TryGetValue(item?.DefinitionId ?? string.Empty, out DailyV1ItemDefinition admitted)
+            && ReferenceEquals(item, admitted)
+            && Inventory.TryAddSelectedItem(item, amount, averageUnitCost);
+    }
+
+    internal bool TrySetSelectedDailyV1InventoryOwner(InventoryRuntime selectedInventory)
+    {
+        if (selectedInventory == null || selectedDailyV1Definition != null || selectedDefinitionGraph != null) return false;
+        inventory = selectedInventory;
+        return true;
+    }
+
     internal bool TryGetSelectedDailyV1CapabilityAttribute(string definitionId, out CapabilityAttributeData attribute)
     {
         attribute = null;
@@ -790,6 +805,12 @@ public class NpcRuntime : ICapabilityConditionSource
 		selectedDailyV1Definition = selectedDefinition;
 		selectedDefinitionGraph = selectedDefinitions;
 		selectedDefinitionBindings = selectedBindings;
+        if (selectedDefinition != null)
+        {
+            inventory = new InventoryRuntime(new DailyV1InventoryOwner(selectedDefinitions));
+            if (!inventory.TryBindSelectedDailyV1Owner(selectedDefinitions, selectedBindings))
+                throw new ArgumentException("The selected NPC Inventory could not bind the exact admitted Daily-v1 item graph.", nameof(selectedDefinitions));
+        }
         spatialKnowledge = new SpatialKnowledgeRuntime(runtimeId);
         explorableSiteKnowledge = new ExplorableSiteKnowledgeRuntime(runtimeId);
         localTopologyKnowledge = new LocalTopologyKnowledgeRuntime(runtimeId);
@@ -871,6 +892,9 @@ public class NpcRuntime : ICapabilityConditionSource
         selectedDailyV1Definition = definition;
         selectedDefinitionGraph = definitions;
         selectedDefinitionBindings = bindings;
+        if (ExistingInventory != null
+            && ExistingInventory.SelectedDailyV1Owner != null
+            && !ExistingInventory.TryBindSelectedDailyV1Owner(definitions, bindings)) return false;
         return true;
     }
 

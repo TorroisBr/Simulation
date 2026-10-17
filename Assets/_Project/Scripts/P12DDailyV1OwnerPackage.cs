@@ -104,7 +104,8 @@ internal sealed class P12DDailyV1OwnerPackage
         out P12DDailyV1OwnerPackageFailure failure,
         Action<P12GDailyV1RestoreStage> stageObserver = null,
         Action afterGenealogyRecordStagedForTest = null,
-        Func<GenealogyOwnerSnapshot, GenealogyOwnerSnapshot> genealogySnapshotOverrideForTest = null)
+        Func<GenealogyOwnerSnapshot, GenealogyOwnerSnapshot> genealogySnapshotOverrideForTest = null,
+        DailyV1EffectiveDefinitions selectedDefinitions = null)
     {
         package = null;
         failure = P12DDailyV1OwnerPackageFailure.InvalidCaptureContext;
@@ -263,7 +264,7 @@ internal sealed class P12DDailyV1OwnerPackage
             if (!cityCapture.TryStage(
                     cityDefinitions, itemDefinitions, stagedLocations,
                     out CityRuntime stagedCity,
-                    out P12DCityMembershipLinker linker, out _)
+                    out P12DCityMembershipLinker linker, out _, selectedDefinitions)
                 || stagedCity == null || linker == null
                 || !stagedRuntimeIdentities.RegisterCity(stagedCity))
             {
@@ -288,7 +289,7 @@ internal sealed class P12DDailyV1OwnerPackage
                 sourceRuntime, token, dProjection, fProjection, cityLinkers, stagedPersons,
                 npcDefinitions, actionDefinitions, statusDefinitions, itemDefinitions,
                 stagedLocations, stagedRouteIds, stagedTravelPartyIds,
-                out IReadOnlyList<NpcRuntime> stagedNpcRoster, out _)
+                out IReadOnlyList<NpcRuntime> stagedNpcRoster, out _, selectedDefinitions)
             || stagedNpcRoster == null)
         {
             failure = P12DDailyV1OwnerPackageFailure.StageFailed;
@@ -359,7 +360,8 @@ internal sealed class P12DDailyV1OwnerPackage
         IReadOnlyList<DailyV1ExplorableSiteDefinition> admittedDailySiteDefinitions,
         IReadOnlyList<string> stagedTravelPartyIds,
         out P12DDailyV1OwnerPackage package,
-        out P12DDailyV1OwnerPackageFailure failure)
+        out P12DDailyV1OwnerPackageFailure failure,
+        DailyV1EffectiveDefinitions selectedDefinitions = null)
     {
         package = null;
         failure = P12DDailyV1OwnerPackageFailure.InvalidCaptureContext;
@@ -408,7 +410,7 @@ internal sealed class P12DDailyV1OwnerPackage
         foreach (P12DCityRootOwnerSnapshot snapshot in citySnapshots)
         {
             if (!snapshot.TryStageForImage(cityDefinitions, itemDefinitions, stagedLocations,
-                    out CityRuntime city, out P12DCityMembershipLinker linker, out _)
+                    out CityRuntime city, out P12DCityMembershipLinker linker, out _, selectedDefinitions)
                 || city == null || linker == null || !stagedRuntimeIdentities.RegisterCity(city))
             { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
             stagedCities.Add(city);
@@ -422,7 +424,7 @@ internal sealed class P12DDailyV1OwnerPackage
         if (!P12DNpcRootOwnerSnapshot.TryStageForImage(npcDRows, npcFRows, cityLinkers,
                 stagedPersons, npcDefinitions, actionDefinitions, statusDefinitions, itemDefinitions,
                 stagedLocations, stagedRouteIds, stagedTravelPartyIds, ownerSections,
-                out IReadOnlyList<NpcRuntime> stagedNpcRoster, out _)
+                out IReadOnlyList<NpcRuntime> stagedNpcRoster, out _, selectedDefinitions)
             || stagedNpcRoster == null)
         { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
 

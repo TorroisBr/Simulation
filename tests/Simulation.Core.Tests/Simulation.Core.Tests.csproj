@@ -28,6 +28,7 @@
     <Compile Include="SimulationRuntimeAdmissionContextTests.cs" />
     <Compile Include="MoneyAccountRuntimeCoreTests.cs" />
     <Compile Include="DailyV1CityEconomicOwnerCoreTests.cs" />
+    <Compile Include="DailyV1InventoryMarketOwnerTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/DeterministicRandomCoreTests.cs" Link="Determinism/DeterministicRandomCoreTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/DeterministicDemographyPolicyTests.cs" Link="Population/DeterministicDemographyPolicyTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/DeterministicRandomRootSnapshotTests.cs" Link="Determinism/DeterministicRandomRootSnapshotTests.cs" />

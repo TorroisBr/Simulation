@@ -230,34 +230,33 @@ internal sealed class P12DCityRootOwnerSnapshot
             return false;
         }
 
-        IReadOnlyList<MarketItemRuntime> installedRows = market.Items;
-        if (installedRows == null)
+        List<P12DCityMarketItemSnapshot> marketRows;
+        if (market.SelectedDailyV1Owner != null)
         {
-            failure = P12DCityRootOwnerSnapshotFailure.InvalidMarketState;
-            return false;
-        }
-
-        List<P12DCityMarketItemSnapshot> marketRows = new List<P12DCityMarketItemSnapshot>(installedRows.Count);
-        foreach (MarketItemRuntime row in installedRows)
-        {
-            if (row == null
-                || row.Item == null
-                || string.IsNullOrWhiteSpace(row.Item.DefinitionId)
-                || row.Amount < 0
-                || row.DesiredAmount <= 0
-                || row.CurrentPrice <= 0f
-                || float.IsNaN(row.CurrentPrice)
-                || float.IsInfinity(row.CurrentPrice))
+            IReadOnlyList<DailyV1MarketItemState> selectedRows = market.SelectedDailyV1Owner.Items;
+            marketRows = new List<P12DCityMarketItemSnapshot>(selectedRows.Count);
+            foreach (DailyV1MarketItemState row in selectedRows)
             {
-                failure = P12DCityRootOwnerSnapshotFailure.InvalidMarketState;
-                return false;
+                if (row == null || row.Item == null || string.IsNullOrWhiteSpace(row.Item.DefinitionId)
+                    || row.Amount < 0 || row.DesiredAmount <= 0 || row.CurrentPrice <= 0f
+                    || float.IsNaN(row.CurrentPrice) || float.IsInfinity(row.CurrentPrice))
+                { failure = P12DCityRootOwnerSnapshotFailure.InvalidMarketState; return false; }
+                marketRows.Add(new P12DCityMarketItemSnapshot(row.Item.DefinitionId, row.Amount, row.DesiredAmount, row.CurrentPrice));
             }
-
-            marketRows.Add(new P12DCityMarketItemSnapshot(
-                row.Item.DefinitionId,
-                row.Amount,
-                row.DesiredAmount,
-                row.CurrentPrice));
+        }
+        else
+        {
+            IReadOnlyList<MarketItemRuntime> installedRows = market.Items;
+            if (installedRows == null) { failure = P12DCityRootOwnerSnapshotFailure.InvalidMarketState; return false; }
+            marketRows = new List<P12DCityMarketItemSnapshot>(installedRows.Count);
+            foreach (MarketItemRuntime row in installedRows)
+            {
+                if (row == null || row.Item == null || string.IsNullOrWhiteSpace(row.Item.DefinitionId)
+                    || row.Amount < 0 || row.DesiredAmount <= 0 || row.CurrentPrice <= 0f
+                    || float.IsNaN(row.CurrentPrice) || float.IsInfinity(row.CurrentPrice))
+                { failure = P12DCityRootOwnerSnapshotFailure.InvalidMarketState; return false; }
+                marketRows.Add(new P12DCityMarketItemSnapshot(row.Item.DefinitionId, row.Amount, row.DesiredAmount, row.CurrentPrice));
+            }
         }
 
         string encodedRuntimeId = city.RuntimeId.Length.ToString(CultureInfo.InvariantCulture)
@@ -327,7 +326,8 @@ internal sealed class P12DCityRootOwnerSnapshot
         StagingCaptureEnvelope captureEnvelope,
         out CityRuntime city,
         out P12DCityMembershipLinker membershipLinker,
-        out P12DCityRootOwnerSnapshotFailure failure)
+        out P12DCityRootOwnerSnapshotFailure failure,
+        DailyV1EffectiveDefinitions selectedDefinitions = null)
     {
         city = null;
         membershipLinker = null;
@@ -369,8 +369,20 @@ internal sealed class P12DCityRootOwnerSnapshot
         }
 
         List<MarketItemRuntime> marketRows = new List<MarketItemRuntime>(MarketItems.Count);
+        List<DailyV1MarketItemState> selectedMarketRows = selectedDefinitions != null
+            ? new List<DailyV1MarketItemState>(MarketItems.Count) : null;
         foreach (P12DCityMarketItemSnapshot row in MarketItems)
         {
+            if (selectedDefinitions != null)
+            {
+                if (row == null || string.IsNullOrWhiteSpace(row.ItemDefinitionId) || row.Amount < 0
+                    || row.DesiredAmount <= 0 || row.CurrentPrice <= 0f || float.IsNaN(row.CurrentPrice)
+                    || float.IsInfinity(row.CurrentPrice)
+                    || !selectedDefinitions.Items.TryGetValue(row.ItemDefinitionId, out DailyV1ItemDefinition itemNode))
+                { failure = P12DCityRootOwnerSnapshotFailure.MissingItemDefinition; return false; }
+                selectedMarketRows.Add(new DailyV1MarketItemState(itemNode, row.Amount, row.DesiredAmount, row.CurrentPrice));
+                continue;
+            }
             if (row == null
                 || string.IsNullOrWhiteSpace(row.ItemDefinitionId)
                 || row.Amount < 0
@@ -411,7 +423,11 @@ internal sealed class P12DCityRootOwnerSnapshot
         }
 
         MarketCounterpartyRuntime counterparty = MarketCounterpartyRuntime.CreateOpen(MarketCounterpartyRuntimeId);
-        if (!MarketRuntime.TryCreateFromOwnerSnapshot(marketRows, MarketRevision, counterparty, out MarketRuntime market))
+        MarketRuntime market;
+        bool createdMarket = selectedDefinitions != null
+            ? MarketRuntime.TryCreateSelectedFromOwnerSnapshot(selectedDefinitions, selectedMarketRows, MarketRevision, counterparty, out market)
+            : MarketRuntime.TryCreateFromOwnerSnapshot(marketRows, MarketRevision, counterparty, out market);
+        if (!createdMarket)
         {
             failure = P12DCityRootOwnerSnapshotFailure.InvalidMarketState;
             return false;
@@ -461,9 +477,10 @@ internal sealed class P12DCityRootOwnerSnapshot
         IReadOnlyList<SpatialLocationRuntime> stagedLocations,
         out CityRuntime city,
         out P12DCityMembershipLinker membershipLinker,
-        out P12DCityRootOwnerSnapshotFailure failure)
+        out P12DCityRootOwnerSnapshotFailure failure,
+        DailyV1EffectiveDefinitions selectedDefinitions = null)
         => TryStageCore(admittedCityDefinitions, admittedItemDefinitions, stagedLocations,
-            null, out city, out membershipLinker, out failure);
+            null, out city, out membershipLinker, out failure, selectedDefinitions);
 
     private static bool MatchesUniqueSection(
         IReadOnlyList<OwnerSectionCensusSnapshot> sections,
@@ -652,7 +669,8 @@ internal sealed class P12DCityRootOwnerSnapshot
             IReadOnlyList<SpatialLocationRuntime> stagedLocations,
             out CityRuntime city,
             out P12DCityMembershipLinker membershipLinker,
-            out P12DCityRootOwnerSnapshotFailure failure) =>
+            out P12DCityRootOwnerSnapshotFailure failure,
+            DailyV1EffectiveDefinitions selectedDefinitions = null) =>
             snapshot.TryStageCore(
                 admittedCityDefinitions,
                 admittedItemDefinitions,
@@ -660,7 +678,8 @@ internal sealed class P12DCityRootOwnerSnapshot
                 this,
                 out city,
                 out membershipLinker,
-                out failure);
+                out failure,
+                selectedDefinitions);
     }
 }
 
