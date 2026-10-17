@@ -292,7 +292,7 @@ public sealed class DailyV1MarketOwner
     public bool CanInstall(long expectedRevision, long increments) => revision == expectedRevision && increments >= 0 && increments <= long.MaxValue - expectedRevision;
     public bool CanInstallMaterialFlow(long expectedRevision, long increments) => CanInstall(expectedRevision, increments) && CanCommit();
     public bool TryInstall(long expectedRevision, long increments, DailyV1MarketPreparedState replacement)
-    { if (replacement == null || increments <= 0 || !CanInstall(expectedRevision, increments)) return false; rows = replacement.Rows; readOnlyRows = replacement.ReadOnlyRows; revision = expectedRevision + increments; return true; }
+    { if (replacement == null || increments <= 0 || !CanInstall(expectedRevision, increments) || !IsValidPreparedState(replacement)) return false; rows = replacement.Rows; readOnlyRows = replacement.ReadOnlyRows; revision = expectedRevision + increments; return true; }
     public void NotifyMaterialFlowInstalled() => NotifyCommitted();
 
     /// <summary>Validates and snapshots a detached replacement while preserving selected row order.</summary>
@@ -302,12 +302,97 @@ public sealed class DailyV1MarketOwner
         prepared = null;
         if (source == null) return false;
         List<DailyV1MarketItemState> next = new List<DailyV1MarketItemState>(source.Count);
+        HashSet<DailyV1ItemDefinition> unique = new HashSet<DailyV1ItemDefinition>(ReferenceEqualityComparerForMarketDefinitions.Instance);
         foreach (DailyV1MarketItemState row in source)
         {
-            if (!IsValid(row)) return false;
+            if (!IsValid(row) || !unique.Add(row.Item)) return false;
             next.Add(Copy(row));
         }
         prepared = new DailyV1MarketPreparedState(next);
+        return true;
+    }
+
+    /// <summary>Creates a detached typed working copy without projecting through Unity-facing rows.</summary>
+    public bool TryCreatePreparedSnapshot(out DailyV1MarketPreparedState prepared) =>
+        TryCreatePreparedState(Items, out prepared);
+
+    /// <summary>Reads one exact graph-node row from a validated prepared copy.</summary>
+    public bool TryGetPreparedItem(DailyV1MarketPreparedState prepared, DailyV1ItemDefinition item,
+        out DailyV1MarketItemState row)
+    {
+        row = null;
+        if (!IsAdmitted(item) || !IsValidPreparedState(prepared)) return false;
+        foreach (DailyV1MarketItemState candidate in prepared.Rows)
+            if (ReferenceEquals(candidate.Item, item))
+            { row = Copy(candidate); return true; }
+        return false;
+    }
+
+    /// <summary>Counts rows by exact graph-node identity in a validated prepared copy.</summary>
+    public bool TryCountPreparedItems(DailyV1MarketPreparedState prepared, DailyV1ItemDefinition item,
+        out int count)
+    {
+        count = 0;
+        if (!IsAdmitted(item) || !IsValidPreparedState(prepared)) return false;
+        foreach (DailyV1MarketItemState candidate in prepared.Rows)
+            if (ReferenceEquals(candidate.Item, item)) count++;
+        return true;
+    }
+
+    /// <summary>Prepares a checked stock adjustment while preserving row order and the exact item node.</summary>
+    public bool TryApplyPreparedStockDelta(DailyV1MarketPreparedState prepared,
+        DailyV1ItemDefinition item, int delta, int desiredAmount,
+        out DailyV1MarketPreparedState replacement, out DailyV1MarketItemState updatedItem)
+    {
+        replacement = null;
+        updatedItem = null;
+        if (!IsAdmitted(item) || delta == 0 || !IsValidPreparedState(prepared)) return false;
+        int index = -1;
+        for (int i = 0; i < prepared.Rows.Count; i++)
+            if (ReferenceEquals(prepared.Rows[i].Item, item)) { index = i; break; }
+
+        int currentAmount = index >= 0 ? prepared.Rows[index].Amount : 0;
+        long nextAmount = (long)currentAmount + delta;
+        if (nextAmount < 0 || nextAmount > int.MaxValue
+            || (index < 0 && (delta < 0 || desiredAmount <= 0))) return false;
+        int nextDesired = index >= 0 ? prepared.Rows[index].DesiredAmount : Math.Max(1, desiredAmount);
+        float nextPrice = CalculatePrice(item, (int)nextAmount, nextDesired);
+        if (float.IsNaN(nextPrice) || float.IsInfinity(nextPrice) || nextPrice <= 0f) return false;
+
+        List<DailyV1MarketItemState> next = new List<DailyV1MarketItemState>(prepared.Rows.Count + (index < 0 ? 1 : 0));
+        for (int i = 0; i < prepared.Rows.Count; i++)
+        {
+            DailyV1MarketItemState row = prepared.Rows[i];
+            next.Add(i == index
+                ? new DailyV1MarketItemState(item, (int)nextAmount, nextDesired, nextPrice)
+                : Copy(row));
+        }
+        if (index < 0) next.Add(new DailyV1MarketItemState(item, (int)nextAmount, nextDesired, nextPrice));
+        replacement = new DailyV1MarketPreparedState(next);
+        updatedItem = Copy(next[index >= 0 ? index : next.Count - 1]);
+        return true;
+    }
+
+    /// <summary>Prepares all price changes as one detached replacement.</summary>
+    public bool TryPreparePriceRefresh(DailyV1MarketPreparedState prepared,
+        out DailyV1MarketPreparedState replacement, out bool changed)
+    {
+        replacement = null;
+        changed = false;
+        if (!IsValidPreparedState(prepared)) return false;
+        List<DailyV1MarketItemState> next = new List<DailyV1MarketItemState>(prepared.Rows.Count);
+        foreach (DailyV1MarketItemState row in prepared.Rows)
+        {
+            float price = CalculatePrice(row.Item, row.Amount, row.DesiredAmount);
+            if (float.IsNaN(price) || float.IsInfinity(price) || price <= 0f) return false;
+            if (price != row.CurrentPrice)
+            {
+                changed = true;
+                next.Add(new DailyV1MarketItemState(row.Item, row.Amount, row.DesiredAmount, price));
+            }
+            else next.Add(Copy(row));
+        }
+        replacement = new DailyV1MarketPreparedState(next);
         return true;
     }
 
@@ -385,10 +470,29 @@ public sealed class DailyV1MarketOwner
     private DailyV1MarketItemState CreateRow(DailyV1ItemDefinition item, int amount, int desired) => new DailyV1MarketItemState(item, Math.Max(0, amount), Math.Max(1, desired), CalculatePrice(item, amount, desired));
     private static float CalculatePrice(DailyV1ItemDefinition item, int amount, int desired) => item == null ? 0f : MarketPriceCalculator.CalculateCurrentPrice(item.Values.basePrice, Math.Max(1, desired), Math.Max(0, amount));
     private bool IsValid(DailyV1MarketItemState row) => row != null && IsAdmitted(row.Item) && row.Amount >= 0 && row.DesiredAmount > 0 && row.CurrentPrice > 0f && !float.IsNaN(row.CurrentPrice) && !float.IsInfinity(row.CurrentPrice);
+    private bool IsValidPreparedState(DailyV1MarketPreparedState prepared)
+    {
+        if (prepared?.Rows == null || prepared.ReadOnlyRows == null
+            || prepared.Rows.Count != prepared.ReadOnlyRows.Count) return false;
+        HashSet<DailyV1ItemDefinition> unique = new HashSet<DailyV1ItemDefinition>(ReferenceEqualityComparerForMarketDefinitions.Instance);
+        for (int i = 0; i < prepared.Rows.Count; i++)
+        {
+            DailyV1MarketItemState row = prepared.Rows[i];
+            if (!IsValid(row) || !ReferenceEquals(row, prepared.ReadOnlyRows[i]) || !unique.Add(row.Item)) return false;
+        }
+        return true;
+    }
     private List<MarketStockRow> CaptureFiniteSourceRows() { List<MarketStockRow> stock = new List<MarketStockRow>(Items.Count); foreach (DailyV1MarketItemState row in Items) { if (row == null) stock.Add(MarketStockRow.NullRow()); else if (row.Item == null) stock.Add(MarketStockRow.NullItem(row.Amount,row.DesiredAmount,row.CurrentPrice)); else stock.Add(MarketStockRow.Item(new MarketItemDefinition(row.Item.DefinitionId,row.Item.Values.basePrice),row.Amount,row.DesiredAmount,row.CurrentPrice)); } return stock; }
     private static bool SameMarketRows(IReadOnlyList<MarketStockRow> left,IReadOnlyList<MarketStockRow> right) { if(left==null||right==null||left.Count!=right.Count)return false; for(int i=0;i<left.Count;i++){MarketStockRow a=left[i],b=right[i]; if(a==null||b==null||a.Kind!=b.Kind||a.Amount!=b.Amount||a.DesiredAmount!=b.DesiredAmount||!SameFloatBits(a.CurrentPrice,b.CurrentPrice))return false; if(a.ItemDefinition==null||b.ItemDefinition==null){if(a.ItemDefinition!=b.ItemDefinition)return false;} else if(!string.Equals(a.ItemDefinition.DefinitionId,b.ItemDefinition.DefinitionId,StringComparison.Ordinal)||!SameFloatBits(a.ItemDefinition.BasePrice,b.ItemDefinition.BasePrice))return false;} return true; }
     private static bool SameFloatBits(float a,float b)=>BitConverter.ToInt32(BitConverter.GetBytes(a),0)==BitConverter.ToInt32(BitConverter.GetBytes(b),0);
     private static bool RejectMapping(out DailyV1MarketPreparedState replacement,out string reason){replacement=null;reason="MarketRowMapping";return false;}
     private static List<DailyV1MarketItemState> CopyRows(List<DailyV1MarketItemState> source){List<DailyV1MarketItemState> result=new List<DailyV1MarketItemState>(source?.Count??0);if(source!=null)foreach(DailyV1MarketItemState row in source)result.Add(Copy(row));return result;}
     private static DailyV1MarketItemState Copy(DailyV1MarketItemState row)=>row==null?null:new DailyV1MarketItemState(row.Item,row.Amount,row.DesiredAmount,row.CurrentPrice);
+
+    private sealed class ReferenceEqualityComparerForMarketDefinitions : IEqualityComparer<DailyV1ItemDefinition>
+    {
+        internal static readonly ReferenceEqualityComparerForMarketDefinitions Instance = new ReferenceEqualityComparerForMarketDefinitions();
+        public bool Equals(DailyV1ItemDefinition x, DailyV1ItemDefinition y) => ReferenceEquals(x, y);
+        public int GetHashCode(DailyV1ItemDefinition value) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(value);
+    }
 }

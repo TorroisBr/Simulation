@@ -111,6 +111,12 @@ public sealed class P14CMixedSourceProductionTests
             Assert.That(selectedMarket.Definitions, Is.SameAs(definitions));
             Assert.That(selectedMarket.Items, Has.Count.EqualTo(1));
             Assert.That(selectedMarket.Items[0].Item, Is.SameAs(definitions.Items[item.DefinitionId]));
+            PreparedMarketState typedPrepared = city.Market.CreatePreparedSnapshot();
+            Assert.That(typedPrepared.SelectedState, Is.Not.Null,
+                "Selected prepared Market work must stay in the typed Core owner state rather than projecting through ItemData rows.");
+            Assert.That(typedPrepared.Items, Is.Null);
+            Assert.That(typedPrepared.SelectedState.ReadOnlyRows[0].Item,
+                Is.SameAs(definitions.Items[item.DefinitionId]));
 
             SimulateDirect(city, 3L);
 
@@ -129,6 +135,149 @@ public sealed class P14CMixedSourceProductionTests
         finally
         {
             UnityEngine.Object.DestroyImmediate(authoring);
+        }
+    }
+
+    [TestCase(CityDailyEconomyStepKind.PriceRefresh)]
+    [TestCase(CityDailyEconomyStepKind.Consumption)]
+    public void SelectedNoOpDailyStepRecordsReceiptWithoutInstallingOrInvalidatingMarket(
+        CityDailyEconomyStepKind kind)
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p14-selected-noop-price-item");
+        using (SelectedCityFixture fixture = CreateSelectedCity(
+            "p14-selected-noop-price-city", item, 5, 3, 0f))
+        {
+            CityRuntime city = fixture.City;
+            DailyV1MarketOwner owner = city.Market.SelectedDailyV1Owner;
+            DailyV1MarketItemState originalRow = owner.Items[0];
+            int admissions = 0;
+            int notifications = 0;
+            city.Market.BindP12MutationBoundary(() => { admissions++; return true; }, () => notifications++);
+            BoundaryContinuationManifest manifest = CreateSelectedManifest(city, kind);
+
+            Assert.That(city.TryPrepareDailyEconomyStep(manifest, manifest.Steps[0],
+                out IBoundaryContinuationStepCommit prepared, out TimelineFailure prepareFailure), Is.True,
+                prepareFailure.ToString());
+            Assert.That(prepared.TryCommit(out TimelineFailure commitFailure), Is.True,
+                commitFailure.ToString());
+
+            Assert.That(city.TryResolveDailyEconomyReceipt(manifest, manifest.Steps[0], out _, out _), Is.True);
+            Assert.That(city.Market.Revision, Is.Zero);
+            Assert.That(owner.Items[0], Is.SameAs(originalRow),
+                "A no-op prepared replacement must not replace the authoritative row instance.");
+            Assert.That(admissions, Is.Zero);
+            Assert.That(notifications, Is.Zero);
+        }
+    }
+
+    [Test]
+    public void SelectedPreparedMarketWriteRejectsAdmissionAtPrepareAndCommitWithoutInstalling()
+    {
+        ItemData prepareDeniedItem = SimulationTestFactory.CreateItem("p14-selected-deny-prepare-item");
+        using (SelectedCityFixture fixture = CreateSelectedCity(
+            "p14-selected-deny-prepare-city", prepareDeniedItem, 4, 5, 0f))
+        {
+            CityRuntime city = fixture.City;
+            int admissions = 0;
+            int notifications = 0;
+            city.Market.BindP12MutationBoundary(() => { admissions++; return false; }, () => notifications++);
+            BoundaryContinuationManifest manifest = CreateSelectedManifest(
+                city, CityDailyEconomyStepKind.Production);
+
+            Assert.That(city.TryPrepareDailyEconomyStep(manifest, manifest.Steps[0],
+                out IBoundaryContinuationStepCommit prepared, out _), Is.False);
+            Assert.That(prepared, Is.Null);
+            Assert.That(admissions, Is.EqualTo(1));
+            Assert.That(notifications, Is.Zero);
+            Assert.That(city.Market.Revision, Is.Zero);
+            Assert.That(city.Market.SelectedDailyV1Owner.GetAmount(
+                fixture.Definitions.Items[prepareDeniedItem.DefinitionId]), Is.EqualTo(4));
+            Assert.That(city.TryResolveDailyEconomyReceipt(manifest, manifest.Steps[0], out _, out _), Is.False);
+        }
+
+        ItemData commitDeniedItem = SimulationTestFactory.CreateItem("p14-selected-deny-commit-item");
+        using (SelectedCityFixture fixture = CreateSelectedCity(
+            "p14-selected-deny-commit-city", commitDeniedItem, 4, 5, 0f))
+        {
+            CityRuntime city = fixture.City;
+            bool admitted = true;
+            int admissions = 0;
+            int notifications = 0;
+            city.Market.BindP12MutationBoundary(() => { admissions++; return admitted; }, () => notifications++);
+            BoundaryContinuationManifest manifest = CreateSelectedManifest(
+                city, CityDailyEconomyStepKind.Production);
+
+            Assert.That(city.TryPrepareDailyEconomyStep(manifest, manifest.Steps[0],
+                out IBoundaryContinuationStepCommit prepared, out TimelineFailure prepareFailure), Is.True,
+                prepareFailure.ToString());
+            admitted = false;
+            Assert.That(prepared.TryCommit(out _), Is.False);
+
+            Assert.That(admissions, Is.EqualTo(2));
+            Assert.That(notifications, Is.Zero);
+            Assert.That(city.Market.Revision, Is.Zero);
+            Assert.That(city.Market.SelectedDailyV1Owner.GetAmount(
+                fixture.Definitions.Items[commitDeniedItem.DefinitionId]), Is.EqualTo(4));
+            Assert.That(city.TryResolveDailyEconomyReceipt(manifest, manifest.Steps[0], out _, out _), Is.False);
+        }
+    }
+
+    [Test]
+    public void SelectedPreparedMarketWriteNotifiesExactlyOnceAfterSuccessfulInstall()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p14-selected-success-item");
+        using (SelectedCityFixture fixture = CreateSelectedCity(
+            "p14-selected-success-city", item, 4, 5, 0f))
+        {
+            CityRuntime city = fixture.City;
+            List<string> observations = new List<string>();
+            city.Market.BindP12MutationBoundary(
+                () => { observations.Add("admit"); return true; },
+                () => observations.Add("commit:" + city.Market.Revision + ":"
+                    + city.Market.SelectedDailyV1Owner.GetAmount(fixture.Definitions.Items[item.DefinitionId])));
+            BoundaryContinuationManifest manifest = CreateSelectedManifest(
+                city, CityDailyEconomyStepKind.Production);
+
+            Assert.That(city.TryPrepareDailyEconomyStep(manifest, manifest.Steps[0],
+                out IBoundaryContinuationStepCommit prepared, out TimelineFailure prepareFailure), Is.True,
+                prepareFailure.ToString());
+            Assert.That(prepared.TryCommit(out TimelineFailure commitFailure), Is.True,
+                commitFailure.ToString());
+
+            Assert.That(observations, Is.EqualTo(new[] { "admit", "admit", "commit:1:9" }));
+            Assert.That(city.Market.Revision, Is.EqualTo(1));
+            Assert.That(city.Market.SelectedDailyV1Owner.GetAmount(
+                fixture.Definitions.Items[item.DefinitionId]), Is.EqualTo(9));
+            Assert.That(city.TryResolveDailyEconomyReceipt(manifest, manifest.Steps[0], out _, out _), Is.True);
+        }
+    }
+
+    [Test]
+    public void DirectSelectedNonMixedFlowUsesOwnerAdmissionAndEpochNotificationForEachWrite()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p14-selected-direct-boundary-item");
+        using (SelectedCityFixture fixture = CreateSelectedCity(
+            "p14-selected-direct-boundary-city", item, 0, 5, 3f))
+        {
+            CityRuntime city = fixture.City;
+            DailyV1ItemDefinition itemNode = fixture.Definitions.Items[item.DefinitionId];
+            List<string> observations = new List<string>();
+            city.Market.BindP12MutationBoundary(
+                () => { observations.Add("admit:" + city.Market.Revision); return true; },
+                () => observations.Add("commit:" + city.Market.Revision + ":"
+                    + city.Market.SelectedDailyV1Owner.GetAmount(itemNode)));
+
+            SimulateDirect(city, 3L);
+
+            Assert.That(city.LastMaterialFlow.OpeningStock, Is.Zero);
+            Assert.That(city.LastMaterialFlow.AppliedSourceQuantity, Is.EqualTo(5));
+            Assert.That(city.LastMaterialFlow.ActualFreeConsumption, Is.EqualTo(3));
+            Assert.That(city.LastMaterialFlow.ClosingStock, Is.EqualTo(2));
+            Assert.That(city.Market.Revision, Is.EqualTo(2));
+            Assert.That(observations, Is.EqualTo(new[]
+            {
+                "admit:0", "commit:1:5", "admit:1", "commit:2:2"
+            }));
         }
     }
 
@@ -185,6 +334,49 @@ public sealed class P14CMixedSourceProductionTests
         Assert.That(city.FiniteProductionSources.Source.RemainingReserve, Is.EqualTo(7));
         Assert.That(city.FiniteProductionSources.Source.Revision, Is.Zero);
         Assert.That(city.Market.GetAmount(item), Is.EqualTo(int.MaxValue - 1));
+    }
+
+    [Test]
+    public void SelectedMixedOverflowCommitsExogenousContributionWhenFiniteOwnerCannotAdvance()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p14-selected-mixed-overflow-max-revision-item");
+        using (SelectedCityFixture fixture = CreateSelectedMixedCity(
+            "p14-selected-mixed-overflow-max-revision-city", item, int.MaxValue - 3, 0f))
+        {
+            CityRuntime city = fixture.City;
+            DailyV1ItemDefinition itemNode = fixture.Definitions.Items[item.DefinitionId];
+            FiniteProductionSourceState finite = city.FiniteProductionSources.Source;
+            SetPrivateLong(finite, "revision", long.MaxValue);
+
+            List<string> notifications = new List<string>();
+            city.Market.BindP12MutationBoundary(() => true, () => notifications.Add(
+                city.Market.Revision + ":" + city.Market.SelectedDailyV1Owner.GetAmount(itemNode)));
+            BoundaryContinuationManifest manifest = CreateSelectedManifest(
+                city, CityDailyEconomyStepKind.Production);
+
+            Assert.That(city.TryPrepareDailyEconomyStep(manifest, manifest.Steps[0],
+                out IBoundaryContinuationStepCommit prepared, out TimelineFailure prepareFailure), Is.True,
+                prepareFailure.ToString());
+            Assert.That(prepared.TryCommit(out TimelineFailure commitFailure), Is.True,
+                commitFailure.ToString());
+
+            Assert.That(city.TryResolveDailyEconomyReceipt(manifest, manifest.Steps[0],
+                out CityDailyEconomyReceipt receipt, out _), Is.True);
+            Assert.That(receipt.SourceOutcomes.Count, Is.EqualTo(2));
+            Assert.That(receipt.SourceOutcomes[0].ProductionSourceId, Is.EqualTo("a-exogenous"));
+            Assert.That(receipt.SourceOutcomes[0].AppliedQuantity, Is.EqualTo(2));
+            Assert.That(receipt.SourceOutcomes[1].ProductionSourceId, Is.EqualTo("b-finite"));
+            Assert.That(receipt.SourceOutcomes[1].PlannedQuantity, Is.EqualTo(3));
+            Assert.That(receipt.SourceOutcomes[1].AppliedQuantity, Is.Zero);
+            Assert.That(receipt.SourceOutcomes[1].RejectionReason, Is.EqualTo("AggregateStockOverflow"));
+
+            Assert.That(city.Market.SelectedDailyV1Owner.GetAmount(itemNode), Is.EqualTo(int.MaxValue - 1));
+            Assert.That(city.Market.Revision, Is.EqualTo(1));
+            Assert.That(finite.RemainingReserve, Is.EqualTo(7));
+            Assert.That(finite.Revision, Is.EqualTo(long.MaxValue));
+            Assert.That(notifications, Is.EqualTo(new[] { "1:" + (int.MaxValue - 1) }),
+                "The accepted exogenous contribution installs atomically and emits one post-install Market callback.");
+        }
     }
 
     [Test]
@@ -384,6 +576,92 @@ public sealed class P14CMixedSourceProductionTests
         else
         { city.productionConfigs.Add(exogenous); city.productionConfigs.Add(finite); }
         return city;
+    }
+
+    private static SelectedCityFixture CreateSelectedCity(string id, ItemData item,
+        int openingStock, int productionPerDay, float consumptionPer1000)
+    {
+        CityData authoredCity = SimulationTestFactory.CreateCityData(id,
+            SimulationTestFactory.CreateMarketItem(item, openingStock, 100));
+        authoredCity.materialFlowProfile = LocalMaterialFlowProfile.ExogenousDaily;
+        authoredCity.initialPopulation = 1000;
+        authoredCity.populationConsumption = new PopulationConsumptionConfig
+        { paymentMode = ConsumptionPaymentMode.Free };
+        authoredCity.marketItems[0].consumptionPer1000Population = consumptionPer1000;
+        authoredCity.productionConfigs.Add(new CityProductionConfig
+        {
+            item = item,
+            amountPerDay = productionPerDay,
+            initialReserve = 0,
+            productionSourceId = "source." + id,
+            contentRevision = "content-v1",
+            sourceKind = CityProductionSourceKind.ExogenousDaily
+        });
+
+        return CreateSelectedCityFixture(id, authoredCity);
+    }
+
+    private static SelectedCityFixture CreateSelectedMixedCity(string id, ItemData item,
+        int openingStock, float consumptionPer1000)
+    {
+        return CreateSelectedCityFixture(id,
+            CreateCity(id, item, openingStock, consumptionPer1000, reverseSourceRows: true));
+    }
+
+    private static SelectedCityFixture CreateSelectedCityFixture(string id, CityData authoredCity)
+    {
+        SimulationConfigData authoring = UnityEngine.ScriptableObject.CreateInstance<SimulationConfigData>();
+        authoring.simulationName = "Selected Daily-v1 P12 mutation fixture";
+        authoring.cities = new List<CityData> { authoredCity };
+        try
+        {
+            SimulationConfigurationResolutionResult resolution = SimulationConfigurationResolver.Resolve(
+                null, null, authoring.CreateConfigurationOverrides());
+            if (!resolution.IsValid)
+                throw new InvalidOperationException(string.Join("; ", resolution.Validation.Errors));
+            CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(
+                authoring.calendar, out string calendarDiagnostic);
+            if (!string.IsNullOrEmpty(calendarDiagnostic))
+                throw new InvalidOperationException(calendarDiagnostic);
+            if (!DailyV1DefinitionAdapter.TryCreate(authoring, resolution.Configuration, calendar,
+                    SimulationGenesisPipeline.ResolveStageOrder(includeAuthoredGeography: true),
+                    "axial-hex-v1", "q-then-r", out DailyV1EffectiveDefinitions definitions,
+                    out DailyV1DefinitionAdapter.SelectedBindings bindings, out string diagnostic))
+                throw new InvalidOperationException(diagnostic);
+            if (!bindings.TryGet(authoredCity, out DailyV1CityDefinition cityDefinition))
+                throw new InvalidOperationException("Selected City binding was not published.");
+            CityRuntime city = CityRuntime.CreateSelectedDailyV1("runtime." + id,
+                cityDefinition, definitions, bindings, new SpatialLocationRuntime("location." + id));
+            return new SelectedCityFixture(authoring, definitions, city);
+        }
+        catch
+        {
+            UnityEngine.Object.DestroyImmediate(authoring);
+            throw;
+        }
+    }
+
+    private static BoundaryContinuationManifest CreateSelectedManifest(CityRuntime city,
+        CityDailyEconomyStepKind kind)
+    {
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world.selected", "profile.selected", 1L);
+        if (!city.TryCreateDailyEconomyStep(operation, 0, kind,
+                out BoundaryContinuationStep step, out TimelineFailure failure))
+            throw new InvalidOperationException(failure.ToString());
+        return new BoundaryContinuationManifest(operation, "daily-economy", "1", "selected-config", new[] { step });
+    }
+
+    private sealed class SelectedCityFixture : IDisposable
+    {
+        internal readonly SimulationConfigData Authoring;
+        internal readonly DailyV1EffectiveDefinitions Definitions;
+        internal readonly CityRuntime City;
+
+        internal SelectedCityFixture(SimulationConfigData authoring,
+            DailyV1EffectiveDefinitions definitions, CityRuntime city)
+        { Authoring = authoring; Definitions = definitions; City = city; }
+
+        public void Dispose() => UnityEngine.Object.DestroyImmediate(Authoring);
     }
 
     private static void SimulateDirect(CityRuntime city, long day) =>
