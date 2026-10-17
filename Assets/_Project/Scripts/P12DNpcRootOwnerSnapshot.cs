@@ -1022,7 +1022,7 @@ internal static class P12DNpcRootOwnerSnapshot
             }
             if (!InventoryRuntime.TryCreateFromOwnerSnapshot(
                     inventoryRows, d.InventoryRevision, out InventoryRuntime inventory)
-                || !MoneyAccountRuntime.TryCreateFromOwnerSnapshot(
+                || !MoneyAccountOwnerBridge.TryCreateFromOwnerSnapshot(
                     d.MoneyBalance, d.MoneyRevision, out MoneyAccountRuntime moneyAccount))
             {
                 failure = P12DNpcRootOwnerSnapshotFailure.UnsupportedValue;

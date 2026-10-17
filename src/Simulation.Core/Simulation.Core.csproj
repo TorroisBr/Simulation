@@ -80,6 +80,8 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Genealogy/GenealogyOwnerBridge.cs" Link="Genealogy/GenealogyOwnerBridge.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Genealogy/GenealogyStore.cs" Link="Genealogy/GenealogyStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketItemDefinition.cs" Link="Economy/MarketItemDefinition.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MoneyAccountRuntime.cs" Link="Economy/MoneyAccountRuntime.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MoneyAccountOwnerBridge.cs" Link="Economy/MoneyAccountOwnerBridge.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/CityMaterialFlowProfiles.cs" Link="Economy/CityMaterialFlowProfiles.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1MixedSourceProfileAdmission.cs" Link="Economy/DailyV1MixedSourceProfileAdmission.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketPriceCalculator.cs" Link="Economy/MarketPriceCalculator.cs" />

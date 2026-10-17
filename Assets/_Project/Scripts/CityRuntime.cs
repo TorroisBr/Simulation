@@ -618,8 +618,8 @@ public class CityRuntime
             || (mixedProductionPreparation != null && !mixedProductionPreparation.CanInstall())
             || (mixedProfileOperation && mixedProductionPreparation == null && marketIncrements > 0
                 && !Market.CanInstallMaterialFlow(marketRevision, marketIncrements))
-            || (populationAccount != null && !populationAccount.CanInstall(populationRevision, populationIncrements, populationBalance))
-            || (settlementAccount != null && !settlementAccount.CanInstall(settlementRevision, settlementIncrements, settlementBalance))) return false;
+            || (populationAccount != null && !MoneyAccountOwnerBridge.CanInstall(populationAccount, populationRevision, populationIncrements, populationBalance))
+            || (settlementAccount != null && !MoneyAccountOwnerBridge.CanInstall(settlementAccount, settlementRevision, settlementIncrements, settlementBalance))) return false;
         CityDailyEconomyReceipt receipt = new CityDailyEconomyReceipt(identity, fingerprint,
             productionResults.AsReadOnly(), consumptionResults.AsReadOnly(), manifest.BoundaryOccurrenceId,
             manifest.AbsoluteDay, p14cSourceOutcomes, p14cOpeningStock, p14cPostProductionStock,
@@ -702,8 +702,8 @@ public class CityRuntime
                             && !Market.CanInstallMaterialFlow(commit.MarketRevision, commit.MarketIncrements)))
                     : (!ReferenceEquals(commit.MarketState, commit.FiniteSource.MarketState)
                         || !commit.FiniteSource.CanInstall()))
-            || (commit.PopulationAccount != null && !commit.PopulationAccount.CanInstall(commit.PopulationRevision, commit.PopulationIncrements, commit.PopulationBalance))
-            || (commit.SettlementAccount != null && !commit.SettlementAccount.CanInstall(commit.SettlementRevision, commit.SettlementIncrements, commit.SettlementBalance))) return false;
+            || (commit.PopulationAccount != null && !MoneyAccountOwnerBridge.CanInstall(commit.PopulationAccount, commit.PopulationRevision, commit.PopulationIncrements, commit.PopulationBalance))
+            || (commit.SettlementAccount != null && !MoneyAccountOwnerBridge.CanInstall(commit.SettlementAccount, commit.SettlementRevision, commit.SettlementIncrements, commit.SettlementBalance))) return false;
         if (commit.MixedSource != null)
         {
             if (!commit.MixedSource.Install()) return false;
@@ -719,8 +719,8 @@ public class CityRuntime
                 && commit.MarketIncrements > 0)
                 Market.NotifyMaterialFlowInstalled();
         }
-        if (commit.PopulationAccount != null) commit.PopulationAccount.InstallPrepared(commit.PopulationRevision, commit.PopulationIncrements, commit.PopulationBalance);
-        if (commit.SettlementAccount != null) commit.SettlementAccount.InstallPrepared(commit.SettlementRevision, commit.SettlementIncrements, commit.SettlementBalance);
+        if (commit.PopulationAccount != null) MoneyAccountOwnerBridge.InstallPrepared(commit.PopulationAccount, commit.PopulationRevision, commit.PopulationIncrements, commit.PopulationBalance);
+        if (commit.SettlementAccount != null) MoneyAccountOwnerBridge.InstallPrepared(commit.SettlementAccount, commit.SettlementRevision, commit.SettlementIncrements, commit.SettlementBalance);
         dailyEconomyReceipts = commit.NextReceipts;
         dailyEconomyReceiptRevision++;
         commit.Completed = true;

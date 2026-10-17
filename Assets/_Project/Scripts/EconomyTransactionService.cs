@@ -388,8 +388,8 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         KeyedSaleReceipt unresolved = KeyedSaleReceipt.Unresolved(proposalId, canonicalFingerprint, fingerprint, snapshot, result);
         if (keyedSaleReceipts.Capacity < keyedSaleReceipts.Count + 1) keyedSaleReceipts.Capacity = keyedSaleReceipts.Count + 1;
         bool ready = seller.Inventory.CanInstall(invRev) && market.CanInstall(marketRev)
-            && sellerAccount.CanInstall(sellerMoneyRev, sellerBalanceReplacement)
-            && (counterpartyAccount == null || counterpartyAccount.CanInstall(counterpartyMoneyRev, counterpartyBalanceReplacement));
+            && MoneyAccountOwnerBridge.CanInstall(sellerAccount, sellerMoneyRev, sellerBalanceReplacement)
+            && (counterpartyAccount == null || MoneyAccountOwnerBridge.CanInstall(counterpartyAccount, counterpartyMoneyRev, counterpartyBalanceReplacement));
         if (!ready)
         {
             EconomyTransactionResult notInstalled = EconomyTransactionResult.CreateFailure(
@@ -407,8 +407,8 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         {
             seller.Inventory.InstallPrepared(invRev, inventoryReplacement);
             market.InstallPrepared(marketRev, marketReplacement);
-            sellerAccount.InstallPrepared(sellerMoneyRev, sellerBalanceReplacement);
-            if (counterpartyAccount != null) counterpartyAccount.InstallPrepared(counterpartyMoneyRev, counterpartyBalanceReplacement);
+            MoneyAccountOwnerBridge.InstallPrepared(sellerAccount, sellerMoneyRev, sellerBalanceReplacement);
+            if (counterpartyAccount != null) MoneyAccountOwnerBridge.InstallPrepared(counterpartyAccount, counterpartyMoneyRev, counterpartyBalanceReplacement);
         }
         catch (Exception)
         {
@@ -750,7 +750,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             long buyerAccountRevision = buyer.MoneyAccount.Revision;
             bool buyerDebitSucceeded = buyer.MoneyAccount.TryDebit(totalPrice);
             if (buyer.MoneyAccount.Revision != buyerAccountRevision)
-                NotifyNpcTradeOwnerMutation(censusTracking, buyerAccountSectionId, buyer.MoneyAccount.HasP12MutationBoundary);
+                NotifyNpcTradeOwnerMutation(censusTracking, buyerAccountSectionId, MoneyAccountOwnerBridge.HasP12MutationBoundary(buyer.MoneyAccount));
             if (buyerDebitSucceeded == false)
             {
                 return EconomyTransactionResult.CreateFailure(
@@ -764,13 +764,13 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             long sellerAccountRevision = seller.MoneyAccount.Revision;
             bool sellerCreditSucceeded = seller.MoneyAccount.TryCredit(totalPrice);
             if (seller.MoneyAccount.Revision != sellerAccountRevision)
-                NotifyNpcTradeOwnerMutation(censusTracking, sellerAccountSectionId, seller.MoneyAccount.HasP12MutationBoundary);
+                NotifyNpcTradeOwnerMutation(censusTracking, sellerAccountSectionId, MoneyAccountOwnerBridge.HasP12MutationBoundary(seller.MoneyAccount));
             if (sellerCreditSucceeded == false)
             {
                 long buyerCompensationRevision = buyer.MoneyAccount.Revision;
                 buyer.MoneyAccount.TryCredit(totalPrice);
                 if (buyer.MoneyAccount.Revision != buyerCompensationRevision)
-                    NotifyNpcTradeOwnerMutation(censusTracking, buyerAccountSectionId, buyer.MoneyAccount.HasP12MutationBoundary);
+                    NotifyNpcTradeOwnerMutation(censusTracking, buyerAccountSectionId, MoneyAccountOwnerBridge.HasP12MutationBoundary(buyer.MoneyAccount));
                 return EconomyTransactionResult.CreateFailure(
                     transactionType,
                     moneyEffect,
@@ -788,12 +788,12 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 long sellerCompensationRevision = seller.MoneyAccount.Revision;
                 seller.MoneyAccount.TryDebit(totalPrice);
                 if (seller.MoneyAccount.Revision != sellerCompensationRevision)
-                    NotifyNpcTradeOwnerMutation(censusTracking, sellerAccountSectionId, seller.MoneyAccount.HasP12MutationBoundary);
+                    NotifyNpcTradeOwnerMutation(censusTracking, sellerAccountSectionId, MoneyAccountOwnerBridge.HasP12MutationBoundary(seller.MoneyAccount));
 
                 long buyerCompensationRevision = buyer.MoneyAccount.Revision;
                 buyer.MoneyAccount.TryCredit(totalPrice);
                 if (buyer.MoneyAccount.Revision != buyerCompensationRevision)
-                    NotifyNpcTradeOwnerMutation(censusTracking, buyerAccountSectionId, buyer.MoneyAccount.HasP12MutationBoundary);
+                    NotifyNpcTradeOwnerMutation(censusTracking, buyerAccountSectionId, MoneyAccountOwnerBridge.HasP12MutationBoundary(buyer.MoneyAccount));
                 return EconomyTransactionResult.CreateFailure(
                     transactionType,
                     moneyEffect,
@@ -1052,14 +1052,14 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                     EconomyTransactionFailureReason.TransactionCommitFailed,
                     actorRuntimeId: npc.RuntimeId);
             }
-            NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId, npc.MoneyAccount.HasP12MutationBoundary);
+            NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId, MoneyAccountOwnerBridge.HasP12MutationBoundary(npc.MoneyAccount));
 
             if (market.RemoveStockUpTo(item, quantity) != quantity)
             {
                 bool refunded = accountBacked == true
                     ? TryCommitMoneyTransfer(counterparty.MoneyAccount, npc.MoneyAccount, totalPrice)
                     : npc.MoneyAccount.TryCredit(totalPrice);
-                if (refunded) NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId, npc.MoneyAccount.HasP12MutationBoundary);
+                if (refunded) NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId, MoneyAccountOwnerBridge.HasP12MutationBoundary(npc.MoneyAccount));
 
                 return EconomyTransactionResult.CreateFailure(
                     transactionType,
@@ -1298,14 +1298,14 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                     EconomyTransactionFailureReason.TransactionCommitFailed,
                     actorRuntimeId: npc.RuntimeId);
             }
-            NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId, npc.MoneyAccount.HasP12MutationBoundary);
+            NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId, MoneyAccountOwnerBridge.HasP12MutationBoundary(npc.MoneyAccount));
 
             if (npc.Inventory.RemoveItem(item, quantity) == false)
             {
                 bool refunded = accountBacked == true
                     ? TryCommitMoneyTransfer(npc.MoneyAccount, counterparty.MoneyAccount, totalPrice)
                     : npc.MoneyAccount.TryDebit(totalPrice);
-                if (refunded) NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId, npc.MoneyAccount.HasP12MutationBoundary);
+                if (refunded) NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId, MoneyAccountOwnerBridge.HasP12MutationBoundary(npc.MoneyAccount));
 
                 return EconomyTransactionResult.CreateFailure(
                     transactionType,

@@ -1,10 +1,10 @@
 using System;
-using UnityEngine;
 
 [Serializable]
 public sealed class MoneyAccountRuntime
 {
-    [SerializeField] private float balance;
+    // Daily-v1 persistence captures this owner through its explicit P12 snapshot.
+    private float balance;
     [NonSerialized] private long revision;
     [NonSerialized] private Func<bool> p12MutationAdmission;
     [NonSerialized] private Action p12MutationCommitted;

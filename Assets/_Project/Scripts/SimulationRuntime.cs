@@ -3397,7 +3397,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             {
                 binding.Admission = () => CanCommitP12NpcOwnerMutation(binding);
                 binding.Committed = () => NotifyP12NpcOwnerMutation(binding);
-                ((MoneyAccountRuntime)binding.Owner).BindP12MutationBoundary(binding.Admission, binding.Committed);
+                MoneyAccountOwnerBridge.BindP12MutationBoundary((MoneyAccountRuntime)binding.Owner, binding.Admission, binding.Committed);
                 npcMoneyAccountMutationBindings.Add((MoneyAccountRuntime)binding.Owner, binding);
             }
 
@@ -3512,7 +3512,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         foreach (KeyValuePair<MoneyAccountRuntime, P12NpcOwnerMutationBinding> pair in
             new List<KeyValuePair<MoneyAccountRuntime, P12NpcOwnerMutationBinding>>(npcMoneyAccountMutationBindings))
         {
-            if (pair.Key.UnbindP12MutationBoundary(pair.Value.Admission, pair.Value.Committed))
+            if (MoneyAccountOwnerBridge.UnbindP12MutationBoundary(pair.Key, pair.Value.Admission, pair.Value.Committed))
                 npcMoneyAccountMutationBindings.Remove(pair.Key);
             else
                 succeeded = false;
