@@ -564,7 +564,7 @@ public class NpcRuntime : ICapabilityConditionSource
             if (npcData?.capabilityValues == null) return 0f;
             foreach (CapabilityAttributeValue row in npcData.capabilityValues)
                 if (row != null && row.Attribute == attribute)
-                    return Mathf.Max(0f, row.Value);
+                    return UnityMathfCompatibility.Max(0f, row.Value);
             return 0f;
         }
         if (selectedDefinitionGraph == null || selectedDefinitionBindings == null
@@ -574,7 +574,7 @@ public class NpcRuntime : ICapabilityConditionSource
             return 0f;
         foreach (DailyV1CapabilityAttributeValue row in selectedDailyV1Definition.Values.capabilityValues ?? Array.Empty<DailyV1CapabilityAttributeValue>())
             if (row != null && string.Equals(row.attribute, attributeNode.DefinitionId, StringComparison.Ordinal))
-                return Mathf.Max(0f, row.value);
+                return UnityMathfCompatibility.Max(0f, row.value);
         return 0f;
     }
 
