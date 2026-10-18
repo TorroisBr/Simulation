@@ -2381,6 +2381,8 @@ public sealed class SimulationBootstrapCompositionTests
         npc.name = "Typed NPC";
         NpcStatusData status = SimulationTestFactory.CreateStatus("typed-npc-runtime-status");
         NpcStatusData actionEffectStatus = SimulationTestFactory.CreateStatus("typed-npc-runtime-action-effect-status");
+        NpcStatusData lostBindingStatus = SimulationTestFactory.CreateStatus("typed-npc-runtime-lost-binding-status");
+        string lostBindingStatusId = lostBindingStatus.DefinitionId;
         npc.statusPadrao.Add(status);
         NpcActionData defaultAction = SimulationTestFactory.CreateAction("typed-npc-runtime-default-action", NpcActionType.Normal);
         NpcActionData selectedProviderAction = SimulationTestFactory.CreateAction(
@@ -2433,6 +2435,7 @@ public sealed class SimulationBootstrapCompositionTests
         config.Actions.Add(selectedProviderAction);
         config.Statuses.Add(status);
         config.Statuses.Add(actionEffectStatus);
+        config.Statuses.Add(lostBindingStatus);
 
         EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
             contentOverrides: config.CreateConfigurationOverrides());
@@ -2546,14 +2549,19 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(selectedDecision.Action, Is.SameAs(defaultAction),
             "The chosen normal action retains the exact admitted Unity identity used by actuation and the P12 current-action slot.");
         Assert.That(graph.Actions.TryGetValue(selectedProviderAction.DefinitionId, out DailyV1ActionDefinition selectedProviderNode), Is.True);
-        RecordingSelectedActionProvider recordingProvider = new RecordingSelectedActionProvider();
+        NpcRuntime firstProviderTarget = new NpcRuntime("typed-provider-target-first", null);
+        NpcRuntime secondProviderTarget = new NpcRuntime("typed-provider-target-second", null);
+        RecordingSelectedActionProvider recordingProvider = new RecordingSelectedActionProvider(
+            firstProviderTarget, secondProviderTarget);
         NpcDecisionSystem duplicateActionDecisions = new NpcDecisionSystem(
-            new List<INpcActionProvider> { recordingProvider });
+            new List<INpcActionProvider> { recordingProvider }, new FixedRandomSource(0.05f));
         NpcActionRuntime duplicateSelectedDecision = duplicateActionDecisions.ChooseSelectedDailyV1Action(
             runtime, new List<DailyV1ActionDefinition> { selectedProviderNode, selectedProviderNode }, 17L);
         Assert.That(duplicateSelectedDecision, Is.Not.Null,
             "Repeated configured references to one admitted provider action must not throw during selected action lookup.");
         Assert.That(duplicateSelectedDecision.Action, Is.SameAs(selectedProviderAction));
+        Assert.That(duplicateSelectedDecision.TargetNpc, Is.SameAs(firstProviderTarget),
+            "Weighted selection must retain the exact provider result paired with the selected duplicate candidate.");
         Assert.That(recordingProvider.CreateCount, Is.EqualTo(2),
             "Duplicate candidates retain their existing separate weighting/provider construction behavior.");
         Assert.That(runtime.HasConfiguredRequiredActionStatuses(defaultAction, runtime.CurrentStatus), Is.True,
@@ -2661,6 +2669,34 @@ public sealed class SimulationBootstrapCompositionTests
             null), Is.EqualTo(DailyV1SelectedActionStatusPlanResult.Applied));
         Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(crimeJusticeRevision + 2),
             "No-op removal/addition does not advance the P12 owner revision.");
+
+        long beforeLostBindingWrite = runtime.P12CrimeJusticeRevision;
+        int notificationsBeforeLostBindingWrite = committedStatusMutations;
+        Object.DestroyImmediate(lostBindingStatus);
+        Assert.That(runtime.ApplySelectedDailyV1StatusChanges(
+            System.Array.Empty<DailyV1StatusDefinition>(),
+            new[] { graph.Statuses[lostBindingStatusId] }), Is.False,
+            "A missing Unity projection binding must reject before the selected Core status owner mutates.");
+        Assert.That(runtime.SelectedDailyV1StatusOwner.Statuses,
+            Is.EqualTo(new[] { graph.Statuses[actionEffectStatus.DefinitionId] }));
+        Assert.That(runtime.CurrentStatus, Is.EqualTo(new[] { actionEffectStatus }));
+        Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(beforeLostBindingWrite));
+        Assert.That(committedStatusMutations, Is.EqualTo(notificationsBeforeLostBindingWrite));
+
+        NpcRuntime compatibilityNpc = new NpcRuntime("typed-runtime-compatibility-npc", null);
+        SimulationRuntime mixedRosterRuntime = new SimulationRuntime(
+            new SimulationTime(),
+            new[] { startingCity },
+            new[] { runtime, compatibilityNpc },
+            economyEnabled: false);
+        Assert.That(mixedRosterRuntime.HasExactSelectedRuntimeOwnerGraph(graph), Is.True,
+            "The initial selected owner graph must exclude legacy compatibility NPCs without selected owners.");
+        NpcRuntime addedSelectedNpc = NpcRuntime.CreateSelectedDailyV1(
+            "typed-runtime-added-selected-npc", node, graph, bindings, startingCity, 0f);
+        Assert.That(mixedRosterRuntime.TryRegisterNpc(
+            addedSelectedNpc, out WorldNpcRegistryFailure addFailure), Is.True, addFailure.ToString(),
+            "A mixed initial roster must retain a usable selected owner graph for later selected registrations.");
+        Assert.That(mixedRosterRuntime.HasExactSelectedRuntimeOwnerGraph(graph), Is.True);
 
         List<DailyV1ActionDefinition> typedActions = new List<DailyV1ActionDefinition>
         {
@@ -4437,6 +4473,15 @@ public sealed class SimulationBootstrapCompositionTests
 
     private sealed class RecordingSelectedActionProvider : INpcActionProvider
     {
+        private readonly NpcRuntime firstTarget;
+        private readonly NpcRuntime secondTarget;
+
+        internal RecordingSelectedActionProvider(NpcRuntime firstTarget, NpcRuntime secondTarget)
+        {
+            this.firstTarget = firstTarget;
+            this.secondTarget = secondTarget;
+        }
+
         public int CreateCount { get; private set; }
 
         public bool HandlesAction(NpcActionData action) =>
@@ -4445,10 +4490,21 @@ public sealed class SimulationBootstrapCompositionTests
         public NpcActionRuntime CreateAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
         {
             CreateCount++;
-            return new NpcActionRuntime(action);
+            utility = CreateCount == 1 ? 1f : 9f;
+            return new NpcActionRuntime(action, CreateCount == 1 ? firstTarget : secondTarget);
         }
 
         public NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime) => null;
+    }
+
+    private sealed class FixedRandomSource : IAuthoritativeRandomSource
+    {
+        private readonly float value;
+        private readonly DeterministicRandomSource streamSource = new DeterministicRandomSource(73);
+
+        internal FixedRandomSource(float value) => this.value = value;
+        public float NextUnit(string streamKey, long drawIndex = 0L) => value;
+        public DeterministicRandomStream CreateStream(string streamKey) => streamSource.CreateStream(streamKey);
     }
 
 }

@@ -371,6 +371,7 @@ public class NpcRuntime : ICapabilityConditionSource
         IReadOnlyList<DailyV1StatusDefinition> statusToAdd)
     {
         return selectedDailyV1StatusOwner != null
+            && CanProjectSelectedStatusChanges(statusToAdd)
             && selectedDailyV1StatusOwner.TryApplyOrderedChanges(
                 statusToRemove,
                 statusToAdd,
@@ -380,6 +381,27 @@ public class NpcRuntime : ICapabilityConditionSource
                     RefreshSelectedStatusProjection();
                     NotifyP12CrimeJusticeMutationCommitted();
                 });
+    }
+
+    private bool CanProjectSelectedStatusChanges(IReadOnlyList<DailyV1StatusDefinition> statusToAdd)
+    {
+        if (selectedDailyV1StatusOwner == null || selectedDefinitionBindings == null)
+            return false;
+
+        // Validate the current projection and every possible admitted addition
+        // before the Core owner starts its ordered writes. A Unity asset may have
+        // been destroyed since admission; discovering that in the post-write
+        // projection callback would leave owner state changed without its P12
+        // revision/epoch notification.
+        List<DailyV1StatusDefinition> possibleStatuses = new List<DailyV1StatusDefinition>(
+            selectedDailyV1StatusOwner.Statuses.Count + (statusToAdd?.Count ?? 0));
+        foreach (DailyV1StatusDefinition status in selectedDailyV1StatusOwner.Statuses)
+            possibleStatuses.Add(status);
+        if (statusToAdd != null)
+            for (int index = 0; index < statusToAdd.Count; index++)
+                possibleStatuses.Add(statusToAdd[index]);
+
+        return TryResolveSelectedStatusAssets(possibleStatuses, out _);
     }
 
     private void RefreshSelectedStatusProjection()

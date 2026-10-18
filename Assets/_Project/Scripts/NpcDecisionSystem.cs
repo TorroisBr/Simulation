@@ -77,8 +77,8 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
                 out List<DailyV1NpcActionCandidate> candidates))
             return null;
 
-        Dictionary<DailyV1ActionDefinition, NpcActionRuntime> providerActions =
-            new Dictionary<DailyV1ActionDefinition, NpcActionRuntime>();
+        Dictionary<DailyV1NpcActionCandidate, NpcActionRuntime> providerActions =
+            new Dictionary<DailyV1NpcActionCandidate, NpcActionRuntime>();
         foreach (DailyV1NpcActionCandidate candidate in candidates)
         {
             if ((NpcActionType)(candidate.Action.Values.actionType?.Value ?? int.MinValue) == NpcActionType.Normal)
@@ -99,15 +99,11 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             }
 
             candidate.Utility = UnityMathfCompatibility.Max(0f, utility);
-            // Configured action lists may contain the same admitted definition
-            // more than once. The candidate list retains its existing weighting
-            // semantics; lookup by definition identity uses the last constructed
-            // provider action for that identity instead of throwing.
-            providerActions[candidate.Action] = providerAction;
+            providerActions.Add(candidate, providerAction);
         }
 
         string randomStreamKey = "npc-decision|" + npcRuntime.RuntimeId + "|" + currentAbsoluteDay;
-        DailyV1ActionDefinition selected = DailyV1NpcActionDecision.ChooseWeightedAction(
+        DailyV1NpcActionCandidate selected = DailyV1NpcActionDecision.ChooseWeightedCandidate(
             candidates, randomSource, randomStreamKey);
         if (selected == null)
             return null;
@@ -115,7 +111,7 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
         if (providerActions.TryGetValue(selected, out NpcActionRuntime selectedProviderAction))
             return selectedProviderAction;
 
-        return npcRuntime.TryGetSelectedDailyV1ActionAsset(selected, out NpcActionData selectedAsset)
+        return npcRuntime.TryGetSelectedDailyV1ActionAsset(selected.Action, out NpcActionData selectedAsset)
             ? new NpcActionRuntime(selectedAsset)
             : null;
     }

@@ -8429,7 +8429,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         if (cityRuntimes == null || npcRuntimes == null) return null;
         return DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
             cityRuntimes.Select(city => city?.SelectedRuntimeOwners),
-            npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners),
+            npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners).Where(owner => owner != null),
             out DailyV1SelectedRuntimeOwnerGraph graph) ? graph : null;
     }
 

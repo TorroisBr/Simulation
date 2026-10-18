@@ -89,6 +89,14 @@ internal static class DailyV1NpcActionDecision
         IAuthoritativeRandomSource randomSource,
         string randomStreamKey)
     {
+        return ChooseWeightedCandidate(candidates, randomSource, randomStreamKey)?.Action;
+    }
+
+    internal static DailyV1NpcActionCandidate ChooseWeightedCandidate(
+        IReadOnlyList<DailyV1NpcActionCandidate> candidates,
+        IAuthoritativeRandomSource randomSource,
+        string randomStreamKey)
+    {
         if (candidates == null || randomSource == null || string.IsNullOrWhiteSpace(randomStreamKey))
             return null;
 
@@ -112,7 +120,7 @@ internal static class DailyV1NpcActionDecision
 
             currentWeight += candidate.Utility;
             if (randomValue <= currentWeight)
-                return candidate.Action;
+                return candidate;
         }
 
         return null;
