@@ -3592,6 +3592,30 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, nextRestoredToken),
                 Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, nextControlToken)),
                 "Identical continuation after restore must preserve deterministic owner-state parity after dynamic roster membership.");
+
+            Assert.That(restoredSession.Runtime.TryUnregisterNpc(
+                    sourceLateNpcId,
+                    out WorldNpcRegistryFailure sourceUnregisterFailure), Is.True,
+                sourceUnregisterFailure.ToString());
+            Assert.That(controlSession.Runtime.TryUnregisterNpc(
+                    controlLateNpcId,
+                    out WorldNpcRegistryFailure controlUnregisterFailure), Is.True,
+                controlUnregisterFailure.ToString());
+            Assert.That(restoredSession.Runtime.HasExactSelectedRuntimeOwnerGraph(
+                    restoredSession.Runtime.SelectedRuntimeOwnerGraph.Definitions), Is.True,
+                "The selected owner graph must track the exact roster after an admitted NPC is removed.");
+            Assert.That(controlSession.Runtime.HasExactSelectedRuntimeOwnerGraph(
+                    controlSession.Runtime.SelectedRuntimeOwnerGraph.Definitions), Is.True);
+
+            Assert.That(restoredSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredAfterRemoval),
+                Is.True, restoredAfterRemoval.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAfterRemoval),
+                Is.True, controlAfterRemoval.ToString());
+            DailyCaptureEligibilityToken restoredAfterRemovalToken = GetCompletedDailyToken(restoredSession.Runtime);
+            DailyCaptureEligibilityToken controlAfterRemovalToken = GetCompletedDailyToken(controlSession.Runtime);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredAfterRemovalToken),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, controlAfterRemovalToken)),
+                "Removing a dynamic selected owner must preserve deterministic continuation and census parity.");
         }
         finally
         {

@@ -30,6 +30,21 @@ internal sealed class DailyV1ExecutionBoundaryState
         return true;
     }
 
+    internal bool TryReplaceSelectedRuntimeOwnerGraph(
+        DailyV1SelectedRuntimeOwnerGraph expected,
+        DailyV1SelectedRuntimeOwnerGraph replacement)
+    {
+        if (!selectedRuntimeOwnerGraphBound
+            || expected == null
+            || replacement == null
+            || !ReferenceEquals(selectedRuntimeOwnerGraph, expected)
+            || !ReferenceEquals(expected.Definitions, replacement.Definitions))
+            return false;
+
+        selectedRuntimeOwnerGraph = replacement;
+        return true;
+    }
+
     internal bool HasExactSelectedRuntimeOwnerGraph(
         DailyV1EffectiveDefinitions definitions,
         IEnumerable<DailyV1CityRuntimeOwners> cityOwners,

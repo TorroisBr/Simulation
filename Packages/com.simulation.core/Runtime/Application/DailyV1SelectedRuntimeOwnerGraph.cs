@@ -177,6 +177,53 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     }
 
     /// <summary>
+    /// Creates the exact selected-owner graph for a roster that has admitted
+    /// one additional NPC. The existing graph and all owner authorities stay
+    /// immutable; only the runtime's graph reference changes at the membership
+    /// boundary.
+    /// </summary>
+    internal bool TryCreateWithAddedNpc(
+        DailyV1NpcRuntimeOwners owner,
+        out DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        graph = null;
+        if (owner == null || !ReferenceEquals(owner.Definitions, Definitions)) return false;
+
+        List<DailyV1NpcRuntimeOwners> updatedNpcs = new List<DailyV1NpcRuntimeOwners>(npcs)
+        {
+            owner
+        };
+        return TryCreate(Definitions, cities, updatedNpcs, out graph);
+    }
+
+    /// <summary>
+    /// Creates the exact selected-owner graph for a roster after one NPC has
+    /// been removed. Removal is by owner-instance identity, matching the
+    /// runtime registry and alias rules.
+    /// </summary>
+    internal bool TryCreateWithoutNpc(
+        DailyV1NpcRuntimeOwners owner,
+        out DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        graph = null;
+        if (owner == null || !ReferenceEquals(owner.Definitions, Definitions)) return false;
+
+        bool removed = false;
+        List<DailyV1NpcRuntimeOwners> updatedNpcs = new List<DailyV1NpcRuntimeOwners>(npcs.Count);
+        foreach (DailyV1NpcRuntimeOwners current in npcs)
+        {
+            if (!removed && ReferenceEquals(current, owner))
+            {
+                removed = true;
+                continue;
+            }
+            updatedNpcs.Add(current);
+        }
+
+        return removed && TryCreate(Definitions, cities, updatedNpcs, out graph);
+    }
+
+    /// <summary>
     /// Resolves an admitted action's exact status effects against this runtime's
     /// selected definition graph. Target application is deliberately deferred
     /// until after the actor callback, matching the existing actuation order.

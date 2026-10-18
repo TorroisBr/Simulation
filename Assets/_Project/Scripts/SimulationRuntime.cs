@@ -6088,9 +6088,44 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
+        DailyV1SelectedRuntimeOwnerGraph selectedGraphBeforeMembership = null;
+        DailyV1SelectedRuntimeOwnerGraph selectedGraphAfterMembership = null;
+        bool replaceSelectedOwnerGraph = false;
+        if (!isComposingNpcRoster)
+        {
+            selectedGraphBeforeMembership = SelectedRuntimeOwnerGraph;
+            if (selectedGraphBeforeMembership != null)
+            {
+                if (!npcRuntime.UsesSelectedDailyV1Definitions
+                    || !selectedGraphBeforeMembership.TryCreateWithAddedNpc(
+                        npcRuntime.SelectedRuntimeOwners,
+                        out selectedGraphAfterMembership))
+                {
+                    failure = WorldNpcRegistryFailure.InvalidNpc;
+                    return false;
+                }
+                replaceSelectedOwnerGraph = true;
+            }
+            else if (IsDailyCaptureProfile)
+            {
+                failure = WorldNpcRegistryFailure.RuntimeFaulted;
+                return false;
+            }
+        }
+
         if (!isComposingNpcRoster && !npcRuntime.TryBindRuntimeMutationGuard(mutationGuard))
         {
             failure = WorldNpcRegistryFailure.AlreadyOwnedByAnotherRuntime;
+            return false;
+        }
+
+        if (replaceSelectedOwnerGraph
+            && !dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(
+                selectedGraphBeforeMembership,
+                selectedGraphAfterMembership))
+        {
+            FaultNpcMembershipCensusBoundary();
+            failure = WorldNpcRegistryFailure.RuntimeFaulted;
             return false;
         }
 
@@ -6098,6 +6133,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             && !identityAlreadyRegistered;
         if (insertedIdentity && !p12RuntimeIdentityRegistry.RegisterNpc(npcRuntime))
         {
+            if (replaceSelectedOwnerGraph
+                && !dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(
+                    selectedGraphAfterMembership,
+                    selectedGraphBeforeMembership))
+                mutationGuard.MarkFaulted(AuthoritativeMutationFaultReason.RollbackRestoreFailed);
             FaultNpcMembershipCensusBoundary();
             failure = WorldNpcRegistryFailure.RuntimeFaulted;
             return false;
@@ -6169,9 +6209,46 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
+        DailyV1SelectedRuntimeOwnerGraph selectedGraphBeforeMembership = null;
+        DailyV1SelectedRuntimeOwnerGraph selectedGraphAfterMembership = null;
+        bool replaceSelectedOwnerGraph = false;
+        if (SelectedRuntimeOwnerGraph != null)
+        {
+            selectedGraphBeforeMembership = SelectedRuntimeOwnerGraph;
+            if (!npcRuntime.UsesSelectedDailyV1Definitions
+                || !selectedGraphBeforeMembership.TryCreateWithoutNpc(
+                    npcRuntime.SelectedRuntimeOwners,
+                    out selectedGraphAfterMembership))
+            {
+                failure = WorldNpcRegistryFailure.RuntimeFaulted;
+                return false;
+            }
+            replaceSelectedOwnerGraph = true;
+        }
+        else if (IsDailyCaptureProfile)
+        {
+            failure = WorldNpcRegistryFailure.RuntimeFaulted;
+            return false;
+        }
+
+        if (replaceSelectedOwnerGraph
+            && !dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(
+                selectedGraphBeforeMembership,
+                selectedGraphAfterMembership))
+        {
+            FaultNpcMembershipCensusBoundary();
+            failure = WorldNpcRegistryFailure.RuntimeFaulted;
+            return false;
+        }
+
         if (npcRuntime.CurrentCity != null
             && !npcRuntime.SetCurrentPresence(null, null))
         {
+            if (replaceSelectedOwnerGraph
+                && !dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(
+                    selectedGraphAfterMembership,
+                    selectedGraphBeforeMembership))
+                mutationGuard.MarkFaulted(AuthoritativeMutationFaultReason.RollbackRestoreFailed);
             failure = WorldNpcRegistryFailure.RuntimeFaulted;
             return false;
         }
