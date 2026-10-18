@@ -52,9 +52,12 @@ internal sealed class P14CMixedSourceProductionPreparation
         if (!market.CanInstall(MarketRevision, MarketRevisionIncrements)) return false;
         if (MarketRevisionIncrements > 0
             && !market.CanInstallMaterialFlow(MarketRevision, MarketRevisionIncrements)) return false;
+        FiniteProductionSourceState currentSource = finiteSource.Source;
+        if (currentSource == null || currentSource.Revision != finiteSourceRevision) return false;
         // A rejected finite contributor has no owner mutation to install. Its
         // revision capacity must not reject other independently accepted
-        // contributors in the same deterministic market preparation.
+        // contributors in the same deterministic market preparation. The
+        // source must still match the revision captured by this preparation.
         return finiteAppliedQuantity == 0
             || finiteSource.CanInstall(finiteSourceRevision, absoluteDay);
     }
