@@ -180,6 +180,9 @@ public sealed class SimulationBootstrapComposition
                 || !ReferenceEquals(node, npc.SelectedDailyV1Definition))
                 return false;
         }
+        if ((runtime.Cities.Count > 0 || runtime.NpcRuntimes.Count > 0)
+            && !runtime.HasExactSelectedRuntimeOwnerGraph(definitions))
+            return false;
         return true;
     }
 

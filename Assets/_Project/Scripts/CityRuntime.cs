@@ -15,6 +15,7 @@ public class CityRuntime
     [SerializeField] private CityData cityData;
     [NonSerialized] private DailyV1CityDefinition selectedDailyV1Definition;
     [NonSerialized] private DailyV1EffectiveDefinitions selectedDefinitionGraph;
+    [NonSerialized] private DailyV1CityRuntimeOwners selectedRuntimeOwners;
     [NonSerialized] private SettlementPopulationRuntime population;
     [SerializeField] private MarketRuntime market;
     [NonSerialized] private MarketCounterpartyRuntime marketCounterparty;
@@ -59,6 +60,7 @@ public class CityRuntime
         : cityData != null ? cityData.DefinitionId : string.Empty;
     internal DailyV1CityDefinition SelectedDailyV1Definition => selectedDailyV1Definition;
     internal DailyV1EffectiveDefinitions SelectedDailyV1DefinitionGraph => selectedDefinitionGraph;
+    internal DailyV1CityRuntimeOwners SelectedRuntimeOwners => selectedRuntimeOwners;
     internal IReadOnlyList<MarketItemConfig> SelectedDailyV1MarketInputs =>
         selectedDailyV1Definition != null && selectedMarketItems != null
             ? selectedMarketItems.AsReadOnly()
@@ -74,6 +76,7 @@ public class CityRuntime
     {
         get
         {
+            if (selectedRuntimeOwners != null) return selectedRuntimeOwners.Population;
             if (population == null)
             {
                 population = CreatePopulationRuntime();
@@ -101,6 +104,7 @@ public class CityRuntime
     {
         get
         {
+            if (selectedRuntimeOwners != null) return selectedRuntimeOwners.Counterparty;
             if (marketCounterparty == null)
             {
                 marketCounterparty = NormalizeMarketCounterparty(market != null ? market.Counterparty : null, runtimeId);
@@ -113,6 +117,7 @@ public class CityRuntime
     {
         get
         {
+            if (selectedRuntimeOwners != null) return selectedRuntimeOwners.PopulationEconomy;
             if (populationEconomy == null)
             {
                 populationEconomy = CreateConfiguredPopulationEconomy();
@@ -189,6 +194,13 @@ public class CityRuntime
         installedCounterparty = marketCounterparty;
         installedPopulationEconomy = populationEconomy;
         installedLocation = location;
+        if (selectedDailyV1Definition != null
+            && (selectedRuntimeOwners == null
+                || !ReferenceEquals(selectedRuntimeOwners.Population, installedPopulation)
+                || !ReferenceEquals(selectedRuntimeOwners.Market, installedMarket?.SelectedDailyV1Owner)
+                || !ReferenceEquals(selectedRuntimeOwners.Counterparty, installedCounterparty)
+                || !ReferenceEquals(selectedRuntimeOwners.PopulationEconomy, installedPopulationEconomy)))
+            return false;
         return installedPopulation != null
             && installedMarket != null
             && installedCounterparty != null
@@ -860,6 +872,16 @@ public class CityRuntime
 
     private void SimulateSelectedLocalDailyMaterialFlow(long absoluteDay, string calendarVersion)
     {
+        if (RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.ExogenousDaily)
+        {
+            if (selectedRuntimeOwners == null)
+                throw new LocalDailyMaterialFlowRejectedException("Selected City runtime owners are not installed.");
+            lastMaterialFlow = selectedRuntimeOwners.SimulateSelectedExogenousDailyMaterialFlow(
+                RuntimeMaterialFlowLocationId, absoluteDay, calendarVersion,
+                (category, message) => logger?.Log(category, message));
+            return;
+        }
+
         DailyV1CityData city = selectedDailyV1Definition.Values;
         if (city.productionConfigs == null || city.productionConfigs.Count == 0
             || city.productionConfigs[0] == null)
@@ -1615,15 +1637,33 @@ public class CityRuntime
         }
         this.location = location;
         this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
-        this.marketCounterparty = marketCounterparty != null
-            ? NormalizeMarketCounterparty(marketCounterparty, runtimeId)
-            : CreateConfiguredMarketCounterparty(runtimeId);
-        population = CreatePopulationRuntime();
-        market = selectedDefinition != null
-            ? new MarketRuntime(selectedDefinition, selectedDefinitions, this.marketCounterparty, selectedBindings)
-            : HasConfiguredDefinition
+        if (selectedDefinition != null)
+        {
+            if (!DailyV1CityRuntimeOwners.TryCreateInitial(
+                    runtimeId, selectedDefinitions, selectedDefinition, marketCounterparty,
+                    out DailyV1CityRuntimeOwners selectedOwners))
+                throw new ArgumentException(
+                    "The selected City owners could not be created from the admitted Daily-v1 graph.",
+                    nameof(selectedDefinition));
+            selectedRuntimeOwners = selectedOwners;
+            this.marketCounterparty = selectedOwners.Counterparty;
+            population = selectedOwners.Population;
+            market = new MarketRuntime(selectedOwners.Market);
+            if (!market.TryBindSelectedDailyV1Owner(selectedDefinitions, selectedBindings))
+                throw new ArgumentException(
+                    "The selected City Market could not retain the exact admitted Daily-v1 owner.",
+                    nameof(selectedBindings));
+        }
+        else
+        {
+            this.marketCounterparty = marketCounterparty != null
+                ? NormalizeMarketCounterparty(marketCounterparty, runtimeId)
+                : CreateConfiguredMarketCounterparty(runtimeId);
+            population = CreatePopulationRuntime();
+            market = HasConfiguredDefinition
                 ? new MarketRuntime(RuntimeMarketItems, this.marketCounterparty)
                 : new MarketRuntime(new List<MarketItemConfig>(), this.marketCounterparty);
+        }
         if (HasConfiguredDefinition && (RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily
             || RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.MixedSourcesDaily
             || finiteProductionSources != null || HasAuthoredFiniteReserve()))
@@ -1682,7 +1722,9 @@ public class CityRuntime
                     RuntimeMarketStoreSemanticId);
             }
         }
-        populationEconomy = CreateConfiguredPopulationEconomy();
+        populationEconomy = selectedRuntimeOwners != null
+            ? selectedRuntimeOwners.PopulationEconomy
+            : CreateConfiguredPopulationEconomy();
     }
 
     public IReadOnlyList<CityProductionResult> SimulateProductionDay()
@@ -2061,15 +2103,24 @@ public class CityRuntime
                 out DailyV1MarketLiquidityConfig marketLiquidity,
                 out DailyV1PopulationConsumptionConfig populationConsumption))
             return false;
+        DailyV1CityRuntimeOwners stagedOwners = null;
+        if (market != null && market.SelectedDailyV1Owner != null
+            && !DailyV1CityRuntimeOwners.TryCreateBound(
+                runtimeId, definitions, definition, population,
+                market.SelectedDailyV1Owner, MarketCounterparty, PopulationEconomy,
+                out stagedOwners))
+            return false;
+        if (market != null && market.SelectedDailyV1Owner != null
+            && !market.TryBindSelectedDailyV1Owner(definitions, bindings))
+            return false;
         selectedDailyV1Definition = definition;
         selectedDefinitionGraph = definitions;
         selectedDefinitionBindings = bindings;
-        if (market != null && market.SelectedDailyV1Owner != null
-            && !market.TryBindSelectedDailyV1Owner(definitions, bindings)) return false;
         selectedMarketItems = marketItems;
         selectedProductionConfigs = productionConfigs;
         selectedMarketLiquidity = marketLiquidity;
         selectedPopulationConsumption = populationConsumption;
+        selectedRuntimeOwners = stagedOwners;
         return true;
     }
 

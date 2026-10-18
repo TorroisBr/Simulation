@@ -549,6 +549,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private readonly SimulationTime simulationTime;
     private readonly List<CityRuntime> cities;
     private readonly IReadOnlyList<CityRuntime> cityRuntimeSnapshot;
+    private readonly DailyV1SelectedRuntimeOwnerGraph selectedRuntimeOwnerGraph;
     private readonly List<NpcRuntime> npcRuntimes;
     private readonly IReadOnlyList<NpcRuntime> npcRuntimeSnapshot;
     private readonly Dictionary<string, NpcRuntime> npcRegistryById;
@@ -656,6 +657,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         ? p18dTimeline.CurrentInstant.AbsoluteDay
         : simulationTime.AbsoluteDay;
     public IReadOnlyList<CityRuntime> Cities => cityRuntimeSnapshot;
+    internal DailyV1SelectedRuntimeOwnerGraph SelectedRuntimeOwnerGraph => selectedRuntimeOwnerGraph;
     public EffectiveSimulationConfiguration Configuration => configuration;
     public SimulationCalendar Calendar => calendar;
     public DailyDemographyReport LastDailyDemographyReport => lastDailyDemographyReport;
@@ -1490,6 +1492,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         this.npcRuntimes.Sort((left, right) => string.CompareOrdinal(
             left?.RuntimeId ?? string.Empty,
             right?.RuntimeId ?? string.Empty));
+        selectedRuntimeOwnerGraph = TryCreateSelectedRuntimeOwnerGraph(
+            this.cities, this.npcRuntimes);
 
         this.manpowerSourceConsequencePlanningService = new ManpowerSourceConsequencePlanningService(
             this,
@@ -8443,6 +8447,42 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
     private bool IsDailyCaptureProfile => runtimeAdmissionContext != null
         && runtimeAdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1;
+
+    internal bool HasExactSelectedRuntimeOwnerGraph(DailyV1EffectiveDefinitions definitions) =>
+        selectedRuntimeOwnerGraph != null
+        && ReferenceEquals(selectedRuntimeOwnerGraph.Definitions, definitions)
+        && selectedRuntimeOwnerGraph.Cities.Count == cities.Count
+        && selectedRuntimeOwnerGraph.Npcs.Count == npcRuntimes.Count;
+
+    private static DailyV1SelectedRuntimeOwnerGraph TryCreateSelectedRuntimeOwnerGraph(
+        IReadOnlyList<CityRuntime> cityRuntimes,
+        IReadOnlyList<NpcRuntime> npcRuntimes)
+    {
+        if (cityRuntimes == null || npcRuntimes == null) return null;
+        DailyV1EffectiveDefinitions definitions = null;
+        List<DailyV1CityRuntimeOwners> cityOwners = new List<DailyV1CityRuntimeOwners>(cityRuntimes.Count);
+        List<DailyV1NpcRuntimeOwners> npcOwners = new List<DailyV1NpcRuntimeOwners>(npcRuntimes.Count);
+        foreach (CityRuntime city in cityRuntimes)
+        {
+            if (city == null || city.SelectedRuntimeOwners == null) return null;
+            DailyV1CityRuntimeOwners owners = city.SelectedRuntimeOwners;
+            if (definitions == null) definitions = owners.Definitions;
+            else if (!ReferenceEquals(definitions, owners.Definitions)) return null;
+            cityOwners.Add(owners);
+        }
+        foreach (NpcRuntime npc in npcRuntimes)
+        {
+            if (npc == null || npc.SelectedRuntimeOwners == null) return null;
+            DailyV1NpcRuntimeOwners owners = npc.SelectedRuntimeOwners;
+            if (definitions == null) definitions = owners.Definitions;
+            else if (!ReferenceEquals(definitions, owners.Definitions)) return null;
+            npcOwners.Add(owners);
+        }
+        if (definitions == null) return null;
+        return DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, cityOwners, npcOwners,
+            out DailyV1SelectedRuntimeOwnerGraph graph) ? graph : null;
+    }
 
     internal bool RequiresSelectedDailyV1DefinitionBindings => IsDailyCaptureProfile;
 

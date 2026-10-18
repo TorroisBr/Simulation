@@ -58,6 +58,9 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocatorCensusCounter.cs" Link="Identity/RuntimeIdAllocatorCensusCounter.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocatorOwnerBridge.cs" Link="Identity/RuntimeIdAllocatorOwnerBridge.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonRuntime.cs" Link="Person/PersonRuntime.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/DailyV1NpcRuntimeOwners.cs" Link="Person/DailyV1NpcRuntimeOwners.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1CityRuntimeOwners.cs" Link="City/DailyV1CityRuntimeOwners.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedRuntimeOwnerGraph.cs" Link="Application/DailyV1SelectedRuntimeOwnerGraph.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonStore.cs" Link="Person/PersonStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonRuntimeOwnerBridge.cs" Link="Person/PersonRuntimeOwnerBridge.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonAgeCalculator.cs" Link="Person/PersonAgeCalculator.cs" />

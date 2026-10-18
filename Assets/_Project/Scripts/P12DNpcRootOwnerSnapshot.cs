@@ -377,6 +377,9 @@ internal sealed class P12DNpcFProjection
 internal sealed class P12DNpcStagedOwnerState
 {
     internal string NpcDefinitionId { get; set; }
+    internal DailyV1EffectiveDefinitions SelectedDefinitions { get; set; }
+    internal DailyV1NpcDefinition SelectedNpcDefinition { get; set; }
+    internal IReadOnlyList<DailyV1StatusDefinition> SelectedCurrentStatusDefinitions { get; set; }
     internal NpcData NpcData { get; set; }
     internal string PersonIdValue { get; set; }
     internal PersonRuntime PersonRuntime { get; set; }
@@ -543,11 +546,25 @@ internal static class P12DNpcRootOwnerSnapshot
         ExplorableSiteKnowledgeRuntime siteKnowledge = npc.ExistingExplorableSiteKnowledge;
         LocalTopologyKnowledgeRuntime localTopology = npc.ExistingLocalTopologyKnowledge;
         AdventureSiteIntelKnowledgeRuntime adventure = npc.ExistingAdventureSiteIntelKnowledge;
-        IReadOnlyList<NpcStatusData> statuses = npc.ExistingCurrentStatus;
+        IReadOnlyList<NpcStatusData> statuses = null;
+        List<string> statusIds = new List<string>();
+        if (npc.UsesSelectedDailyV1Definitions)
+        {
+            if (!npc.TryCopySelectedCurrentStatusDefinitionIds(statusIds))
+            {
+                failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+                return false;
+            }
+        }
+        else
+        {
+            statuses = npc.ExistingCurrentStatus;
+        }
 
         if (inventory == null || account == null || merchantPlan == null || travelPlan == null
             || commercial == null || spatial == null || siteKnowledge == null
-            || localTopology == null || adventure == null || statuses == null
+            || localTopology == null || adventure == null
+            || (!npc.UsesSelectedDailyV1Definitions && statuses == null)
             || !inventoryOwners.Add(inventory) || !accountOwners.Add(account)
             || !merchantPlanOwners.Add(merchantPlan) || !travelPlanOwners.Add(travelPlan)
             || !commercialOwners.Add(commercial) || !spatialOwners.Add(spatial)
@@ -614,15 +631,17 @@ internal static class P12DNpcRootOwnerSnapshot
             }
         }
 
-        List<string> statusIds = new List<string>(statuses.Count);
-        foreach (NpcStatusData status in statuses)
+        if (!npc.UsesSelectedDailyV1Definitions)
         {
-            if (status == null || string.IsNullOrWhiteSpace(status.DefinitionId))
+            foreach (NpcStatusData status in statuses)
             {
-                failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
-                return false;
+                if (status == null || string.IsNullOrWhiteSpace(status.DefinitionId))
+                {
+                    failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+                    return false;
+                }
+                statusIds.Add(status.DefinitionId);
             }
-            statusIds.Add(status.DefinitionId);
         }
 
         List<P12DNpcInventoryRowValue> inventoryRows =
@@ -973,6 +992,16 @@ internal static class P12DNpcRootOwnerSnapshot
                 return false;
             }
 
+            DailyV1NpcDefinition selectedNpcDefinition = null;
+            if (selectedDefinitions != null
+                && (!selectedDefinitions.Npcs.TryGetValue(d.NpcDefinitionId, out selectedNpcDefinition)
+                    || selectedNpcDefinition == null
+                    || !string.Equals(selectedNpcDefinition.DefinitionId, d.NpcDefinitionId, StringComparison.Ordinal)))
+            {
+                failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+                return false;
+            }
+
             if (!ResolveNullable(d.CurrentCityRuntimeId, citiesById, out CityRuntime currentCity)
                 || !ResolveNullable(d.CurrentLocationRuntimeId, locationsById, out SpatialLocationRuntime currentLocation)
                 || !ResolveNullable(d.DestinationCityRuntimeId, citiesById, out CityRuntime destinationCity)
@@ -1026,6 +1055,9 @@ internal static class P12DNpcRootOwnerSnapshot
             }
 
             List<NpcStatusData> statuses = new List<NpcStatusData>(d.CurrentStatusDefinitionIds.Count);
+            List<DailyV1StatusDefinition> selectedStatusDefinitions = selectedDefinitions == null
+                ? null
+                : new List<DailyV1StatusDefinition>(d.CurrentStatusDefinitionIds.Count);
             foreach (string statusId in d.CurrentStatusDefinitionIds)
             {
                 if (string.IsNullOrWhiteSpace(statusId)
@@ -1033,6 +1065,18 @@ internal static class P12DNpcRootOwnerSnapshot
                 {
                     failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
                     return false;
+                }
+                if (selectedDefinitions != null)
+                {
+                    if (!selectedDefinitions.Statuses.TryGetValue(statusId,
+                            out DailyV1StatusDefinition selectedStatus)
+                        || selectedStatus == null
+                        || !string.Equals(selectedStatus.DefinitionId, status.DefinitionId, StringComparison.Ordinal))
+                    {
+                        failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+                        return false;
+                    }
+                    selectedStatusDefinitions.Add(selectedStatus);
                 }
                 statuses.Add(status);
             }
@@ -1168,6 +1212,9 @@ internal static class P12DNpcRootOwnerSnapshot
             P12DNpcStagedOwnerState stagedState = new P12DNpcStagedOwnerState
             {
                 NpcDefinitionId = d.NpcDefinitionId,
+                SelectedDefinitions = selectedDefinitions,
+                SelectedNpcDefinition = selectedNpcDefinition,
+                SelectedCurrentStatusDefinitions = selectedStatusDefinitions,
                 NpcData = npcsByDefinition[d.NpcDefinitionId],
                 PersonIdValue = d.PersonIdValue,
                 PersonRuntime = stagedPerson,

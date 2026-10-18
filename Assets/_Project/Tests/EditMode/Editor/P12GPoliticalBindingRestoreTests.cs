@@ -63,6 +63,9 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             Is.True, controlAdvance.ToString());
         DailyCaptureEligibilityToken sourceToken = GetCompletedToken(source.Session.Runtime);
         DailyCaptureEligibilityToken controlToken = GetCompletedToken(control.Session.Runtime);
+        Assert.That(source.Session.Runtime.NpcRuntimes.Any(npc =>
+                npc?.SelectedDailyV1StatusOwner?.Statuses.Count > 0), Is.True,
+            "The accepted selected-profile fixture must exercise populated typed NPC status state.");
         AssertIndependentOwners(source.Session, sourceToken, control.Session, controlToken);
         Assert.That(sourceToken.BoundaryProvenance, Is.EqualTo(DailyCaptureBoundaryProvenance.CompletedAdvance));
         Assert.That(sourceToken.CompletedCoreSequence, Is.GreaterThan(0L));
@@ -533,6 +536,22 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             out P12DDailyV1OwnerPackage stagedD,
             out P12DDailyV1OwnerPackageFailure dFailure,
             selectedDefinitions: anchorComposition.SelectedDefinitions), Is.True, dFailure.ToString());
+
+        bool stagedSelectedStatusIsPopulated = false;
+        foreach (NpcRuntime stagedNpc in stagedD.Npcs)
+        {
+            P12DNpcDRow stagedRow = stagedD.NpcDRows.Single(row =>
+                string.Equals(row.RuntimeId, stagedNpc.RuntimeId, StringComparison.Ordinal));
+            Assert.That(stagedNpc.SelectedDailyV1StatusOwner, Is.Not.Null,
+                "Selected P12-D staging must install the canonical status owner before Unity binding.");
+            List<string> stagedStatusIds = new List<string>();
+            Assert.That(stagedNpc.TryCopySelectedCurrentStatusDefinitionIds(stagedStatusIds), Is.True);
+            Assert.That(stagedStatusIds, Is.EqualTo(stagedRow.CurrentStatusDefinitionIds),
+                "The staged owner must contain the exact ordered/multiplicity-preserving P12-D status identities.");
+            if (stagedStatusIds.Count > 0) stagedSelectedStatusIsPopulated = true;
+        }
+        Assert.That(stagedSelectedStatusIsPopulated, Is.True,
+            "The selected P12-D fixture must prove canonical status-owner staging with populated rows.");
 
         if (seedPoliticalOwners)
         {
@@ -1518,6 +1537,17 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             npc => npc.RuntimeId, StringComparer.Ordinal);
         Assert.That(npcD.Evidence.CoversStagedNpcRuntimeIds(runtimeRoster), Is.True,
             "D/F capture provenance must cover every runtime NPC identity exactly once.");
+        foreach (P12DNpcDRow row in npcD.Rows)
+        {
+            Assert.That(runtimeRoster.TryGetValue(row.RuntimeId, out NpcRuntime npc), Is.True);
+            List<string> selectedStatusIds = new List<string>();
+            Assert.That(npc.TryCopySelectedCurrentStatusDefinitionIds(selectedStatusIds), Is.True,
+                "Selected P12-D status capture must come from the typed Core owner.");
+            Assert.That(row.CurrentStatusDefinitionIds, Is.EqualTo(selectedStatusIds),
+                "The unchanged P12-D row must preserve typed status identity, order, and multiplicity.");
+            Assert.That(npc.CurrentStatus.Select(status => status?.DefinitionId), Is.EqualTo(selectedStatusIds),
+                "The selected Unity compatibility projection must match the exact Core status owner.");
+        }
 
         for (int index = 0; index < runtime.Cities.Count; index++)
         {
