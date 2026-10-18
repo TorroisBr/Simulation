@@ -14,6 +14,7 @@ internal sealed class DailyV1NpcRuntimeOwners
     internal DailyV1InventoryOwner Inventory { get; }
     internal DailyV1NpcStatusOwner Status { get; }
     internal MoneyAccountRuntime MoneyAccount { get; }
+    internal DailyV1NpcActionSlotOwner ActionSlot { get; }
 
     private DailyV1NpcRuntimeOwners(
         string runtimeId,
@@ -29,6 +30,7 @@ internal sealed class DailyV1NpcRuntimeOwners
         Inventory = inventory;
         Status = status;
         MoneyAccount = moneyAccount;
+        ActionSlot = new DailyV1NpcActionSlotOwner(definitions);
     }
 
     internal static bool TryCreateInitial(
@@ -87,4 +89,32 @@ internal sealed class DailyV1NpcRuntimeOwners
 
     internal bool TryCopyStatusDefinitionIds(List<string> destination) =>
         Status != null && Status.TryCopyDefinitionIds(destination);
+}
+
+/// <summary>
+/// Holds the exact admitted action-definition identity occupying one selected
+/// NPC's current-action slot. Unity's NpcActionRuntime remains the existing
+/// execution and persistence projection of this node.
+/// </summary>
+internal sealed class DailyV1NpcActionSlotOwner
+{
+    private readonly DailyV1EffectiveDefinitions definitions;
+
+    internal DailyV1ActionDefinition CurrentAction { get; private set; }
+
+    internal DailyV1NpcActionSlotOwner(DailyV1EffectiveDefinitions definitions)
+    {
+        this.definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
+    }
+
+    internal bool TrySetCurrentAction(DailyV1ActionDefinition action)
+    {
+        if (action != null
+            && (!definitions.Actions.TryGetValue(action.DefinitionId, out DailyV1ActionDefinition admitted)
+                || !ReferenceEquals(action, admitted)))
+            return false;
+
+        CurrentAction = action;
+        return true;
+    }
 }

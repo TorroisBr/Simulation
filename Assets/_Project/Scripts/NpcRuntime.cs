@@ -151,14 +151,30 @@ public class NpcRuntime : ICapabilityConditionSource
         if (currentStatus.Capacity < required) currentStatus.Capacity = required;
         return true;
     }
-    public NpcActionData CurrentAction => currentAction;
+    public NpcActionData CurrentAction
+    {
+        get
+        {
+            if (selectedRuntimeOwners == null) return currentAction;
+            DailyV1ActionDefinition selectedAction = selectedRuntimeOwners.ActionSlot?.CurrentAction;
+            if (selectedAction == null) return null;
+            if (selectedDefinitionBindings != null)
+                return selectedDefinitionBindings.TryGetAsset(selectedAction, out NpcActionData selectedAsset)
+                    && selectedAsset != null
+                    ? selectedAsset
+                    : null;
+            return currentActionRuntime?.Action;
+        }
+    }
     public NpcActionRuntime CurrentActionRuntime => currentActionRuntime;
     internal long CurrentActionRevision => currentActionRevision;
-    internal bool HasConsistentCurrentActionSlot =>
-        (currentAction == null && currentActionRuntime == null)
-        || (currentActionRuntime != null
-            && currentActionRuntime.Action != null
-            && ReferenceEquals(currentActionRuntime.Action, currentAction));
+    internal bool HasConsistentCurrentActionSlot => selectedRuntimeOwners != null
+        ? HasConsistentSelectedCurrentActionSlot(
+            selectedDefinitionGraph, selectedDefinitionBindings, selectedRuntimeOwners.ActionSlot)
+        : (currentAction == null && currentActionRuntime == null)
+            || (currentActionRuntime != null
+                && currentActionRuntime.Action != null
+                && ReferenceEquals(currentActionRuntime.Action, currentAction));
     public NpcLifeState LifeState => lifeState;
     public bool IsAlive => lifeState == NpcLifeState.Alive;
     public bool IsDead => lifeState == NpcLifeState.Dead;
@@ -509,11 +525,48 @@ public class NpcRuntime : ICapabilityConditionSource
     private bool TryGetSelectedDailyV1Action(NpcActionData action, out DailyV1ActionDefinition actionNode)
     {
         actionNode = null;
-        return selectedDailyV1Definition != null && action != null
-            && selectedDefinitionGraph != null && selectedDefinitionBindings != null
-            && selectedDefinitionBindings.TryGet(action, out actionNode)
-            && selectedDefinitionGraph.Actions.TryGetValue(actionNode.DefinitionId, out DailyV1ActionDefinition admittedAction)
+        return selectedDailyV1Definition != null
+            && TryResolveSelectedDailyV1Action(selectedDefinitionGraph, selectedDefinitionBindings,
+                action, out actionNode);
+    }
+
+    private static bool TryResolveSelectedDailyV1Action(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1DefinitionAdapter.SelectedBindings bindings,
+        NpcActionData action,
+        out DailyV1ActionDefinition actionNode)
+    {
+        actionNode = null;
+        return definitions != null && bindings != null && action != null
+            && bindings.TryGet(action, out actionNode)
+            && definitions.Actions.TryGetValue(actionNode.DefinitionId, out DailyV1ActionDefinition admittedAction)
             && ReferenceEquals(actionNode, admittedAction);
+    }
+
+    private bool HasConsistentSelectedCurrentActionSlot(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1DefinitionAdapter.SelectedBindings bindings,
+        DailyV1NpcActionSlotOwner actionSlot)
+    {
+        if (definitions == null || actionSlot == null)
+            return false;
+
+        if (currentActionRuntime == null)
+            return currentAction == null && actionSlot.CurrentAction == null;
+
+        NpcActionData actionAsset = currentActionRuntime.Action;
+        DailyV1ActionDefinition currentNode = actionSlot.CurrentAction;
+        if (actionAsset == null || !ReferenceEquals(currentAction, actionAsset)
+            || currentNode == null
+            || !definitions.Actions.TryGetValue(actionAsset.DefinitionId, out DailyV1ActionDefinition admittedNode)
+            || !ReferenceEquals(currentNode, admittedNode))
+            return false;
+
+        if (bindings == null) return true;
+        return bindings.TryGet(actionAsset, out DailyV1ActionDefinition mappedNode)
+            && ReferenceEquals(mappedNode, currentNode)
+            && bindings.TryGetAsset(currentNode, out NpcActionData mappedAsset)
+            && ReferenceEquals(mappedAsset, actionAsset);
     }
 
     internal bool TryGetSelectedDailyV1Actions(List<NpcActionData> actions)
@@ -1022,6 +1075,8 @@ public class NpcRuntime : ICapabilityConditionSource
             if (!ReferenceEquals(selectedDailyV1Definition, definition)
                 || !ReferenceEquals(selectedDefinitionGraph, definitions)
                 || selectedDailyV1StatusOwner == null
+                || !HasConsistentSelectedCurrentActionSlot(
+                    definitions, bindings, selectedRuntimeOwners.ActionSlot)
                 || (selectedDefinitionBindings != null
                     && !ReferenceEquals(selectedDefinitionBindings, bindings)))
                 return false;
@@ -1057,13 +1112,19 @@ public class NpcRuntime : ICapabilityConditionSource
             return true;
         }
 
-        if (!TryCreateSelectedStatusNodesFromAssets(definitions, bindings, currentStatus,
+        DailyV1ActionDefinition stagedCurrentAction = null;
+        if (!HasConsistentCurrentActionSlot
+            || (currentActionRuntime != null
+                && !TryResolveSelectedDailyV1Action(definitions, bindings,
+                    currentActionRuntime.Action, out stagedCurrentAction))
+            || !TryCreateSelectedStatusNodesFromAssets(definitions, bindings, currentStatus,
                 out List<DailyV1StatusDefinition> stagedStatuses)
             || !DailyV1SelectedRuntimeOwnerGraph.TryCreateBoundNpcOwner(
                 runtimeId, definitions, definition, stagedStatuses,
                 ExistingInventory?.SelectedDailyV1Owner, moneyAccount,
                 out DailyV1NpcRuntimeOwners stagedOwners))
             return false;
+        if (!stagedOwners.ActionSlot.TrySetCurrentAction(stagedCurrentAction)) return false;
         if (ExistingInventory != null
             && ExistingInventory.SelectedDailyV1Owner != null
             && !ExistingInventory.TryBindSelectedDailyV1Owner(definitions, bindings)) return false;
@@ -1215,6 +1276,15 @@ public class NpcRuntime : ICapabilityConditionSource
                     state.MoneyAccount,
                     out stagedSelectedOwners))
                 return false;
+
+            DailyV1ActionDefinition stagedCurrentAction = null;
+            if (state.CurrentActionDefinitionId != null
+                && (!state.SelectedDefinitions.Actions.TryGetValue(
+                        state.CurrentActionDefinitionId, out stagedCurrentAction)
+                    || stagedCurrentAction == null))
+                return false;
+            if (!stagedSelectedOwners.ActionSlot.TrySetCurrentAction(stagedCurrentAction))
+                return false;
         }
         else if (state.SelectedNpcDefinition != null
             || state.SelectedCurrentStatusDefinitions != null)
@@ -1290,7 +1360,16 @@ public class NpcRuntime : ICapabilityConditionSource
     {
         if (actionRuntime == currentActionRuntime
             && ReferenceEquals(currentAction, actionRuntime?.Action))
-            return true;
+            return HasConsistentCurrentActionSlot;
+        DailyV1ActionDefinition selectedActionNode = null;
+        if (selectedRuntimeOwners != null
+            && (!HasConsistentCurrentActionSlot
+                || selectedDefinitionBindings == null
+                || (actionRuntime != null
+                    && !TryResolveSelectedDailyV1Action(
+                        selectedDefinitionGraph, selectedDefinitionBindings,
+                        actionRuntime.Action, out selectedActionNode))))
+            return false;
         bool p12Bound = p12LifecycleMutationAdmission != null;
         if ((p12Bound && !HasConsistentCurrentActionSlot)
             || (actionRuntime != null
@@ -1311,6 +1390,14 @@ public class NpcRuntime : ICapabilityConditionSource
         if (p12Bound && previous != null && !previous.UnbindP12Owner(this))
         {
             actionRuntime?.UnbindP12Owner(this);
+            return false;
+        }
+
+        if (selectedRuntimeOwners != null
+            && !selectedRuntimeOwners.ActionSlot.TrySetCurrentAction(selectedActionNode))
+        {
+            if (p12Bound && previous != null) previous.TryBindP12Owner(this);
+            if (p12Bound && actionRuntime != null) actionRuntime.UnbindP12Owner(this);
             return false;
         }
 
@@ -1344,6 +1431,7 @@ public class NpcRuntime : ICapabilityConditionSource
     private void ClearCurrentActionSlotAfterAdmission()
     {
         NpcActionRuntime previous = currentActionRuntime;
+        selectedRuntimeOwners?.ActionSlot.TrySetCurrentAction(null);
         currentAction = null;
         currentActionRuntime = null;
         previous?.UnbindP12Owner(this);

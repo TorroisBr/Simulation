@@ -253,6 +253,30 @@ public sealed class DailyV1NpcStatusOwnerTests
     }
 
     [Test]
+    public void SelectedNpcActionSlotPreservesExactAdmittedActionNodeIdentity()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1EffectiveDefinitions otherDefinitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition npc = definitions.Npcs.Values.First();
+        DailyV1ActionDefinition action = definitions.Actions.Values.First();
+        DailyV1ActionDefinition sameIdForeignAction = otherDefinitions.Actions[action.DefinitionId];
+
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-runtime", definitions, npc, 0f, out DailyV1NpcRuntimeOwners owner), Is.True);
+        Assert.That(owner.ActionSlot, Is.Not.Null);
+        Assert.That(owner.ActionSlot.CurrentAction, Is.Null);
+
+        Assert.That(owner.ActionSlot.TrySetCurrentAction(action), Is.True);
+        Assert.That(owner.ActionSlot.CurrentAction, Is.SameAs(action));
+        Assert.That(owner.ActionSlot.TrySetCurrentAction(sameIdForeignAction), Is.False,
+            "Matching DefinitionId does not admit an action node from a different effective graph.");
+        Assert.That(owner.ActionSlot.CurrentAction, Is.SameAs(action),
+            "A rejected foreign node leaves the current canonical identity unchanged.");
+        Assert.That(owner.ActionSlot.TrySetCurrentAction(null), Is.True);
+        Assert.That(owner.ActionSlot.CurrentAction, Is.Null);
+    }
+
+    [Test]
     public void SelectedNpcRuntimeOwnerCompositionConsumesExactGraphAndPreservesOwnerInstances()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
