@@ -1014,7 +1014,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
         {
             if (npc == null || npc.NpcData == null)
                 return false;
-            npcDefinitions.Add(npc.NpcData);
+            AddUniqueDefinitionReference(npcDefinitions, npc.NpcData);
             InventoryRuntime inventory = npc.ExistingInventory;
             if (inventory == null)
                 continue;
@@ -1029,6 +1029,14 @@ internal static partial class P12GDailyV1RestoreCoordinator
     {
         if (candidate == null) return;
         foreach (ItemData value in values)
+            if (ReferenceEquals(value, candidate)) return;
+        values.Add(candidate);
+    }
+
+    private static void AddUniqueDefinitionReference(List<NpcData> values, NpcData candidate)
+    {
+        if (candidate == null) return;
+        foreach (NpcData value in values)
             if (ReferenceEquals(value, candidate)) return;
         values.Add(candidate);
     }
