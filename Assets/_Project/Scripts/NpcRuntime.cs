@@ -257,8 +257,35 @@ public class NpcRuntime : ICapabilityConditionSource
         }
 
         if (!TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)) return false;
+        if (!TryResolveSelectedStatusNodes(activeStatuses, out List<DailyV1StatusDefinition> activeStatusNodes))
+            return false;
         return DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
-            selectedDefinitionGraph, actionNode, selectedDailyV1StatusOwner?.Statuses);
+            selectedDefinitionGraph, actionNode, activeStatusNodes);
+    }
+
+    private bool TryResolveSelectedStatusNodes(
+        IReadOnlyList<NpcStatusData> statusAssets,
+        out List<DailyV1StatusDefinition> statusNodes)
+    {
+        statusNodes = null;
+        if (selectedDefinitionGraph == null || selectedDefinitionBindings == null)
+            return false;
+
+        List<DailyV1StatusDefinition> resolved = new List<DailyV1StatusDefinition>();
+        foreach (NpcStatusData statusAsset in statusAssets ?? Array.Empty<NpcStatusData>())
+        {
+            if (statusAsset == null)
+                continue;
+            if (!selectedDefinitionBindings.TryGet(statusAsset, out DailyV1StatusDefinition statusNode)
+                || !selectedDefinitionGraph.Statuses.TryGetValue(statusNode.DefinitionId,
+                    out DailyV1StatusDefinition admittedNode)
+                || !ReferenceEquals(statusNode, admittedNode))
+                return false;
+            resolved.Add(statusNode);
+        }
+
+        statusNodes = resolved;
+        return true;
     }
 
     internal bool TryGetConfiguredActionStatusChanges(

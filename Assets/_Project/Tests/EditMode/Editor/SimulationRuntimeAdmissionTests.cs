@@ -10703,8 +10703,17 @@ public sealed class SimulationRuntimeAdmissionTests
     private static T ReadPrivateField<T>(object target, string name)
     {
         FieldInfo field = target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.That(field, Is.Not.Null);
-        return (T)field.GetValue(target);
+        if (field != null)
+            return (T)field.GetValue(target);
+
+        // Core extraction moves some runtime values behind read-only properties.
+        // Keep these white-box assertions bound to the same semantic member
+        // without requiring the production runtime to retain duplicate fields.
+        PropertyInfo property = target.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(property, Is.Not.Null, "Expected private field or property '" + name + "'.");
+        MethodInfo getter = property.GetGetMethod(nonPublic: true);
+        Assert.That(getter, Is.Not.Null, "Expected a readable private property '" + name + "'.");
+        return (T)property.GetValue(target);
     }
 
     private static void WritePrivateField<T>(object target, string name, T value)
