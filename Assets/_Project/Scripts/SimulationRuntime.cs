@@ -6094,9 +6094,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         if (!isComposingNpcRoster)
         {
             selectedGraphBeforeMembership = SelectedRuntimeOwnerGraph;
-            if (selectedGraphBeforeMembership != null && npcRuntime.UsesSelectedDailyV1Definitions)
+            if (npcRuntime.UsesSelectedDailyV1Definitions)
             {
-                if (!selectedGraphBeforeMembership.TryCreateWithAddedNpc(
+                if (selectedGraphBeforeMembership == null
+                    || !selectedGraphBeforeMembership.TryCreateWithAddedNpc(
                         npcRuntime.SelectedRuntimeOwners,
                         out selectedGraphAfterMembership))
                 {
@@ -6104,11 +6105,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     return false;
                 }
                 replaceSelectedOwnerGraph = true;
-            }
-            else if (selectedGraphBeforeMembership == null && IsDailyCaptureProfile)
-            {
-                failure = WorldNpcRegistryFailure.RuntimeFaulted;
-                return false;
             }
         }
 
@@ -6223,11 +6219,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 return false;
             }
             replaceSelectedOwnerGraph = true;
-        }
-        else if (IsDailyCaptureProfile && SelectedRuntimeOwnerGraph == null)
-        {
-            failure = WorldNpcRegistryFailure.RuntimeFaulted;
-            return false;
         }
 
         if (replaceSelectedOwnerGraph
