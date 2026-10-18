@@ -3546,15 +3546,18 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceFirst),
                 Is.True, sourceFirst.ToString());
 
-            NpcData lateNpcDefinition = SimulationTestFactory.CreateNpc("p12g-dynamic-roster-late-npc");
             string sourceLateNpcId = sourceSession.Composition.RuntimeIdAllocator.AllocateNpcId();
             string controlLateNpcId = controlSession.Composition.RuntimeIdAllocator.AllocateNpcId();
             Assert.That(sourceLateNpcId, Is.EqualTo(controlLateNpcId));
+            NpcRuntime sourceTemplate = sourceSession.Runtime.NpcRuntimes[0];
+            NpcRuntime controlTemplate = controlSession.Runtime.NpcRuntimes[0];
+            NpcRuntime sourceLateNpc = CreateSelectedDailyV1RosterMember(sourceTemplate, sourceLateNpcId);
+            NpcRuntime controlLateNpc = CreateSelectedDailyV1RosterMember(controlTemplate, controlLateNpcId);
             Assert.That(sourceSession.Runtime.TryRegisterNpc(
-                    new NpcRuntime(sourceLateNpcId, lateNpcDefinition),
+                    sourceLateNpc,
                     out WorldNpcRegistryFailure sourceRegisterFailure), Is.True, sourceRegisterFailure.ToString());
             Assert.That(controlSession.Runtime.TryRegisterNpc(
-                    new NpcRuntime(controlLateNpcId, lateNpcDefinition),
+                    controlLateNpc,
                     out WorldNpcRegistryFailure controlRegisterFailure), Is.True, controlRegisterFailure.ToString());
             Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceSecond),
                 Is.True, sourceSecond.ToString());
@@ -4197,10 +4200,14 @@ public sealed class SimulationRuntimeAdmissionTests
 
         bool originalStealCanFail = steal.canFail;
         bool originalArrestCanFail = arrest.canFail;
+        // Selected runtimes execute the immutable definition graph captured at
+        // bootstrap. Configure successful outcomes before either graph is built.
         GameObject uninterruptedObject = new GameObject("P12-G successful directive uninterrupted");
         GameObject restoredObject = new GameObject("P12-G successful directive restored");
         try
         {
+            steal.canFail = false;
+            arrest.canFail = false;
             TesteSimulacao uninterrupted = uninterruptedObject.AddComponent<TesteSimulacao>();
             TesteSimulacao restored = restoredObject.AddComponent<TesteSimulacao>();
             ConfigureSelectedBootstrap(uninterrupted, config);
@@ -4263,7 +4270,6 @@ public sealed class SimulationRuntimeAdmissionTests
 
             SelectOnly(uninterruptedSession.Runtime, steal);
             SelectOnly(sourceSession.Runtime, steal);
-            steal.canFail = false;
             Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlTheftFailure),
                 Is.True, controlTheftFailure.ToString());
             Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceTheftFailure),
@@ -4282,7 +4288,6 @@ public sealed class SimulationRuntimeAdmissionTests
 
             SelectOnly(uninterruptedSession.Runtime, arrest);
             SelectOnly(sourceSession.Runtime, arrest);
-            arrest.canFail = false;
             Assert.That(controlJustice.HasActiveWarrantInCity(controlActor, controlActor.CurrentCity), Is.True);
             Assert.That(sourceJustice.HasActiveWarrantInCity(sourceActor, sourceActor.CurrentCity), Is.True);
             Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlArrestFailure),
@@ -4430,10 +4435,14 @@ public sealed class SimulationRuntimeAdmissionTests
 
         bool originalStealCanFail = steal.canFail;
         bool originalArrestCanFail = arrest.canFail;
+        // Selected runtimes execute the immutable definition graph captured at
+        // bootstrap. Configure successful outcomes before either graph is built.
         GameObject uninterruptedObject = new GameObject("P12-G successful directive-party uninterrupted");
         GameObject restoredObject = new GameObject("P12-G successful directive-party restored");
         try
         {
+            steal.canFail = false;
+            arrest.canFail = false;
             TesteSimulacao uninterrupted = uninterruptedObject.AddComponent<TesteSimulacao>();
             TesteSimulacao restored = restoredObject.AddComponent<TesteSimulacao>();
             ConfigureSelectedBootstrap(uninterrupted, config);
@@ -4509,7 +4518,6 @@ public sealed class SimulationRuntimeAdmissionTests
 
             SelectOnly(uninterruptedSession.Runtime, steal);
             SelectOnly(sourceSession.Runtime, steal);
-            steal.canFail = false;
             Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlTheftFailure),
                 Is.True, controlTheftFailure.ToString());
             Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceTheftFailure),
@@ -4522,7 +4530,6 @@ public sealed class SimulationRuntimeAdmissionTests
 
             SelectOnly(uninterruptedSession.Runtime, arrest);
             SelectOnly(sourceSession.Runtime, arrest);
-            arrest.canFail = false;
             Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlArrestFailure),
                 Is.True, controlArrestFailure.ToString());
             Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceArrestFailure),
@@ -10717,6 +10724,20 @@ public sealed class SimulationRuntimeAdmissionTests
         MethodInfo getter = property.GetGetMethod(nonPublic: true);
         Assert.That(getter, Is.Not.Null, "Expected a readable private property '" + name + "'.");
         return (T)property.GetValue(target);
+    }
+
+    private static NpcRuntime CreateSelectedDailyV1RosterMember(NpcRuntime admittedTemplate, string runtimeId)
+    {
+        Assert.That(admittedTemplate, Is.Not.Null);
+        object definition = ReadPrivateField<object>(admittedTemplate, "selectedDailyV1Definition");
+        object definitions = ReadPrivateField<object>(admittedTemplate, "selectedDefinitionGraph");
+        object bindings = ReadPrivateField<object>(admittedTemplate, "selectedDefinitionBindings");
+        MethodInfo factory = typeof(NpcRuntime).GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+            .Single(method => method.Name == "CreateSelectedDailyV1" && method.GetParameters().Length == 6);
+        return (NpcRuntime)factory.Invoke(null, new object[]
+        {
+            runtimeId, definition, definitions, bindings, admittedTemplate.CurrentCity, 0f
+        });
     }
 
     private static void WritePrivateField<T>(object target, string name, T value)

@@ -111,6 +111,8 @@ public sealed class P12CrimeSocialAppraisalInvalidationTests
         GameObject bootstrapObject = new GameObject("P12 Crime/Social daily operation integration test");
         try
         {
+            // Selected Daily-v1 captures effective action values at bootstrap.
+            steal.canFail = false;
             TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
             SetPrivateField(bootstrap, "simulationConfig", config);
             SetPrivateField(bootstrap, "runtimeAdmissionProfile", SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
@@ -182,7 +184,6 @@ public sealed class P12CrimeSocialAppraisalInvalidationTests
             Assert.That(expectedOperations, Does.Contain(DailyAdvanceOperationId));
             Assert.That(protocol.TryReadMutationEpoch(out long startingEpoch, out ContinuationCensusFailure startFailure),
                 Is.True, startFailure.ToString());
-            steal.canFail = false;
             Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
                 Is.True, advanceFailure.ToString());
 

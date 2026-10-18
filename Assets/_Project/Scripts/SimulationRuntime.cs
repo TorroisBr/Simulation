@@ -11240,8 +11240,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         List<NpcActionData> actionDefinitions = new List<NpcActionData>();
         if (npcRuntime != null && npcRuntime.UsesSelectedDailyV1Definitions)
         {
-            if (!npcRuntime.TryGetSelectedDailyV1Actions(actionDefinitions))
+            // The typed graph includes dependency-closed action definitions.
+            // Runtime availability still comes from the selected profile's
+            // captured action allowlist, projected through exact asset/node
+            // bindings; do not expose every referenced definition as an action.
+            if (configuredActions == null)
                 return enabledActions;
+            actionDefinitions.AddRange(configuredActions);
         }
         else if (configuredActions != null)
         {
@@ -11250,6 +11255,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         foreach (NpcActionData action in actionDefinitions)
         {
+            if (npcRuntime != null && npcRuntime.UsesSelectedDailyV1Definitions
+                && !npcRuntime.TryGetSelectedDailyV1ActionNode(action, out _))
+                continue;
             if (IsActionEnabledForRuntime(npcRuntime, action))
             {
                 enabledActions.Add(action);
@@ -11262,14 +11270,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private List<DailyV1ActionDefinition> GetSelectedConfiguredActionsEnabledForRuntime(NpcRuntime npcRuntime)
     {
         List<DailyV1ActionDefinition> enabledActions = new List<DailyV1ActionDefinition>();
-        List<DailyV1ActionDefinition> actionDefinitions = new List<DailyV1ActionDefinition>();
-        if (npcRuntime == null || !npcRuntime.UsesSelectedDailyV1Definitions
-            || !npcRuntime.TryGetSelectedDailyV1ActionNodes(actionDefinitions))
+        if (npcRuntime == null || !npcRuntime.UsesSelectedDailyV1Definitions || configuredActions == null)
             return enabledActions;
 
-        foreach (DailyV1ActionDefinition action in actionDefinitions)
+        foreach (NpcActionData configuredAction in configuredActions)
+        {
+            if (!npcRuntime.TryGetSelectedDailyV1ActionNode(
+                    configuredAction, out DailyV1ActionDefinition action))
+                continue;
             if (IsSelectedActionEnabledForRuntime(action))
                 enabledActions.Add(action);
+        }
         return enabledActions;
     }
 
