@@ -2506,7 +2506,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(runtime.NpcName, Is.EqualTo("Typed NPC"));
         List<NpcActionData> configuredActions = new List<NpcActionData>();
         Assert.That(runtime.TryGetSelectedDailyV1Actions(configuredActions), Is.True);
-        Assert.That(configuredActions, Is.EqualTo(new[] { defaultAction }),
+        Assert.That(configuredActions, Is.EqualTo(new[] { defaultAction, selectedProviderAction }),
             "Selected action inventory must be reconstructed from the admitted graph and exact asset bindings.");
         Assert.That(runtime.TryGetSelectedDailyV1ActionByDefinitionId(defaultAction.DefinitionId, out NpcActionData selectedAction), Is.True);
         Assert.That(selectedAction, Is.SameAs(defaultAction));
