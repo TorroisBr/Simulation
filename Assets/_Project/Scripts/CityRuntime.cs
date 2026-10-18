@@ -1639,7 +1639,7 @@ public class CityRuntime
         this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
         if (selectedDefinition != null)
         {
-            if (!DailyV1CityRuntimeOwners.TryCreateInitial(
+            if (!DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialCityOwner(
                     runtimeId, selectedDefinitions, selectedDefinition, marketCounterparty,
                     out DailyV1CityRuntimeOwners selectedOwners))
                 throw new ArgumentException(
@@ -2105,7 +2105,7 @@ public class CityRuntime
             return false;
         DailyV1CityRuntimeOwners stagedOwners = null;
         if (market != null && market.SelectedDailyV1Owner != null
-            && !DailyV1CityRuntimeOwners.TryCreateBound(
+            && !DailyV1SelectedRuntimeOwnerGraph.TryCreateBoundCityOwner(
                 runtimeId, definitions, definition, population,
                 market.SelectedDailyV1Owner, MarketCounterparty, PopulationEconomy,
                 out stagedOwners))

@@ -2,13 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 
-public enum OwnerSectionRole
-{
-    Required,
-    ExplicitlyEmpty,
-    Excluded
-}
-
 public enum ContinuationCensusFailure
 {
     None,
@@ -36,33 +29,6 @@ public sealed class OwnerSectionContract
     public string SectionId { get; }
     public int SchemaVersion { get; }
     public OwnerSectionRole Role { get; }
-}
-
-/// <summary>Copied live owner evidence captured only at a quiescent boundary.</summary>
-internal sealed class OwnerSectionCensusSnapshot
-{
-    internal OwnerSectionCensusSnapshot(
-        string sectionId,
-        int schemaVersion,
-        OwnerSectionRole role,
-        object ownerInstanceIdentity,
-        int cardinality,
-        long revision)
-    {
-        SectionId = sectionId ?? throw new ArgumentNullException(nameof(sectionId));
-        SchemaVersion = schemaVersion;
-        Role = role;
-        OwnerInstanceIdentity = ownerInstanceIdentity ?? throw new ArgumentNullException(nameof(ownerInstanceIdentity));
-        Cardinality = cardinality;
-        Revision = revision;
-    }
-
-    internal string SectionId { get; }
-    internal int SchemaVersion { get; }
-    internal OwnerSectionRole Role { get; }
-    internal object OwnerInstanceIdentity { get; }
-    internal int Cardinality { get; }
-    internal long Revision { get; }
 }
 
 /// <summary>Reads a live witness from one concrete owner instance.</summary>

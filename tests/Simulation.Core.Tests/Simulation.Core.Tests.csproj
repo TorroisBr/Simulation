@@ -26,6 +26,7 @@
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarParityTests.cs" Link="Calendar/CalendarParityTests.cs" />
     <Compile Include="SimulationTimeCoreTests.cs" />
     <Compile Include="SimulationRuntimeAdmissionContextTests.cs" />
+    <Compile Include="DailyV1ExecutionBoundaryStateTests.cs" />
     <Compile Include="MoneyAccountRuntimeCoreTests.cs" />
     <Compile Include="DailyV1CityEconomicOwnerCoreTests.cs" />
     <Compile Include="DailyV1InventoryMarketOwnerTests.cs" />

@@ -41,6 +41,8 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialRuntimeValues.cs" Link="Geography/SpatialRuntimeValues.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialGeography.cs" Link="Geography/SpatialGeography.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationHost.cs" Link="Application/DailyV1ApplicationHost.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyCaptureEligibilityToken.cs" Link="Application/DailyCaptureEligibilityToken.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ExecutionBoundaryState.cs" Link="Application/DailyV1ExecutionBoundaryState.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/SimulationRuntimeAdmissionContext.cs" Link="Application/SimulationRuntimeAdmissionContext.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/SimulationLogger.cs" Link="Application/SimulationLogger.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/SimulationRecordSequence.cs" Link="Persistence/SimulationRecordSequence.cs" />

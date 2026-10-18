@@ -100,6 +100,7 @@ public class NpcRuntime : ICapabilityConditionSource
         : npcData != null ? npcData.DefinitionId : string.Empty;
     internal DailyV1NpcDefinition SelectedDailyV1Definition => selectedDailyV1Definition;
     internal DailyV1EffectiveDefinitions SelectedDailyV1DefinitionGraph => selectedDefinitionGraph;
+    internal DailyV1NpcRuntimeOwners SelectedRuntimeOwners => selectedRuntimeOwners;
     internal DailyV1NpcStatusOwner SelectedDailyV1StatusOwner => selectedDailyV1StatusOwner;
     internal bool TryCopySelectedCurrentStatusDefinitionIds(List<string> destination) =>
         UsesSelectedDailyV1Definitions
@@ -919,7 +920,7 @@ public class NpcRuntime : ICapabilityConditionSource
         this.npcData = selectedDefinition == null ? npcData : null;
         if (selectedDefinition != null)
         {
-            if (!DailyV1NpcRuntimeOwners.TryCreateInitial(
+            if (!DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
                     runtimeId, selectedDefinitions, selectedDefinition, initialMoney,
                     out DailyV1NpcRuntimeOwners selectedOwners))
                 throw new ArgumentException(
@@ -1050,7 +1051,7 @@ public class NpcRuntime : ICapabilityConditionSource
 
         if (!TryCreateSelectedStatusNodesFromAssets(definitions, bindings, currentStatus,
                 out List<DailyV1StatusDefinition> stagedStatuses)
-            || !DailyV1NpcRuntimeOwners.TryCreateBound(
+            || !DailyV1SelectedRuntimeOwnerGraph.TryCreateBoundNpcOwner(
                 runtimeId, definitions, definition, stagedStatuses,
                 ExistingInventory?.SelectedDailyV1Owner, moneyAccount,
                 out DailyV1NpcRuntimeOwners stagedOwners))
@@ -1197,7 +1198,7 @@ public class NpcRuntime : ICapabilityConditionSource
                     return false;
             }
 
-            if (!DailyV1NpcRuntimeOwners.TryCreateBound(
+            if (!DailyV1SelectedRuntimeOwnerGraph.TryCreateBoundNpcOwner(
                     runtimeId,
                     state.SelectedDefinitions,
                     state.SelectedNpcDefinition,

@@ -796,6 +796,74 @@ public sealed class EconomyTransactionTests
     }
 
     [Test]
+    public void P12SelectedNpcTradeNotifiesBothAccountAndInventoryOwnerCommits()
+    {
+        ItemData itemAsset = SimulationTestFactory.CreateItem("p12-selected-npc-trade-item", 7f);
+        CityData cityAsset = SimulationTestFactory.CreateCityData("p12-selected-npc-trade-city",
+            SimulationTestFactory.CreateMarketItem(itemAsset, 4, 4));
+        NpcData buyerAsset = SimulationTestFactory.CreateNpc("p12-selected-npc-trade-buyer");
+        NpcData sellerAsset = SimulationTestFactory.CreateNpc("p12-selected-npc-trade-seller");
+        SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
+        authoring.Cities.Add(cityAsset);
+        authoring.Npcs.Add(new NpcSimulationConfig
+        {
+            npc = buyerAsset,
+            startingCity = cityAsset,
+            initialMoney = 30f
+        });
+        authoring.Npcs.Add(new NpcSimulationConfig
+        {
+            npc = sellerAsset,
+            startingCity = cityAsset,
+            initialMoney = 0f
+        });
+
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: authoring.CreateConfigurationOverrides());
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(authoring.Calendar, out _);
+        DailyV1EffectiveDefinitions definitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            authoring, effective, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        DailyV1ItemDefinition item = definitions.Items[itemAsset.DefinitionId];
+        CityRuntime city = CityRuntime.CreateSelectedDailyV1(
+            "p12-selected-npc-trade-city-runtime", definitions.Cities[cityAsset.DefinitionId], definitions,
+            bindings, new SpatialLocationRuntime("p12-selected-npc-trade-location"));
+        NpcRuntime buyer = NpcRuntime.CreateSelectedDailyV1(
+            "p12-selected-npc-trade-buyer-runtime", definitions.Npcs[buyerAsset.DefinitionId], definitions,
+            bindings, city, 30f);
+        NpcRuntime seller = NpcRuntime.CreateSelectedDailyV1(
+            "p12-selected-npc-trade-seller-runtime", definitions.Npcs[sellerAsset.DefinitionId], definitions,
+            bindings, city, 0f);
+        Assert.That(seller.Inventory.TryAddSelectedItem(item, 2, item.Values.basePrice), Is.True);
+
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(), new[] { city }, new[] { buyer, seller }, economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialAssessment), Is.True,
+            initialAssessment.ToString());
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long beforeTrade,
+            out ContinuationCensusFailure beforeTradeFailure), Is.True, beforeTradeFailure.ToString());
+
+        EconomyTransactionResult trade = service.TryExecuteNpcTrade(buyer, seller, item, 1, 7f);
+
+        Assert.That(trade.Success, Is.True, trade.FailureReason.ToString());
+        Assert.That(trade.TransactionType, Is.EqualTo(EconomyTransactionType.NpcToNpcTrade));
+        Assert.That(trade.ItemDefinitionId, Is.EqualTo(item.DefinitionId));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long afterTrade,
+            out ContinuationCensusFailure afterTradeFailure), Is.True, afterTradeFailure.ToString());
+        Assert.That(afterTrade, Is.EqualTo(beforeTrade + 4),
+            "A selected NPC trade commits both MoneyAccount owners and both Inventory owners once each.");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure finalAssessment), Is.True,
+            finalAssessment.ToString());
+        Assert.That(buyer.Money, Is.EqualTo(23f).Within(0.001f));
+        Assert.That(seller.Money, Is.EqualTo(7f).Within(0.001f));
+        Assert.That(buyer.Inventory.SelectedDailyV1Owner.GetAmount(item), Is.EqualTo(1));
+        Assert.That(seller.Inventory.SelectedDailyV1Owner.GetAmount(item), Is.EqualTo(1));
+    }
+
+    [Test]
     public void SelectedMerchantMarketBuyAndSaleUseCanonicalOwnersWithoutLegacyItemProjections()
     {
         ItemData itemAsset = SimulationTestFactory.CreateItem("selected-merchant-typed-item", 10f);

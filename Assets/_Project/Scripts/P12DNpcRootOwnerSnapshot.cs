@@ -1031,6 +1031,15 @@ internal static class P12DNpcRootOwnerSnapshot
             P12DNpcDRow d = dProjection.Rows[i];
             P12DNpcFRow f = fProjection.Rows[i];
             NpcRuntime stagedNpc = candidatesById[d.RuntimeId];
+            DailyV1NpcDefinition selectedNpcDefinition = null;
+            if (selectedDefinitions != null
+                && (!selectedDefinitions.Npcs.TryGetValue(d.NpcDefinitionId, out selectedNpcDefinition)
+                    || selectedNpcDefinition == null
+                    || !string.Equals(selectedNpcDefinition.DefinitionId, d.NpcDefinitionId, StringComparison.Ordinal)))
+            {
+                failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+                return false;
+            }
 
             PersonRuntime stagedPerson = null;
             if (d.PersonIdValue != null)

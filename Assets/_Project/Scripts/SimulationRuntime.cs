@@ -15,106 +15,6 @@ public enum SimulationRuntimeAdvanceFailure
     CompletedBoundarySequenceOverflow = 6
 }
 
-internal enum DailyCaptureEligibilityFailure
-{
-    None = 0,
-    UnsupportedProfile = 1,
-    WrongOwnerThread = 2,
-    RuntimeFaulted = 3,
-    OperationInProgress = 4,
-    NoCompletedBoundary = 5,
-    StaleToken = 6,
-    OwnerCoverageIncomplete = 7,
-    WorldNotPublished = 8
-}
-
-internal enum DailyCaptureBoundaryProvenance
-{
-    CompletedAdvance = 1,
-    RestoredContinuation = 2
-}
-
-/// <summary>
-/// Ephemeral, in-memory proof that one live Daily-v1 runtime has an admitted
-/// completed or restored continuation boundary and remains unchanged at that
-/// boundary. This is not serialized authority or a domain-state export.
-/// </summary>
-internal sealed class DailyCaptureEligibilityToken
-{
-    internal DailyCaptureEligibilityToken(
-        object runtimeInstanceIdentity,
-        SimulationRuntimeAdmissionContext admissionContext,
-        EffectiveSimulationConfiguration configurationIdentity,
-        SimulationCalendar calendarIdentity,
-        SimulationRuntimeCompositionProfile compositionProfile,
-        WorldId worldId,
-        long absoluteDay,
-        long completedCoreSequence,
-        DailyCaptureBoundaryProvenance boundaryProvenance,
-        long mutationEpoch,
-        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections)
-    {
-        RuntimeInstanceIdentity = runtimeInstanceIdentity ?? throw new ArgumentNullException(nameof(runtimeInstanceIdentity));
-        AdmissionContext = admissionContext ?? throw new ArgumentNullException(nameof(admissionContext));
-        ConfigurationIdentity = configurationIdentity ?? throw new ArgumentNullException(nameof(configurationIdentity));
-        CalendarIdentity = calendarIdentity ?? throw new ArgumentNullException(nameof(calendarIdentity));
-        CompositionProfile = compositionProfile;
-        WorldId = worldId ?? throw new ArgumentNullException(nameof(worldId));
-        AbsoluteDay = absoluteDay;
-        CompletedCoreSequence = completedCoreSequence;
-        BoundaryProvenance = boundaryProvenance;
-        MutationEpoch = mutationEpoch;
-        OwnerSections = ownerSections ?? throw new ArgumentNullException(nameof(ownerSections));
-    }
-
-    internal DailyCaptureEligibilityToken(
-        object runtimeInstanceIdentity,
-        SimulationRuntimeAdmissionContext admissionContext,
-        EffectiveSimulationConfiguration configurationIdentity,
-        SimulationCalendar calendarIdentity,
-        SimulationRuntimeCompositionProfile compositionProfile,
-        WorldId worldId,
-        long absoluteDay,
-        long completedCoreSequence,
-        long mutationEpoch,
-        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections)
-        : this(
-            runtimeInstanceIdentity,
-            admissionContext,
-            configurationIdentity,
-            calendarIdentity,
-            compositionProfile,
-            worldId,
-            absoluteDay,
-            completedCoreSequence,
-            DailyCaptureBoundaryProvenance.CompletedAdvance,
-            mutationEpoch,
-            ownerSections)
-    {
-    }
-
-    internal object RuntimeInstanceIdentity { get; }
-    internal SimulationRuntimeAdmissionContext AdmissionContext { get; }
-    internal EffectiveSimulationConfiguration ConfigurationIdentity { get; }
-    internal SimulationCalendar CalendarIdentity { get; }
-    internal SimulationRuntimeCompositionProfile CompositionProfile { get; }
-    internal WorldId WorldId { get; }
-    internal long AbsoluteDay { get; }
-    internal long CompletedCoreSequence { get; }
-    internal DailyCaptureBoundaryProvenance BoundaryProvenance { get; }
-    internal long MutationEpoch { get; }
-    internal IReadOnlyList<OwnerSectionCensusSnapshot> OwnerSections { get; }
-}
-
-/// <summary>Explicit non-P12 domain composition used only by bounded proving profiles.</summary>
-public enum SimulationRuntimeCompositionProfile
-{
-    Standard = 0,
-    P15AProvingStructure = 1,
-    P16AOneHopMilitary = 2,
-    P17AWithdrawalWar = 3
-}
-
 /// <summary>Stable host-supplied identity used by the bounded P17-A trusted scenario input path.</summary>
 public sealed class P17AScenarioAuthorityCapability
 {
@@ -527,10 +427,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
     private readonly AuthoritativeMutationGuard mutationGuard = new AuthoritativeMutationGuard();
     private bool coreMutationGuardAuthoritiesBound;
-    private readonly object dailyCaptureRuntimeIdentity = new object();
-    private bool advanceLeaseHeld;
-    private long completedDailyCoreSequence;
-    private DailyCaptureEligibilityToken currentDailyCaptureToken;
+    private readonly DailyV1ExecutionBoundaryState dailyExecutionBoundary = new DailyV1ExecutionBoundaryState();
+    private bool advanceLeaseHeld => dailyExecutionBoundary.AdvanceLeaseHeld;
+    private long completedDailyCoreSequence => dailyExecutionBoundary.CompletedCoreSequence;
+    private DailyCaptureEligibilityToken currentDailyCaptureToken => dailyExecutionBoundary.CurrentCaptureToken;
     private readonly SimulationRuntimeAdmissionContext runtimeAdmissionContext;
     private readonly SimulationRuntimeCompositionProfile compositionProfile;
     private readonly int p16AOwnerThreadId;
@@ -549,7 +449,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private readonly SimulationTime simulationTime;
     private readonly List<CityRuntime> cities;
     private readonly IReadOnlyList<CityRuntime> cityRuntimeSnapshot;
-    private readonly DailyV1SelectedRuntimeOwnerGraph selectedRuntimeOwnerGraph;
     private readonly List<NpcRuntime> npcRuntimes;
     private readonly IReadOnlyList<NpcRuntime> npcRuntimeSnapshot;
     private readonly Dictionary<string, NpcRuntime> npcRegistryById;
@@ -657,7 +556,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         ? p18dTimeline.CurrentInstant.AbsoluteDay
         : simulationTime.AbsoluteDay;
     public IReadOnlyList<CityRuntime> Cities => cityRuntimeSnapshot;
-    internal DailyV1SelectedRuntimeOwnerGraph SelectedRuntimeOwnerGraph => selectedRuntimeOwnerGraph;
+    internal DailyV1SelectedRuntimeOwnerGraph SelectedRuntimeOwnerGraph => dailyExecutionBoundary.SelectedRuntimeOwnerGraph;
     public EffectiveSimulationConfiguration Configuration => configuration;
     public SimulationCalendar Calendar => calendar;
     public DailyDemographyReport LastDailyDemographyReport => lastDailyDemographyReport;
@@ -1492,8 +1391,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         this.npcRuntimes.Sort((left, right) => string.CompareOrdinal(
             left?.RuntimeId ?? string.Empty,
             right?.RuntimeId ?? string.Empty));
-        selectedRuntimeOwnerGraph = TryCreateSelectedRuntimeOwnerGraph(
+        DailyV1SelectedRuntimeOwnerGraph selectedOwnerGraph = TryCreateSelectedRuntimeOwnerGraph(
             this.cities, this.npcRuntimes);
+        if (!dailyExecutionBoundary.TryBindSelectedRuntimeOwnerGraph(selectedOwnerGraph))
+            throw new InvalidOperationException("The selected owner graph could not be bound to this runtime boundary.");
 
         this.manpowerSourceConsequencePlanningService = new ManpowerSourceConsequencePlanningService(
             this,
@@ -8449,38 +8350,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         && runtimeAdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1;
 
     internal bool HasExactSelectedRuntimeOwnerGraph(DailyV1EffectiveDefinitions definitions) =>
-        selectedRuntimeOwnerGraph != null
-        && ReferenceEquals(selectedRuntimeOwnerGraph.Definitions, definitions)
-        && selectedRuntimeOwnerGraph.Cities.Count == cities.Count
-        && selectedRuntimeOwnerGraph.Npcs.Count == npcRuntimes.Count;
+        dailyExecutionBoundary.HasExactSelectedRuntimeOwnerGraph(
+            definitions,
+            cities.Select(city => city?.SelectedRuntimeOwners),
+            npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners));
 
     private static DailyV1SelectedRuntimeOwnerGraph TryCreateSelectedRuntimeOwnerGraph(
         IReadOnlyList<CityRuntime> cityRuntimes,
         IReadOnlyList<NpcRuntime> npcRuntimes)
     {
         if (cityRuntimes == null || npcRuntimes == null) return null;
-        DailyV1EffectiveDefinitions definitions = null;
-        List<DailyV1CityRuntimeOwners> cityOwners = new List<DailyV1CityRuntimeOwners>(cityRuntimes.Count);
-        List<DailyV1NpcRuntimeOwners> npcOwners = new List<DailyV1NpcRuntimeOwners>(npcRuntimes.Count);
-        foreach (CityRuntime city in cityRuntimes)
-        {
-            if (city == null || city.SelectedRuntimeOwners == null) return null;
-            DailyV1CityRuntimeOwners owners = city.SelectedRuntimeOwners;
-            if (definitions == null) definitions = owners.Definitions;
-            else if (!ReferenceEquals(definitions, owners.Definitions)) return null;
-            cityOwners.Add(owners);
-        }
-        foreach (NpcRuntime npc in npcRuntimes)
-        {
-            if (npc == null || npc.SelectedRuntimeOwners == null) return null;
-            DailyV1NpcRuntimeOwners owners = npc.SelectedRuntimeOwners;
-            if (definitions == null) definitions = owners.Definitions;
-            else if (!ReferenceEquals(definitions, owners.Definitions)) return null;
-            npcOwners.Add(owners);
-        }
-        if (definitions == null) return null;
-        return DailyV1SelectedRuntimeOwnerGraph.TryCreate(
-            definitions, cityOwners, npcOwners,
+        return DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+            cityRuntimes.Select(city => city?.SelectedRuntimeOwners),
+            npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners),
             out DailyV1SelectedRuntimeOwnerGraph graph) ? graph : null;
     }
 
@@ -8501,8 +8383,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     {
         failure = SimulationRuntimeAdvanceFailure.None;
         if (!IsDailyCaptureProfile) return true;
-        if (requestedCoreCount <= 0L
-            || completedDailyCoreSequence > long.MaxValue - requestedCoreCount)
+        if (!dailyExecutionBoundary.CanRecordCompletedCoreCount(requestedCoreCount))
         {
             failure = SimulationRuntimeAdvanceFailure.CompletedBoundarySequenceOverflow;
             return false;
@@ -8515,14 +8396,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     {
         failure = SimulationRuntimeAdvanceFailure.None;
         if (!IsDailyCaptureProfile) return true;
-        if (completedDailyCoreSequence == long.MaxValue)
+        if (!dailyExecutionBoundary.TryRecordCompletedCore())
         {
             FaultRuntimeAdmission();
             failure = SimulationRuntimeAdvanceFailure.CompletedBoundarySequenceOverflow;
             return false;
         }
-
-        completedDailyCoreSequence++;
         return true;
     }
 
@@ -8597,50 +8476,21 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         return DailyCaptureEligibilityFailure.RuntimeFaulted;
     }
 
-    private static bool AreDailyCaptureOwnerSectionsEqual(
-        IReadOnlyList<OwnerSectionCensusSnapshot> left,
-        IReadOnlyList<OwnerSectionCensusSnapshot> right)
-    {
-        if (left == null || right == null || left.Count != right.Count) return false;
-        for (int index = 0; index < left.Count; index++)
-        {
-            OwnerSectionCensusSnapshot first = left[index];
-            OwnerSectionCensusSnapshot second = right[index];
-            if (first == null
-                || second == null
-                || !string.Equals(first.SectionId, second.SectionId, StringComparison.Ordinal)
-                || first.SchemaVersion != second.SchemaVersion
-                || first.Role != second.Role
-                || !ReferenceEquals(first.OwnerInstanceIdentity, second.OwnerInstanceIdentity)
-                || first.Cardinality != second.Cardinality
-                || first.Revision != second.Revision)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     private bool TryCompareDailyCaptureToken(
         DailyCaptureEligibilityToken token,
         IReadOnlyList<OwnerSectionCensusSnapshot> currentOwnerSections,
         long currentMutationEpoch)
     {
-        return token != null
-            && ReferenceEquals(token.RuntimeInstanceIdentity, dailyCaptureRuntimeIdentity)
-            && ReferenceEquals(token.AdmissionContext, runtimeAdmissionContext)
-            && ReferenceEquals(token.ConfigurationIdentity, configuration)
-            && ReferenceEquals(token.CalendarIdentity, calendar)
-            && token.CompositionProfile == compositionProfile
-            && ReferenceEquals(token.WorldId, WorldId)
-            && token.AbsoluteDay == CurrentDay
-            && token.CompletedCoreSequence == completedDailyCoreSequence
-            && token.CompletedCoreSequence > 0L
-            && (token.BoundaryProvenance == DailyCaptureBoundaryProvenance.CompletedAdvance
-                || token.BoundaryProvenance == DailyCaptureBoundaryProvenance.RestoredContinuation)
-            && token.MutationEpoch == currentMutationEpoch
-            && AreDailyCaptureOwnerSectionsEqual(token.OwnerSections, currentOwnerSections);
+        return dailyExecutionBoundary.TryCompareCurrentCaptureToken(
+            token,
+            runtimeAdmissionContext,
+            configuration,
+            calendar,
+            compositionProfile,
+            WorldId,
+            CurrentDay,
+            currentOwnerSections,
+            currentMutationEpoch);
     }
 
     private bool TryPublishCompletedDailyCaptureToken(
@@ -8658,19 +8508,22 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
-        DailyCaptureEligibilityToken token = new DailyCaptureEligibilityToken(
-            dailyCaptureRuntimeIdentity,
-            runtimeAdmissionContext,
-            configuration,
-            calendar,
-            compositionProfile,
-            WorldId,
-            CurrentDay,
-            completedDailyCoreSequence,
-            DailyCaptureBoundaryProvenance.CompletedAdvance,
-            mutationEpoch,
-            ownerSections);
-        currentDailyCaptureToken = token;
+        if (!dailyExecutionBoundary.TryCreateCompletedAdvanceToken(
+                runtimeAdmissionContext,
+                configuration,
+                calendar,
+                compositionProfile,
+                WorldId,
+                CurrentDay,
+                mutationEpoch,
+                ownerSections,
+                out _))
+        {
+            FaultRuntimeAdmission();
+            failure = DailyCaptureEligibilityFailure.NoCompletedBoundary;
+            return false;
+        }
+
         return true;
     }
 
@@ -8799,21 +8652,22 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
-        DailyCaptureEligibilityToken restoredToken = new DailyCaptureEligibilityToken(
-            dailyCaptureRuntimeIdentity,
-            runtimeAdmissionContext,
-            configuration,
-            calendar,
-            compositionProfile,
-            expectedWorldId,
-            preservedAbsoluteDay,
-            preservedCompletedCoreSequence,
-            DailyCaptureBoundaryProvenance.RestoredContinuation,
-            mutationEpoch,
-            validatedTargetOwnerSections ?? ownerSections);
+        if (!dailyExecutionBoundary.TryCreateRestoredContinuationToken(
+                runtimeAdmissionContext,
+                configuration,
+                calendar,
+                compositionProfile,
+                expectedWorldId,
+                preservedAbsoluteDay,
+                preservedCompletedCoreSequence,
+                mutationEpoch,
+                validatedTargetOwnerSections ?? ownerSections,
+                out _))
+        {
+            failure = DailyCaptureEligibilityFailure.StaleToken;
+            return false;
+        }
 
-        completedDailyCoreSequence = preservedCompletedCoreSequence;
-        currentDailyCaptureToken = restoredToken;
         factualReadWorldPublished = true;
         return true;
     }
@@ -8841,7 +8695,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         if (!TryCompareDailyCaptureToken(current, ownerSections, mutationEpoch))
         {
-            currentDailyCaptureToken = null;
+            dailyExecutionBoundary.InvalidateCurrentCaptureToken();
             failure = DailyCaptureEligibilityFailure.StaleToken;
             return false;
         }
@@ -8981,7 +8835,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         if (!TryCompareDailyCaptureToken(token, ownerSections, mutationEpoch))
         {
-            currentDailyCaptureToken = null;
+            dailyExecutionBoundary.InvalidateCurrentCaptureToken();
             failure = DailyCaptureEligibilityFailure.StaleToken;
             return false;
         }
@@ -9035,7 +8889,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         {
             if (runtimeAdmissionContext != null)
             {
-                currentDailyCaptureToken = null;
+                dailyExecutionBoundary.InvalidateCurrentCaptureToken();
                 if (mutationGuard.CanMutate == false)
                 {
                     failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
@@ -9072,7 +8926,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 }
                 catch
                 {
-                    currentDailyCaptureToken = null;
+                    dailyExecutionBoundary.InvalidateCurrentCaptureToken();
                     FaultRuntimeAdmission();
                     throw;
                 }
@@ -9150,13 +9004,18 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         }
 
         lease = new AdvanceLease(this);
-        advanceLeaseHeld = true;
+        if (!dailyExecutionBoundary.TryAcquireAdvanceLease())
+        {
+            lease = null;
+            return false;
+        }
+
         return true;
     }
 
     private void ReleaseAdvanceLease()
     {
-        advanceLeaseHeld = false;
+        dailyExecutionBoundary.ReleaseAdvanceLease();
     }
 
     internal sealed class AdvanceLease : IDisposable
@@ -10874,7 +10733,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         using (lease)
         {
             if (runtimeAdmissionContext != null)
-                currentDailyCaptureToken = null;
+                dailyExecutionBoundary.InvalidateCurrentCaptureToken();
 
             if (mutationGuard.CanMutate == false)
             {

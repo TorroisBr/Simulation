@@ -137,6 +137,78 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
     }
 
     [Test]
+    public void SelectedRuntimeOwnerGraphRequiresTheExactOrderedOwnerInstancesAtComposition()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1CityDefinition city = definitions.Cities.Values.First();
+        DailyV1NpcDefinition[] npcDefinitions = definitions.Npcs.Values.Take(2).ToArray();
+        Assert.That(npcDefinitions, Has.Length.EqualTo(2));
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialCityOwner(
+            "city-runtime", definitions, city, null,
+            out DailyV1CityRuntimeOwners cityOwners), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
+            "npc-runtime-1", definitions, npcDefinitions[0], 0f,
+            out DailyV1NpcRuntimeOwners npcOwner1), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
+            "npc-runtime-2", definitions, npcDefinitions[1], 0f,
+            out DailyV1NpcRuntimeOwners npcOwner2), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, new[] { cityOwners }, new[] { npcOwner1, npcOwner2 },
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        Assert.That(graph.MatchesExactOwnerInstances(
+            new[] { cityOwners }, new[] { npcOwner1, npcOwner2 }), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+            new[] { cityOwners }, new[] { npcOwner1, npcOwner2 },
+            out DailyV1SelectedRuntimeOwnerGraph composedGraph), Is.True);
+        Assert.That(composedGraph.MatchesExactOwnerInstances(
+            new[] { cityOwners }, new[] { npcOwner1, npcOwner2 }), Is.True);
+        Assert.That(graph.MatchesExactOwnerInstances(
+            new[] { cityOwners }, new[] { npcOwner2, npcOwner1 }), Is.False);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
+            "npc-runtime-replacement", definitions, npcDefinitions[1], 0f,
+            out DailyV1NpcRuntimeOwners replacementOwner), Is.True);
+        Assert.That(graph.MatchesExactOwnerInstances(
+            new[] { cityOwners }, new[] { npcOwner1, replacementOwner }), Is.False);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+            new[] { cityOwners }, new[] { npcOwner1, replacementOwner },
+            out DailyV1SelectedRuntimeOwnerGraph replacementGraph), Is.True);
+        Assert.That(replacementGraph.MatchesExactOwnerInstances(
+            new[] { cityOwners }, new[] { npcOwner1, replacementOwner }), Is.True);
+    }
+
+    [Test]
+    public void RuntimeBoundaryOwnsOneExactSelectedOwnerGraphBinding()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1CityRuntimeOwners.TryCreateInitial(
+            "city-runtime", definitions, definitions.Cities.Values.First(), null,
+            out DailyV1CityRuntimeOwners cityOwners), Is.True);
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-runtime", definitions, definitions.Npcs.Values.First(), 0f,
+            out DailyV1NpcRuntimeOwners npcOwners), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, new[] { cityOwners }, new[] { npcOwners },
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        DailyV1ExecutionBoundaryState boundary = new DailyV1ExecutionBoundaryState();
+
+        Assert.That(boundary.TryBindSelectedRuntimeOwnerGraph(graph), Is.True);
+        Assert.That(boundary.SelectedRuntimeOwnerGraph, Is.SameAs(graph));
+        Assert.That(boundary.HasExactSelectedRuntimeOwnerGraph(
+            definitions, new[] { cityOwners }, new[] { npcOwners }), Is.True);
+        Assert.That(boundary.TryBindSelectedRuntimeOwnerGraph(graph), Is.True,
+            "Idempotent binding may retain the original graph instance.");
+
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, new[] { cityOwners }, new[] { npcOwners },
+            out DailyV1SelectedRuntimeOwnerGraph aliasGraph), Is.True);
+        Assert.That(boundary.TryBindSelectedRuntimeOwnerGraph(aliasGraph), Is.False,
+            "A runtime boundary cannot replace its owner graph with an equal-looking graph.");
+        Assert.That(boundary.HasExactSelectedRuntimeOwnerGraph(
+            definitions, new[] { cityOwners }, System.Array.Empty<DailyV1NpcRuntimeOwners>()), Is.False);
+    }
+
+    [Test]
     public void SelectedExogenousDailyFlowUsesCoreOwnersAndPreservesMarketRevisionOrdering()
     {
         DailyV1EffectiveDefinitions definitions = CreateExogenousFlowDefinitions(
