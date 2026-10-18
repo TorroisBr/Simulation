@@ -305,30 +305,16 @@ public class NpcRuntime : ICapabilityConditionSource
         IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
         IReadOnlyList<DailyV1StatusDefinition> statusToAdd)
     {
-        if (selectedDailyV1StatusOwner == null) return false;
-        foreach (DailyV1StatusDefinition status in statusToRemove ?? Array.Empty<DailyV1StatusDefinition>())
-            RemoveSelectedDailyV1Status(status);
-        foreach (DailyV1StatusDefinition status in statusToAdd ?? Array.Empty<DailyV1StatusDefinition>())
-            AddSelectedDailyV1Status(status);
-        return true;
-    }
-
-    private void AddSelectedDailyV1Status(DailyV1StatusDefinition status)
-    {
-        if (selectedDailyV1StatusOwner == null || selectedDailyV1StatusOwner.Contains(status)) return;
-        EnsureP12CrimeJusticeMutationAllowed();
-        if (!selectedDailyV1StatusOwner.TryAdd(status)) return;
-        RefreshSelectedStatusProjection();
-        NotifyP12CrimeJusticeMutationCommitted();
-    }
-
-    private void RemoveSelectedDailyV1Status(DailyV1StatusDefinition status)
-    {
-        if (selectedDailyV1StatusOwner == null || !selectedDailyV1StatusOwner.Contains(status)) return;
-        EnsureP12CrimeJusticeMutationAllowed();
-        if (!selectedDailyV1StatusOwner.TryRemove(status)) return;
-        RefreshSelectedStatusProjection();
-        NotifyP12CrimeJusticeMutationCommitted();
+        return selectedDailyV1StatusOwner != null
+            && selectedDailyV1StatusOwner.TryApplyOrderedChanges(
+                statusToRemove,
+                statusToAdd,
+                EnsureP12CrimeJusticeMutationAllowed,
+                () =>
+                {
+                    RefreshSelectedStatusProjection();
+                    NotifyP12CrimeJusticeMutationCommitted();
+                });
     }
 
     private void RefreshSelectedStatusProjection()
@@ -1524,7 +1510,8 @@ public class NpcRuntime : ICapabilityConditionSource
         {
             if (selectedDailyV1StatusOwner == null || selectedDefinitionBindings == null
                 || !selectedDefinitionBindings.TryGet(status, out DailyV1StatusDefinition statusNode)) return;
-            AddSelectedDailyV1Status(statusNode);
+            ApplySelectedDailyV1StatusChanges(
+                Array.Empty<DailyV1StatusDefinition>(), new[] { statusNode });
             return;
         }
         if (currentStatus == null) currentStatus = new List<NpcStatusData>();
@@ -1540,7 +1527,8 @@ public class NpcRuntime : ICapabilityConditionSource
         {
             if (status == null || selectedDailyV1StatusOwner == null || selectedDefinitionBindings == null
                 || !selectedDefinitionBindings.TryGet(status, out DailyV1StatusDefinition statusNode)) return;
-            RemoveSelectedDailyV1Status(statusNode);
+            ApplySelectedDailyV1StatusChanges(
+                new[] { statusNode }, Array.Empty<DailyV1StatusDefinition>());
             return;
         }
         if (status == null || currentStatus == null || !currentStatus.Contains(status)) return;

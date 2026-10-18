@@ -59,6 +59,31 @@ internal sealed class DailyV1NpcStatusOwner
         return statuses.Remove(status);
     }
 
+    internal bool TryApplyOrderedChanges(
+        IEnumerable<DailyV1StatusDefinition> statusToRemove,
+        IEnumerable<DailyV1StatusDefinition> statusToAdd,
+        Action mutationAdmission,
+        Action mutationCommitted)
+    {
+        if (mutationAdmission == null || mutationCommitted == null) return false;
+
+        foreach (DailyV1StatusDefinition status in statusToRemove ?? Array.Empty<DailyV1StatusDefinition>())
+        {
+            if (!Contains(status)) continue;
+            mutationAdmission();
+            if (TryRemove(status)) mutationCommitted();
+        }
+
+        foreach (DailyV1StatusDefinition status in statusToAdd ?? Array.Empty<DailyV1StatusDefinition>())
+        {
+            if (Contains(status)) continue;
+            mutationAdmission();
+            if (TryAdd(status)) mutationCommitted();
+        }
+
+        return true;
+    }
+
     internal bool TryCopyDefinitionIds(List<string> destination)
     {
         if (destination == null) return false;

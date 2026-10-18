@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 
@@ -40,6 +41,41 @@ public sealed class DailyV1NpcStatusOwnerTests
         Assert.That(DailyV1NpcStatusOwner.TryCreate(definitions,
             new[] { otherDefinitions.Statuses.Values.First() }, out DailyV1NpcStatusOwner owner), Is.False);
         Assert.That(owner, Is.Null);
+    }
+
+    [Test]
+    public void SelectedStatusOwnerAppliesOrderedRemovalThenAdditionAndNotifiesEachWrite()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1StatusDefinition first = definitions.Statuses.Values.First();
+        DailyV1StatusDefinition second = definitions.Statuses.Values.Skip(1).First();
+        Assert.That(DailyV1NpcStatusOwner.TryCreate(definitions,
+            new[] { first, second }, out DailyV1NpcStatusOwner owner), Is.True);
+        List<string> events = new List<string>();
+
+        Assert.That(owner.TryApplyOrderedChanges(
+            new[] { first }, new[] { first, second },
+            () => events.Add("admit"), () => events.Add("commit")), Is.True);
+
+        Assert.That(owner.Statuses, Is.EqualTo(new[] { second, first }),
+            "The existing writer removes first, then adds; duplicate add remains a no-op.");
+        Assert.That(events, Is.EqualTo(new[] { "admit", "commit", "admit", "commit" }),
+            "Admission and commit callbacks run once for each successful membership write.");
+    }
+
+    [Test]
+    public void SelectedStatusOwnerDoesNotWriteWhenMutationAdmissionThrows()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1StatusDefinition first = definitions.Statuses.Values.First();
+        Assert.That(DailyV1NpcStatusOwner.TryCreate(definitions,
+            new[] { first }, out DailyV1NpcStatusOwner owner), Is.True);
+
+        Assert.Throws<InvalidOperationException>(() => owner.TryApplyOrderedChanges(
+            new[] { first }, Array.Empty<DailyV1StatusDefinition>(),
+            () => throw new InvalidOperationException("admission rejected"), () => { }));
+
+        Assert.That(owner.Statuses, Is.EqualTo(new[] { first }));
     }
 
     [Test]
