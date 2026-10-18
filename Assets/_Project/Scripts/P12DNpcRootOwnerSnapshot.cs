@@ -18,7 +18,15 @@ internal enum P12DNpcRootOwnerSnapshotFailure
     InvalidPersonBinding,
     InvalidCityMembership,
     InvalidProfileExclusion,
-    StaleCapture
+    StaleCapture,
+    InvalidDefinitionMap,
+    InvalidSelectedItemBindings,
+    InvalidNpcDefinition,
+    InvalidSelectedNpcDefinition,
+    InvalidStatusDefinition,
+    InvalidSelectedStatusDefinition,
+    InvalidInventoryItem,
+    InvalidSelectedInventoryItem
 }
 
 internal sealed class P12DNpcInventoryRowValue
@@ -942,7 +950,7 @@ internal static class P12DNpcRootOwnerSnapshot
             || !TryBuildUniqueMap(itemDefinitions, value => value?.DefinitionId, out Dictionary<string, ItemData> itemsByDefinition)
             || !TryBuildUniqueMap(stagedLocations, value => value?.RuntimeId, out Dictionary<string, SpatialLocationRuntime> locationsById))
         {
-            failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+            failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinitionMap;
             return false;
         }
 
@@ -952,7 +960,7 @@ internal static class P12DNpcRootOwnerSnapshot
                 itemDefinitions.Cast<ScriptableObject>(), selectedDefinitions,
                 out selectedItemBindings, out _))
         {
-            failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+            failure = P12DNpcRootOwnerSnapshotFailure.InvalidSelectedItemBindings;
             return false;
         }
 
@@ -999,7 +1007,7 @@ internal static class P12DNpcRootOwnerSnapshot
             if (!npcsByDefinition.TryGetValue(d.NpcDefinitionId, out NpcData npcData)
                 || npcData == null || !string.Equals(npcData.DefinitionId, d.NpcDefinitionId, StringComparison.Ordinal))
             {
-                failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+                failure = P12DNpcRootOwnerSnapshotFailure.InvalidNpcDefinition;
                 return false;
             }
 
@@ -1009,7 +1017,7 @@ internal static class P12DNpcRootOwnerSnapshot
                     || selectedNpcDefinition == null
                     || !string.Equals(selectedNpcDefinition.DefinitionId, d.NpcDefinitionId, StringComparison.Ordinal)))
             {
-                failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+                failure = P12DNpcRootOwnerSnapshotFailure.InvalidSelectedNpcDefinition;
                 return false;
             }
 
@@ -1048,7 +1056,7 @@ internal static class P12DNpcRootOwnerSnapshot
                     || selectedNpcDefinition == null
                     || !string.Equals(selectedNpcDefinition.DefinitionId, d.NpcDefinitionId, StringComparison.Ordinal)))
             {
-                failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+                failure = P12DNpcRootOwnerSnapshotFailure.InvalidSelectedNpcDefinition;
                 return false;
             }
 
@@ -1083,7 +1091,7 @@ internal static class P12DNpcRootOwnerSnapshot
                 if (string.IsNullOrWhiteSpace(statusId)
                     || !statusesByDefinition.TryGetValue(statusId, out NpcStatusData status))
                 {
-                    failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+                    failure = P12DNpcRootOwnerSnapshotFailure.InvalidStatusDefinition;
                     return false;
                 }
                 if (selectedDefinitions != null)
@@ -1093,7 +1101,7 @@ internal static class P12DNpcRootOwnerSnapshot
                         || selectedStatus == null
                         || !string.Equals(selectedStatus.DefinitionId, status.DefinitionId, StringComparison.Ordinal))
                     {
-                        failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+                        failure = P12DNpcRootOwnerSnapshotFailure.InvalidSelectedStatusDefinition;
                         return false;
                     }
                     selectedStatusDefinitions.Add(selectedStatus);
@@ -1109,7 +1117,7 @@ internal static class P12DNpcRootOwnerSnapshot
             {
                 if (row == null || string.IsNullOrWhiteSpace(row.ItemDefinitionId))
                 {
-                    failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+                    failure = P12DNpcRootOwnerSnapshotFailure.InvalidInventoryItem;
                     return false;
                 }
                 if (selectedDefinitions != null)
@@ -1120,7 +1128,7 @@ internal static class P12DNpcRootOwnerSnapshot
                         || float.IsNaN(row.AverageUnitCost) || float.IsInfinity(row.AverageUnitCost)
                         || row.AverageUnitCost < 0f)
                     {
-                        failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+                        failure = P12DNpcRootOwnerSnapshotFailure.InvalidSelectedInventoryItem;
                         return false;
                     }
                     selectedInventoryRows.Add(new DailyV1InventoryItemState(
@@ -1130,7 +1138,7 @@ internal static class P12DNpcRootOwnerSnapshot
                 {
                     if (!itemsByDefinition.TryGetValue(row.ItemDefinitionId, out ItemData item))
                     {
-                        failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+                        failure = P12DNpcRootOwnerSnapshotFailure.InvalidInventoryItem;
                         return false;
                     }
                     inventoryRows.Add(new InventoryItemRuntime(item, row.Amount, row.AverageUnitCost));
