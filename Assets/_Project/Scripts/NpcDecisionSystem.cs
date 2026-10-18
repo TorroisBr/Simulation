@@ -99,7 +99,11 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             }
 
             candidate.Utility = UnityMathfCompatibility.Max(0f, utility);
-            providerActions.Add(candidate.Action, providerAction);
+            // Configured action lists may contain the same admitted definition
+            // more than once. The candidate list retains its existing weighting
+            // semantics; lookup by definition identity uses the last constructed
+            // provider action for that identity instead of throwing.
+            providerActions[candidate.Action] = providerAction;
         }
 
         string randomStreamKey = "npc-decision|" + npcRuntime.RuntimeId + "|" + currentAbsoluteDay;

@@ -248,12 +248,20 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 out IReadOnlyList<DailyV1StatusDefinition> targetStatusToAdd))
             return false;
 
+        bool targetMutationExpected = targetExpected
+            && (targetStatusToRemove.Count > 0 || targetStatusToAdd.Count > 0);
+        if (targetMutationExpected
+            && (targetOwner == null
+                || !ReferenceEquals(targetOwner.Definitions, Definitions)
+                || !ContainsExactNpcOwner(targetOwner)))
+            return false;
+
         plan = new DailyV1SelectedActionStatusPlan(
             actorOwner,
             actorStatusToRemove,
             actorStatusToAdd,
-            targetExpected,
-            targetOwner,
+            targetMutationExpected,
+            targetMutationExpected ? targetOwner : null,
             targetStatusToRemove,
             targetStatusToAdd);
         return true;

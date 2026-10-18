@@ -2383,6 +2383,9 @@ public sealed class SimulationBootstrapCompositionTests
         NpcStatusData actionEffectStatus = SimulationTestFactory.CreateStatus("typed-npc-runtime-action-effect-status");
         npc.statusPadrao.Add(status);
         NpcActionData defaultAction = SimulationTestFactory.CreateAction("typed-npc-runtime-default-action", NpcActionType.Normal);
+        NpcActionData selectedProviderAction = SimulationTestFactory.CreateAction(
+            "typed-npc-runtime-provider-action", NpcActionType.SellGoods);
+        selectedProviderAction.baseUtility = 3f;
         defaultAction.actionName = "Typed action";
         defaultAction.actionCategory = NpcActionCategory.General;
         defaultAction.normalActionLogText = "performed the admitted action";
@@ -2427,6 +2430,7 @@ public sealed class SimulationBootstrapCompositionTests
         });
         config.Npcs.Add(npcConfig);
         config.Actions.Add(defaultAction);
+        config.Actions.Add(selectedProviderAction);
         config.Statuses.Add(status);
         config.Statuses.Add(actionEffectStatus);
 
@@ -2541,6 +2545,17 @@ public sealed class SimulationBootstrapCompositionTests
             "Selected action eligibility and utility must be evaluated from the admitted Core definition node.");
         Assert.That(selectedDecision.Action, Is.SameAs(defaultAction),
             "The chosen normal action retains the exact admitted Unity identity used by actuation and the P12 current-action slot.");
+        Assert.That(graph.Actions.TryGetValue(selectedProviderAction.DefinitionId, out DailyV1ActionDefinition selectedProviderNode), Is.True);
+        RecordingSelectedActionProvider recordingProvider = new RecordingSelectedActionProvider();
+        NpcDecisionSystem duplicateActionDecisions = new NpcDecisionSystem(
+            new List<INpcActionProvider> { recordingProvider });
+        NpcActionRuntime duplicateSelectedDecision = duplicateActionDecisions.ChooseSelectedDailyV1Action(
+            runtime, new List<DailyV1ActionDefinition> { selectedProviderNode, selectedProviderNode }, 17L);
+        Assert.That(duplicateSelectedDecision, Is.Not.Null,
+            "Repeated configured references to one admitted provider action must not throw during selected action lookup.");
+        Assert.That(duplicateSelectedDecision.Action, Is.SameAs(selectedProviderAction));
+        Assert.That(recordingProvider.CreateCount, Is.EqualTo(2),
+            "Duplicate candidates retain their existing separate weighting/provider construction behavior.");
         Assert.That(runtime.HasConfiguredRequiredActionStatuses(defaultAction, runtime.CurrentStatus), Is.True,
             "Action eligibility must retain its admitted required-status reference after authoring edits.");
         Assert.That(runtime.HasConfiguredRequiredActionStatuses(defaultAction, new List<NpcStatusData>()), Is.False,
@@ -2605,6 +2620,25 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
             System.Array.Empty<DailyV1CityRuntimeOwners>(), new[] { runtime.SelectedRuntimeOwners },
             out DailyV1SelectedRuntimeOwnerGraph selectedOwnerGraph), Is.True);
+        long beforeMissingTargetPlan = runtime.P12CrimeJusticeRevision;
+        Assert.That(runtime.TryCreateConfiguredActionStatusPlan(
+            defaultAction, selectedOwnerGraph, true, null, out _), Is.False,
+            "Nonempty target status effects must reject during planning when the target has no selected owner.");
+        Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(beforeMissingTargetPlan),
+            "A missing target owner must be detected before the actor owner is mutated.");
+
+        Assert.That(runtime.TryCreateConfiguredActionStatusPlan(
+            selectedProviderAction, selectedOwnerGraph, true, null,
+            out DailyV1SelectedActionStatusPlan noTargetEffectsPlan), Is.True,
+            "A target without selected owner state is compatible when the admitted action has no target status effects.");
+        int actorApplyCount = 0;
+        int targetApplyCount = 0;
+        Assert.That(noTargetEffectsPlan.Apply(
+            (owner, remove, add) => { actorApplyCount++; return ReferenceEquals(owner, runtime.SelectedRuntimeOwners); },
+            (owner, remove, add) => { targetApplyCount++; return false; }), Is.EqualTo(DailyV1SelectedActionStatusPlanResult.Applied));
+        Assert.That(actorApplyCount, Is.EqualTo(1));
+        Assert.That(targetApplyCount, Is.Zero,
+            "The plan must not invoke a target callback when the target effects are empty.");
         Assert.That(runtime.TryCreateConfiguredActionStatusPlan(
             defaultAction, selectedOwnerGraph, false, null,
             out DailyV1SelectedActionStatusPlan statusPlan), Is.True,
@@ -2633,6 +2667,7 @@ public sealed class SimulationBootstrapCompositionTests
             graph.Actions[defaultAction.DefinitionId]
         };
         Object.DestroyImmediate(defaultAction);
+        Object.DestroyImmediate(selectedProviderAction);
         Assert.That(runtime.TryGetSelectedDailyV1ActionNodes(typedActions), Is.False,
             "Selected action admission must fail closed if any graph action has lost its live exact Unity binding.");
         Assert.That(typedActions, Is.Empty,
@@ -4398,6 +4433,22 @@ public sealed class SimulationBootstrapCompositionTests
             BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(initialize, Is.Not.Null);
         initialize.Invoke(simulation, new object[] { stageCompleted });
+    }
+
+    private sealed class RecordingSelectedActionProvider : INpcActionProvider
+    {
+        public int CreateCount { get; private set; }
+
+        public bool HandlesAction(NpcActionData action) =>
+            action != null && action.actionType == NpcActionType.SellGoods;
+
+        public NpcActionRuntime CreateAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
+        {
+            CreateCount++;
+            return new NpcActionRuntime(action);
+        }
+
+        public NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime) => null;
     }
 
 }
