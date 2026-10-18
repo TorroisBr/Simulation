@@ -693,7 +693,9 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
         MerchantTradePlanRuntime plan = npcRuntime.MerchantTradePlan;
         bool saleBelongsToPlan = plan.IsActive == true && plan.Item == actionRuntime.TargetItem;
         float planPurchasePrice = saleBelongsToPlan == true ? plan.PurchasePricePerItem : 0f;
-        float referencePrice = saleBelongsToPlan == true ? planPurchasePrice : npcRuntime.Inventory.GetAverageUnitCost(actionRuntime.TargetItem);
+        float referencePrice = saleBelongsToPlan == true
+            ? planPurchasePrice
+            : GetInventoryAverageUnitCost(npcRuntime, actionRuntime.TargetItem);
 
         if (actionRuntime.TargetNpc != null && TryExecuteSellGoodsToNpc(npcRuntime, actionRuntime, referencePrice, out int amountSoldToNpc) == true)
         {
@@ -737,7 +739,10 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
         float reserveAmount = buyerRuntime.Money * tradeConfiguration.LocalReserveRatio;
         float spendableMoney = UnityMathfCompatibility.Max(0f, buyerRuntime.Money - reserveAmount);
         int affordableAmount = UnityMathfCompatibility.FloorToInt(spendableMoney / unitPrice);
-        amountSold = UnityMathfCompatibility.Min(actionRuntime.Amount, sellerRuntime.Inventory.GetAmount(actionRuntime.TargetItem), affordableAmount);
+        amountSold = UnityMathfCompatibility.Min(
+            actionRuntime.Amount,
+            GetInventoryAmount(sellerRuntime, actionRuntime.TargetItem),
+            affordableAmount);
 
         if (amountSold <= 0)
         {
@@ -779,7 +784,7 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
 
     private bool TryExecuteSellGoodsToMarket(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, bool saleBelongsToPlan, MerchantTradePlanRuntime plan, float planPurchasePrice)
     {
-        float averageUnitCost = npcRuntime.Inventory.GetAverageUnitCost(actionRuntime.TargetItem);
+        float averageUnitCost = GetInventoryAverageUnitCost(npcRuntime, actionRuntime.TargetItem);
         EconomyTransactionResult transaction;
         if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
         {
@@ -986,7 +991,7 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             return;
         }
 
-        if (plan.IsActive == true && npcRuntime.Inventory.HasItem(plan.Item, 1) == false)
+        if (plan.IsActive == true && GetInventoryAmount(npcRuntime, plan.Item) < 1)
         {
             npcRuntime.ClearMerchantTradePlan();
         }
@@ -1458,7 +1463,7 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             return null;
         }
 
-        int sellerAmount = sellerRuntime.Inventory.GetAmount(item);
+        int sellerAmount = GetInventoryAmount(sellerRuntime, item);
         int maxAmount = UnityMathfCompatibility.Min(requestedAmount, sellerAmount);
 
         if (maxAmount <= 0)
@@ -1621,46 +1626,39 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             return null;
         }
 
-        List<DailyV1MerchantLocalSaleCandidate> candidates = new List<DailyV1MerchantLocalSaleCandidate>();
-        List<InventoryItemRuntime> sourceRows = new List<InventoryItemRuntime>();
+        DailyV1InventoryOwner inventory = npcRuntime.Inventory?.SelectedDailyV1Owner;
+        if (inventory == null || !ReferenceEquals(inventory.Definitions, definitions))
+        {
+            return null;
+        }
+
+        List<DailyV1MerchantLocalSaleFact> marketFacts = new List<DailyV1MerchantLocalSaleFact>();
+        List<ItemData> sourceItems = new List<ItemData>();
         List<CommercialMarketObservation> observations = new List<CommercialMarketObservation>();
         List<float> freshnessValues = new List<float>();
 
-        foreach (InventoryItemRuntime inventoryItem in npcRuntime.Inventory.Items)
+        foreach (DailyV1ItemDefinition itemNode in definitions.Items.Values)
         {
-            if (inventoryItem == null || inventoryItem.Item == null || inventoryItem.Amount <= 0)
+            if (itemNode == null
+                || !npcRuntime.TryGetSelectedDailyV1ItemAsset(itemNode, out ItemData itemAsset)
+                || !TryGetUsefulObservation(
+                    npcRuntime,
+                    npcRuntime.CurrentCity,
+                    itemAsset,
+                    out CommercialMarketObservation localObservation,
+                    out float freshness))
             {
                 continue;
             }
 
-            if (!npcRuntime.TryGetSelectedDailyV1Item(inventoryItem.Item, out DailyV1ItemDefinition itemNode))
-            {
-                // A selected inventory row without its exact admitted node cannot
-                // participate in a selected decision.
-                return null;
-            }
-
-            if (!TryGetUsefulObservation(
-                npcRuntime,
-                npcRuntime.CurrentCity,
-                inventoryItem.Item,
-                out CommercialMarketObservation localObservation,
-                out float freshness))
-            {
-                continue;
-            }
-
-            int requestedAmount = UnityMathfCompatibility.Min(tradeConfiguration.MaxTradeAmount, inventoryItem.Amount);
             int availableAmount = LimitMarketSaleAmountFromKnowledge(
-                npcRuntime, npcRuntime.CurrentCity, localObservation.ObservedPrice, requestedAmount);
-            candidates.Add(new DailyV1MerchantLocalSaleCandidate(
+                npcRuntime, npcRuntime.CurrentCity, localObservation.ObservedPrice, tradeConfiguration.MaxTradeAmount);
+            marketFacts.Add(new DailyV1MerchantLocalSaleFact(
                 itemNode,
-                inventoryItem.Amount,
-                inventoryItem.AverageUnitCost,
                 localObservation.ObservedPrice,
                 freshness,
                 availableAmount));
-            sourceRows.Add(inventoryItem);
+            sourceItems.Add(itemAsset);
             observations.Add(localObservation);
             freshnessValues.Add(freshness);
         }
@@ -1668,7 +1666,9 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
         if (!DailyV1MerchantActionPlanning.TryPlanLocalSale(
             definitions,
             merchant,
-            candidates,
+            inventory,
+            marketFacts,
+            tradeConfiguration.MaxTradeAmount,
             GetMinimumProfitPerItem(npcRuntime),
             out DailyV1MerchantLocalSalePlan plan)
             || plan == null)
@@ -1676,15 +1676,15 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             return null;
         }
 
-        InventoryItemRuntime selectedRow = sourceRows[plan.CandidateIndex];
-        CommercialMarketObservation selectedObservation = observations[plan.CandidateIndex];
-        float selectedFreshness = freshnessValues[plan.CandidateIndex];
+        ItemData selectedItem = sourceItems[plan.MarketFactIndex];
+        CommercialMarketObservation selectedObservation = observations[plan.MarketFactIndex];
+        float selectedFreshness = freshnessValues[plan.MarketFactIndex];
         CommercialDecisionEvidence evidence = CreateCommercialEvidence(
             npcRuntime,
             npcRuntime.CurrentCity,
             npcRuntime.CurrentCity,
             null,
-            selectedRow.Item,
+            selectedItem,
             null,
             0f,
             selectedObservation,
@@ -1698,7 +1698,7 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             plan.Score);
 
         return new MerchantTradeOpportunity(
-            selectedRow.Item,
+            selectedItem,
             npcRuntime.CurrentCity,
             plan.Amount,
             plan.ReferencePrice,
@@ -2006,7 +2006,50 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             return 0;
         }
 
-        return UnityMathfCompatibility.Min(tradeConfiguration.MaxTradeAmount, plan.RemainingAmount, npcRuntime.Inventory.GetAmount(plan.Item));
+        return UnityMathfCompatibility.Min(
+            tradeConfiguration.MaxTradeAmount,
+            plan.RemainingAmount,
+            GetInventoryAmount(npcRuntime, plan.Item));
+    }
+
+    private static int GetInventoryAmount(NpcRuntime npcRuntime, ItemData item)
+    {
+        if (npcRuntime == null || item == null) return 0;
+        if (npcRuntime.SelectedDailyV1DefinitionGraph == null)
+            return npcRuntime.Inventory != null ? npcRuntime.Inventory.GetAmount(item) : 0;
+        return TryGetSelectedInventoryOwnerItem(npcRuntime, item,
+            out DailyV1InventoryOwner owner, out DailyV1ItemDefinition node)
+            ? owner.GetAmount(node) : 0;
+    }
+
+    private static float GetInventoryAverageUnitCost(NpcRuntime npcRuntime, ItemData item)
+    {
+        if (npcRuntime == null || item == null) return 0f;
+        if (npcRuntime.SelectedDailyV1DefinitionGraph == null)
+            return npcRuntime.Inventory != null ? npcRuntime.Inventory.GetAverageUnitCost(item) : 0f;
+        return TryGetSelectedInventoryOwnerItem(npcRuntime, item,
+            out DailyV1InventoryOwner owner, out DailyV1ItemDefinition node)
+            ? owner.GetAverageUnitCost(node) : 0f;
+    }
+
+    private static bool TryGetSelectedInventoryOwnerItem(
+        NpcRuntime npcRuntime,
+        ItemData item,
+        out DailyV1InventoryOwner owner,
+        out DailyV1ItemDefinition node)
+    {
+        owner = null;
+        node = null;
+        DailyV1EffectiveDefinitions definitions = npcRuntime?.SelectedDailyV1DefinitionGraph;
+        if (definitions == null || npcRuntime.Inventory?.SelectedDailyV1Owner == null
+            || !ReferenceEquals(npcRuntime.Inventory.SelectedDailyV1Owner.Definitions, definitions)
+            || !npcRuntime.TryGetSelectedDailyV1Item(item, out node))
+        {
+            node = null;
+            return false;
+        }
+        owner = npcRuntime.Inventory.SelectedDailyV1Owner;
+        return true;
     }
 
     private float CalculateTradeScore(float netProfit, int travelDays)

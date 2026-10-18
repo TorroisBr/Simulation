@@ -1074,6 +1074,20 @@ public sealed class EconomyTransactionTests
         Assert.That(replayedReceipt, Is.SameAs(firstReceipt));
         Assert.That(merchant.Inventory.SelectedDailyV1Owner.GetAmount(item), Is.EqualTo(inventoryAfterKeyedSale));
         Assert.That(city.Market.SelectedDailyV1Owner.GetAmount(item), Is.EqualTo(stockAfterKeyedSale));
+
+        merchant.SetMerchantTradePlan(itemAsset, city, city, 4, 10f);
+        float plannedSaleUtility = 0f;
+        NpcActionRuntime plannedSale = merchantSystem.CreateAction(merchant, sellAction, ref plannedSaleUtility);
+        Assert.That(plannedSale, Is.Not.Null,
+            "Selected trade-plan inventory admission reads the authoritative Core owner even after the Unity inventory projection binding was removed.");
+        Assert.That(plannedSale.TargetItem, Is.SameAs(itemAsset));
+        Assert.That(plannedSale.Amount, Is.EqualTo(1),
+            "Planned sale quantity is capped by the current Core-owned inventory amount.");
+
+        Assert.That(merchant.Inventory.RemoveSelectedItem(item, 1), Is.True);
+        merchantSystem.AdvanceNpcTradeState(merchant);
+        Assert.That(merchant.MerchantTradePlan.IsActive, Is.False,
+            "After the exact owner inventory is depleted, normalization clears the selected merchant plan.");
     }
 
     [Test]

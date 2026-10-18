@@ -1,37 +1,31 @@
 using System;
 using System.Collections.Generic;
 
-/// <summary>Unity-read merchant facts paired with the exact admitted Daily-v1 item node.</summary>
-internal sealed class DailyV1MerchantLocalSaleCandidate
+/// <summary>Current market facts paired with an exact admitted Daily-v1 item node.</summary>
+internal sealed class DailyV1MerchantLocalSaleFact
 {
     internal DailyV1ItemDefinition Item { get; }
-    internal int InventoryAmount { get; }
-    internal float AverageUnitCost { get; }
     internal float ObservedPrice { get; }
     internal float Freshness { get; }
     internal int AvailableAmount { get; }
 
-    internal DailyV1MerchantLocalSaleCandidate(
+    internal DailyV1MerchantLocalSaleFact(
         DailyV1ItemDefinition item,
-        int inventoryAmount,
-        float averageUnitCost,
         float observedPrice,
         float freshness,
         int availableAmount)
     {
         Item = item;
-        InventoryAmount = inventoryAmount;
-        AverageUnitCost = averageUnitCost;
         ObservedPrice = observedPrice;
         Freshness = freshness;
         AvailableAmount = availableAmount;
     }
 }
 
-/// <summary>The existing local SellGoods choice, retaining its source row and graph identity.</summary>
+/// <summary>The existing local SellGoods choice, retaining its market-fact index and graph identity.</summary>
 internal sealed class DailyV1MerchantLocalSalePlan
 {
-    internal int CandidateIndex { get; }
+    internal int MarketFactIndex { get; }
     internal DailyV1ItemDefinition Item { get; }
     internal int Amount { get; }
     internal float ReferencePrice { get; }
@@ -40,7 +34,7 @@ internal sealed class DailyV1MerchantLocalSalePlan
     internal float Score { get; }
 
     internal DailyV1MerchantLocalSalePlan(
-        int candidateIndex,
+        int marketFactIndex,
         DailyV1ItemDefinition item,
         int amount,
         float referencePrice,
@@ -48,7 +42,7 @@ internal sealed class DailyV1MerchantLocalSalePlan
         float profitPerItem,
         float score)
     {
-        CandidateIndex = candidateIndex;
+        MarketFactIndex = marketFactIndex;
         Item = item;
         Amount = amount;
         ReferencePrice = referencePrice;
@@ -136,41 +130,60 @@ internal static class DailyV1MerchantActionPlanning
     internal static bool TryPlanLocalSale(
         DailyV1EffectiveDefinitions definitions,
         DailyV1NpcDefinition merchant,
-        IReadOnlyList<DailyV1MerchantLocalSaleCandidate> candidates,
+        DailyV1InventoryOwner inventory,
+        IReadOnlyList<DailyV1MerchantLocalSaleFact> marketFacts,
+        int maximumTradeAmount,
         float minimumProfitPerItem,
         out DailyV1MerchantLocalSalePlan plan)
     {
         plan = null;
-        if (!DailyV1NpcDefinitionRules.IsAdmittedNpc(definitions, merchant) || candidates == null)
+        if (!DailyV1NpcDefinitionRules.IsAdmittedNpc(definitions, merchant)
+            || inventory == null || !ReferenceEquals(inventory.Definitions, definitions)
+            || marketFacts == null || maximumTradeAmount <= 0)
             return false;
 
-        for (int index = 0; index < candidates.Count; index++)
+        for (int inventoryIndex = 0; inventoryIndex < inventory.Items.Count; inventoryIndex++)
         {
-            DailyV1MerchantLocalSaleCandidate candidate = candidates[index];
-            if (candidate == null)
-                continue;
-
-            if (candidate.Item == null
-                || !definitions.Items.TryGetValue(candidate.Item.DefinitionId, out DailyV1ItemDefinition admittedItem)
-                || !ReferenceEquals(candidate.Item, admittedItem))
+            DailyV1InventoryItemState inventoryRow = inventory.Items[inventoryIndex];
+            if (inventoryRow == null)
                 return false;
 
-            if (candidate.InventoryAmount <= 0 || candidate.Freshness <= 0f || candidate.AvailableAmount <= 0)
+            if (inventoryRow.Amount <= 0)
                 continue;
 
-            float referencePrice = candidate.AverageUnitCost > 0f
-                ? candidate.AverageUnitCost
-                : candidate.Item.Values.basePrice;
-            float profitPerItem = candidate.ObservedPrice - referencePrice;
+            if (inventoryRow.Item == null
+                || !definitions.Items.TryGetValue(inventoryRow.Item.DefinitionId, out DailyV1ItemDefinition admittedItem)
+                || !ReferenceEquals(inventoryRow.Item, admittedItem))
+                return false;
+
+            int factIndex = FindExactMarketFact(marketFacts, inventoryRow.Item);
+            if (factIndex == -2)
+                return false;
+            if (factIndex < 0)
+                continue;
+            DailyV1MerchantLocalSaleFact fact = marketFacts[factIndex];
+            if (fact.Freshness <= 0f || fact.AvailableAmount <= 0)
+                continue;
+
+            int amount = UnityMathfCompatibility.Min(
+                maximumTradeAmount,
+                UnityMathfCompatibility.Min(inventoryRow.Amount, fact.AvailableAmount));
+            if (amount <= 0)
+                continue;
+
+            float referencePrice = inventoryRow.AverageUnitCost > 0f
+                ? inventoryRow.AverageUnitCost
+                : inventoryRow.Item.Values.basePrice;
+            float profitPerItem = fact.ObservedPrice - referencePrice;
             if (profitPerItem < UnityMathfCompatibility.Max(0f, minimumProfitPerItem))
                 continue;
 
             float preferenceMultiplier = DailyV1NpcDefinitionRules.TryGetPreferredTradeItemMultiplier(
-                merchant, definitions, candidate.Item, out float configuredMultiplier)
+                merchant, definitions, inventoryRow.Item, out float configuredMultiplier)
                 ? UnityMathfCompatibility.Max(0.01f, configuredMultiplier)
                 : 1f;
-            float score = profitPerItem * candidate.AvailableAmount
-                * candidate.Freshness
+            float score = profitPerItem * amount
+                * fact.Freshness
                 * preferenceMultiplier;
 
             // For local sales all candidates share the same destination and have no target NPC.
@@ -178,20 +191,37 @@ internal static class DailyV1MerchantActionPlanning
             if (plan == null
                 || score > plan.Score
                 || (UnityMathfCompatibility.Approximately(score, plan.Score)
-                    && string.CompareOrdinal(candidate.Item.DefinitionId, plan.Item.DefinitionId) < 0))
+                    && string.CompareOrdinal(inventoryRow.Item.DefinitionId, plan.Item.DefinitionId) < 0))
             {
                 plan = new DailyV1MerchantLocalSalePlan(
-                    index,
-                    candidate.Item,
-                    candidate.AvailableAmount,
+                    factIndex,
+                    inventoryRow.Item,
+                    amount,
                     referencePrice,
-                    candidate.ObservedPrice,
+                    fact.ObservedPrice,
                     profitPerItem,
                     score);
             }
         }
 
         return true;
+    }
+
+    private static int FindExactMarketFact(
+        IReadOnlyList<DailyV1MerchantLocalSaleFact> marketFacts,
+        DailyV1ItemDefinition item)
+    {
+        for (int index = 0; index < marketFacts.Count; index++)
+        {
+            DailyV1MerchantLocalSaleFact fact = marketFacts[index];
+            if (fact == null)
+                continue;
+            if (ReferenceEquals(fact.Item, item))
+                return index;
+            if (fact.Item != null && string.Equals(fact.Item.DefinitionId, item.DefinitionId, StringComparison.Ordinal))
+                return -2;
+        }
+        return -1;
     }
 
     internal static bool TryPlanTradeOpportunity(

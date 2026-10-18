@@ -696,6 +696,17 @@ public class NpcRuntime : ICapabilityConditionSource
             && ReferenceEquals(itemNode, admittedItem);
     }
 
+    internal bool TryGetSelectedDailyV1ItemAsset(DailyV1ItemDefinition itemNode, out ItemData item)
+    {
+        item = null;
+        return selectedDailyV1Definition != null && itemNode != null
+            && selectedDefinitionGraph != null && selectedDefinitionBindings != null
+            && selectedDefinitionGraph.Items.TryGetValue(itemNode.DefinitionId, out DailyV1ItemDefinition admittedItem)
+            && ReferenceEquals(itemNode, admittedItem)
+            && selectedDefinitionBindings.TryGetAsset(itemNode, out item)
+            && item != null;
+    }
+
     internal bool TryAddSelectedDailyV1InventoryItem(DailyV1ItemDefinition item, int amount, float averageUnitCost)
     {
         return selectedDailyV1Definition != null && selectedDefinitionGraph != null

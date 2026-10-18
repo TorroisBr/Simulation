@@ -10,19 +10,22 @@ public sealed class DailyV1MerchantActionPlanningTests
         DailyV1NpcDefinition merchant = definitions.Npcs["AFONSO"];
         DailyV1ItemDefinition iron = definitions.Items["FERRO"];
         DailyV1ItemDefinition grain = definitions.Items["TRIGO"];
-        List<DailyV1MerchantLocalSaleCandidate> candidates = new List<DailyV1MerchantLocalSaleCandidate>
+        DailyV1InventoryOwner inventory = new DailyV1InventoryOwner(definitions);
+        Assert.That(inventory.TryAddItem(iron, 5, 10f), Is.True);
+        Assert.That(inventory.TryAddItem(grain, 5, 1f), Is.True);
+        List<DailyV1MerchantLocalSaleFact> marketFacts = new List<DailyV1MerchantLocalSaleFact>
         {
-            new DailyV1MerchantLocalSaleCandidate(iron, 5, 10f, 15f, 1f, 4),
-            new DailyV1MerchantLocalSaleCandidate(grain, 5, 1f, 9f, 1f, 4)
+            new DailyV1MerchantLocalSaleFact(iron, 15f, 1f, 4),
+            new DailyV1MerchantLocalSaleFact(grain, 9f, 1f, 4)
         };
 
         Assert.That(DailyV1MerchantActionPlanning.TryPlanLocalSale(
-            definitions, merchant, candidates, 1f, out DailyV1MerchantLocalSalePlan plan), Is.True);
+            definitions, merchant, inventory, marketFacts, 5, 1f, out DailyV1MerchantLocalSalePlan plan), Is.True);
 
         // The authored iron preference is 2x. Existing formula scores iron at 40
         // and grain at 32, despite grain's greater per-unit margin.
         Assert.That(plan, Is.Not.Null);
-        Assert.That(plan.CandidateIndex, Is.EqualTo(0));
+        Assert.That(plan.MarketFactIndex, Is.EqualTo(0));
         Assert.That(plan.Item, Is.SameAs(iron));
         Assert.That(plan.Amount, Is.EqualTo(4));
         Assert.That(plan.ReferencePrice, Is.EqualTo(10f));
@@ -37,17 +40,21 @@ public sealed class DailyV1MerchantActionPlanningTests
         DailyV1NpcDefinition merchant = definitions.Npcs["JORGE"];
         DailyV1ItemDefinition iron = definitions.Items["FERRO"];
         DailyV1ItemDefinition grain = definitions.Items["TRIGO"];
-        List<DailyV1MerchantLocalSaleCandidate> candidates = new List<DailyV1MerchantLocalSaleCandidate>
+        DailyV1InventoryOwner inventory = new DailyV1InventoryOwner(definitions);
+        Assert.That(inventory.TryAddItem(grain, 2), Is.True);
+        Assert.That(inventory.TryAddItem(iron, 2), Is.True);
+        List<DailyV1MerchantLocalSaleFact> marketFacts = new List<DailyV1MerchantLocalSaleFact>
         {
-            new DailyV1MerchantLocalSaleCandidate(grain, 2, 0f, grain.Values.basePrice + 4f, 1f, 1),
-            new DailyV1MerchantLocalSaleCandidate(iron, 2, 0f, iron.Values.basePrice + 4f, 1f, 1)
+            new DailyV1MerchantLocalSaleFact(grain, grain.Values.basePrice + 4f, 1f, 1),
+            new DailyV1MerchantLocalSaleFact(iron, iron.Values.basePrice + 4f, 1f, 1)
         };
 
         Assert.That(DailyV1MerchantActionPlanning.TryPlanLocalSale(
-            definitions, merchant, candidates, 1f, out DailyV1MerchantLocalSalePlan plan), Is.True);
+            definitions, merchant, inventory, marketFacts, 5, 1f, out DailyV1MerchantLocalSalePlan plan), Is.True);
 
         Assert.That(plan.Item, Is.SameAs(iron),
-            "Equal scores retain the existing ordinal DefinitionId tie-break rather than inventory order.");
+            "Equal scores retain the existing ordinal DefinitionId tie-break rather than inventory or market-fact order.");
+        Assert.That(plan.MarketFactIndex, Is.EqualTo(1));
         Assert.That(plan.ReferencePrice, Is.EqualTo(iron.Values.basePrice),
             "Selected planning reads the captured effective item value, not a Unity ItemData projection.");
     }
@@ -59,15 +66,20 @@ public sealed class DailyV1MerchantActionPlanningTests
         DailyV1EffectiveDefinitions foreign = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1NpcDefinition merchant = definitions.Npcs["JORGE"];
         DailyV1ItemDefinition item = definitions.Items["FERRO"];
-        DailyV1MerchantLocalSaleCandidate candidate = new DailyV1MerchantLocalSaleCandidate(
-            item, 3, 1f, 5f, 1f, 2);
+        DailyV1InventoryOwner inventory = new DailyV1InventoryOwner(definitions);
+        Assert.That(inventory.TryAddItem(item, 3, 1f), Is.True);
+        DailyV1MerchantLocalSaleFact foreignFact = new DailyV1MerchantLocalSaleFact(
+            foreign.Items[item.DefinitionId], 5f, 1f, 2);
 
         Assert.That(DailyV1MerchantActionPlanning.TryPlanLocalSale(
-            definitions, foreign.Npcs[merchant.DefinitionId], new[] { candidate }, 0f, out _), Is.False);
+            definitions, foreign.Npcs[merchant.DefinitionId], inventory, new[] { foreignFact }, 3, 0f, out _), Is.False);
         Assert.That(DailyV1MerchantActionPlanning.TryPlanLocalSale(
-            definitions, merchant,
-            new[] { new DailyV1MerchantLocalSaleCandidate(foreign.Items[item.DefinitionId], 3, 1f, 5f, 1f, 2) },
-            0f, out _), Is.False);
+            definitions, merchant, inventory, new[] { foreignFact }, 3, 0f, out _), Is.False);
+        DailyV1InventoryOwner foreignInventory = new DailyV1InventoryOwner(foreign);
+        Assert.That(foreignInventory.TryAddItem(foreign.Items[item.DefinitionId], 3), Is.True);
+        Assert.That(DailyV1MerchantActionPlanning.TryPlanLocalSale(
+            definitions, merchant, foreignInventory,
+            new[] { new DailyV1MerchantLocalSaleFact(item, 5f, 1f, 2) }, 3, 0f, out _), Is.False);
     }
 
     [Test]
@@ -76,15 +88,25 @@ public sealed class DailyV1MerchantActionPlanningTests
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1NpcDefinition merchant = definitions.Npcs["JORGE"];
         DailyV1ItemDefinition iron = definitions.Items["FERRO"];
-        List<DailyV1MerchantLocalSaleCandidate> candidates = new List<DailyV1MerchantLocalSaleCandidate>
-        {
-            new DailyV1MerchantLocalSaleCandidate(iron, 5, 10f, 20f, 0f, 5),
-            new DailyV1MerchantLocalSaleCandidate(iron, 0, 10f, 20f, 1f, 5),
-            new DailyV1MerchantLocalSaleCandidate(iron, 5, 10f, 10.5f, 1f, 5)
-        };
+        DailyV1InventoryOwner inventory = new DailyV1InventoryOwner(definitions);
+        Assert.That(inventory.TryAddItem(iron, 5, 10f), Is.True);
 
         Assert.That(DailyV1MerchantActionPlanning.TryPlanLocalSale(
-            definitions, merchant, candidates, 1f, out DailyV1MerchantLocalSalePlan plan), Is.True);
+            definitions, merchant, inventory,
+            new[] { new DailyV1MerchantLocalSaleFact(iron, 20f, 0f, 5) },
+            5, 1f, out DailyV1MerchantLocalSalePlan plan), Is.True);
+        Assert.That(plan, Is.Null, "Stale market facts are skipped.");
+
+        Assert.That(DailyV1MerchantActionPlanning.TryPlanLocalSale(
+            definitions, merchant, inventory,
+            new[] { new DailyV1MerchantLocalSaleFact(iron, 20f, 1f, 0) },
+            5, 1f, out plan), Is.True);
+        Assert.That(plan, Is.Null, "Market liquidity can make the effective available amount empty.");
+
+        Assert.That(DailyV1MerchantActionPlanning.TryPlanLocalSale(
+            definitions, merchant, inventory,
+            new[] { new DailyV1MerchantLocalSaleFact(iron, 10.5f, 1f, 5) },
+            5, 1f, out plan), Is.True);
         Assert.That(plan, Is.Null);
     }
 
