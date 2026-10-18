@@ -80,3 +80,39 @@ Validation for this follow-up:
 - `git diff --check` for the candidate source/test changes: PASS.
 - The new Unity P14 regression and prior Unity regressions remain UNRUN; no Unity validation is claimed for this source tree.
 - No full CORE-F integration validation, independent review of this follow-up, or canonical promotion is claimed.
+
+## Current integration WIP — selected Merchant reads shared commercial owner
+
+Implementation base: `cf51fa9c87fb61d5dc75716ac376f10280e68cd3` on
+`codex/core/CORE-F-city-runtime-integration`. This is in-progress integration
+work only; it is not a validated candidate, independent review, promotion, or
+CORE-F completion claim.
+
+The selected Merchant local-sale, route-trade, and scouting read paths now use
+`DailyV1CommercialKnowledgeOwner` observations and liquidity directly for
+selected-profile facts and freshness. The selected local-sale and route-trade
+plans continue to use exact admitted Core item nodes. Unity `ItemData` and
+commercial observation wrappers remain at existing Unity action/evidence
+boundaries. The shared selected helper also verifies the typed owner observation
+before producing its existing wrapper result. `CommercialKnowledgePolicy`
+shares the same age/freshness calculation across its Unity adapter and typed
+Core observation overloads; no public API or freshness semantics changed.
+
+| SHA-256 | WIP changed path |
+| --- | --- |
+| `E4C5B688551787363A6B4786DA97495F8FAB2C1269B5F6DCA37DF83421F03096` | `Assets/_Project/Scripts/CommercialKnowledge.cs` |
+| `D81ED0804F143186F1A9DD1A8CE44112D1086B9122BA389DF9432BD71454532D` | `Assets/_Project/Scripts/MerchantSystem.cs` |
+
+Validation and review status for this WIP:
+
+- `git diff --check`: PASS.
+- Unity compilation and focused EditMode regressions: NOT RUN. This checkout
+  has no `Library/PackageCache`; the existing static compilation inputs refer
+  to absent Unity-generated references. The cache was not recreated and no
+  evidence ACL or security restriction was changed.
+- .NET CoreValidation: NOT RERUN because this WIP changes only Unity-side
+  `Assets` sources. The earlier 310/310 result remains evidence for its prior
+  source tip only, not this WIP.
+- Independent exact-tip review: NOT RUN; the Unity compilation/test gate is
+  incomplete.
+- Candidate publication and canonical promotion: NOT performed for this WIP.

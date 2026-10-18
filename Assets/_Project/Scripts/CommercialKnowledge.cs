@@ -1469,66 +1469,58 @@ public sealed class CommercialKnowledgePolicy
 
     public long GetAgeDays(CommercialMarketObservation observation, long currentAbsoluteDay)
     {
-        if (observation == null || currentAbsoluteDay <= observation.ObservedDay)
-        {
-            return 0L;
-        }
-
-        return currentAbsoluteDay - observation.ObservedDay;
+        return observation == null ? 0L : GetAgeDays(observation.ObservedDay, currentAbsoluteDay);
     }
 
     public float GetFreshness(CommercialMarketObservation observation, long currentAbsoluteDay)
     {
-        if (observation == null)
-        {
-            return 0f;
-        }
+        return observation == null ? 0f : GetFreshness(observation.ObservedDay, currentAbsoluteDay);
+    }
 
-        long ageDays = GetAgeDays(observation, Math.Max(0L, currentAbsoluteDay));
+    internal long GetAgeDays(DailyV1CommercialMarketObservation observation, long currentAbsoluteDay)
+    {
+        return observation == null ? 0L : GetAgeDays(observation.ObservedDay, currentAbsoluteDay);
+    }
 
-        if (ageDays <= freshForDays)
-        {
-            return 1f;
-        }
-
-        if (ageDays >= maxUsefulAgeDays)
-        {
-            return 0f;
-        }
-
-        float decayRange = maxUsefulAgeDays - freshForDays;
-        return 1f - (ageDays - freshForDays) / decayRange;
+    internal float GetFreshness(DailyV1CommercialMarketObservation observation, long currentAbsoluteDay)
+    {
+        return observation == null ? 0f : GetFreshness(observation.ObservedDay, currentAbsoluteDay);
     }
 
     public long GetAgeDays(CommercialLiquidityObservation observation, long currentAbsoluteDay)
     {
-        if (observation == null || currentAbsoluteDay <= observation.ObservedDay)
-        {
-            return 0L;
-        }
-
-        return currentAbsoluteDay - observation.ObservedDay;
+        return observation == null ? 0L : GetAgeDays(observation.ObservedDay, currentAbsoluteDay);
     }
 
     public float GetFreshness(CommercialLiquidityObservation observation, long currentAbsoluteDay)
     {
-        if (observation == null)
-        {
-            return 0f;
-        }
+        return observation == null ? 0f : GetFreshness(observation.ObservedDay, currentAbsoluteDay);
+    }
 
-        long ageDays = GetAgeDays(observation, Math.Max(0L, currentAbsoluteDay));
+    internal long GetAgeDays(DailyV1CommercialLiquidityObservation observation, long currentAbsoluteDay)
+    {
+        return observation == null ? 0L : GetAgeDays(observation.ObservedDay, currentAbsoluteDay);
+    }
 
+    internal float GetFreshness(DailyV1CommercialLiquidityObservation observation, long currentAbsoluteDay)
+    {
+        return observation == null ? 0f : GetFreshness(observation.ObservedDay, currentAbsoluteDay);
+    }
+
+    private long GetAgeDays(long observedDay, long currentAbsoluteDay)
+    {
+        if (currentAbsoluteDay <= observedDay)
+            return 0L;
+        return currentAbsoluteDay - observedDay;
+    }
+
+    private float GetFreshness(long observedDay, long currentAbsoluteDay)
+    {
+        long ageDays = GetAgeDays(observedDay, Math.Max(0L, currentAbsoluteDay));
         if (ageDays <= freshForDays)
-        {
             return 1f;
-        }
-
         if (ageDays >= maxUsefulAgeDays)
-        {
             return 0f;
-        }
-
         float decayRange = maxUsefulAgeDays - freshForDays;
         return 1f - (ageDays - freshForDays) / decayRange;
     }

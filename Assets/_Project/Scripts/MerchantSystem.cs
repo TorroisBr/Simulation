@@ -1170,27 +1170,29 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             return null;
         }
 
+        DailyV1CommercialKnowledgeOwner commercialKnowledge = npcRuntime.CommercialKnowledge.SelectedOwner;
+        if (commercialKnowledge == null || !ReferenceEquals(commercialKnowledge.Definitions, definitions))
+        {
+            return null;
+        }
+
         List<DailyV1MerchantTradeCandidate> candidates = new List<DailyV1MerchantTradeCandidate>();
         List<CityRuntime> targetCities = new List<CityRuntime>();
-        List<CommercialMarketObservation> originObservations = new List<CommercialMarketObservation>();
-        List<CommercialMarketObservation> destinationObservations = new List<CommercialMarketObservation>();
+        List<DailyV1CommercialMarketObservation> originObservations = new List<DailyV1CommercialMarketObservation>();
+        List<DailyV1CommercialMarketObservation> destinationObservations = new List<DailyV1CommercialMarketObservation>();
         List<float> originFreshnessValues = new List<float>();
         List<float> destinationFreshnessValues = new List<float>();
 
-        foreach (CommercialMarketObservation originObservation in npcRuntime.CommercialKnowledge.Observations)
+        foreach (DailyV1CommercialMarketObservation originObservation in commercialKnowledge.Observations)
         {
             if (originObservation == null
-                || originObservation.LocationRuntimeId != originCity.Location.RuntimeId
+                || !string.Equals(originObservation.LocationRuntimeId, originCity.Location.RuntimeId, StringComparison.Ordinal)
                 || originObservation.ItemDefinition == null
+                || !definitions.Items.TryGetValue(originObservation.ItemDefinitionId, out DailyV1ItemDefinition itemNode)
+                || !ReferenceEquals(itemNode, originObservation.ItemDefinition)
+                || !npcRuntime.TryGetSelectedDailyV1ItemAsset(itemNode, out _)
                 || originObservation.ObservedStock <= 0)
             {
-                continue;
-            }
-
-            if (!npcRuntime.TryGetSelectedDailyV1Item(
-                originObservation.ItemDefinition, out DailyV1ItemDefinition itemNode))
-            {
-                // Knowledge outside this selected graph cannot produce a selected action.
                 continue;
             }
 
@@ -1231,11 +1233,11 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
                     continue;
                 }
 
-                if (!TryGetUsefulObservation(
+                if (!TryGetUsefulSelectedObservation(
                     npcRuntime,
                     targetCity,
-                    originObservation.ItemDefinition,
-                    out CommercialMarketObservation targetObservation,
+                    itemNode,
+                    out DailyV1CommercialMarketObservation targetObservation,
                     out float targetFreshness))
                 {
                     continue;
@@ -1280,8 +1282,20 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
         }
 
         CityRuntime selectedTarget = targetCities[plan.CandidateIndex];
-        CommercialMarketObservation selectedOriginObservation = originObservations[plan.CandidateIndex];
-        CommercialMarketObservation selectedDestinationObservation = destinationObservations[plan.CandidateIndex];
+        DailyV1CommercialMarketObservation selectedOriginOwnerObservation = originObservations[plan.CandidateIndex];
+        DailyV1CommercialMarketObservation selectedDestinationOwnerObservation = destinationObservations[plan.CandidateIndex];
+        if (!npcRuntime.TryGetSelectedDailyV1ItemAsset(plan.Item, out ItemData selectedItem)
+            || !npcRuntime.CommercialKnowledge.TryGetObservation(
+                selectedOriginOwnerObservation.LocationRuntimeId,
+                selectedOriginOwnerObservation.ItemDefinitionId,
+                out CommercialMarketObservation selectedOriginObservation)
+            || !npcRuntime.CommercialKnowledge.TryGetObservation(
+                selectedDestinationOwnerObservation.LocationRuntimeId,
+                selectedDestinationOwnerObservation.ItemDefinitionId,
+                out CommercialMarketObservation selectedDestinationObservation))
+        {
+            return null;
+        }
         float selectedOriginFreshness = originFreshnessValues[plan.CandidateIndex];
         float selectedDestinationFreshness = destinationFreshnessValues[plan.CandidateIndex];
         float grossProfit = plan.ProfitPerItem * plan.Amount;
@@ -1290,7 +1304,7 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             originCity,
             selectedTarget,
             null,
-            selectedOriginObservation.ItemDefinition,
+            selectedItem,
             selectedOriginObservation,
             selectedOriginFreshness,
             selectedDestinationObservation,
@@ -1304,7 +1318,7 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             plan.Score);
 
         return new MerchantTradeOpportunity(
-            selectedOriginObservation.ItemDefinition,
+            selectedItem,
             selectedTarget,
             plan.Amount,
             plan.BuyPrice,
@@ -1627,29 +1641,35 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
         }
 
         DailyV1InventoryOwner inventory = npcRuntime.Inventory?.SelectedDailyV1Owner;
-        if (inventory == null || !ReferenceEquals(inventory.Definitions, definitions))
+        DailyV1CommercialKnowledgeOwner commercialKnowledge = npcRuntime.CommercialKnowledge.SelectedOwner;
+        if (inventory == null || !ReferenceEquals(inventory.Definitions, definitions)
+            || commercialKnowledge == null || !ReferenceEquals(commercialKnowledge.Definitions, definitions)
+            || npcRuntime.CurrentCity?.Location == null)
         {
             return null;
         }
 
         List<DailyV1MerchantLocalSaleFact> marketFacts = new List<DailyV1MerchantLocalSaleFact>();
         List<ItemData> sourceItems = new List<ItemData>();
-        List<CommercialMarketObservation> observations = new List<CommercialMarketObservation>();
+        List<DailyV1CommercialMarketObservation> observations = new List<DailyV1CommercialMarketObservation>();
         List<float> freshnessValues = new List<float>();
 
         foreach (DailyV1ItemDefinition itemNode in definitions.Items.Values)
         {
             if (itemNode == null
                 || !npcRuntime.TryGetSelectedDailyV1ItemAsset(itemNode, out ItemData itemAsset)
-                || !TryGetUsefulObservation(
-                    npcRuntime,
-                    npcRuntime.CurrentCity,
-                    itemAsset,
-                    out CommercialMarketObservation localObservation,
-                    out float freshness))
+                || !commercialKnowledge.TryGetObservation(
+                    npcRuntime.CurrentCity.Location.RuntimeId,
+                    itemNode.DefinitionId,
+                    out DailyV1CommercialMarketObservation localObservation)
+                || !ReferenceEquals(localObservation.ItemDefinition, itemNode))
             {
                 continue;
             }
+
+            float freshness = knowledgePolicy.GetFreshness(localObservation, simulationTime.AbsoluteDay);
+            if (freshness <= 0f)
+                continue;
 
             int availableAmount = LimitMarketSaleAmountFromKnowledge(
                 npcRuntime, npcRuntime.CurrentCity, localObservation.ObservedPrice, tradeConfiguration.MaxTradeAmount);
@@ -1676,8 +1696,15 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             return null;
         }
 
+        DailyV1CommercialMarketObservation selectedOwnerObservation = observations[plan.MarketFactIndex];
         ItemData selectedItem = sourceItems[plan.MarketFactIndex];
-        CommercialMarketObservation selectedObservation = observations[plan.MarketFactIndex];
+        if (!npcRuntime.CommercialKnowledge.TryGetObservation(
+                selectedOwnerObservation.LocationRuntimeId,
+                selectedOwnerObservation.ItemDefinitionId,
+                out CommercialMarketObservation selectedObservation))
+        {
+            return null;
+        }
         float selectedFreshness = freshnessValues[plan.MarketFactIndex];
         CommercialDecisionEvidence evidence = CreateCommercialEvidence(
             npcRuntime,
@@ -1748,26 +1775,46 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             {
                 foreach (string itemDefinitionId in relevantItemDefinitionIds)
                 {
-                    if (npcRuntime.CommercialKnowledge.TryGetObservation(
-                        targetCity.Location.RuntimeId,
-                        itemDefinitionId,
-                        out CommercialMarketObservation observation) == false)
+                    bool usesSelectedDefinitions = npcRuntime.SelectedDailyV1DefinitionGraph != null;
+                    DailyV1CommercialKnowledgeOwner selectedKnowledge = npcRuntime.CommercialKnowledge.SelectedOwner;
+                    DailyV1CommercialMarketObservation selectedObservation = null;
+                    CommercialMarketObservation legacyObservation = null;
+                    bool hasObservation;
+                    if (usesSelectedDefinitions)
+                    {
+                        hasObservation = selectedKnowledge != null
+                            && ReferenceEquals(selectedKnowledge.Definitions, npcRuntime.SelectedDailyV1DefinitionGraph)
+                            && selectedKnowledge.TryGetObservation(
+                                targetCity.Location.RuntimeId, itemDefinitionId, out selectedObservation);
+                    }
+                    else
+                    {
+                        hasObservation = npcRuntime.CommercialKnowledge.TryGetObservation(
+                            targetCity.Location.RuntimeId, itemDefinitionId, out legacyObservation);
+                    }
+                    if (!hasObservation)
                     {
                         unknownObservationCount++;
                         continue;
                     }
 
-                    if (knowledgePolicy.GetFreshness(observation, simulationTime.AbsoluteDay) > 0f)
+                    float freshness = selectedObservation != null
+                        ? knowledgePolicy.GetFreshness(selectedObservation, simulationTime.AbsoluteDay)
+                        : knowledgePolicy.GetFreshness(legacyObservation, simulationTime.AbsoluteDay);
+                    if (freshness > 0f)
                     {
                         continue;
                     }
 
                     staleObservationCount++;
+                    long observedDay = selectedObservation != null
+                        ? selectedObservation.ObservedDay
+                        : legacyObservation.ObservedDay;
 
-                    if (hasOldestObservation == false || observation.ObservedDay < oldestObservationDay)
+                    if (hasOldestObservation == false || observedDay < oldestObservationDay)
                     {
                         hasOldestObservation = true;
-                        oldestObservationDay = observation.ObservedDay;
+                        oldestObservationDay = observedDay;
                     }
                 }
             }
@@ -1831,9 +1878,20 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
                 AddRelevantItemDefinitionId(definitionIds, uniqueDefinitionIds, definitionId);
         }
 
-        foreach (CommercialMarketObservation observation in npcRuntime.CommercialKnowledge.Observations)
+        DailyV1CommercialKnowledgeOwner selectedKnowledge = npcRuntime?.CommercialKnowledge.SelectedOwner;
+        if (npcRuntime?.SelectedDailyV1DefinitionGraph != null)
         {
-            AddRelevantItemDefinitionId(definitionIds, uniqueDefinitionIds, observation?.ItemDefinitionId);
+            if (selectedKnowledge != null
+                && ReferenceEquals(selectedKnowledge.Definitions, npcRuntime.SelectedDailyV1DefinitionGraph))
+            {
+                foreach (DailyV1CommercialMarketObservation observation in selectedKnowledge.Observations)
+                    AddRelevantItemDefinitionId(definitionIds, uniqueDefinitionIds, observation?.ItemDefinitionId);
+            }
+        }
+        else if (npcRuntime != null)
+        {
+            foreach (CommercialMarketObservation observation in npcRuntime.CommercialKnowledge.Observations)
+                AddRelevantItemDefinitionId(definitionIds, uniqueDefinitionIds, observation?.ItemDefinitionId);
         }
 
         definitionIds.Sort(StringComparer.Ordinal);
@@ -1865,9 +1923,67 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             || cityRuntime == null
             || cityRuntime.Location == null
             || item == null
-            || string.IsNullOrWhiteSpace(item.DefinitionId) == true
-            || npcRuntime.CommercialKnowledge.TryGetObservation(cityRuntime.Location.RuntimeId, item.DefinitionId, out observation) == false)
+            || string.IsNullOrWhiteSpace(item.DefinitionId) == true)
         {
+            return false;
+        }
+
+        if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
+        {
+            if (!npcRuntime.TryGetSelectedDailyV1Item(item, out DailyV1ItemDefinition itemNode)
+                || !TryGetUsefulSelectedObservation(
+                    npcRuntime, cityRuntime, itemNode,
+                    out DailyV1CommercialMarketObservation selectedObservation, out freshness)
+                || !npcRuntime.CommercialKnowledge.TryGetObservation(
+                    cityRuntime.Location.RuntimeId, itemNode.DefinitionId, out observation))
+            {
+                observation = null;
+                freshness = 0f;
+                return false;
+            }
+
+            if (!ReferenceEquals(selectedObservation.ItemDefinition,
+                    npcRuntime.SelectedDailyV1DefinitionGraph.Items[itemNode.DefinitionId])
+                || observation == null
+                || !string.Equals(observation.LocationRuntimeId, selectedObservation.LocationRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(observation.ItemDefinitionId, selectedObservation.ItemDefinitionId, StringComparison.Ordinal)
+                || observation.ObservedPrice != selectedObservation.ObservedPrice
+                || observation.ObservedStock != selectedObservation.ObservedStock
+                || observation.ObservedDay != selectedObservation.ObservedDay
+                || observation.ReceivedDay != selectedObservation.ReceivedDay)
+            {
+                observation = null;
+                freshness = 0f;
+                return false;
+            }
+
+            return true;
+        }
+
+        if (!npcRuntime.CommercialKnowledge.TryGetObservation(cityRuntime.Location.RuntimeId, item.DefinitionId, out observation))
+            return false;
+        freshness = knowledgePolicy.GetFreshness(observation, simulationTime.AbsoluteDay);
+        return freshness > 0f;
+    }
+
+    private bool TryGetUsefulSelectedObservation(
+        NpcRuntime npcRuntime,
+        CityRuntime cityRuntime,
+        DailyV1ItemDefinition item,
+        out DailyV1CommercialMarketObservation observation,
+        out float freshness)
+    {
+        observation = null;
+        freshness = 0f;
+        DailyV1EffectiveDefinitions definitions = npcRuntime?.SelectedDailyV1DefinitionGraph;
+        DailyV1CommercialKnowledgeOwner owner = npcRuntime?.CommercialKnowledge.SelectedOwner;
+        if (definitions == null || owner == null || !ReferenceEquals(owner.Definitions, definitions)
+            || item == null || !definitions.Items.TryGetValue(item.DefinitionId, out DailyV1ItemDefinition admitted)
+            || !ReferenceEquals(admitted, item) || cityRuntime?.Location == null
+            || !owner.TryGetObservation(cityRuntime.Location.RuntimeId, item.DefinitionId, out observation)
+            || !ReferenceEquals(observation.ItemDefinition, item))
+        {
+            observation = null;
             return false;
         }
 
@@ -1884,15 +2000,29 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
         if (requestedAmount <= 0
             || expectedUnitPrice <= 0f
             || npcRuntime == null
-            || targetCity?.Location == null
-            || npcRuntime.CommercialKnowledge.TryGetLiquidityObservation(
-                targetCity.Location.RuntimeId,
-                out CommercialLiquidityObservation observation) == false)
+            || targetCity?.Location == null)
         {
             return Math.Max(0, requestedAmount);
         }
 
-        if (knowledgePolicy.GetFreshness(observation, simulationTime.AbsoluteDay) <= 0f
+        DailyV1CommercialKnowledgeOwner selectedKnowledge = npcRuntime.CommercialKnowledge.SelectedOwner;
+        if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
+        {
+            if (selectedKnowledge == null
+                || !ReferenceEquals(selectedKnowledge.Definitions, npcRuntime.SelectedDailyV1DefinitionGraph)
+                || !selectedKnowledge.TryGetLiquidityObservation(targetCity.Location.RuntimeId,
+                    out DailyV1CommercialLiquidityObservation selectedObservation)
+                || knowledgePolicy.GetFreshness(selectedObservation, simulationTime.AbsoluteDay) <= 0f
+                || selectedObservation.LiquidityMode == MarketLiquidityMode.Open)
+                return requestedAmount;
+            return UnityMathfCompatibility.Min(
+                requestedAmount,
+                UnityMathfCompatibility.FloorToInt(selectedObservation.ObservedPurchasingPower / expectedUnitPrice));
+        }
+
+        if (!npcRuntime.CommercialKnowledge.TryGetLiquidityObservation(
+                targetCity.Location.RuntimeId, out CommercialLiquidityObservation observation)
+            || knowledgePolicy.GetFreshness(observation, simulationTime.AbsoluteDay) <= 0f
             || observation.LiquidityMode == MarketLiquidityMode.Open)
         {
             return requestedAmount;
@@ -1930,10 +2060,30 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             return null;
         }
 
-        npcRuntime.CommercialKnowledge.TryGetLiquidityObservation(
-            tradeDestination.Location.RuntimeId,
-            out CommercialLiquidityObservation liquidityObservation);
-        float liquidityFreshness = knowledgePolicy.GetFreshness(liquidityObservation, simulationTime.AbsoluteDay);
+        CommercialLiquidityObservation liquidityObservation = null;
+        float liquidityFreshness = 0f;
+        DailyV1CommercialKnowledgeOwner selectedKnowledge = npcRuntime.CommercialKnowledge.SelectedOwner;
+        if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
+        {
+            if (selectedKnowledge != null
+                && ReferenceEquals(selectedKnowledge.Definitions, npcRuntime.SelectedDailyV1DefinitionGraph)
+                && selectedKnowledge.TryGetLiquidityObservation(
+                    tradeDestination.Location.RuntimeId,
+                    out DailyV1CommercialLiquidityObservation selectedLiquidity))
+            {
+                if (npcRuntime.CommercialKnowledge.TryGetLiquidityObservation(
+                    tradeDestination.Location.RuntimeId, out liquidityObservation))
+                {
+                    liquidityFreshness = knowledgePolicy.GetFreshness(selectedLiquidity, simulationTime.AbsoluteDay);
+                }
+            }
+        }
+        else
+        {
+            npcRuntime.CommercialKnowledge.TryGetLiquidityObservation(
+                tradeDestination.Location.RuntimeId, out liquidityObservation);
+            liquidityFreshness = knowledgePolicy.GetFreshness(liquidityObservation, simulationTime.AbsoluteDay);
+        }
 
         return new CommercialDecisionEvidence(
             item.DefinitionId,
