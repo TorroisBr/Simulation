@@ -11324,6 +11324,21 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         NpcActionData action,
         NpcActionRuntime actionRuntime)
     {
+        if (npcRuntime != null && npcRuntime.UsesSelectedDailyV1Definitions)
+        {
+            string selectedDecisionId = actionRuntime?.OriginDecisionId
+                ?? actionRuntime?.Action?.DefinitionId
+                ?? "unbound";
+            return npcRuntime.TryRollSelectedDailyV1ActionSuccess(
+                action,
+                selectedDecisionId,
+                actionRuntime != null ? actionRuntime.SuccessChanceMultiplier : 1f,
+                CurrentDay,
+                randomSource,
+                out bool succeeded)
+                && succeeded;
+        }
+
         if (action == null || (npcRuntime != null
             ? npcRuntime.GetConfiguredActionCanFail(action)
             : action.canFail) == false)

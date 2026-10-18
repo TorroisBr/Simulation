@@ -165,6 +165,57 @@ public sealed class DailyV1NpcDefinitionRulesTests
         Assert.That(random.Calls, Is.Zero, "Zero total weight must not consume the authoritative decision stream.");
     }
 
+    [Test]
+    public void SelectedActionSuccessUsesEffectiveDefinitionAndConsumesExactlyOneDraw()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ActionDefinition action = definitions.Actions.Values.FirstOrDefault(value => value.Values.canFail);
+        Assert.That(action, Is.Not.Null, "The selected fixture must exercise the configured action-success path.");
+        SequenceRandomSource random = new SequenceRandomSource(0.5f, 0.75f);
+        const string actorRuntimeId = "npc-runtime-17";
+        const string originDecisionId = "decision-42";
+        const float multiplier = 1.25f;
+        const long day = 42L;
+
+        Assert.That(DailyV1NpcActionDecision.TryRollActionSuccess(
+            definitions, action, actorRuntimeId, originDecisionId, multiplier, day, random,
+            out bool succeeded), Is.True);
+        float expectedChance = UnityMathfCompatibility.Clamp01(
+            action.Values.baseSuccessChance * UnityMathfCompatibility.Max(0f, multiplier));
+        Assert.That(succeeded, Is.EqualTo(0.5f <= expectedChance));
+        Assert.That(random.Calls, Is.EqualTo(1));
+        Assert.That(random.LastStreamKey,
+            Is.EqualTo("action-success|npc-runtime-17|decision-42|" + action.DefinitionId + "|42"));
+        Assert.That(random.NextUnit("following-operation"), Is.EqualTo(0.75f),
+            "The selected success roll must consume one draw and leave the following draw unchanged.");
+        Assert.That(random.Calls, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void SelectedActionSuccessRejectsForeignNodeAndDoesNotDrawForNonFailingAction()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1EffectiveDefinitions foreignDefinitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ActionDefinition nonFailing = definitions.Actions.Values.FirstOrDefault(value => !value.Values.canFail);
+        DailyV1ActionDefinition foreignAction = foreignDefinitions.Actions[definitions.Actions.Keys.First()];
+        Assert.That(nonFailing, Is.Not.Null, "The selected fixture must contain a non-failing action.");
+        SequenceRandomSource random = new SequenceRandomSource(0.25f);
+
+        Assert.That(DailyV1NpcActionDecision.TryRollActionSuccess(
+            definitions, foreignAction, "npc-runtime-17", "decision-42", 1f, 42L, random,
+            out bool rejectedResult), Is.False);
+        Assert.That(rejectedResult, Is.False);
+        Assert.That(random.Calls, Is.Zero, "A foreign same-profile node must be rejected before RNG use.");
+
+        Assert.That(DailyV1NpcActionDecision.TryRollActionSuccess(
+            definitions, nonFailing, "npc-runtime-17", null, 1f, 42L, random,
+            out bool nonFailingResult), Is.True);
+        Assert.That(nonFailingResult, Is.True);
+        Assert.That(random.Calls, Is.Zero, "A non-failing action must not consume the success stream.");
+        Assert.That(random.NextUnit("following-operation"), Is.EqualTo(0.25f));
+        Assert.That(random.Calls, Is.EqualTo(1));
+    }
+
     private sealed class FixedRandomSource : IAuthoritativeRandomSource
     {
         private readonly float value;
@@ -178,6 +229,23 @@ public sealed class DailyV1NpcDefinitionRulesTests
             Calls++;
             LastStreamKey = streamKey;
             return value;
+        }
+
+        public DeterministicRandomStream CreateStream(string streamKey) => null;
+    }
+
+    private sealed class SequenceRandomSource : IAuthoritativeRandomSource
+    {
+        private readonly float[] values;
+        public int Calls { get; private set; }
+        public string LastStreamKey { get; private set; }
+
+        public SequenceRandomSource(params float[] values) { this.values = values; }
+
+        public float NextUnit(string streamKey, long drawIndex = 0L)
+        {
+            LastStreamKey = streamKey;
+            return values[Calls++];
         }
 
         public DeterministicRandomStream CreateStream(string streamKey) => null;

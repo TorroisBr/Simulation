@@ -17,6 +17,41 @@ internal sealed class DailyV1NpcActionCandidate
 /// <summary>Core action eligibility, utility and deterministic selection for selected Daily-v1 definitions.</summary>
 internal static class DailyV1NpcActionDecision
 {
+    /// <summary>Applies the admitted Daily-v1 action's existing success-roll contract.</summary>
+    internal static bool TryRollActionSuccess(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ActionDefinition action,
+        string actorRuntimeId,
+        string decisionId,
+        float contextualMultiplier,
+        long currentAbsoluteDay,
+        IAuthoritativeRandomSource randomSource,
+        out bool succeeded)
+    {
+        succeeded = false;
+        if (!IsAdmittedAction(definitions, action))
+            return false;
+
+        if (!action.Values.canFail)
+        {
+            succeeded = true;
+            return true;
+        }
+
+        if (randomSource == null)
+            return false;
+
+        float effectiveChance = UnityMathfCompatibility.Clamp01(
+            action.Values.baseSuccessChance * UnityMathfCompatibility.Max(0f, contextualMultiplier));
+        string decisionKey = decisionId ?? "unbound";
+        string actionKey = action.DefinitionId;
+        float randomValue = randomSource.NextUnit(
+            "action-success|" + (actorRuntimeId ?? "unknown-actor") + "|" + decisionKey + "|"
+            + actionKey + "|" + currentAbsoluteDay);
+        succeeded = randomValue <= effectiveChance;
+        return true;
+    }
+
     internal static bool TryCreateCandidates(
         DailyV1NpcDefinition npc,
         DailyV1EffectiveDefinitions definitions,

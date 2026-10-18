@@ -446,6 +446,28 @@ public class NpcRuntime : ICapabilityConditionSource
             : 0f;
     }
 
+    internal bool TryRollSelectedDailyV1ActionSuccess(
+        NpcActionData action,
+        string decisionId,
+        float contextualMultiplier,
+        long currentAbsoluteDay,
+        IAuthoritativeRandomSource randomSource,
+        out bool succeeded)
+    {
+        succeeded = false;
+        return selectedDailyV1Definition != null
+            && TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
+            && DailyV1NpcActionDecision.TryRollActionSuccess(
+                selectedDefinitionGraph,
+                actionNode,
+                RuntimeId,
+                decisionId,
+                contextualMultiplier,
+                currentAbsoluteDay,
+                randomSource,
+                out succeeded);
+    }
+
     internal int GetConfiguredActionTypeOrder(NpcActionData action)
     {
         if (selectedDailyV1Definition == null)
