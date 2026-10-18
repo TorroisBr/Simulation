@@ -1030,6 +1030,8 @@ public class NpcRuntime : ICapabilityConditionSource
 
             selectedRuntimeOwners = selectedOwners;
             selectedDefinitionBindings = selectedBindings;
+            commercialKnowledge = new CommercialKnowledgeRuntime(
+                selectedOwners.CommercialKnowledge, selectedBindings);
             inventory = new InventoryRuntime(selectedOwners.Inventory);
             if (!inventory.TryBindSelectedDailyV1Owner(selectedDefinitions, selectedBindings))
                 throw new ArgumentException("The selected NPC Inventory could not bind the exact admitted Daily-v1 item graph.", nameof(selectedDefinitions));
@@ -1143,6 +1145,12 @@ public class NpcRuntime : ICapabilityConditionSource
                 && ExistingInventory.SelectedDailyV1Owner != null
                 && !ExistingInventory.TryBindSelectedDailyV1Owner(definitions, bindings))
                 return false;
+            if (CommercialKnowledge.SelectedOwner == null
+                || !ReferenceEquals(CommercialKnowledge.SelectedOwner,
+                    selectedRuntimeOwners.CommercialKnowledge)
+                || !CommercialKnowledge.TryBindSelectedDailyV1Owner(
+                    selectedRuntimeOwners.CommercialKnowledge, bindings))
+                return false;
 
             // A detached P12 stage already owns the canonical status nodes.
             // Bind only the Unity compatibility projection here; never rebuild
@@ -1153,6 +1161,9 @@ public class NpcRuntime : ICapabilityConditionSource
         }
 
         DailyV1ActionDefinition stagedCurrentAction = null;
+        if (!CommercialKnowledge.TryCreateSelectedOwner(definitions, bindings,
+                out DailyV1CommercialKnowledgeOwner stagedCommercialKnowledge))
+            return false;
         if (!HasConsistentCurrentActionSlot
             || (currentActionRuntime != null
                 && !TryResolveSelectedDailyV1Action(definitions, bindings,
@@ -1162,12 +1173,14 @@ public class NpcRuntime : ICapabilityConditionSource
             || !DailyV1SelectedRuntimeOwnerGraph.TryCreateBoundNpcOwner(
                 runtimeId, definitions, definition, stagedStatuses,
                 ExistingInventory?.SelectedDailyV1Owner, moneyAccount,
+                stagedCommercialKnowledge,
                 out DailyV1NpcRuntimeOwners stagedOwners))
             return false;
         if (!stagedOwners.ActionSlot.TrySetCurrentAction(stagedCurrentAction)) return false;
         if (ExistingInventory != null
             && ExistingInventory.SelectedDailyV1Owner != null
             && !ExistingInventory.TryBindSelectedDailyV1Owner(definitions, bindings)) return false;
+        if (!CommercialKnowledge.TryBindSelectedDailyV1Owner(stagedCommercialKnowledge, bindings)) return false;
         selectedRuntimeOwners = stagedOwners;
         selectedDefinitionBindings = bindings;
         return true;
@@ -1291,6 +1304,9 @@ public class NpcRuntime : ICapabilityConditionSource
                 || state.SelectedCurrentStatusDefinitions.Count != state.CurrentStatus.Count
                 || state.Inventory.SelectedDailyV1Owner == null
                 || !ReferenceEquals(state.Inventory.SelectedDailyV1Owner.Definitions,
+                    state.SelectedDefinitions)
+                || state.CommercialKnowledge.SelectedOwner == null
+                || !ReferenceEquals(state.CommercialKnowledge.SelectedOwner.Definitions,
                     state.SelectedDefinitions))
                 return false;
 
@@ -1314,6 +1330,7 @@ public class NpcRuntime : ICapabilityConditionSource
                     state.SelectedCurrentStatusDefinitions,
                     state.Inventory.SelectedDailyV1Owner,
                     state.MoneyAccount,
+                    state.CommercialKnowledge.SelectedOwner,
                     out stagedSelectedOwners))
                 return false;
 

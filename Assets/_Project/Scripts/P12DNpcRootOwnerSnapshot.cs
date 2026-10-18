@@ -2,6 +2,7 @@ using System.Linq;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using UnityEngine;
 
 internal enum P12DNpcRootOwnerSnapshotFailure
 {
@@ -945,6 +946,16 @@ internal static class P12DNpcRootOwnerSnapshot
             return false;
         }
 
+        DailyV1DefinitionAdapter.SelectedBindings selectedItemBindings = null;
+        if (selectedDefinitions != null
+            && !DailyV1DefinitionAdapter.SelectedBindings.TryCreate(
+                itemDefinitions.Cast<ScriptableObject>(), selectedDefinitions,
+                out selectedItemBindings, out _))
+        {
+            failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
+            return false;
+        }
+
         Dictionary<string, CityRuntime> citiesById = new Dictionary<string, CityRuntime>(StringComparer.Ordinal);
         for (int i = 0; i < cityMembershipLinkers.Count; i++)
         {
@@ -1171,7 +1182,8 @@ internal static class P12DNpcRootOwnerSnapshot
                 return false;
             }
 
-            if (!TryCreateCommercialKnowledge(f, itemsByDefinition,
+            if (!TryCreateCommercialKnowledge(f, itemsByDefinition, selectedDefinitions,
+                    selectedItemBindings,
                     out CommercialKnowledgeRuntime stagedCommercial)
                 || !ExplorableSiteKnowledgeRuntime.TryCreateFromOwnerSnapshot(
                     d.RuntimeId, f.SiteObservations, f.SiteKnowledgeRevision,
@@ -1305,6 +1317,8 @@ internal static class P12DNpcRootOwnerSnapshot
     private static bool TryCreateCommercialKnowledge(
         P12DNpcFRow row,
         IReadOnlyDictionary<string, ItemData> itemsByDefinition,
+        DailyV1EffectiveDefinitions selectedDefinitions,
+        DailyV1DefinitionAdapter.SelectedBindings selectedItemBindings,
         out CommercialKnowledgeRuntime staged)
     {
         staged = null;
@@ -1346,9 +1360,12 @@ internal static class P12DNpcRootOwnerSnapshot
             catch (ArgumentException) { return false; }
         }
 
-        return CommercialKnowledgeRuntime.TryCreateFromOwnerSnapshot(
-            markets, liquidity, row.CommercialShareReceipts,
-            row.CommercialKnowledgeRevision, out staged);
+        if (!CommercialKnowledgeRuntime.TryCreateFromOwnerSnapshot(
+                markets, liquidity, row.CommercialShareReceipts,
+                row.CommercialKnowledgeRevision, out staged)) return false;
+        if (selectedDefinitions == null) return selectedItemBindings == null;
+        return selectedItemBindings != null
+            && staged.TryBindSelectedDailyV1Owner(selectedDefinitions, selectedItemBindings);
     }
 
     private static bool TryValidateActionEvidence(

@@ -154,11 +154,12 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         IEnumerable<DailyV1StatusDefinition> statuses,
         DailyV1InventoryOwner inventory,
         MoneyAccountRuntime moneyAccount,
+        DailyV1CommercialKnowledgeOwner commercialKnowledge,
         out DailyV1NpcRuntimeOwners owners)
     {
         owners = null;
         if (!DailyV1NpcRuntimeOwners.TryCreateBound(
-                runtimeId, definitions, definition, statuses, inventory, moneyAccount,
+                runtimeId, definitions, definition, statuses, inventory, moneyAccount, commercialKnowledge,
                 out DailyV1NpcRuntimeOwners candidate)
             || !TryCreate(definitions, Array.Empty<DailyV1CityRuntimeOwners>(), new[] { candidate }, out _))
             return false;

@@ -194,7 +194,7 @@ public sealed class CommercialKnowledgeShareValue
     public string SourceRuntimeId { get; }
     public string SortKey => IsMarketObservation ? "item:" + ItemDefinitionId : "liquidity";
 
-    private CommercialKnowledgeShareValue(string locationRuntimeId, string itemDefinitionId,
+    internal CommercialKnowledgeShareValue(string locationRuntimeId, string itemDefinitionId,
         ItemData itemDefinition, float observedPrice, int observedStock, MarketLiquidityMode liquidityMode,
         float observedPurchasingPower, long observedDay, long sourceReceivedDay,
         CommercialKnowledgeSource source, string sourceRuntimeId, bool isMarketObservation)
@@ -404,6 +404,16 @@ public sealed class CommercialKnowledgeShareReceipt
             receiverPersonId, sourceSnapshotFingerprint, appliedObservationCount);
         return true;
     }
+
+    internal static CommercialKnowledgeShareReceipt FromSelectedOwner(
+        DailyV1CommercialKnowledgeShareReceipt receipt)
+    {
+        if (receipt == null || !receipt.IsValid) return null;
+        return new CommercialKnowledgeShareReceipt(receipt.OperationIdentity, receipt.Fingerprint,
+            receipt.BoundaryOccurrenceId, receipt.SenderRuntimeId, receipt.SenderPersonId,
+            receipt.ReceiverRuntimeId, receipt.ReceiverPersonId, receipt.SourceSnapshotFingerprint,
+            receipt.AppliedObservationCount);
+    }
 }
 
 /// <summary>Prepared recipient-owned batch. Knowledge and its edge receipt install together.</summary>
@@ -416,6 +426,7 @@ public sealed class CommercialKnowledgeShareBatchCommit
     private readonly List<CommercialLiquidityObservation> nextLiquidityObservations;
     private readonly List<CommercialKnowledgeShareReceipt> nextReceipts;
     private readonly CommercialKnowledgeShareReceipt receipt;
+    private readonly DailyV1CommercialKnowledgeShareBatchCommit selectedCommit;
 
     internal CommercialKnowledgeShareBatchCommit(CommercialKnowledgeRuntime owner, long expectedRevision,
         bool replay, List<CommercialMarketObservation> nextMarketObservations,
@@ -428,6 +439,15 @@ public sealed class CommercialKnowledgeShareBatchCommit
         this.nextMarketObservations = nextMarketObservations;
         this.nextLiquidityObservations = nextLiquidityObservations;
         this.nextReceipts = nextReceipts;
+        this.receipt = receipt;
+    }
+
+    internal CommercialKnowledgeShareBatchCommit(CommercialKnowledgeRuntime owner,
+        DailyV1CommercialKnowledgeShareBatchCommit selectedCommit,
+        CommercialKnowledgeShareReceipt receipt)
+    {
+        this.owner = owner;
+        this.selectedCommit = selectedCommit;
         this.receipt = receipt;
     }
 
@@ -444,6 +464,7 @@ public sealed class CommercialKnowledgeShareBatchCommit
     internal List<CommercialMarketObservation> NextMarketObservations => nextMarketObservations;
     internal List<CommercialLiquidityObservation> NextLiquidityObservations => nextLiquidityObservations;
     internal List<CommercialKnowledgeShareReceipt> NextReceipts => nextReceipts;
+    internal DailyV1CommercialKnowledgeShareBatchCommit SelectedCommit => selectedCommit;
 }
 
 [Serializable]
@@ -455,12 +476,269 @@ public sealed class CommercialKnowledgeRuntime
     [SerializeField] private long revision;
     [NonSerialized] private Func<bool> p12MutationAdmission;
     [NonSerialized] private Action p12MutationCommitted;
+    [NonSerialized] private DailyV1CommercialKnowledgeOwner selectedOwner;
+    [NonSerialized] private DailyV1DefinitionAdapter.SelectedBindings selectedBindings;
+    [NonSerialized] private Dictionary<DailyV1CommercialKnowledgeShareReceipt, CommercialKnowledgeShareReceipt> selectedReceiptProjections;
 
-    public IReadOnlyList<CommercialMarketObservation> Observations => ObservationList;
-    public IReadOnlyList<CommercialLiquidityObservation> LiquidityObservations => LiquidityObservationList;
-    public long Revision => revision;
+    public IReadOnlyList<CommercialMarketObservation> Observations => selectedOwner == null
+        ? ObservationList : ProjectSelectedMarketObservations();
+    public IReadOnlyList<CommercialLiquidityObservation> LiquidityObservations => selectedOwner == null
+        ? LiquidityObservationList : ProjectSelectedLiquidityObservations();
+    public long Revision => selectedOwner == null ? revision : selectedOwner.Revision;
+    internal DailyV1CommercialKnowledgeOwner SelectedOwner => selectedOwner;
+
+    internal CommercialKnowledgeRuntime() { }
+
+    internal CommercialKnowledgeRuntime(DailyV1CommercialKnowledgeOwner selectedOwner,
+        DailyV1DefinitionAdapter.SelectedBindings selectedBindings)
+    {
+        if (selectedOwner == null) throw new ArgumentNullException(nameof(selectedOwner));
+        if (selectedBindings == null) throw new ArgumentNullException(nameof(selectedBindings));
+        this.selectedOwner = selectedOwner;
+        this.selectedBindings = selectedBindings;
+        selectedReceiptProjections = new Dictionary<DailyV1CommercialKnowledgeShareReceipt, CommercialKnowledgeShareReceipt>();
+    }
+
+    internal bool TryBindSelectedDailyV1Owner(DailyV1EffectiveDefinitions definitions,
+        DailyV1DefinitionAdapter.SelectedBindings bindings)
+    {
+        if (definitions == null || bindings == null) return false;
+        if (selectedOwner != null)
+            return ReferenceEquals(selectedOwner.Definitions, definitions)
+                && TryBindSelectedDailyV1Owner(selectedOwner, bindings);
+        if (!TryCreateSelectedOwner(definitions, bindings, out DailyV1CommercialKnowledgeOwner owner)) return false;
+        return TryBindSelectedDailyV1Owner(owner, bindings);
+    }
+
+    internal bool TryCreateSelectedOwner(DailyV1EffectiveDefinitions definitions,
+        DailyV1DefinitionAdapter.SelectedBindings bindings,
+        out DailyV1CommercialKnowledgeOwner owner)
+    {
+        owner = null;
+        if (definitions == null || bindings == null) return false;
+        if (selectedOwner != null)
+        {
+            if (!ReferenceEquals(selectedOwner.Definitions, definitions)) return false;
+            foreach (DailyV1CommercialMarketObservation row in selectedOwner.Observations)
+                if (row == null || !bindings.TryGetAsset(row.ItemDefinition, out ItemData item)
+                    || item == null || !bindings.TryGet(item, out DailyV1ItemDefinition node)
+                    || !ReferenceEquals(node, row.ItemDefinition)) return false;
+            owner = selectedOwner;
+            return true;
+        }
+
+        List<DailyV1CommercialMarketObservation> markets = new List<DailyV1CommercialMarketObservation>(ObservationList.Count);
+        foreach (CommercialMarketObservation row in ObservationList)
+        {
+            if (row == null || row.ItemDefinition == null
+                || !bindings.TryGet(row.ItemDefinition, out DailyV1ItemDefinition node)
+                || !definitions.Items.TryGetValue(node.DefinitionId, out DailyV1ItemDefinition admitted)
+                || !ReferenceEquals(admitted, node)
+                || !string.Equals(row.ItemDefinitionId, node.DefinitionId, StringComparison.Ordinal)
+                || !TryToSelectedSource(row.Source, out DailyV1CommercialKnowledgeSource source)) return false;
+            try
+            {
+                markets.Add(new DailyV1CommercialMarketObservation(row.LocationRuntimeId, node,
+                    row.ObservedPrice, row.ObservedStock, row.ObservedDay, row.ReceivedDay,
+                    source, row.SourceRuntimeId));
+            }
+            catch (ArgumentException) { return false; }
+        }
+
+        List<DailyV1CommercialLiquidityObservation> liquidity = new List<DailyV1CommercialLiquidityObservation>(LiquidityObservationList.Count);
+        foreach (CommercialLiquidityObservation row in LiquidityObservationList)
+        {
+            if (row == null || !TryToSelectedSource(row.Source, out DailyV1CommercialKnowledgeSource source)) return false;
+            try
+            {
+                liquidity.Add(new DailyV1CommercialLiquidityObservation(row.LocationRuntimeId,
+                    row.LiquidityMode, row.ObservedPurchasingPower, row.ObservedDay,
+                    row.ReceivedDay, source, row.SourceRuntimeId));
+            }
+            catch (ArgumentException) { return false; }
+        }
+
+        List<DailyV1CommercialKnowledgeShareReceipt> receipts = new List<DailyV1CommercialKnowledgeShareReceipt>(ShareReceipts.Count);
+        foreach (CommercialKnowledgeShareReceipt row in ShareReceipts)
+        {
+            if (row == null || !CommercialKnowledgeShareReceipt.TryCreateFromOwnerSnapshot(
+                    row.OperationIdentity, row.Fingerprint, row.BoundaryOccurrenceId,
+                    row.SenderRuntimeId, row.SenderPersonId, row.ReceiverRuntimeId,
+                    row.ReceiverPersonId, row.SourceSnapshotFingerprint,
+                    row.AppliedObservationCount, out CommercialKnowledgeShareReceipt validated)) return false;
+            receipts.Add(new DailyV1CommercialKnowledgeShareReceipt(
+                validated.OperationIdentity, validated.Fingerprint, validated.BoundaryOccurrenceId,
+                validated.SenderRuntimeId, validated.SenderPersonId, validated.ReceiverRuntimeId,
+                validated.ReceiverPersonId, validated.SourceSnapshotFingerprint,
+                validated.AppliedObservationCount));
+        }
+        return DailyV1CommercialKnowledgeOwner.TryCreateFromOwnerSnapshot(
+            definitions, markets, liquidity, receipts, revision, out owner);
+    }
+
+    internal bool TryBindSelectedDailyV1Owner(DailyV1CommercialKnowledgeOwner owner,
+        DailyV1DefinitionAdapter.SelectedBindings bindings)
+    {
+        if (owner == null || bindings == null) return false;
+        if (selectedOwner != null && !ReferenceEquals(selectedOwner, owner)) return false;
+        if (!owner.TryCopyOwnerSnapshot(
+                out IReadOnlyList<DailyV1CommercialMarketObservation> markets,
+                out IReadOnlyList<DailyV1CommercialLiquidityObservation> liquidity,
+                out IReadOnlyList<DailyV1CommercialKnowledgeShareReceipt> receipts)) return false;
+        foreach (DailyV1CommercialMarketObservation row in markets)
+        {
+            if (row == null || !bindings.TryGetAsset(row.ItemDefinition, out ItemData item)
+                || item == null || !bindings.TryGet(item, out DailyV1ItemDefinition node)
+                || !ReferenceEquals(node, row.ItemDefinition)) return false;
+        }
+        if (selectedOwner != null)
+        {
+            selectedBindings = bindings;
+            return true;
+        }
+        if ((p12MutationAdmission == null) != (p12MutationCommitted == null)) return false;
+        if (p12MutationAdmission != null)
+        {
+            try { owner.BindMutationBoundary(p12MutationAdmission, p12MutationCommitted); }
+            catch (InvalidOperationException) { return false; }
+        }
+        selectedOwner = owner;
+        selectedBindings = bindings;
+        observations = new List<CommercialMarketObservation>();
+        liquidityObservations = new List<CommercialLiquidityObservation>();
+        shareReceipts = new List<CommercialKnowledgeShareReceipt>();
+        revision = 0L;
+        selectedReceiptProjections = new Dictionary<DailyV1CommercialKnowledgeShareReceipt, CommercialKnowledgeShareReceipt>();
+        return true;
+    }
+
+    private static bool TryToSelectedSource(CommercialKnowledgeSource source,
+        out DailyV1CommercialKnowledgeSource selectedSource)
+    {
+        selectedSource = default;
+        if (!Enum.IsDefined(typeof(CommercialKnowledgeSource), source)) return false;
+        selectedSource = (DailyV1CommercialKnowledgeSource)(int)source;
+        return Enum.IsDefined(typeof(DailyV1CommercialKnowledgeSource), selectedSource);
+    }
+
+    private static CommercialKnowledgeSource FromSelectedSource(DailyV1CommercialKnowledgeSource source) =>
+        (CommercialKnowledgeSource)(int)source;
+
+    private bool TryCreateSelectedMarketObservation(CommercialMarketObservation observation,
+        out DailyV1CommercialMarketObservation selected)
+    {
+        selected = null;
+        if (selectedOwner == null || selectedBindings == null || observation == null
+            || observation.ItemDefinition == null
+            || !selectedBindings.TryGet(observation.ItemDefinition, out DailyV1ItemDefinition node)
+            || !selectedOwner.Definitions.Items.TryGetValue(node.DefinitionId, out DailyV1ItemDefinition admitted)
+            || !ReferenceEquals(node, admitted)
+            || !string.Equals(observation.ItemDefinitionId, node.DefinitionId, StringComparison.Ordinal)
+            || !TryToSelectedSource(observation.Source, out DailyV1CommercialKnowledgeSource source)) return false;
+        try
+        {
+            selected = new DailyV1CommercialMarketObservation(observation.LocationRuntimeId,
+                node, observation.ObservedPrice, observation.ObservedStock, observation.ObservedDay,
+                observation.ReceivedDay, source, observation.SourceRuntimeId);
+            return true;
+        }
+        catch (ArgumentException) { return false; }
+    }
+
+    private static bool TryCreateSelectedLiquidityObservation(CommercialLiquidityObservation observation,
+        out DailyV1CommercialLiquidityObservation selected)
+    {
+        selected = null;
+        if (observation == null || !TryToSelectedSource(observation.Source,
+                out DailyV1CommercialKnowledgeSource source)) return false;
+        try
+        {
+            selected = new DailyV1CommercialLiquidityObservation(observation.LocationRuntimeId,
+                observation.LiquidityMode, observation.ObservedPurchasingPower, observation.ObservedDay,
+                observation.ReceivedDay, source, observation.SourceRuntimeId);
+            return true;
+        }
+        catch (ArgumentException) { return false; }
+    }
+
+    private bool TryProjectSelectedMarketObservation(DailyV1CommercialMarketObservation observation,
+        out CommercialMarketObservation projected)
+    {
+        projected = null;
+        if (observation == null || selectedBindings == null
+            || !selectedBindings.TryGetAsset(observation.ItemDefinition, out ItemData item) || item == null)
+            return false;
+        try
+        {
+            projected = new CommercialMarketObservation(observation.LocationRuntimeId, item,
+                observation.ObservedPrice, observation.ObservedStock, observation.ObservedDay,
+                observation.ReceivedDay, FromSelectedSource(observation.Source), observation.SourceRuntimeId);
+            return true;
+        }
+        catch (ArgumentException) { return false; }
+    }
+
+    private static bool TryProjectSelectedLiquidityObservation(
+        DailyV1CommercialLiquidityObservation observation,
+        out CommercialLiquidityObservation projected)
+    {
+        projected = null;
+        if (observation == null) return false;
+        try
+        {
+            projected = new CommercialLiquidityObservation(observation.LocationRuntimeId,
+                observation.LiquidityMode, observation.ObservedPurchasingPower, observation.ObservedDay,
+                observation.ReceivedDay, FromSelectedSource(observation.Source), observation.SourceRuntimeId);
+            return true;
+        }
+        catch (ArgumentException) { return false; }
+    }
+
+    private IReadOnlyList<CommercialMarketObservation> ProjectSelectedMarketObservations()
+    {
+        if (selectedBindings == null || selectedOwner == null) return Array.Empty<CommercialMarketObservation>();
+        List<CommercialMarketObservation> projected = new List<CommercialMarketObservation>(selectedOwner.Observations.Count);
+        foreach (DailyV1CommercialMarketObservation row in selectedOwner.Observations)
+        {
+            if (row == null || !selectedBindings.TryGetAsset(row.ItemDefinition, out ItemData item) || item == null)
+                return Array.Empty<CommercialMarketObservation>();
+            projected.Add(new CommercialMarketObservation(row.LocationRuntimeId, item,
+                row.ObservedPrice, row.ObservedStock, row.ObservedDay, row.ReceivedDay,
+                FromSelectedSource(row.Source), row.SourceRuntimeId));
+        }
+        return projected.AsReadOnly();
+    }
+
+    private IReadOnlyList<CommercialLiquidityObservation> ProjectSelectedLiquidityObservations()
+    {
+        if (selectedOwner == null) return Array.Empty<CommercialLiquidityObservation>();
+        List<CommercialLiquidityObservation> projected = new List<CommercialLiquidityObservation>(selectedOwner.LiquidityObservations.Count);
+        foreach (DailyV1CommercialLiquidityObservation row in selectedOwner.LiquidityObservations)
+        {
+            if (row == null) return Array.Empty<CommercialLiquidityObservation>();
+            projected.Add(new CommercialLiquidityObservation(row.LocationRuntimeId, row.LiquidityMode,
+                row.ObservedPurchasingPower, row.ObservedDay, row.ReceivedDay,
+                FromSelectedSource(row.Source), row.SourceRuntimeId));
+        }
+        return projected.AsReadOnly();
+    }
+
+    private CommercialKnowledgeShareReceipt ProjectSelectedReceipt(DailyV1CommercialKnowledgeShareReceipt receipt)
+    {
+        if (receipt == null || !receipt.IsValid) return null;
+        if (selectedReceiptProjections == null)
+            selectedReceiptProjections = new Dictionary<DailyV1CommercialKnowledgeShareReceipt, CommercialKnowledgeShareReceipt>();
+        if (!selectedReceiptProjections.TryGetValue(receipt, out CommercialKnowledgeShareReceipt projected))
+        {
+            projected = CommercialKnowledgeShareReceipt.FromSelectedOwner(receipt);
+            if (projected != null) selectedReceiptProjections.Add(receipt, projected);
+        }
+        return projected;
+    }
     internal bool TryReadCensus(out int marketCount, out int liquidityCount, out int shareReceiptCount, out long currentRevision)
     {
+        if (selectedOwner != null)
+            return selectedOwner.TryReadCensus(out marketCount, out liquidityCount, out shareReceiptCount, out currentRevision);
         marketCount = 0; liquidityCount = 0; shareReceiptCount = 0; currentRevision = revision;
         if (observations == null || liquidityObservations == null || shareReceipts == null) return false;
         marketCount = observations.Count;
@@ -482,6 +760,41 @@ public sealed class CommercialKnowledgeRuntime
         markets = null;
         liquidity = null;
         receipts = null;
+        if (selectedOwner != null)
+        {
+            if (selectedBindings == null
+                || !selectedOwner.TryCopyOwnerSnapshot(
+                    out IReadOnlyList<DailyV1CommercialMarketObservation> selectedMarkets,
+                    out IReadOnlyList<DailyV1CommercialLiquidityObservation> selectedLiquidity,
+                    out IReadOnlyList<DailyV1CommercialKnowledgeShareReceipt> selectedReceipts)) return false;
+            List<CommercialMarketObservation> projectedMarkets = new List<CommercialMarketObservation>(selectedMarkets.Count);
+            foreach (DailyV1CommercialMarketObservation row in selectedMarkets)
+            {
+                if (row == null || !selectedBindings.TryGetAsset(row.ItemDefinition, out ItemData item) || item == null) return false;
+                projectedMarkets.Add(new CommercialMarketObservation(row.LocationRuntimeId, item,
+                    row.ObservedPrice, row.ObservedStock, row.ObservedDay, row.ReceivedDay,
+                    FromSelectedSource(row.Source), row.SourceRuntimeId));
+            }
+            List<CommercialLiquidityObservation> projectedLiquidity = new List<CommercialLiquidityObservation>(selectedLiquidity.Count);
+            foreach (DailyV1CommercialLiquidityObservation row in selectedLiquidity)
+            {
+                if (row == null) return false;
+                projectedLiquidity.Add(new CommercialLiquidityObservation(row.LocationRuntimeId,
+                    row.LiquidityMode, row.ObservedPurchasingPower, row.ObservedDay,
+                    row.ReceivedDay, FromSelectedSource(row.Source), row.SourceRuntimeId));
+            }
+            List<CommercialKnowledgeShareReceipt> projectedReceipts = new List<CommercialKnowledgeShareReceipt>(selectedReceipts.Count);
+            foreach (DailyV1CommercialKnowledgeShareReceipt row in selectedReceipts)
+            {
+                CommercialKnowledgeShareReceipt projected = ProjectSelectedReceipt(row);
+                if (projected == null) return false;
+                projectedReceipts.Add(projected);
+            }
+            markets = projectedMarkets.AsReadOnly();
+            liquidity = projectedLiquidity.AsReadOnly();
+            receipts = projectedReceipts.AsReadOnly();
+            return true;
+        }
         if (observations == null || liquidityObservations == null || shareReceipts == null) return false;
         markets = new List<CommercialMarketObservation>(observations).AsReadOnly();
         liquidity = new List<CommercialLiquidityObservation>(liquidityObservations).AsReadOnly();
@@ -527,8 +840,53 @@ public sealed class CommercialKnowledgeRuntime
         return true;
     }
 
+    private bool TryCreateSelectedShareBatch(CommercialKnowledgeShareBatch batch,
+        out DailyV1CommercialKnowledgeShareBatch selectedBatch)
+    {
+        selectedBatch = null;
+        if (selectedOwner == null || selectedBindings == null || batch == null) return false;
+        List<DailyV1CommercialKnowledgeShareValue> values =
+            new List<DailyV1CommercialKnowledgeShareValue>(batch.Values.Count);
+        foreach (CommercialKnowledgeShareValue value in batch.Values)
+        {
+            if (value == null || !TryToSelectedSource(value.Source,
+                    out DailyV1CommercialKnowledgeSource source)) return false;
+            DailyV1ItemDefinition item = null;
+            if (value.IsMarketObservation)
+            {
+                if (value.ItemDefinition == null
+                    || !selectedBindings.TryGet(value.ItemDefinition, out item)
+                    || !selectedOwner.Definitions.Items.TryGetValue(value.ItemDefinitionId,
+                        out DailyV1ItemDefinition admitted)
+                    || !ReferenceEquals(item, admitted)
+                    || !string.Equals(item.DefinitionId, value.ItemDefinitionId,
+                        StringComparison.Ordinal)) return false;
+            }
+            else if (value.ItemDefinition != null || value.ItemDefinitionId != null)
+            {
+                return false;
+            }
+            values.Add(new DailyV1CommercialKnowledgeShareValue(value.LocationRuntimeId,
+                item, value.ObservedPrice, value.ObservedStock, value.LiquidityMode,
+                value.ObservedPurchasingPower, value.ObservedDay, value.SourceReceivedDay,
+                source, value.SourceRuntimeId, value.IsMarketObservation));
+        }
+        try
+        {
+            selectedBatch = new DailyV1CommercialKnowledgeShareBatch(
+                batch.BoundaryOccurrenceId, batch.SenderRuntimeId, batch.SenderPersonId,
+                batch.ReceiverRuntimeId, batch.ReceiverPersonId, batch.SourceSnapshotFingerprint,
+                batch.ReceivedDay, batch.MaxSuccessfulUpdates, values);
+            return true;
+        }
+        catch (ArgumentException) { return false; }
+    }
+
     public bool RecordObservation(CommercialMarketObservation observation)
     {
+        if (selectedOwner != null)
+            return TryCreateSelectedMarketObservation(observation, out DailyV1CommercialMarketObservation selected)
+                && selectedOwner.RecordObservation(selected);
         if (observation == null)
         {
             return false;
@@ -563,6 +921,9 @@ public sealed class CommercialKnowledgeRuntime
 
     public bool CanImproveWith(CommercialMarketObservation observation)
     {
+        if (selectedOwner != null)
+            return TryCreateSelectedMarketObservation(observation, out DailyV1CommercialMarketObservation selected)
+                && selectedOwner.CanImproveWith(selected);
         if (observation == null)
         {
             return false;
@@ -574,6 +935,13 @@ public sealed class CommercialKnowledgeRuntime
 
     public bool TryGetObservation(string locationRuntimeId, string itemDefinitionId, out CommercialMarketObservation observation)
     {
+        if (selectedOwner != null)
+        {
+            observation = null;
+            return selectedOwner.TryGetObservation(locationRuntimeId, itemDefinitionId,
+                    out DailyV1CommercialMarketObservation selected)
+                && TryProjectSelectedMarketObservation(selected, out observation);
+        }
         int index = FindObservationIndex(locationRuntimeId, itemDefinitionId);
 
         if (index >= 0)
@@ -588,6 +956,10 @@ public sealed class CommercialKnowledgeRuntime
 
     public bool RecordLiquidityObservation(CommercialLiquidityObservation observation)
     {
+        if (selectedOwner != null)
+            return TryCreateSelectedLiquidityObservation(observation,
+                    out DailyV1CommercialLiquidityObservation selected)
+                && selectedOwner.RecordLiquidityObservation(selected);
         if (observation == null)
         {
             return false;
@@ -620,6 +992,10 @@ public sealed class CommercialKnowledgeRuntime
 
     public bool CanImproveWith(CommercialLiquidityObservation observation)
     {
+        if (selectedOwner != null)
+            return TryCreateSelectedLiquidityObservation(observation,
+                    out DailyV1CommercialLiquidityObservation selected)
+                && selectedOwner.CanImproveWith(selected);
         if (observation == null)
         {
             return false;
@@ -631,6 +1007,13 @@ public sealed class CommercialKnowledgeRuntime
 
     public bool TryGetLiquidityObservation(string locationRuntimeId, out CommercialLiquidityObservation observation)
     {
+        if (selectedOwner != null)
+        {
+            observation = null;
+            return selectedOwner.TryGetLiquidityObservation(locationRuntimeId,
+                    out DailyV1CommercialLiquidityObservation selected)
+                && TryProjectSelectedLiquidityObservation(selected, out observation);
+        }
         int index = FindLiquidityObservationIndex(locationRuntimeId);
 
         if (index >= 0)
@@ -650,6 +1033,24 @@ public sealed class CommercialKnowledgeRuntime
     {
         prepared = null;
         if (marketObservations == null) return false;
+        if (selectedOwner != null)
+        {
+            List<DailyV1CommercialMarketObservation> selectedMarkets =
+                new List<DailyV1CommercialMarketObservation>(marketObservations.Count);
+            foreach (CommercialMarketObservation observation in marketObservations)
+            {
+                if (!TryCreateSelectedMarketObservation(observation,
+                        out DailyV1CommercialMarketObservation selected)) return false;
+                selectedMarkets.Add(selected);
+            }
+            DailyV1CommercialLiquidityObservation liquidity = null;
+            if (liquidityObservation != null
+                && !TryCreateSelectedLiquidityObservation(liquidityObservation, out liquidity)) return false;
+            if (!selectedOwner.TryPrepareDirectObservationBatch(selectedMarkets, liquidity,
+                    out DailyV1CommercialKnowledgeObservationInstall selectedPrepared)) return false;
+            prepared = new CommercialKnowledgeObservationInstall(this, selectedPrepared);
+            return true;
+        }
 
         List<CommercialMarketObservation> nextMarkets =
             new List<CommercialMarketObservation>(ObservationList);
@@ -698,12 +1099,22 @@ public sealed class CommercialKnowledgeRuntime
         return true;
     }
 
-    internal bool CanInstall(CommercialKnowledgeObservationInstall prepared) =>
-        prepared != null && prepared.Owner == this && revision == prepared.ExpectedRevision
-        && (prepared.NextRevision == revision || CanCommitP12Mutation());
+    internal bool CanInstall(CommercialKnowledgeObservationInstall prepared)
+    {
+        if (prepared == null || prepared.Owner != this) return false;
+        if (prepared.SelectedInstall != null)
+            return selectedOwner != null && selectedOwner.CanInstall(prepared.SelectedInstall);
+        return selectedOwner == null && revision == prepared.ExpectedRevision
+            && (prepared.NextRevision == revision || CanCommitP12Mutation());
+    }
 
     internal void InstallPrepared(CommercialKnowledgeObservationInstall prepared)
     {
+        if (prepared != null && prepared.Owner == this && prepared.SelectedInstall != null)
+        {
+            if (selectedOwner != null) selectedOwner.InstallPrepared(prepared.SelectedInstall);
+            return;
+        }
         if (prepared == null || prepared.Owner != this || revision != prepared.ExpectedRevision
             || prepared.NextRevision == revision || !CanCommitP12Mutation()) return;
         observations = prepared.NextMarketObservations;
@@ -716,6 +1127,12 @@ public sealed class CommercialKnowledgeRuntime
     {
         receipt = null;
         if (string.IsNullOrWhiteSpace(operationIdentity)) return false;
+        if (selectedOwner != null)
+        {
+            return selectedOwner.TryGetShareReceipt(operationIdentity,
+                    out DailyV1CommercialKnowledgeShareReceipt selectedReceipt)
+                && (receipt = ProjectSelectedReceipt(selectedReceipt)) != null;
+        }
         foreach (CommercialKnowledgeShareReceipt candidate in ShareReceipts)
         {
             if (candidate == null || candidate.OperationIdentity != operationIdentity) continue;
@@ -730,6 +1147,16 @@ public sealed class CommercialKnowledgeRuntime
     {
         prepared = null;
         if (batch == null) return false;
+        if (selectedOwner != null)
+        {
+            if (!TryCreateSelectedShareBatch(batch, out DailyV1CommercialKnowledgeShareBatch selectedBatch)
+                || !selectedOwner.TryPrepareShareBatch(selectedBatch,
+                    out DailyV1CommercialKnowledgeShareBatchCommit selectedPrepared)) return false;
+            CommercialKnowledgeShareReceipt selectedReceipt = ProjectSelectedReceipt(selectedPrepared.Receipt);
+            if (selectedReceipt == null) return false;
+            prepared = new CommercialKnowledgeShareBatchCommit(this, selectedPrepared, selectedReceipt);
+            return true;
+        }
         string fingerprint = batch.Fingerprint;
         if (TryGetShareReceipt(batch.OperationIdentity, out CommercialKnowledgeShareReceipt existing))
         {
@@ -791,6 +1218,15 @@ public sealed class CommercialKnowledgeRuntime
     {
         receipt = null;
         if (commit == null) return false;
+        if (commit.SelectedCommit != null)
+        {
+            if (selectedOwner == null
+                || !selectedOwner.TryCommitShareBatch(commit.SelectedCommit,
+                    out DailyV1CommercialKnowledgeShareReceipt selectedReceipt)) return false;
+            receipt = ProjectSelectedReceipt(selectedReceipt);
+            return receipt != null;
+        }
+        if (selectedOwner != null) return false;
         if (commit.IsReplay)
         {
             if (TryGetShareReceipt(commit.Receipt.OperationIdentity, out CommercialKnowledgeShareReceipt existing)
@@ -820,6 +1256,7 @@ public sealed class CommercialKnowledgeRuntime
         if (committed == null) throw new ArgumentNullException(nameof(committed));
         if (p12MutationAdmission != null || p12MutationCommitted != null)
             throw new InvalidOperationException("CommercialKnowledgeRuntime is already bound to a P12 mutation boundary.");
+        if (selectedOwner != null) selectedOwner.BindMutationBoundary(admission, committed);
         p12MutationAdmission = admission;
         p12MutationCommitted = committed;
     }
@@ -828,6 +1265,7 @@ public sealed class CommercialKnowledgeRuntime
     {
         if (!ReferenceEquals(p12MutationAdmission, admission)
             || !ReferenceEquals(p12MutationCommitted, committed)) return false;
+        if (selectedOwner != null && !selectedOwner.UnbindMutationBoundary(admission, committed)) return false;
         p12MutationAdmission = null;
         p12MutationCommitted = null;
         return true;
@@ -955,6 +1393,7 @@ public sealed class CommercialKnowledgeRuntime
 internal sealed class CommercialKnowledgeObservationInstall
 {
     internal CommercialKnowledgeRuntime Owner { get; }
+    internal DailyV1CommercialKnowledgeObservationInstall SelectedInstall { get; }
     internal long ExpectedRevision { get; }
     internal long NextRevision { get; }
     internal List<CommercialMarketObservation> NextMarketObservations { get; }
@@ -970,6 +1409,18 @@ internal sealed class CommercialKnowledgeObservationInstall
         NextRevision = nextRevision;
         NextMarketObservations = nextMarketObservations;
         NextLiquidityObservations = nextLiquidityObservations;
+    }
+
+    internal CommercialKnowledgeObservationInstall(CommercialKnowledgeRuntime owner,
+        DailyV1CommercialKnowledgeObservationInstall selectedInstall)
+    {
+        Owner = owner;
+        SelectedInstall = selectedInstall;
+        if (selectedInstall != null)
+        {
+            ExpectedRevision = selectedInstall.ExpectedRevision;
+            NextRevision = selectedInstall.NextRevision;
+        }
     }
 
     internal bool CanInstall(CommercialKnowledgeRuntime owner) => owner != null

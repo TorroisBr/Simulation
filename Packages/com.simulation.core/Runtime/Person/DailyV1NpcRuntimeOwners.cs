@@ -14,6 +14,7 @@ internal sealed class DailyV1NpcRuntimeOwners
     internal DailyV1InventoryOwner Inventory { get; }
     internal DailyV1NpcStatusOwner Status { get; }
     internal MoneyAccountRuntime MoneyAccount { get; }
+    internal DailyV1CommercialKnowledgeOwner CommercialKnowledge { get; }
     internal DailyV1NpcActionSlotOwner ActionSlot { get; }
 
     private DailyV1NpcRuntimeOwners(
@@ -22,7 +23,8 @@ internal sealed class DailyV1NpcRuntimeOwners
         DailyV1NpcDefinition definition,
         DailyV1InventoryOwner inventory,
         DailyV1NpcStatusOwner status,
-        MoneyAccountRuntime moneyAccount)
+        MoneyAccountRuntime moneyAccount,
+        DailyV1CommercialKnowledgeOwner commercialKnowledge)
     {
         RuntimeId = runtimeId;
         Definitions = definitions;
@@ -30,6 +32,7 @@ internal sealed class DailyV1NpcRuntimeOwners
         Inventory = inventory;
         Status = status;
         MoneyAccount = moneyAccount;
+        CommercialKnowledge = commercialKnowledge;
         ActionSlot = new DailyV1NpcActionSlotOwner(definitions);
     }
 
@@ -54,7 +57,8 @@ internal sealed class DailyV1NpcRuntimeOwners
 
         DailyV1InventoryOwner inventory = new DailyV1InventoryOwner(definitions);
         MoneyAccountRuntime moneyAccount = new MoneyAccountRuntime(initialMoney);
-        return TryCreateBound(runtimeId, definitions, definition, statuses, inventory, moneyAccount, out owners);
+        return TryCreateBound(runtimeId, definitions, definition, statuses, inventory, moneyAccount,
+            new DailyV1CommercialKnowledgeOwner(definitions), out owners);
     }
 
     internal static bool TryCreateBound(
@@ -64,6 +68,7 @@ internal sealed class DailyV1NpcRuntimeOwners
         IEnumerable<DailyV1StatusDefinition> statuses,
         DailyV1InventoryOwner inventory,
         MoneyAccountRuntime moneyAccount,
+        DailyV1CommercialKnowledgeOwner commercialKnowledge,
         out DailyV1NpcRuntimeOwners owners)
     {
         owners = null;
@@ -71,14 +76,27 @@ internal sealed class DailyV1NpcRuntimeOwners
             || !IsAdmitted(definitions, definition)
             || statuses == null
             || moneyAccount == null
+            || commercialKnowledge == null
+            || !ReferenceEquals(commercialKnowledge.Definitions, definitions)
             || (inventory != null && !ReferenceEquals(inventory.Definitions, definitions))
             || !DailyV1NpcStatusOwner.TryCreate(definitions, statuses, out DailyV1NpcStatusOwner statusOwner))
             return false;
 
         owners = new DailyV1NpcRuntimeOwners(
-            runtimeId, definitions, definition, inventory, statusOwner, moneyAccount);
+            runtimeId, definitions, definition, inventory, statusOwner, moneyAccount, commercialKnowledge);
         return true;
     }
+
+    internal static bool TryCreateBound(
+        string runtimeId,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1NpcDefinition definition,
+        IEnumerable<DailyV1StatusDefinition> statuses,
+        DailyV1InventoryOwner inventory,
+        MoneyAccountRuntime moneyAccount,
+        out DailyV1NpcRuntimeOwners owners) =>
+        TryCreateBound(runtimeId, definitions, definition, statuses, inventory, moneyAccount,
+            definitions == null ? null : new DailyV1CommercialKnowledgeOwner(definitions), out owners);
 
     private static bool IsAdmitted(
         DailyV1EffectiveDefinitions definitions,
