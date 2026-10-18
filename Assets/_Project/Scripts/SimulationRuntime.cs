@@ -11413,7 +11413,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 out IReadOnlyList<NpcStatusData> statusToAdd,
                 out IReadOnlyList<NpcStatusData> targetStatusToRemove,
                 out IReadOnlyList<NpcStatusData> targetStatusToAdd))
-            throw new InvalidOperationException("The admitted action status effects could not be resolved from the selected definition graph.");
+            throw new InvalidOperationException(
+                "The admitted action status effects could not be resolved from the selected definition graph "
+                + "(NPC '" + npcRuntime.RuntimeId + "', action '" + action.DefinitionId + "').");
 
         ApplyStatusChanges(npcRuntime, statusToRemove, statusToAdd);
 
