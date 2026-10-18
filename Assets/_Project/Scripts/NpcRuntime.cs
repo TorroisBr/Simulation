@@ -655,6 +655,13 @@ public class NpcRuntime : ICapabilityConditionSource
             && actionAsset != null;
     }
 
+    internal bool TryGetSelectedDailyV1ActionNode(
+        NpcActionData actionAsset,
+        out DailyV1ActionDefinition action)
+    {
+        return TryGetSelectedDailyV1Action(actionAsset, out action);
+    }
+
     internal bool TryGetSelectedDailyV1ActiveStatusNodes(List<DailyV1StatusDefinition> statuses)
     {
         if (statuses == null)

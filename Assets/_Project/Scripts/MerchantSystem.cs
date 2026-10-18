@@ -1038,6 +1038,12 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
         MerchantTradeOpportunity bestOpportunity = null;
         List<CityRuntime> destinationCities = travelSystem.GetKnownDirectDestinationCities(npcRuntime, originCity);
 
+        if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
+        {
+            return FindBestSelectedTradeOpportunityFrom(
+                npcRuntime, originCity, destinationCities, additionalCost, additionalTravelDays);
+        }
+
         foreach (CommercialMarketObservation originObservation in npcRuntime.CommercialKnowledge.Observations)
         {
             if (originObservation == null
@@ -1143,6 +1149,165 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
         }
 
         return bestOpportunity;
+    }
+
+    private MerchantTradeOpportunity FindBestSelectedTradeOpportunityFrom(
+        NpcRuntime npcRuntime,
+        CityRuntime originCity,
+        List<CityRuntime> destinationCities,
+        float additionalCost,
+        int additionalTravelDays)
+    {
+        DailyV1EffectiveDefinitions definitions = npcRuntime.SelectedDailyV1DefinitionGraph;
+        DailyV1NpcDefinition merchant = npcRuntime.SelectedDailyV1Definition;
+        if (definitions == null || merchant == null || destinationCities == null)
+        {
+            return null;
+        }
+
+        List<DailyV1MerchantTradeCandidate> candidates = new List<DailyV1MerchantTradeCandidate>();
+        List<CityRuntime> targetCities = new List<CityRuntime>();
+        List<CommercialMarketObservation> originObservations = new List<CommercialMarketObservation>();
+        List<CommercialMarketObservation> destinationObservations = new List<CommercialMarketObservation>();
+        List<float> originFreshnessValues = new List<float>();
+        List<float> destinationFreshnessValues = new List<float>();
+
+        foreach (CommercialMarketObservation originObservation in npcRuntime.CommercialKnowledge.Observations)
+        {
+            if (originObservation == null
+                || originObservation.LocationRuntimeId != originCity.Location.RuntimeId
+                || originObservation.ItemDefinition == null
+                || originObservation.ObservedStock <= 0)
+            {
+                continue;
+            }
+
+            if (!npcRuntime.TryGetSelectedDailyV1Item(
+                originObservation.ItemDefinition, out DailyV1ItemDefinition itemNode))
+            {
+                // Knowledge outside this selected graph cannot produce a selected action.
+                continue;
+            }
+
+            float originFreshness = knowledgePolicy.GetFreshness(originObservation, simulationTime.AbsoluteDay);
+            float buyPrice = originObservation.ObservedPrice;
+            if (originFreshness <= 0f || buyPrice <= 0f)
+            {
+                continue;
+            }
+
+            foreach (CityRuntime targetCity in destinationCities)
+            {
+                if (targetCity == null || targetCity == originCity)
+                {
+                    continue;
+                }
+
+                int travelDays = travelSystem.GetTravelDays(originCity, targetCity);
+                if (travelDays <= 0)
+                {
+                    continue;
+                }
+
+                float travelCost = travelSystem.GetTravelCost(travelDays);
+                float totalTravelCost = additionalCost + travelCost;
+                float moneyAvailableForGoods = npcRuntime.Money - totalTravelCost;
+                if (moneyAvailableForGoods <= 0f)
+                {
+                    continue;
+                }
+
+                int availableAmount = UnityMathfCompatibility.Min(
+                    tradeConfiguration.MaxTradeAmount,
+                    originObservation.ObservedStock,
+                    UnityMathfCompatibility.FloorToInt(moneyAvailableForGoods / buyPrice));
+                if (availableAmount <= 0)
+                {
+                    continue;
+                }
+
+                if (!TryGetUsefulObservation(
+                    npcRuntime,
+                    targetCity,
+                    originObservation.ItemDefinition,
+                    out CommercialMarketObservation targetObservation,
+                    out float targetFreshness))
+                {
+                    continue;
+                }
+
+                float sellPrice = targetObservation.ObservedPrice;
+                int amount = LimitMarketSaleAmountFromKnowledge(
+                    npcRuntime, targetCity, sellPrice, availableAmount);
+                if (amount <= 0)
+                {
+                    continue;
+                }
+
+                int totalTravelDays = additionalTravelDays + travelDays;
+                candidates.Add(new DailyV1MerchantTradeCandidate(
+                    itemNode,
+                    targetCity.RuntimeId,
+                    amount,
+                    buyPrice,
+                    sellPrice,
+                    totalTravelCost,
+                    totalTravelDays,
+                    originFreshness,
+                    targetFreshness));
+                targetCities.Add(targetCity);
+                originObservations.Add(originObservation);
+                destinationObservations.Add(targetObservation);
+                originFreshnessValues.Add(originFreshness);
+                destinationFreshnessValues.Add(targetFreshness);
+            }
+        }
+
+        if (!DailyV1MerchantActionPlanning.TryPlanTradeOpportunity(
+            definitions,
+            merchant,
+            candidates,
+            GetMinimumProfitPerItem(npcRuntime),
+            out DailyV1MerchantTradePlan plan)
+            || plan == null)
+        {
+            return null;
+        }
+
+        CityRuntime selectedTarget = targetCities[plan.CandidateIndex];
+        CommercialMarketObservation selectedOriginObservation = originObservations[plan.CandidateIndex];
+        CommercialMarketObservation selectedDestinationObservation = destinationObservations[plan.CandidateIndex];
+        float selectedOriginFreshness = originFreshnessValues[plan.CandidateIndex];
+        float selectedDestinationFreshness = destinationFreshnessValues[plan.CandidateIndex];
+        float grossProfit = plan.ProfitPerItem * plan.Amount;
+        CommercialDecisionEvidence evidence = CreateCommercialEvidence(
+            npcRuntime,
+            originCity,
+            selectedTarget,
+            null,
+            selectedOriginObservation.ItemDefinition,
+            selectedOriginObservation,
+            selectedOriginFreshness,
+            selectedDestinationObservation,
+            selectedDestinationFreshness,
+            plan.Amount,
+            plan.BuyPrice,
+            plan.SellPrice,
+            candidates[plan.CandidateIndex].TotalTravelCost,
+            grossProfit,
+            plan.NetProfit,
+            plan.Score);
+
+        return new MerchantTradeOpportunity(
+            selectedOriginObservation.ItemDefinition,
+            selectedTarget,
+            plan.Amount,
+            plan.BuyPrice,
+            plan.SellPrice,
+            plan.ProfitPerItem,
+            plan.NetProfit,
+            plan.Score,
+            evidence);
     }
 
     private MerchantTradeRepositionOpportunity FindBestTradeRepositionOpportunity(NpcRuntime npcRuntime)
@@ -1376,6 +1541,11 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             return null;
         }
 
+        if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
+        {
+            return FindBestSelectedLocalSale(npcRuntime);
+        }
+
         MerchantTradeOpportunity bestSale = null;
 
         foreach (InventoryItemRuntime inventoryItem in npcRuntime.Inventory.Items)
@@ -1440,6 +1610,103 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
         }
 
         return bestSale;
+    }
+
+    private MerchantTradeOpportunity FindBestSelectedLocalSale(NpcRuntime npcRuntime)
+    {
+        DailyV1EffectiveDefinitions definitions = npcRuntime.SelectedDailyV1DefinitionGraph;
+        DailyV1NpcDefinition merchant = npcRuntime.SelectedDailyV1Definition;
+        if (definitions == null || merchant == null)
+        {
+            return null;
+        }
+
+        List<DailyV1MerchantLocalSaleCandidate> candidates = new List<DailyV1MerchantLocalSaleCandidate>();
+        List<InventoryItemRuntime> sourceRows = new List<InventoryItemRuntime>();
+        List<CommercialMarketObservation> observations = new List<CommercialMarketObservation>();
+        List<float> freshnessValues = new List<float>();
+
+        foreach (InventoryItemRuntime inventoryItem in npcRuntime.Inventory.Items)
+        {
+            if (inventoryItem == null || inventoryItem.Item == null || inventoryItem.Amount <= 0)
+            {
+                continue;
+            }
+
+            if (!npcRuntime.TryGetSelectedDailyV1Item(inventoryItem.Item, out DailyV1ItemDefinition itemNode))
+            {
+                // A selected inventory row without its exact admitted node cannot
+                // participate in a selected decision.
+                return null;
+            }
+
+            if (!TryGetUsefulObservation(
+                npcRuntime,
+                npcRuntime.CurrentCity,
+                inventoryItem.Item,
+                out CommercialMarketObservation localObservation,
+                out float freshness))
+            {
+                continue;
+            }
+
+            int requestedAmount = UnityMathfCompatibility.Min(tradeConfiguration.MaxTradeAmount, inventoryItem.Amount);
+            int availableAmount = LimitMarketSaleAmountFromKnowledge(
+                npcRuntime, npcRuntime.CurrentCity, localObservation.ObservedPrice, requestedAmount);
+            candidates.Add(new DailyV1MerchantLocalSaleCandidate(
+                itemNode,
+                inventoryItem.Amount,
+                inventoryItem.AverageUnitCost,
+                localObservation.ObservedPrice,
+                freshness,
+                availableAmount));
+            sourceRows.Add(inventoryItem);
+            observations.Add(localObservation);
+            freshnessValues.Add(freshness);
+        }
+
+        if (!DailyV1MerchantActionPlanning.TryPlanLocalSale(
+            definitions,
+            merchant,
+            candidates,
+            GetMinimumProfitPerItem(npcRuntime),
+            out DailyV1MerchantLocalSalePlan plan)
+            || plan == null)
+        {
+            return null;
+        }
+
+        InventoryItemRuntime selectedRow = sourceRows[plan.CandidateIndex];
+        CommercialMarketObservation selectedObservation = observations[plan.CandidateIndex];
+        float selectedFreshness = freshnessValues[plan.CandidateIndex];
+        CommercialDecisionEvidence evidence = CreateCommercialEvidence(
+            npcRuntime,
+            npcRuntime.CurrentCity,
+            npcRuntime.CurrentCity,
+            null,
+            selectedRow.Item,
+            null,
+            0f,
+            selectedObservation,
+            selectedFreshness,
+            plan.Amount,
+            plan.ReferencePrice,
+            plan.LocalPrice,
+            0f,
+            plan.ProfitPerItem * plan.Amount,
+            plan.ProfitPerItem * plan.Amount,
+            plan.Score);
+
+        return new MerchantTradeOpportunity(
+            selectedRow.Item,
+            npcRuntime.CurrentCity,
+            plan.Amount,
+            plan.ReferencePrice,
+            plan.LocalPrice,
+            plan.ProfitPerItem,
+            plan.ProfitPerItem * plan.Amount,
+            plan.Score,
+            evidence);
     }
 
     private MerchantCommercialScoutingOpportunity FindBestCommercialScoutingOpportunity(NpcRuntime npcRuntime)

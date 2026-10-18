@@ -6,7 +6,6 @@ using UnityEngine;
 
 public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvider, INpcActionFailureHandler, IAutonomousNpcActionPolicy, IAuthoritativeMutationGuardBindable
 {
-    private const float EscapeSuccessMultiplierPerFailure = 0.8f;
     private const string HiddenStatusStepId = "crime-hidden-statuses";
     private const string HiddenStatusOwnerId = "crime";
     private const string HiddenStatusOperationKind = "crime.advance-hidden-statuses";
@@ -861,6 +860,48 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
 
     private NpcActionRuntime CreateEscapePrisonAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
     {
+        if (npcRuntime != null && npcRuntime.UsesSelectedDailyV1Definitions)
+        {
+            bool isArrested = justiceSystem.IsArrested(npcRuntime);
+            if (!isArrested)
+            {
+                utility = 0f;
+                return null;
+            }
+
+            bool wasArrestedToday = justiceSystem.WasArrestedToday(npcRuntime);
+            if (wasArrestedToday)
+            {
+                utility = 0f;
+                return null;
+            }
+
+            int remainingSentenceDays = justiceSystem.GetRemainingSentenceDays(npcRuntime);
+
+            if (!npcRuntime.TryGetSelectedDailyV1ActionNode(action, out DailyV1ActionDefinition actionNode)
+                || !DailyV1CrimeActionPlanning.TryPlanEscapePrison(
+                    npcRuntime.SelectedDailyV1DefinitionGraph,
+                    npcRuntime.SelectedDailyV1Definition,
+                    actionNode,
+                    isArrested,
+                    wasArrestedToday,
+                    remainingSentenceDays,
+                    out bool canAttemptEscape,
+                    out float selectedUtility)
+                || !canAttemptEscape)
+            {
+                utility = 0f;
+                return null;
+            }
+
+            utility = selectedUtility;
+            NpcActionRuntime selectedActionRuntime = new NpcActionRuntime(action);
+            int selectedFailedEscapeAttempts = justiceSystem.GetFailedEscapeAttempts(npcRuntime);
+            selectedActionRuntime.SetSuccessChanceMultiplier(
+                DailyV1CrimeActionPlanning.GetEscapeSuccessChanceMultiplier(selectedFailedEscapeAttempts));
+            return selectedActionRuntime;
+        }
+
         if (npcRuntime == null || justiceSystem.IsArrested(npcRuntime) == false || justiceSystem.WasArrestedToday(npcRuntime) == true)
         {
             utility = 0f;
@@ -880,7 +921,9 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
 
         NpcActionRuntime actionRuntime = new NpcActionRuntime(action);
         int failedAttempts = justiceSystem.GetFailedEscapeAttempts(npcRuntime);
-        actionRuntime.SetSuccessChanceMultiplier(UnityMathfCompatibility.Pow(EscapeSuccessMultiplierPerFailure, failedAttempts));
+        actionRuntime.SetSuccessChanceMultiplier(UnityMathfCompatibility.Pow(
+            DailyV1CrimeActionPlanning.EscapeSuccessMultiplierPerFailure,
+            failedAttempts));
         return actionRuntime;
     }
 

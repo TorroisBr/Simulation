@@ -35,6 +35,10 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1DefinitionIdentity.cs" Link="Definitions/DailyV1DefinitionIdentity.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1NpcDefinitionRules.cs" Link="Definitions/DailyV1NpcDefinitionRules.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1NpcActionDecision.cs" Link="Definitions/DailyV1NpcActionDecision.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1GuardActionPlanning.cs" Link="Definitions/DailyV1GuardActionPlanning.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1CrimeActionPlanning.cs" Link="Definitions/DailyV1CrimeActionPlanning.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1TravelActionPlanning.cs" Link="Definitions/DailyV1TravelActionPlanning.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1MerchantActionPlanning.cs" Link="Definitions/DailyV1MerchantActionPlanning.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1NpcStatusOwner.cs" Link="Definitions/DailyV1NpcStatusOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/GeographyRecords.cs" Link="Geography/GeographyRecords.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialPassageIdentity.cs" Link="Geography/SpatialPassageIdentity.cs" />

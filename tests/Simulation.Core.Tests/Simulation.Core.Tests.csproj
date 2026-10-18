@@ -48,6 +48,10 @@
       <Compile Include="SimulationConfigurationResolverPrecedenceTests.cs" Link="Configuration/SimulationConfigurationResolverPrecedenceTests.cs" />
       <Compile Include="DailyV1TypedDefinitionGraphTests.cs" Link="Definitions/DailyV1TypedDefinitionGraphTests.cs" />
       <Compile Include="DailyV1NpcDefinitionRulesTests.cs" Link="Definitions/DailyV1NpcDefinitionRulesTests.cs" />
+      <Compile Include="DailyV1GuardActionPlanningTests.cs" Link="Definitions/DailyV1GuardActionPlanningTests.cs" />
+      <Compile Include="DailyV1CrimeActionPlanningTests.cs" Link="Definitions/DailyV1CrimeActionPlanningTests.cs" />
+      <Compile Include="DailyV1TravelActionPlanningTests.cs" Link="Definitions/DailyV1TravelActionPlanningTests.cs" />
+      <Compile Include="DailyV1MerchantActionPlanningTests.cs" Link="Definitions/DailyV1MerchantActionPlanningTests.cs" />
       <Compile Include="DailyV1NpcStatusOwnerTests.cs" Link="Definitions/DailyV1NpcStatusOwnerTests.cs" />
     <Compile Include="ActionExecutionTests.cs" Link="Application/ActionExecutionTests.cs" />
       <Compile Include="DailyV1ApplicationHostTests.cs" Link="Application/DailyV1ApplicationHostTests.cs" />

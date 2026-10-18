@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -45,16 +46,74 @@ public class GuardSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
             return null;
         }
 
-        NpcRuntime target = FindArrestTarget(npcRuntime, out float bounty);
-
-        if (target == null)
+        NpcRuntime target;
+        if (npcRuntime.UsesSelectedDailyV1Definitions)
         {
-            utility = 0f;
-            return null;
+            if (!TryCreateSelectedArrestTarget(npcRuntime, action, utility, out target, out float selectedUtility))
+            {
+                utility = 0f;
+                return null;
+            }
+
+            utility = selectedUtility;
+        }
+        else
+        {
+            target = FindArrestTarget(npcRuntime, out float bounty);
+
+            if (target == null)
+            {
+                utility = 0f;
+                return null;
+            }
+
+            utility = UnityMathfCompatibility.Max(utility, 55f + bounty * 0.25f);
         }
 
-        utility = UnityMathfCompatibility.Max(utility, 55f + bounty * 0.25f);
         return new NpcActionRuntime(action, target);
+    }
+
+    private bool TryCreateSelectedArrestTarget(
+        NpcRuntime guardRuntime,
+        NpcActionData actionAsset,
+        float currentUtility,
+        out NpcRuntime targetRuntime,
+        out float resultingUtility)
+    {
+        targetRuntime = null;
+        resultingUtility = 0f;
+        if (guardRuntime == null
+            || guardRuntime.SelectedDailyV1DefinitionGraph == null
+            || !guardRuntime.TryGetSelectedDailyV1ActionNode(actionAsset, out DailyV1ActionDefinition actionNode))
+            return false;
+
+        List<DailyV1GuardArrestCandidate> candidates = new List<DailyV1GuardArrestCandidate>();
+        List<NpcRuntime> targetRuntimes = new List<NpcRuntime>();
+        foreach (NpcRuntime candidate in guardRuntime.CurrentCity.ImportantNpcs)
+        {
+            if (!IsValidArrestTarget(guardRuntime, candidate))
+                continue;
+
+            candidates.Add(new DailyV1GuardArrestCandidate(
+                candidate.RuntimeId,
+                justiceSystem.GetBounty(candidate, guardRuntime.CurrentCity)));
+            targetRuntimes.Add(candidate);
+        }
+
+        if (!DailyV1GuardActionPlanning.TryPlanArrest(
+                guardRuntime.SelectedDailyV1DefinitionGraph,
+                guardRuntime.SelectedDailyV1Definition,
+                actionNode,
+                candidates,
+                currentUtility,
+                out int selectedIndex,
+                out resultingUtility)
+            || selectedIndex < 0
+            || selectedIndex >= targetRuntimes.Count)
+            return false;
+
+        targetRuntime = targetRuntimes[selectedIndex];
+        return targetRuntime != null;
     }
 
     public NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)

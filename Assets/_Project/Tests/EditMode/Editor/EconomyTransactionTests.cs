@@ -864,6 +864,104 @@ public sealed class EconomyTransactionTests
     }
 
     [Test]
+    public void SelectedMerchantBuyGoodsUsesCoreTradePlannerAndCapturedPreference()
+    {
+        ItemData itemAsset = SimulationTestFactory.CreateItem("selected-buy-planner-item", 5f);
+        CityData originAsset = SimulationTestFactory.CreateCityData(
+            "selected-buy-planner-origin",
+            SimulationTestFactory.CreateMarketItem(itemAsset, 10, 10));
+        CityData destinationAsset = SimulationTestFactory.CreateCityData(
+            "selected-buy-planner-destination",
+            SimulationTestFactory.CreateMarketItem(itemAsset, 10, 10));
+        originAsset.connections.Add(new CityConnection { destination = destinationAsset, travelDays = 2 });
+
+        NpcData merchantAsset = SimulationTestFactory.CreateNpc(
+            "selected-buy-planner-merchant", NpcJobType.Merchant, MerchantBehavior.Traveling);
+        merchantAsset.job.minimumProfitPerItem = 1f;
+        merchantAsset.job.PreferredTradeItems.Add(new TradeItemPreference
+        {
+            item = itemAsset,
+            utilityMultiplier = 2f
+        });
+        NpcActionData buyAction = SimulationTestFactory.CreateAction(
+            "selected-buy-planner-action", NpcActionType.BuyGoods, NpcActionCategory.Commerce);
+        merchantAsset.acoesPadrao.Add(new NPCDefaultAction { action = buyAction, baseUtility = 10f });
+        NpcSimulationConfig npcConfig = new NpcSimulationConfig
+        {
+            npc = merchantAsset,
+            startingCity = originAsset,
+            initialMoney = 100f
+        };
+
+        SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
+        authoring.Cities.Add(originAsset);
+        authoring.Cities.Add(destinationAsset);
+        authoring.Npcs.Add(npcConfig);
+        authoring.Actions.Add(buyAction);
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: authoring.CreateConfigurationOverrides());
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(authoring.Calendar, out _);
+        DailyV1EffectiveDefinitions definitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            authoring, effective, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
+
+        DailyV1CityDefinition originNode = definitions.Cities[originAsset.DefinitionId];
+        DailyV1CityDefinition destinationNode = definitions.Cities[destinationAsset.DefinitionId];
+        DailyV1NpcDefinition merchantNode = definitions.Npcs[merchantAsset.DefinitionId];
+        DailyV1ItemDefinition itemNode = definitions.Items[itemAsset.DefinitionId];
+        CityRuntime origin = CityRuntime.CreateSelectedDailyV1(
+            "selected-buy-planner-origin-runtime", originNode, definitions, bindings,
+            new SpatialLocationRuntime("selected-buy-planner-origin-location"));
+        CityRuntime destination = CityRuntime.CreateSelectedDailyV1(
+            "selected-buy-planner-destination-runtime", destinationNode, definitions, bindings,
+            new SpatialLocationRuntime("selected-buy-planner-destination-location"));
+        NpcRuntime merchant = NpcRuntime.CreateSelectedDailyV1(
+            "selected-buy-planner-merchant-runtime", merchantNode, definitions, bindings, origin, 100f);
+
+        RuntimeIdentityRegistry identityRegistry = new RuntimeIdentityRegistry();
+        SpatialNetworkRuntime network = new SpatialNetworkRuntime(identityRegistry);
+        Assert.That(network.RegisterLocation(origin.Location), Is.True);
+        Assert.That(network.RegisterLocation(destination.Location), Is.True);
+        SpatialRouteRuntime route = SimulationTestFactory.CreateRoute(
+            "selected-buy-planner-route", origin, destination, 2);
+        Assert.That(network.RegisterRoute(route), Is.True);
+        Dictionary<SpatialLocationRuntime, CityRuntime> citiesByLocation = new Dictionary<SpatialLocationRuntime, CityRuntime>
+        {
+            [origin.Location] = origin,
+            [destination.Location] = destination
+        };
+        TravelSystem travel = new TravelSystem(
+            network,
+            location => citiesByLocation.TryGetValue(location, out CityRuntime city) ? city : null,
+            1f);
+        Assert.That(merchant.SpatialKnowledge.DiscoverLocation(origin.Location.RuntimeId), Is.True);
+        Assert.That(merchant.SpatialKnowledge.DiscoverLocation(destination.Location.RuntimeId), Is.True);
+        Assert.That(merchant.SpatialKnowledge.DiscoverRoute(route.RuntimeId), Is.True);
+        Assert.That(merchant.CommercialKnowledge.RecordObservation(new CommercialMarketObservation(
+            origin.Location.RuntimeId, itemAsset, 5f, 10, 0L, 0L,
+            CommercialKnowledgeSource.DirectObservation)), Is.True);
+        Assert.That(merchant.CommercialKnowledge.RecordObservation(new CommercialMarketObservation(
+            destination.Location.RuntimeId, itemAsset, 20f, 10, 0L, 0L,
+            CommercialKnowledgeSource.DirectObservation)), Is.True);
+
+        // Mutation after admission proves the selected decision reads the captured typed preference.
+        merchantAsset.job.PreferredTradeItems[0].utilityMultiplier = 1000f;
+        SimulationTime time = new SimulationTime();
+        MerchantSystem system = SimulationTestFactory.CreateMerchantSystem(travel, time);
+        float utility = 10f;
+        NpcActionRuntime action = system.CreateAction(merchant, buyAction, ref utility);
+
+        Assert.That(action, Is.Not.Null);
+        Assert.That(action.Action, Is.SameAs(buyAction));
+        Assert.That(action.TargetCity, Is.SameAs(destination));
+        Assert.That(action.TargetItem, Is.SameAs(itemAsset));
+        Assert.That(action.Amount, Is.EqualTo(5));
+        Assert.That(action.ExpectedUnitPrice, Is.EqualTo(5f));
+        Assert.That(action.CommercialDecisionEvidence.ItemDefinitionId, Is.EqualTo(itemNode.DefinitionId));
+        Assert.That(utility, Is.EqualTo(103.5f).Within(0.001f),
+            "Core scores net profit 73 over two travel days, applies the captured 2x preference, then the existing 30-point BuyGoods base utility.");
+    }
+
+    [Test]
     public void SelectedMerchantMarketBuyAndSaleUseCanonicalOwnersWithoutLegacyItemProjections()
     {
         ItemData itemAsset = SimulationTestFactory.CreateItem("selected-merchant-typed-item", 10f);
@@ -887,7 +985,7 @@ public sealed class EconomyTransactionTests
         {
             item = itemAsset,
             amount = 2,
-            averageUnitCost = 3f
+            averageUnitCost = 0f
         });
         SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
         authoring.Cities.Add(cityAsset);
@@ -901,12 +999,13 @@ public sealed class EconomyTransactionTests
         DailyV1CityDefinition cityDefinition = definitions.Cities[cityAsset.DefinitionId];
         DailyV1NpcDefinition npcDefinition = definitions.Npcs[npcAsset.DefinitionId];
         DailyV1ItemDefinition item = definitions.Items[itemAsset.DefinitionId];
+        itemAsset.basePrice = 1000f;
         CityRuntime city = CityRuntime.CreateSelectedDailyV1(
             "selected-merchant-typed-city-runtime", cityDefinition, definitions, bindings,
             new SpatialLocationRuntime("selected-merchant-typed-location"));
         NpcRuntime merchant = NpcRuntime.CreateSelectedDailyV1(
             "selected-merchant-typed-npc-runtime", npcDefinition, definitions, bindings, city, 20f);
-        Assert.That(merchant.Inventory.TryAddSelectedItem(item, 2, 3f), Is.True);
+        Assert.That(merchant.Inventory.TryAddSelectedItem(item, 2, 0f), Is.True);
 
         // Remove only the legacy projections. The Merchant action still receives the
         // authored ItemData at its Unity edge, while the selected owner transaction
@@ -917,6 +1016,24 @@ public sealed class EconomyTransactionTests
             .SetValue(merchant.Inventory, null);
 
         MerchantSystem merchantSystem = SimulationTestFactory.CreateMerchantSystem(null, new SimulationTime());
+        Assert.That(merchant.CommercialKnowledge.RecordObservation(new CommercialMarketObservation(
+            city.Location.RuntimeId,
+            itemAsset,
+            20f,
+            4,
+            0L,
+            0L,
+            CommercialKnowledgeSource.DirectObservation)), Is.True);
+        float selectedSaleUtility = 0f;
+        NpcActionRuntime plannedSelectedSale = merchantSystem.CreateAction(
+            merchant, sellAction, ref selectedSaleUtility);
+        Assert.That(plannedSelectedSale, Is.Not.Null);
+        Assert.That(plannedSelectedSale.TargetItem, Is.SameAs(itemAsset));
+        Assert.That(plannedSelectedSale.Amount, Is.EqualTo(2));
+        Assert.That(plannedSelectedSale.ExpectedUnitPrice, Is.EqualTo(20f));
+        Assert.That(selectedSaleUtility, Is.EqualTo(45f).Within(0.001f),
+            "The selected Core plan uses captured basePrice 10, not the later Unity authoring value 1000: (20 - 10) * 2 plus SellGoods base utility 25.");
+
         NpcActionRuntime action = new NpcActionRuntime(sellAction, city, itemAsset, 1, 10f);
         Assert.That(merchant.IsAlive, Is.True);
         Assert.That(merchant.GetConfiguredActionType(sellAction), Is.EqualTo(NpcActionType.SellGoods));

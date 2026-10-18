@@ -252,12 +252,12 @@ internal static class DailyV1NpcDefinitionRules
         return false;
     }
 
-    private static bool IsAdmittedNpc(DailyV1EffectiveDefinitions definitions, DailyV1NpcDefinition npc) =>
+    internal static bool IsAdmittedNpc(DailyV1EffectiveDefinitions definitions, DailyV1NpcDefinition npc) =>
         definitions != null && npc != null
         && definitions.Npcs.TryGetValue(npc.DefinitionId, out DailyV1NpcDefinition admitted)
         && ReferenceEquals(admitted, npc);
 
-    private static bool IsAdmittedAction(DailyV1EffectiveDefinitions definitions, DailyV1ActionDefinition action) =>
+    internal static bool IsAdmittedAction(DailyV1EffectiveDefinitions definitions, DailyV1ActionDefinition action) =>
         definitions != null && action != null
         && definitions.Actions.TryGetValue(action.DefinitionId, out DailyV1ActionDefinition admitted)
         && ReferenceEquals(admitted, action);
