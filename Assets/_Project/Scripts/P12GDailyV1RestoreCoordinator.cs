@@ -351,6 +351,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
 
             RuntimeIdentityRegistry sourceIdentityRegistry = sourceSession.IdentityRegistry;
             ExplorableSiteStore sourceSites = sourceComposition.ExplorableSites;
+            P12DNpcRootOwnerSnapshotFailure npcStageFailure = P12DNpcRootOwnerSnapshotFailure.None;
             if (!P12DDailyV1OwnerPackage.TryCaptureAndStage(
                     sourceRuntime,
                     sourceToken,
@@ -375,10 +376,14 @@ internal static partial class P12GDailyV1RestoreCoordinator
                         ? null
                         : (Action)(() => stageObserver(P12GDailyV1RestoreStage.DGenealogyEdgeStaged)),
                     genealogySnapshotOverrideForTest,
-                    selectedDefinitions: sourceComposition.SelectedDefinitions))
+                    selectedDefinitions: sourceComposition.SelectedDefinitions,
+                    npcStageFailureObserver: stageFailure => npcStageFailure = stageFailure))
             {
                 failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
-                diagnostic = "P12-D could not stage the factual roots: " + dFailure + ".";
+                diagnostic = "P12-D could not stage the factual roots: " + dFailure
+                    + (npcStageFailure == P12DNpcRootOwnerSnapshotFailure.None
+                        ? "."
+                        : " (NPC root staging: " + npcStageFailure + ").");
                 return false;
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.DStaged);

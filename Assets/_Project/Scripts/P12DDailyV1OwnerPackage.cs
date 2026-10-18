@@ -105,7 +105,8 @@ internal sealed class P12DDailyV1OwnerPackage
         Action<P12GDailyV1RestoreStage> stageObserver = null,
         Action afterGenealogyRecordStagedForTest = null,
         Func<GenealogyOwnerSnapshot, GenealogyOwnerSnapshot> genealogySnapshotOverrideForTest = null,
-        DailyV1EffectiveDefinitions selectedDefinitions = null)
+        DailyV1EffectiveDefinitions selectedDefinitions = null,
+        Action<P12DNpcRootOwnerSnapshotFailure> npcStageFailureObserver = null)
     {
         package = null;
         failure = P12DDailyV1OwnerPackageFailure.InvalidCaptureContext;
@@ -285,13 +286,16 @@ internal sealed class P12DDailyV1OwnerPackage
         }
         stageObserver?.Invoke(P12GDailyV1RestoreStage.DRelationsValidated);
 
-        if (!P12DNpcRootOwnerSnapshot.TryStage(
+        bool npcStageSucceeded = P12DNpcRootOwnerSnapshot.TryStage(
                 sourceRuntime, token, dProjection, fProjection, cityLinkers, stagedPersons,
                 npcDefinitions, actionDefinitions, statusDefinitions, itemDefinitions,
                 stagedLocations, stagedRouteIds, stagedTravelPartyIds,
-                out IReadOnlyList<NpcRuntime> stagedNpcRoster, out _, selectedDefinitions)
-            || stagedNpcRoster == null)
+                out IReadOnlyList<NpcRuntime> stagedNpcRoster,
+                out P12DNpcRootOwnerSnapshotFailure npcStageFailure,
+                selectedDefinitions);
+        if (!npcStageSucceeded || stagedNpcRoster == null)
         {
+            npcStageFailureObserver?.Invoke(npcStageFailure);
             failure = P12DDailyV1OwnerPackageFailure.StageFailed;
             return false;
         }
