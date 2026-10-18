@@ -511,7 +511,8 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(faulted, Is.EqualTo(DailyCaptureEligibilityFailure.RuntimeFaulted));
 
         SimulationRuntime overflowRuntime = CreatePublishedDailyCaptureRuntime(new SimulationTime());
-        WritePrivateField(overflowRuntime, "completedDailyCoreSequence", long.MaxValue - 2L);
+        object overflowBoundary = ReadPrivateField<object>(overflowRuntime, "dailyExecutionBoundary");
+        WritePrivateField(overflowBoundary, "completedCoreSequence", long.MaxValue - 2L);
         Assert.That(overflowRuntime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure finalAvailableAdvance), Is.True,
             finalAvailableAdvance.ToString());
         Assert.That(overflowRuntime.TryGetCompletedDailyCaptureToken(
@@ -6507,8 +6508,10 @@ public sealed class SimulationRuntimeAdmissionTests
                         if (stage != P12GDailyV1RestoreStage.BoundaryAdmitted) return;
                         Assert.That(privateCandidate, Is.Not.Null);
                         Assert.That(privateCandidate.Runtime.HasValidRestoredDailyBoundaryAdmission(), Is.True);
+                        object executionBoundary = ReadPrivateField<object>(
+                            privateCandidate.Runtime, "dailyExecutionBoundary");
                         WritePrivateField(
-                            privateCandidate.Runtime, "currentDailyCaptureToken", sourceToken);
+                            executionBoundary, "currentCaptureToken", sourceToken);
                         tokenCorruptedAfterAdmission = true;
                     },
                     candidate => privateCandidate = candidate), Is.False);
