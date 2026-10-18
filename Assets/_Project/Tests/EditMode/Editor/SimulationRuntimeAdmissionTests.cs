@@ -3570,9 +3570,13 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(sourceGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, controlToken)),
                 "Equivalent supported roster transitions must produce the same completed-boundary owner graph.");
 
+            List<P12GDailyV1RestoreStage> restoreStages = new List<P12GDailyV1RestoreStage>();
             Assert.That(source.TryRestoreDailyContinuation(
-                    out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic), Is.True,
-                restoreFailure + ": " + restoreDiagnostic);
+                    restoreStages.Add,
+                    out P12GDailyV1RestoreFailure restoreFailure,
+                    out string restoreDiagnostic), Is.True,
+                restoreFailure + ": " + restoreDiagnostic
+                + " Stages: " + string.Join(",", restoreStages));
             SimulationActiveSession restoredSession = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
             Assert.That(restoredSession.AdmissionContext.IsRestoredContinuation, Is.True);
             DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restoredSession.Runtime);
