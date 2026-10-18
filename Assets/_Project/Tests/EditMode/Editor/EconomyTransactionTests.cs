@@ -957,8 +957,8 @@ public sealed class EconomyTransactionTests
         Assert.That(action.Amount, Is.EqualTo(5));
         Assert.That(action.ExpectedUnitPrice, Is.EqualTo(5f));
         Assert.That(action.CommercialDecisionEvidence.ItemDefinitionId, Is.EqualTo(itemNode.DefinitionId));
-        Assert.That(utility, Is.EqualTo(103.5f).Within(0.001f),
-            "Core scores net profit 73 over two travel days, applies the captured 2x preference, then the existing 30-point BuyGoods base utility.");
+        Assert.That(utility, Is.EqualTo(103f).Within(0.001f),
+            "Core scores net profit 73 over two travel days, applies the captured 2x preference (73), then the existing 30-point BuyGoods base utility (103 total).");
     }
 
     [Test]
