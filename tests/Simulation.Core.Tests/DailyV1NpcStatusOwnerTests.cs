@@ -79,6 +79,180 @@ public sealed class DailyV1NpcStatusOwnerTests
     }
 
     [Test]
+    public void SelectedActionStatusPlanAppliesActorThenTargetUsingExactOrderedOwnerWrites()
+    {
+        DailyV1EffectiveDefinitions baseline = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ActionDefinition baselineAction = baseline.Actions.Values.First();
+        DailyV1EffectiveDefinitions definitions = CreateDefinitionsWithActionStatusChanges(
+            baseline, baselineAction,
+            "status/Status-Livre", "status/Status-Preso",
+            "status/Status-Escondido", "status/Status-Procurado");
+        DailyV1ActionDefinition action = definitions.Actions[baselineAction.DefinitionId];
+        DailyV1StatusDefinition actorInitial = definitions.Statuses["status/Status-Livre"];
+        DailyV1StatusDefinition actorResult = definitions.Statuses["status/Status-Preso"];
+        DailyV1StatusDefinition targetInitial = definitions.Statuses["status/Status-Escondido"];
+        DailyV1StatusDefinition targetResult = definitions.Statuses["status/Status-Procurado"];
+        DailyV1NpcRuntimeOwners actor = CreateNpcOwner(
+            "actor", definitions, definitions.Npcs.Values.First(), actorInitial);
+        DailyV1NpcRuntimeOwners target = CreateNpcOwner(
+            "target", definitions, definitions.Npcs.Values.Skip(1).First(), targetInitial);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, Array.Empty<DailyV1CityRuntimeOwners>(), new[] { actor, target },
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        Assert.That(graph.TryCreateActionStatusPlan(
+            actor, action, true, target, out DailyV1SelectedActionStatusPlan plan), Is.True);
+
+        List<string> events = new List<string>();
+        DailyV1SelectedActionStatusPlanResult result = plan.Apply(
+            (owner, remove, add) => ApplyAndRecord(owner, remove, add, events),
+            (owner, remove, add) => ApplyAndRecord(owner, remove, add, events));
+
+        Assert.That(result, Is.EqualTo(DailyV1SelectedActionStatusPlanResult.Applied));
+        Assert.That(events, Is.EqualTo(new[]
+        {
+            "admit:actor", "commit:actor:",
+            "admit:actor", "commit:actor:status/Status-Preso",
+            "admit:target", "commit:target:",
+            "admit:target", "commit:target:status/Status-Procurado"
+        }), "Each owner keeps remove-before-add writes, and the actor completes before target mutation starts.");
+        Assert.That(actor.Status.Statuses, Is.EqualTo(new[] { actorResult }));
+        Assert.That(target.Status.Statuses, Is.EqualTo(new[] { targetResult }));
+        Assert.That(actor.Status.Statuses[0], Is.SameAs(actorResult));
+        Assert.That(target.Status.Statuses[0], Is.SameAs(targetResult));
+    }
+
+    [Test]
+    public void SelectedActionStatusPlanPreservesActorFirstPartialFailureSemantics()
+    {
+        DailyV1EffectiveDefinitions baseline = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1EffectiveDefinitions definitions = CreateDefinitionsWithActionStatusChanges(
+            baseline, baseline.Actions.Values.First(),
+            "status/Status-Livre", "status/Status-Preso",
+            "status/Status-Escondido", "status/Status-Procurado");
+        DailyV1NpcRuntimeOwners actor = CreateNpcOwner(
+            "actor", definitions, definitions.Npcs.Values.First(), definitions.Statuses["status/Status-Livre"]);
+        DailyV1NpcRuntimeOwners target = CreateNpcOwner(
+            "target", definitions, definitions.Npcs.Values.Skip(1).First(), definitions.Statuses["status/Status-Escondido"]);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, Array.Empty<DailyV1CityRuntimeOwners>(), new[] { actor, target },
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        Assert.That(graph.TryCreateActionStatusPlan(
+            actor, definitions.Actions.Values.First(), true, target,
+            out DailyV1SelectedActionStatusPlan plan), Is.True);
+
+        bool targetCalled = false;
+        Assert.That(plan.Apply(
+            (_, __, ___) => false,
+            (_, __, ___) => { targetCalled = true; return true; }),
+            Is.EqualTo(DailyV1SelectedActionStatusPlanResult.ActorRejected));
+        Assert.That(targetCalled, Is.False);
+        Assert.That(actor.Status.Statuses, Is.EqualTo(new[] { definitions.Statuses["status/Status-Livre"] }));
+
+        Assert.That(plan.Apply(
+            (owner, remove, add) => owner.Status.TryApplyOrderedChanges(remove, add, () => { }, () => { }),
+            (_, __, ___) => false), Is.EqualTo(DailyV1SelectedActionStatusPlanResult.TargetRejected));
+        Assert.That(actor.Status.Statuses, Is.EqualTo(new[] { definitions.Statuses["status/Status-Preso"] }),
+            "The existing actuation order keeps completed actor mutations when target application fails.");
+        Assert.That(target.Status.Statuses, Is.EqualTo(new[] { definitions.Statuses["status/Status-Escondido"] }));
+    }
+
+    [Test]
+    public void SelectedActionStatusPlanRejectsForeignActorAndActionIdentity()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1EffectiveDefinitions foreign = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcRuntimeOwners actor = CreateNpcOwner(
+            "actor", definitions, definitions.Npcs.Values.First(), Array.Empty<DailyV1StatusDefinition>());
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, Array.Empty<DailyV1CityRuntimeOwners>(), new[] { actor },
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        Assert.That(graph.TryCreateActionStatusPlan(
+            actor, foreign.Actions.Values.First(), false, null, out _), Is.False);
+        DailyV1NpcRuntimeOwners foreignActor = CreateNpcOwner(
+            "foreign-actor", foreign, foreign.Npcs.Values.First(), Array.Empty<DailyV1StatusDefinition>());
+        Assert.That(graph.TryCreateActionStatusPlan(
+            foreignActor, definitions.Actions.Values.First(), false, null, out _), Is.False);
+    }
+
+    private static bool ApplyAndRecord(
+        DailyV1NpcRuntimeOwners owner,
+        IReadOnlyList<DailyV1StatusDefinition> remove,
+        IReadOnlyList<DailyV1StatusDefinition> add,
+        List<string> events)
+    {
+        return owner != null && owner.Status.TryApplyOrderedChanges(
+            remove,
+            add,
+            () => events.Add("admit:" + owner.RuntimeId),
+            () => events.Add("commit:" + owner.RuntimeId + ":"
+                + string.Join(",", owner.Status.Statuses.Select(status => status.DefinitionId))));
+    }
+
+    private static DailyV1NpcRuntimeOwners CreateNpcOwner(
+        string runtimeId,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1NpcDefinition npc,
+        params DailyV1StatusDefinition[] statuses)
+    {
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateBound(
+            runtimeId, definitions, npc, statuses, null, new MoneyAccountRuntime(),
+            out DailyV1NpcRuntimeOwners owner), Is.True);
+        return owner;
+    }
+
+    private static DailyV1EffectiveDefinitions CreateDefinitionsWithActionStatusChanges(
+        DailyV1EffectiveDefinitions source,
+        DailyV1ActionDefinition selectedAction,
+        string actorRemove,
+        string actorAdd,
+        string targetRemove,
+        string targetAdd)
+    {
+        List<DailyV1NpcActionData> actions = source.Actions.Values.Select(action =>
+        {
+            if (!ReferenceEquals(action, selectedAction)) return action.Values;
+            DailyV1NpcActionData values = action.Values;
+            return new DailyV1NpcActionData(
+                values.id,
+                values.statusNecessariosParaFazerAcao,
+                values.actionName,
+                values.normalActionLogText,
+                values.actionCategory,
+                values.actionType,
+                values.baseUtility,
+                values.statusModifiers,
+                values.canFail,
+                values.baseSuccessChance,
+                new[] { actorAdd },
+                new[] { actorRemove },
+                new[] { targetAdd },
+                new[] { targetRemove },
+                values.crimeSettings);
+        }).ToList();
+
+        return DailyV1EffectiveDefinitions.CreateSelectedSchema(
+            source.Configuration,
+            source.EffectiveConfiguration,
+            source.Calendar,
+            source.Cities.Values.Select(city => city.Values),
+            source.Items.Values.Select(item => item.Values),
+            source.Npcs.Values.Select(npc => npc.Values),
+            source.Jobs.Values.Select(job => job.Values),
+            actions,
+            source.Statuses.Values.Select(status => status.Values),
+            source.StageOrder,
+            source.ProfileContractIdentity,
+            source.GeographyProfileContractIdentity,
+            source.GeographyStageIdentity,
+            source.HexCoordinateConvention,
+            source.HexCoordinateCanonicalOrder,
+            source.Traits.Select(pair => new KeyValuePair<string, string>(pair.Key, pair.Value.DisplayName)),
+            source.CapabilityAttributes.Select(pair => new KeyValuePair<string, string>(pair.Key, pair.Value.DisplayName)),
+            source.ExplorableSites.Values.Select(site => site.Values));
+    }
+
+    [Test]
     public void SelectedNpcRuntimeOwnerCompositionConsumesExactGraphAndPreservesOwnerInstances()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

@@ -2602,8 +2602,18 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(typedStatusToAdd, Is.EqualTo(new[] { graph.Statuses[actionEffectStatus.DefinitionId] }));
         int committedStatusMutations = 0;
         Assert.That(runtime.TryBindP12CrimeJusticeMutationBoundary(_ => true, _ => committedStatusMutations++), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+            System.Array.Empty<DailyV1CityRuntimeOwners>(), new[] { runtime.SelectedRuntimeOwners },
+            out DailyV1SelectedRuntimeOwnerGraph selectedOwnerGraph), Is.True);
+        Assert.That(runtime.TryCreateConfiguredActionStatusPlan(
+            defaultAction, selectedOwnerGraph, false, null,
+            out DailyV1SelectedActionStatusPlan statusPlan), Is.True,
+            "The Unity action binding is resolved into a Core-owned plan over the exact selected runtime owner.");
         long crimeJusticeRevision = runtime.P12CrimeJusticeRevision;
-        Assert.That(runtime.ApplySelectedDailyV1StatusChanges(typedStatusToRemove, typedStatusToAdd), Is.True);
+        Assert.That(statusPlan.Apply(
+            (owner, remove, add) => ReferenceEquals(owner, runtime.SelectedRuntimeOwners)
+                && runtime.ApplySelectedDailyV1StatusChanges(remove, add),
+            null), Is.EqualTo(DailyV1SelectedActionStatusPlanResult.Applied));
         Assert.That(runtime.CurrentStatus, Is.EqualTo(new[] { actionEffectStatus }),
             "The Core owner mutation updates the exact Unity status projection used by existing systems and P12.");
         Assert.That(runtime.SelectedDailyV1StatusOwner.Statuses,
@@ -2611,7 +2621,10 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(crimeJusticeRevision + 2),
             "The existing P12 owner revision still advances once for each actual ordered status write.");
         Assert.That(committedStatusMutations, Is.EqualTo(2));
-        Assert.That(runtime.ApplySelectedDailyV1StatusChanges(typedStatusToRemove, typedStatusToAdd), Is.True);
+        Assert.That(statusPlan.Apply(
+            (owner, remove, add) => ReferenceEquals(owner, runtime.SelectedRuntimeOwners)
+                && runtime.ApplySelectedDailyV1StatusChanges(remove, add),
+            null), Is.EqualTo(DailyV1SelectedActionStatusPlanResult.Applied));
         Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(crimeJusticeRevision + 2),
             "No-op removal/addition does not advance the P12 owner revision.");
 

@@ -175,6 +175,49 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
             && MatchesExactOwnerInstances(npcs, npcOwners);
     }
 
+    /// <summary>
+    /// Resolves an admitted action's exact status effects against this runtime's
+    /// selected definition graph. Target application is deliberately deferred
+    /// until after the actor callback, matching the existing actuation order.
+    /// </summary>
+    internal bool TryCreateActionStatusPlan(
+        DailyV1NpcRuntimeOwners actorOwner,
+        DailyV1ActionDefinition action,
+        bool targetExpected,
+        DailyV1NpcRuntimeOwners targetOwner,
+        out DailyV1SelectedActionStatusPlan plan)
+    {
+        plan = null;
+        if (actorOwner == null
+            || !ReferenceEquals(actorOwner.Definitions, Definitions)
+            || !ContainsExactNpcOwner(actorOwner)
+            || (!targetExpected && targetOwner != null)
+            || !DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
+                Definitions, action,
+                out IReadOnlyList<DailyV1StatusDefinition> actorStatusToRemove,
+                out IReadOnlyList<DailyV1StatusDefinition> actorStatusToAdd,
+                out IReadOnlyList<DailyV1StatusDefinition> targetStatusToRemove,
+                out IReadOnlyList<DailyV1StatusDefinition> targetStatusToAdd))
+            return false;
+
+        plan = new DailyV1SelectedActionStatusPlan(
+            actorOwner,
+            actorStatusToRemove,
+            actorStatusToAdd,
+            targetExpected,
+            targetOwner,
+            targetStatusToRemove,
+            targetStatusToAdd);
+        return true;
+    }
+
+    private bool ContainsExactNpcOwner(DailyV1NpcRuntimeOwners candidate)
+    {
+        foreach (DailyV1NpcRuntimeOwners owner in npcs)
+            if (ReferenceEquals(owner, candidate)) return true;
+        return false;
+    }
+
     private static bool MatchesExactOwnerInstances<T>(
         IReadOnlyList<T> expected,
         IEnumerable<T> actual)
@@ -189,5 +232,67 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         }
 
         return index == expected.Count;
+    }
+}
+
+internal enum DailyV1SelectedActionStatusPlanResult
+{
+    Applied,
+    ActorRejected,
+    TargetRejected
+}
+
+/// <summary>
+/// Immutable actor-first/target-second status mutation plan. The adapter
+/// callbacks still own host-specific admission, revision, epoch and
+/// compatibility projection behavior through each existing NPC owner writer.
+/// </summary>
+internal sealed class DailyV1SelectedActionStatusPlan
+{
+    internal delegate bool ApplyOwnerStatusChanges(
+        DailyV1NpcRuntimeOwners owner,
+        IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
+        IReadOnlyList<DailyV1StatusDefinition> statusToAdd);
+
+    private readonly DailyV1NpcRuntimeOwners actorOwner;
+    private readonly IReadOnlyList<DailyV1StatusDefinition> actorStatusToRemove;
+    private readonly IReadOnlyList<DailyV1StatusDefinition> actorStatusToAdd;
+    private readonly bool targetExpected;
+    private readonly DailyV1NpcRuntimeOwners targetOwner;
+    private readonly IReadOnlyList<DailyV1StatusDefinition> targetStatusToRemove;
+    private readonly IReadOnlyList<DailyV1StatusDefinition> targetStatusToAdd;
+
+    internal DailyV1SelectedActionStatusPlan(
+        DailyV1NpcRuntimeOwners actorOwner,
+        IReadOnlyList<DailyV1StatusDefinition> actorStatusToRemove,
+        IReadOnlyList<DailyV1StatusDefinition> actorStatusToAdd,
+        bool targetExpected,
+        DailyV1NpcRuntimeOwners targetOwner,
+        IReadOnlyList<DailyV1StatusDefinition> targetStatusToRemove,
+        IReadOnlyList<DailyV1StatusDefinition> targetStatusToAdd)
+    {
+        this.actorOwner = actorOwner ?? throw new ArgumentNullException(nameof(actorOwner));
+        this.actorStatusToRemove = actorStatusToRemove ?? throw new ArgumentNullException(nameof(actorStatusToRemove));
+        this.actorStatusToAdd = actorStatusToAdd ?? throw new ArgumentNullException(nameof(actorStatusToAdd));
+        this.targetExpected = targetExpected;
+        this.targetOwner = targetOwner;
+        this.targetStatusToRemove = targetStatusToRemove ?? throw new ArgumentNullException(nameof(targetStatusToRemove));
+        this.targetStatusToAdd = targetStatusToAdd ?? throw new ArgumentNullException(nameof(targetStatusToAdd));
+    }
+
+    internal DailyV1SelectedActionStatusPlanResult Apply(
+        ApplyOwnerStatusChanges applyActor,
+        ApplyOwnerStatusChanges applyTarget)
+    {
+        if (applyActor == null
+            || !applyActor(actorOwner, actorStatusToRemove, actorStatusToAdd))
+            return DailyV1SelectedActionStatusPlanResult.ActorRejected;
+
+        if (!targetExpected) return DailyV1SelectedActionStatusPlanResult.Applied;
+
+        return applyTarget != null
+            && applyTarget(targetOwner, targetStatusToRemove, targetStatusToAdd)
+            ? DailyV1SelectedActionStatusPlanResult.Applied
+            : DailyV1SelectedActionStatusPlanResult.TargetRejected;
     }
 }
