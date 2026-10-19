@@ -530,6 +530,6 @@ public sealed class SpatialKnowledgeCensusTests
         Assert.That(adapter, Is.Not.Null);
         adapter.GetType().GetField("ownerRuntimeId", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(adapter, serializedOwnerRuntimeId);
-        ((ISerializationCallbackReceiver)adapter).OnAfterDeserialize();
+        ((UnityEngine.ISerializationCallbackReceiver)adapter).OnAfterDeserialize();
     }
 }
