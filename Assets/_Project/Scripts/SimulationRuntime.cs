@@ -11120,9 +11120,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             CurrentDay,
             calendar?.SemanticVersion,
             (owner, category, message) => ResolveAdapter(owner).LogSelectedDailyEconomy(category, message),
-            (owner, result) => ResolveAdapter(owner).ProjectSelectedLocalMaterialFlow(owner, result),
-            (owner, item, quantity) => ResolveAdapter(owner)
-                .ExecuteSelectedAccountBackedPopulationConsumption(owner, item, quantity));
+            (owner, result) => ResolveAdapter(owner).ProjectSelectedLocalMaterialFlow(owner, result));
     }
 
     private void RefreshLocalKnowledgeAndShare()

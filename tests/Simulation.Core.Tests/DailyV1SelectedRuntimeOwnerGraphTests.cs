@@ -128,8 +128,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(graph.TrySimulateDailyEconomyDay(
             graph.Cities.Reverse(), 1, "calendar-v1",
             (owner, category, _) => events.Add(owner.Definition.DefinitionId + ":" + category),
-            (_, _) => Assert.Fail("A rejected owner sequence must not project material flow."),
-            (_, _, _) => throw new AssertionException("The admitted fixture uses Free population consumption.")), Is.False);
+            (_, _) => Assert.Fail("A rejected owner sequence must not project material flow.")), Is.False);
         Assert.That(events, Is.Empty, "A mismatched City order is rejected before any writes or callbacks.");
         Assert.That(graph.Cities.Select(city => city.Market.Revision), Is.EqualTo(originalRevisions));
         Assert.That(graph.Cities.Select(city => city.Market.Items.Select(row => row.Amount).ToArray()),
@@ -138,8 +137,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(graph.TrySimulateDailyEconomyDay(
             graph.Cities, 1, "calendar-v1",
             (owner, category, _) => events.Add(owner.Definition.DefinitionId + ":" + category),
-            (_, _) => { },
-            (_, _, _) => throw new AssertionException("The admitted fixture uses Free population consumption.")), Is.True);
+            (_, _) => { }), Is.True);
 
         string[] productionEvents = events.Where(value => value.EndsWith(":" + SimulationLogCategory.EconomyProduction,
             StringComparison.Ordinal)).ToArray();
@@ -162,6 +160,50 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         if (consumptionEvents.Length > 0)
             Assert.That(firstConsumption, Is.GreaterThan(lastProduction),
                 "All City production completes before any City consumes.");
+    }
+
+    [Test]
+    public void AccountBackedDailyEconomyRunsThroughCoreOwnerGraph()
+    {
+        DailyV1SimulationConfigData configuration = DailyV1TypedDefinitionGraphTests.CreateConfiguration(
+            1f, new[] { "city/paid" });
+        DailyV1CityData cityValues = new DailyV1CityData(
+            "city/paid", "Paid City", string.Empty, string.Empty, string.Empty,
+            new DailyV1EnumValue((int)LocalMaterialFlowProfile.ExogenousDaily, "ExogenousDaily"),
+            1000,
+            new DailyV1MarketLiquidityConfig(
+                new DailyV1EnumValue((int)MarketLiquidityMode.AccountBacked, "AccountBacked"), 0f),
+            new DailyV1PopulationConsumptionConfig(
+                new DailyV1EnumValue((int)ConsumptionPaymentMode.AccountBacked, "AccountBacked"), 50f),
+            new[] { new DailyV1MarketItemConfig("item/paid", 5, 5, 1f) },
+            Array.Empty<DailyV1CityProductionConfig>(), Array.Empty<DailyV1CityConnection>());
+        DailyV1EffectiveDefinitions definitions = DailyV1EffectiveDefinitions.CreateSelectedSchema(
+            configuration, SimulationConfigurationDefaults.Create(),
+            new DailyV1CalendarDefinition(1, 1, 1, null), new[] { cityValues },
+            new[] { new DailyV1ItemData("item/paid", "Iron", 4f, null) },
+            Array.Empty<DailyV1NpcData>(), Array.Empty<DailyV1NpcJobData>(),
+            Array.Empty<DailyV1NpcActionData>(), Array.Empty<DailyV1NpcStatusData>(),
+            Array.Empty<string>(), "test.daily-v1", "test.geography-v1",
+            "test.geography-stage/v1", "hex-v1", "q-r-s");
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialCityOwner(
+            "city-runtime-paid", "location-runtime-paid", definitions,
+            definitions.Cities["city/paid"], null, out DailyV1CityRuntimeOwners city), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, new[] { city }, Array.Empty<DailyV1NpcRuntimeOwners>(), out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        int consumptionLogs = 0;
+        Assert.That(graph.TrySimulateDailyEconomyDay(graph.Cities, 1, "calendar-v1",
+            (_, category, _) => { if (category == SimulationLogCategory.EconomyConsumption) consumptionLogs++; },
+            null), Is.True);
+
+        DailyV1ItemDefinition item = definitions.Items["item/paid"];
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(4));
+        Assert.That(city.PopulationEconomy.MoneyAccount.Balance, Is.EqualTo(46f));
+        Assert.That(city.Counterparty.MoneyAccount.Balance, Is.EqualTo(4f));
+        Assert.That(city.PopulationEconomy.MoneyAccount.Revision, Is.EqualTo(1));
+        Assert.That(city.Counterparty.MoneyAccount.Revision, Is.EqualTo(1));
+        Assert.That(city.Market.Revision, Is.EqualTo(1), "The selected consumption commits one Market owner write.");
+        Assert.That(consumptionLogs, Is.EqualTo(1));
     }
 
     [Test]

@@ -555,13 +555,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         long absoluteDay,
         string calendarVersion,
         Action<DailyV1CityRuntimeOwners, SimulationLogCategory, string> logOutput,
-        Action<DailyV1CityRuntimeOwners, LocalDailyMaterialFlowResult> localFlowOutput,
-        Func<DailyV1CityRuntimeOwners, DailyV1ItemDefinition, int, int> accountBackedConsumption)
+        Action<DailyV1CityRuntimeOwners, LocalDailyMaterialFlowResult> localFlowOutput)
     {
-        // The argument remains temporarily for the existing SimulationRuntime
-        // call signature. Selected account-backed consumption is now executed
-        // by the Core City owner and this Unity callback is never invoked.
-        _ = accountBackedConsumption;
         if (!MatchesExactOwnerInstances(cities, exactCityOwners)) return false;
 
         foreach (DailyV1CityRuntimeOwners city in cities)
