@@ -295,6 +295,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     {
         public readonly object Owner;
         public readonly string[] SectionIds;
+        public NpcRuntime OwnerNpc;
         public Func<bool> Admission;
         public Action Committed;
         public Func<bool, IReadOnlyList<CityRuntime>, bool> TravelAdmission;
@@ -3402,6 +3403,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             NpcRuntime ownerNpc = FindNpcForMerchantPlanAuthority(binding.Owner);
             if (ownerNpc == null || !ReferenceEquals(ownerNpc.MerchantTradePlanAuthority, binding.Owner))
                 throw new InvalidOperationException("The merchant-plan census owner has no exact NPC projection.");
+            binding.OwnerNpc = ownerNpc;
             ownerNpc.MerchantTradePlan.BindP12MutationBoundary(binding.Admission, binding.Committed);
             npcMerchantPlanMutationBindings.Add(binding.Owner, binding);
         }
@@ -3474,10 +3476,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         foreach (KeyValuePair<object, P12NpcOwnerMutationBinding> pair in
             new List<KeyValuePair<object, P12NpcOwnerMutationBinding>>(npcMerchantPlanMutationBindings))
         {
-            NpcRuntime ownerNpc = FindNpcForMerchantPlanAuthority(pair.Key);
+            NpcRuntime ownerNpc = pair.Value.OwnerNpc;
             if (ownerNpc != null
+                && ReferenceEquals(ownerNpc.MerchantTradePlanAuthority, pair.Key)
                 && ownerNpc.MerchantTradePlan.UnbindP12MutationBoundary(pair.Value.Admission, pair.Value.Committed))
+            {
+                pair.Value.OwnerNpc = null;
                 npcMerchantPlanMutationBindings.Remove(pair.Key);
+            }
             else
                 succeeded = false;
         }

@@ -2661,6 +2661,26 @@ public class TesteSimulacao : MonoBehaviour
                 throw new System.InvalidOperationException(
                     "Selected NPC construction requires the admitted typed graph and its captured configuration.");
 
+            // NpcRuntime retains this resolver for its Unity compatibility projection.
+            // Capture the exact published CityRuntime objects rather than closing over
+            // CityRuntimeList: ReleaseBootstrapAliases clears that temporary alias after
+            // publication, while selected NPC owners continue to need stable projections.
+            Dictionary<string, CityRuntime> selectedCityProjections =
+                new Dictionary<string, CityRuntime>(StringComparer.Ordinal);
+            foreach (CityRuntime city in CityRuntimeList)
+            {
+                if (city == null || string.IsNullOrWhiteSpace(city.RuntimeId)
+                    || selectedCityProjections.ContainsKey(city.RuntimeId))
+                    throw new System.InvalidOperationException(
+                        "Selected NPC projection binding requires unique published City runtime identities.");
+                selectedCityProjections.Add(city.RuntimeId, city);
+            }
+            Func<string, CityRuntime> resolveSelectedCityProjection = cityRuntimeId =>
+                !string.IsNullOrWhiteSpace(cityRuntimeId)
+                && selectedCityProjections.TryGetValue(cityRuntimeId, out CityRuntime city)
+                    ? city
+                    : null;
+
             if (selectedRuntimeOwnerGraphBuilder == null
                 || !selectedRuntimeOwnerGraphBuilder.TryCreateConfiguredNpcs(
                     runtimeIdAllocator,
@@ -2686,9 +2706,7 @@ public class TesteSimulacao : MonoBehaviour
                     selectedDefinitions, selectedBindings, selectedNpcOwners, startingCity);
                 if (!selectedNpc.TryBindSelectedDailyV1Definition(
                         selectedNpcOwners.Definition, selectedDefinitions, selectedBindings,
-                        cityRuntimeId => CityRuntimeList.Find(city => city != null
-                            && string.Equals(city.RuntimeId, cityRuntimeId,
-                                System.StringComparison.Ordinal))))
+                        resolveSelectedCityProjection))
                     throw new System.InvalidOperationException(
                         "The selected NPC Unity/P12 identity projection could not attach to its Core-owned runtime.");
                 if (!runtimeIdentityRegistry.RegisterNpc(selectedNpc))

@@ -5136,7 +5136,9 @@ public sealed class SimulationRuntimeAdmissionTests
             {
                 TravelPartyRuntime party = candidate.Composition.TravelParties.ActiveParties.Single();
                 Assert.That(candidate.IdentityRegistry.TryGetNpc(party.MemberRuntimeIds[0], out NpcRuntime member), Is.True);
-                WritePrivateField(member, "activeTravelPartyId", "p12g/missing-party");
+                object selectedOwners = ReadPrivateField<object>(member, "selectedRuntimeOwners");
+                object selectedTravelOwner = ReadPrivateField<object>(selectedOwners, "Travel");
+                WritePrivateField(selectedTravelOwner, "<ActiveTravelPartyId>k__BackingField", "p12g/missing-party");
             }, out P12GDailyV1RestoreFailure restoreFailure, out string diagnostic), Is.False);
             Assert.That(restoreFailure, Is.EqualTo(P12GDailyV1RestoreFailure.BindingValidationFailed));
             Assert.That(diagnostic, Does.Contain("ActiveTravelPartyId"));
@@ -10761,7 +10763,18 @@ public sealed class SimulationRuntimeAdmissionTests
         object definitions = ReadPrivateField<object>(admittedTemplate, "selectedDefinitionGraph");
         object bindings = ReadPrivateField<object>(admittedTemplate, "selectedDefinitionBindings");
         MethodInfo factory = typeof(NpcRuntime).GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
-            .Single(method => method.Name == "CreateSelectedDailyV1" && method.GetParameters().Length == 6);
+            .Single(method =>
+            {
+                if (method.Name != "CreateSelectedDailyV1") return false;
+                ParameterInfo[] parameters = method.GetParameters();
+                return parameters.Length == 6
+                    && parameters[0].ParameterType == typeof(string)
+                    && parameters[1].ParameterType == typeof(DailyV1NpcDefinition)
+                    && parameters[2].ParameterType == typeof(DailyV1EffectiveDefinitions)
+                    && parameters[3].ParameterType == typeof(DailyV1DefinitionAdapter.SelectedBindings)
+                    && parameters[4].ParameterType == typeof(CityRuntime)
+                    && parameters[5].ParameterType == typeof(float);
+            });
         return (NpcRuntime)factory.Invoke(null, new object[]
         {
             runtimeId, definition, definitions, bindings, admittedTemplate.CurrentCity, 0f

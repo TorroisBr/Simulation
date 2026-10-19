@@ -2908,7 +2908,7 @@ public sealed class SimulationBootstrapCompositionTests
         int committedStatusMutations = 0;
         Assert.That(runtime.TryBindP12CrimeJusticeMutationBoundary(_ => true, _ => committedStatusMutations++), Is.True);
         Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
-            System.Array.Empty<DailyV1CityRuntimeOwners>(), new[] { runtime.SelectedRuntimeOwners },
+            new[] { startingCity.SelectedRuntimeOwners }, new[] { runtime.SelectedRuntimeOwners },
             out DailyV1SelectedRuntimeOwnerGraph selectedOwnerGraph), Is.True);
         long beforeMissingTargetPlan = runtime.P12CrimeJusticeRevision;
         Assert.That(runtime.TryCreateConfiguredActionStatusPlan(
@@ -3131,7 +3131,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(planProviders, Has.Count.EqualTo(roster.Length * 2));
         foreach (NpcRuntime npc in roster)
         {
-            object merchantPlan = ReadNonPublicProperty(npc, "ExistingMerchantTradePlan");
+            object merchantPlan = npc.MerchantTradePlanAuthority;
             object travelPlan = ReadNonPublicProperty(npc, "ExistingTravelPlan");
             AssertNpcPlanWitness(
                 planProviders,
@@ -3435,7 +3435,7 @@ public sealed class SimulationBootstrapCompositionTests
             AddExpectedDailyV1OwnerIdentity(
                 expected,
                 NpcPlanCensusProvider.SectionIdFor(NpcPlanCensusProvider.MerchantTradePlanKind, runtimeId),
-                ReadNonPublicProperty(npc, "ExistingMerchantTradePlan"));
+                npc.MerchantTradePlanAuthority);
             AddExpectedDailyV1OwnerIdentity(
                 expected,
                 NpcPlanCensusProvider.SectionIdFor(NpcPlanCensusProvider.TravelPlanKind, runtimeId),
