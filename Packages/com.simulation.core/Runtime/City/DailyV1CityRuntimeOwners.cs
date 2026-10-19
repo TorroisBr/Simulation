@@ -130,6 +130,93 @@ internal sealed partial class DailyV1CityRuntimeOwners
         && ReferenceEquals(definition, admitted);
 
     /// <summary>
+    /// Mirrors the selected City adapter's local-flow classification using
+    /// only the admitted immutable definition and its Core-owned source.
+    /// </summary>
+    internal bool HasLocalDailyMaterialFlow
+    {
+        get
+        {
+            DailyV1CityData city = Definition?.Values;
+            if (city == null) return false;
+            LocalMaterialFlowProfile profile = (LocalMaterialFlowProfile)(city.materialFlowProfile?.Value
+                ?? (int)LocalMaterialFlowProfile.ExogenousDaily);
+            return FiniteSource != null
+                || profile != LocalMaterialFlowProfile.ExogenousDaily
+                || !string.IsNullOrWhiteSpace(city.settlementSemanticId)
+                || !string.IsNullOrWhiteSpace(city.materialFlowLocationId)
+                || !string.IsNullOrWhiteSpace(city.marketStoreSemanticId)
+                || (city.productionConfigs ?? Array.Empty<DailyV1CityProductionConfig>()).Any(source =>
+                    source != null && (!string.IsNullOrWhiteSpace(source.productionSourceId)
+                        || source.initialReserve != 0));
+        }
+    }
+
+    internal bool HasConfiguredAccountBackedConsumption =>
+        PopulationEconomy?.PaymentMode == ConsumptionPaymentMode.AccountBacked
+        && (Definition?.Values?.marketItems ?? Array.Empty<DailyV1MarketItemConfig>())
+            .Any(row => row != null && row.consumptionPer1000Population > 0f);
+
+    /// <summary>
+    /// Applies the selected City's existing ordinary production pass through
+    /// its admitted definition nodes and canonical Market owner.
+    /// </summary>
+    internal void SimulateSelectedProductionDay(Action<SimulationLogCategory, string> logOutput)
+    {
+        DailyV1CityData city = Definition.Values;
+        foreach (DailyV1CityProductionConfig production in
+            city.productionConfigs ?? Array.Empty<DailyV1CityProductionConfig>())
+        {
+            if (production == null || production.amountPerDay <= 0
+                || !Definitions.Items.TryGetValue(production.item ?? string.Empty,
+                    out DailyV1ItemDefinition item))
+                continue;
+
+            int produced = Market.AddStock(item, production.amountPerDay);
+            if (produced <= 0) continue;
+            logOutput?.Invoke(SimulationLogCategory.EconomyProduction,
+                $"{city.cityName} produziu {produced} {item.Values.itemName}");
+        }
+    }
+
+    /// <summary>
+    /// Applies the selected City's existing ordinary consumption pass. Free
+    /// consumption writes directly to the Core Market; account-backed
+    /// transactions remain owned by the existing host transaction service.
+    /// </summary>
+    internal void SimulateSelectedConsumptionDay(
+        Func<DailyV1CityRuntimeOwners, DailyV1ItemDefinition, int, int> accountBackedConsumption,
+        Action<SimulationLogCategory, string> logOutput)
+    {
+        DailyV1CityData city = Definition.Values;
+        foreach (DailyV1MarketItemConfig config in city.marketItems ?? Array.Empty<DailyV1MarketItemConfig>())
+        {
+            if (config == null || config.consumptionPer1000Population <= 0f
+                || !Definitions.Items.TryGetValue(config.item ?? string.Empty,
+                    out DailyV1ItemDefinition item))
+                continue;
+
+            int desiredConsumption = UnityMathfCompatibility.RoundToInt(
+                Population.CurrentPopulation / 1000f * config.consumptionPer1000Population);
+            if (desiredConsumption <= 0) continue;
+
+            int consumed = PopulationEconomy.PaymentMode == ConsumptionPaymentMode.Free
+                ? Market.RemoveStockUpTo(item, desiredConsumption)
+                : accountBackedConsumption(this, item, desiredConsumption);
+            if (consumed > 0)
+                logOutput?.Invoke(SimulationLogCategory.EconomyConsumption,
+                    $"{city.cityName} consumiu {consumed} {item.Values.itemName}");
+        }
+    }
+
+    internal void UpdateSelectedMarketPrices(Action<SimulationLogCategory, string> logOutput)
+    {
+        Market.UpdatePrices();
+        logOutput?.Invoke(SimulationLogCategory.Market,
+            $"{Definition.Values.cityName} atualizou os precos do mercado.");
+    }
+
+    /// <summary>
     /// Executes the selected City's admitted daily material-flow policy through
     /// the same Core owners used by bootstrap, capture, and hydration. The
     /// Unity CityRuntime supplies only the host location projection and log sink.

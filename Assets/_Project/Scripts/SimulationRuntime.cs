@@ -11036,6 +11036,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
     private void SimulateEconomyDay()
     {
+        if (TrySimulateSelectedDailyEconomyDay())
+            return;
+
         foreach (CityRuntime cityRuntime in cities)
         {
             if (cityRuntime != null && cityRuntime.HasLocalDailyMaterialFlow)
@@ -11061,6 +11064,42 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 cityRuntime.SimulateConsumptionDay();
             cityRuntime.UpdateMarketPrices();
         }
+    }
+
+    private bool TrySimulateSelectedDailyEconomyDay()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
+        if (graph == null || cities == null || cities.Count != graph.Cities.Count
+            || !HasExactSelectedRuntimeOwnerGraph(graph.Definitions))
+            return false;
+        if (calendar == null && graph.Cities.Any(city => city.HasLocalDailyMaterialFlow))
+            return false;
+
+        List<CityRuntime> adapters = new List<CityRuntime>(cities.Count);
+        for (int index = 0; index < cities.Count; index++)
+        {
+            CityRuntime city = cities[index];
+            if (city == null || !ReferenceEquals(city.SelectedRuntimeOwners, graph.Cities[index]))
+                return false;
+            adapters.Add(city);
+        }
+
+        CityRuntime ResolveAdapter(DailyV1CityRuntimeOwners owner)
+        {
+            for (int index = 0; index < graph.Cities.Count; index++)
+                if (ReferenceEquals(graph.Cities[index], owner))
+                    return adapters[index];
+            throw new InvalidOperationException("A selected City economy callback referenced an owner outside the runtime graph.");
+        }
+
+        return graph.TrySimulateDailyEconomyDay(
+            graph.Cities,
+            CurrentDay,
+            calendar?.SemanticVersion,
+            (owner, category, message) => ResolveAdapter(owner).LogSelectedDailyEconomy(category, message),
+            (owner, result) => ResolveAdapter(owner).ProjectSelectedLocalMaterialFlow(owner, result),
+            (owner, item, quantity) => ResolveAdapter(owner)
+                .ExecuteSelectedAccountBackedPopulationConsumption(owner, item, quantity));
     }
 
     private void RefreshLocalKnowledgeAndShare()

@@ -366,6 +366,56 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         return plan.TryCommit(preCommitAdmission);
     }
 
+    /// <summary>
+    /// Executes the existing selected-City daily economy in its established
+    /// global pass order: local material flow, ordinary production, then
+    /// consumption and price refresh per City. The host callbacks are projections
+    /// only; all selected mutable owners and definition reads remain in Core.
+    /// Returns false only during preflight, before any owner is mutated.
+    /// </summary>
+    internal bool TrySimulateDailyEconomyDay(
+        IEnumerable<DailyV1CityRuntimeOwners> exactCityOwners,
+        long absoluteDay,
+        string calendarVersion,
+        Action<DailyV1CityRuntimeOwners, SimulationLogCategory, string> logOutput,
+        Action<DailyV1CityRuntimeOwners, LocalDailyMaterialFlowResult> localFlowOutput,
+        Func<DailyV1CityRuntimeOwners, DailyV1ItemDefinition, int, int> accountBackedConsumption)
+    {
+        if (!MatchesExactOwnerInstances(cities, exactCityOwners)) return false;
+        foreach (DailyV1CityRuntimeOwners city in cities)
+            if (city.HasConfiguredAccountBackedConsumption && accountBackedConsumption == null)
+                return false;
+
+        foreach (DailyV1CityRuntimeOwners city in cities)
+        {
+            if (!city.HasLocalDailyMaterialFlow) continue;
+            LocalDailyMaterialFlowResult result = city.SimulateSelectedLocalDailyMaterialFlow(
+                city.Definition.Values.materialFlowLocationId,
+                absoluteDay,
+                calendarVersion,
+                logOutput == null ? null : (category, message) => logOutput(city, category, message));
+            localFlowOutput?.Invoke(city, result);
+        }
+
+        foreach (DailyV1CityRuntimeOwners city in cities)
+        {
+            if (!city.HasLocalDailyMaterialFlow)
+                city.SimulateSelectedProductionDay(
+                    logOutput == null ? null : (category, message) => logOutput(city, category, message));
+        }
+
+        foreach (DailyV1CityRuntimeOwners city in cities)
+        {
+            if (!city.HasLocalDailyMaterialFlow)
+                city.SimulateSelectedConsumptionDay(accountBackedConsumption,
+                    logOutput == null ? null : (category, message) => logOutput(city, category, message));
+            city.UpdateSelectedMarketPrices(
+                logOutput == null ? null : (category, message) => logOutput(city, category, message));
+        }
+
+        return true;
+    }
+
     private static bool MatchesExactOwnerInstances<T>(
         IReadOnlyList<T> expected,
         IEnumerable<T> actual)

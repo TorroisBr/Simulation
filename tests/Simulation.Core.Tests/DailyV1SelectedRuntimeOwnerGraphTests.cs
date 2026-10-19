@@ -1,10 +1,67 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 
 [TestFixture]
 public sealed class DailyV1SelectedRuntimeOwnerGraphTests
 {
+    [Test]
+    public void SelectedDailyEconomyPreflightsExactCityOwnersAndPreservesGlobalPassOrder()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(
+            allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        long[] originalRevisions = graph.Cities.Select(city => city.Market.Revision).ToArray();
+        int[][] originalStock = graph.Cities.Select(city => city.Market.Items.Select(row => row.Amount).ToArray()).ToArray();
+        List<string> events = new List<string>();
+
+        Assert.That(graph.TrySimulateDailyEconomyDay(
+            graph.Cities.Reverse(), 1, "calendar-v1",
+            (owner, category, _) => events.Add(owner.Definition.DefinitionId + ":" + category),
+            (_, _) => Assert.Fail("A rejected owner sequence must not project material flow."),
+            (_, _, _) => throw new AssertionException("The admitted fixture uses Free population consumption.")), Is.False);
+        Assert.That(events, Is.Empty, "A mismatched City order is rejected before any writes or callbacks.");
+        Assert.That(graph.Cities.Select(city => city.Market.Revision), Is.EqualTo(originalRevisions));
+        Assert.That(graph.Cities.Select(city => city.Market.Items.Select(row => row.Amount).ToArray()),
+            Is.EqualTo(originalStock));
+
+        Assert.That(graph.TrySimulateDailyEconomyDay(
+            graph.Cities, 1, "calendar-v1",
+            (owner, category, _) => events.Add(owner.Definition.DefinitionId + ":" + category),
+            (_, _) => { },
+            (_, _, _) => throw new AssertionException("The admitted fixture uses Free population consumption.")), Is.True);
+
+        string[] productionEvents = events.Where(value => value.EndsWith(":" + SimulationLogCategory.EconomyProduction,
+            StringComparison.Ordinal)).ToArray();
+        string[] consumptionEvents = events.Where(value => value.EndsWith(":" + SimulationLogCategory.EconomyConsumption,
+            StringComparison.Ordinal)).ToArray();
+        string[] marketEvents = events.Where(value => value.EndsWith(":" + SimulationLogCategory.Market,
+            StringComparison.Ordinal)).ToArray();
+        Assert.That(productionEvents, Is.Not.Empty);
+        Assert.That(marketEvents, Has.Length.EqualTo(graph.Cities.Count));
+        Assert.That(marketEvents.Select(value => value.Split(':')[0]),
+            Is.EqualTo(graph.Cities.Select(city => city.Definition.DefinitionId)));
+
+        int firstConsumption = events.FindIndex(value => value.EndsWith(":" + SimulationLogCategory.EconomyConsumption,
+            StringComparison.Ordinal));
+        int firstMarket = events.FindIndex(value => value.EndsWith(":" + SimulationLogCategory.Market,
+            StringComparison.Ordinal));
+        int lastProduction = events.FindLastIndex(value => value.EndsWith(":" + SimulationLogCategory.EconomyProduction,
+            StringComparison.Ordinal));
+        Assert.That(lastProduction, Is.LessThan(firstMarket), "All production remains ahead of the final City pass.");
+        if (consumptionEvents.Length > 0)
+            Assert.That(firstConsumption, Is.GreaterThan(lastProduction),
+                "All City production completes before any City consumes.");
+    }
+
     [Test]
     public void AdmittedDefinitionsConstructAndOperatePairedCityNpcOwnersInCore()
     {

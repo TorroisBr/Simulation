@@ -265,6 +265,9 @@ public class MarketRuntime
     internal int RemoveSelectedStock(DailyV1ItemDefinition item, int amount) =>
         selectedOwner != null ? selectedOwner.RemoveStockUpTo(item, amount) : 0;
 
+    internal bool IsBoundToSelectedOwner(DailyV1MarketOwner owner) =>
+        owner != null && ReferenceEquals(selectedOwner, owner);
+
     internal float GetSelectedPriceForSale(DailyV1ItemDefinition item)
     {
         // Keep the selected path on the Core owner's pricing contract for both

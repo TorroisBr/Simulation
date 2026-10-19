@@ -1954,6 +1954,37 @@ public class CityRuntime
         logger?.Log(SimulationLogCategory.Market, $"{CityName} atualizou os precos do mercado.");
     }
 
+    internal void LogSelectedDailyEconomy(SimulationLogCategory category, string message) =>
+        logger?.Log(category, message);
+
+    internal void ProjectSelectedLocalMaterialFlow(
+        DailyV1CityRuntimeOwners expectedOwner,
+        LocalDailyMaterialFlowResult result)
+    {
+        if (!ReferenceEquals(selectedRuntimeOwners, expectedOwner))
+            throw new InvalidOperationException("The selected City material-flow projection is not bound to its exact Core owner.");
+        lastMaterialFlow = result;
+    }
+
+    internal int ExecuteSelectedAccountBackedPopulationConsumption(
+        DailyV1CityRuntimeOwners expectedOwner,
+        DailyV1ItemDefinition item,
+        int requestedQuantity)
+    {
+        if (!ReferenceEquals(selectedRuntimeOwners, expectedOwner)
+            || expectedOwner == null
+            || !ReferenceEquals(Population, expectedOwner.Population)
+            || !ReferenceEquals(PopulationEconomy, expectedOwner.PopulationEconomy)
+            || !Market.IsBoundToSelectedOwner(expectedOwner.Market)
+            || item == null
+            || !expectedOwner.Definitions.Items.TryGetValue(item.DefinitionId, out DailyV1ItemDefinition admitted)
+            || !ReferenceEquals(item, admitted))
+            throw new InvalidOperationException("The selected population transaction is not bound to its exact Core City owners.");
+
+        return new EconomyTransactionService().TryExecutePopulationConsumption(
+            expectedOwner.PopulationEconomy, Market, item, requestedQuantity).Quantity;
+    }
+
     public void AddImportantNpc(NpcRuntime npcRuntime)
     {
         if (npcRuntime == null)

@@ -1863,6 +1863,15 @@ public sealed class SimulationBootstrapCompositionTests
             + config.ExplorableSites.Count * 2;
         Assert.That(simulation.SpatialNetwork.Routes.Count, Is.EqualTo(expectedP9RouteCount),
             "The selected P9-B-only profile adds no P10-A topology or routes.");
+
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(selectedGraph, Is.Not.Null);
+        Assert.That(runtime.HasExactSelectedRuntimeOwnerGraph(selectedGraph.Definitions), Is.True);
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.True,
+            advanceFailure.ToString());
+        Assert.That(runtime.CurrentDay, Is.EqualTo(1L));
+        Assert.That(runtime.HasExactSelectedRuntimeOwnerGraph(selectedGraph.Definitions), Is.True,
+            "Daily economy execution retains the exact selected Core owner graph.");
     }
 
     [Test]
