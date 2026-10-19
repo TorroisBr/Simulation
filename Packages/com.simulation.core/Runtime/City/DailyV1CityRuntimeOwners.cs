@@ -8,6 +8,7 @@ using System.Collections.Generic;
 internal sealed class DailyV1CityRuntimeOwners
 {
     internal string RuntimeId { get; }
+    internal string LocationRuntimeId { get; }
     internal DailyV1EffectiveDefinitions Definitions { get; }
     internal DailyV1CityDefinition Definition { get; }
     internal SettlementPopulationRuntime Population { get; }
@@ -18,6 +19,7 @@ internal sealed class DailyV1CityRuntimeOwners
 
     private DailyV1CityRuntimeOwners(
         string runtimeId,
+        string locationRuntimeId,
         DailyV1EffectiveDefinitions definitions,
         DailyV1CityDefinition definition,
         SettlementPopulationRuntime population,
@@ -27,6 +29,7 @@ internal sealed class DailyV1CityRuntimeOwners
         DailyV1CityNpcPresenceOwner npcPresence)
     {
         RuntimeId = runtimeId;
+        LocationRuntimeId = locationRuntimeId;
         Definitions = definitions;
         Definition = definition;
         Population = population;
@@ -38,13 +41,15 @@ internal sealed class DailyV1CityRuntimeOwners
 
     internal static bool TryCreateInitial(
         string runtimeId,
+        string locationRuntimeId,
         DailyV1EffectiveDefinitions definitions,
         DailyV1CityDefinition definition,
         MarketCounterpartyRuntime suppliedCounterparty,
         out DailyV1CityRuntimeOwners owners)
     {
         owners = null;
-        if (string.IsNullOrWhiteSpace(runtimeId) || !IsAdmitted(definitions, definition)) return false;
+        if (string.IsNullOrWhiteSpace(runtimeId) || string.IsNullOrWhiteSpace(locationRuntimeId)
+            || !IsAdmitted(definitions, definition)) return false;
 
         DailyV1CityData values = definition.Values;
         MarketCounterpartyRuntime counterparty = suppliedCounterparty == null
@@ -65,12 +70,13 @@ internal sealed class DailyV1CityRuntimeOwners
             return false;
 
         owners = new DailyV1CityRuntimeOwners(
-            runtimeId, definitions, definition, population, market, counterparty, populationEconomy, npcPresence);
+            runtimeId, locationRuntimeId, definitions, definition, population, market, counterparty, populationEconomy, npcPresence);
         return true;
     }
 
     internal static bool TryCreateBound(
         string runtimeId,
+        string locationRuntimeId,
         DailyV1EffectiveDefinitions definitions,
         DailyV1CityDefinition definition,
         SettlementPopulationRuntime population,
@@ -82,6 +88,7 @@ internal sealed class DailyV1CityRuntimeOwners
     {
         owners = null;
         if (string.IsNullOrWhiteSpace(runtimeId)
+            || string.IsNullOrWhiteSpace(locationRuntimeId)
             || definitions == null
             || definition == null
             || !definitions.Cities.TryGetValue(definition.DefinitionId, out DailyV1CityDefinition admitted)
@@ -100,7 +107,7 @@ internal sealed class DailyV1CityRuntimeOwners
             return false;
 
         owners = new DailyV1CityRuntimeOwners(
-            runtimeId, definitions, definition, population, market, counterparty, populationEconomy, npcPresence);
+            runtimeId, locationRuntimeId, definitions, definition, population, market, counterparty, populationEconomy, npcPresence);
         return true;
     }
 

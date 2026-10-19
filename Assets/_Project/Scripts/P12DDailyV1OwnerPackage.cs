@@ -114,7 +114,7 @@ internal sealed class P12DDailyV1OwnerPackage
             || exactOwnerSectionVector == null || sourceRuntimeIdentities == null
             || sourceSpatialNetwork == null || sourceExplorableSites == null
             || stagedRuntimeIdentities == null || stagedWorldId == null
-            || cityDefinitions == null || itemDefinitions == null
+            || (selectedDefinitions == null && cityDefinitions == null) || itemDefinitions == null
             || npcDefinitions == null || actionDefinitions == null
             || statusDefinitions == null || admittedDailySiteDefinitions == null
             || stagedTravelPartyIds == null
@@ -234,7 +234,8 @@ internal sealed class P12DDailyV1OwnerPackage
         string[] stagedRouteIds = stagedSpatialNetwork.Routes.Select(route => route?.RuntimeId).ToArray();
         Dictionary<string, SpatialLocationRuntime> locationsById =
             stagedLocations.ToDictionary(location => location.RuntimeId, StringComparer.Ordinal);
-        if (!TryBuildUniqueMap(cityDefinitions, definition => definition?.DefinitionId, out _)
+        if ((selectedDefinitions == null
+                && !TryBuildUniqueMap(cityDefinitions, definition => definition?.DefinitionId, out _))
             || !TryBuildUniqueMap(itemDefinitions, definition => definition?.DefinitionId, out _))
         {
             failure = P12DDailyV1OwnerPackageFailure.InvalidDefinition;
@@ -373,7 +374,8 @@ internal sealed class P12DDailyV1OwnerPackage
             || npcDRows == null || npcFRows == null || spatialSnapshot == null
             || personSnapshot == null || genealogySnapshot == null || siteSnapshot == null
             || stagedRuntimeIdentities == null || stagedWorldId == null
-            || cityDefinitions == null || itemDefinitions == null || npcDefinitions == null
+            || (selectedDefinitions == null && cityDefinitions == null)
+            || itemDefinitions == null || npcDefinitions == null
             || actionDefinitions == null || statusDefinitions == null || admittedDailySiteDefinitions == null
             || admittedDailySiteDefinitions.Count != 0 || stagedTravelPartyIds == null
             || !TryValidateStagedIdentityRegistryIsEmpty(stagedRuntimeIdentities)
@@ -394,7 +396,8 @@ internal sealed class P12DDailyV1OwnerPackage
         string[] stagedRouteIds = stagedSpatialNetwork.Routes.Select(route => route?.RuntimeId).ToArray();
         Dictionary<string, SpatialLocationRuntime> locationsById =
             stagedLocations.ToDictionary(location => location.RuntimeId, StringComparer.Ordinal);
-        if (!TryBuildUniqueMap(cityDefinitions, definition => definition?.DefinitionId, out _)
+        if ((selectedDefinitions == null
+                && !TryBuildUniqueMap(cityDefinitions, definition => definition?.DefinitionId, out _))
             || !TryBuildUniqueMap(itemDefinitions, definition => definition?.DefinitionId, out _))
         { failure = P12DDailyV1OwnerPackageFailure.InvalidDefinition; return false; }
 

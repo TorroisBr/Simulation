@@ -170,7 +170,14 @@ internal sealed class P12DCityRootOwnerSnapshot
                 out PopulationEconomyRuntime populationEconomy,
                 out SpatialLocationRuntime location)
             || !string.Equals(population.SettlementRuntimeId, city.RuntimeId, StringComparison.Ordinal)
-            || string.IsNullOrWhiteSpace(location.RuntimeId))
+            || string.IsNullOrWhiteSpace(location.RuntimeId)
+            || (city.SelectedRuntimeOwners != null
+                && (!string.Equals(city.SelectedRuntimeOwners.RuntimeId, city.RuntimeId, StringComparison.Ordinal)
+                    || !string.Equals(city.SelectedRuntimeOwners.LocationRuntimeId, location.RuntimeId, StringComparison.Ordinal)
+                    || !ReferenceEquals(city.SelectedRuntimeOwners.Definitions, city.SelectedDailyV1DefinitionGraph)
+                    || !ReferenceEquals(city.SelectedRuntimeOwners.Definition, city.SelectedDailyV1Definition)
+                    || !string.Equals(city.SelectedRuntimeOwners.Definition?.DefinitionId,
+                        city.DefinitionId, StringComparison.Ordinal))))
         {
             failure = P12DCityRootOwnerSnapshotFailure.InvalidCityOwner;
             return false;
@@ -353,16 +360,31 @@ internal sealed class P12DCityRootOwnerSnapshot
             || PopulationReceiptRevision < 0L
             || PopulationReceipts == null
             || PopulationReceiptRevision < PopulationReceipts.Count
-            || admittedCityDefinitions == null
+            || (selectedDefinitions == null && admittedCityDefinitions == null)
             || admittedItemDefinitions == null
             || stagedLocations == null)
         {
             return false;
         }
 
-        if (!TryResolveUniqueCityDefinition(admittedCityDefinitions, CityDefinitionId, out CityData cityDefinition,
-                out failure)
-            || !TryResolveUniqueLocation(stagedLocations, LegacyLocationRuntimeId, out SpatialLocationRuntime location,
+        CityData cityDefinition = null;
+        DailyV1CityDefinition selectedCityDefinition = null;
+        if (selectedDefinitions != null)
+        {
+            if (!selectedDefinitions.Cities.TryGetValue(CityDefinitionId, out selectedCityDefinition)
+                || selectedCityDefinition == null
+                || !string.Equals(selectedCityDefinition.DefinitionId, CityDefinitionId, StringComparison.Ordinal))
+            {
+                failure = P12DCityRootOwnerSnapshotFailure.MissingCityDefinition;
+                return false;
+            }
+        }
+        else if (!TryResolveUniqueCityDefinition(admittedCityDefinitions, CityDefinitionId,
+                     out cityDefinition, out failure))
+        {
+            return false;
+        }
+        if (!TryResolveUniqueLocation(stagedLocations, LegacyLocationRuntimeId, out SpatialLocationRuntime location,
                 out failure))
         {
             return false;
@@ -459,7 +481,9 @@ internal sealed class P12DCityRootOwnerSnapshot
                 ImportantNpcRuntimeIds,
                 captureEnvelope,
                 out city,
-                out membershipLinker))
+                out membershipLinker,
+                selectedCityDefinition,
+                selectedDefinitions))
         {
             failure = P12DCityRootOwnerSnapshotFailure.StageFailed;
             city = null;

@@ -65,9 +65,10 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
             runtimeId, out DailyV1CityNpcPresenceOwner npcPresence), Is.True);
 
         Assert.That(DailyV1CityRuntimeOwners.TryCreateBound(
-            runtimeId, definitions, city, population, market, counterparty, economy,
+            runtimeId, "location-selected-city", definitions, city, population, market, counterparty, economy,
             npcPresence,
             out DailyV1CityRuntimeOwners owners), Is.True);
+        Assert.That(owners.LocationRuntimeId, Is.EqualTo("location-selected-city"));
         Assert.That(owners.Definitions, Is.SameAs(definitions));
         Assert.That(owners.Definition, Is.SameAs(city));
         Assert.That(owners.Population, Is.SameAs(population));
@@ -95,12 +96,12 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
             runtimeId, out DailyV1CityNpcPresenceOwner npcPresence), Is.True);
 
         Assert.That(DailyV1CityRuntimeOwners.TryCreateBound(
-            runtimeId, definitions, city, population, foreignMarket, counterparty, economy,
+            runtimeId, "location-selected-city", definitions, city, population, foreignMarket, counterparty, economy,
             npcPresence,
             out DailyV1CityRuntimeOwners owners), Is.False);
         Assert.That(owners, Is.Null);
         Assert.That(DailyV1CityRuntimeOwners.TryCreateBound(
-            runtimeId, definitions, city, population, foreignMarket,
+            runtimeId, "location-selected-city", definitions, city, population, foreignMarket,
             MarketCounterpartyRuntime.CreateOpen("other-city"), economy, npcPresence, out owners), Is.False);
         Assert.That(owners, Is.Null);
     }
@@ -112,7 +113,8 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         DailyV1CityDefinition city = definitions.Cities.Values.First();
         DailyV1NpcDefinition npc = definitions.Npcs.Values.First();
         Assert.That(DailyV1CityRuntimeOwners.TryCreateInitial(
-            "city-runtime", definitions, city, null, out DailyV1CityRuntimeOwners cityOwners), Is.True);
+            "city-runtime", "location-city-runtime", definitions, city, null,
+            out DailyV1CityRuntimeOwners cityOwners), Is.True);
         Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
             "npc-runtime", definitions, npc, 0f, out DailyV1NpcRuntimeOwners npcOwners), Is.True);
 
@@ -126,6 +128,47 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         Assert.That(graph.Npcs[0], Is.SameAs(npcOwners));
         Assert.That(cityOwners.NpcPresence.OrderedNpcRuntimeIds, Is.Empty);
         Assert.That(cityOwners.NpcPresence.Revision, Is.Zero);
+    }
+
+    [Test]
+    public void SelectedRuntimeOwnerGraphOwnsUniqueP8LocationBindingsAndChecksNpcCityJoins()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1CityDefinition[] cityDefinitions = definitions.Cities.Values.Take(2).ToArray();
+        Assert.That(cityDefinitions, Has.Length.EqualTo(2));
+
+        Assert.That(DailyV1CityRuntimeOwners.TryCreateInitial(
+            "city-runtime-a", "p8-location-shared", definitions, cityDefinitions[0], null,
+            out DailyV1CityRuntimeOwners firstCity), Is.True);
+        Assert.That(DailyV1CityRuntimeOwners.TryCreateInitial(
+            "city-runtime-b", "p8-location-shared", definitions, cityDefinitions[1], null,
+            out DailyV1CityRuntimeOwners secondCity), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, new[] { firstCity, secondCity }, System.Array.Empty<DailyV1NpcRuntimeOwners>(),
+            out DailyV1SelectedRuntimeOwnerGraph duplicateLocationGraph), Is.False,
+            "A selected runtime cannot assign two top-level City owners to one P8 Location.");
+        Assert.That(duplicateLocationGraph, Is.Null);
+
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-runtime", definitions, definitions.Npcs.Values.First(), 0f,
+            out DailyV1NpcRuntimeOwners npc), Is.True);
+        Assert.That(npc.Travel.TryInstallState(
+            "p8-location-other", firstCity.RuntimeId, null, null,
+            0, 0, null, false, null, null, 0L), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, new[] { firstCity }, new[] { npc },
+            out DailyV1SelectedRuntimeOwnerGraph mismatchedCurrentLocation), Is.False,
+            "A current City reference must use that City owner's exact P8 LocationId.");
+        Assert.That(mismatchedCurrentLocation, Is.Null);
+
+        Assert.That(npc.Travel.TryInstallState(
+            null, null, "p8-location-other", firstCity.RuntimeId,
+            1, 1, null, false, null, null, 0L), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, new[] { firstCity }, new[] { npc },
+            out DailyV1SelectedRuntimeOwnerGraph mismatchedDestinationLocation), Is.False,
+            "A destination City reference must use that City owner's exact P8 LocationId.");
+        Assert.That(mismatchedDestinationLocation, Is.Null);
     }
 
     [Test]
@@ -358,7 +401,8 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         DailyV1CityDefinition city = definitions.Cities.Values.First();
         DailyV1NpcDefinition npc = definitions.Npcs.Values.First();
         Assert.That(DailyV1CityRuntimeOwners.TryCreateInitial(
-            "shared-runtime", definitions, city, null, out DailyV1CityRuntimeOwners cityOwners), Is.True);
+            "shared-runtime", "location-shared-runtime", definitions, city, null,
+            out DailyV1CityRuntimeOwners cityOwners), Is.True);
         Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
             "shared-runtime", definitions, npc, 0f, out DailyV1NpcRuntimeOwners npcOwners), Is.True);
 
@@ -376,7 +420,7 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         DailyV1NpcDefinition[] npcDefinitions = definitions.Npcs.Values.Take(2).ToArray();
         Assert.That(npcDefinitions, Has.Length.EqualTo(2));
         Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialCityOwner(
-            "city-runtime", definitions, city, null,
+            "city-runtime", "location-city-runtime", definitions, city, null,
             out DailyV1CityRuntimeOwners cityOwners), Is.True);
         Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
             "npc-runtime-1", definitions, npcDefinitions[0], 0f,
@@ -414,7 +458,8 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         Assert.That(DailyV1CityRuntimeOwners.TryCreateInitial(
-            "city-runtime", definitions, definitions.Cities.Values.First(), null,
+            "city-runtime", "location-city-runtime", definitions,
+            definitions.Cities.Values.First(), null,
             out DailyV1CityRuntimeOwners cityOwners), Is.True);
         Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
             "npc-runtime", definitions, definitions.Npcs.Values.First(), 0f,
@@ -448,7 +493,7 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         DailyV1CityDefinition city = definitions.Cities["CAMPO_VERDE"];
         DailyV1ItemDefinition item = definitions.Items["TRIGO"];
         Assert.That(DailyV1CityRuntimeOwners.TryCreateInitial(
-            "city-runtime", definitions, city, null,
+            "city-runtime", "location-city-runtime", definitions, city, null,
             out DailyV1CityRuntimeOwners owners), Is.True);
         List<string> output = new List<string>();
 
@@ -480,7 +525,7 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
             "TRIGO", "FERRO", 20, 100, 2f, 5, 1000);
         DailyV1CityDefinition city = definitions.Cities["CAMPO_VERDE"];
         Assert.That(DailyV1CityRuntimeOwners.TryCreateInitial(
-            "city-runtime", definitions, city, null,
+            "city-runtime", "location-city-runtime", definitions, city, null,
             out DailyV1CityRuntimeOwners owners), Is.True);
         long revision = owners.Market.Revision;
         int stock = owners.Market.Items.Sum(row => row.Amount);

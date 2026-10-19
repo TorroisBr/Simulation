@@ -215,14 +215,17 @@ public sealed class DailyV1SelectedTravelTransitionPlanTests
         long presenceRevision)
     {
         DailyV1CityDefinition definition = System.Linq.Enumerable.First(definitions.Cities.Values);
+        string locationRuntimeId = runtimeId.StartsWith("city-", System.StringComparison.Ordinal)
+            ? "location-" + runtimeId.Substring("city-".Length)
+            : "location-" + runtimeId;
         Assert.That(DailyV1CityRuntimeOwners.TryCreateInitial(
-            runtimeId, definitions, definition, null,
+            runtimeId, locationRuntimeId, definitions, definition, null,
             out DailyV1CityRuntimeOwners initial), Is.True);
         Assert.That(DailyV1CityNpcPresenceOwner.TryCreateBound(
             runtimeId, npcRuntimeIds, presenceRevision,
             out DailyV1CityNpcPresenceOwner presence), Is.True);
         Assert.That(DailyV1CityRuntimeOwners.TryCreateBound(
-            runtimeId, definitions, definition,
+            runtimeId, locationRuntimeId, definitions, definition,
             initial.Population, initial.Market, initial.Counterparty, initial.PopulationEconomy,
             presence, out DailyV1CityRuntimeOwners bound), Is.True);
         return bound;

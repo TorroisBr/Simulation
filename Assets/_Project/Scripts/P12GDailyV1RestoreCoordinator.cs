@@ -1176,10 +1176,15 @@ internal static partial class P12GDailyV1RestoreCoordinator
         foreach (CityRuntime city in stagedD.Cities)
         {
             if (city == null
-                || !selectedBindings.TryGet(city.CityData, selectedDefinitions, out DailyV1CityDefinition cityNode)
+                || string.IsNullOrWhiteSpace(city.DefinitionId)
+                || !selectedDefinitions.Cities.TryGetValue(city.DefinitionId, out DailyV1CityDefinition cityNode)
+                || cityNode == null
+                || !string.Equals(cityNode.DefinitionId, city.DefinitionId, StringComparison.Ordinal)
+                || !selectedDefinitions.Cities.TryGetValue(cityNode.DefinitionId, out DailyV1CityDefinition exactCityNode)
+                || !ReferenceEquals(cityNode, exactCityNode)
                 || !city.TryBindSelectedDailyV1Definition(cityNode, selectedDefinitions, selectedBindings))
             {
-                diagnostic = "A detached City did not retain the exact admitted typed definition node.";
+                diagnostic = "A detached City did not resolve its captured definition identity to the exact admitted typed graph node.";
                 return false;
             }
         }

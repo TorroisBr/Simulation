@@ -152,6 +152,76 @@ public sealed class P12DCityRootOwnerSnapshotTests
     }
 
     [Test]
+    public void SelectedRestoreUsesTypedCityAndItemIdentityThenBindsAfterMembershipLink()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("selected-city-restore-item", 7f);
+        CityData authoredCity = SimulationTestFactory.CreateCityData(
+            "selected-city-restore-definition",
+            SimulationTestFactory.CreateMarketItem(item, 12, 40));
+        SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
+        authoring.simulationName = "Selected City restore fixture";
+        authoring.cities = new List<CityData> { authoredCity };
+        SimulationConfigurationResolutionResult resolution = SimulationConfigurationResolver.Resolve(
+            null, null, authoring.CreateConfigurationOverrides());
+        Assert.That(resolution.IsValid, Is.True, string.Join("; ", resolution.Validation.Errors));
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(
+            authoring.calendar, out string calendarDiagnostic);
+        Assert.That(string.IsNullOrEmpty(calendarDiagnostic), Is.True, calendarDiagnostic);
+        Assert.That(DailyV1DefinitionAdapter.TryCreate(
+            authoring, resolution.Configuration, calendar,
+            SimulationGenesisPipeline.ResolveStageOrder(includeAuthoredGeography: true),
+            "axial-hex-v1", "q-then-r",
+            out DailyV1EffectiveDefinitions definitions,
+            out DailyV1DefinitionAdapter.SelectedBindings bindings,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(definitions.Cities.TryGetValue(
+            authoredCity.DefinitionId, out DailyV1CityDefinition cityDefinition), Is.True);
+
+        SpatialLocationRuntime location = new SpatialLocationRuntime("selected-city-restore-location");
+        CityRuntime sourceCity = new CityRuntime("selected-city-restore-runtime", authoredCity, location);
+        DailyCaptureEligibilityToken token = CreateToken(sourceCity, CreateOwnerSections(sourceCity));
+        Assert.That(P12DCityRootOwnerSnapshot.TryCaptureForStaging(
+            sourceCity, token, new object(), token.OwnerSections,
+            out P12DCityRootOwnerSnapshot.StagingCaptureEnvelope capture, out _), Is.True);
+
+        Assert.That(capture.TryStage(
+            null,
+            Array.Empty<ItemData>(),
+            new[] { location },
+            out CityRuntime restoredCity,
+            out P12DCityMembershipLinker linker,
+            out P12DCityRootOwnerSnapshotFailure failure,
+            definitions), Is.True, failure.ToString());
+        Assert.That(restoredCity.CityData, Is.Null,
+            "Selected P12 restore resolves City identity from the typed graph without retaining CityData.");
+        Assert.That(restoredCity.DefinitionId, Is.EqualTo(authoredCity.DefinitionId));
+        Assert.That(restoredCity.SelectedDailyV1Definition, Is.SameAs(cityDefinition));
+        Assert.That(restoredCity.SelectedRuntimeOwners, Is.Null,
+            "The selected owner join waits until the captured membership linker fills.");
+        Assert.That(restoredCity.Market.SelectedDailyV1Owner, Is.Not.Null);
+        Assert.That(linker.TryFillOnce(Array.Empty<NpcRuntime>()), Is.True);
+        Assert.That(restoredCity.TryBindSelectedDailyV1Definition(cityDefinition, definitions, bindings), Is.True);
+        Assert.That(restoredCity.SelectedRuntimeOwners, Is.Not.Null);
+        Assert.That(restoredCity.SelectedRuntimeOwners.Definitions, Is.SameAs(definitions));
+        Assert.That(restoredCity.SelectedRuntimeOwners.Definition, Is.SameAs(cityDefinition));
+        Assert.That(restoredCity.SelectedRuntimeOwners.LocationRuntimeId, Is.EqualTo(location.RuntimeId));
+        Assert.That(restoredCity.SelectedRuntimeOwners.NpcPresence.Revision,
+            Is.EqualTo(capture.Snapshot.ImportantNpcRevision));
+        Assert.That(restoredCity.CityData, Is.SameAs(authoredCity),
+            "Unity attaches the exact authoring projection only after typed restore succeeds.");
+        Assert.That(restoredCity.Market.SelectedDailyV1Owner.Items[0].Item,
+            Is.SameAs(definitions.Items[item.DefinitionId]));
+        DailyCaptureEligibilityToken restoredToken = CreateToken(restoredCity, CreateOwnerSections(restoredCity));
+        Assert.That(P12DCityRootOwnerSnapshot.TryCaptureForStaging(
+            restoredCity, restoredToken, new object(), restoredToken.OwnerSections,
+            out P12DCityRootOwnerSnapshot.StagingCaptureEnvelope restoredCapture,
+            out P12DCityRootOwnerSnapshotFailure restoredCaptureFailure), Is.True,
+            restoredCaptureFailure.ToString());
+        Assert.That(restoredCapture.Snapshot.CityDefinitionId, Is.EqualTo(cityDefinition.DefinitionId));
+        Assert.That(restoredCapture.Snapshot.LegacyLocationRuntimeId, Is.EqualTo(location.RuntimeId));
+    }
+
+    [Test]
     public void Capture_RejectsMissingDuplicateWrongOwnerCardinalityAndRevisionSections()
     {
         CityRuntime city = SimulationTestFactory.CreateCity("city-root-vector", "city-root-vector-location");

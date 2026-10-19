@@ -38,13 +38,16 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         List<DailyV1CityRuntimeOwners> cities = new List<DailyV1CityRuntimeOwners>();
         List<DailyV1NpcRuntimeOwners> npcs = new List<DailyV1NpcRuntimeOwners>();
         HashSet<string> runtimeIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> locationIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (DailyV1CityRuntimeOwners owner in cityOwners)
         {
             if (owner == null || string.IsNullOrWhiteSpace(owner.RuntimeId)
+                || string.IsNullOrWhiteSpace(owner.LocationRuntimeId)
                 || owner.Definition == null || !ReferenceEquals(owner.Definitions, definitions)
                 || !definitions.Cities.TryGetValue(owner.Definition.DefinitionId, out DailyV1CityDefinition city)
                 || !ReferenceEquals(city, owner.Definition)
-                || !runtimeIds.Add(owner.RuntimeId)) return false;
+                || !runtimeIds.Add(owner.RuntimeId)
+                || !locationIds.Add(owner.LocationRuntimeId)) return false;
             cities.Add(owner);
         }
         foreach (DailyV1NpcRuntimeOwners owner in npcOwners)
@@ -53,7 +56,11 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 || owner.Definition == null || !ReferenceEquals(owner.Definitions, definitions)
                 || !definitions.Npcs.TryGetValue(owner.Definition.DefinitionId, out DailyV1NpcDefinition npc)
                 || !ReferenceEquals(npc, owner.Definition)
-                || !runtimeIds.Add(owner.RuntimeId)) return false;
+                || !runtimeIds.Add(owner.RuntimeId)
+                || !MatchesCityLocation(cities, owner.Travel?.CurrentCityRuntimeId,
+                    owner.Travel?.CurrentLocationRuntimeId)
+                || !MatchesCityLocation(cities, owner.Travel?.DestinationCityRuntimeId,
+                    owner.Travel?.DestinationLocationRuntimeId)) return false;
             npcs.Add(owner);
         }
 
@@ -92,6 +99,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
 
     internal static bool TryCreateInitialCityOwner(
         string runtimeId,
+        string locationRuntimeId,
         DailyV1EffectiveDefinitions definitions,
         DailyV1CityDefinition definition,
         MarketCounterpartyRuntime suppliedCounterparty,
@@ -99,7 +107,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     {
         owners = null;
         if (!DailyV1CityRuntimeOwners.TryCreateInitial(
-                runtimeId, definitions, definition, suppliedCounterparty,
+                runtimeId, locationRuntimeId, definitions, definition, suppliedCounterparty,
                 out DailyV1CityRuntimeOwners candidate)
             || !TryCreate(definitions, new[] { candidate }, Array.Empty<DailyV1NpcRuntimeOwners>(), out _))
             return false;
@@ -110,6 +118,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
 
     internal static bool TryCreateBoundCityOwner(
         string runtimeId,
+        string locationRuntimeId,
         DailyV1EffectiveDefinitions definitions,
         DailyV1CityDefinition definition,
         SettlementPopulationRuntime population,
@@ -121,13 +130,26 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     {
         owners = null;
         if (!DailyV1CityRuntimeOwners.TryCreateBound(
-                runtimeId, definitions, definition, population, market, counterparty,
+                runtimeId, locationRuntimeId, definitions, definition, population, market, counterparty,
                 populationEconomy, npcPresence, out DailyV1CityRuntimeOwners candidate)
             || !TryCreate(definitions, new[] { candidate }, Array.Empty<DailyV1NpcRuntimeOwners>(), out _))
             return false;
 
         owners = candidate;
         return true;
+    }
+
+    private static bool MatchesCityLocation(
+        IReadOnlyList<DailyV1CityRuntimeOwners> cities,
+        string cityRuntimeId,
+        string locationRuntimeId)
+    {
+        if (cityRuntimeId == null) return true;
+        if (string.IsNullOrWhiteSpace(cityRuntimeId) || string.IsNullOrWhiteSpace(locationRuntimeId)) return false;
+        foreach (DailyV1CityRuntimeOwners city in cities)
+            if (string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal))
+                return string.Equals(city.LocationRuntimeId, locationRuntimeId, StringComparison.Ordinal);
+        return false;
     }
 
     internal static bool TryCreateInitialNpcOwner(
@@ -305,8 +327,6 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
     private readonly List<DailyV1NpcRuntimeOwners> npcs = new List<DailyV1NpcRuntimeOwners>();
     private readonly Dictionary<string, List<DailyV1CityRuntimeOwners>> citiesByDefinition =
         new Dictionary<string, List<DailyV1CityRuntimeOwners>>(StringComparer.Ordinal);
-    private readonly Dictionary<DailyV1CityRuntimeOwners, string> locationIdsByCityOwner =
-        new Dictionary<DailyV1CityRuntimeOwners, string>();
     private readonly HashSet<string> runtimeIds = new HashSet<string>(StringComparer.Ordinal);
     private readonly HashSet<string> locationIds = new HashSet<string>(StringComparer.Ordinal);
     private bool built;
@@ -421,7 +441,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
             return false;
         }
         if (!DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialCityOwner(
-                runtimeId, definitions, definition, null, out DailyV1CityRuntimeOwners candidate))
+                runtimeId, locationRuntimeId, definitions, definition, null,
+                out DailyV1CityRuntimeOwners candidate))
         {
             runtimeIds.Remove(runtimeId);
             locationIds.Remove(locationRuntimeId);
@@ -429,7 +450,6 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
         }
 
         cities.Add(candidate);
-        locationIdsByCityOwner.Add(candidate, locationRuntimeId);
         if (!citiesByDefinition.TryGetValue(definition.DefinitionId, out List<DailyV1CityRuntimeOwners> matches))
         {
             matches = new List<DailyV1CityRuntimeOwners>();
@@ -442,10 +462,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
 
     internal bool TryRemoveInitialCity(DailyV1CityRuntimeOwners owners)
     {
-        if (built || owners == null || !cities.Remove(owners)
-            || !locationIdsByCityOwner.TryGetValue(owners, out string locationId)) return false;
-        locationIdsByCityOwner.Remove(owners);
-        locationIds.Remove(locationId);
+        if (built || owners == null || !cities.Remove(owners)) return false;
+        locationIds.Remove(owners.LocationRuntimeId);
         runtimeIds.Remove(owners.RuntimeId);
         if (citiesByDefinition.TryGetValue(owners.Definition.DefinitionId, out List<DailyV1CityRuntimeOwners> matches))
         {
@@ -478,10 +496,9 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
         DailyV1CityRuntimeOwners startingCity = ResolveUniqueStartingCity(configuration.startingCity);
         if (startingCity != null)
         {
-            if (!locationIdsByCityOwner.TryGetValue(startingCity, out string locationId)
-                || !startingCity.NpcPresence.TryAdd(runtimeId)
+            if (!startingCity.NpcPresence.TryAdd(runtimeId)
                 || !candidate.Travel.TryCommitState(
-                    locationId, startingCity.RuntimeId,
+                    startingCity.LocationRuntimeId, startingCity.RuntimeId,
                     null, null, 0, 0, null, false, null, null, false))
             {
                 runtimeIds.Remove(runtimeId);
@@ -513,7 +530,9 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
     internal bool TryGetLocationRuntimeId(DailyV1CityRuntimeOwners city, out string runtimeId)
     {
         runtimeId = null;
-        return city != null && locationIdsByCityOwner.TryGetValue(city, out runtimeId);
+        if (city == null || !cities.Contains(city)) return false;
+        runtimeId = city.LocationRuntimeId;
+        return !string.IsNullOrWhiteSpace(runtimeId);
     }
 
     internal bool TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph)
@@ -601,7 +620,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
         HashSet<string> seenNpcIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (DailyV1CityRuntimeOwners city in cities)
         {
-            if (!locationIdsByCityOwner.ContainsKey(city)) return false;
+            if (string.IsNullOrWhiteSpace(city.LocationRuntimeId)) return false;
             foreach (string npcRuntimeId in city.NpcPresence.OrderedNpcRuntimeIds)
             {
                 if (!seenNpcIds.Add(npcRuntimeId)) return false;
@@ -609,8 +628,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
                     string.Equals(owner.RuntimeId, npcRuntimeId, StringComparison.Ordinal));
                 if (npc == null
                     || !string.Equals(npc.Travel.CurrentCityRuntimeId, city.RuntimeId, StringComparison.Ordinal)
-                    || !locationIdsByCityOwner.TryGetValue(city, out string locationId)
-                    || !string.Equals(npc.Travel.CurrentLocationRuntimeId, locationId, StringComparison.Ordinal))
+                    || !string.Equals(npc.Travel.CurrentLocationRuntimeId,
+                        city.LocationRuntimeId, StringComparison.Ordinal))
                     return false;
             }
         }

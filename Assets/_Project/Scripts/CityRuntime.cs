@@ -1475,13 +1475,20 @@ public class CityRuntime
         IReadOnlyList<string> orderedNpcRuntimeIds,
         P12DCityRootOwnerSnapshot.StagingCaptureEnvelope captureEnvelope,
         out CityRuntime city,
-        out P12DCityMembershipLinker membershipLinker)
+        out P12DCityMembershipLinker membershipLinker,
+        DailyV1CityDefinition selectedDefinition = null,
+        DailyV1EffectiveDefinitions selectedDefinitions = null)
     {
         city = null;
         membershipLinker = null;
         if (string.IsNullOrWhiteSpace(snapshotRuntimeId)
-            || snapshotCityData == null
-            || string.IsNullOrWhiteSpace(snapshotCityData.DefinitionId)
+            || ((selectedDefinition == null) != (selectedDefinitions == null))
+            || (selectedDefinition == null
+                ? snapshotCityData == null || string.IsNullOrWhiteSpace(snapshotCityData.DefinitionId)
+                : selectedDefinitions == null
+                    || !selectedDefinitions.Cities.TryGetValue(selectedDefinition.DefinitionId, out DailyV1CityDefinition admitted)
+                    || !ReferenceEquals(admitted, selectedDefinition)
+                    || !AreSelectedDefinitionInputsAdmitted(selectedDefinition, selectedDefinitions))
             || snapshotLocation == null
             || string.IsNullOrWhiteSpace(snapshotLocation.RuntimeId)
             || snapshotCounterparty == null
@@ -1498,6 +1505,10 @@ public class CityRuntime
                 snapshotPopulationEconomy.PopulationEconomicRuntimeId,
                 "population-" + snapshotRuntimeId,
                 StringComparison.Ordinal)
+            || (selectedDefinition != null
+                && (snapshotMarket.SelectedDailyV1Owner == null
+                    || !ReferenceEquals(snapshotMarket.SelectedDailyV1Owner.Definitions, selectedDefinitions)
+                    || !ReferenceEquals(snapshotMarket.SelectedDailyV1Owner.Counterparty, snapshotCounterparty)))
             || snapshotPopulation == null
             || !string.Equals(snapshotPopulation.SettlementRuntimeId, snapshotRuntimeId, StringComparison.Ordinal)
             || snapshotImportantNpcRevision < 0L
@@ -1519,7 +1530,10 @@ public class CityRuntime
         CityRuntime staged = new CityRuntime
         {
             runtimeId = snapshotRuntimeId,
-            cityData = snapshotCityData,
+            cityData = selectedDefinition == null ? snapshotCityData : null,
+            selectedDailyV1Definition = selectedDefinition,
+            selectedDefinitionGraph = selectedDefinitions,
+            selectedRuntimeOwners = null,
             location = snapshotLocation,
             marketCounterparty = snapshotCounterparty,
             market = snapshotMarket,
@@ -1673,6 +1687,7 @@ public class CityRuntime
                 || !AreSelectedDefinitionInputsAdmitted(selectedDefinition, selectedDefinitions)
                 || (initialSelectedOwners != null
                     && (!string.Equals(initialSelectedOwners.RuntimeId, runtimeId, StringComparison.Ordinal)
+                        || !string.Equals(initialSelectedOwners.LocationRuntimeId, location.RuntimeId, StringComparison.Ordinal)
                         || !ReferenceEquals(initialSelectedOwners.Definitions, selectedDefinitions)
                         || !ReferenceEquals(initialSelectedOwners.Definition, selectedDefinition))))
         {
@@ -1693,7 +1708,7 @@ public class CityRuntime
             DailyV1CityRuntimeOwners selectedOwners = initialSelectedOwners;
             if (selectedOwners == null
                 && !DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialCityOwner(
-                    runtimeId, selectedDefinitions, selectedDefinition, marketCounterparty,
+                    runtimeId, location.RuntimeId, selectedDefinitions, selectedDefinition, marketCounterparty,
                     out selectedOwners))
                 throw new ArgumentException(
                     "The selected City owners could not be created from the admitted Daily-v1 graph.",
@@ -2387,12 +2402,15 @@ public class CityRuntime
             || !ReferenceEquals(graphNode, definition)
             || !AreSelectedDefinitionInputsAdmitted(definition, definitions))
             return false;
-        if (selectedDailyV1Definition != null)
-            return ReferenceEquals(selectedDailyV1Definition, definition)
-                && ReferenceEquals(selectedDefinitionGraph, definitions)
-                && (selectedDefinitionBindings == null || bindings == null
-                    || ReferenceEquals(selectedDefinitionBindings, bindings))
-                && TryAttachSelectedDefinitionBindings(definitions, bindings);
+        if (selectedDailyV1Definition != null
+            && (!ReferenceEquals(selectedDailyV1Definition, definition)
+                || !ReferenceEquals(selectedDefinitionGraph, definitions)
+                || (selectedDefinitionBindings != null && bindings != null
+                    && !ReferenceEquals(selectedDefinitionBindings, bindings))))
+            return false;
+        if (selectedDailyV1Definition != null && selectedRuntimeOwners != null)
+            return TryAttachSelectedDefinitionBindings(definitions, bindings);
+
         DailyV1CityRuntimeOwners stagedOwners = null;
         DailyV1CityNpcPresenceOwner stagedPresenceOwner = null;
         if (market != null && market.SelectedDailyV1Owner != null
@@ -2404,7 +2422,7 @@ public class CityRuntime
             return false;
         if (market != null && market.SelectedDailyV1Owner != null
             && !DailyV1SelectedRuntimeOwnerGraph.TryCreateBoundCityOwner(
-                runtimeId, definitions, definition, population,
+                runtimeId, location?.RuntimeId, definitions, definition, population,
                 market.SelectedDailyV1Owner, MarketCounterparty, PopulationEconomy,
                 stagedPresenceOwner,
                 out stagedOwners))
