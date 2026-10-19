@@ -243,7 +243,8 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
     /// <summary>
     /// Advances solo travel through the exact selected Core owner graph while
     /// retaining this system's established P12 adapter, party-store, event,
-    /// knowledge, and logging responsibilities. Returns false only when the
+    /// and logging responsibilities. Core commits selected arrival knowledge
+    /// on the exact owner before this adapter publishes the result. Returns false only when the
     /// exact runtime-to-owner join cannot be established before any writes.
     /// </summary>
     internal bool TryAdvanceSelectedSoloTravels(
@@ -305,7 +306,6 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
                 if (!result.ShouldReport) return;
                 if (result.Arrived)
                 {
-                    runtime.SpatialKnowledge.DiscoverLocation(runtime.CurrentLocation?.RuntimeId);
                     arrivals.Add(runtime);
                     domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcArrivedEvent(
                         eventId,

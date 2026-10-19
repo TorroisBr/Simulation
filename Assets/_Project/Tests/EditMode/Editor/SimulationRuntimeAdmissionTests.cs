@@ -855,6 +855,42 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(arguments[2] as IReadOnlyList<NpcRuntime>, Is.Empty);
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure clearedCensus), Is.True,
             clearedCensus.ToString());
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long epochBeforeArrivals, out ContinuationCensusFailure epochBeforeFailure), Is.True,
+            epochBeforeFailure.ToString());
+
+        Dictionary<NpcRuntime, OwnerSectionCensusWitness> spatialWitnessesBefore =
+            new Dictionary<NpcRuntime, OwnerSectionCensusWitness>();
+        Dictionary<NpcRuntime, bool> destinationKnownBefore = new Dictionary<NpcRuntime, bool>();
+        foreach (NpcRuntime npc in travelers)
+        {
+            IOwnerSectionCensusProvider locationsProvider = runtime.SpatialKnowledgeCensusProviders.Single(provider =>
+                string.Equals(provider.GetCurrentCensus().SectionId,
+                    SpatialKnowledgeCensusProvider.LocationsSectionPrefix + npc.RuntimeId,
+                    StringComparison.Ordinal));
+            OwnerSectionCensusWitness locations = locationsProvider.GetCurrentCensus();
+            Assert.That(locations.OwnerInstanceIdentity, Is.SameAs(npc.SpatialKnowledge));
+            spatialWitnessesBefore.Add(npc, locations);
+            destinationKnownBefore.Add(npc,
+                npc.SpatialKnowledge.KnowsLocation(commonDestination.Location.RuntimeId));
+        }
+
+        RuntimeIdAllocator runtimeIdAllocator = ReadPrivateField<RuntimeIdAllocator>(runtime, "runtimeIdAllocator");
+        SimulationRecordSequence recordSequence = ReadPrivateField<SimulationRecordSequence>(runtime, "simulationRecordSequence");
+        Assert.That(travelSystem, Is.Not.Null);
+        Assert.That(runtimeIdAllocator, Is.Not.Null);
+        Assert.That(recordSequence, Is.Not.Null);
+        DomainEventRecorder eventRecorder = ReadPrivateField<DomainEventRecorder>(travelSystem, "domainEventRecorder");
+        Assert.That(eventRecorder, Is.Not.Null);
+        DomainEventStore domainEventStore = ReadPrivateField<DomainEventStore>(eventRecorder, "eventStore");
+        Assert.That(domainEventStore, Is.Not.Null);
+        IOwnerSectionCensusProvider eventCounterProvider =
+            RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(runtimeIdAllocator);
+        SimulationRecordSequenceCensusProvider sequenceProvider =
+            new SimulationRecordSequenceCensusProvider(recordSequence);
+        long eventCounterBefore = eventCounterProvider.GetCurrentCensus().Revision;
+        long recordSequenceBefore = sequenceProvider.GetCurrentCensus().Revision;
+        int eventCountBefore = domainEventStore.Events.Count;
         Dictionary<CityRuntime, long> cityPresenceRevisions = runtime.Cities.ToDictionary(
             city => city, city => city.SelectedRuntimeOwners.NpcPresence.Revision);
 
@@ -876,8 +912,50 @@ public sealed class SimulationRuntimeAdmissionTests
                 Is.EqualTo(cityPresenceRevisions[city] + expectedArrivals),
                 "Only the shared destination presence owner advances, exactly once for each committed arrival.");
         }
+
+        long discoveryMutations = 0L;
+        foreach (NpcRuntime npc in travelers)
+        {
+            string locationsSectionId = SpatialKnowledgeCensusProvider.LocationsSectionPrefix + npc.RuntimeId;
+            string routesSectionId = SpatialKnowledgeCensusProvider.RoutesSectionPrefix + npc.RuntimeId;
+            IOwnerSectionCensusProvider locationsProvider = runtime.SpatialKnowledgeCensusProviders.Single(provider =>
+                string.Equals(provider.GetCurrentCensus().SectionId, locationsSectionId, StringComparison.Ordinal));
+            IOwnerSectionCensusProvider routesProvider = runtime.SpatialKnowledgeCensusProviders.Single(provider =>
+                string.Equals(provider.GetCurrentCensus().SectionId, routesSectionId, StringComparison.Ordinal));
+            OwnerSectionCensusWitness locationsAfter = locationsProvider.GetCurrentCensus();
+            OwnerSectionCensusWitness routesAfter = routesProvider.GetCurrentCensus();
+            long expectedDiscoveryRevision = spatialWitnessesBefore[npc].Revision
+                + (destinationKnownBefore[npc] ? 0L : 1L);
+            Assert.That(locationsAfter.OwnerInstanceIdentity, Is.SameAs(npc.SpatialKnowledge));
+            Assert.That(routesAfter.OwnerInstanceIdentity, Is.SameAs(npc.SpatialKnowledge));
+            Assert.That(locationsAfter.Revision, Is.EqualTo(expectedDiscoveryRevision),
+                "The selected arrival discovers only a previously unknown destination on its exact Core owner.");
+            Assert.That(routesAfter.Revision, Is.EqualTo(expectedDiscoveryRevision),
+                "Location and route sections share the exact SpatialKnowledge owner revision.");
+            Assert.That(locationsAfter.Cardinality,
+                Is.EqualTo(spatialWitnessesBefore[npc].Cardinality + (destinationKnownBefore[npc] ? 0 : 1)));
+            discoveryMutations += destinationKnownBefore[npc] ? 0L : 1L;
+        }
+
+        long eventCounterAfter = eventCounterProvider.GetCurrentCensus().Revision;
+        long recordSequenceAfter = sequenceProvider.GetCurrentCensus().Revision;
+        Assert.That(eventCounterAfter - eventCounterBefore, Is.EqualTo(arrivals.Count),
+            "Each arrival event uses the registered Event-ID counter owner once.");
+        Assert.That(recordSequenceAfter - recordSequenceBefore, Is.EqualTo(arrivals.Count),
+            "Each arrival event uses the registered record-sequence owner once.");
+        Assert.That(domainEventStore.Events.Count - eventCountBefore, Is.EqualTo(arrivals.Count));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long epochAfterArrivals, out ContinuationCensusFailure epochAfterFailure), Is.True,
+            epochAfterFailure.ToString());
+        Assert.That(epochAfterArrivals, Is.EqualTo(epochBeforeArrivals
+            + arrivals.Count // one travel-state + City-presence commit vector per NPC
+            + discoveryMutations
+            + (eventCounterAfter - eventCounterBefore)
+            + (recordSequenceAfter - recordSequenceBefore)),
+            "The shared P12 epoch advances once for each committed owner vector, including arrival knowledge and event identities.");
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure arrivalCensus), Is.True,
-            arrivalCensus.ToString());
+            arrivalCensus.ToString(),
+            "A fresh census assessment proves every exact per-NPC spatial section baseline accepted the committed owner revision.");
     }
 
     [Test]

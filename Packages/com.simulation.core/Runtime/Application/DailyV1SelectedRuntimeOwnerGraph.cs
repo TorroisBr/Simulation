@@ -591,6 +591,15 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 npc, advancePlan, shouldReport: true, committedAdvance,
                 arrived: willArrive && committedAdvance, originDecisionId);
             completed.Add(advanceResult);
+            if (advanceResult.Arrived)
+            {
+                // Arrival discovery is part of the selected domain transition,
+                // not a Unity-side consequence callback. TravelPlan has already
+                // installed the authoritative location on this exact NPC owner;
+                // the SpatialKnowledge owner retains its existing P12 mutation
+                // boundary and revision behavior.
+                npc.SpatialKnowledge.DiscoverLocation(npc.Travel.CurrentLocationRuntimeId);
+            }
             publishResult(advanceResult);
         }
 

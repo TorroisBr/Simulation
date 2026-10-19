@@ -414,7 +414,17 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
                 Assert.That(plan.IsCommitted, Is.True);
                 transitionOrder.Add("publish:" + npc.RuntimeId);
             },
-            result => transitionOrder.Add("result:" + result.Npc.RuntimeId),
+            result =>
+            {
+                if (result.Arrived)
+                {
+                    Assert.That(result.Npc.SpatialKnowledge.KnowsLocation(
+                        result.Npc.Travel.CurrentLocationRuntimeId), Is.True,
+                        "The committed SpatialKnowledge owner is current before the adapter result is published.");
+                    transitionOrder.Add("knowledge-current:" + result.Npc.RuntimeId);
+                }
+                transitionOrder.Add("result:" + result.Npc.RuntimeId);
+            },
             out IReadOnlyList<DailyV1SelectedSoloTravelDayResult> travelResults), Is.True);
 
         foreach (DailyV1NpcRuntimeOwners committedOwner in new[] { startedToday, arriving })
@@ -433,8 +443,25 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             Assert.That(resultIndex, Is.GreaterThan(publishIndex),
                 "Each owner result must be consumed after commit publication.");
             Assert.That(resultIndex, Is.LessThan(nextPreflightIndex),
-                "Per-NPC event/knowledge/report adapters must retain deterministic owner order.");
+                "Per-NPC event/report adapters must retain deterministic owner order after Core commits arrival knowledge.");
+            if (ReferenceEquals(committedOwner, arriving))
+            {
+                int knowledgeIndex = transitionOrder.IndexOf("knowledge-current:" + committedOwner.RuntimeId);
+                Assert.That(knowledgeIndex, Is.GreaterThan(publishIndex),
+                    "Arrival discovery follows the travel projection/P12 notification.");
+                Assert.That(knowledgeIndex, Is.LessThan(resultIndex),
+                    "Arrival discovery is committed before its event/report adapter runs.");
+            }
         }
+
+        Assert.That(arriving.SpatialKnowledge.KnowsLocation(
+            arriving.Travel.CurrentLocationRuntimeId), Is.True,
+            "The Core travel stage applies arrival discovery to the exact selected SpatialKnowledge owner before publishing its report.");
+        Assert.That(arriving.SpatialKnowledge.Revision, Is.EqualTo(1L));
+        Assert.That(startedToday.SpatialKnowledge.Revision, Is.Zero,
+            "Clearing the start-day marker is not an arrival and must not create discovery state.");
+        Assert.That(rejectedAdvance.SpatialKnowledge.Revision, Is.Zero,
+            "A rejected travel advance must not create arrival discovery state.");
 
         Assert.That(startedToday.Travel.TravelDaysRemaining, Is.EqualTo(3),
             "Travel started today is cleared without consuming a travel day.");
