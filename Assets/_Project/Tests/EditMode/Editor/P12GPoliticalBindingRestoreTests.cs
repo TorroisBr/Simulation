@@ -1200,7 +1200,12 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             Assert.That(match.SchemaVersion, Is.EqualTo(row.SchemaVersion), row.SectionId);
             Assert.That(match.Role, Is.EqualTo(row.Role), row.SectionId);
             Assert.That(match.Cardinality, Is.EqualTo(row.Cardinality), row.SectionId);
-            Assert.That(match.Revision, Is.EqualTo(row.Revision), row.SectionId);
+            string revisionDiagnostic = row.SectionId;
+            if (row.SectionId.StartsWith(NpcPlanCensusProvider.MerchantTradePlanSectionPrefix,
+                    StringComparison.Ordinal))
+                revisionDiagnostic += "; expected " + DescribeMerchantPlanOwner(row.OwnerInstanceIdentity)
+                    + "; actual " + DescribeMerchantPlanOwner(match.OwnerInstanceIdentity);
+            Assert.That(match.Revision, Is.EqualTo(row.Revision), revisionDiagnostic);
             Assert.That(match.OwnerInstanceIdentity, Is.Not.SameAs(row.OwnerInstanceIdentity),
                 row.SectionId + " must be a private mutable owner instance");
         }
@@ -1222,6 +1227,24 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     + leftRows[i].SectionId + " and " + leftRows[j].SectionId + ".");
             }
         }
+    }
+
+    private static string DescribeMerchantPlanOwner(object owner)
+    {
+        if (owner is DailyV1NpcMerchantTradePlanOwner selected)
+            return $"CorePlan(rev={selected.Revision},item={selected.ItemDefinition?.DefinitionId ?? "<null>"},"
+                + $"origin={selected.OriginCityRuntimeId ?? "<null>"},target={selected.TargetCityRuntimeId ?? "<null>"},"
+                + $"planned={selected.PlannedAmount},remaining={selected.RawRemainingAmount},"
+                + $"wait={selected.WaitDaysAtDestination},travel={selected.PendingTravelDays})";
+        if (owner is MerchantTradePlanRuntime legacy)
+        {
+            MerchantTradePlanState state = legacy.CaptureOwnerState();
+            return $"UnityPlan(rev={legacy.Revision},item={state.Item?.DefinitionId ?? "<null>"},"
+                + $"origin={state.OriginCity?.RuntimeId ?? "<null>"},target={state.TargetCity?.RuntimeId ?? "<null>"},"
+                + $"planned={state.PlannedAmount},remaining={state.RawRemainingAmount},"
+                + $"wait={state.WaitDaysAtDestination},travel={state.PendingTravelDays})";
+        }
+        return owner?.GetType().Name ?? "<null>";
     }
 
     internal static void AssertDailyV1Parity(
