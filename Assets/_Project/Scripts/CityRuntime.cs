@@ -1689,7 +1689,7 @@ public class CityRuntime
                     && (!string.Equals(initialSelectedOwners.RuntimeId, runtimeId, StringComparison.Ordinal)
                         || !string.Equals(initialSelectedOwners.LocationRuntimeId, location.RuntimeId, StringComparison.Ordinal)
                         || !ReferenceEquals(initialSelectedOwners.Definitions, selectedDefinitions)
-                        || !ReferenceEquals(initialSelectedOwners.Definition, selectedDefinition))))
+                        || !ReferenceEquals(initialSelectedOwners.Definition, selectedDefinition)))))
         {
             throw new ArgumentException(
                 "The selected City runtime must consume an exact admitted typed definition graph node and its admitted item identities.",

@@ -1185,7 +1185,7 @@ public class NpcRuntime : ICapabilityConditionSource
 				|| (initialSelectedOwners != null
 					&& (!string.Equals(initialSelectedOwners.RuntimeId, runtimeId, StringComparison.Ordinal)
 						|| !ReferenceEquals(initialSelectedOwners.Definitions, selectedDefinitions)
-						|| !ReferenceEquals(initialSelectedOwners.Definition, selectedDefinition))))
+						|| !ReferenceEquals(initialSelectedOwners.Definition, selectedDefinition)))))
 		{
 			throw new ArgumentException(
 				"The selected NPC runtime must consume an exact admitted typed definition graph node and any supplied authoring projection must map to it.",
