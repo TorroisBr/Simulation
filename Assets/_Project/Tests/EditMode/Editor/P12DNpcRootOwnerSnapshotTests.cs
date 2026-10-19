@@ -81,6 +81,25 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         Assert.That(providers[1].GetCurrentCensus().Revision, Is.EqualTo(4L));
     }
 
+    [TestCase("")]
+    [TestCase("npc-spatial-owner-other")]
+    public void CaptureRejectsBlankOrMismatchedSerializedSpatialOwnerIdentity(string serializedOwnerRuntimeId)
+    {
+        NpcRuntime npc = new NpcRuntime("npc-spatial-owner-capture",
+            SimulationTestFactory.CreateNpc("p12d-spatial-owner-capture-definition"));
+        DailyFixture fixture = CreateDailyFixture(null, npc);
+        DailyCaptureEligibilityToken token = CompleteDailyBoundary(fixture.Runtime);
+        SetSerializedSpatialOwnerIdentityAndDeserialize(npc, serializedOwnerRuntimeId);
+
+        Assert.That(P12DNpcRootOwnerSnapshot.TryCapture(
+            fixture.Runtime, token, new object(), token.OwnerSections,
+            out P12DNpcDProjection d, out P12DNpcFProjection f,
+            out P12DNpcRootOwnerSnapshotFailure failure), Is.False);
+        Assert.That(d, Is.Null);
+        Assert.That(f, Is.Null);
+        Assert.That(failure, Is.EqualTo(P12DNpcRootOwnerSnapshotFailure.StaleCapture));
+    }
+
     [Test]
     public void DailyV1Package_StagesPersonFirstAndPreservesOneOrderedCityNpcGraph()
     {
@@ -1280,5 +1299,16 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             out DailyCaptureEligibilityToken token,
             out DailyCaptureEligibilityFailure tokenFailure), Is.True, tokenFailure.ToString());
         return token;
+    }
+
+    private static void SetSerializedSpatialOwnerIdentityAndDeserialize(
+        NpcRuntime npc, string serializedOwnerRuntimeId)
+    {
+        object adapter = typeof(NpcRuntime).GetField("spatialKnowledge",
+            BindingFlags.Instance | BindingFlags.NonPublic).GetValue(npc);
+        Assert.That(adapter, Is.Not.Null);
+        adapter.GetType().GetField("ownerRuntimeId", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(adapter, serializedOwnerRuntimeId);
+        adapter.GetType().GetMethod("OnAfterDeserialize").Invoke(adapter, null);
     }
 }

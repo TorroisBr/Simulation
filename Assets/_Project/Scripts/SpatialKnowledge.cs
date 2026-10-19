@@ -27,14 +27,15 @@ internal sealed class SpatialKnowledgeSerializationAdapter : ISerializationCallb
 
     internal SpatialKnowledgeRuntime BoundOwner => owner;
 
-    internal SpatialKnowledgeRuntime GetOrCreateOwner(string fallbackRuntimeId)
+    internal SpatialKnowledgeRuntime GetOrCreateOwner()
     {
         if (owner != null) return owner;
-        string selectedOwnerId = string.IsNullOrWhiteSpace(ownerRuntimeId)
-            ? fallbackRuntimeId
-            : ownerRuntimeId;
+        // A persisted identity is evidence owned by the serialized value. Do
+        // not repair a missing identity from the containing NPC: doing so can
+        // turn malformed persisted state into an admitted census owner.
+        if (string.IsNullOrWhiteSpace(ownerRuntimeId)) return null;
         if (!SpatialKnowledgeRuntime.TryCreateFromSerializedState(
-                selectedOwnerId, knownLocationRuntimeIds, knownRouteRuntimeIds, revision,
+                ownerRuntimeId, knownLocationRuntimeIds, knownRouteRuntimeIds, revision,
                 out owner))
             return null;
         return owner;

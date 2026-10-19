@@ -138,6 +138,25 @@ public sealed class SpatialKnowledgeCensusTests
         Assert.That(restored.ExistingSpatialKnowledge, Is.SameAs(restoredOwner));
     }
 
+    [TestCase("")]
+    [TestCase("npc-spatial-census-other")]
+    public void InvalidSerializedSpatialOwnerIdentityIsNotRepairedForCensus(string serializedOwnerRuntimeId)
+    {
+        NpcRuntime npc = new NpcRuntime("npc-spatial-census-identity", null);
+        SimulationRuntime runtime = CreateRuntime(npc: npc);
+        SetSerializedSpatialOwnerIdentityAndDeserialize(npc, serializedOwnerRuntimeId);
+
+        if (string.IsNullOrWhiteSpace(serializedOwnerRuntimeId))
+            Assert.That(npc.ExistingSpatialKnowledge, Is.Null);
+        else
+            Assert.That(npc.ExistingSpatialKnowledge.OwnerRuntimeId, Is.EqualTo(serializedOwnerRuntimeId));
+
+        Assert.Throws<System.InvalidOperationException>(() =>
+            SpatialKnowledgeCensusProvider.CreateProviders(new[] { npc }));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+    }
+
     [Test]
     public void SaturatedRevisionRejectsNewKnowledgeBeforeChangingCardinality()
     {
@@ -501,5 +520,16 @@ public sealed class SpatialKnowledgeCensusTests
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
             out long epoch, out ContinuationCensusFailure epochFailure), Is.True, epochFailure.ToString());
         Assert.That(epoch, Is.EqualTo(expectedEpoch));
+    }
+
+    private static void SetSerializedSpatialOwnerIdentityAndDeserialize(
+        NpcRuntime npc, string serializedOwnerRuntimeId)
+    {
+        object adapter = typeof(NpcRuntime).GetField("spatialKnowledge",
+            BindingFlags.Instance | BindingFlags.NonPublic).GetValue(npc);
+        Assert.That(adapter, Is.Not.Null);
+        adapter.GetType().GetField("ownerRuntimeId", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(adapter, serializedOwnerRuntimeId);
+        ((ISerializationCallbackReceiver)adapter).OnAfterDeserialize();
     }
 }

@@ -286,14 +286,14 @@ public class NpcRuntime : ICapabilityConditionSource
             if (selectedRuntimeOwners != null) return selectedRuntimeOwners.SpatialKnowledge;
             if (spatialKnowledge == null)
                 spatialKnowledge = new SpatialKnowledgeSerializationAdapter(new SpatialKnowledgeRuntime(runtimeId));
-            SpatialKnowledgeRuntime owner = spatialKnowledge.GetOrCreateOwner(runtimeId);
-            if (owner == null)
+            SpatialKnowledgeRuntime owner = spatialKnowledge.GetOrCreateOwner();
+            if (owner == null || !string.Equals(owner.OwnerRuntimeId, runtimeId, StringComparison.Ordinal))
                 throw new InvalidOperationException("The Unity SpatialKnowledge serialization value could not bind a Core owner.");
             return owner;
         }
     }
     internal SpatialKnowledgeRuntime ExistingSpatialKnowledge =>
-        selectedRuntimeOwners?.SpatialKnowledge ?? spatialKnowledge?.GetOrCreateOwner(runtimeId);
+        selectedRuntimeOwners?.SpatialKnowledge ?? spatialKnowledge?.GetOrCreateOwner();
     public LocalTopologyKnowledgeRuntime LocalTopologyKnowledge => localTopologyKnowledge ?? (localTopologyKnowledge = new LocalTopologyKnowledgeRuntime(runtimeId));
     internal LocalTopologyKnowledgeRuntime ExistingLocalTopologyKnowledge => localTopologyKnowledge;
     public AdventureSiteIntelKnowledgeRuntime AdventureSiteIntelKnowledge => adventureSiteIntelKnowledge ?? (adventureSiteIntelKnowledge = new AdventureSiteIntelKnowledgeRuntime(runtimeId));
@@ -1247,7 +1247,9 @@ public class NpcRuntime : ICapabilityConditionSource
         {
             DailyV1NpcRuntimeOwners selectedOwners = initialSelectedOwners;
             SpatialKnowledgeRuntime serializedSpatialOwner = initialSelectedOwners == null
-                ? (spatialKnowledge?.GetOrCreateOwner(runtimeId) ?? new SpatialKnowledgeRuntime(runtimeId))
+                ? (spatialKnowledge == null
+                    ? new SpatialKnowledgeRuntime(runtimeId)
+                    : spatialKnowledge.GetOrCreateOwner())
                 : spatialKnowledge?.BoundOwner;
             if (selectedOwners == null
                 && !DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
