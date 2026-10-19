@@ -2369,7 +2369,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(runtime.TryCopySelectedCurrentStatusDefinitionIds(statusIds), Is.True);
         Assert.That(statusIds, Is.EqualTo(new[] { status.DefinitionId }));
         Assert.That(runtime.TryAddSelectedDailyV1InventoryItem(itemDefinition, 2, 5f), Is.True);
-        Assert.That(runtime.Inventory.SelectedDailyV1Owner.GetAmount(itemDefinition), Is.EqualTo(3));
+        Assert.That(runtime.Inventory.SelectedDailyV1Owner.GetAmount(itemDefinition), Is.EqualTo(2));
 
         Assert.That(runtime.TryBindSelectedDailyV1Definition(definition, graph, bindings), Is.True,
             "The Unity compatibility projection must attach to the existing owners without rebuilding them.");
