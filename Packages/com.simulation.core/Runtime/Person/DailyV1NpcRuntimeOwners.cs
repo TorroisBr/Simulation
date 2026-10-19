@@ -17,6 +17,7 @@ internal sealed class DailyV1NpcRuntimeOwners
     internal DailyV1CommercialKnowledgeOwner CommercialKnowledge { get; }
     internal DailyV1NpcLifecycleOwner Lifecycle { get; }
     internal DailyV1NpcActionSlotOwner ActionSlot { get; }
+    internal DailyV1NpcTravelOwner Travel { get; }
 
     private DailyV1NpcRuntimeOwners(
         string runtimeId,
@@ -36,6 +37,7 @@ internal sealed class DailyV1NpcRuntimeOwners
         CommercialKnowledge = commercialKnowledge;
         Lifecycle = new DailyV1NpcLifecycleOwner();
         ActionSlot = new DailyV1NpcActionSlotOwner(definitions);
+        Travel = new DailyV1NpcTravelOwner(runtimeId);
     }
 
     internal static bool TryCreateInitial(
@@ -198,5 +200,98 @@ internal sealed class DailyV1NpcLifecycleOwner
     internal void NotifyLifeStateMutationCommitted()
     {
         if (LifeStateRevision < long.MaxValue) LifeStateRevision++;
+    }
+}
+
+/// <summary>
+/// Owns the selected NPC's travel/presence values and travel-state revision.
+/// Unity City and Location references remain the adapter projection used by
+/// existing operations; this Core record stores their stable runtime IDs.
+/// </summary>
+internal sealed class DailyV1NpcTravelOwner
+{
+    internal string NpcRuntimeId { get; }
+    internal string CurrentLocationRuntimeId { get; private set; }
+    internal string CurrentCityRuntimeId { get; private set; }
+    internal string DestinationLocationRuntimeId { get; private set; }
+    internal string DestinationCityRuntimeId { get; private set; }
+    internal int TravelDaysRemaining { get; private set; }
+    internal int TravelDaysTotal { get; private set; }
+    internal string TravelRouteRuntimeId { get; private set; }
+    internal bool TravelStartedToday { get; private set; }
+    internal string TravelOriginDecisionId { get; private set; }
+    internal string ActiveTravelPartyId { get; private set; }
+    internal long Revision { get; private set; }
+    internal bool IsTraveling => DestinationLocationRuntimeId != null && TravelDaysRemaining > 0;
+
+    internal DailyV1NpcTravelOwner(string npcRuntimeId)
+    {
+        if (string.IsNullOrWhiteSpace(npcRuntimeId))
+            throw new ArgumentException("An NPC travel owner requires its stable RuntimeId.", nameof(npcRuntimeId));
+        NpcRuntimeId = npcRuntimeId;
+    }
+
+    internal bool CanAdvanceRevision(int increments) =>
+        increments >= 0 && Revision <= long.MaxValue - increments;
+
+    internal bool TryInstallState(
+        string currentLocationRuntimeId,
+        string currentCityRuntimeId,
+        string destinationLocationRuntimeId,
+        string destinationCityRuntimeId,
+        int travelDaysRemaining,
+        int travelDaysTotal,
+        string travelRouteRuntimeId,
+        bool travelStartedToday,
+        string travelOriginDecisionId,
+        string activeTravelPartyId,
+        long revision)
+    {
+        if (revision < 0L) return false;
+        CurrentLocationRuntimeId = currentLocationRuntimeId;
+        CurrentCityRuntimeId = currentCityRuntimeId;
+        DestinationLocationRuntimeId = destinationLocationRuntimeId;
+        DestinationCityRuntimeId = destinationCityRuntimeId;
+        TravelDaysRemaining = travelDaysRemaining;
+        TravelDaysTotal = travelDaysTotal;
+        TravelRouteRuntimeId = travelRouteRuntimeId;
+        TravelStartedToday = travelStartedToday;
+        TravelOriginDecisionId = travelOriginDecisionId;
+        ActiveTravelPartyId = activeTravelPartyId;
+        Revision = revision;
+        return true;
+    }
+
+    internal bool TryCommitState(
+        string currentLocationRuntimeId,
+        string currentCityRuntimeId,
+        string destinationLocationRuntimeId,
+        string destinationCityRuntimeId,
+        int travelDaysRemaining,
+        int travelDaysTotal,
+        string travelRouteRuntimeId,
+        bool travelStartedToday,
+        string travelOriginDecisionId,
+        string activeTravelPartyId,
+        bool travelStateChanged)
+    {
+        long nextRevision = Revision;
+        if (travelStateChanged)
+        {
+            if (!CanAdvanceRevision(1)) return false;
+            nextRevision++;
+        }
+        return TryInstallState(
+            currentLocationRuntimeId,
+            currentCityRuntimeId,
+            destinationLocationRuntimeId,
+            destinationCityRuntimeId,
+            travelDaysRemaining,
+            travelDaysTotal,
+            travelRouteRuntimeId,
+            travelStartedToday,
+            travelOriginDecisionId,
+            activeTravelPartyId,
+            nextRevision);
     }
 }

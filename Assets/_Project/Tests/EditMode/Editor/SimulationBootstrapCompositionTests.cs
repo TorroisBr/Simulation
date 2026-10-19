@@ -2453,16 +2453,44 @@ public sealed class SimulationBootstrapCompositionTests
             "Selected City presence must be owned by Core while retaining the runtime's exact NPC identity.");
         Assert.That(cities[0].SelectedRuntimeOwners.NpcPresence.Revision,
             Is.EqualTo(cities[0].ImportantNpcRevision));
+        Assert.That(cities[0].HasConsistentSelectedNpcPresence, Is.True);
+        Assert.That(npcs[0].HasConsistentSelectedTravelState, Is.True);
         long presenceRevision = cities[0].ImportantNpcRevision;
         cities[0].RemoveImportantNpc(npcs[0]);
         Assert.That(cities[0].ImportantNpcs, Is.Empty);
         Assert.That(cities[0].SelectedRuntimeOwners.NpcPresence.OrderedNpcRuntimeIds, Is.Empty);
         Assert.That(cities[0].ImportantNpcRevision, Is.EqualTo(presenceRevision + 1L));
+        Assert.That(npcs[0].HasConsistentSelectedTravelState, Is.True);
         cities[0].AddImportantNpc(npcs[0]);
         Assert.That(cities[0].ImportantNpcs.Single(), Is.SameAs(npcs[0]));
         Assert.That(cities[0].SelectedRuntimeOwners.NpcPresence.OrderedNpcRuntimeIds,
             Is.EqualTo(new[] { npcs[0].RuntimeId }));
         Assert.That(cities[0].ImportantNpcRevision, Is.EqualTo(presenceRevision + 2L));
+        Assert.That(npcs[0].HasConsistentSelectedTravelState, Is.True);
+        SpatialLocationRuntime destination = new SpatialLocationRuntime("graph-construction-destination");
+        long travelRevision = npcs[0].TravelStateRevision;
+        Assert.That(npcs[0].StartTravel(destination, null, 2), Is.True);
+        Assert.That(cities[0].ImportantNpcs, Is.Empty);
+        Assert.That(npcs[0].CurrentCity, Is.Null);
+        Assert.That(npcs[0].SelectedRuntimeOwners.Travel.CurrentLocationRuntimeId, Is.Null);
+        Assert.That(npcs[0].SelectedRuntimeOwners.Travel.DestinationLocationRuntimeId,
+            Is.EqualTo(destination.RuntimeId));
+        Assert.That(npcs[0].TravelDaysRemaining, Is.EqualTo(2));
+        Assert.That(npcs[0].TravelStateRevision, Is.EqualTo(travelRevision + 1L));
+        Assert.That(npcs[0].HasConsistentSelectedTravelState, Is.True);
+        Assert.That(npcs[0].AdvanceTravelDay(out CityRuntime intermediateArrival), Is.False);
+        Assert.That(intermediateArrival, Is.Null);
+        Assert.That(npcs[0].TravelDaysRemaining, Is.EqualTo(1));
+        Assert.That(npcs[0].TravelStateRevision, Is.EqualTo(travelRevision + 2L));
+        Assert.That(npcs[0].AdvanceTravelDay(out CityRuntime finalArrival), Is.True);
+        Assert.That(finalArrival, Is.Null);
+        Assert.That(npcs[0].CurrentLocation, Is.SameAs(destination));
+        Assert.That(npcs[0].CurrentCity, Is.Null);
+        Assert.That(npcs[0].SelectedRuntimeOwners.Travel.CurrentLocationRuntimeId,
+            Is.EqualTo(destination.RuntimeId));
+        Assert.That(npcs[0].SelectedRuntimeOwners.Travel.DestinationLocationRuntimeId, Is.Null);
+        Assert.That(npcs[0].TravelStateRevision, Is.EqualTo(travelRevision + 3L));
+        Assert.That(npcs[0].HasConsistentSelectedTravelState, Is.True);
         List<NpcActionData> configuredActions = (List<NpcActionData>)typeof(TesteSimulacao)
             .GetProperty("ConfiguredActions", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(host);
         Assert.That(configuredActions, Is.EqualTo(new[] { action }),

@@ -207,8 +207,9 @@ public class CityRuntime
         out long membershipRevision)
     {
         npcRuntimeIds = null;
-        membershipRevision = importantNpcRevision;
-        if (importantNpcs == null || importantNpcRevision < 0L || location == null)
+        membershipRevision = ImportantNpcRevision;
+        if (importantNpcs == null || membershipRevision < 0L || location == null
+            || !HasConsistentSelectedNpcPresence)
         {
             return false;
         }
@@ -231,6 +232,26 @@ public class CityRuntime
 
         npcRuntimeIds = new ReadOnlyCollection<string>(copiedIds);
         return true;
+    }
+
+    internal bool HasConsistentSelectedNpcPresence
+    {
+        get
+        {
+            if (selectedRuntimeOwners == null) return true;
+            DailyV1CityNpcPresenceOwner owner = selectedRuntimeOwners.NpcPresence;
+            List<NpcRuntime> projection = EnsureImportantNpcs();
+            if (!string.Equals(owner.CityRuntimeId, runtimeId, StringComparison.Ordinal)
+                || owner.OrderedNpcRuntimeIds.Count != projection.Count)
+                return false;
+            for (int i = 0; i < projection.Count; i++)
+            {
+                if (projection[i] == null
+                    || !string.Equals(owner.OrderedNpcRuntimeIds[i], projection[i].RuntimeId, StringComparison.Ordinal))
+                    return false;
+            }
+            return true;
+        }
     }
 
     internal void GetDailyEconomyReceiptExclusionProof(out int receiptCount, out long receiptRevision)
@@ -1990,6 +2011,7 @@ public class CityRuntime
             bool inOwner = selectedRuntimeOwners.NpcPresence.Contains(npcRuntime.RuntimeId);
             if (inProjection != inOwner) return false;
             if (inProjection) return true;
+            if (ContainsDifferentImportantNpcWithSameRuntimeId(npcRuntime)) return false;
         }
         else if (EnsureImportantNpcs().Contains(npcRuntime)) return true;
         return CanApplyImportantNpcRevisionIncrements(1L);
@@ -2034,7 +2056,8 @@ public class CityRuntime
         DailyV1CityNpcPresenceOwner presenceOwner = selectedRuntimeOwners?.NpcPresence;
         if (presenceOwner != null
             && (string.IsNullOrWhiteSpace(npcRuntime.RuntimeId)
-                || presenceOwner.Contains(npcRuntime.RuntimeId)))
+                || presenceOwner.Contains(npcRuntime.RuntimeId)
+                || ContainsDifferentImportantNpcWithSameRuntimeId(npcRuntime)))
             return false;
 
         if (presenceOwner == null && importantNpcRevision == long.MaxValue
@@ -2101,6 +2124,18 @@ public class CityRuntime
         }
 
         return importantNpcs;
+    }
+
+    private bool ContainsDifferentImportantNpcWithSameRuntimeId(NpcRuntime npcRuntime)
+    {
+        if (npcRuntime == null || string.IsNullOrWhiteSpace(npcRuntime.RuntimeId)) return false;
+        foreach (NpcRuntime member in EnsureImportantNpcs())
+        {
+            if (member != null && !ReferenceEquals(member, npcRuntime)
+                && string.Equals(member.RuntimeId, npcRuntime.RuntimeId, StringComparison.Ordinal))
+                return true;
+        }
+        return false;
     }
 
     internal void BindP12PresenceMutationBoundary(Func<bool> admission, Action committed)

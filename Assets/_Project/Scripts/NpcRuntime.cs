@@ -177,6 +177,25 @@ public class NpcRuntime : ICapabilityConditionSource
             || (currentActionRuntime != null
                 && currentActionRuntime.Action != null
                 && ReferenceEquals(currentActionRuntime.Action, currentAction));
+    internal bool HasConsistentSelectedTravelState => selectedRuntimeOwners == null
+        || (string.Equals(selectedRuntimeOwners.Travel.NpcRuntimeId, runtimeId, StringComparison.Ordinal)
+            && string.Equals(selectedRuntimeOwners.Travel.CurrentLocationRuntimeId,
+                currentLocation?.RuntimeId, StringComparison.Ordinal)
+            && string.Equals(selectedRuntimeOwners.Travel.CurrentCityRuntimeId,
+                currentCity?.RuntimeId, StringComparison.Ordinal)
+            && string.Equals(selectedRuntimeOwners.Travel.DestinationLocationRuntimeId,
+                destinationLocation?.RuntimeId, StringComparison.Ordinal)
+            && string.Equals(selectedRuntimeOwners.Travel.DestinationCityRuntimeId,
+                destinationCity?.RuntimeId, StringComparison.Ordinal)
+            && selectedRuntimeOwners.Travel.TravelDaysRemaining == travelDaysRemaining
+            && selectedRuntimeOwners.Travel.TravelDaysTotal == travelDaysTotal
+            && string.Equals(selectedRuntimeOwners.Travel.TravelRouteRuntimeId,
+                travelRouteRuntimeId, StringComparison.Ordinal)
+            && selectedRuntimeOwners.Travel.TravelStartedToday == travelStartedToday
+            && string.Equals(selectedRuntimeOwners.Travel.TravelOriginDecisionId,
+                travelOriginDecisionId, StringComparison.Ordinal)
+            && string.Equals(selectedRuntimeOwners.Travel.ActiveTravelPartyId,
+                activeTravelPartyId, StringComparison.Ordinal));
     public NpcLifeState LifeState => selectedRuntimeOwners != null
         ? selectedRuntimeOwners.Lifecycle.LifeState
         : lifeState;
@@ -193,20 +212,28 @@ public class NpcRuntime : ICapabilityConditionSource
     public SpatialLocationRuntime DestinationLocation => destinationLocation;
     public CityRuntime CurrentCity => currentCity;
     public CityRuntime DestinationCity => destinationCity;
-    public int TravelDaysRemaining => travelDaysRemaining;
-    public int TravelDaysTotal => travelDaysTotal;
-    public string TravelRouteRuntimeId => travelRouteRuntimeId;
-    public bool TravelStartedToday => travelStartedToday;
-    public string TravelOriginDecisionId => travelOriginDecisionId;
-    public string ActiveTravelPartyId => activeTravelPartyId;
-    public long TravelStateRevision => travelStateRevision;
+    public int TravelDaysRemaining => selectedRuntimeOwners != null
+        ? selectedRuntimeOwners.Travel.TravelDaysRemaining : travelDaysRemaining;
+    public int TravelDaysTotal => selectedRuntimeOwners != null
+        ? selectedRuntimeOwners.Travel.TravelDaysTotal : travelDaysTotal;
+    public string TravelRouteRuntimeId => selectedRuntimeOwners != null
+        ? selectedRuntimeOwners.Travel.TravelRouteRuntimeId : travelRouteRuntimeId;
+    public bool TravelStartedToday => selectedRuntimeOwners != null
+        ? selectedRuntimeOwners.Travel.TravelStartedToday : travelStartedToday;
+    public string TravelOriginDecisionId => selectedRuntimeOwners != null
+        ? selectedRuntimeOwners.Travel.TravelOriginDecisionId : travelOriginDecisionId;
+    public string ActiveTravelPartyId => selectedRuntimeOwners != null
+        ? selectedRuntimeOwners.Travel.ActiveTravelPartyId : activeTravelPartyId;
+    public long TravelStateRevision => selectedRuntimeOwners?.Travel.Revision ?? travelStateRevision;
     internal long LifeStateRevision => selectedRuntimeOwners != null
         ? selectedRuntimeOwners.Lifecycle.LifeStateRevision
         : lifeStateRevision;
     internal long ResidenceRevision => residenceRevision;
     internal long P12CrimeJusticeRevision => p12CrimeJusticeRevision;
     internal bool IsP12CrimeJusticeBound => p12CrimeJusticeMutationAdmission != null;
-    public bool IsTraveling => destinationLocation != null && travelDaysRemaining > 0;
+    public bool IsTraveling => selectedRuntimeOwners != null
+        ? selectedRuntimeOwners.Travel.IsTraveling
+        : destinationLocation != null && travelDaysRemaining > 0;
     public int HiddenDaysRemaining => hiddenDaysRemaining;
     public bool IsHidden => hiddenDaysRemaining > 0;
     public MerchantTradePlanRuntime MerchantTradePlan => merchantTradePlan ?? (merchantTradePlan = new MerchantTradePlanRuntime());
@@ -906,7 +933,7 @@ public class NpcRuntime : ICapabilityConditionSource
         bool travelStateChanged,
         IReadOnlyList<CityRuntime> changedCities)
     {
-        if (travelStateChanged && travelStateRevision == long.MaxValue) return false;
+        if (travelStateChanged && TravelStateRevision == long.MaxValue) return false;
         if (p12TravelStateMutationAdmission == null) return true;
         bool admitted;
         try { admitted = p12TravelStateMutationAdmission(travelStateChanged, changedCities); }
@@ -921,9 +948,59 @@ public class NpcRuntime : ICapabilityConditionSource
         bool travelStateChanged,
         IReadOnlyList<CityRuntime> changedCities)
     {
+        if (selectedRuntimeOwners != null)
+        {
+            if (!TryCommitSelectedTravelProjection(travelStateChanged))
+                throw new InvalidOperationException("The selected NPC travel owner revision was not preflighted.");
+        }
+        else if (travelStateChanged && travelStateRevision < long.MaxValue)
+        {
+            travelStateRevision++;
+        }
+
         if (p12TravelStateMutationCommitted == null) return;
         try { p12TravelStateMutationCommitted(travelStateChanged, changedCities); }
         catch { }
+    }
+
+    private bool TryInstallSelectedTravelProjection(DailyV1NpcTravelOwner owner, long revision) =>
+        owner != null
+        && owner.TryInstallState(
+            currentLocation?.RuntimeId,
+            currentCity?.RuntimeId,
+            destinationLocation?.RuntimeId,
+            destinationCity?.RuntimeId,
+            travelDaysRemaining,
+            travelDaysTotal,
+            travelRouteRuntimeId,
+            travelStartedToday,
+            travelOriginDecisionId,
+            activeTravelPartyId,
+            revision);
+
+    private bool TryCommitSelectedTravelProjection(bool travelStateChanged)
+    {
+        DailyV1NpcTravelOwner owner = selectedRuntimeOwners?.Travel;
+        return owner != null
+            && owner.TryCommitState(
+                currentLocation?.RuntimeId,
+                currentCity?.RuntimeId,
+                destinationLocation?.RuntimeId,
+                destinationCity?.RuntimeId,
+                travelDaysRemaining,
+                travelDaysTotal,
+                travelRouteRuntimeId,
+                travelStartedToday,
+                travelOriginDecisionId,
+                activeTravelPartyId,
+                travelStateChanged);
+    }
+
+    private void InstallSelectedTravelProjection(long revision)
+    {
+        if (selectedRuntimeOwners != null
+            && !TryInstallSelectedTravelProjection(selectedRuntimeOwners.Travel, revision))
+            throw new InvalidOperationException("The selected NPC travel projection could not be committed to its Core owner.");
     }
 
     internal void BindP12LifecycleMutationBoundary(
@@ -1299,7 +1376,13 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         if (!stagedOwners.ActionSlot.TrySetCurrentAction(stagedCurrentAction)
             || !stagedOwners.ActionSlot.TryInstallRevision(currentActionRevision)
-            || !stagedOwners.Lifecycle.TryInstallState(lifeState, injurySeverity, lifeStateRevision)) return false;
+            || !stagedOwners.Lifecycle.TryInstallState(lifeState, injurySeverity, lifeStateRevision)
+            || !stagedOwners.Travel.TryInstallState(
+                currentLocation?.RuntimeId, currentCity?.RuntimeId,
+                destinationLocation?.RuntimeId, destinationCity?.RuntimeId,
+                travelDaysRemaining, travelDaysTotal, travelRouteRuntimeId,
+                travelStartedToday, travelOriginDecisionId, activeTravelPartyId,
+                travelStateRevision)) return false;
         if (ExistingInventory != null
             && ExistingInventory.SelectedDailyV1Owner != null
             && !ExistingInventory.TryBindSelectedDailyV1Owner(definitions, bindings)) return false;
@@ -1517,6 +1600,9 @@ public class NpcRuntime : ICapabilityConditionSource
         p12CrimeJusticeRevision = state.CrimeJusticeRevision;
         currentActionRevision = stagedSelectedOwners == null ? state.CurrentActionRevision : 0L;
         travelStateRevision = state.TravelStateRevision;
+        if (stagedSelectedOwners != null
+            && !TryInstallSelectedTravelProjection(stagedSelectedOwners.Travel, state.TravelStateRevision))
+            return false;
         return true;
     }
 
@@ -1931,6 +2017,8 @@ public class NpcRuntime : ICapabilityConditionSource
 
         if (changedCities.Count != 0)
             NotifyP12TravelStateMutationCommitted(false, changedCities);
+        else
+            InstallSelectedTravelProjection(TravelStateRevision);
 
         return true;
     }
@@ -1986,7 +2074,6 @@ public class NpcRuntime : ICapabilityConditionSource
         travelRouteRuntimeId = string.IsNullOrWhiteSpace(routeRuntimeId) == true ? null : routeRuntimeId;
         travelStartedToday = true;
         travelOriginDecisionId = string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId;
-        travelStateRevision++;
         NotifyP12TravelStateMutationCommitted(true, changedCities);
         return true;
     }
@@ -2001,7 +2088,7 @@ public class NpcRuntime : ICapabilityConditionSource
     internal bool CanApplyTravelStateRevisionIncrements(long increments)
     {
         return increments >= 0L
-            && travelStateRevision <= long.MaxValue - increments;
+            && TravelStateRevision <= long.MaxValue - increments;
     }
 
     internal bool CanPreflightTravelStateMutations(long requiredTravelStateRevisionIncrements)
@@ -2026,7 +2113,6 @@ public class NpcRuntime : ICapabilityConditionSource
         if (string.Equals(activeTravelPartyId, next, StringComparison.Ordinal)) return true;
         if (!CanCommitP12TravelStateMutation(true, Array.Empty<CityRuntime>())) return false;
         activeTravelPartyId = next;
-        travelStateRevision++;
         NotifyP12TravelStateMutationCommitted(true, Array.Empty<CityRuntime>());
         return true;
     }
@@ -2036,7 +2122,6 @@ public class NpcRuntime : ICapabilityConditionSource
         if (!travelStartedToday) return true;
         if (!CanCommitP12TravelStateMutation(true, Array.Empty<CityRuntime>())) return false;
         travelStartedToday = false;
-        travelStateRevision++;
         NotifyP12TravelStateMutationCommitted(true, Array.Empty<CityRuntime>());
         return true;
     }
@@ -2072,7 +2157,6 @@ public class NpcRuntime : ICapabilityConditionSource
 
         if (travelDaysRemaining > 0)
         {
-            travelStateRevision++;
             NotifyP12TravelStateMutationCommitted(true, changedCities);
             return false;
         }
@@ -2099,7 +2183,6 @@ public class NpcRuntime : ICapabilityConditionSource
             }
         }
 
-        travelStateRevision++;
         NotifyP12TravelStateMutationCommitted(true, changedCities);
 
         return true;
@@ -2146,7 +2229,6 @@ public class NpcRuntime : ICapabilityConditionSource
             currentCity = null;
         }
 
-        travelStateRevision++;
         NotifyP12TravelStateMutationCommitted(true, changedCities);
 
         return true;
@@ -2163,6 +2245,7 @@ public class NpcRuntime : ICapabilityConditionSource
         {
             currentCity = null;
             currentLocation = null;
+            InstallSelectedTravelProjection(TravelStateRevision);
         }
     }
 

@@ -87,4 +87,52 @@ public sealed class DailyV1NpcActionSlotOwnerTests
         slot.NotifyCurrentActionMutationCommitted();
         Assert.That(slot.Revision, Is.EqualTo(long.MaxValue));
     }
+
+    [Test]
+    public void SelectedNpcTravelOwnerPreservesRuntimeIdentitiesAndExactRevision()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-runtime", definitions, definitions.Npcs.Values.First(), 0f,
+            out DailyV1NpcRuntimeOwners owners), Is.True);
+        DailyV1NpcTravelOwner travel = owners.Travel;
+
+        Assert.That(travel.NpcRuntimeId, Is.EqualTo("npc-runtime"));
+        Assert.That(travel.IsTraveling, Is.False);
+        Assert.That(travel.Revision, Is.Zero);
+        Assert.That(travel.TryInstallState(
+            "location-origin", "city-origin", "location-destination", "city-destination",
+            2, 2, "route-1", true, "decision-1", "party-1", 23L), Is.True);
+        Assert.That(travel.CurrentLocationRuntimeId, Is.EqualTo("location-origin"));
+        Assert.That(travel.CurrentCityRuntimeId, Is.EqualTo("city-origin"));
+        Assert.That(travel.DestinationLocationRuntimeId, Is.EqualTo("location-destination"));
+        Assert.That(travel.DestinationCityRuntimeId, Is.EqualTo("city-destination"));
+        Assert.That(travel.TravelDaysRemaining, Is.EqualTo(2));
+        Assert.That(travel.TravelDaysTotal, Is.EqualTo(2));
+        Assert.That(travel.TravelRouteRuntimeId, Is.EqualTo("route-1"));
+        Assert.That(travel.TravelStartedToday, Is.True);
+        Assert.That(travel.TravelOriginDecisionId, Is.EqualTo("decision-1"));
+        Assert.That(travel.ActiveTravelPartyId, Is.EqualTo("party-1"));
+        Assert.That(travel.IsTraveling, Is.True);
+        Assert.That(travel.Revision, Is.EqualTo(23L));
+        Assert.That(travel.CanAdvanceRevision(1), Is.True);
+        Assert.That(travel.TryCommitState(
+            "location-origin", "city-origin", "location-destination", "city-destination",
+            1, 2, "route-1", true, "decision-1", "party-1", true), Is.True);
+        Assert.That(travel.TravelDaysRemaining, Is.EqualTo(1));
+        Assert.That(travel.Revision, Is.EqualTo(24L));
+
+        Assert.That(travel.TryInstallState(
+            "location-origin", "city-origin", "location-destination", "city-destination",
+            2, 2, "route-1", true, "decision-1", "party-1", -1L), Is.False);
+        Assert.That(travel.Revision, Is.EqualTo(24L));
+        Assert.That(travel.TryInstallState(
+            "location-origin", "city-origin", null, null,
+            0, 0, null, false, null, null, long.MaxValue), Is.True);
+        Assert.That(travel.CanAdvanceRevision(1), Is.False);
+        Assert.That(travel.TryCommitState(
+            "location-origin", "city-origin", "location-destination", "city-destination",
+            1, 2, "route-1", true, "decision-1", "party-1", true), Is.False);
+        Assert.That(travel.IsTraveling, Is.False);
+    }
 }

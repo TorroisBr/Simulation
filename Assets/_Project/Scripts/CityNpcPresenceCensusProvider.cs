@@ -36,6 +36,10 @@ public static class CityNpcPresenceCensusProvider
 
         private void ValidateReciprocalPresenceProjection()
         {
+            if (!owner.HasConsistentSelectedNpcPresence)
+                throw new InvalidOperationException(
+                    "Selected City presence owner differs from its exact Unity reference projection.");
+
             HashSet<NpcRuntime> rosterMembers = new HashSet<NpcRuntime>();
             HashSet<string> runtimeIds = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < installedNpcRoster.Count; i++)

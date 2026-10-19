@@ -605,7 +605,8 @@ internal static class P12DNpcRootOwnerSnapshot
             || !NpcInjuryRules.IsValid(npc.InjurySeverity)
             || npc.TravelDaysRemaining < 0 || npc.TravelDaysTotal < 0
             || (npc.TravelDaysTotal > 0 && npc.TravelDaysRemaining > npc.TravelDaysTotal)
-            || !npc.HasConsistentCurrentActionSlot)
+            || !npc.HasConsistentCurrentActionSlot
+            || !npc.HasConsistentSelectedTravelState)
         {
             failure = P12DNpcRootOwnerSnapshotFailure.UnsupportedValue;
             return false;
