@@ -319,6 +319,91 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
     internal IReadOnlyList<DailyV1CityRuntimeOwners> Cities => cities.AsReadOnly();
     internal IReadOnlyList<DailyV1NpcRuntimeOwners> Npcs => npcs.AsReadOnly();
 
+    /// <summary>
+    /// Performs the selected City's identity allocation and authoritative
+    /// owner construction in Core. The callback only admits the corresponding
+    /// host location projection; it receives the already allocated identity
+    /// and must not allocate another one.
+    /// </summary>
+    internal bool TryCreateConfiguredCities(
+        RuntimeIdAllocator runtimeIds,
+        Func<string, bool> tryRegisterLocationProjection)
+    {
+        if (built || runtimeIds == null || tryRegisterLocationProjection == null
+            || definitions.Configuration == null)
+            return false;
+
+        List<string> selectedCityIds = new List<string>(
+            definitions.Configuration.cities ?? Array.Empty<string>());
+        selectedCityIds.Sort(StringComparer.Ordinal);
+        foreach (string cityId in selectedCityIds)
+        {
+            if (string.IsNullOrWhiteSpace(cityId)) continue;
+            if (!definitions.Cities.TryGetValue(cityId, out DailyV1CityDefinition definition)
+                || definition == null
+                || !string.Equals(definition.DefinitionId, cityId, StringComparison.Ordinal))
+                return false;
+
+            string locationRuntimeId = runtimeIds.AllocateLocationId();
+            if (!tryRegisterLocationProjection(locationRuntimeId)) continue;
+
+            string cityRuntimeId = runtimeIds.AllocateCityId();
+            if (!TryAddInitialCity(cityRuntimeId, locationRuntimeId, definition, out _)) return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Allocates selected NPC identities and builds their exact definition,
+    /// inventory, travel, and City-presence owners in Core. The optional
+    /// resolver is a host projection check used to preserve existing Unity
+    /// missing/ambiguous City diagnostics before each NPC identity is issued.
+    /// </summary>
+    internal bool TryCreateConfiguredNpcs(
+        RuntimeIdAllocator runtimeIds,
+        Func<string, string> resolveStartingCityProjection)
+    {
+        if (built || runtimeIds == null || definitions.Configuration == null) return false;
+
+        Dictionary<string, DailyV1NpcSimulationConfig> selectedRows =
+            new Dictionary<string, DailyV1NpcSimulationConfig>(StringComparer.Ordinal);
+        foreach (DailyV1NpcSimulationConfig row in
+            definitions.Configuration.npcs ?? Array.Empty<DailyV1NpcSimulationConfig>())
+        {
+            if (row == null || string.IsNullOrWhiteSpace(row.npc)) continue;
+            if (!selectedRows.TryAdd(row.npc, row)) return false;
+        }
+
+        List<string> selectedNpcIds = new List<string>(selectedRows.Keys);
+        selectedNpcIds.Sort(StringComparer.Ordinal);
+        foreach (string npcId in selectedNpcIds)
+        {
+            if (!definitions.Npcs.TryGetValue(npcId, out DailyV1NpcDefinition definition)
+                || definition == null
+                || !string.Equals(definition.DefinitionId, npcId, StringComparison.Ordinal))
+                return false;
+
+            DailyV1NpcSimulationConfig configuration = selectedRows[npcId];
+            DailyV1CityRuntimeOwners startingCity = null;
+            if (!string.IsNullOrWhiteSpace(configuration.startingCity))
+            {
+                if (!definitions.Cities.ContainsKey(configuration.startingCity)) return false;
+                startingCity = ResolveUniqueStartingCity(configuration.startingCity);
+                string projectedCityRuntimeId = resolveStartingCityProjection == null
+                    ? startingCity?.RuntimeId
+                    : resolveStartingCityProjection(configuration.startingCity);
+                if (!string.Equals(projectedCityRuntimeId, startingCity?.RuntimeId, StringComparison.Ordinal))
+                    return false;
+            }
+
+            string npcRuntimeId = runtimeIds.AllocateNpcId();
+            if (!TryAddInitialNpc(npcRuntimeId, definition, configuration, out _)) return false;
+        }
+
+        return true;
+    }
+
     internal bool TryAddInitialCity(
         string runtimeId,
         string locationRuntimeId,

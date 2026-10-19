@@ -227,6 +227,62 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
     }
 
     [Test]
+    public void CoreGenesisBuilderOwnsSelectedCityAndNpcIdentityAllocationOrder()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        RuntimeIdAllocator runtimeIds = new RuntimeIdAllocator();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        List<string> registeredLocationIds = new List<string>();
+
+        Assert.That(builder.TryCreateConfiguredCities(runtimeIds, locationRuntimeId =>
+        {
+            registeredLocationIds.Add(locationRuntimeId);
+            return true;
+        }), Is.True);
+
+        List<string> resolvedNpcCityDefinitions = new List<string>();
+        Assert.That(builder.TryCreateConfiguredNpcs(runtimeIds, cityDefinitionId =>
+        {
+            resolvedNpcCityDefinitions.Add(cityDefinitionId);
+            return builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId;
+        }), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        List<string> expectedCityDefinitions = new List<string>(definitions.Configuration.cities);
+        expectedCityDefinitions.RemoveAll(string.IsNullOrWhiteSpace);
+        expectedCityDefinitions.Sort(System.StringComparer.Ordinal);
+        Assert.That(graph.Cities, Has.Count.EqualTo(expectedCityDefinitions.Count));
+        Assert.That(registeredLocationIds, Has.Count.EqualTo(expectedCityDefinitions.Count));
+        for (int index = 0; index < graph.Cities.Count; index++)
+        {
+            Assert.That(graph.Cities[index].Definition.DefinitionId,
+                Is.EqualTo(expectedCityDefinitions[index]));
+            Assert.That(graph.Cities[index].RuntimeId,
+                Is.EqualTo("city-" + (index + 1).ToString("D6")));
+            Assert.That(builder.TryGetLocationRuntimeId(graph.Cities[index], out string locationRuntimeId), Is.True);
+            Assert.That(locationRuntimeId, Is.EqualTo("location-" + (index + 1).ToString("D6")));
+            Assert.That(registeredLocationIds[index], Is.EqualTo(locationRuntimeId));
+        }
+
+        List<DailyV1NpcSimulationConfig> expectedNpcRows = definitions.Configuration.npcs
+            .Where(row => row != null && !string.IsNullOrWhiteSpace(row.npc))
+            .OrderBy(row => row.npc, System.StringComparer.Ordinal)
+            .ToList();
+        Assert.That(graph.Npcs, Has.Count.EqualTo(expectedNpcRows.Count));
+        Assert.That(resolvedNpcCityDefinitions, Is.EqualTo(expectedNpcRows
+            .Where(row => !string.IsNullOrWhiteSpace(row.startingCity))
+            .Select(row => row.startingCity)));
+        for (int index = 0; index < graph.Npcs.Count; index++)
+        {
+            Assert.That(graph.Npcs[index].Definition.DefinitionId,
+                Is.EqualTo(expectedNpcRows[index].npc));
+            Assert.That(graph.Npcs[index].RuntimeId,
+                Is.EqualTo("npc-" + (index + 1).ToString("D6")));
+        }
+    }
+
+    [Test]
     public void CoreGenesisBuilderRejectsIncompleteOrPostBuildMutation()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

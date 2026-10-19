@@ -2282,36 +2282,32 @@ public class TesteSimulacao : MonoBehaviour
 
             selectedRuntimeOwnerGraphBuilder = new DailyV1SelectedRuntimeOwnerGraphBuilder(selectedDefinitions);
             selectedInitialRuntimeOwnerGraph = null;
+            Dictionary<string, SpatialLocationRuntime> selectedLocationsByRuntimeId =
+                new Dictionary<string, SpatialLocationRuntime>(System.StringComparer.Ordinal);
+            if (!selectedRuntimeOwnerGraphBuilder.TryCreateConfiguredCities(
+                    runtimeIdAllocator,
+                    locationRuntimeId =>
+                    {
+                        SpatialLocationRuntime selectedLocation = new SpatialLocationRuntime(locationRuntimeId);
+                        if (!spatialNetwork.RegisterLocation(selectedLocation)) return false;
+                        selectedLocationsByRuntimeId.Add(locationRuntimeId, selectedLocation);
+                        return true;
+                    }))
+                throw new System.InvalidOperationException(
+                    "The selected City owner graph could not construct the exact admitted Daily-v1 owner set.");
 
-            List<string> selectedCityIds = new List<string>(
-                selectedDefinitions.Configuration.cities ?? System.Array.Empty<string>());
-            selectedCityIds.Sort(System.StringComparer.Ordinal);
-            foreach (string cityId in selectedCityIds)
+            foreach (DailyV1CityRuntimeOwners selectedCityOwners in selectedRuntimeOwnerGraphBuilder.Cities)
             {
-                if (string.IsNullOrWhiteSpace(cityId))
-                    continue;
-                if (!selectedDefinitions.Cities.TryGetValue(cityId, out DailyV1CityDefinition cityDefinition)
-                    || cityDefinition == null
-                    || !string.Equals(cityDefinition.DefinitionId, cityId, System.StringComparison.Ordinal))
+                if (!selectedRuntimeOwnerGraphBuilder.TryGetLocationRuntimeId(selectedCityOwners, out string locationRuntimeId)
+                    || !selectedLocationsByRuntimeId.TryGetValue(locationRuntimeId, out SpatialLocationRuntime selectedLocation))
                     throw new System.InvalidOperationException(
-                        "A selected City runtime row does not resolve to its exact admitted typed definition.");
-
-                SpatialLocationRuntime selectedLocation = new SpatialLocationRuntime(runtimeIdAllocator.AllocateLocationId());
-                if (!spatialNetwork.RegisterLocation(selectedLocation))
-                    continue;
-
-                string selectedCityRuntimeId = runtimeIdAllocator.AllocateCityId();
-                if (!selectedRuntimeOwnerGraphBuilder.TryAddInitialCity(
-                        selectedCityRuntimeId, selectedLocation.RuntimeId, cityDefinition,
-                        out DailyV1CityRuntimeOwners selectedCityOwners))
-                    throw new System.InvalidOperationException(
-                        "The selected City owner graph could not construct the exact admitted Daily-v1 owner.");
-
+                        "A selected Core City owner has no matching registered Unity location projection.");
+                string cityId = selectedCityOwners.Definition.DefinitionId;
                 CityRuntime selectedCity = CityRuntime.CreateSelectedDailyV1(
-                    selectedCityRuntimeId, cityDefinition,
+                    selectedCityOwners.RuntimeId, selectedCityOwners.Definition,
                     selectedDefinitions, selectedBindings, selectedCityOwners, selectedLocation, logger);
                 if (!selectedCity.TryBindSelectedDailyV1Definition(
-                        cityDefinition, selectedDefinitions, selectedBindings))
+                        selectedCityOwners.Definition, selectedDefinitions, selectedBindings))
                     throw new System.InvalidOperationException(
                         "The selected City Unity/P12 identity projection could not attach to its Core-owned runtime.");
                 if (!runtimeIdentityRegistry.RegisterCity(selectedCity))
@@ -2661,53 +2657,31 @@ public class TesteSimulacao : MonoBehaviour
                 throw new System.InvalidOperationException(
                     "Selected NPC construction requires the admitted typed graph and its captured configuration.");
 
-            Dictionary<string, DailyV1NpcSimulationConfig> selectedRows =
-                new Dictionary<string, DailyV1NpcSimulationConfig>(System.StringComparer.Ordinal);
-            foreach (DailyV1NpcSimulationConfig row in
-                selectedDefinitions.Configuration.npcs ?? System.Array.Empty<DailyV1NpcSimulationConfig>())
-            {
-                if (row == null || string.IsNullOrWhiteSpace(row.npc))
-                    continue;
-                if (!selectedRows.TryAdd(row.npc, row))
-                    throw new System.InvalidOperationException(
-                        "The selected NPC graph contains duplicate runtime-construction rows for '" + row.npc + "'.");
-            }
+            if (selectedRuntimeOwnerGraphBuilder == null
+                || !selectedRuntimeOwnerGraphBuilder.TryCreateConfiguredNpcs(
+                    runtimeIdAllocator,
+                    cityDefinitionId => GetSingleCityRuntimeByDefinition(cityDefinitionId)?.RuntimeId))
+                throw new System.InvalidOperationException(
+                    "The selected Core NPC owner graph could not construct the exact admitted Daily-v1 owner set.");
 
-            List<string> selectedNpcIds = new List<string>(selectedRows.Keys);
-            selectedNpcIds.Sort(System.StringComparer.Ordinal);
-            foreach (string npcId in selectedNpcIds)
+            foreach (DailyV1NpcRuntimeOwners selectedNpcOwners in selectedRuntimeOwnerGraphBuilder.Npcs)
             {
-                if (!selectedDefinitions.Npcs.TryGetValue(npcId, out DailyV1NpcDefinition npcDefinition)
-                    || npcDefinition == null
-                    || !string.Equals(npcDefinition.DefinitionId, npcId, System.StringComparison.Ordinal))
-                    throw new System.InvalidOperationException(
-                        "A selected NPC runtime row does not resolve to its exact admitted typed definition.");
-                DailyV1NpcSimulationConfig selectedConfig = selectedRows[npcId];
-
+                string npcId = selectedNpcOwners.Definition.DefinitionId;
                 CityRuntime startingCity = null;
-                if (!string.IsNullOrWhiteSpace(selectedConfig.startingCity))
+                if (!string.IsNullOrWhiteSpace(selectedNpcOwners.Travel.CurrentCityRuntimeId))
                 {
-                    if (!selectedDefinitions.Cities.ContainsKey(selectedConfig.startingCity))
+                    startingCity = CityRuntimeList.Find(city => city != null
+                        && string.Equals(city.RuntimeId, selectedNpcOwners.Travel.CurrentCityRuntimeId,
+                            System.StringComparison.Ordinal));
+                    if (startingCity == null)
                         throw new System.InvalidOperationException(
-                            "A selected NPC starting City did not resolve through the admitted typed definition graph.");
-                    startingCity = GetSingleCityRuntimeByDefinition(selectedConfig.startingCity);
+                            "A Core-owned selected NPC City binding has no matching Unity City projection.");
                 }
-
-                if (selectedRuntimeOwnerGraphBuilder == null)
-                    throw new System.InvalidOperationException(
-                        "The selected NPC stage has no Core owner-graph builder from the selected City stage.");
-                string selectedNpcRuntimeId = runtimeIdAllocator.AllocateNpcId();
-                if (!selectedRuntimeOwnerGraphBuilder.TryAddInitialNpc(
-                        selectedNpcRuntimeId, npcDefinition, selectedConfig,
-                        out DailyV1NpcRuntimeOwners selectedNpcOwners))
-                    throw new System.InvalidOperationException(
-                        "The selected NPC owner graph could not construct the exact admitted Daily-v1 owner and initial inventory.");
-
                 NpcRuntime selectedNpc = NpcRuntime.CreateSelectedDailyV1(
-                    selectedNpcRuntimeId, npcDefinition,
+                    selectedNpcOwners.RuntimeId, selectedNpcOwners.Definition,
                     selectedDefinitions, selectedBindings, selectedNpcOwners, startingCity);
                 if (!selectedNpc.TryBindSelectedDailyV1Definition(
-                        npcDefinition, selectedDefinitions, selectedBindings))
+                        selectedNpcOwners.Definition, selectedDefinitions, selectedBindings))
                     throw new System.InvalidOperationException(
                         "The selected NPC Unity/P12 identity projection could not attach to its Core-owned runtime.");
                 if (!runtimeIdentityRegistry.RegisterNpc(selectedNpc))
