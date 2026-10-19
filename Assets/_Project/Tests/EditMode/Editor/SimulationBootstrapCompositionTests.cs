@@ -2425,6 +2425,21 @@ public sealed class SimulationBootstrapCompositionTests
             "typed-npc-plan-city-runtime", planCityDefinition, graph, bindings,
             new SpatialLocationRuntime("typed-npc-plan-city-location"));
 
+        NpcRuntime legacyRuntime = new NpcRuntime("npc-runtime-legacy-owner-rebind", npc);
+        SpatialKnowledgeRuntime legacySpatialOwner = legacyRuntime.SpatialKnowledge;
+        Assert.That(legacySpatialOwner.DiscoverLocation("location/retained"), Is.True);
+        Assert.That(legacySpatialOwner.DiscoverRoute("route/retained"), Is.True);
+        Assert.That(legacyRuntime.TryBindSelectedDailyV1Definition(
+            definition, graph, bindings, _ => null), Is.True,
+            "Binding the admitted typed graph must compose the existing spatial authority, not replace it.");
+        Assert.That(legacyRuntime.SelectedRuntimeOwners.SpatialKnowledge, Is.SameAs(legacySpatialOwner));
+        Assert.That(legacyRuntime.SpatialKnowledge, Is.SameAs(legacySpatialOwner));
+        Assert.That(legacyRuntime.SpatialKnowledge.KnownLocationRuntimeIds,
+            Is.EqualTo(new[] { "location/retained" }));
+        Assert.That(legacyRuntime.SpatialKnowledge.KnownRouteRuntimeIds,
+            Is.EqualTo(new[] { "route/retained" }));
+        Assert.That(legacyRuntime.SpatialKnowledge.Revision, Is.EqualTo(2L));
+
         npc.statusPadrao.Clear();
 
         NpcRuntime runtime = NpcRuntime.CreateSelectedDailyV1(

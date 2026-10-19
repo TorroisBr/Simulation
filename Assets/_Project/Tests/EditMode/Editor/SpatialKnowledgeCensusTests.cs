@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using NUnit.Framework;
+using UnityEngine;
 
 public sealed class SpatialKnowledgeCensusTests
 {
@@ -81,6 +82,60 @@ public sealed class SpatialKnowledgeCensusTests
         Assert.That(locations, Is.EqualTo(new[] { "location-a", "location-b" }));
         Assert.That(routes, Is.EqualTo(new[] { "route-a", "route-b" }));
         Assert.That(owner.Revision, Is.EqualTo(4L));
+    }
+
+    [Test]
+    public void SelectedNpcAndSpatialCensusShareTheExactCoreAuthority()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition definition = definitions.Npcs.Values.First();
+        NpcRuntime npc = NpcRuntime.CreateSelectedDailyV1(
+            "npc-selected-spatial", definition, definitions, null, 0f);
+
+        SpatialKnowledgeRuntime owner = npc.SelectedRuntimeOwners.SpatialKnowledge;
+        Assert.That(npc.SpatialKnowledge, Is.SameAs(owner));
+        Assert.That(npc.ExistingSpatialKnowledge, Is.SameAs(owner));
+        Assert.That(owner.DiscoverLocation("location/second"), Is.True);
+        Assert.That(owner.DiscoverLocation("location/first"), Is.True);
+        Assert.That(owner.DiscoverRoute("route/second"), Is.True);
+        Assert.That(owner.DiscoverRoute("route/first"), Is.True);
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers =
+            SpatialKnowledgeCensusProvider.CreateProviders(new[] { npc });
+        Assert.That(providers, Has.Count.EqualTo(2));
+        Assert.That(providers[0].GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(owner));
+        Assert.That(providers[1].GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(owner));
+        Assert.That(providers[0].GetCurrentCensus().Revision, Is.EqualTo(4L));
+        Assert.That(providers[1].GetCurrentCensus().Revision, Is.EqualTo(4L));
+        Assert.That(owner.KnownLocationRuntimeIds, Is.EqualTo(new[] { "location/second", "location/first" }));
+        Assert.That(owner.KnownRouteRuntimeIds, Is.EqualTo(new[] { "route/second", "route/first" }));
+    }
+
+    [Test]
+    public void NestedUnitySerializationRoundTripRehydratesOneCoreAuthorityWithoutChangingWireFields()
+    {
+        NpcRuntime source = new NpcRuntime("npc-serialized-spatial", null);
+        Assert.That(source.SpatialKnowledge.DiscoverLocation("location/second"), Is.True);
+        Assert.That(source.SpatialKnowledge.DiscoverLocation("location/first"), Is.True);
+        Assert.That(source.SpatialKnowledge.DiscoverRoute("route/second"), Is.True);
+        Assert.That(source.SpatialKnowledge.DiscoverRoute("route/first"), Is.True);
+        SpatialKnowledgeRuntime sourceOwner = source.SpatialKnowledge;
+
+        string serialized = JsonUtility.ToJson(source);
+        Assert.That(serialized, Does.Contain("\"spatialKnowledge\""));
+        Assert.That(serialized, Does.Contain("\"knownLocationRuntimeIds\""));
+        Assert.That(serialized, Does.Contain("\"knownRouteRuntimeIds\""));
+        Assert.That(serialized, Does.Contain("\"ownerRuntimeId\":\"npc-serialized-spatial\""));
+        NpcRuntime restored = JsonUtility.FromJson<NpcRuntime>(serialized);
+        Assert.That(restored, Is.Not.Null);
+
+        SpatialKnowledgeRuntime restoredOwner = restored.SpatialKnowledge;
+        Assert.That(restoredOwner, Is.Not.SameAs(sourceOwner));
+        Assert.That(restoredOwner.OwnerRuntimeId, Is.EqualTo(sourceOwner.OwnerRuntimeId));
+        Assert.That(restoredOwner.KnownLocationRuntimeIds, Is.EqualTo(sourceOwner.KnownLocationRuntimeIds));
+        Assert.That(restoredOwner.KnownRouteRuntimeIds, Is.EqualTo(sourceOwner.KnownRouteRuntimeIds));
+        Assert.That(restoredOwner.Revision, Is.EqualTo(sourceOwner.Revision));
+        Assert.That(restored.ExistingSpatialKnowledge, Is.SameAs(restoredOwner));
     }
 
     [Test]

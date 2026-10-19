@@ -56,7 +56,7 @@ public class NpcRuntime : ICapabilityConditionSource
     [SerializeField]private NpcLocalKnowledgeObservationRuntime localKnowledgeObservationRuntime = new NpcLocalKnowledgeObservationRuntime();
     [SerializeField]private NpcMerchantTradeStateRuntime merchantTradeStateRuntime = new NpcMerchantTradeStateRuntime();
     [SerializeField]private ExplorableSiteKnowledgeRuntime explorableSiteKnowledge;
-    [SerializeField]private SpatialKnowledgeRuntime spatialKnowledge;
+    [SerializeField]private SpatialKnowledgeSerializationAdapter spatialKnowledge;
     [SerializeField]private LocalTopologyKnowledgeRuntime localTopologyKnowledge;
     [SerializeField]private AdventureSiteIntelKnowledgeRuntime adventureSiteIntelKnowledge;
 
@@ -279,8 +279,21 @@ public class NpcRuntime : ICapabilityConditionSource
     internal NpcMerchantTradeStateRuntime ExistingMerchantTradeStateRuntime => merchantTradeStateRuntime;
     public ExplorableSiteKnowledgeRuntime ExplorableSiteKnowledge => explorableSiteKnowledge ?? (explorableSiteKnowledge = new ExplorableSiteKnowledgeRuntime(runtimeId));
     internal ExplorableSiteKnowledgeRuntime ExistingExplorableSiteKnowledge => explorableSiteKnowledge;
-    public SpatialKnowledgeRuntime SpatialKnowledge => spatialKnowledge ?? (spatialKnowledge = new SpatialKnowledgeRuntime(runtimeId));
-    internal SpatialKnowledgeRuntime ExistingSpatialKnowledge => spatialKnowledge;
+    public SpatialKnowledgeRuntime SpatialKnowledge
+    {
+        get
+        {
+            if (selectedRuntimeOwners != null) return selectedRuntimeOwners.SpatialKnowledge;
+            if (spatialKnowledge == null)
+                spatialKnowledge = new SpatialKnowledgeSerializationAdapter(new SpatialKnowledgeRuntime(runtimeId));
+            SpatialKnowledgeRuntime owner = spatialKnowledge.GetOrCreateOwner(runtimeId);
+            if (owner == null)
+                throw new InvalidOperationException("The Unity SpatialKnowledge serialization value could not bind a Core owner.");
+            return owner;
+        }
+    }
+    internal SpatialKnowledgeRuntime ExistingSpatialKnowledge =>
+        selectedRuntimeOwners?.SpatialKnowledge ?? spatialKnowledge?.GetOrCreateOwner(runtimeId);
     public LocalTopologyKnowledgeRuntime LocalTopologyKnowledge => localTopologyKnowledge ?? (localTopologyKnowledge = new LocalTopologyKnowledgeRuntime(runtimeId));
     internal LocalTopologyKnowledgeRuntime ExistingLocalTopologyKnowledge => localTopologyKnowledge;
     public AdventureSiteIntelKnowledgeRuntime AdventureSiteIntelKnowledge => adventureSiteIntelKnowledge ?? (adventureSiteIntelKnowledge = new AdventureSiteIntelKnowledgeRuntime(runtimeId));
@@ -1233,15 +1246,31 @@ public class NpcRuntime : ICapabilityConditionSource
         if (selectedDefinition != null)
         {
             DailyV1NpcRuntimeOwners selectedOwners = initialSelectedOwners;
+            SpatialKnowledgeRuntime serializedSpatialOwner = initialSelectedOwners == null
+                ? (spatialKnowledge?.GetOrCreateOwner(runtimeId) ?? new SpatialKnowledgeRuntime(runtimeId))
+                : spatialKnowledge?.BoundOwner;
             if (selectedOwners == null
                 && !DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
                     runtimeId, selectedDefinitions, selectedDefinition, initialMoney,
-                    out selectedOwners))
+                    serializedSpatialOwner, out selectedOwners))
                 throw new ArgumentException(
                     "The selected NPC owner composition could not be created from the admitted graph.",
                     nameof(selectedDefinition));
 
+            if (selectedOwners == null
+                || !string.Equals(selectedOwners.RuntimeId, runtimeId, StringComparison.Ordinal)
+                || (serializedSpatialOwner != null
+                    && !ReferenceEquals(serializedSpatialOwner, selectedOwners.SpatialKnowledge)))
+                throw new ArgumentException(
+                    "The selected NPC SpatialKnowledge owner must be the exact Core owner composed for the runtime.",
+                    nameof(selectedDefinition));
+
             selectedRuntimeOwners = selectedOwners;
+            spatialKnowledge ??= new SpatialKnowledgeSerializationAdapter();
+            if (!spatialKnowledge.TryBind(selectedOwners.SpatialKnowledge))
+                throw new ArgumentException(
+                    "The Unity SpatialKnowledge serialization adapter could not bind the selected Core owner.",
+                    nameof(selectedDefinition));
             if (!TravelPlan.TryBindSelectedOwner(selectedOwners.TravelPlan))
                 throw new ArgumentException(
                     "The selected NPC travel plan could not bind to its Core owner.",
@@ -1255,7 +1284,8 @@ public class NpcRuntime : ICapabilityConditionSource
                 throw new ArgumentException("The selected NPC Inventory could not bind the exact admitted Daily-v1 item graph.", nameof(selectedDefinitions));
             moneyAccount = selectedOwners.MoneyAccount;
         }
-        spatialKnowledge = new SpatialKnowledgeRuntime(runtimeId);
+        if (selectedDefinition == null && spatialKnowledge == null)
+            spatialKnowledge = new SpatialKnowledgeSerializationAdapter(new SpatialKnowledgeRuntime(runtimeId));
         explorableSiteKnowledge = new ExplorableSiteKnowledgeRuntime(runtimeId);
         localTopologyKnowledge = new LocalTopologyKnowledgeRuntime(runtimeId);
         adventureSiteIntelKnowledge = new AdventureSiteIntelKnowledgeRuntime(runtimeId);
@@ -1463,6 +1493,7 @@ public class NpcRuntime : ICapabilityConditionSource
                 ExistingInventory?.SelectedDailyV1Owner, moneyAccount,
                 stagedCommercialKnowledge,
                 stagedMerchantPlan,
+                ExistingSpatialKnowledge,
                 out DailyV1NpcRuntimeOwners stagedOwners))
             return false;
         if (!stagedOwners.ActionSlot.TrySetCurrentAction(stagedCurrentAction, stagedCurrentActionPayload)
@@ -1648,6 +1679,7 @@ public class NpcRuntime : ICapabilityConditionSource
                     state.MoneyAccount,
                     state.CommercialKnowledge.SelectedOwner,
                     state.SelectedMerchantTradePlanOwner,
+                    state.SpatialKnowledge,
                     out stagedSelectedOwners))
                 return false;
 
@@ -1689,6 +1721,13 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         }
 
+        SpatialKnowledgeSerializationAdapter stagedSpatialKnowledgeAdapter =
+            new SpatialKnowledgeSerializationAdapter();
+        if (!stagedSpatialKnowledgeAdapter.TryBind(state.SpatialKnowledge)
+            || (stagedSelectedOwners != null
+                && !ReferenceEquals(stagedSelectedOwners.SpatialKnowledge, state.SpatialKnowledge)))
+            return false;
+
         PersonId stagedPersonId = null;
         if (state.PersonIdValue != null && !PersonId.TryCreate(state.PersonIdValue, out stagedPersonId))
             return false;
@@ -1722,7 +1761,7 @@ public class NpcRuntime : ICapabilityConditionSource
         merchantTradePlan = state.MerchantTradePlan;
         travelPlan = state.TravelPlan;
         commercialKnowledge = state.CommercialKnowledge;
-        spatialKnowledge = state.SpatialKnowledge;
+        spatialKnowledge = stagedSpatialKnowledgeAdapter;
         explorableSiteKnowledge = state.ExplorableSiteKnowledge;
         localTopologyKnowledge = state.LocalTopologyKnowledge;
         adventureSiteIntelKnowledge = state.AdventureSiteIntelKnowledge;

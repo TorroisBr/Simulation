@@ -27,6 +27,7 @@ internal sealed class DailyV1NpcRuntimeOwners
     internal DailyV1NpcMerchantTradePlanOwner MerchantTradePlan { get; }
     internal MoneyAccountRuntime MoneyAccount { get; }
     internal DailyV1CommercialKnowledgeOwner CommercialKnowledge { get; }
+    internal SpatialKnowledgeRuntime SpatialKnowledge { get; }
     internal DailyV1NpcLifecycleOwner Lifecycle { get; }
     internal DailyV1NpcActionSlotOwner ActionSlot { get; }
     internal DailyV1NpcTravelOwner Travel { get; }
@@ -42,7 +43,8 @@ internal sealed class DailyV1NpcRuntimeOwners
         DailyV1NpcMerchantTradePlanOwner merchantTradePlan,
         DailyV1NpcStatusOwner status,
         MoneyAccountRuntime moneyAccount,
-        DailyV1CommercialKnowledgeOwner commercialKnowledge)
+        DailyV1CommercialKnowledgeOwner commercialKnowledge,
+        SpatialKnowledgeRuntime spatialKnowledge)
     {
         RuntimeId = runtimeId;
         Definitions = definitions;
@@ -52,6 +54,7 @@ internal sealed class DailyV1NpcRuntimeOwners
         Status = status;
         MoneyAccount = moneyAccount;
         CommercialKnowledge = commercialKnowledge;
+        SpatialKnowledge = spatialKnowledge;
         Lifecycle = new DailyV1NpcLifecycleOwner();
         ActionSlot = new DailyV1NpcActionSlotOwner(definitions);
         Travel = new DailyV1NpcTravelOwner(runtimeId);
@@ -66,8 +69,22 @@ internal sealed class DailyV1NpcRuntimeOwners
         float initialMoney,
         out DailyV1NpcRuntimeOwners owners)
     {
+        return TryCreateInitial(runtimeId, definitions, definition, initialMoney,
+            string.IsNullOrWhiteSpace(runtimeId) ? null : new SpatialKnowledgeRuntime(runtimeId), out owners);
+    }
+
+    internal static bool TryCreateInitial(
+        string runtimeId,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1NpcDefinition definition,
+        float initialMoney,
+        SpatialKnowledgeRuntime spatialKnowledge,
+        out DailyV1NpcRuntimeOwners owners)
+    {
         owners = null;
-        if (string.IsNullOrWhiteSpace(runtimeId) || !IsAdmitted(definitions, definition)) return false;
+        if (string.IsNullOrWhiteSpace(runtimeId) || !IsAdmitted(definitions, definition)
+            || spatialKnowledge == null
+            || !string.Equals(spatialKnowledge.OwnerRuntimeId, runtimeId, StringComparison.Ordinal)) return false;
 
         List<DailyV1StatusDefinition> statuses = new List<DailyV1StatusDefinition>();
         foreach (string statusId in definition.Values.statusPadrao ?? Array.Empty<string>())
@@ -84,7 +101,8 @@ internal sealed class DailyV1NpcRuntimeOwners
             return false;
         MoneyAccountRuntime moneyAccount = new MoneyAccountRuntime(initialMoney);
         return TryCreateBound(runtimeId, definitions, definition, statuses, inventory, moneyAccount,
-            new DailyV1CommercialKnowledgeOwner(definitions), merchantTradePlan, out owners);
+            new DailyV1CommercialKnowledgeOwner(definitions), merchantTradePlan,
+            spatialKnowledge, out owners);
     }
 
     internal static bool TryCreateBound(
@@ -98,6 +116,23 @@ internal sealed class DailyV1NpcRuntimeOwners
         DailyV1NpcMerchantTradePlanOwner merchantTradePlan,
         out DailyV1NpcRuntimeOwners owners)
     {
+        return TryCreateBound(runtimeId, definitions, definition, statuses, inventory,
+            moneyAccount, commercialKnowledge, merchantTradePlan,
+            string.IsNullOrWhiteSpace(runtimeId) ? null : new SpatialKnowledgeRuntime(runtimeId), out owners);
+    }
+
+    internal static bool TryCreateBound(
+        string runtimeId,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1NpcDefinition definition,
+        IEnumerable<DailyV1StatusDefinition> statuses,
+        DailyV1InventoryOwner inventory,
+        MoneyAccountRuntime moneyAccount,
+        DailyV1CommercialKnowledgeOwner commercialKnowledge,
+        DailyV1NpcMerchantTradePlanOwner merchantTradePlan,
+        SpatialKnowledgeRuntime spatialKnowledge,
+        out DailyV1NpcRuntimeOwners owners)
+    {
         owners = null;
         if (string.IsNullOrWhiteSpace(runtimeId)
             || !IsAdmitted(definitions, definition)
@@ -107,13 +142,15 @@ internal sealed class DailyV1NpcRuntimeOwners
             || !ReferenceEquals(commercialKnowledge.Definitions, definitions)
             || merchantTradePlan == null
             || !ReferenceEquals(merchantTradePlan.Definitions, definitions)
+            || spatialKnowledge == null
+            || !string.Equals(spatialKnowledge.OwnerRuntimeId, runtimeId, StringComparison.Ordinal)
             || (inventory != null && !ReferenceEquals(inventory.Definitions, definitions))
             || !DailyV1NpcStatusOwner.TryCreate(definitions, statuses, out DailyV1NpcStatusOwner statusOwner))
             return false;
 
         owners = new DailyV1NpcRuntimeOwners(
             runtimeId, definitions, definition, inventory, merchantTradePlan,
-            statusOwner, moneyAccount, commercialKnowledge);
+            statusOwner, moneyAccount, commercialKnowledge, spatialKnowledge);
         return true;
     }
 

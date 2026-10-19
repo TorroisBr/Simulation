@@ -13,6 +13,75 @@ public sealed class P12DNpcRootOwnerSnapshotTests
     public void TearDown() => SimulationTestFactory.CleanupDefinitions();
 
     [Test]
+    public void DetachedP12HydrationBindsTheStagedSpatialCoreOwnerIntoSelectedComposition()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition selectedDefinition = definitions.Npcs.Values.First();
+        List<DailyV1StatusDefinition> selectedStatuses = selectedDefinition.Values.statusPadrao
+            .Select(statusId => definitions.Statuses[statusId]).ToList();
+        NpcData npcData = SimulationTestFactory.CreateNpc(selectedDefinition.DefinitionId);
+        npcData.statusPadrao.Clear();
+        List<NpcStatusData> statusAssets = new List<NpcStatusData>();
+        foreach (DailyV1StatusDefinition selectedStatus in selectedStatuses)
+        {
+            NpcStatusData statusAsset = SimulationTestFactory.CreateStatus(selectedStatus.DefinitionId);
+            npcData.statusPadrao.Add(statusAsset);
+            statusAssets.Add(statusAsset);
+        }
+
+        Assert.That(SpatialKnowledgeRuntime.TryCreateFromOwnerSnapshot(
+            "npc-detached-spatial", new[] { "location/second", "location/first" },
+            new[] { "route/second", "route/first" }, 4L,
+            out SpatialKnowledgeRuntime stagedSpatialOwner), Is.True);
+        DailyV1InventoryOwner selectedInventoryOwner = new DailyV1InventoryOwner(definitions);
+        DailyV1CommercialKnowledgeOwner selectedCommercialOwner =
+            new DailyV1CommercialKnowledgeOwner(definitions);
+        Assert.That(DailyV1NpcMerchantTradePlanOwner.TryCreateInitial(
+            definitions, out DailyV1NpcMerchantTradePlanOwner selectedTradePlanOwner), Is.True);
+
+        P12DNpcStagedOwnerState stagedState = new P12DNpcStagedOwnerState
+        {
+            NpcDefinitionId = selectedDefinition.DefinitionId,
+            SelectedDefinitions = definitions,
+            SelectedNpcDefinition = selectedDefinition,
+            SelectedCurrentStatusDefinitions = selectedStatuses,
+            NpcData = npcData,
+            LifeState = NpcLifeState.Alive,
+            InjurySeverity = NpcInjurySeverity.None,
+            CurrentStatus = statusAssets,
+            Inventory = new InventoryRuntime(selectedInventoryOwner),
+            MoneyAccount = new MoneyAccountRuntime(),
+            MerchantTradePlan = new MerchantTradePlanRuntime(),
+            SelectedMerchantTradePlanOwner = selectedTradePlanOwner,
+            TravelPlan = new NpcTravelPlanRuntime(),
+            CommercialKnowledge = new CommercialKnowledgeRuntime(selectedCommercialOwner, null),
+            SpatialKnowledge = stagedSpatialOwner,
+            ExplorableSiteKnowledge = new ExplorableSiteKnowledgeRuntime("npc-detached-spatial"),
+            LocalTopologyKnowledge = new LocalTopologyKnowledgeRuntime("npc-detached-spatial"),
+            AdventureSiteIntelKnowledge = new AdventureSiteIntelKnowledgeRuntime("npc-detached-spatial")
+        };
+        NpcRuntime restored = new NpcRuntime("npc-detached-spatial", npcData);
+
+        Assert.That(restored.TryInstallP12OwnerSnapshot(stagedState), Is.True);
+        Assert.That(restored.SelectedRuntimeOwners, Is.Not.Null);
+        Assert.That(restored.SelectedRuntimeOwners.SpatialKnowledge, Is.SameAs(stagedSpatialOwner));
+        Assert.That(restored.SpatialKnowledge, Is.SameAs(stagedSpatialOwner));
+        Assert.That(restored.ExistingSpatialKnowledge, Is.SameAs(stagedSpatialOwner));
+        Assert.That(restored.SpatialKnowledge.KnownLocationRuntimeIds,
+            Is.EqualTo(new[] { "location/second", "location/first" }));
+        Assert.That(restored.SpatialKnowledge.KnownRouteRuntimeIds,
+            Is.EqualTo(new[] { "route/second", "route/first" }));
+        Assert.That(restored.SpatialKnowledge.Revision, Is.EqualTo(4L));
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers =
+            SpatialKnowledgeCensusProvider.CreateProviders(new[] { restored });
+        Assert.That(providers[0].GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(stagedSpatialOwner));
+        Assert.That(providers[1].GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(stagedSpatialOwner));
+        Assert.That(providers[0].GetCurrentCensus().Revision, Is.EqualTo(4L));
+        Assert.That(providers[1].GetCurrentCensus().Revision, Is.EqualTo(4L));
+    }
+
+    [Test]
     public void DailyV1Package_StagesPersonFirstAndPreservesOneOrderedCityNpcGraph()
     {
         CityRuntime city = SimulationTestFactory.CreateCity(
