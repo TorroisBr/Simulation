@@ -558,10 +558,11 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         Action<DailyV1CityRuntimeOwners, LocalDailyMaterialFlowResult> localFlowOutput,
         Func<DailyV1CityRuntimeOwners, DailyV1ItemDefinition, int, int> accountBackedConsumption)
     {
+        // The argument remains temporarily for the existing SimulationRuntime
+        // call signature. Selected account-backed consumption is now executed
+        // by the Core City owner and this Unity callback is never invoked.
+        _ = accountBackedConsumption;
         if (!MatchesExactOwnerInstances(cities, exactCityOwners)) return false;
-        foreach (DailyV1CityRuntimeOwners city in cities)
-            if (city.HasConfiguredAccountBackedConsumption && accountBackedConsumption == null)
-                return false;
 
         foreach (DailyV1CityRuntimeOwners city in cities)
         {
@@ -584,7 +585,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         foreach (DailyV1CityRuntimeOwners city in cities)
         {
             if (!city.HasLocalDailyMaterialFlow)
-                city.SimulateSelectedConsumptionDay(accountBackedConsumption,
+                city.SimulateSelectedConsumptionDay(
                     logOutput == null ? null : (category, message) => logOutput(city, category, message));
             city.UpdateSelectedMarketPrices(
                 logOutput == null ? null : (category, message) => logOutput(city, category, message));

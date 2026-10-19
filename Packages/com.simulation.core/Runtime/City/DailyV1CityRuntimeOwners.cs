@@ -181,11 +181,10 @@ internal sealed partial class DailyV1CityRuntimeOwners
 
     /// <summary>
     /// Applies the selected City's existing ordinary consumption pass. Free
-    /// consumption writes directly to the Core Market; account-backed
-    /// transactions remain owned by the existing host transaction service.
+    /// consumption and account-backed transactions write directly to the same
+    /// Core Market and MoneyAccount owners used by capture and hydration.
     /// </summary>
     internal void SimulateSelectedConsumptionDay(
-        Func<DailyV1CityRuntimeOwners, DailyV1ItemDefinition, int, int> accountBackedConsumption,
         Action<SimulationLogCategory, string> logOutput)
     {
         DailyV1CityData city = Definition.Values;
@@ -202,7 +201,8 @@ internal sealed partial class DailyV1CityRuntimeOwners
 
             int consumed = PopulationEconomy.PaymentMode == ConsumptionPaymentMode.Free
                 ? Market.RemoveStockUpTo(item, desiredConsumption)
-                : accountBackedConsumption(this, item, desiredConsumption);
+                : DailyV1PopulationConsumptionOperation.Execute(
+                    PopulationEconomy, Counterparty, Market, item, desiredConsumption).Quantity;
             if (consumed > 0)
                 logOutput?.Invoke(SimulationLogCategory.EconomyConsumption,
                     $"{city.cityName} consumiu {consumed} {item.Values.itemName}");

@@ -72,6 +72,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/CommercialActionEvidence.cs" Link="Knowledge/CommercialActionEvidence.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1CityRuntimeOwners.cs" Link="City/DailyV1CityRuntimeOwners.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1CityEconomyContinuation.cs" Link="City/DailyV1CityEconomyContinuation.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1PopulationConsumptionOperation.cs" Link="Economy/DailyV1PopulationConsumptionOperation.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1FiniteProductionSourceOwner.cs" Link="City/DailyV1FiniteProductionSourceOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedTravelTransitionPlan.cs" Link="City/DailyV1SelectedTravelTransitionPlan.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedRuntimeOwnerGraph.cs" Link="Application/DailyV1SelectedRuntimeOwnerGraph.cs" />

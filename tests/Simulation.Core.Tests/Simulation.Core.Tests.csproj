@@ -29,6 +29,7 @@
     <Compile Include="DailyV1ExecutionBoundaryStateTests.cs" />
     <Compile Include="MoneyAccountRuntimeCoreTests.cs" />
     <Compile Include="DailyV1CityEconomicOwnerCoreTests.cs" />
+    <Compile Include="DailyV1PopulationConsumptionOperationTests.cs" />
     <Compile Include="DailyV1SelectedTravelTransitionPlanTests.cs" />
     <Compile Include="DailyV1SelectedOpenMarketSaleTests.cs" />
     <Compile Include="SpatialNetworkOwnerTests.cs" Link="Geography/SpatialNetworkOwnerTests.cs" />

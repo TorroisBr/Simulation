@@ -1661,7 +1661,62 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         DailyV1ItemDefinition item,
         int requestedQuantity)
     {
-        return ExecutePopulationConsumption(population, market, new TradeItem(item), requestedQuantity);
+        if (market == null)
+        {
+            return EconomyTransactionResult.CreateFailure(
+                EconomyTransactionType.PopulationConsumption,
+                MoneyEffect.Transfer,
+                EconomyTransactionFailureReason.InvalidInput,
+                actorRuntimeId: population != null ? population.PopulationEconomicRuntimeId : null);
+        }
+
+        DailyV1PopulationConsumptionOutcome outcome = DailyV1PopulationConsumptionOperation.Execute(
+            population, market.Counterparty, market.SelectedDailyV1Owner, item, requestedQuantity);
+        if (outcome.Success)
+        {
+            return EconomyTransactionResult.CreateSuccess(
+                EconomyTransactionType.PopulationConsumption,
+                MoneyEffect.Transfer,
+                outcome.TotalPrice,
+                outcome.ItemDefinitionId,
+                outcome.RequestedQuantity,
+                outcome.Quantity,
+                outcome.UnitPrice,
+                outcome.TotalPrice,
+                outcome.SourceRuntimeId,
+                outcome.DestinationRuntimeId,
+                actorRuntimeId: outcome.ActorRuntimeId,
+                itemSourceRuntimeId: outcome.ItemSourceRuntimeId,
+                itemDestinationRuntimeId: outcome.ItemDestinationRuntimeId);
+        }
+
+        return EconomyTransactionResult.CreateFailure(
+            EconomyTransactionType.PopulationConsumption,
+            MoneyEffect.Transfer,
+            MapPopulationConsumptionFailure(outcome.Failure),
+            actorRuntimeId: outcome.ActorRuntimeId);
+    }
+
+    private static EconomyTransactionFailureReason MapPopulationConsumptionFailure(
+        DailyV1PopulationConsumptionFailure failure)
+    {
+        switch (failure)
+        {
+            case DailyV1PopulationConsumptionFailure.InvalidInput:
+                return EconomyTransactionFailureReason.InvalidInput;
+            case DailyV1PopulationConsumptionFailure.InvalidQuantity:
+                return EconomyTransactionFailureReason.InvalidQuantity;
+            case DailyV1PopulationConsumptionFailure.InvalidPrice:
+                return EconomyTransactionFailureReason.InvalidPrice;
+            case DailyV1PopulationConsumptionFailure.InsufficientFunds:
+                return EconomyTransactionFailureReason.InsufficientFunds;
+            case DailyV1PopulationConsumptionFailure.InsufficientStock:
+                return EconomyTransactionFailureReason.InsufficientStock;
+            case DailyV1PopulationConsumptionFailure.CounterpartyCreditCapacity:
+                return EconomyTransactionFailureReason.CounterpartyCreditCapacity;
+            default:
+                return EconomyTransactionFailureReason.TransactionCommitFailed;
+        }
     }
 
     private EconomyTransactionResult ExecutePopulationConsumption(
