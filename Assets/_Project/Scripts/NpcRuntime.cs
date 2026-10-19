@@ -2400,7 +2400,7 @@ public class NpcRuntime : ICapabilityConditionSource
         SpatialLocationRuntime nextCurrentLocation = arriving ? destinationLocation : currentLocation;
         CityRuntime nextDestinationCity = arriving ? null : destinationCity;
         SpatialLocationRuntime nextDestinationLocation = arriving ? null : destinationLocation;
-        CityRuntime[] projectionCandidates = arriving && destinationCity != null
+        CityRuntime[] projectionCandidates = destinationCity != null
             ? new[] { destinationCity }
             : Array.Empty<CityRuntime>();
         if (!TryCommitSelectedTravelTransition(

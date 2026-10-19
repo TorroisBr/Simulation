@@ -104,6 +104,52 @@ public sealed class GeneralizedSpatialTravelTests
     }
 
     [Test]
+    public void SelectedIntermediateTravelRejectsInconsistentDestinationCityProjection()
+    {
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        CityData originAsset = SimulationTestFactory.CreateCityData("selected-travel-origin");
+        CityData destinationAsset = SimulationTestFactory.CreateCityData("selected-travel-destination");
+        NpcData npcAsset = SimulationTestFactory.CreateNpc("selected-travel-npc");
+        config.Cities.Add(originAsset);
+        config.Cities.Add(destinationAsset);
+        config.Npcs.Add(new NpcSimulationConfig { npc = npcAsset, startingCity = originAsset });
+
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: config.CreateConfigurationOverrides());
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(config.Calendar, out _);
+        DailyV1EffectiveDefinitions definitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            config, effective, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        CityRuntime origin = CityRuntime.CreateSelectedDailyV1(
+            "selected-travel-origin-runtime", definitions.Cities[originAsset.DefinitionId], definitions,
+            bindings, new SpatialLocationRuntime("selected-travel-origin-location"));
+        CityRuntime destination = CityRuntime.CreateSelectedDailyV1(
+            "selected-travel-destination-runtime", definitions.Cities[destinationAsset.DefinitionId], definitions,
+            bindings, new SpatialLocationRuntime("selected-travel-destination-location"));
+        NpcRuntime traveler = NpcRuntime.CreateSelectedDailyV1(
+            "selected-travel-runtime", definitions.Npcs[npcAsset.DefinitionId], definitions,
+            bindings, origin, 0f);
+        NpcRuntime conflictingAlias = NpcRuntime.CreateSelectedDailyV1(
+            traveler.RuntimeId, definitions.Npcs[npcAsset.DefinitionId], definitions,
+            bindings, null, 0f);
+
+        Assert.That(traveler.StartTravel(destination, 2), Is.True);
+        Assert.That(traveler.ClearTravelStartedToday(), Is.True);
+        destination.AddImportantNpc(conflictingAlias);
+
+        int remainingBefore = traveler.TravelDaysRemaining;
+        long revisionBefore = traveler.SelectedRuntimeOwners.Travel.Revision;
+        Assert.That(destination.HasConsistentSelectedNpcPresenceProjection(traveler), Is.False);
+
+        Assert.That(traveler.AdvanceTravelDay(out _), Is.False,
+            "Intermediate travel must retain the existing destination projection preflight.");
+        Assert.That(traveler.TravelDaysRemaining, Is.EqualTo(remainingBefore));
+        Assert.That(traveler.SelectedRuntimeOwners.Travel.Revision, Is.EqualTo(revisionBefore));
+        Assert.That(destination.ImportantNpcs, Is.EquivalentTo(new[] { conflictingAlias }));
+        Assert.That(destination.SelectedRuntimeOwners.NpcPresence.OrderedNpcRuntimeIds,
+            Is.EqualTo(new[] { traveler.RuntimeId }));
+    }
+
+    [Test]
     public void CityPresenceCensusBindsStableOrderedCityOwnersAndExactRevision()
     {
         SpatialTravelFixture fixture = new SpatialTravelFixture();
