@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
 /// Holds the exact selected City owner instances consumed by the Unity runtime
@@ -16,6 +17,7 @@ internal sealed class DailyV1CityRuntimeOwners
     internal MarketCounterpartyRuntime Counterparty { get; }
     internal PopulationEconomyRuntime PopulationEconomy { get; }
     internal DailyV1CityNpcPresenceOwner NpcPresence { get; }
+    internal DailyV1FiniteProductionSourceOwner FiniteSource { get; }
 
     private DailyV1CityRuntimeOwners(
         string runtimeId,
@@ -26,7 +28,8 @@ internal sealed class DailyV1CityRuntimeOwners
         DailyV1MarketOwner market,
         MarketCounterpartyRuntime counterparty,
         PopulationEconomyRuntime populationEconomy,
-        DailyV1CityNpcPresenceOwner npcPresence)
+        DailyV1CityNpcPresenceOwner npcPresence,
+        DailyV1FiniteProductionSourceOwner finiteSource)
     {
         RuntimeId = runtimeId;
         LocationRuntimeId = locationRuntimeId;
@@ -37,6 +40,7 @@ internal sealed class DailyV1CityRuntimeOwners
         Counterparty = counterparty;
         PopulationEconomy = populationEconomy;
         NpcPresence = npcPresence;
+        FiniteSource = finiteSource;
     }
 
     internal static bool TryCreateInitial(
@@ -68,9 +72,13 @@ internal sealed class DailyV1CityRuntimeOwners
         if (!DailyV1CityNpcPresenceOwner.TryCreateInitial(
                 runtimeId, out DailyV1CityNpcPresenceOwner npcPresence))
             return false;
+        if (!DailyV1FiniteProductionSourceOwner.TryCreate(
+                definitions, definition, out DailyV1FiniteProductionSourceOwner finiteSource))
+            return false;
 
         owners = new DailyV1CityRuntimeOwners(
-            runtimeId, locationRuntimeId, definitions, definition, population, market, counterparty, populationEconomy, npcPresence);
+            runtimeId, locationRuntimeId, definitions, definition, population, market, counterparty,
+            populationEconomy, npcPresence, finiteSource);
         return true;
     }
 
@@ -103,11 +111,14 @@ internal sealed class DailyV1CityRuntimeOwners
             || populationEconomy == null
             || !string.Equals(populationEconomy.CityRuntimeId, runtimeId, StringComparison.Ordinal)
             || npcPresence == null
-            || !string.Equals(npcPresence.CityRuntimeId, runtimeId, StringComparison.Ordinal))
+            || !string.Equals(npcPresence.CityRuntimeId, runtimeId, StringComparison.Ordinal)
+            || !DailyV1FiniteProductionSourceOwner.TryCreate(
+                definitions, definition, out DailyV1FiniteProductionSourceOwner finiteSource))
             return false;
 
         owners = new DailyV1CityRuntimeOwners(
-            runtimeId, locationRuntimeId, definitions, definition, population, market, counterparty, populationEconomy, npcPresence);
+            runtimeId, locationRuntimeId, definitions, definition, population, market, counterparty,
+            populationEconomy, npcPresence, finiteSource);
         return true;
     }
 
@@ -204,6 +215,159 @@ internal sealed class DailyV1CityRuntimeOwners
                 $"{city.cityName} consumed {actual} {item.Values.itemName}");
         return result;
     }
+
+    /// <summary>
+    /// Executes the admitted selected mixed-source City operation against the
+    /// exact Core Market and finite-source owners. Production is installed as
+    /// one prepared replacement before the existing free-consumption write.
+    /// </summary>
+    internal LocalDailyMaterialFlowResult SimulateSelectedMixedSourceDailyMaterialFlow(
+        long absoluteDay,
+        string calendarVersion,
+        Action<SimulationLogCategory, string> logOutput)
+    {
+        DailyV1CityData city = Definition.Values;
+        if (!DailyV1MixedSourceProfileAdmission.TryValidate(city, out string rejection))
+            throw PrepareMixedSourceRejected(rejection);
+        bool finiteConfigMatches = false;
+        if (FiniteSource != null)
+            foreach (DailyV1CityProductionConfig source in city.productionConfigs)
+                if (source != null
+                    && (CityProductionSourceKind)(source.sourceKind?.Value ?? 0)
+                        == CityProductionSourceKind.FiniteReserveDaily
+                    && ReferenceEquals(FiniteSource.Item, Definitions.Items.TryGetValue(
+                        source.item, out DailyV1ItemDefinition item) ? item : null)
+                    && string.Equals(source.productionSourceId, FiniteSource.ProductionSourceId, StringComparison.Ordinal)
+                    && string.Equals(source.contentRevision, FiniteSource.ContentRevision, StringComparison.Ordinal)
+                    && source.amountPerDay == FiniteSource.DailyOutputLimit
+                    && source.initialReserve == FiniteSource.InitialReserve
+                    && string.Equals(city.settlementSemanticId, FiniteSource.SettlementSemanticId, StringComparison.Ordinal)
+                    && string.Equals(city.marketStoreSemanticId, FiniteSource.MarketStoreSemanticId, StringComparison.Ordinal))
+                    finiteConfigMatches = true;
+        if (!finiteConfigMatches)
+            throw PrepareMixedSourceRejected("FiniteSourceOwnerMismatch");
+
+        DailyV1FiniteProductionSourceOwner finite = FiniteSource;
+        if (finite.RemainingReserve < 0 || finite.RemainingReserve > finite.InitialReserve
+            || finite.DailyOutputLimit <= 0)
+            throw PrepareMixedSourceRejected("InvalidFiniteSourceState");
+
+        long marketRevision = Market.Revision;
+        if (!Market.TryCreatePreparedSnapshot(out DailyV1MarketPreparedState marketState)
+            || !Market.TryCountPreparedItems(marketState, finite.Item, out int matchingCount)
+            || matchingCount != 1
+            || !Market.TryGetPreparedItem(marketState, finite.Item, out DailyV1MarketItemState preparedItem)
+            || preparedItem == null)
+            throw PrepareMixedSourceRejected("MarketRowCardinality");
+
+        int openingStock = preparedItem.Amount;
+        long marketIncrements = 0;
+        long totalApplied = 0;
+        int finiteApplied = 0;
+        List<CityDailyMaterialFlowSourceOutcome> outcomes = new List<CityDailyMaterialFlowSourceOutcome>(
+            city.productionConfigs.Count);
+        List<DailyV1CityProductionConfig> ordered = new List<DailyV1CityProductionConfig>(city.productionConfigs);
+        ordered.Sort((left, right) => StringComparer.Ordinal.Compare(
+            left?.productionSourceId ?? string.Empty, right?.productionSourceId ?? string.Empty));
+
+        foreach (DailyV1CityProductionConfig source in ordered)
+        {
+            CityProductionSourceKind kind = (CityProductionSourceKind)(source.sourceKind?.Value ?? 0);
+            bool finiteSource = kind == CityProductionSourceKind.FiniteReserveDaily;
+            int planned = finiteSource
+                ? Math.Min(source.amountPerDay, finite.RemainingReserve)
+                : source.amountPerDay;
+            string sourceRejection = planned == 0 ? "ReserveExhausted" : string.Empty;
+            int applied = 0;
+            if (planned > 0)
+            {
+                if (!Market.TryApplyPreparedStockDelta(marketState, finite.Item, planned,
+                        preparedItem.DesiredAmount, out DailyV1MarketPreparedState updatedState,
+                        out DailyV1MarketItemState updatedItem))
+                    sourceRejection = "AggregateStockOverflow";
+                else
+                {
+                    marketState = updatedState;
+                    preparedItem = updatedItem;
+                    applied = planned;
+                    marketIncrements++;
+                    totalApplied += applied;
+                    if (finiteSource) finiteApplied = applied;
+                }
+            }
+
+            outcomes.Add(new CityDailyMaterialFlowSourceOutcome(
+                source.productionSourceId, kind, source.amountPerDay, planned, applied, sourceRejection));
+        }
+
+        if (marketIncrements > 0 && !Market.CanInstallMaterialFlow(marketRevision, marketIncrements))
+            throw PrepareMixedSourceRejected(Market.Revision == marketRevision
+                ? "MarketMutationRejected" : "StaleMarketRevision");
+        long finiteRevision = finite.Revision;
+        if (finiteApplied > 0 && !finite.CanInstall(finiteRevision, absoluteDay))
+            throw PrepareMixedSourceRejected(finite.Revision == long.MaxValue
+                ? "SourceRevisionExhausted"
+                : absoluteDay <= finite.LastProcessedDay ? "BoundaryAlreadyProcessed" : "StaleSourceRevision");
+
+        if (marketIncrements > 0 && !Market.TryInstall(marketRevision, marketIncrements, marketState))
+            throw new LocalDailyMaterialFlowRejectedException(
+                "P14-C daily production became stale or was rejected before installation.");
+        if (finiteApplied > 0 && !finite.TryInstall(finiteRevision, absoluteDay, finiteApplied))
+            throw new LocalDailyMaterialFlowRejectedException(
+                "P14-C daily production became stale or was rejected before installation.");
+        if (marketIncrements > 0) Market.NotifyMaterialFlowInstalled();
+
+        DailyV1CityProductionConfig representative = null;
+        foreach (DailyV1CityProductionConfig row in ordered)
+            if ((CityProductionSourceKind)(row.sourceKind?.Value ?? 0) == CityProductionSourceKind.ExogenousDaily)
+            { representative = row; break; }
+        DailyV1MarketItemConfig marketItem = city.marketItems[0];
+        int requested = Math.Max(0, UnityMathfCompatibility.RoundToInt(
+            Population.CurrentPopulation / 1000f * marketItem.consumptionPer1000Population));
+        int actual = Market.RemoveStockUpTo(finite.Item, requested);
+        int closingStock = Market.GetAmount(finite.Item);
+        string[] rejected = outcomes
+            .Where(outcome => !string.IsNullOrEmpty(outcome.RejectionReason)
+                && outcome.RejectionReason != "ReserveExhausted")
+            .Select(outcome => outcome.ProductionSourceId + ":" + outcome.RejectionReason)
+            .ToArray();
+        LocalDailyMaterialFlowResult result = new LocalDailyMaterialFlowResult(
+            city.settlementSemanticId,
+            representative?.productionSourceId ?? string.Empty,
+            city.marketStoreSemanticId,
+            city.materialFlowLocationId,
+            finite.Item.DefinitionId,
+            representative?.contentRevision ?? finite.ContentRevision,
+            "Economy.Enabled=true;PaymentMode=Free",
+            "simulation-calendar",
+            calendarVersion,
+            true,
+            Population.CurrentPopulation,
+            marketItem.consumptionPer1000Population,
+            absoluteDay,
+            openingStock,
+            city.productionConfigs.Aggregate(0L, (total, source) => total + source.amountPerDay),
+            checked((int)totalApplied),
+            string.Join(";", rejected),
+            requested,
+            actual,
+            closingStock,
+            outcomes.AsReadOnly());
+
+        foreach (CityDailyMaterialFlowSourceOutcome outcome in outcomes)
+            if (outcome.AppliedQuantity > 0)
+                logOutput?.Invoke(SimulationLogCategory.EconomyProduction,
+                    city.cityName + " source " + outcome.ProductionSourceId + ": "
+                    + outcome.AppliedQuantity + "/" + outcome.ConfiguredQuantity);
+        if (actual > 0)
+            logOutput?.Invoke(SimulationLogCategory.EconomyConsumption,
+                city.cityName + " consumed " + actual + " " + finite.Item.Values.itemName);
+        return result;
+    }
+
+    private static LocalDailyMaterialFlowRejectedException PrepareMixedSourceRejected(string reason) =>
+        new LocalDailyMaterialFlowRejectedException(
+            "P14-C daily production could not be prepared: " + (reason ?? string.Empty));
 }
 
 /// <summary>

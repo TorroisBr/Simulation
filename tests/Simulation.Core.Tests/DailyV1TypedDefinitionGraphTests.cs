@@ -170,7 +170,7 @@ public sealed class DailyV1TypedDefinitionGraphTests
         Assert.That(connection.DisplayName, Is.Null);
     }
 
-    private static DailyV1SimulationConfigData CreateConfiguration(float travelCost, string[] cities,
+    internal static DailyV1SimulationConfigData CreateConfiguration(float travelCost, string[] cities,
         DailyV1ExplorableSiteConfig[] explorableSites = null)
     {
         return new DailyV1SimulationConfigData(

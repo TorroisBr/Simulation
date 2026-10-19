@@ -111,6 +111,11 @@ public sealed class P14CMixedSourceProductionTests
             Assert.That(selectedMarket.Definitions, Is.SameAs(definitions));
             Assert.That(selectedMarket.Items, Has.Count.EqualTo(1));
             Assert.That(selectedMarket.Items[0].Item, Is.SameAs(definitions.Items[item.DefinitionId]));
+            FiniteProductionSourceState finiteProjection = city.FiniteProductionSources.Source;
+            Assert.That(city.FiniteProductionSources.Source, Is.SameAs(finiteProjection),
+                "The Unity compatibility view retains its stable object identity while Core owns the source state.");
+            Assert.That(city.SelectedRuntimeOwners.FiniteSource.Item,
+                Is.SameAs(definitions.Items[item.DefinitionId]));
             PreparedMarketState typedPrepared = city.Market.CreatePreparedSnapshot();
             Assert.That(typedPrepared.SelectedState, Is.Not.Null,
                 "Selected prepared Market work must stay in the typed Core owner state rather than projecting through ItemData rows.");
@@ -130,6 +135,9 @@ public sealed class P14CMixedSourceProductionTests
             Assert.That(flow.ClosingStock, Is.EqualTo(6));
             Assert.That(city.FiniteProductionSources.Source.RemainingReserve, Is.EqualTo(4));
             Assert.That(city.FiniteProductionSources.Source.Revision, Is.EqualTo(1));
+            Assert.That(city.FiniteProductionSources.Source, Is.SameAs(finiteProjection));
+            Assert.That(finiteProjection.RemainingReserve, Is.EqualTo(4));
+            Assert.That(finiteProjection.Revision, Is.EqualTo(1));
             Assert.That(city.Market.GetAmount(item), Is.EqualTo(6));
             Assert.That(selectedMarket.Items[0].Item, Is.SameAs(definitions.Items[item.DefinitionId]));
             Assert.That(selectedMarket.Items[0].Amount, Is.EqualTo(6));

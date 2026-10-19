@@ -436,6 +436,14 @@ public class CityRuntime
 
     private void SimulateMixedSourceDailyMaterialFlow(long absoluteDay, string calendarVersion)
     {
+        if (selectedRuntimeOwners != null)
+        {
+            lastMaterialFlow = selectedRuntimeOwners.SimulateSelectedMixedSourceDailyMaterialFlow(
+                absoluteDay, calendarVersion,
+                (category, message) => logger?.Log(category, message));
+            return;
+        }
+
         string configurationBefore = CaptureDailyEconomyConfiguration();
         if (!TryPrepareMixedSourceProduction(absoluteDay,
                 out P14CMixedSourceProductionPreparation preparation, out string rejection))
@@ -1765,16 +1773,9 @@ public class CityRuntime
             }
             if (selectedDefinition != null)
             {
-                DailyV1CityProductionConfig finiteSource = mixed
-                    ? selectedDefinition.Values.productionConfigs.FirstOrDefault(row => row != null
-                        && (CityProductionSourceKind)(row.sourceKind?.Value ?? 0) == CityProductionSourceKind.FiniteReserveDaily)
-                    : selectedDefinition.Values.productionConfigs[0];
-                if (finiteSource == null
-                    || !selectedDefinitions.Items.TryGetValue(finiteSource.item, out DailyV1ItemDefinition finiteItem))
-                    throw new LocalDailyMaterialFlowRejectedException("Finite-reserve source row or admitted item definition is missing.");
-                finiteProductionSources = new FiniteProductionSourceStore(
-                    RuntimeMaterialFlowProfile, finiteSource, finiteItem,
-                    RuntimeSettlementSemanticId, RuntimeMarketStoreSemanticId);
+                if (selectedRuntimeOwners?.FiniteSource == null)
+                    throw new LocalDailyMaterialFlowRejectedException("Finite-reserve state was not created by the selected Core City owner.");
+                finiteProductionSources = new FiniteProductionSourceStore(selectedRuntimeOwners.FiniteSource);
             }
             else
             {

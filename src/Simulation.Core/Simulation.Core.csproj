@@ -69,6 +69,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/NpcLifeState.cs" Link="Person/NpcLifeState.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/DailyV1CommercialKnowledgeOwner.cs" Link="Knowledge/DailyV1CommercialKnowledgeOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1CityRuntimeOwners.cs" Link="City/DailyV1CityRuntimeOwners.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1FiniteProductionSourceOwner.cs" Link="City/DailyV1FiniteProductionSourceOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedTravelTransitionPlan.cs" Link="City/DailyV1SelectedTravelTransitionPlan.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedRuntimeOwnerGraph.cs" Link="Application/DailyV1SelectedRuntimeOwnerGraph.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonStore.cs" Link="Person/PersonStore.cs" />

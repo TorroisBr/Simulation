@@ -79,6 +79,67 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
     }
 
     [Test]
+    public void CoreSelectedCityCompositionOwnsFiniteReserveStateByCanonicalItemIdentity()
+    {
+        DailyV1CityData cityValues = new DailyV1CityData(
+            "city/a", "City A", "settlement/a", "location/a", "market/a",
+            new DailyV1EnumValue((int)LocalMaterialFlowProfile.MixedSourcesDaily, "MixedSourcesDaily"),
+            1000, null,
+            new DailyV1PopulationConsumptionConfig(
+                new DailyV1EnumValue((int)ConsumptionPaymentMode.Free, "Free"), 0f),
+            new[] { new DailyV1MarketItemConfig("item/a", 5, 100, 4f) },
+            new[]
+            {
+                new DailyV1CityProductionConfig("item/a", 2, 0, "source/exogenous", "content-v1",
+                    new DailyV1EnumValue((int)CityProductionSourceKind.ExogenousDaily, "ExogenousDaily")),
+                new DailyV1CityProductionConfig("item/a", 3, 7, "source/finite", "content-v1",
+                    new DailyV1EnumValue((int)CityProductionSourceKind.FiniteReserveDaily, "FiniteReserveDaily"))
+            },
+            new List<DailyV1CityConnection>());
+        DailyV1EffectiveDefinitions definitions = DailyV1EffectiveDefinitions.CreateSelectedSchema(
+            DailyV1TypedDefinitionGraphTests.CreateConfiguration(1f, new[] { "city/a" }),
+            SimulationConfigurationDefaults.Create(), new DailyV1CalendarDefinition(1, 1, 1, null),
+            new[] { cityValues }, new[] { new DailyV1ItemData("item/a", "Iron", 4f, null) },
+            System.Array.Empty<DailyV1NpcData>(), System.Array.Empty<DailyV1NpcJobData>(),
+            System.Array.Empty<DailyV1NpcActionData>(), System.Array.Empty<DailyV1NpcStatusData>(),
+            System.Array.Empty<string>(), "test.daily-v1", "test.geography-v1",
+            "test.geography-stage/v1", "hex-v1", "q-r-s");
+
+        Assert.That(DailyV1CityRuntimeOwners.TryCreateInitial(
+            "city-runtime", "location-runtime", definitions, definitions.Cities["city/a"], null,
+            out DailyV1CityRuntimeOwners owners), Is.True);
+        DailyV1FiniteProductionSourceOwner source = owners.FiniteSource;
+        Assert.That(source, Is.Not.Null);
+        Assert.That(source.Item, Is.SameAs(definitions.Items["item/a"]));
+        Assert.That(source.ProductionSourceId, Is.EqualTo("source/finite"));
+        Assert.That(source.InitialReserve, Is.EqualTo(7));
+        Assert.That(source.RemainingReserve, Is.EqualTo(7));
+        Assert.That(source.Revision, Is.Zero);
+        Assert.That(source.LastProcessedDay, Is.EqualTo(long.MinValue));
+
+        LocalDailyMaterialFlowResult result = owners.SimulateSelectedMixedSourceDailyMaterialFlow(
+            1, "calendar-v1", null);
+        Assert.That(result.OpeningStock, Is.EqualTo(5));
+        Assert.That(result.ConfiguredSourceQuantity, Is.EqualTo(5));
+        Assert.That(result.AppliedSourceQuantity, Is.EqualTo(5));
+        Assert.That(result.RequestedFreeConsumption, Is.EqualTo(4));
+        Assert.That(result.ActualFreeConsumption, Is.EqualTo(4));
+        Assert.That(result.ClosingStock, Is.EqualTo(6));
+        Assert.That(result.SourceOutcomes.Select(outcome => outcome.ProductionSourceId),
+            Is.EqualTo(new[] { "source/exogenous", "source/finite" }));
+        Assert.That(owners.Market.GetAmount(source.Item), Is.EqualTo(6));
+        Assert.That(source.RemainingReserve, Is.EqualTo(4));
+        Assert.That(source.Revision, Is.EqualTo(1));
+        Assert.That(source.LastProcessedDay, Is.EqualTo(1));
+        Assert.Throws<LocalDailyMaterialFlowRejectedException>(() =>
+            owners.SimulateSelectedMixedSourceDailyMaterialFlow(1, "calendar-v1", null),
+            "A finite source cannot install twice for the same boundary.");
+        Assert.That(source.RemainingReserve, Is.EqualTo(4));
+        Assert.That(source.Revision, Is.EqualTo(1));
+        Assert.That(owners.Market.GetAmount(source.Item), Is.EqualTo(6));
+    }
+
+    [Test]
     public void SelectedCityOwnerJoinRejectsForeignOwnerGraphAndCounterpartyIdentity()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

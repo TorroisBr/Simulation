@@ -5,8 +5,28 @@ using UnityEngine;
 public sealed class FiniteProductionSourceStore
 {
     [SerializeField] private FiniteProductionSourceState source;
+    [NonSerialized] private DailyV1FiniteProductionSourceOwner selectedOwner;
 
-    public FiniteProductionSourceState Source => source;
+    /// <summary>
+    /// Compatibility projection for existing Unity callers. Selected finite
+    /// source state is owned by the shared Core City owner.
+    /// </summary>
+    public FiniteProductionSourceState Source
+    {
+        get
+        {
+            if (selectedOwner == null) return source;
+            FiniteSourceSnapshot snapshot = selectedOwner.CaptureSnapshot();
+            if (source == null) source = new FiniteProductionSourceState(snapshot);
+            else source.Refresh(snapshot);
+            return source;
+        }
+    }
+
+    internal FiniteProductionSourceStore(DailyV1FiniteProductionSourceOwner selectedOwner)
+    {
+        this.selectedOwner = selectedOwner ?? throw new ArgumentNullException(nameof(selectedOwner));
+    }
 
     internal FiniteProductionSourceStore(
         LocalMaterialFlowProfile profile,
@@ -81,11 +101,19 @@ public sealed class FiniteProductionSourceStore
     }
 
     internal bool CanInstall(long expectedRevision, long day) =>
-        source != null && source.Revision == expectedRevision
-        && source.Revision < long.MaxValue && day > source.LastProcessedDay;
+        selectedOwner != null
+            ? selectedOwner.CanInstall(expectedRevision, day)
+            : source != null && source.Revision == expectedRevision
+                && source.Revision < long.MaxValue && day > source.LastProcessedDay;
 
     internal void Install(long expectedRevision, long day, int produced)
     {
+        if (selectedOwner != null)
+        {
+            if (!selectedOwner.TryInstall(expectedRevision, day, produced))
+                throw new InvalidOperationException("The selected Core finite-source owner rejected a prepared install.");
+            return;
+        }
         source.Install(expectedRevision, day, produced);
     }
 }
@@ -132,6 +160,26 @@ public sealed class FiniteProductionSourceState
         dailyOutputLimit = dailyLimit;
         initialReserve = reserve;
         remainingReserve = reserve;
+    }
+
+    internal FiniteProductionSourceState(FiniteSourceSnapshot snapshot)
+    {
+        Refresh(snapshot);
+    }
+
+    internal void Refresh(FiniteSourceSnapshot snapshot)
+    {
+        if (snapshot == null) throw new ArgumentNullException(nameof(snapshot));
+        productionSourceId = snapshot.ProductionSourceId;
+        settlementSemanticId = snapshot.SettlementSemanticId;
+        marketStoreSemanticId = snapshot.MarketStoreSemanticId;
+        itemDefinitionId = snapshot.ItemDefinitionId;
+        contentRevision = snapshot.ContentRevision;
+        dailyOutputLimit = snapshot.DailyOutputLimit;
+        initialReserve = snapshot.InitialReserve;
+        remainingReserve = snapshot.RemainingReserve;
+        revision = snapshot.Revision;
+        lastProcessedDay = snapshot.LastProcessedDay;
     }
 
     internal void Install(long expectedRevision, long day, int produced)
