@@ -158,6 +158,15 @@ public sealed class SimulationBootstrapCompositionTests
         simulation.Start();
 
         Assert.That(simulation.Bootstrap, Is.Not.Null);
+        DailyV1SelectedRuntimeOwnerGraph initialOwnerGraph =
+            ReadPrivateField<DailyV1SelectedRuntimeOwnerGraph>(simulation, "selectedInitialRuntimeOwnerGraph");
+        Assert.That(initialOwnerGraph, Is.Not.Null,
+            "Core genesis must construct the selected City/NPC authorities before SimulationRuntime composition.");
+        Assert.That(simulation.Runtime.SelectedRuntimeOwnerGraph, Is.SameAs(initialOwnerGraph),
+            "SimulationRuntime must bind the same Core-composed graph rather than rebuild another authority join.");
+        Assert.That(initialOwnerGraph.MatchesExactOwnerInstances(
+            simulation.Runtime.Cities.Select(city => city?.SelectedRuntimeOwners),
+            simulation.Runtime.NpcRuntimes.Select(npc => npc?.SelectedRuntimeOwners)), Is.True);
         IAuthoritativeRandomSource randomSource =
             ReadPrivateField<SimulationActiveSession>(simulation, "activeSession").RandomSource;
         Assert.That(randomSource, Is.TypeOf<DeterministicRandomSource>());

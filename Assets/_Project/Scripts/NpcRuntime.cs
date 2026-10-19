@@ -1144,6 +1144,22 @@ public class NpcRuntime : ICapabilityConditionSource
 			selectedDefinition, selectedDefinitions, selectedBindings);
 	}
 
+	internal static NpcRuntime CreateSelectedDailyV1(
+		string runtimeId,
+		DailyV1NpcDefinition selectedDefinition,
+		DailyV1EffectiveDefinitions selectedDefinitions,
+		DailyV1DefinitionAdapter.SelectedBindings selectedBindings,
+		DailyV1NpcRuntimeOwners selectedOwners,
+		CityRuntime startingCity)
+	{
+		if (selectedDefinition == null) throw new ArgumentNullException(nameof(selectedDefinition));
+		if (selectedDefinitions == null) throw new ArgumentNullException(nameof(selectedDefinitions));
+		if (selectedBindings == null) throw new ArgumentNullException(nameof(selectedBindings));
+		if (selectedOwners == null) throw new ArgumentNullException(nameof(selectedOwners));
+		return new NpcRuntime(runtimeId, null, null, 0f,
+			selectedDefinition, selectedDefinitions, selectedBindings, selectedOwners, startingCity);
+	}
+
 	/// <summary>
 	/// Creates the selected NPC owner composition directly from the admitted
 	/// Core graph. Unity asset bindings may be attached later for compatibility
@@ -1167,7 +1183,9 @@ public class NpcRuntime : ICapabilityConditionSource
 	private NpcRuntime(string runtimeId, NpcData npcData, CityRuntime startingCity, float initialMoney,
 		DailyV1NpcDefinition selectedDefinition,
 		DailyV1EffectiveDefinitions selectedDefinitions = null,
-		DailyV1DefinitionAdapter.SelectedBindings selectedBindings = null)
+		DailyV1DefinitionAdapter.SelectedBindings selectedBindings = null,
+		DailyV1NpcRuntimeOwners initialSelectedOwners = null,
+		CityRuntime initialSelectedCityProjection = null)
 	{
 		if (string.IsNullOrWhiteSpace(runtimeId) == true)
         {
@@ -1181,7 +1199,11 @@ public class NpcRuntime : ICapabilityConditionSource
 						|| (npcData != null && !ReferenceEquals(exactAsset, npcData))
 						|| !string.Equals(selectedDefinition.DefinitionId, exactAsset.DefinitionId, StringComparison.Ordinal)))
 				|| !selectedDefinitions.Npcs.TryGetValue(selectedDefinition.DefinitionId, out DailyV1NpcDefinition graphNode)
-				|| !ReferenceEquals(graphNode, selectedDefinition)))
+				|| !ReferenceEquals(graphNode, selectedDefinition)
+				|| (initialSelectedOwners != null
+					&& (!string.Equals(initialSelectedOwners.RuntimeId, runtimeId, StringComparison.Ordinal)
+						|| !ReferenceEquals(initialSelectedOwners.Definitions, selectedDefinitions)
+						|| !ReferenceEquals(initialSelectedOwners.Definition, selectedDefinition))))
 		{
 			throw new ArgumentException(
 				"The selected NPC runtime must consume an exact admitted typed definition graph node and any supplied authoring projection must map to it.",
@@ -1192,9 +1214,11 @@ public class NpcRuntime : ICapabilityConditionSource
         this.npcData = selectedDefinition == null ? npcData : null;
         if (selectedDefinition != null)
         {
-            if (!DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
+            DailyV1NpcRuntimeOwners selectedOwners = initialSelectedOwners;
+            if (selectedOwners == null
+                && !DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
                     runtimeId, selectedDefinitions, selectedDefinition, initialMoney,
-                    out DailyV1NpcRuntimeOwners selectedOwners))
+                    out selectedOwners))
                 throw new ArgumentException(
                     "The selected NPC owner composition could not be created from the admitted graph.",
                     nameof(selectedDefinition));
@@ -1232,7 +1256,33 @@ public class NpcRuntime : ICapabilityConditionSource
             currentStatus.AddRange(npcData.statusPadrao);
         }
 
-        if (startingCity != null)
+        if (initialSelectedOwners != null)
+        {
+            if (initialSelectedCityProjection != null)
+            {
+                if (!string.Equals(initialSelectedOwners.Travel.CurrentCityRuntimeId,
+                        initialSelectedCityProjection.RuntimeId, StringComparison.Ordinal)
+                    || !string.Equals(initialSelectedOwners.Travel.CurrentLocationRuntimeId,
+                        initialSelectedCityProjection.Location?.RuntimeId, StringComparison.Ordinal))
+                    throw new ArgumentException(
+                        "The selected NPC Core presence does not match its initial City projection.",
+                        nameof(initialSelectedCityProjection));
+                currentCity = initialSelectedCityProjection;
+                currentLocation = initialSelectedCityProjection.Location;
+                if (!initialSelectedCityProjection.TryAttachInitialSelectedNpcProjection(this))
+                    throw new ArgumentException(
+                        "The selected NPC Core presence could not bind its initial Unity projection.",
+                        nameof(initialSelectedCityProjection));
+            }
+            else if (initialSelectedOwners.Travel.CurrentCityRuntimeId != null
+                || initialSelectedOwners.Travel.CurrentLocationRuntimeId != null)
+            {
+                throw new ArgumentException(
+                    "The selected NPC has Core presence without a matching initial City projection.",
+                    nameof(initialSelectedCityProjection));
+            }
+        }
+        else if (startingCity != null)
         {
             startingCity.AddImportantNpc(this);
 		}

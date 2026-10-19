@@ -802,7 +802,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         RuntimeIdentityRegistry runtimeIdentityRegistry = null,
         SpatialNetworkRuntime spatialNetworkRuntime = null,
         bool requireP12RuntimeIdentitySpatialCensusOwners = false,
-        CrimeSocialAppraisalWorldState p12CrimeSocialAppraisalWorldState = null)
+        CrimeSocialAppraisalWorldState p12CrimeSocialAppraisalWorldState = null,
+        DailyV1SelectedRuntimeOwnerGraph initialSelectedRuntimeOwnerGraph = null)
     {
         WorldId = worldId;
         if (!Enum.IsDefined(typeof(SimulationRuntimeCompositionProfile), compositionProfile))
@@ -1391,8 +1392,22 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         this.npcRuntimes.Sort((left, right) => string.CompareOrdinal(
             left?.RuntimeId ?? string.Empty,
             right?.RuntimeId ?? string.Empty));
-        DailyV1SelectedRuntimeOwnerGraph selectedOwnerGraph = TryCreateSelectedRuntimeOwnerGraph(
-            this.cities, this.npcRuntimes);
+        DailyV1SelectedRuntimeOwnerGraph selectedOwnerGraph;
+        if (initialSelectedRuntimeOwnerGraph != null)
+        {
+            if (runtimeAdmissionContext?.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !initialSelectedRuntimeOwnerGraph.MatchesExactOwnerInstances(
+                    this.cities.Select(city => city?.SelectedRuntimeOwners),
+                    this.npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners).Where(owner => owner != null)))
+                throw new ArgumentException(
+                    "The supplied initial selected-owner graph must be the exact owner composition of the UnityBootstrap-Daily-v1 runtime.",
+                    nameof(initialSelectedRuntimeOwnerGraph));
+            selectedOwnerGraph = initialSelectedRuntimeOwnerGraph;
+        }
+        else
+        {
+            selectedOwnerGraph = TryCreateSelectedRuntimeOwnerGraph(this.cities, this.npcRuntimes);
+        }
         if (!dailyExecutionBoundary.TryBindSelectedRuntimeOwnerGraph(selectedOwnerGraph))
             throw new InvalidOperationException("The selected owner graph could not be bound to this runtime boundary.");
 

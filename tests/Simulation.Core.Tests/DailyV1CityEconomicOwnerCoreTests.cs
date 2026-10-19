@@ -129,6 +129,130 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
     }
 
     [Test]
+    public void CoreGenesisBuilderConstructsTheCompleteSelectedCityNpcOwnerGraph()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+
+        List<string> cityIds = new List<string>(definitions.Configuration.cities);
+        cityIds.RemoveAll(string.IsNullOrWhiteSpace);
+        cityIds.Sort(System.StringComparer.Ordinal);
+        Dictionary<string, DailyV1CityRuntimeOwners> cityOwnersByDefinition =
+            new Dictionary<string, DailyV1CityRuntimeOwners>(System.StringComparer.Ordinal);
+        for (int index = 0; index < cityIds.Count; index++)
+        {
+            string definitionId = cityIds[index];
+            Assert.That(definitions.Cities.TryGetValue(definitionId, out DailyV1CityDefinition definition), Is.True);
+            Assert.That(builder.TryAddInitialCity(
+                "city-runtime-" + index, "location-runtime-" + index, definition,
+                out DailyV1CityRuntimeOwners cityOwners), Is.True);
+            if (!cityOwnersByDefinition.ContainsKey(definitionId))
+                cityOwnersByDefinition.Add(definitionId, cityOwners);
+            else
+                cityOwnersByDefinition[definitionId] = null;
+        }
+
+        Dictionary<string, DailyV1NpcSimulationConfig> npcRows =
+            new Dictionary<string, DailyV1NpcSimulationConfig>(System.StringComparer.Ordinal);
+        foreach (DailyV1NpcSimulationConfig row in definitions.Configuration.npcs)
+        {
+            if (row == null || string.IsNullOrWhiteSpace(row.npc)) continue;
+            Assert.That(npcRows.TryAdd(row.npc, row), Is.True, "The captured fixture must have unique selected NPC rows.");
+        }
+        List<string> npcIds = new List<string>(npcRows.Keys);
+        npcIds.Sort(System.StringComparer.Ordinal);
+        Dictionary<string, DailyV1NpcRuntimeOwners> npcOwnersByDefinition =
+            new Dictionary<string, DailyV1NpcRuntimeOwners>(System.StringComparer.Ordinal);
+        int npcOrdinal = 0;
+        foreach (string definitionId in npcIds)
+        {
+            Assert.That(definitions.Npcs.TryGetValue(definitionId, out DailyV1NpcDefinition definition), Is.True);
+            Assert.That(builder.TryAddInitialNpc(
+                "npc-runtime-" + npcOrdinal++, definition, npcRows[definitionId],
+                out DailyV1NpcRuntimeOwners npcOwners), Is.True);
+            npcOwnersByDefinition.Add(definitionId, npcOwners);
+        }
+
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        Assert.That(graph.Definitions, Is.SameAs(definitions));
+        Assert.That(graph.Cities, Has.Count.EqualTo(cityIds.Count));
+        Assert.That(graph.Npcs, Has.Count.EqualTo(npcIds.Count));
+        Assert.That(graph.MatchesExactOwnerInstances(builder.Cities, builder.Npcs), Is.True);
+
+        foreach (string definitionId in npcIds)
+        {
+            DailyV1NpcSimulationConfig row = npcRows[definitionId];
+            DailyV1NpcRuntimeOwners owners = npcOwnersByDefinition[definitionId];
+            Assert.That(owners.Definitions, Is.SameAs(definitions));
+            Assert.That(owners.Definition, Is.SameAs(definitions.Npcs[definitionId]));
+
+            int expectedInventoryWrites = 0;
+            foreach (DailyV1NpcInitialInventoryItemConfig itemRow in row.initialInventory
+                ?? System.Array.Empty<DailyV1NpcInitialInventoryItemConfig>())
+            {
+                if (itemRow == null || string.IsNullOrWhiteSpace(itemRow.item)) continue;
+                expectedInventoryWrites++;
+                Assert.That(definitions.Items.ContainsKey(itemRow.item), Is.True);
+            }
+            Assert.That(owners.Inventory.Revision, Is.EqualTo(expectedInventoryWrites));
+            foreach (DailyV1InventoryItemState item in owners.Inventory.Items)
+                Assert.That(definitions.Items[item.Item.DefinitionId], Is.SameAs(item.Item));
+
+            DailyV1CityRuntimeOwners expectedCity = null;
+            if (!string.IsNullOrWhiteSpace(row.startingCity))
+                cityOwnersByDefinition.TryGetValue(row.startingCity, out expectedCity);
+            if (expectedCity == null)
+            {
+                Assert.That(owners.Travel.CurrentCityRuntimeId, Is.Null);
+                Assert.That(owners.Travel.CurrentLocationRuntimeId, Is.Null);
+            }
+            else
+            {
+                Assert.That(owners.Travel.CurrentCityRuntimeId, Is.EqualTo(expectedCity.RuntimeId));
+                Assert.That(builder.TryGetLocationRuntimeId(expectedCity, out string locationId), Is.True);
+                Assert.That(owners.Travel.CurrentLocationRuntimeId, Is.EqualTo(locationId));
+                Assert.That(owners.Travel.Revision, Is.Zero);
+                Assert.That(expectedCity.NpcPresence.Contains(owners.RuntimeId), Is.True);
+            }
+        }
+
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            int expectedMembershipCount = graph.Npcs.Count(owner =>
+                string.Equals(owner.Travel.CurrentCityRuntimeId, city.RuntimeId, System.StringComparison.Ordinal));
+            Assert.That(city.NpcPresence.OrderedNpcRuntimeIds, Has.Count.EqualTo(expectedMembershipCount));
+            Assert.That(city.NpcPresence.Revision, Is.EqualTo(expectedMembershipCount));
+        }
+    }
+
+    [Test]
+    public void CoreGenesisBuilderRejectsIncompleteOrPostBuildMutation()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        List<string> cityIds = new List<string>(definitions.Configuration.cities);
+        cityIds.RemoveAll(string.IsNullOrWhiteSpace);
+        cityIds.Sort(System.StringComparer.Ordinal);
+        for (int index = 0; index < cityIds.Count; index++)
+        {
+            DailyV1CityDefinition city = definitions.Cities[cityIds[index]];
+            Assert.That(builder.TryAddInitialCity(
+                "city-runtime-" + index, "location-runtime-" + index, city, out _), Is.True);
+        }
+
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph incomplete), Is.False);
+        Assert.That(incomplete, Is.Null);
+        DailyV1NpcSimulationConfig firstRow = definitions.Configuration.npcs.First(
+            row => row != null && !string.IsNullOrWhiteSpace(row.npc));
+        Assert.That(builder.TryAddInitialNpc(
+            "npc-runtime-1", definitions.Npcs[firstRow.npc], firstRow, out _), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph stillIncomplete), Is.False);
+        Assert.That(stillIncomplete, Is.Null);
+    }
+
+    [Test]
     public void CityPresenceOwnerPreservesOrderedIdentityAndAdvancesOnlyForMembershipChanges()
     {
         Assert.That(DailyV1CityNpcPresenceOwner.TryCreateInitial(

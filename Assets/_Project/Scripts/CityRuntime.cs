@@ -1625,6 +1625,23 @@ public class CityRuntime
             selectedDefinition, selectedDefinitions, null);
     }
 
+    internal static CityRuntime CreateSelectedDailyV1(
+        string runtimeId,
+        DailyV1CityDefinition selectedDefinition,
+        DailyV1EffectiveDefinitions selectedDefinitions,
+        DailyV1DefinitionAdapter.SelectedBindings selectedBindings,
+        DailyV1CityRuntimeOwners selectedOwners,
+        SpatialLocationRuntime location,
+        SimulationLogger logger = null)
+    {
+        if (selectedDefinition == null) throw new ArgumentNullException(nameof(selectedDefinition));
+        if (selectedDefinitions == null) throw new ArgumentNullException(nameof(selectedDefinitions));
+        if (selectedBindings == null) throw new ArgumentNullException(nameof(selectedBindings));
+        if (selectedOwners == null) throw new ArgumentNullException(nameof(selectedOwners));
+        return new CityRuntime(runtimeId, null, location, logger, selectedOwners.Counterparty,
+            selectedDefinition, selectedDefinitions, selectedBindings, selectedOwners);
+    }
+
     private CityRuntime(
         string runtimeId,
         CityData cityData,
@@ -1633,7 +1650,8 @@ public class CityRuntime
         MarketCounterpartyRuntime marketCounterparty,
         DailyV1CityDefinition selectedDefinition,
         DailyV1EffectiveDefinitions selectedDefinitions = null,
-        DailyV1DefinitionAdapter.SelectedBindings selectedBindings = null)
+        DailyV1DefinitionAdapter.SelectedBindings selectedBindings = null,
+        DailyV1CityRuntimeOwners initialSelectedOwners = null)
     {
         if (string.IsNullOrWhiteSpace(runtimeId) == true)
         {
@@ -1652,7 +1670,11 @@ public class CityRuntime
                         || !string.Equals(selectedDefinition.DefinitionId, exactAsset.DefinitionId, StringComparison.Ordinal)))
                 || !selectedDefinitions.Cities.TryGetValue(selectedDefinition.DefinitionId, out DailyV1CityDefinition graphNode)
                 || !ReferenceEquals(graphNode, selectedDefinition)
-                || !AreSelectedDefinitionInputsAdmitted(selectedDefinition, selectedDefinitions)))
+                || !AreSelectedDefinitionInputsAdmitted(selectedDefinition, selectedDefinitions)
+                || (initialSelectedOwners != null
+                    && (!string.Equals(initialSelectedOwners.RuntimeId, runtimeId, StringComparison.Ordinal)
+                        || !ReferenceEquals(initialSelectedOwners.Definitions, selectedDefinitions)
+                        || !ReferenceEquals(initialSelectedOwners.Definition, selectedDefinition))))
         {
             throw new ArgumentException(
                 "The selected City runtime must consume an exact admitted typed definition graph node and its admitted item identities.",
@@ -1668,9 +1690,11 @@ public class CityRuntime
         this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
         if (selectedDefinition != null)
         {
-            if (!DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialCityOwner(
+            DailyV1CityRuntimeOwners selectedOwners = initialSelectedOwners;
+            if (selectedOwners == null
+                && !DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialCityOwner(
                     runtimeId, selectedDefinitions, selectedDefinition, marketCounterparty,
-                    out DailyV1CityRuntimeOwners selectedOwners))
+                    out selectedOwners))
                 throw new ArgumentException(
                     "The selected City owners could not be created from the admitted Daily-v1 graph.",
                     nameof(selectedDefinition));
@@ -1999,6 +2023,31 @@ public class CityRuntime
         if (npcRuntime == null || !EnsureImportantNpcs().Contains(npcRuntime)) return false;
         return selectedRuntimeOwners == null
             || selectedRuntimeOwners.NpcPresence.Contains(npcRuntime.RuntimeId);
+    }
+
+    /// <summary>
+    /// Attaches the Unity object projection for membership already composed by
+    /// the Core genesis graph. This does not write the owner or advance its
+    /// P12 revision; the Core builder has already installed that authority.
+    /// </summary>
+    internal bool TryAttachInitialSelectedNpcProjection(NpcRuntime npcRuntime)
+    {
+        DailyV1CityRuntimeOwners cityOwners = selectedRuntimeOwners;
+        DailyV1NpcRuntimeOwners npcOwners = npcRuntime?.SelectedRuntimeOwners;
+        if (cityOwners == null || npcOwners == null
+            || !ReferenceEquals(cityOwners.Definitions, npcOwners.Definitions)
+            || string.IsNullOrWhiteSpace(npcRuntime.RuntimeId)
+            || !cityOwners.NpcPresence.Contains(npcRuntime.RuntimeId)
+            || !string.Equals(npcOwners.Travel.CurrentCityRuntimeId, RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(npcOwners.Travel.CurrentLocationRuntimeId, Location?.RuntimeId, StringComparison.Ordinal)
+            || npcRuntime.IsTraveling || !npcRuntime.IsAlive)
+            return false;
+
+        List<NpcRuntime> membership = EnsureImportantNpcs();
+        if (membership.Contains(npcRuntime)) return true;
+        if (ContainsDifferentImportantNpcWithSameRuntimeId(npcRuntime)) return false;
+        membership.Add(npcRuntime);
+        return true;
     }
 
     internal bool CanAddImportantNpcMembership(NpcRuntime npcRuntime)

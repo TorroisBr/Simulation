@@ -164,6 +164,8 @@ public class TesteSimulacao : MonoBehaviour
     private long lastEconomySnapshotDay;
     private SimulationBootstrapComposition draftComposition;
     private DailyV1EffectiveDefinitions selectedDefinitions;
+    [System.NonSerialized] private DailyV1SelectedRuntimeOwnerGraphBuilder selectedRuntimeOwnerGraphBuilder;
+    [System.NonSerialized] private DailyV1SelectedRuntimeOwnerGraph selectedInitialRuntimeOwnerGraph;
     private bool UsesSelectedDefinitionBindings => selectedDefinitions != null && selectedDefinitionBindings != null;
     private SimulationActiveSession activeSession;
     private readonly object activeSessionGate = new object();
@@ -657,7 +659,8 @@ public class TesteSimulacao : MonoBehaviour
                             requireP12ReceiptCensusOwners: runtimeAdmissionContext != null,
                             runtimeIdentityRegistry: runtimeIdentityRegistry,
                             spatialNetworkRuntime: spatialNetwork,
-                            requireP12RuntimeIdentitySpatialCensusOwners: runtimeAdmissionContext != null);
+                            requireP12RuntimeIdentitySpatialCensusOwners: runtimeAdmissionContext != null,
+                            initialSelectedRuntimeOwnerGraph: selectedInitialRuntimeOwnerGraph);
                         simulationRuntime.BindP12EconomyTransactionService(economyTransactionService);
                         if (runtimeAdmissionContext != null
                             && !simulationRuntime.TryBeginBootstrapPublicationScope(out bootstrapPublicationScope))
@@ -2277,6 +2280,9 @@ public class TesteSimulacao : MonoBehaviour
                 throw new System.InvalidOperationException(
                     "Selected City construction requires the admitted typed graph and its captured configuration.");
 
+            selectedRuntimeOwnerGraphBuilder = new DailyV1SelectedRuntimeOwnerGraphBuilder(selectedDefinitions);
+            selectedInitialRuntimeOwnerGraph = null;
+
             List<string> selectedCityIds = new List<string>(
                 selectedDefinitions.Configuration.cities ?? System.Array.Empty<string>());
             selectedCityIds.Sort(System.StringComparer.Ordinal);
@@ -2294,15 +2300,25 @@ public class TesteSimulacao : MonoBehaviour
                 if (!spatialNetwork.RegisterLocation(selectedLocation))
                     continue;
 
+                string selectedCityRuntimeId = runtimeIdAllocator.AllocateCityId();
+                if (!selectedRuntimeOwnerGraphBuilder.TryAddInitialCity(
+                        selectedCityRuntimeId, selectedLocation.RuntimeId, cityDefinition,
+                        out DailyV1CityRuntimeOwners selectedCityOwners))
+                    throw new System.InvalidOperationException(
+                        "The selected City owner graph could not construct the exact admitted Daily-v1 owner.");
+
                 CityRuntime selectedCity = CityRuntime.CreateSelectedDailyV1(
-                    runtimeIdAllocator.AllocateCityId(), cityDefinition,
-                    selectedDefinitions, selectedLocation, logger);
+                    selectedCityRuntimeId, cityDefinition,
+                    selectedDefinitions, selectedBindings, selectedCityOwners, selectedLocation, logger);
                 if (!selectedCity.TryBindSelectedDailyV1Definition(
                         cityDefinition, selectedDefinitions, selectedBindings))
                     throw new System.InvalidOperationException(
                         "The selected City Unity/P12 identity projection could not attach to its Core-owned runtime.");
                 if (!runtimeIdentityRegistry.RegisterCity(selectedCity))
+                {
+                    selectedRuntimeOwnerGraphBuilder.TryRemoveInitialCity(selectedCityOwners);
                     continue;
+                }
 
                 CityRuntimeList.Add(selectedCity);
                 CityData p12IdentityBridge = selectedCity.CityData;
@@ -2677,20 +2693,29 @@ public class TesteSimulacao : MonoBehaviour
                     startingCity = GetSingleCityRuntimeByDefinition(selectedConfig.startingCity);
                 }
 
+                if (selectedRuntimeOwnerGraphBuilder == null)
+                    throw new System.InvalidOperationException(
+                        "The selected NPC stage has no Core owner-graph builder from the selected City stage.");
+                string selectedNpcRuntimeId = runtimeIdAllocator.AllocateNpcId();
+                if (!selectedRuntimeOwnerGraphBuilder.TryAddInitialNpc(
+                        selectedNpcRuntimeId, npcDefinition, selectedConfig,
+                        out DailyV1NpcRuntimeOwners selectedNpcOwners))
+                    throw new System.InvalidOperationException(
+                        "The selected NPC owner graph could not construct the exact admitted Daily-v1 owner and initial inventory.");
+
                 NpcRuntime selectedNpc = NpcRuntime.CreateSelectedDailyV1(
-                    runtimeIdAllocator.AllocateNpcId(), npcDefinition,
-                    selectedDefinitions, null, selectedConfig.initialMoney);
+                    selectedNpcRuntimeId, npcDefinition,
+                    selectedDefinitions, selectedBindings, selectedNpcOwners, startingCity);
                 if (!selectedNpc.TryBindSelectedDailyV1Definition(
                         npcDefinition, selectedDefinitions, selectedBindings))
                     throw new System.InvalidOperationException(
                         "The selected NPC Unity/P12 identity projection could not attach to its Core-owned runtime.");
-                startingCity?.AddImportantNpc(selectedNpc);
                 if (!runtimeIdentityRegistry.RegisterNpc(selectedNpc))
                 {
                     startingCity?.RemoveImportantNpc(selectedNpc);
+                    selectedRuntimeOwnerGraphBuilder.TryRemoveInitialNpc(selectedNpc.SelectedRuntimeOwners);
                     continue;
                 }
-                ApplyInitialInventory(selectedNpc, selectedConfig, selectedDefinitions, selectedBindings);
 
                 NpcData p12IdentityBridge = selectedNpc.NpcData;
                 if (p12IdentityBridge == null
@@ -2700,6 +2725,11 @@ public class TesteSimulacao : MonoBehaviour
                 NpcRuntimeList.Add(selectedNpc);
                 AddNpcRuntimeByDefinition(p12IdentityBridge, selectedNpc);
             }
+
+            if (selectedRuntimeOwnerGraphBuilder == null
+                || !selectedRuntimeOwnerGraphBuilder.TryBuild(out selectedInitialRuntimeOwnerGraph))
+                throw new System.InvalidOperationException(
+                    "The selected Core City/NPC owner graph does not exactly match the admitted Daily-v1 genesis composition.");
             return;
         }
 
