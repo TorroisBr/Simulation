@@ -6,7 +6,7 @@ using System.Linq;
 /// Holds the exact selected City owner instances consumed by the Unity runtime
 /// adapter. This is an owner join, not a second copy of their mutable state.
 /// </summary>
-internal sealed class DailyV1CityRuntimeOwners
+internal sealed partial class DailyV1CityRuntimeOwners
 {
     internal string RuntimeId { get; }
     internal string LocationRuntimeId { get; }

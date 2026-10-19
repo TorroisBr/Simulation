@@ -192,6 +192,212 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
     }
 
     [Test]
+    public void SelectedCityP18StepsUseCoreOwnersAndRetainReplayableReceipts()
+    {
+        DailyV1CityRuntimeOwners owners = CreateMixedCityOwner();
+        int marketCommitted = 0;
+        Assert.That(owners.Market.TryBindMutationBoundary(() => true, () => marketCommitted++), Is.True);
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "profile", 1);
+        Assert.That(owners.TryCreateDailyEconomyStep(operation, 0,
+            CityDailyEconomyStepKind.Production, out BoundaryContinuationStep production, out _), Is.True);
+        Assert.That(owners.TryCreateDailyEconomyStep(operation, 1,
+            CityDailyEconomyStepKind.Consumption, out BoundaryContinuationStep consumption, out _), Is.True);
+        BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(operation,
+            "city-economy", "1", "configuration", new[] { production, consumption }, "content");
+
+        Assert.That(owners.TryPrepareDailyEconomyStep(manifest, production,
+            out IBoundaryContinuationStepCommit productionCommit, out _), Is.True);
+        Assert.That(owners.Market.GetAmount(owners.FiniteSource.Item), Is.EqualTo(5),
+            "Preparing a selected City operation must not mutate its authoritative Market owner.");
+        Assert.That(productionCommit.TryCommit(out _), Is.True);
+        Assert.That(owners.Market.GetAmount(owners.FiniteSource.Item), Is.EqualTo(10));
+        Assert.That(owners.Market.Revision, Is.EqualTo(2));
+        Assert.That(owners.FiniteSource.RemainingReserve, Is.EqualTo(4));
+        Assert.That(owners.FiniteSource.Revision, Is.EqualTo(1));
+        Assert.That(marketCommitted, Is.EqualTo(1), "A multi-row production install invalidates the Market once.");
+        Assert.That(owners.TryResolveDailyEconomyReceipt(manifest, production,
+            out CityDailyEconomyReceipt productionReceipt, out _), Is.True);
+        Assert.That(productionReceipt.SourceOutcomes.Select(row => row.ProductionSourceId),
+            Is.EqualTo(new[] { "source/exogenous", "source/finite" }));
+        Assert.That(productionReceipt.OpeningStock, Is.EqualTo(5));
+        Assert.That(productionReceipt.PostProductionStock, Is.EqualTo(10));
+        Assert.That(productionReceipt.PostProductionMarketRevision, Is.EqualTo(2));
+
+        Assert.That(owners.TryPrepareDailyEconomyStep(manifest, consumption,
+            out IBoundaryContinuationStepCommit consumptionCommit, out _), Is.True);
+        Assert.That(consumptionCommit.TryCommit(out _), Is.True);
+        Assert.That(owners.Market.GetAmount(owners.FiniteSource.Item), Is.EqualTo(6));
+        Assert.That(owners.Market.Revision, Is.EqualTo(3));
+        Assert.That(marketCommitted, Is.EqualTo(2));
+        Assert.That(owners.TryResolveDailyEconomyReceipt(manifest, consumption,
+            out CityDailyEconomyReceipt consumptionReceipt, out _), Is.True);
+        Assert.That(consumptionReceipt.ActualFreeConsumption, Is.EqualTo(4));
+        Assert.That(consumptionReceipt.ClosingStock, Is.EqualTo(6));
+
+        Assert.That(owners.TryPrepareDailyEconomyStep(manifest, production,
+            out IBoundaryContinuationStepCommit replay, out _), Is.True);
+        Assert.That(replay.TryCommit(out _), Is.True);
+        Assert.That(owners.Market.GetAmount(owners.FiniteSource.Item), Is.EqualTo(6));
+        owners.GetDailyEconomyReceiptExclusionProof(out int receiptCount, out long receiptRevision);
+        Assert.That(receiptCount, Is.EqualTo(2));
+        Assert.That(receiptRevision, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void SelectedCityNoOpP18StepRecordsReceiptWithoutMarketInvalidation()
+    {
+        DailyV1CityRuntimeOwners owners = CreateMixedCityOwner();
+        int marketCommitted = 0;
+        Assert.That(owners.Market.TryBindMutationBoundary(() => true, () => marketCommitted++), Is.True);
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "profile", 1);
+        Assert.That(owners.TryCreateDailyEconomyStep(operation, 0,
+            CityDailyEconomyStepKind.PriceRefresh, out BoundaryContinuationStep priceRefresh, out _), Is.True);
+        BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(operation,
+            "city-economy", "1", "configuration", new[] { priceRefresh }, "content");
+
+        Assert.That(owners.TryPrepareDailyEconomyStep(manifest, priceRefresh,
+            out IBoundaryContinuationStepCommit prepared, out _), Is.True);
+        Assert.That(prepared.TryCommit(out _), Is.True);
+        Assert.That(owners.Market.Revision, Is.Zero);
+        Assert.That(marketCommitted, Is.Zero);
+        owners.GetDailyEconomyReceiptExclusionProof(out int receiptCount, out long receiptRevision);
+        Assert.That(receiptCount, Is.EqualTo(1));
+        Assert.That(receiptRevision, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void SelectedFiniteSourceP18CommitUsesTheValidatedScenarioAndRejectsStaleMarket()
+    {
+        DailyV1CityRuntimeOwners owners = CreateFiniteCityOwner();
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "profile", 1);
+        Assert.That(owners.TryCreateDailyEconomyStep(operation, 0,
+            CityDailyEconomyStepKind.Production, out BoundaryContinuationStep step, out _), Is.True);
+        BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(operation,
+            "city-economy", "1", "configuration", new[] { step }, "content");
+
+        Assert.That(owners.TryPrepareDailyEconomyStep(manifest, step,
+            out IBoundaryContinuationStepCommit prepared, out _), Is.True);
+        Assert.That(owners.Market.GetAmount(owners.FiniteSource.Item), Is.EqualTo(5));
+        Assert.That(owners.Market.AddStock(owners.FiniteSource.Item, 1), Is.EqualTo(1));
+        Assert.That(prepared.TryCommit(out _), Is.False);
+        Assert.That(owners.FiniteSource.RemainingReserve, Is.EqualTo(7));
+        Assert.That(owners.FiniteSource.Revision, Is.Zero);
+        Assert.That(owners.Market.GetAmount(owners.FiniteSource.Item), Is.EqualTo(6));
+
+        Assert.That(owners.TryCreateDailyEconomyStep(new DailyBoundaryOperation("world", "profile", 2), 0,
+            CityDailyEconomyStepKind.Production, out BoundaryContinuationStep nextDayStep, out _), Is.True);
+        BoundaryContinuationManifest nextDay = new BoundaryContinuationManifest(
+            new DailyBoundaryOperation("world", "profile", 2), "city-economy", "1",
+            "configuration", new[] { nextDayStep }, "content");
+        Assert.That(owners.TryPrepareDailyEconomyStep(nextDay, nextDayStep,
+            out IBoundaryContinuationStepCommit nextDayCommit, out _), Is.True);
+        Assert.That(nextDayCommit.TryCommit(out _), Is.True);
+        Assert.That(owners.FiniteSource.RemainingReserve, Is.EqualTo(4));
+        Assert.That(owners.FiniteSource.Revision, Is.EqualTo(1));
+        Assert.That(owners.Market.GetAmount(owners.FiniteSource.Item), Is.EqualTo(9));
+    }
+
+    [Test]
+    public void SelectedCityP18AccountBackedConsumptionTransfersBothBalancesAtCommit()
+    {
+        DailyV1CityData cityValues = new DailyV1CityData(
+            "city/paid", "Paid City", "settlement/paid", "location/paid", "market/paid",
+            new DailyV1EnumValue((int)LocalMaterialFlowProfile.ExogenousDaily, "ExogenousDaily"),
+            1000, new DailyV1MarketLiquidityConfig(
+                new DailyV1EnumValue((int)MarketLiquidityMode.AccountBacked, "AccountBacked"), 0f),
+            new DailyV1PopulationConsumptionConfig(
+                new DailyV1EnumValue((int)ConsumptionPaymentMode.AccountBacked, "AccountBacked"), 50f),
+            new[] { new DailyV1MarketItemConfig("item/paid", 5, 5, 1f) },
+            System.Array.Empty<DailyV1CityProductionConfig>(), new List<DailyV1CityConnection>());
+        DailyV1EffectiveDefinitions definitions = DailyV1EffectiveDefinitions.CreateSelectedSchema(
+            DailyV1TypedDefinitionGraphTests.CreateConfiguration(1f, new[] { "city/paid" }),
+            SimulationConfigurationDefaults.Create(), new DailyV1CalendarDefinition(1, 1, 1, null),
+            new[] { cityValues }, new[] { new DailyV1ItemData("item/paid", "Iron", 4f, null) },
+            System.Array.Empty<DailyV1NpcData>(), System.Array.Empty<DailyV1NpcJobData>(),
+            System.Array.Empty<DailyV1NpcActionData>(), System.Array.Empty<DailyV1NpcStatusData>(),
+            System.Array.Empty<string>(), "test.daily-v1", "test.geography-v1",
+            "test.geography-stage/v1", "hex-v1", "q-r-s");
+        Assert.That(DailyV1CityRuntimeOwners.TryCreateInitial("city-runtime-paid", "location-runtime-paid",
+            definitions, definitions.Cities["city/paid"], null, out DailyV1CityRuntimeOwners owners), Is.True);
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "profile", 1);
+        Assert.That(owners.TryCreateDailyEconomyStep(operation, 0, CityDailyEconomyStepKind.Consumption,
+            out BoundaryContinuationStep step, out _), Is.True);
+        BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(operation,
+            "city-economy", "1", "configuration", new[] { step }, "content");
+
+        Assert.That(owners.TryPrepareDailyEconomyStep(manifest, step,
+            out IBoundaryContinuationStepCommit prepared, out _), Is.True);
+        Assert.That(owners.PopulationEconomy.MoneyAccount.Balance, Is.EqualTo(50f));
+        Assert.That(owners.Counterparty.MoneyAccount.Balance, Is.EqualTo(0f));
+        Assert.That(prepared.TryCommit(out _), Is.True);
+
+        Assert.That(owners.Market.GetAmount(definitions.Items["item/paid"]), Is.EqualTo(4));
+        Assert.That(owners.PopulationEconomy.MoneyAccount.Balance, Is.EqualTo(46f));
+        Assert.That(owners.Counterparty.MoneyAccount.Balance, Is.EqualTo(4f));
+        Assert.That(owners.PopulationEconomy.MoneyAccount.Revision, Is.EqualTo(1));
+        Assert.That(owners.Counterparty.MoneyAccount.Revision, Is.EqualTo(1));
+        Assert.That(owners.TryResolveDailyEconomyReceipt(manifest, step,
+            out CityDailyEconomyReceipt receipt, out _), Is.True);
+        Assert.That(receipt.ConsumptionResults.Single().TotalPaid, Is.EqualTo(4f));
+    }
+
+    private static DailyV1CityRuntimeOwners CreateMixedCityOwner()
+    {
+        DailyV1CityData cityValues = new DailyV1CityData(
+            "city/p18", "P18 City", "settlement/p18", "location/p18", "market/p18",
+            new DailyV1EnumValue((int)LocalMaterialFlowProfile.MixedSourcesDaily, "MixedSourcesDaily"),
+            1000, null,
+            new DailyV1PopulationConsumptionConfig(
+                new DailyV1EnumValue((int)ConsumptionPaymentMode.Free, "Free"), 0f),
+            new[] { new DailyV1MarketItemConfig("item/p18", 5, 100, 4f) },
+            new[]
+            {
+                new DailyV1CityProductionConfig("item/p18", 2, 0, "source/exogenous", "content-v1",
+                    new DailyV1EnumValue((int)CityProductionSourceKind.ExogenousDaily, "ExogenousDaily")),
+                new DailyV1CityProductionConfig("item/p18", 3, 7, "source/finite", "content-v1",
+                    new DailyV1EnumValue((int)CityProductionSourceKind.FiniteReserveDaily, "FiniteReserveDaily"))
+            },
+            new List<DailyV1CityConnection>());
+        DailyV1EffectiveDefinitions definitions = DailyV1EffectiveDefinitions.CreateSelectedSchema(
+            DailyV1TypedDefinitionGraphTests.CreateConfiguration(1f, new[] { "city/p18" }),
+            SimulationConfigurationDefaults.Create(), new DailyV1CalendarDefinition(1, 1, 1, null),
+            new[] { cityValues }, new[] { new DailyV1ItemData("item/p18", "Iron", 4f, null) },
+            System.Array.Empty<DailyV1NpcData>(), System.Array.Empty<DailyV1NpcJobData>(),
+            System.Array.Empty<DailyV1NpcActionData>(), System.Array.Empty<DailyV1NpcStatusData>(),
+            System.Array.Empty<string>(), "test.daily-v1", "test.geography-v1",
+            "test.geography-stage/v1", "hex-v1", "q-r-s");
+        Assert.That(DailyV1CityRuntimeOwners.TryCreateInitial("city-runtime-p18", "location-runtime-p18",
+            definitions, definitions.Cities["city/p18"], null, out DailyV1CityRuntimeOwners owners), Is.True);
+        return owners;
+    }
+
+    private static DailyV1CityRuntimeOwners CreateFiniteCityOwner()
+    {
+        DailyV1CityData cityValues = new DailyV1CityData(
+            "city/finite", "Finite City", "settlement/finite", "location/finite", "market/finite",
+            new DailyV1EnumValue((int)LocalMaterialFlowProfile.FiniteReserveDaily, "FiniteReserveDaily"),
+            1000, null,
+            new DailyV1PopulationConsumptionConfig(
+                new DailyV1EnumValue((int)ConsumptionPaymentMode.Free, "Free"), 0f),
+            new[] { new DailyV1MarketItemConfig("item/finite", 5, 100, 0f) },
+            new[] { new DailyV1CityProductionConfig("item/finite", 3, 7,
+                "source/finite", "content-v1",
+                new DailyV1EnumValue((int)CityProductionSourceKind.FiniteReserveDaily, "FiniteReserveDaily")) },
+            new List<DailyV1CityConnection>());
+        DailyV1EffectiveDefinitions definitions = DailyV1EffectiveDefinitions.CreateSelectedSchema(
+            DailyV1TypedDefinitionGraphTests.CreateConfiguration(1f, new[] { "city/finite" }),
+            SimulationConfigurationDefaults.Create(), new DailyV1CalendarDefinition(1, 1, 1, null),
+            new[] { cityValues }, new[] { new DailyV1ItemData("item/finite", "Iron", 4f, null) },
+            System.Array.Empty<DailyV1NpcData>(), System.Array.Empty<DailyV1NpcJobData>(),
+            System.Array.Empty<DailyV1NpcActionData>(), System.Array.Empty<DailyV1NpcStatusData>(),
+            System.Array.Empty<string>(), "test.daily-v1", "test.geography-v1",
+            "test.geography-stage/v1", "hex-v1", "q-r-s");
+        Assert.That(DailyV1CityRuntimeOwners.TryCreateInitial("city-runtime-finite", "location-runtime-finite",
+            definitions, definitions.Cities["city/finite"], null, out DailyV1CityRuntimeOwners owners), Is.True);
+        return owners;
+    }
+
+    [Test]
     public void SelectedRuntimeOwnerGraphOwnsUniqueP8LocationBindingsAndChecksNpcCityJoins()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

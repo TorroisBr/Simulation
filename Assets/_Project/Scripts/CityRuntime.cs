@@ -256,6 +256,11 @@ public class CityRuntime
 
     internal void GetDailyEconomyReceiptExclusionProof(out int receiptCount, out long receiptRevision)
     {
+        if (selectedRuntimeOwners != null)
+        {
+            selectedRuntimeOwners.GetDailyEconomyReceiptExclusionProof(out receiptCount, out receiptRevision);
+            return;
+        }
         receiptCount = dailyEconomyReceipts != null ? dailyEconomyReceipts.Count : 0;
         receiptRevision = dailyEconomyReceiptRevision;
     }
@@ -527,6 +532,9 @@ public class CityRuntime
         out BoundaryContinuationStep step,
         out TimelineFailure failure)
     {
+        if (selectedRuntimeOwners != null)
+            return selectedRuntimeOwners.TryCreateDailyEconomyStep(operation, ordinal, kind,
+                out step, out failure);
         step = null;
         failure = TimelineFailure.ContinuationFailed;
         if (operation == null || ordinal < 0 || string.IsNullOrWhiteSpace(RuntimeId)
@@ -547,6 +555,9 @@ public class CityRuntime
         out IBoundaryContinuationStepCommit prepared,
         out TimelineFailure failure)
     {
+        if (selectedRuntimeOwners != null)
+            return selectedRuntimeOwners.TryPrepareDailyEconomyStep(manifest, step,
+                out prepared, out failure);
         prepared = null;
         failure = TimelineFailure.ContinuationFailed;
         if (!TryGetDailyEconomyIdentity(manifest, step, out string identity, out string fingerprint)) return false;
@@ -963,6 +974,9 @@ public class CityRuntime
         out CityDailyEconomyReceipt receipt,
         out TimelineFailure failure)
     {
+        if (selectedRuntimeOwners != null)
+            return selectedRuntimeOwners.TryResolveDailyEconomyReceipt(manifest, step,
+                out receipt, out failure);
         receipt = null;
         if (!TryGetDailyEconomyIdentity(manifest, step, out string identity, out string fingerprint))
         { failure = TimelineFailure.ContinuationFailed; return false; }
@@ -980,6 +994,8 @@ public class CityRuntime
         CityDailyEconomyStepKind kind,
         out CityDailyEconomyReceipt receipt)
     {
+        if (selectedRuntimeOwners != null)
+            return selectedRuntimeOwners.TryGetDailyEconomyReceiptForManifest(manifest, kind, out receipt);
         receipt = null;
         if (manifest?.Steps == null || dailyEconomyReceipts == null) return false;
         string stepId = GetDailyEconomyStepId(kind);
@@ -2482,46 +2498,6 @@ public class CityRuntime
                 && !definitions.Items.ContainsKey(row.item)) return false;
         }
         return true;
-    }
-}
-
-public enum CityDailyEconomyStepKind { Production, Consumption, PriceRefresh }
-
-[Serializable]
-public sealed class CityDailyEconomyReceipt
-{
-    public string Identity { get; }
-    public string Fingerprint { get; }
-    public string BoundaryOccurrenceId { get; }
-    public long AbsoluteDay { get; }
-    public IReadOnlyList<CityProductionResult> ProductionResults { get; }
-    public IReadOnlyList<CityConsumptionResult> ConsumptionResults { get; }
-    public IReadOnlyList<CityDailyMaterialFlowSourceOutcome> SourceOutcomes { get; }
-    public int? OpeningStock { get; }
-    public int? PostProductionStock { get; }
-    public long? PostProductionMarketRevision { get; }
-    public int? ActualFreeConsumption { get; }
-    public int? ClosingStock { get; }
-    internal CityDailyEconomyReceipt(string identity, string fingerprint,
-        IReadOnlyList<CityProductionResult> production, IReadOnlyList<CityConsumptionResult> consumption)
-        : this(identity, fingerprint, production, consumption, string.Empty, 0L)
-    {
-    }
-
-    internal CityDailyEconomyReceipt(string identity, string fingerprint,
-        IReadOnlyList<CityProductionResult> production, IReadOnlyList<CityConsumptionResult> consumption,
-        string boundaryOccurrenceId, long absoluteDay,
-        IReadOnlyList<CityDailyMaterialFlowSourceOutcome> sourceOutcomes = null,
-        int? openingStock = null, int? postProductionStock = null,
-        long? postProductionMarketRevision = null,
-        int? actualFreeConsumption = null, int? closingStock = null)
-    {
-        Identity = identity; Fingerprint = fingerprint; ProductionResults = production; ConsumptionResults = consumption;
-        BoundaryOccurrenceId = boundaryOccurrenceId ?? string.Empty; AbsoluteDay = absoluteDay;
-        SourceOutcomes = sourceOutcomes ?? Array.Empty<CityDailyMaterialFlowSourceOutcome>();
-        OpeningStock = openingStock; PostProductionStock = postProductionStock;
-        PostProductionMarketRevision = postProductionMarketRevision;
-        ActualFreeConsumption = actualFreeConsumption; ClosingStock = closingStock;
     }
 }
 
