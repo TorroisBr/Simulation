@@ -52,6 +52,15 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         List<DailyV1NpcRuntimeOwners> npcs = new List<DailyV1NpcRuntimeOwners>();
         HashSet<string> runtimeIds = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string> locationIds = new HashSet<string>(StringComparer.Ordinal);
+        if (spatialNetwork != null)
+        {
+            foreach (SpatialLocationRuntime location in spatialNetwork.Locations)
+                if (location == null || string.IsNullOrWhiteSpace(location.RuntimeId)
+                    || !runtimeIds.Add(location.RuntimeId)) return false;
+            foreach (SpatialRouteRuntime route in spatialNetwork.Routes)
+                if (route == null || string.IsNullOrWhiteSpace(route.RuntimeId)
+                    || !runtimeIds.Add(route.RuntimeId)) return false;
+        }
         foreach (DailyV1CityRuntimeOwners owner in cityOwners)
         {
             if (owner == null || string.IsNullOrWhiteSpace(owner.RuntimeId)
@@ -61,7 +70,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 || !ReferenceEquals(city, owner.Definition)
                 || (spatialNetwork != null && !spatialNetwork.ContainsLocationId(owner.LocationRuntimeId))
                 || !runtimeIds.Add(owner.RuntimeId)
-                || !locationIds.Add(owner.LocationRuntimeId)) return false;
+                || !locationIds.Add(owner.LocationRuntimeId)
+                || (spatialNetwork == null && !runtimeIds.Add(owner.LocationRuntimeId))) return false;
             cities.Add(owner);
         }
         foreach (DailyV1NpcRuntimeOwners owner in npcOwners)

@@ -7,6 +7,43 @@ using NUnit.Framework;
 public sealed class DailyV1SelectedRuntimeOwnerGraphTests
 {
     [Test]
+    public void GraphRejectsRuntimeIdentityCollisionsAcrossSelectedOwnerAndSpatialFamilies()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1CityDefinition cityDefinition = definitions.Cities.Values.First();
+        DailyV1NpcDefinition npcDefinition = definitions.Npcs.Values.First();
+
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialCityOwner(
+            "city-runtime", "city-location", definitions, cityDefinition, null,
+            out DailyV1CityRuntimeOwners city), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
+            "npc-runtime", definitions, npcDefinition, 0f,
+            out DailyV1NpcRuntimeOwners npc), Is.True);
+
+        SpatialNetworkOwner locationCollision = new SpatialNetworkOwner();
+        Assert.That(locationCollision.TryRegisterLocation(
+            new SpatialLocationRuntime("city-runtime"), () => true, () => { }, null), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, new[] { city }, Array.Empty<DailyV1NpcRuntimeOwners>(), locationCollision,
+            out _), Is.False, "A City identity cannot alias a Location identity.");
+
+        SpatialNetworkOwner routeCollision = new SpatialNetworkOwner();
+        SpatialLocationRuntime origin = new SpatialLocationRuntime("route-origin");
+        SpatialLocationRuntime destination = new SpatialLocationRuntime("route-destination");
+        Assert.That(routeCollision.TryRegisterLocation(origin, () => true, () => { }, null), Is.True);
+        Assert.That(routeCollision.TryRegisterLocation(destination, () => true, () => { }, null), Is.True);
+        Assert.That(routeCollision.TryRegisterRoute(
+            new SpatialRouteRuntime("npc-runtime", origin, destination, 1), () => true), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, Array.Empty<DailyV1CityRuntimeOwners>(), new[] { npc }, routeCollision,
+            out _), Is.False, "An NPC identity cannot alias a Route identity.");
+
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialCityOwner(
+            "same-as-location", "same-as-location", definitions, cityDefinition, null,
+            out _), Is.False, "A detached graph still rejects an owner/location alias without a spatial network.");
+    }
+
+    [Test]
     public void SelectedDailyEconomyPreflightsExactCityOwnersAndPreservesGlobalPassOrder()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
