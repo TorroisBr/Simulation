@@ -3201,7 +3201,56 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epochBeforeReject, out _), Is.True);
 
         NpcActionRuntime rejectedReplacement = new NpcActionRuntime(admittedAction);
-        npc.SetCurrentActionRuntime(rejectedReplacement);
+        System.Reflection.FieldInfo admissionField = typeof(NpcRuntime).GetField(
+            "p12LifecycleMutationAdmission", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(admissionField, Is.Not.Null);
+        var originalAdmission = (System.Func<NpcRuntime, bool, bool, bool, NpcActionRuntime, bool>)
+            admissionField.GetValue(npc);
+        Assert.That(originalAdmission, Is.Not.Null);
+        int ownerThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
+        bool foreignThreadAdmissionObserved = false;
+        bool workerCompleted = false;
+        System.Threading.Thread worker = null;
+        admissionField.SetValue(npc,
+            new System.Func<NpcRuntime, bool, bool, bool, NpcActionRuntime, bool>(
+                (owner, lifeChanged, residenceChanged, actionChanged, nextAction) =>
+                {
+                    if (System.Threading.Thread.CurrentThread.ManagedThreadId != ownerThreadId)
+                    {
+                        foreignThreadAdmissionObserved = true;
+                        return false;
+                    }
+
+                    if (actionChanged && ReferenceEquals(nextAction, rejectedReplacement))
+                    {
+                        worker = new System.Threading.Thread(() =>
+                        {
+                            previous.SetOriginDecisionId("off-owner-action-payload-write");
+                            workerCompleted = true;
+                        });
+                        worker.Start();
+                        if (!worker.Join(System.TimeSpan.FromSeconds(5)))
+                            throw new System.TimeoutException("Concurrent action payload writer did not finish.");
+                    }
+
+                    return originalAdmission(owner, lifeChanged, residenceChanged, actionChanged, nextAction);
+                }));
+        try
+        {
+            npc.SetCurrentActionRuntime(rejectedReplacement);
+        }
+        finally
+        {
+            if (worker != null) worker.Join();
+            admissionField.SetValue(npc, originalAdmission);
+        }
+
+        Assert.That(workerCompleted, Is.True,
+            "The wrong-thread payload write must be attempted during replacement admission.");
+        Assert.That(foreignThreadAdmissionObserved, Is.True,
+            "The previous action must remain P12 guarded until the replacement commits.");
+        Assert.That(previous.OriginDecisionId, Is.Null,
+            "A wrong-thread payload write must be rejected before changing the previous Core payload.");
 
         Assert.That(npc.CurrentActionRuntime, Is.SameAs(previous),
             "A rejected host admission must retain the prior Unity action runtime.");
@@ -3215,7 +3264,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(npc.SelectedRuntimeOwners.ActionSlot.Revision, Is.EqualTo(1L));
         Assert.That(npc.CurrentActionRevision, Is.EqualTo(1L));
         Assert.That(previous.IsP12Bound, Is.True,
-            "Rollback must restore the previous action's P12 owner binding.");
+            "Rejection must preserve the previous action's P12 owner binding.");
         Assert.That(previous.SelectedOwner, Is.SameAs(npc.SelectedRuntimeOwners.ActionSlot.CurrentPayload));
         Assert.That(rejectedReplacement.IsP12Bound, Is.False,
             "The rejected replacement must release its provisional P12 owner binding.");

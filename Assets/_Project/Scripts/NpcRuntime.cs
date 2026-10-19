@@ -1795,13 +1795,6 @@ public class NpcRuntime : ICapabilityConditionSource
             actionRuntime?.UnbindSelectedOwner();
             return false;
         }
-        if (p12Bound && previous != null && !previous.UnbindP12Owner(this))
-        {
-            actionRuntime?.UnbindP12Owner(this);
-            actionRuntime?.UnbindSelectedOwner();
-            return false;
-        }
-
         DailyV1SelectedRuntimeOwnerGraph selectedGraph = selectedRuntimeOwners == null
             ? null
             : selectedRuntimeOwnerGraphProvider?.Invoke();
@@ -1827,7 +1820,6 @@ public class NpcRuntime : ICapabilityConditionSource
         }
         if (!actionSlotCommitted)
         {
-            if (p12Bound && previous != null) previous.TryBindP12Owner(this);
             if (p12Bound && actionRuntime != null) actionRuntime.UnbindP12Owner(this);
             actionRuntime?.UnbindSelectedOwner();
             return false;
@@ -1837,6 +1829,13 @@ public class NpcRuntime : ICapabilityConditionSource
             previous.UnbindSelectedOwner();
         currentActionRuntime = actionRuntime;
         currentAction = actionRuntime != null ? actionRuntime.Action : null;
+        // Keep the previous action's P12 guard installed through admission and
+        // the Core slot commit. Before the Unity projection changes, its owner
+        // callback sees either a rejected admission or an inconsistent slot;
+        // after the projection changes, it rejects because this is no longer
+        // the exact installed action. Only then is it safe to detach the guard.
+        if (p12Bound && previous != null && !ReferenceEquals(previous, actionRuntime))
+            previous.UnbindP12Owner(this);
         NotifyP12LifecycleMutationCommitted(
             false, false, true, currentActionRevisionAlreadyCommitted: graphCommittedActionSlot);
         return true;
