@@ -265,7 +265,7 @@ public sealed partial class SimulationRuntime
             failure = TimelineFailure.UnsupportedProfile;
             return false;
         }
-        if (!TryAcquireAdvanceLease(out AdvanceLease lease))
+        if (!TryAcquireAdvanceLease(out DailyV1AdvanceLease lease))
         {
             failure = TimelineFailure.ReentrantAdvance;
             return false;

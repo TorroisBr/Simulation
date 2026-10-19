@@ -1641,7 +1641,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 "The SimulationRuntime is faulted.");
             return false;
         }
-        if (!TryAcquireAdvanceLease(out AdvanceLease lease))
+        if (!TryAcquireAdvanceLease(out DailyV1AdvanceLease lease))
         {
             failure = ArmedForceSpatialFailure.Create(
                 ArmedForceSpatialFailureCode.RuntimeOperationInProgress,
@@ -1750,7 +1750,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 "The SimulationRuntime is faulted.");
             return false;
         }
-        if (!TryAcquireAdvanceLease(out AdvanceLease lease))
+        if (!TryAcquireAdvanceLease(out DailyV1AdvanceLease lease))
         {
             failure = ArmedForceSpatialFailure.Create(
                 ArmedForceSpatialFailureCode.RuntimeOperationInProgress,
@@ -1805,7 +1805,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 "P17-A observations must run on the SimulationRuntime owner thread.");
             return false;
         }
-        if (!TryAcquireAdvanceLease(out AdvanceLease lease))
+        if (!TryAcquireAdvanceLease(out DailyV1AdvanceLease lease))
         {
             failure = PersistentStateFailure.Create(
                 PersistentStateFailureCode.InvalidLifecycle,
@@ -1944,7 +1944,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 "The SimulationRuntime is faulted.");
             return false;
         }
-        if (!TryAcquireAdvanceLease(out AdvanceLease lease))
+        if (!TryAcquireAdvanceLease(out DailyV1AdvanceLease lease))
         {
             failure = PersistentStateFailure.Create(
                 PersistentStateFailureCode.InvalidLifecycle,
@@ -9056,7 +9056,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             }
         }
 
-        if (TryAcquireAdvanceLease(out AdvanceLease lease) == false)
+        if (dailyExecutionBoundary.TryBeginAdvance(
+                runtimeAdmissionContext != null,
+                out DailyV1AdvanceLease lease) == false)
         {
             failure = SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress;
             return false;
@@ -9066,7 +9068,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         {
             if (runtimeAdmissionContext != null)
             {
-                dailyExecutionBoundary.InvalidateCurrentCaptureToken();
                 if (mutationGuard.CanMutate == false)
                 {
                     failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
@@ -9172,44 +9173,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     /// Acquires this runtime's single-writer advance lease for a larger composed
     /// chronological operation. This is reentrancy protection, not a thread lock.
     /// </summary>
-    internal bool TryAcquireAdvanceLease(out AdvanceLease lease)
+    internal bool TryAcquireAdvanceLease(out DailyV1AdvanceLease lease)
     {
-        lease = null;
-        if (advanceLeaseHeld)
-        {
-            return false;
-        }
-
-        lease = new AdvanceLease(this);
-        if (!dailyExecutionBoundary.TryAcquireAdvanceLease())
-        {
-            lease = null;
-            return false;
-        }
-
-        return true;
-    }
-
-    private void ReleaseAdvanceLease()
-    {
-        dailyExecutionBoundary.ReleaseAdvanceLease();
-    }
-
-    internal sealed class AdvanceLease : IDisposable
-    {
-        private SimulationRuntime owner;
-
-        internal AdvanceLease(SimulationRuntime owner)
-        {
-            this.owner = owner;
-        }
-
-        public void Dispose()
-        {
-            SimulationRuntime currentOwner = owner;
-            owner = null;
-            currentOwner?.ReleaseAdvanceLease();
-        }
+        return dailyExecutionBoundary.TryAcquireAdvanceLease(out lease);
     }
 
     private void AdvanceDayAfterClockAdvance()
@@ -9374,56 +9340,35 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         List<NpcRuntime> arrivedNpcs = new List<NpcRuntime>();
         DailyV1SelectedRuntimeOwnerGraph selectedGraph = SelectedRuntimeOwnerGraph;
 
-        if (travelPartySystem != null)
+        if (selectedGraph != null)
         {
-            if (runtimeAdmissionContext == null)
+            if (!TryAdvanceSelectedTravelDayStage(out IReadOnlyList<NpcRuntime> selectedArrivals))
+                throw new InvalidOperationException(
+                    "The selected Core ordered TravelParty/solo-travel stages could not admit their exact runtime owner graph.");
+            arrivedNpcs.AddRange(selectedArrivals);
+        }
+        else
+        {
+            if (travelPartySystem != null)
             {
-                if (selectedGraph != null)
+                if (runtimeAdmissionContext == null)
                 {
-                    if (!travelPartySystem.TryAdvanceSelectedParties(selectedGraph, npcRuntimes,
-                            out IReadOnlyList<NpcRuntime> partyArrivals))
-                        throw new InvalidOperationException(
-                            "The selected Core TravelParty stage could not admit its exact runtime owner graph.");
-                    arrivedNpcs.AddRange(partyArrivals);
+                    arrivedNpcs.AddRange(travelPartySystem.AdvanceParties());
+                }
+                else if (!TryBeginP12TravelPartyAdvanceOperation(
+                    out P12TravelPartyAdvanceOperationScope travelPartyAdvanceScope))
+                {
+                    throw new InvalidOperationException(
+                        "The P12 TravelParty advance owner operation could not be admitted.");
                 }
                 else
-                    arrivedNpcs.AddRange(travelPartySystem.AdvanceParties());
-            }
-            else if (!TryBeginP12TravelPartyAdvanceOperation(
-                out P12TravelPartyAdvanceOperationScope travelPartyAdvanceScope))
-            {
-                throw new InvalidOperationException(
-                    "The P12 TravelParty advance owner operation could not be admitted.");
-            }
-            else
-            {
-                using (travelPartyAdvanceScope)
                 {
-                    if (selectedGraph != null)
-                    {
-                        if (!travelPartySystem.TryAdvanceSelectedParties(selectedGraph, npcRuntimes,
-                                out IReadOnlyList<NpcRuntime> partyArrivals))
-                            throw new InvalidOperationException(
-                                "The selected Core TravelParty stage could not admit its exact runtime owner graph.");
-                        arrivedNpcs.AddRange(partyArrivals);
-                    }
-                    else
+                    using (travelPartyAdvanceScope)
                         arrivedNpcs.AddRange(travelPartySystem.AdvanceParties());
                 }
             }
-        }
 
-        if (travelSystem != null)
-        {
-            if (selectedGraph != null)
-            {
-                if (!travelSystem.TryAdvanceSelectedSoloTravels(
-                        selectedGraph, npcRuntimes, out IReadOnlyList<NpcRuntime> selectedArrivals))
-                    throw new InvalidOperationException(
-                        "The selected Core solo-travel stage could not admit its exact runtime owner graph.");
-                arrivedNpcs.AddRange(selectedArrivals);
-            }
-            else
+            if (travelSystem != null)
                 arrivedNpcs.AddRange(travelSystem.AdvanceTravels(npcRuntimes));
         }
 
@@ -10931,7 +10876,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             }
         }
 
-        if (TryAcquireAdvanceLease(out AdvanceLease lease) == false)
+        if (dailyExecutionBoundary.TryBeginAdvance(
+                runtimeAdmissionContext != null,
+                out DailyV1AdvanceLease lease) == false)
         {
             failure = SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress;
             return false;
@@ -10939,9 +10886,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         using (lease)
         {
-            if (runtimeAdmissionContext != null)
-                dailyExecutionBoundary.InvalidateCurrentCaptureToken();
-
             if (mutationGuard.CanMutate == false)
             {
                 failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;

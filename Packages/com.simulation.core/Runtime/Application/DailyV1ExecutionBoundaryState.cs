@@ -8,13 +8,13 @@ using System.Collections.Generic;
 internal sealed class DailyV1ExecutionBoundaryState
 {
     private readonly object runtimeInstanceIdentity = new object();
-    private bool advanceLeaseHeld;
+    private DailyV1AdvanceLease advanceLease;
     private long completedCoreSequence;
     private DailyCaptureEligibilityToken currentCaptureToken;
     private bool selectedRuntimeOwnerGraphBound;
     private DailyV1SelectedRuntimeOwnerGraph selectedRuntimeOwnerGraph;
 
-    internal bool AdvanceLeaseHeld => advanceLeaseHeld;
+    internal bool AdvanceLeaseHeld => advanceLease != null;
     internal long CompletedCoreSequence => completedCoreSequence;
     internal object RuntimeInstanceIdentity => runtimeInstanceIdentity;
     internal DailyCaptureEligibilityToken CurrentCaptureToken => currentCaptureToken;
@@ -123,25 +123,35 @@ internal sealed class DailyV1ExecutionBoundaryState
         return true;
     }
 
-    internal bool TryAcquireAdvanceLease()
+    internal bool TryAcquireAdvanceLease(out DailyV1AdvanceLease lease)
     {
-        if (advanceLeaseHeld)
+        lease = null;
+        if (advanceLease != null)
             return false;
 
-        advanceLeaseHeld = true;
+        DailyV1AdvanceLease candidate = new DailyV1AdvanceLease(this);
+        advanceLease = candidate;
+        lease = candidate;
         return true;
     }
 
-    internal void ReleaseAdvanceLease()
+    internal bool TryBeginAdvance(bool invalidateCaptureToken, out DailyV1AdvanceLease lease)
     {
-        advanceLeaseHeld = false;
+        if (!TryAcquireAdvanceLease(out lease)) return false;
+        if (invalidateCaptureToken) InvalidateCurrentCaptureToken();
+        return true;
+    }
+    internal void ReleaseAdvanceLease(DailyV1AdvanceLease lease)
+    {
+        if (ReferenceEquals(advanceLease, lease))
+            advanceLease = null;
     }
 
     internal bool TryInstallRestoredCompletedCoreSequence(long restoredSequence)
     {
         if (restoredSequence <= 0L
             || completedCoreSequence != 0L
-            || advanceLeaseHeld)
+            || AdvanceLeaseHeld)
             return false;
 
         completedCoreSequence = restoredSequence;
@@ -192,7 +202,7 @@ internal sealed class DailyV1ExecutionBoundaryState
         out DailyCaptureEligibilityToken token)
     {
         token = null;
-        if (restoredCoreSequence <= 0L || completedCoreSequence != 0L || advanceLeaseHeld)
+        if (restoredCoreSequence <= 0L || completedCoreSequence != 0L || AdvanceLeaseHeld)
             return false;
 
         DailyCaptureEligibilityToken candidate = new DailyCaptureEligibilityToken(
@@ -213,5 +223,26 @@ internal sealed class DailyV1ExecutionBoundaryState
         currentCaptureToken = candidate;
         token = candidate;
         return true;
+    }
+}
+
+/// <summary>
+/// Idempotent handle for one runtime advance window. Disposing an older handle
+/// cannot release a later lease from the same boundary state.
+/// </summary>
+internal sealed class DailyV1AdvanceLease : IDisposable
+{
+    private DailyV1ExecutionBoundaryState owner;
+
+    internal DailyV1AdvanceLease(DailyV1ExecutionBoundaryState owner)
+    {
+        this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+    }
+
+    public void Dispose()
+    {
+        DailyV1ExecutionBoundaryState current = owner;
+        owner = null;
+        current?.ReleaseAdvanceLease(this);
     }
 }

@@ -305,19 +305,7 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
                         "A committed selected TravelParty transition could not publish its Unity projection.");
                 runtime.RecordSelectedTravelOwnerMutationCommitted(plan, changedCities);
             },
-            party => domainEventRecorder == null || domainEventRecorder.Record(
-                (eventId, absoluteDay, recordSequence) => new TravelPartyArrivedEvent(
-                    eventId,
-                    absoluteDay,
-                    recordSequence,
-                    party.TravelPartyId,
-                    party.OriginLocationRuntimeId,
-                    party.DestinationLocationRuntimeId,
-                    party.RouteRuntimeId,
-                    party.TravelDaysTotal,
-                    party.TravelerRuntimeIds,
-                    party.EscortRuntimeIds,
-                    party.OriginDecisionId)),
+            PublishSelectedTravelPartyArrivalEvent,
             out IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> completed);
         if (!advanced) return false;
 
@@ -327,12 +315,37 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
             foreach (DailyV1NpcRuntimeOwners owner in result.Members)
                 arrived.Add(adapters[owner]);
             if (!result.EventRecorded)
-                logger.LogWarning("Travel party arrival event could not be recorded for TravelPartyId '"
-                    + result.Party.TravelPartyId + "'.");
+                WarnSelectedTravelPartyArrivalEventFailure(result.Party);
         }
         arrivals = arrived.AsReadOnly();
         return true;
     }
+
+    internal bool PublishSelectedTravelPartyArrivalEvent(TravelPartyRuntime party)
+    {
+        return party != null && (domainEventRecorder == null || domainEventRecorder.Record(
+            (eventId, absoluteDay, recordSequence) => new TravelPartyArrivedEvent(
+                eventId,
+                absoluteDay,
+                recordSequence,
+                party.TravelPartyId,
+                party.OriginLocationRuntimeId,
+                party.DestinationLocationRuntimeId,
+                party.RouteRuntimeId,
+                party.TravelDaysTotal,
+                party.TravelerRuntimeIds,
+                party.EscortRuntimeIds,
+                party.OriginDecisionId)));
+    }
+
+    internal void WarnSelectedTravelPartyArrivalEventFailure(TravelPartyRuntime party)
+    {
+        if (party == null) return;
+        logger.LogWarning("Travel party arrival event could not be recorded for TravelPartyId '"
+            + party.TravelPartyId + "'.");
+    }
+
+    internal void EnsureSelectedDailyTravelAdvanceAvailable() => ThrowIfFaulted();
 
     private IReadOnlyList<NpcRuntime> AdvancePartiesInMutationWindow()
     {

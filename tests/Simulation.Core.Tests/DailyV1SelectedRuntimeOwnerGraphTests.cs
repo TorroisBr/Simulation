@@ -604,4 +604,123 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             "publish:" + member.RuntimeId + ":False"
         }));
     }
+
+    [Test]
+    public void SelectedTravelDayStageRunsPartyOperationBeforeSoloTravel()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(
+            allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        Assert.That(graph.Npcs.Count, Is.GreaterThanOrEqualTo(2));
+
+        DailyV1NpcRuntimeOwners partyMember = graph.Npcs[0];
+        DailyV1CityRuntimeOwners partyOrigin = graph.Cities.Single(city =>
+            string.Equals(city.RuntimeId, partyMember.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        DailyV1CityRuntimeOwners partyDestination = graph.Cities.Single(city =>
+            !ReferenceEquals(city, partyOrigin));
+        Assert.That(DailyV1SelectedTravelTransitionPlan.TryStartTravel(
+            partyMember, partyOrigin, partyOrigin.LocationRuntimeId, partyDestination.LocationRuntimeId,
+            partyDestination, 1, "ordered-party", "ordered-party-route",
+            out DailyV1SelectedTravelTransitionPlan partyStart), Is.True);
+        Assert.That(graph.TryCommitTravelTransition(partyMember, partyStart, null), Is.True);
+
+        TravelPartyRuntime party = new TravelPartyRuntime(
+            "ordered-party-1", partyOrigin.LocationRuntimeId, partyDestination.LocationRuntimeId,
+            "ordered-party-route", new[] { partyMember.RuntimeId }, Array.Empty<string>(), 1,
+            "ordered-party", new[] { new TravelPartyMemberCost(partyMember.RuntimeId, 1f) });
+        TravelPartyStore store = new TravelPartyStore();
+        Assert.That(store.Add(party), Is.True);
+        Assert.That(DailyV1SelectedTravelTransitionPlan.TrySetActiveTravelParty(
+            partyMember, party.TravelPartyId, out DailyV1SelectedTravelTransitionPlan setParty), Is.True);
+        Assert.That(graph.TryCommitTravelTransition(partyMember, setParty, null), Is.True);
+        Assert.That(partyMember.Travel.TravelStartedToday, Is.True);
+        Assert.That(DailyV1SelectedTravelTransitionPlan.TryClearTravelStartedToday(
+            partyMember, out DailyV1SelectedTravelTransitionPlan clearPartyStartDay), Is.True);
+        Assert.That(graph.TryCommitTravelTransition(partyMember, clearPartyStartDay, null), Is.True);
+
+        DailyV1NpcRuntimeOwners solo = graph.Npcs[1];
+        DailyV1CityRuntimeOwners soloOrigin = graph.Cities.Single(city =>
+            string.Equals(city.RuntimeId, solo.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        DailyV1CityRuntimeOwners soloDestination = graph.Cities.Single(city =>
+            !ReferenceEquals(city, soloOrigin));
+        Assert.That(DailyV1SelectedTravelTransitionPlan.TryStartTravel(
+            solo, soloOrigin, soloOrigin.LocationRuntimeId, soloDestination.LocationRuntimeId,
+            soloDestination, 2, "ordered-solo", "ordered-solo-route",
+            out DailyV1SelectedTravelTransitionPlan soloStart), Is.True);
+        Assert.That(graph.TryCommitTravelTransition(solo, soloStart, null), Is.True);
+        Assert.That(solo.Travel.TryInstallState(
+            null, null, soloDestination.LocationRuntimeId, soloDestination.RuntimeId, 2, 2,
+            "ordered-solo-route", false, "ordered-solo", null, solo.Travel.Revision), Is.True);
+
+        List<string> order = new List<string>();
+        RecordingTravelStageBoundary boundary = new RecordingTravelStageBoundary(order);
+        Assert.That(DailyV1SelectedTravelDayStage.TryAdvance(
+            graph,
+            store,
+            new[] { partyMember.RuntimeId },
+            boundary,
+            operation =>
+            {
+                order.Add("party-operation-enter");
+                bool committed = operation();
+                order.Add("party-operation-exit");
+                return committed;
+            },
+            advanceSoloTravel: true,
+            out IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
+            out IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults), Is.True);
+
+        Assert.That(partyArrivals, Has.Count.EqualTo(1));
+        Assert.That(soloResults, Has.Count.EqualTo(1));
+        Assert.That(soloResults[0].Npc, Is.SameAs(solo));
+        Assert.That(order.IndexOf("party-operation-enter"), Is.LessThan(order.IndexOf("party-event")));
+        Assert.That(order.IndexOf("party-event"), Is.LessThan(order.IndexOf("party-operation-exit")));
+        Assert.That(order.IndexOf("party-operation-exit"), Is.LessThan(order.IndexOf("solo-result")));
+    }
+
+    private sealed class RecordingTravelStageBoundary : IDailyV1SelectedTravelDayBoundary
+    {
+        private readonly List<string> order;
+
+        internal RecordingTravelStageBoundary(List<string> order) => this.order = order;
+
+        public bool TryPrepareTransition(
+            DailyV1NpcRuntimeOwners npc,
+            DailyV1SelectedTravelTransitionPlan plan,
+            bool arriving,
+            out object projectionReceipt)
+        {
+            order.Add("prepare:" + npc.RuntimeId + ":" + arriving);
+            projectionReceipt = plan;
+            return true;
+        }
+
+        public void PublishCommittedTransition(
+            DailyV1NpcRuntimeOwners npc,
+            DailyV1SelectedTravelTransitionPlan plan,
+            bool arriving,
+            object projectionReceipt)
+        {
+            Assert.That(plan, Is.SameAs(projectionReceipt));
+            Assert.That(plan.IsCommitted, Is.True);
+            order.Add("publish:" + npc.RuntimeId + ":" + arriving);
+        }
+
+        public bool PublishTravelPartyArrival(TravelPartyRuntime party)
+        {
+            order.Add("party-event");
+            return true;
+        }
+
+        public void PublishSoloTravelResult(DailyV1SelectedSoloTravelDayResult result)
+        {
+            order.Add("solo-result");
+        }
+    }
 }

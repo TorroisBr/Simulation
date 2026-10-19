@@ -303,34 +303,68 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
             result =>
             {
                 NpcRuntime runtime = adapters[result.Npc];
-                if (!result.ShouldReport) return;
-                if (result.Arrived)
-                {
-                    arrivals.Add(runtime);
-                    domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcArrivedEvent(
-                        eventId,
-                        absoluteDay,
-                        recordSequence,
-                        runtime.RuntimeId,
-                        runtime.CurrentLocation?.RuntimeId,
-                        result.OriginDecisionId));
-                    string destinationName = runtime.CurrentCity != null
-                        ? runtime.CurrentCity.CityName
-                        : runtime.CurrentLocation?.RuntimeId ?? "destino desconhecido";
-                    logger.Log(SimulationLogCategory.Travel, $"{runtime.NpcName} chegou em {destinationName}");
-                    return;
-                }
-
-                string verb = runtime.TravelDaysRemaining == 1 ? "Resta" : "Restam";
-                string dayText = runtime.TravelDaysRemaining == 1 ? "dia" : "dias";
-                logger.Log(SimulationLogCategory.Travel,
-                    $"{runtime.NpcName} esta viajando. {verb} {runtime.TravelDaysRemaining} {dayText}.");
+                if (PublishSelectedSoloTravelResult(runtime, result)) arrivals.Add(runtime);
             },
             out _);
         if (!advanced) return false;
 
         arrivedNpcs = arrivals.AsReadOnly();
         return true;
+    }
+
+    internal IReadOnlyCollection<string> GetManagedTravelPartyNpcRuntimeIds()
+    {
+        HashSet<string> memberRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+        TravelPartyStore store = travelPartyStore;
+        if (store == null) return memberRuntimeIds;
+
+        IDisposable readWindow = store.EnterReadWindow();
+        try
+        {
+            foreach (TravelPartyRuntime party in store.ActiveParties)
+            {
+                if (party == null || !party.IsActive || party.MemberRuntimeIds == null) continue;
+                foreach (string memberRuntimeId in party.MemberRuntimeIds)
+                    if (!string.IsNullOrWhiteSpace(memberRuntimeId))
+                        memberRuntimeIds.Add(memberRuntimeId);
+            }
+        }
+        finally
+        {
+            readWindow.Dispose();
+        }
+
+        return memberRuntimeIds;
+    }
+
+    internal void EnsureSelectedDailyTravelAdvanceAvailable() => ThrowIfFaulted();
+
+    internal bool PublishSelectedSoloTravelResult(
+        NpcRuntime runtime,
+        DailyV1SelectedSoloTravelDayResult result)
+    {
+        if (runtime == null || result == null || !result.ShouldReport) return false;
+        if (result.Arrived)
+        {
+            domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcArrivedEvent(
+                eventId,
+                absoluteDay,
+                recordSequence,
+                runtime.RuntimeId,
+                runtime.CurrentLocation?.RuntimeId,
+                result.OriginDecisionId));
+            string destinationName = runtime.CurrentCity != null
+                ? runtime.CurrentCity.CityName
+                : runtime.CurrentLocation?.RuntimeId ?? "destino desconhecido";
+            logger.Log(SimulationLogCategory.Travel, $"{runtime.NpcName} chegou em {destinationName}");
+            return true;
+        }
+
+        string verb = runtime.TravelDaysRemaining == 1 ? "Resta" : "Restam";
+        string dayText = runtime.TravelDaysRemaining == 1 ? "dia" : "dias";
+        logger.Log(SimulationLogCategory.Travel,
+            $"{runtime.NpcName} esta viajando. {verb} {runtime.TravelDaysRemaining} {dayText}.");
+        return false;
     }
 
     internal bool TryGetSelectedTravelProjectionCandidates(
@@ -376,31 +410,6 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
 
         projections = candidates.ToArray();
         return true;
-    }
-
-    private IReadOnlyCollection<string> GetManagedTravelPartyNpcRuntimeIds()
-    {
-        HashSet<string> memberRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
-        TravelPartyStore store = travelPartyStore;
-        if (store == null) return memberRuntimeIds;
-
-        IDisposable readWindow = store.EnterReadWindow();
-        try
-        {
-            foreach (TravelPartyRuntime party in store.ActiveParties)
-            {
-                if (party == null || !party.IsActive || party.MemberRuntimeIds == null) continue;
-                foreach (string memberRuntimeId in party.MemberRuntimeIds)
-                    if (!string.IsNullOrWhiteSpace(memberRuntimeId))
-                        memberRuntimeIds.Add(memberRuntimeId);
-            }
-        }
-        finally
-        {
-            readWindow.Dispose();
-        }
-
-        return memberRuntimeIds;
     }
 
     public IReadOnlyList<NpcRuntime> AdvanceTravels(List<NpcRuntime> npcRuntimeList)

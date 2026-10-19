@@ -4,20 +4,59 @@ using NUnit.Framework;
 public sealed class DailyV1ExecutionBoundaryStateTests
 {
     [Test]
-    public void AdvanceLeaseIsReentrantGuardAndCanBeReleased()
+    public void CoreAdvanceLeaseIsReentrantGuardAndCanBeReleasedExactlyOnce()
     {
         DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
 
         Assert.That(state.AdvanceLeaseHeld, Is.False);
-        Assert.That(state.TryAcquireAdvanceLease(), Is.True);
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease first), Is.True);
         Assert.That(state.AdvanceLeaseHeld, Is.True);
-        Assert.That(state.TryAcquireAdvanceLease(), Is.False);
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease rejected), Is.False);
+        Assert.That(rejected, Is.Null);
 
-        state.ReleaseAdvanceLease();
-
+        first.Dispose();
         Assert.That(state.AdvanceLeaseHeld, Is.False);
-        Assert.That(state.TryAcquireAdvanceLease(), Is.True);
-        state.ReleaseAdvanceLease();
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease second), Is.True);
+        first.Dispose();
+        Assert.That(state.AdvanceLeaseHeld, Is.True,
+            "Disposing a stale lease handle must not release the newer runtime window.");
+        Assert.That(state.TryAcquireAdvanceLease(out rejected), Is.False);
+
+        second.Dispose();
+        Assert.That(state.AdvanceLeaseHeld, Is.False);
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease third), Is.True);
+        third.Dispose();
+    }
+
+    [Test]
+    public void BeginAdvanceInvalidatesCaptureOnlyAfterLeaseAdmission()
+    {
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow();
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(1, 1, 1));
+        WorldId world = new WorldId(Guid.NewGuid());
+        OwnerSectionCensusSnapshot[] sections =
+        {
+            new OwnerSectionCensusSnapshot("city.market", 1, OwnerSectionRole.Required, new object(), 1, 4L)
+        };
+        Assert.That(state.TryRecordCompletedCore(), Is.True);
+        Assert.That(state.TryCreateCompletedAdvanceToken(
+            admission, configuration, calendar, SimulationRuntimeCompositionProfile.Standard,
+            world, 1L, 9L, sections, out DailyCaptureEligibilityToken priorToken), Is.True);
+
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease competingLease), Is.True);
+        Assert.That(state.TryBeginAdvance(true, out DailyV1AdvanceLease rejectedLease), Is.False);
+        Assert.That(rejectedLease, Is.Null);
+        Assert.That(state.CurrentCaptureToken, Is.SameAs(priorToken),
+            "A rejected concurrent advance must not invalidate the last completed boundary.");
+        competingLease.Dispose();
+
+        Assert.That(state.TryBeginAdvance(true, out DailyV1AdvanceLease admittedLease), Is.True);
+        Assert.That(state.CurrentCaptureToken, Is.Null,
+            "An admitted advance invalidates the previous token before any mutation.");
+        admittedLease.Dispose();
     }
 
     [Test]
@@ -49,9 +88,9 @@ public sealed class DailyV1ExecutionBoundaryStateTests
     public void RestoredSequenceCanOnlyBeInstalledAtIdleEmptyBoundary()
     {
         DailyV1ExecutionBoundaryState leased = new DailyV1ExecutionBoundaryState();
-        Assert.That(leased.TryAcquireAdvanceLease(), Is.True);
+        Assert.That(leased.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease), Is.True);
         Assert.That(leased.TryInstallRestoredCompletedCoreSequence(3L), Is.False);
-        leased.ReleaseAdvanceLease();
+        lease.Dispose();
 
         Assert.That(leased.TryInstallRestoredCompletedCoreSequence(3L), Is.True);
         Assert.That(leased.CompletedCoreSequence, Is.EqualTo(3L));
