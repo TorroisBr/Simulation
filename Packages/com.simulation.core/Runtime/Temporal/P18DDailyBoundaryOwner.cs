@@ -89,7 +89,7 @@ public sealed class P18DDailyBoundaryOwner : IResumableDayBoundaryOwner, IBounda
             return false;
         }
 
-        string continuationId = SpatialStableKey.Encode(operation.OccurrenceId, SubphaseKind, SubphaseVersion);
+        string continuationId = StableKeyEncoding.Encode(operation.OccurrenceId, SubphaseKind, SubphaseVersion);
         if (continuations.TryGetValue(continuationId, out BoundaryContinuationState existing))
         {
             prepared = new ActivationCommit(this, existing.Manifest, existing);
@@ -473,7 +473,7 @@ public sealed class P18DDailyBoundaryOwner : IResumableDayBoundaryOwner, IBounda
         && left.OccurrenceSequence == right.OccurrenceSequence && left.DueAt == right.DueAt
         && left.Kind == right.Kind;
 
-    private static string Identity(DueWorkReference fact) => SpatialStableKey.Encode(
+    private static string Identity(DueWorkReference fact) => StableKeyEncoding.Encode(
         fact.OwnerId, fact.DueWorkId, fact.InstanceId, fact.Revision.ToString(CultureInfo.InvariantCulture),
         fact.OccurrenceSequence.ToString(CultureInfo.InvariantCulture));
 }

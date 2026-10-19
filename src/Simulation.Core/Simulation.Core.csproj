@@ -83,6 +83,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonChronologyResults.cs" Link="Person/PersonChronologyResults.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonNaturalMortalityQuery.cs" Link="Person/PersonNaturalMortalityQuery.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Temporal/LogicalTimeline.cs" Link="Temporal/LogicalTimeline.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Temporal/P18DDailyBoundaryOwner.cs" Link="Temporal/P18DDailyBoundaryOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/AggregateDemographyPolicyContracts.cs" Link="Population/AggregateDemographyPolicyContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/DemographicSampling.cs" Link="Population/DemographicSampling.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/DeterministicAggregateDemographyProvider.cs" Link="Population/DeterministicAggregateDemographyProvider.cs" />
