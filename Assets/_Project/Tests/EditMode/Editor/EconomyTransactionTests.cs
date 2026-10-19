@@ -812,12 +812,6 @@ public sealed class EconomyTransactionTests
             startingCity = cityAsset,
             initialMoney = 20f
         };
-        npcConfig.InitialInventory.Add(new NpcInitialInventoryItemConfig
-        {
-            item = itemAsset,
-            amount = 2,
-            averageUnitCost = 1f
-        });
         SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
         authoring.enabledModules.Add(SimulationModule.Merchant);
         authoring.Cities.Add(cityAsset);
@@ -834,6 +828,7 @@ public sealed class EconomyTransactionTests
         NpcRuntime merchant = NpcRuntime.CreateSelectedDailyV1(
             "daily-selected-sale-merchant-runtime", definitions.Npcs[npcAsset.DefinitionId],
             definitions, bindings, city, 20f);
+        Assert.That(merchant.Inventory.TryAddSelectedItem(item, 2, 1f), Is.True);
         SimulationTime time = new SimulationTime();
         EconomyTransactionService transactionService = new EconomyTransactionService();
         MerchantSystem merchantSystem = new MerchantSystem(
@@ -843,6 +838,22 @@ public sealed class EconomyTransactionTests
             simulationTime: time,
             decisionRecorder: null,
             transactionService: transactionService);
+        Assert.That(effective.MerchantTrade.Enabled, Is.True);
+        Assert.That(merchant.HasJobType(NpcJobType.Merchant), Is.True);
+        Assert.That(merchant.CurrentCity, Is.SameAs(city));
+        merchantSystem.ObserveCurrentMarket(merchant);
+        Assert.That(merchant.Inventory.GetSelectedAmount(item), Is.EqualTo(2));
+        Assert.That(city.Market.Items.Count, Is.EqualTo(1));
+        Assert.That(merchant.CommercialKnowledge.SelectedOwner.Observations.Count, Is.EqualTo(1));
+        Assert.That(merchant.CommercialKnowledge.SelectedOwner.TryGetObservation(
+            city.Location.RuntimeId, item.DefinitionId,
+            out DailyV1CommercialMarketObservation observedMarket), Is.True);
+        Assert.That(observedMarket.ObservedPrice, Is.GreaterThan(merchant.Inventory.GetSelectedAverageUnitCost(item)));
+        float plannedUtility = 0f;
+        NpcActionRuntime plannedSale = merchantSystem.CreateAction(merchant, sellAction, ref plannedUtility);
+        Assert.That(plannedSale, Is.Not.Null,
+            $"The selected local market facts must make SellGoods available; price={observedMarket.ObservedPrice}, utility={plannedUtility}.");
+        Assert.That(plannedSale.TargetItem, Is.SameAs(itemAsset));
         SimulationRuntime runtime = new SimulationRuntime(
             time,
             new[] { city },
