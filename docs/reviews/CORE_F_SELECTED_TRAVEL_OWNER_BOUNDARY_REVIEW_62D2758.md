@@ -37,3 +37,22 @@ The original Unity XML/log bytes reside in the stated private evidence store and
 ## Limits
 
 This review does not cover the co-committed material-flow change, the full CORE-F host/runtime package, full-suite validation, detached restore, .NET host continuation, or canonical promotion. CORE-F remains incomplete. No candidate files were edited during review.
+
+## Addendum — selected City material-flow result retention
+
+**Addendum verdict: VALIDATED_CANDIDATE — selected material-flow result-retention change only.** This is an incremental review of the co-committed City change at the same exact source identity; it does not expand the travel review into whole-commit approval or CORE-F acceptance.
+
+- Production base: `3ec0aa126f95a034f219c4dca3accc82ac3c8dc9`
+- Candidate: `62d27581fe1b3b9255dbe810be07b53bb3465551`
+- Candidate tree: `34987c0efec955aeb100b64474ecbe7551a7f58f`
+- Core canonical at review: `a07402faa4739d0bb276d3bc4aa24e6ed7bd6cea`
+
+I reviewed the City `LastMaterialFlow` projection and selected-owner storage in `CityRuntime`, `DailyV1CityRuntimeOwners`, `DailyV1SelectedRuntimeOwnerGraph`, the changed Core test, and the committed validation identity. The selected Core graph now stores each completed local-flow result on its exact City owner after the operation returns. `CityRuntime.LastMaterialFlow` reads that owner value when selected owners are installed and retains its existing local-field fallback for non-selected construction. The selected Unity call paths likewise mirror the result onto the exact selected owner; the Core graph no longer needs a Unity projection callback to retain the result.
+
+`RecordSelectedMaterialFlow` changes only this diagnostic/result reference. It does not mutate Market or source state and does not advance owner revisions or epochs. The material-flow operation continues to use the existing Market and finite-source authorities and their existing admission/install paths. The exact-owner-sequence preflight in the Core graph occurs before the daily flow loops; its test checks that rejected owner ordering leaves stock, Market revisions, and retained result references unchanged. The added `SelectedDailyEconomyKeepsMaterialFlowResultOnTheCoreOwnerWithoutProjectionCallback` test exercises a successful finite-reserve day without a projection callback and checks the retained day/opening/applied/closing values and remaining reserve.
+
+No actionable finding remains in this narrow behavior. The test and code support retaining a completed result in Core without introducing duplicate Market/source ownership. This does not establish a new persistence contract: the result remains described as diagnostic and non-persisted, and existing P12 City capture rejects Cities with local material flow before serialization. Nor does this review claim broader failure atomicity for a daily material-flow operation or cover every material-flow profile.
+
+The candidate validation record binds hashes for the changed City/runtime owner sources and Core test to the candidate and reports the focused `DailyV1SelectedRuntimeOwnerGraphTests` run as 7/7 PASS, together with the listed filtered Unity runs and `git diff --check` PASS. The original private XML/log bytes were not independently reopened or reproduced; the earlier evidence limitation therefore still applies. This addendum is based on exact committed source and test inspection plus the committed evidence record, not an independent rerun.
+
+This addendum covers only the selected City material-flow result-retention delta. It does not review or approve the remaining non-travel portions of the commit, full CORE-F integration, full-suite validation, detached restore, .NET host continuation, or canonical promotion. CORE-F remains incomplete.
