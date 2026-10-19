@@ -2361,6 +2361,23 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(runtime.CurrentStatus, Has.Count.EqualTo(1));
         Assert.That(runtime.CurrentStatus[0], Is.SameAs(status));
         Assert.That(runtime.SelectedRuntimeOwners.Inventory, Is.SameAs(runtime.Inventory.SelectedDailyV1Owner));
+
+        DailyV1ActionDefinition actionDefinition = graph.Actions.Values.First();
+        Assert.That(bindings.TryGetAsset(actionDefinition, out NpcActionData actionAsset), Is.True);
+        runtime.SetCurrentActionRuntime(new NpcActionRuntime(actionAsset));
+        Assert.That(runtime.CurrentActionRevision, Is.EqualTo(1L));
+        Assert.That(runtime.SelectedRuntimeOwners.ActionSlot.Revision, Is.EqualTo(1L),
+            "The selected Core action-slot owner carries the committed revision used by P12.");
+        runtime.SetCurrentActionRuntime(null);
+        Assert.That(runtime.CurrentActionRevision, Is.EqualTo(2L));
+        Assert.That(runtime.SelectedRuntimeOwners.ActionSlot.Revision, Is.EqualTo(2L));
+        Assert.That(runtime.TryApplyInjury(NpcInjurySeverity.Hurt), Is.True);
+        Assert.That(runtime.InjurySeverity, Is.EqualTo(NpcInjurySeverity.Hurt));
+        Assert.That(runtime.SelectedRuntimeOwners.Lifecycle.InjurySeverity, Is.EqualTo(NpcInjurySeverity.Hurt));
+        Assert.That(runtime.TryApplyDeath(), Is.True);
+        Assert.That(runtime.LifeState, Is.EqualTo(NpcLifeState.Dead));
+        Assert.That(runtime.SelectedRuntimeOwners.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Dead));
+        Assert.That(runtime.LifeStateRevision, Is.EqualTo(1L));
     }
 
     [Test]

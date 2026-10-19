@@ -15,6 +15,7 @@ internal sealed class DailyV1NpcRuntimeOwners
     internal DailyV1NpcStatusOwner Status { get; }
     internal MoneyAccountRuntime MoneyAccount { get; }
     internal DailyV1CommercialKnowledgeOwner CommercialKnowledge { get; }
+    internal DailyV1NpcLifecycleOwner Lifecycle { get; }
     internal DailyV1NpcActionSlotOwner ActionSlot { get; }
 
     private DailyV1NpcRuntimeOwners(
@@ -33,6 +34,7 @@ internal sealed class DailyV1NpcRuntimeOwners
         Status = status;
         MoneyAccount = moneyAccount;
         CommercialKnowledge = commercialKnowledge;
+        Lifecycle = new DailyV1NpcLifecycleOwner();
         ActionSlot = new DailyV1NpcActionSlotOwner(definitions);
     }
 
@@ -119,6 +121,7 @@ internal sealed class DailyV1NpcActionSlotOwner
     private readonly DailyV1EffectiveDefinitions definitions;
 
     internal DailyV1ActionDefinition CurrentAction { get; private set; }
+    internal long Revision { get; private set; }
 
     internal DailyV1NpcActionSlotOwner(DailyV1EffectiveDefinitions definitions)
     {
@@ -134,5 +137,66 @@ internal sealed class DailyV1NpcActionSlotOwner
 
         CurrentAction = action;
         return true;
+    }
+
+    internal bool CanAdvanceRevision(int increments) =>
+        increments >= 0 && Revision <= long.MaxValue - increments;
+
+    internal bool TryInstallRevision(long revision)
+    {
+        if (revision < 0L) return false;
+        Revision = revision;
+        return true;
+    }
+
+    internal void NotifyCurrentActionMutationCommitted()
+    {
+        if (Revision < long.MaxValue) Revision++;
+    }
+}
+
+/// <summary>
+/// Owns the selected NPC's factual life and injury values and the existing
+/// P12 life-state revision. Unity fields remain compatibility projections.
+/// </summary>
+internal sealed class DailyV1NpcLifecycleOwner
+{
+    internal NpcLifeState LifeState { get; private set; } = NpcLifeState.Alive;
+    internal NpcInjurySeverity InjurySeverity { get; private set; } = NpcInjurySeverity.None;
+    internal long LifeStateRevision { get; private set; }
+
+    internal bool TryInstallState(NpcLifeState lifeState, NpcInjurySeverity injurySeverity, long revision)
+    {
+        if (!NpcInjuryRules.IsValid(lifeState)
+            || !NpcInjuryRules.IsValid(injurySeverity)
+            || revision < 0L)
+            return false;
+
+        LifeState = lifeState;
+        InjurySeverity = injurySeverity;
+        LifeStateRevision = revision;
+        return true;
+    }
+
+    internal bool TrySetInjurySeverity(NpcInjurySeverity severity)
+    {
+        if (!NpcInjuryRules.IsValid(severity)) return false;
+        if (severity > InjurySeverity) InjurySeverity = severity;
+        return true;
+    }
+
+    internal bool TrySetLifeState(NpcLifeState lifeState)
+    {
+        if (!NpcInjuryRules.IsValid(lifeState)) return false;
+        LifeState = lifeState;
+        return true;
+    }
+
+    internal bool CanAdvanceRevision(int increments) =>
+        increments >= 0 && LifeStateRevision <= long.MaxValue - increments;
+
+    internal void NotifyLifeStateMutationCommitted()
+    {
+        if (LifeStateRevision < long.MaxValue) LifeStateRevision++;
     }
 }
