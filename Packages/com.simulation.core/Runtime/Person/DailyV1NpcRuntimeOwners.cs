@@ -1,6 +1,17 @@
 using System;
 using System.Collections.Generic;
 
+/// <summary>The existing selected NPC travel-plan reason values.
+/// Numeric order is retained for Unity serialization and P12 persistence.</summary>
+public enum NpcTravelReason
+{
+    None,
+    Trade,
+    Flee,
+    TradeReposition,
+    CommercialScout
+}
+
 /// <summary>
 /// Core-owned composition of the selected Daily-v1 NPC owners used by the
 /// Unity runtime adapter. The owner instances are shared with that adapter;
@@ -19,6 +30,7 @@ internal sealed class DailyV1NpcRuntimeOwners
     internal DailyV1NpcLifecycleOwner Lifecycle { get; }
     internal DailyV1NpcActionSlotOwner ActionSlot { get; }
     internal DailyV1NpcTravelOwner Travel { get; }
+    internal DailyV1NpcTravelPlanOwner TravelPlan { get; }
     internal DailyV1NpcHiddenStateOwner HiddenState { get; }
 
     private DailyV1NpcRuntimeOwners(
@@ -42,6 +54,7 @@ internal sealed class DailyV1NpcRuntimeOwners
         Lifecycle = new DailyV1NpcLifecycleOwner();
         ActionSlot = new DailyV1NpcActionSlotOwner(definitions);
         Travel = new DailyV1NpcTravelOwner(runtimeId);
+        TravelPlan = new DailyV1NpcTravelPlanOwner();
         HiddenState = new DailyV1NpcHiddenStateOwner();
     }
 
@@ -350,5 +363,100 @@ internal sealed class DailyV1NpcTravelOwner
             travelOriginDecisionId,
             activeTravelPartyId,
             nextRevision);
+    }
+}
+
+/// <summary>
+/// Owns the selected NPC's pending travel-plan values. Unity City and Location
+/// references are compatibility projections; the plan authority stores their
+/// stable runtime identities and the exact existing revision.
+/// </summary>
+internal sealed class DailyV1NpcTravelPlanOwner
+{
+    internal string TargetLocationRuntimeId { get; private set; }
+    internal string TargetCityRuntimeId { get; private set; }
+    internal NpcTravelReason Reason { get; private set; }
+    internal float Utility { get; private set; }
+    internal float ExpectedCost { get; private set; }
+    internal string OriginDecisionId { get; private set; }
+    internal long Revision { get; private set; }
+
+    internal bool Matches(
+        string targetLocationRuntimeId,
+        string targetCityRuntimeId,
+        NpcTravelReason reason,
+        float utility,
+        float expectedCost,
+        string originDecisionId) =>
+        string.Equals(TargetLocationRuntimeId, targetLocationRuntimeId, StringComparison.Ordinal)
+        && string.Equals(TargetCityRuntimeId, targetCityRuntimeId, StringComparison.Ordinal)
+        && Reason == reason
+        && Utility.Equals(utility)
+        && ExpectedCost.Equals(expectedCost)
+        && string.Equals(OriginDecisionId, originDecisionId, StringComparison.Ordinal);
+
+    internal bool CanCommit(
+        string targetLocationRuntimeId,
+        string targetCityRuntimeId,
+        NpcTravelReason reason,
+        float utility,
+        float expectedCost,
+        string originDecisionId) =>
+        IsValid(targetLocationRuntimeId, targetCityRuntimeId, reason, utility, expectedCost)
+        && (Matches(targetLocationRuntimeId, targetCityRuntimeId, reason, utility, expectedCost, originDecisionId)
+            || Revision < long.MaxValue);
+
+    internal bool TryCommit(
+        string targetLocationRuntimeId,
+        string targetCityRuntimeId,
+        NpcTravelReason reason,
+        float utility,
+        float expectedCost,
+        string originDecisionId)
+    {
+        if (!CanCommit(targetLocationRuntimeId, targetCityRuntimeId, reason,
+                utility, expectedCost, originDecisionId)) return false;
+        if (Matches(targetLocationRuntimeId, targetCityRuntimeId, reason,
+                utility, expectedCost, originDecisionId)) return true;
+        if (!TryInstallExact(targetLocationRuntimeId, targetCityRuntimeId, reason,
+                utility, expectedCost, originDecisionId, Revision + 1L)) return false;
+        return true;
+    }
+
+    internal bool TryInstallExact(
+        string targetLocationRuntimeId,
+        string targetCityRuntimeId,
+        NpcTravelReason reason,
+        float utility,
+        float expectedCost,
+        string originDecisionId,
+        long revision)
+    {
+        if (revision < 0L || !IsValid(targetLocationRuntimeId, targetCityRuntimeId,
+                reason, utility, expectedCost)) return false;
+        TargetLocationRuntimeId = targetLocationRuntimeId;
+        TargetCityRuntimeId = targetCityRuntimeId;
+        Reason = reason;
+        Utility = utility;
+        ExpectedCost = expectedCost;
+        OriginDecisionId = originDecisionId;
+        Revision = revision;
+        return true;
+    }
+
+    private static bool IsValid(
+        string targetLocationRuntimeId,
+        string targetCityRuntimeId,
+        NpcTravelReason reason,
+        float utility,
+        float expectedCost)
+    {
+        if (!Enum.IsDefined(typeof(NpcTravelReason), reason)
+            || float.IsNaN(utility) || float.IsInfinity(utility) || utility < 0f
+            || float.IsNaN(expectedCost) || float.IsInfinity(expectedCost) || expectedCost < 0f
+            || (targetLocationRuntimeId != null && string.IsNullOrWhiteSpace(targetLocationRuntimeId))
+            || (targetCityRuntimeId != null && string.IsNullOrWhiteSpace(targetCityRuntimeId))) return false;
+        return targetLocationRuntimeId != null
+            || (targetCityRuntimeId == null && reason == NpcTravelReason.None);
     }
 }

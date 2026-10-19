@@ -195,7 +195,9 @@ public class NpcRuntime : ICapabilityConditionSource
             && string.Equals(selectedRuntimeOwners.Travel.TravelOriginDecisionId,
                 travelOriginDecisionId, StringComparison.Ordinal)
             && string.Equals(selectedRuntimeOwners.Travel.ActiveTravelPartyId,
-                activeTravelPartyId, StringComparison.Ordinal));
+                activeTravelPartyId, StringComparison.Ordinal)
+            && ReferenceEquals(travelPlan?.SelectedOwner, selectedRuntimeOwners.TravelPlan)
+            && travelPlan.MatchesSelectedOwner());
     public NpcLifeState LifeState => selectedRuntimeOwners != null
         ? selectedRuntimeOwners.Lifecycle.LifeState
         : lifeState;
@@ -1210,6 +1212,10 @@ public class NpcRuntime : ICapabilityConditionSource
                     nameof(selectedDefinition));
 
             selectedRuntimeOwners = selectedOwners;
+            if (!TravelPlan.TryBindSelectedOwner(selectedOwners.TravelPlan))
+                throw new ArgumentException(
+                    "The selected NPC travel plan could not bind to its Core owner.",
+                    nameof(selectedDefinition));
             selectedDefinitionBindings = selectedBindings;
             commercialKnowledge = new CommercialKnowledgeRuntime(
                 selectedOwners.CommercialKnowledge, selectedBindings);
@@ -1328,6 +1334,8 @@ public class NpcRuntime : ICapabilityConditionSource
                 || selectedDailyV1StatusOwner == null
                 || !HasConsistentSelectedCurrentActionSlot(
                     definitions, bindings, selectedRuntimeOwners.ActionSlot)
+                || !ReferenceEquals(TravelPlan.SelectedOwner, selectedRuntimeOwners.TravelPlan)
+                || !TravelPlan.MatchesSelectedOwner()
                 || (selectedDefinitionBindings != null
                     && !ReferenceEquals(selectedDefinitionBindings, bindings)))
                 return false;
@@ -1424,6 +1432,11 @@ public class NpcRuntime : ICapabilityConditionSource
             || !stagedOwners.ActionSlot.TryInstallRevision(currentActionRevision)
             || !stagedOwners.Lifecycle.TryInstallState(lifeState, injurySeverity, lifeStateRevision)
             || !stagedOwners.HiddenState.TryInstallExact(hiddenDaysRemaining)
+            || travelPlan == null
+            || !stagedOwners.TravelPlan.TryInstallExact(
+                travelPlan.TargetLocation?.RuntimeId, travelPlan.TargetCity?.RuntimeId,
+                travelPlan.Reason, travelPlan.Utility, travelPlan.ExpectedCost,
+                travelPlan.OriginDecisionId, travelPlan.Revision)
             || !stagedOwners.Travel.TryInstallState(
                 currentLocation?.RuntimeId, currentCity?.RuntimeId,
                 destinationLocation?.RuntimeId, destinationCity?.RuntimeId,
@@ -1437,6 +1450,7 @@ public class NpcRuntime : ICapabilityConditionSource
         if (!MerchantTradePlan.TryBindSelectedOwner(
                 stagedOwners.MerchantTradePlan, bindings,
                 resolveCityRuntime ?? (_ => null))) return false;
+        if (!TravelPlan.TryBindSelectedOwner(stagedOwners.TravelPlan)) return false;
         selectedRuntimeOwners = stagedOwners;
         selectedDefinitionBindings = bindings;
         return true;
@@ -1601,11 +1615,20 @@ public class NpcRuntime : ICapabilityConditionSource
                         state.CurrentActionDefinitionId, out stagedCurrentAction)
                     || stagedCurrentAction == null))
                 return false;
+            NpcTravelPlanState stagedTravelPlanState = state.TravelPlan.CaptureOwnerState();
+            if (stagedTravelPlanState == null) return false;
             if (!stagedSelectedOwners.ActionSlot.TrySetCurrentAction(stagedCurrentAction)
                 || !stagedSelectedOwners.ActionSlot.TryInstallRevision(state.CurrentActionRevision)
                 || !stagedSelectedOwners.Lifecycle.TryInstallState(
                     state.LifeState, state.InjurySeverity, state.LifeStateRevision)
-                || !stagedSelectedOwners.HiddenState.TryInstallExact(state.HiddenDaysRemaining))
+                || !stagedSelectedOwners.HiddenState.TryInstallExact(state.HiddenDaysRemaining)
+                || !stagedSelectedOwners.TravelPlan.TryInstallExact(
+                    stagedTravelPlanState.TargetLocation?.RuntimeId,
+                    stagedTravelPlanState.TargetCity?.RuntimeId,
+                    stagedTravelPlanState.Reason, stagedTravelPlanState.Utility,
+                    stagedTravelPlanState.ExpectedCost, stagedTravelPlanState.OriginDecisionId,
+                    state.TravelPlan.Revision)
+                || !state.TravelPlan.TryBindSelectedOwner(stagedSelectedOwners.TravelPlan))
                 return false;
         }
         else if (state.SelectedNpcDefinition != null

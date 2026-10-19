@@ -228,6 +228,7 @@ public class NpcTravelPlanRuntime
     [SerializeField] private long revision;
     [NonSerialized] private Func<bool> p12MutationAdmission;
     [NonSerialized] private Action p12MutationCommitted;
+    [NonSerialized] private DailyV1NpcTravelPlanOwner selectedOwner;
 
     public SpatialLocationRuntime TargetLocation => targetLocation;
     public CityRuntime TargetCity => targetCity;
@@ -235,13 +236,33 @@ public class NpcTravelPlanRuntime
     public float Utility => utility;
     public float ExpectedCost => expectedCost;
     public string OriginDecisionId => originDecisionId;
-    public long Revision => revision;
+    public long Revision => selectedOwner == null ? revision : selectedOwner.Revision;
     public bool IsActive => targetLocation != null && reason != NpcTravelReason.None;
+
+    internal DailyV1NpcTravelPlanOwner SelectedOwner => selectedOwner;
+
+    internal bool TryBindSelectedOwner(DailyV1NpcTravelPlanOwner owner)
+    {
+        if (owner == null) return false;
+        if (selectedOwner != null) return ReferenceEquals(selectedOwner, owner) && MatchesSelectedOwner();
+        if (!owner.Matches(targetLocation?.RuntimeId, targetCity?.RuntimeId, reason,
+                utility, expectedCost, originDecisionId)
+            || owner.Revision != revision) return false;
+        selectedOwner = owner;
+        return true;
+    }
+
+    internal bool MatchesSelectedOwner() => selectedOwner != null
+        && (targetCity == null || ReferenceEquals(targetCity.Location, targetLocation))
+        && selectedOwner.Matches(targetLocation?.RuntimeId, targetCity?.RuntimeId,
+            reason, utility, expectedCost, originDecisionId)
+        && selectedOwner.Revision == revision;
 
     internal NpcTravelPlanState CaptureOwnerState() => new NpcTravelPlanState(
         targetLocation, targetCity, reason, utility, expectedCost, originDecisionId);
 
     internal bool MatchesOwnerState(NpcTravelPlanState state) => state != null
+        && (selectedOwner == null || MatchesSelectedOwner())
         && ReferenceEquals(targetLocation, state.TargetLocation)
         && ReferenceEquals(targetCity, state.TargetCity)
         && reason == state.Reason
@@ -249,22 +270,37 @@ public class NpcTravelPlanRuntime
         && expectedCost.Equals(state.ExpectedCost)
         && string.Equals(originDecisionId, state.OriginDecisionId, StringComparison.Ordinal);
 
-    internal bool CanInstallOwnerState(NpcTravelPlanState state) => state != null
-        && (MatchesOwnerState(state)
-            || (revision < long.MaxValue && CanCommitP12Mutation()));
+    internal bool CanInstallOwnerState(NpcTravelPlanState state)
+    {
+        if (state == null) return false;
+        if (selectedOwner != null && !MatchesSelectedOwner()) return false;
+        if (MatchesOwnerState(state)) return true;
+        long currentRevision = Revision;
+        if (currentRevision == long.MaxValue || !CanCommitP12Mutation()) return false;
+        return selectedOwner == null
+            || selectedOwner.CanCommit(state.TargetLocation?.RuntimeId,
+                state.TargetCity?.RuntimeId, state.Reason, state.Utility,
+                state.ExpectedCost, state.OriginDecisionId);
+    }
 
     internal bool InstallOwnerState(NpcTravelPlanState state)
     {
         if (state == null) return false;
         if (MatchesOwnerState(state)) return true;
-        if (revision == long.MaxValue || !CanCommitP12Mutation()) return false;
+        if (selectedOwner != null && !MatchesSelectedOwner()) return false;
+        if (Revision == long.MaxValue || !CanCommitP12Mutation()) return false;
+        if (selectedOwner != null
+            && !selectedOwner.TryCommit(state.TargetLocation?.RuntimeId,
+                state.TargetCity?.RuntimeId, state.Reason, state.Utility,
+                state.ExpectedCost, state.OriginDecisionId)) return false;
         targetLocation = state.TargetLocation;
         targetCity = state.TargetCity;
         reason = state.Reason;
         utility = state.Utility;
         expectedCost = state.ExpectedCost;
         originDecisionId = state.OriginDecisionId;
-        revision++;
+        if (selectedOwner == null) revision++;
+        else revision = selectedOwner.Revision;
         NotifyP12MutationCommitted();
         return true;
     }
@@ -388,15 +424,6 @@ internal sealed class NpcTravelPlanState
         ExpectedCost = expectedCost;
         OriginDecisionId = originDecisionId;
     }
-}
-
-public enum NpcTravelReason
-{
-    None,
-    Trade,
-    Flee,
-    TradeReposition,
-    CommercialScout
 }
 
 public enum NpcActionResultType

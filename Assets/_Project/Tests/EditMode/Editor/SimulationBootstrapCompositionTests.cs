@@ -2414,6 +2414,19 @@ public sealed class SimulationBootstrapCompositionTests
             "A non-admitted authoring alias cannot replace the typed plan identity.");
         Assert.That(planAuthority.Revision, Is.EqualTo(2L));
 
+        DailyV1NpcTravelPlanOwner travelPlanAuthority = runtime.SelectedRuntimeOwners.TravelPlan;
+        Assert.That(runtime.TravelPlan.SelectedOwner, Is.SameAs(travelPlanAuthority));
+        Assert.That(travelPlanAuthority.Revision, Is.Zero);
+        runtime.TravelPlan.Set(planCity, NpcTravelReason.Trade, 0.75f, 3f, "decision.travel-plan");
+        Assert.That(runtime.TravelPlan.TargetCity, Is.SameAs(planCity));
+        Assert.That(runtime.TravelPlan.TargetLocation, Is.SameAs(planCity.Location));
+        Assert.That(travelPlanAuthority.TargetCityRuntimeId, Is.EqualTo(planCity.RuntimeId));
+        Assert.That(travelPlanAuthority.TargetLocationRuntimeId, Is.EqualTo(planCity.Location.RuntimeId));
+        Assert.That(travelPlanAuthority.Revision, Is.EqualTo(1L));
+        runtime.TravelPlan.Set(planCity, NpcTravelReason.Trade, 0.75f, 3f, "decision.travel-plan");
+        Assert.That(travelPlanAuthority.Revision, Is.EqualTo(1L),
+            "An identical selected travel plan remains a no-op.");
+
         DailyV1ActionDefinition actionDefinition = graph.Actions.Values.First();
         Assert.That(bindings.TryGetAsset(actionDefinition, out NpcActionData actionAsset), Is.True);
         runtime.SetCurrentActionRuntime(new NpcActionRuntime(actionAsset));
