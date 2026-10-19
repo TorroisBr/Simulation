@@ -9372,12 +9372,22 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         RejectActorChoicesWithoutMaterializedTurn(npcRuntimes.Count);
 
         List<NpcRuntime> arrivedNpcs = new List<NpcRuntime>();
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph = SelectedRuntimeOwnerGraph;
 
         if (travelPartySystem != null)
         {
             if (runtimeAdmissionContext == null)
             {
-                arrivedNpcs.AddRange(travelPartySystem.AdvanceParties());
+                if (selectedGraph != null)
+                {
+                    if (!travelPartySystem.TryAdvanceSelectedParties(selectedGraph, npcRuntimes,
+                            out IReadOnlyList<NpcRuntime> partyArrivals))
+                        throw new InvalidOperationException(
+                            "The selected Core TravelParty stage could not admit its exact runtime owner graph.");
+                    arrivedNpcs.AddRange(partyArrivals);
+                }
+                else
+                    arrivedNpcs.AddRange(travelPartySystem.AdvanceParties());
             }
             else if (!TryBeginP12TravelPartyAdvanceOperation(
                 out P12TravelPartyAdvanceOperationScope travelPartyAdvanceScope))
@@ -9388,13 +9398,23 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             else
             {
                 using (travelPartyAdvanceScope)
-                    arrivedNpcs.AddRange(travelPartySystem.AdvanceParties());
+                {
+                    if (selectedGraph != null)
+                    {
+                        if (!travelPartySystem.TryAdvanceSelectedParties(selectedGraph, npcRuntimes,
+                                out IReadOnlyList<NpcRuntime> partyArrivals))
+                            throw new InvalidOperationException(
+                                "The selected Core TravelParty stage could not admit its exact runtime owner graph.");
+                        arrivedNpcs.AddRange(partyArrivals);
+                    }
+                    else
+                        arrivedNpcs.AddRange(travelPartySystem.AdvanceParties());
+                }
             }
         }
 
         if (travelSystem != null)
         {
-            DailyV1SelectedRuntimeOwnerGraph selectedGraph = SelectedRuntimeOwnerGraph;
             if (selectedGraph != null)
             {
                 if (!travelSystem.TryAdvanceSelectedSoloTravels(

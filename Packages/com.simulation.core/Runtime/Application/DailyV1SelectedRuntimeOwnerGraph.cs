@@ -472,6 +472,203 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     }
 
     /// <summary>
+    /// Advances the existing P8 TravelParty owner in its captured store order.
+    /// Core resolves each exact selected NPC owner, checks synchronized travel,
+    /// and performs the travel, discovery, party-identity, and store-completion
+    /// mutations. The two host callbacks are restricted to the established
+    /// pre-commit P12/projection preflight and publishing a committed Core
+    /// owner into the existing Unity projection before the next member is read.
+    /// The event callback publishes the noncausal event read model at its
+    /// existing position before active-party identities are cleared.
+    /// </summary>
+    internal bool TryAdvanceTravelParties(
+        TravelPartyStore partyStore,
+        Func<DailyV1NpcRuntimeOwners, DailyV1SelectedTravelTransitionPlan, bool, bool> preCommitAdmission,
+        Action<DailyV1NpcRuntimeOwners, DailyV1SelectedTravelTransitionPlan, bool> publishCommitted,
+        Func<TravelPartyRuntime, bool> publishArrivalEvent,
+        out IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> arrivals)
+    {
+        arrivals = null;
+        if (partyStore == null || preCommitAdmission == null || publishCommitted == null)
+            return false;
+
+        using (partyStore.EnterMutationWindow())
+        {
+            List<DailyV1SelectedTravelPartyArrivalResult> completed =
+                new List<DailyV1SelectedTravelPartyArrivalResult>();
+            List<TravelPartyRuntime> activeParties = new List<TravelPartyRuntime>(partyStore.ActiveParties);
+            Dictionary<string, DailyV1NpcRuntimeOwners> npcsById =
+                new Dictionary<string, DailyV1NpcRuntimeOwners>(StringComparer.Ordinal);
+            foreach (DailyV1NpcRuntimeOwners npc in npcs)
+                if (npc == null || !npcsById.TryAdd(npc.RuntimeId, npc)) return false;
+
+            foreach (TravelPartyRuntime party in activeParties)
+            {
+                if (party == null || !party.IsActive
+                    || !TryResolveSynchronizedPartyMembers(party, npcsById,
+                        out List<DailyV1NpcRuntimeOwners> members))
+                    continue;
+
+                bool startedToday = false;
+                foreach (DailyV1NpcRuntimeOwners member in members)
+                    startedToday |= member.Travel.TravelStartedToday;
+
+                if (startedToday)
+                {
+                    List<DailyV1SelectedTravelTransitionPlan> clearPlans =
+                        new List<DailyV1SelectedTravelTransitionPlan>(members.Count);
+                    bool canClear = true;
+                    foreach (DailyV1NpcRuntimeOwners member in members)
+                    {
+                        if (!DailyV1SelectedTravelTransitionPlan.TryClearTravelStartedToday(
+                                member, out DailyV1SelectedTravelTransitionPlan clearPlan)
+                            || !preCommitAdmission(member, clearPlan, false))
+                        {
+                            canClear = false;
+                            break;
+                        }
+                        clearPlans.Add(clearPlan);
+                    }
+                    if (!canClear) continue;
+                    foreach (DailyV1SelectedTravelTransitionPlan clearPlan in clearPlans)
+                    {
+                        DailyV1NpcRuntimeOwners member = clearPlan.Npc;
+                        if (!TryCommitTravelTransition(member, clearPlan, null))
+                            throw new InvalidOperationException(
+                                "A preflighted TravelParty start-day flag could not commit.");
+                        publishCommitted(member, clearPlan, false);
+                    }
+                    continue;
+                }
+
+                bool willArrive = members[0].Travel.TravelDaysRemaining <= 1;
+                DailyV1CityRuntimeOwners destinationCity = null;
+                string destinationCityId = members[0].Travel.DestinationCityRuntimeId;
+                if (destinationCityId != null)
+                {
+                    foreach (DailyV1CityRuntimeOwners city in cities)
+                        if (string.Equals(city.RuntimeId, destinationCityId, StringComparison.Ordinal))
+                        {
+                            destinationCity = city;
+                            break;
+                        }
+                    if (destinationCity == null) continue;
+                }
+
+                if (willArrive && !partyStore.CanCommitMutations(1)) continue;
+
+                List<DailyV1SelectedTravelTransitionPlan> advancePlans =
+                    new List<DailyV1SelectedTravelTransitionPlan>(members.Count);
+                int destinationPresenceAdds = 0;
+                bool canAdvance = true;
+                foreach (DailyV1NpcRuntimeOwners member in members)
+                {
+                    if (!DailyV1SelectedTravelTransitionPlan.TryAdvanceTravelDay(
+                            member, destinationCity,
+                            out DailyV1SelectedTravelTransitionPlan advancePlan,
+                            out bool memberArrives)
+                        || memberArrives != willArrive
+                        || !preCommitAdmission(member, advancePlan, willArrive))
+                    {
+                        canAdvance = false;
+                        break;
+                    }
+                    if (willArrive && destinationCity != null
+                        && !destinationCity.NpcPresence.Contains(member.RuntimeId))
+                        destinationPresenceAdds++;
+                    advancePlans.Add(advancePlan);
+                }
+                if (!canAdvance || (destinationCity != null
+                    && !destinationCity.NpcPresence.CanApplyRevisionIncrements(destinationPresenceAdds)))
+                    continue;
+
+                bool allMembersAdvanced = true;
+                foreach (DailyV1SelectedTravelTransitionPlan advancePlan in advancePlans)
+                {
+                    DailyV1NpcRuntimeOwners member = advancePlan.Npc;
+                    if (!TryCommitTravelTransition(member, advancePlan, null))
+                    {
+                        allMembersAdvanced = false;
+                        continue;
+                    }
+                    publishCommitted(member, advancePlan, willArrive);
+                }
+                if (!allMembersAdvanced || !willArrive) continue;
+
+                foreach (DailyV1NpcRuntimeOwners member in members)
+                    member.SpatialKnowledge.DiscoverLocation(party.DestinationLocationRuntimeId);
+
+                bool eventRecorded = publishArrivalEvent == null || publishArrivalEvent(party);
+                foreach (DailyV1NpcRuntimeOwners member in members)
+                {
+                    if (!DailyV1SelectedTravelTransitionPlan.TrySetActiveTravelParty(
+                            member, null, out DailyV1SelectedTravelTransitionPlan clearPartyPlan)
+                        || !preCommitAdmission(member, clearPartyPlan, false)
+                        || !TryCommitTravelTransition(member, clearPartyPlan, null))
+                        throw new InvalidOperationException(
+                            "A preflighted arrived TravelParty member could not clear its party identity.");
+                    publishCommitted(member, clearPartyPlan, false);
+                }
+
+                if (!partyStore.Complete(party.TravelPartyId))
+                    throw new InvalidOperationException(
+                        "A preflighted TravelParty arrival could not complete its Core owner.");
+
+                completed.Add(new DailyV1SelectedTravelPartyArrivalResult(
+                    party, members.AsReadOnly(), eventRecorded));
+            }
+
+            arrivals = completed.AsReadOnly();
+            return true;
+        }
+    }
+
+    private static bool TryResolveSynchronizedPartyMembers(
+        TravelPartyRuntime party,
+        IReadOnlyDictionary<string, DailyV1NpcRuntimeOwners> npcsById,
+        out List<DailyV1NpcRuntimeOwners> members)
+    {
+        members = new List<DailyV1NpcRuntimeOwners>();
+        if (party == null || npcsById == null || party.MemberRuntimeIds == null
+            || party.MemberRuntimeIds.Count == 0)
+            return false;
+
+        foreach (string runtimeId in party.MemberRuntimeIds)
+        {
+            if (string.IsNullOrWhiteSpace(runtimeId)
+                || !npcsById.TryGetValue(runtimeId, out DailyV1NpcRuntimeOwners member)
+                || member == null || member.Lifecycle.LifeState != NpcLifeState.Alive)
+                return false;
+            members.Add(member);
+        }
+
+        DailyV1NpcRuntimeOwners first = members[0];
+        if (!first.Travel.IsTraveling
+            || string.IsNullOrWhiteSpace(first.Travel.DestinationLocationRuntimeId)
+            || first.Travel.TravelDaysRemaining <= 0
+            || !string.Equals(first.Travel.ActiveTravelPartyId, party.TravelPartyId, StringComparison.Ordinal)
+            || !string.Equals(first.Travel.DestinationLocationRuntimeId,
+                party.DestinationLocationRuntimeId, StringComparison.Ordinal)
+            || !string.Equals(first.Travel.TravelOriginDecisionId,
+                party.OriginDecisionId, StringComparison.Ordinal))
+            return false;
+
+        foreach (DailyV1NpcRuntimeOwners member in members)
+            if (!member.Travel.IsTraveling
+                || !string.Equals(member.Travel.DestinationLocationRuntimeId,
+                    first.Travel.DestinationLocationRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(member.Travel.DestinationCityRuntimeId,
+                    first.Travel.DestinationCityRuntimeId, StringComparison.Ordinal)
+                || member.Travel.TravelDaysRemaining != first.Travel.TravelDaysRemaining
+                || !string.Equals(member.Travel.ActiveTravelPartyId,
+                    party.TravelPartyId, StringComparison.Ordinal)
+                || !string.Equals(member.Travel.TravelOriginDecisionId,
+                    party.OriginDecisionId, StringComparison.Ordinal))
+                return false;
+        return true;
+    }
+
+    /// <summary>
     /// Commits the exact selected NPC action definition/payload to its Core
     /// owner slot after host admission. The host still projects its existing
     /// action object and records the P12 epoch after this authoritative write.
@@ -674,6 +871,23 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
 /// A receipt is emitted only after Core has selected and evaluated that NPC;
 /// its plan is committed when <see cref="WasCommitted"/> is true.
 /// </summary>
+internal sealed class DailyV1SelectedTravelPartyArrivalResult
+{
+    internal TravelPartyRuntime Party { get; }
+    internal IReadOnlyList<DailyV1NpcRuntimeOwners> Members { get; }
+    internal bool EventRecorded { get; }
+
+    internal DailyV1SelectedTravelPartyArrivalResult(
+        TravelPartyRuntime party,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> members,
+        bool eventRecorded)
+    {
+        Party = party ?? throw new ArgumentNullException(nameof(party));
+        Members = members ?? throw new ArgumentNullException(nameof(members));
+        EventRecorded = eventRecorded;
+    }
+}
+
 internal sealed class DailyV1SelectedSoloTravelDayResult
 {
     internal DailyV1NpcRuntimeOwners Npc { get; }

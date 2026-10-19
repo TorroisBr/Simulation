@@ -488,4 +488,120 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(travelResults.Single(result => ReferenceEquals(result.Npc, startedToday)).WasCommitted, Is.True);
         Assert.That(travelResults.Any(result => ReferenceEquals(result.Npc, partyMember)), Is.False);
     }
+
+    [Test]
+    public void SelectedTravelPartyDayRunsCoreOwnerTransitionsInPartyMemberAndP12Order()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(
+            allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        DailyV1NpcRuntimeOwners member = graph.Npcs[0];
+        DailyV1CityRuntimeOwners origin = graph.Cities.Single(city =>
+            string.Equals(city.RuntimeId, member.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        DailyV1CityRuntimeOwners destination = graph.Cities.Single(city => !ReferenceEquals(city, origin));
+        Assert.That(DailyV1SelectedTravelTransitionPlan.TryStartTravel(
+            member, origin, origin.LocationRuntimeId, destination.LocationRuntimeId, destination,
+            requestedTravelDays: 2, originDecisionId: "party-day-decision",
+            routeId: "party-day-route", out DailyV1SelectedTravelTransitionPlan startPlan), Is.True);
+        Assert.That(graph.TryCommitTravelTransition(member, startPlan, () => true), Is.True);
+
+        TravelPartyRuntime party = new TravelPartyRuntime(
+            "party-day-1", origin.LocationRuntimeId, destination.LocationRuntimeId,
+            "party-day-route", new[] { member.RuntimeId }, Array.Empty<string>(), 2,
+            "party-day-decision", new[] { new TravelPartyMemberCost(member.RuntimeId, 1f) });
+        TravelPartyStore partyStore = new TravelPartyStore();
+        Assert.That(partyStore.Add(party), Is.True);
+        Assert.That(DailyV1SelectedTravelTransitionPlan.TrySetActiveTravelParty(
+            member, party.TravelPartyId, out DailyV1SelectedTravelTransitionPlan setPartyPlan), Is.True);
+        Assert.That(graph.TryCommitTravelTransition(member, setPartyPlan, () => true), Is.True);
+
+        List<string> ownerEvents = new List<string>();
+        IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> completed = null;
+        Assert.That(graph.TryAdvanceTravelParties(
+            partyStore,
+            (owner, plan, arriving) =>
+            {
+                ownerEvents.Add("admit:" + owner.RuntimeId + ":" + arriving);
+                return true;
+            },
+            (owner, plan, arriving) =>
+            {
+                Assert.That(plan.IsCommitted, Is.True);
+                ownerEvents.Add("publish:" + owner.RuntimeId + ":" + arriving);
+            },
+            _ =>
+            {
+                Assert.Fail("The travel start-day flag must be cleared without arrival.");
+                return false;
+            },
+            out completed), Is.True);
+        Assert.That(completed, Is.Empty);
+        Assert.That(member.Travel.TravelStartedToday, Is.False);
+        Assert.That(member.Travel.TravelDaysRemaining, Is.EqualTo(2));
+        Assert.That(partyStore.ActiveParties, Is.EqualTo(new[] { party }));
+
+        Assert.That(member.Travel.TryInstallState(
+            null, null, destination.LocationRuntimeId, destination.RuntimeId, 1, 2,
+            "party-day-route", false, "party-day-decision", party.TravelPartyId,
+            member.Travel.Revision), Is.True);
+        long storeRevisionBeforeArrival = partyStore.Revision;
+        bool eventObservedBeforePartyClear = false;
+        ownerEvents.Clear();
+
+        Assert.That(graph.TryAdvanceTravelParties(
+            partyStore,
+            (owner, plan, arriving) =>
+            {
+                ownerEvents.Add("admit:" + owner.RuntimeId + ":" + arriving);
+                return true;
+            },
+            (owner, plan, arriving) =>
+            {
+                Assert.That(plan.IsCommitted, Is.True);
+                ownerEvents.Add("publish:" + owner.RuntimeId + ":" + arriving);
+            },
+            currentParty =>
+            {
+                Assert.That(currentParty, Is.SameAs(party));
+                Assert.That(partyStore.ActiveParties, Does.Contain(party),
+                    "The established arrival event is published before the party owner completes.");
+                Assert.That(member.Travel.ActiveTravelPartyId, Is.EqualTo(party.TravelPartyId),
+                    "The established arrival event precedes member party-identity clearing.");
+                Assert.That(destination.NpcPresence.Contains(member.RuntimeId), Is.True);
+                Assert.That(member.SpatialKnowledge.KnowsLocation(destination.LocationRuntimeId), Is.True,
+                    "Arrival discovery is committed to the exact selected Core owner before event publication.");
+                ownerEvents.Add("event:" + currentParty.TravelPartyId);
+                eventObservedBeforePartyClear = true;
+                return true;
+            },
+            out completed), Is.True);
+
+        Assert.That(eventObservedBeforePartyClear, Is.True);
+        Assert.That(completed, Has.Count.EqualTo(1));
+        Assert.That(completed[0].Party, Is.SameAs(party));
+        Assert.That(completed[0].Members, Is.EqualTo(new[] { member }));
+        Assert.That(completed[0].EventRecorded, Is.True);
+        Assert.That(partyStore.ActiveParties, Is.Empty);
+        Assert.That(partyStore.Revision, Is.EqualTo(storeRevisionBeforeArrival + 1));
+        Assert.That(member.Travel.ActiveTravelPartyId, Is.Null);
+        Assert.That(member.Travel.CurrentCityRuntimeId, Is.EqualTo(destination.RuntimeId));
+        Assert.That(member.Travel.Revision, Is.EqualTo(5L));
+        Assert.That(member.SpatialKnowledge.Revision, Is.EqualTo(1L));
+        Assert.That(destination.NpcPresence.Contains(member.RuntimeId), Is.True);
+        Assert.That(ownerEvents, Is.EqualTo(new[]
+        {
+            "admit:" + member.RuntimeId + ":True",
+            "publish:" + member.RuntimeId + ":True",
+            "event:party-day-1",
+            "admit:" + member.RuntimeId + ":False",
+            "publish:" + member.RuntimeId + ":False"
+        }));
+    }
 }

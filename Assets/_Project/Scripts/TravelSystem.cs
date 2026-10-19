@@ -333,7 +333,7 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
         return true;
     }
 
-    private bool TryGetSelectedTravelProjectionCandidates(
+    internal bool TryGetSelectedTravelProjectionCandidates(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1SelectedTravelTransitionPlan plan,
         out CityRuntime[] projections)

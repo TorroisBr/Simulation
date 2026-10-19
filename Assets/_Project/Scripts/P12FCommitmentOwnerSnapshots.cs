@@ -187,7 +187,25 @@ internal sealed class P12FTravelPartyOwnerSnapshot
                 return false;
             }
         }
-        if (!TravelPartyStore.TryCreateFromOwnerSnapshot(snapshot, out stagedStore) || stagedStore == null)
+        List<TravelPartyRuntime> stagedParties = new List<TravelPartyRuntime>(snapshot.Parties.Count);
+        foreach (P12FTravelPartyOwnerSnapshotRecord record in snapshot.Parties)
+        {
+            try
+            {
+                stagedParties.Add(TravelPartyRuntime.CreateActiveFromOwnerSnapshot(
+                    record.TravelPartyId, record.OriginLocationRuntimeId,
+                    record.DestinationLocationRuntimeId, record.RouteRuntimeId,
+                    record.TravelerRuntimeIds, record.EscortRuntimeIds,
+                    record.TravelDaysTotal, record.OriginDecisionId, record.MemberCosts));
+            }
+            catch (ArgumentException)
+            {
+                failure = P12FCommitmentSnapshotFailure.StageFailed;
+                return false;
+            }
+        }
+        if (!TravelPartyStore.TryCreateFromOwnerRows(
+                stagedParties, snapshot.Revision, out stagedStore) || stagedStore == null)
         {
             failure = P12FCommitmentSnapshotFailure.StageFailed;
             return false;

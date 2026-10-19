@@ -22,7 +22,10 @@ public sealed class P12FCommitmentOwnerSnapshotTests
             out P12FTravelPartyOwnerSnapshot partySnapshot, out P12FCommitmentSnapshotFailure partyFailure), Is.True);
         Assert.That(partyFailure, Is.EqualTo(P12FCommitmentSnapshotFailure.None));
         Assert.That(partySnapshot.Parties, Is.Empty);
-        Assert.That(TravelPartyStore.TryCreateFromOwnerSnapshot(partySnapshot, out TravelPartyStore stagedParties), Is.True);
+        Assert.That(P12FTravelPartyOwnerSnapshot.TryStage(
+            partySnapshot, Array.Empty<NpcRuntime>(), Array.Empty<P12DNpcFRow>(),
+            new RuntimeIdentityRegistry(), out TravelPartyStore stagedParties, out partyFailure), Is.True);
+        Assert.That(partyFailure, Is.EqualTo(P12FCommitmentSnapshotFailure.None));
         Assert.That(stagedParties.Revision, Is.EqualTo(0));
 
         Assert.That(P12FExpeditionOwnerSnapshot.TryCapture(expeditions, token, token.OwnerSections,
