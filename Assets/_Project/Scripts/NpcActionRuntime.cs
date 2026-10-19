@@ -130,13 +130,15 @@ public class NpcActionRuntime
         if (action == null || !string.Equals(action.DefinitionId, owner.Action.DefinitionId, StringComparison.Ordinal))
             return false;
         if (bindings == null) return true;
-        return bindings.TryGet(owner.Action, out DailyV1ActionDefinition mappedAction)
+        return bindings.TryGet(action, out DailyV1ActionDefinition mappedAction)
             && ReferenceEquals(mappedAction, owner.Action)
             && bindings.TryGetAsset(owner.Action, out NpcActionData mappedActionAsset)
             && ReferenceEquals(mappedActionAsset, action)
             && (owner.TargetItem == null
                 ? targetItem == null
-                : bindings.TryGetAsset(owner.TargetItem, out ItemData mappedItem)
+                : bindings.TryGet(targetItem, out DailyV1ItemDefinition mappedItemNode)
+                    && ReferenceEquals(mappedItemNode, owner.TargetItem)
+                    && bindings.TryGetAsset(owner.TargetItem, out ItemData mappedItem)
                     && ReferenceEquals(mappedItem, targetItem));
     }
 
