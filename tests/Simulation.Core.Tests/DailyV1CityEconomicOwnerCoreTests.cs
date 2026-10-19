@@ -117,8 +117,8 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         Assert.That(source.Revision, Is.Zero);
         Assert.That(source.LastProcessedDay, Is.EqualTo(long.MinValue));
 
-        LocalDailyMaterialFlowResult result = owners.SimulateSelectedMixedSourceDailyMaterialFlow(
-            1, "calendar-v1", null);
+        LocalDailyMaterialFlowResult result = owners.SimulateSelectedLocalDailyMaterialFlow(
+            owners.LocationRuntimeId, 1, "calendar-v1", null);
         Assert.That(result.OpeningStock, Is.EqualTo(5));
         Assert.That(result.ConfiguredSourceQuantity, Is.EqualTo(5));
         Assert.That(result.AppliedSourceQuantity, Is.EqualTo(5));
@@ -132,7 +132,8 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         Assert.That(source.Revision, Is.EqualTo(1));
         Assert.That(source.LastProcessedDay, Is.EqualTo(1));
         Assert.Throws<LocalDailyMaterialFlowRejectedException>(() =>
-            owners.SimulateSelectedMixedSourceDailyMaterialFlow(1, "calendar-v1", null),
+            owners.SimulateSelectedLocalDailyMaterialFlow(
+                owners.LocationRuntimeId, 1, "calendar-v1", null),
             "A finite source cannot install twice for the same boundary.");
         Assert.That(source.RemainingReserve, Is.EqualTo(4));
         Assert.That(source.Revision, Is.EqualTo(1));
@@ -147,7 +148,7 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         DailyV1ItemDefinition item = source.Item;
         List<string> logs = new List<string>();
 
-        LocalDailyMaterialFlowResult result = owners.SimulateSelectedFiniteReserveDailyMaterialFlow(
+        LocalDailyMaterialFlowResult result = owners.SimulateSelectedLocalDailyMaterialFlow(
             owners.LocationRuntimeId, 1, "calendar-v1", (_, message) => logs.Add(message));
 
         Assert.That(result.ItemDefinitionId, Is.EqualTo(item.DefinitionId));
@@ -166,7 +167,7 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
             "Production and the existing free-consumption write retain separate Market revisions.");
         Assert.That(logs, Is.EqualTo(new[] { "Finite City source source/finite: 3/3", "Finite City consumed 4 Iron" }));
 
-        LocalDailyMaterialFlowResult second = owners.SimulateSelectedFiniteReserveDailyMaterialFlow(
+        LocalDailyMaterialFlowResult second = owners.SimulateSelectedLocalDailyMaterialFlow(
             owners.LocationRuntimeId, 2, "calendar-v1", null);
         Assert.That(second.AppliedSourceQuantity, Is.EqualTo(3));
         Assert.That(second.ClosingStock, Is.EqualTo(3));
@@ -800,7 +801,7 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
             out DailyV1CityRuntimeOwners owners), Is.True);
         List<string> output = new List<string>();
 
-        LocalDailyMaterialFlowResult result = owners.SimulateSelectedExogenousDailyMaterialFlow(
+        LocalDailyMaterialFlowResult result = owners.SimulateSelectedLocalDailyMaterialFlow(
             "location/1", 7, "calendar/1", (category, message) => output.Add(category + ":" + message));
 
         Assert.That(result.SettlementSemanticId, Is.EqualTo("settlement/1"));

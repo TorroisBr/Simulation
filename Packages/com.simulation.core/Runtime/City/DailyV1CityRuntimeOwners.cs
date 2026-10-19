@@ -129,6 +129,35 @@ internal sealed partial class DailyV1CityRuntimeOwners
         && definitions.Cities.TryGetValue(definition.DefinitionId, out DailyV1CityDefinition admitted)
         && ReferenceEquals(definition, admitted);
 
+    /// <summary>
+    /// Executes the selected City's admitted daily material-flow policy through
+    /// the same Core owners used by bootstrap, capture, and hydration. The
+    /// Unity CityRuntime supplies only the host location projection and log sink.
+    /// </summary>
+    internal LocalDailyMaterialFlowResult SimulateSelectedLocalDailyMaterialFlow(
+        string locationId,
+        long absoluteDay,
+        string calendarVersion,
+        Action<SimulationLogCategory, string> logOutput)
+    {
+        LocalMaterialFlowProfile profile = (LocalMaterialFlowProfile)(Definition.Values.materialFlowProfile?.Value
+            ?? (int)LocalMaterialFlowProfile.ExogenousDaily);
+        switch (profile)
+        {
+            case LocalMaterialFlowProfile.FiniteReserveDaily:
+                return SimulateSelectedFiniteReserveDailyMaterialFlow(
+                    locationId, absoluteDay, calendarVersion, logOutput);
+            case LocalMaterialFlowProfile.MixedSourcesDaily:
+                return SimulateSelectedMixedSourceDailyMaterialFlow(
+                    absoluteDay, calendarVersion, logOutput);
+            default:
+                // Keep the selected runtime's prior fallback for an unrecognized
+                // profile value; valid admitted profiles use the explicit cases.
+                return SimulateSelectedExogenousDailyMaterialFlow(
+                    locationId, absoluteDay, calendarVersion, logOutput);
+        }
+    }
+
     private static MarketCounterpartyRuntime CreateConfiguredCounterparty(
         string runtimeId,
         DailyV1CityData values)
