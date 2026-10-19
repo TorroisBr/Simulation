@@ -149,6 +149,46 @@ public sealed class P14CMixedSourceProductionTests
     }
 
     [Test]
+    public void SelectedFiniteReserveFlowUsesTheCoreCityOwnersAfterAuthoringItemsAreDetached()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p14b-selected-finite-item", 4f);
+        CityData authoredCity = CreateFiniteCity("p14b-selected-finite-city", item, 5, 4f);
+        using (SelectedCityFixture fixture = CreateSelectedCityFixture(
+            "p14b-selected-finite-city", authoredCity))
+        {
+            CityRuntime city = fixture.City;
+            DailyV1CityRuntimeOwners exactOwners = city.SelectedRuntimeOwners;
+            DailyV1FiniteProductionSourceOwner finiteSource = exactOwners.FiniteSource;
+            DailyV1ItemDefinition admittedItem = fixture.Definitions.Items[item.DefinitionId];
+
+            authoredCity.materialFlowProfile = LocalMaterialFlowProfile.ExogenousDaily;
+            authoredCity.productionConfigs[0].item = null;
+            authoredCity.productionConfigs[0].amountPerDay = 999;
+            authoredCity.productionConfigs[0].initialReserve = 999;
+            authoredCity.marketItems[0].item = null;
+            item.itemName = "Changed after admission";
+
+            SimulateDirect(city, 1L);
+
+            LocalDailyMaterialFlowResult flow = city.LastMaterialFlow;
+            Assert.That(city.SelectedRuntimeOwners, Is.SameAs(exactOwners));
+            Assert.That(finiteSource.Item, Is.SameAs(admittedItem));
+            Assert.That(flow.ItemDefinitionId, Is.EqualTo(admittedItem.DefinitionId));
+            Assert.That(flow.OpeningStock, Is.EqualTo(5));
+            Assert.That(flow.ConfiguredSourceQuantity, Is.EqualTo(3));
+            Assert.That(flow.AppliedSourceQuantity, Is.EqualTo(3));
+            Assert.That(flow.SourceRejectionReason, Is.Empty);
+            Assert.That(flow.RequestedFreeConsumption, Is.EqualTo(4));
+            Assert.That(flow.ActualFreeConsumption, Is.EqualTo(4));
+            Assert.That(flow.ClosingStock, Is.EqualTo(4));
+            Assert.That(finiteSource.RemainingReserve, Is.EqualTo(4));
+            Assert.That(finiteSource.Revision, Is.EqualTo(1));
+            Assert.That(finiteSource.LastProcessedDay, Is.EqualTo(1));
+            Assert.That(city.Market.SelectedDailyV1Owner.GetAmount(admittedItem), Is.EqualTo(4));
+        }
+    }
+
+    [Test]
     public void SelectedMixedProductionReceiptUsesAdmittedGraphAfterAuthoringItemsAreDetached()
     {
         ItemData item = SimulationTestFactory.CreateItem("p14c-selected-receipt-item");
@@ -624,6 +664,30 @@ public sealed class P14CMixedSourceProductionTests
         { city.productionConfigs.Add(finite); city.productionConfigs.Add(exogenous); }
         else
         { city.productionConfigs.Add(exogenous); city.productionConfigs.Add(finite); }
+        return city;
+    }
+
+    private static CityData CreateFiniteCity(string id, ItemData item, int openingStock,
+        float consumptionPer1000)
+    {
+        CityData city = SimulationTestFactory.CreateCityData(id,
+            SimulationTestFactory.CreateMarketItem(item, openingStock, 100));
+        city.materialFlowProfile = LocalMaterialFlowProfile.FiniteReserveDaily;
+        city.settlementSemanticId = "settlement." + id;
+        city.materialFlowLocationId = "location." + id;
+        city.marketStoreSemanticId = "store." + id;
+        city.initialPopulation = 1000;
+        city.populationConsumption = new PopulationConsumptionConfig { paymentMode = ConsumptionPaymentMode.Free };
+        city.marketItems[0].consumptionPer1000Population = consumptionPer1000;
+        city.productionConfigs.Add(new CityProductionConfig
+        {
+            item = item,
+            amountPerDay = 3,
+            initialReserve = 7,
+            productionSourceId = "source." + id,
+            contentRevision = "content-finite-v1",
+            sourceKind = CityProductionSourceKind.FiniteReserveDaily
+        });
         return city;
     }
 

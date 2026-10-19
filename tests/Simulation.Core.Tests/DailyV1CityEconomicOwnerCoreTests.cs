@@ -140,6 +140,42 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
     }
 
     [Test]
+    public void SelectedFiniteReserveDailyFlowUsesCoreOwnersAndCanonicalItemIdentity()
+    {
+        DailyV1CityRuntimeOwners owners = CreateFiniteCityOwner(consumptionPer1000Population: 4f);
+        DailyV1FiniteProductionSourceOwner source = owners.FiniteSource;
+        DailyV1ItemDefinition item = source.Item;
+        List<string> logs = new List<string>();
+
+        LocalDailyMaterialFlowResult result = owners.SimulateSelectedFiniteReserveDailyMaterialFlow(
+            owners.LocationRuntimeId, 1, "calendar-v1", (_, message) => logs.Add(message));
+
+        Assert.That(result.ItemDefinitionId, Is.EqualTo(item.DefinitionId));
+        Assert.That(result.OpeningStock, Is.EqualTo(5));
+        Assert.That(result.ConfiguredSourceQuantity, Is.EqualTo(3));
+        Assert.That(result.AppliedSourceQuantity, Is.EqualTo(3));
+        Assert.That(result.SourceRejectionReason, Is.Empty);
+        Assert.That(result.RequestedFreeConsumption, Is.EqualTo(4));
+        Assert.That(result.ActualFreeConsumption, Is.EqualTo(4));
+        Assert.That(result.ClosingStock, Is.EqualTo(4));
+        Assert.That(owners.Market.GetAmount(item), Is.EqualTo(4));
+        Assert.That(source.RemainingReserve, Is.EqualTo(4));
+        Assert.That(source.Revision, Is.EqualTo(1));
+        Assert.That(source.LastProcessedDay, Is.EqualTo(1));
+        Assert.That(owners.Market.Revision, Is.EqualTo(2),
+            "Production and the existing free-consumption write retain separate Market revisions.");
+        Assert.That(logs, Is.EqualTo(new[] { "Finite City source source/finite: 3/3", "Finite City consumed 4 Iron" }));
+
+        LocalDailyMaterialFlowResult second = owners.SimulateSelectedFiniteReserveDailyMaterialFlow(
+            owners.LocationRuntimeId, 2, "calendar-v1", null);
+        Assert.That(second.AppliedSourceQuantity, Is.EqualTo(3));
+        Assert.That(second.ClosingStock, Is.EqualTo(3));
+        Assert.That(source.RemainingReserve, Is.EqualTo(1));
+        Assert.That(source.Revision, Is.EqualTo(2));
+        Assert.That(source.LastProcessedDay, Is.EqualTo(2));
+    }
+
+    [Test]
     public void SelectedCityOwnerJoinRejectsForeignOwnerGraphAndCounterpartyIdentity()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -371,7 +407,7 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         return owners;
     }
 
-    private static DailyV1CityRuntimeOwners CreateFiniteCityOwner()
+    private static DailyV1CityRuntimeOwners CreateFiniteCityOwner(float consumptionPer1000Population = 0f)
     {
         DailyV1CityData cityValues = new DailyV1CityData(
             "city/finite", "Finite City", "settlement/finite", "location/finite", "market/finite",
@@ -379,7 +415,7 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
             1000, null,
             new DailyV1PopulationConsumptionConfig(
                 new DailyV1EnumValue((int)ConsumptionPaymentMode.Free, "Free"), 0f),
-            new[] { new DailyV1MarketItemConfig("item/finite", 5, 100, 0f) },
+            new[] { new DailyV1MarketItemConfig("item/finite", 5, 100, consumptionPer1000Population) },
             new[] { new DailyV1CityProductionConfig("item/finite", 3, 7,
                 "source/finite", "content-v1",
                 new DailyV1EnumValue((int)CityProductionSourceKind.FiniteReserveDaily, "FiniteReserveDaily")) },

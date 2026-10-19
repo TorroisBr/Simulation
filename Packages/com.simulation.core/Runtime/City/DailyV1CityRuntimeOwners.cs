@@ -217,6 +217,173 @@ internal sealed partial class DailyV1CityRuntimeOwners
     }
 
     /// <summary>
+    /// Executes the selected finite-reserve City source through the canonical
+    /// Core item, Market, and reserve owners. The Unity City adapter only
+    /// projects the resulting value and forwards log output.
+    /// </summary>
+    internal LocalDailyMaterialFlowResult SimulateSelectedFiniteReserveDailyMaterialFlow(
+        string locationId,
+        long absoluteDay,
+        string calendarVersion,
+        Action<SimulationLogCategory, string> logOutput)
+    {
+        DailyV1CityData city = Definition.Values;
+        if ((LocalMaterialFlowProfile)(city.materialFlowProfile?.Value
+                ?? (int)LocalMaterialFlowProfile.ExogenousDaily) != LocalMaterialFlowProfile.FiniteReserveDaily
+            || city.productionConfigs == null || city.productionConfigs.Count != 1
+            || city.productionConfigs[0] == null)
+            throw new LocalDailyMaterialFlowRejectedException(
+                "Selected finite-reserve material flow requires one authored source.");
+
+        DailyV1CityProductionConfig source = city.productionConfigs[0];
+        if (string.IsNullOrWhiteSpace(source.item)
+            || !Definitions.Items.TryGetValue(source.item, out DailyV1ItemDefinition item)
+            || item == null || FiniteSource == null || !ReferenceEquals(FiniteSource.Item, item)
+            || !string.Equals(FiniteSource.ProductionSourceId, source.productionSourceId, StringComparison.Ordinal)
+            || !string.Equals(FiniteSource.ContentRevision, source.contentRevision, StringComparison.Ordinal)
+            || source.amountPerDay != FiniteSource.DailyOutputLimit
+            || source.initialReserve != FiniteSource.InitialReserve
+            || !string.Equals(FiniteSource.SettlementSemanticId, city.settlementSemanticId, StringComparison.Ordinal)
+            || !string.Equals(FiniteSource.MarketStoreSemanticId, city.marketStoreSemanticId, StringComparison.Ordinal))
+            throw new LocalDailyMaterialFlowRejectedException(
+                "Finite source configuration must match its constructed Core owner.");
+
+        DailyV1MarketItemConfig itemConfig = null;
+        foreach (DailyV1MarketItemConfig candidate in city.marketItems ?? Array.Empty<DailyV1MarketItemConfig>())
+        {
+            if (candidate != null && string.Equals(candidate.item, item.DefinitionId, StringComparison.Ordinal))
+            {
+                itemConfig = candidate;
+                break;
+            }
+        }
+        if (itemConfig == null
+            || (ConsumptionPaymentMode)(city.populationConsumption?.paymentMode?.Value
+                ?? (int)ConsumptionPaymentMode.Free) != ConsumptionPaymentMode.Free
+            || string.IsNullOrWhiteSpace(locationId))
+            throw new LocalDailyMaterialFlowRejectedException(
+                "Selected finite-reserve material flow requires its admitted item, location, and free population consumption.");
+
+        int opening = Market.GetAmount(item);
+        int applied = 0;
+        string rejection = string.Empty;
+        FiniteSourceSnapshot sourceSnapshot = FiniteSource.CaptureSnapshot();
+        long expectedSourceRevision = sourceSnapshot.Revision;
+        long expectedMarketRevision = Market.Revision;
+        int requestedProduction = Math.Min(sourceSnapshot.DailyOutputLimit, sourceSnapshot.RemainingReserve);
+
+        if (requestedProduction > 0 && expectedSourceRevision == long.MaxValue)
+        {
+            rejection = "SourceRevisionExhausted";
+        }
+        else if (requestedProduction > 0 && expectedMarketRevision == long.MaxValue)
+        {
+            rejection = "MarketRevisionExhausted";
+        }
+        else if (!Market.TryCreateFiniteSourceScenario(locationId, sourceSnapshot,
+                     out FiniteSourceScenarioRuntime finiteRuntime,
+                     out FiniteSourceScenarioSnapshot currentSnapshot,
+                     out rejection))
+        {
+            // Preserve the production service's fail-closed rejection result;
+            // the existing free-consumption stage still runs below.
+        }
+        else if (!finiteRuntime.TryPrepareAdvance(currentSnapshot, absoluteDay,
+                     out PreparedFiniteSourceAdvance preparedAdvance, out rejection)
+            || preparedAdvance.Quantity != requestedProduction)
+        {
+            if (string.IsNullOrEmpty(rejection)) rejection = "InvalidMarketInput";
+        }
+        else if (preparedAdvance.Status == FiniteSourceOperationStatus.Exhausted)
+        {
+            rejection = "ReserveExhausted";
+        }
+        else if (preparedAdvance.Status != FiniteSourceOperationStatus.Applied
+            || !finiteRuntime.TryApplyPrepared(currentSnapshot, preparedAdvance,
+                out FiniteSourceScenarioSnapshot nextSnapshot, out rejection)
+            || !Market.TryPrepareFiniteStockIncrease(currentSnapshot, preparedAdvance, nextSnapshot,
+                out DailyV1MarketPreparedState preparedMarket, out rejection))
+        {
+            if (string.IsNullOrEmpty(rejection)) rejection = "InvalidMarketInput";
+        }
+        else if (!FiniteSource.CanInstall(expectedSourceRevision, absoluteDay))
+        {
+            rejection = FiniteSource.Revision != expectedSourceRevision
+                ? "StaleSourceRevision" : "SourceRevisionExhausted";
+        }
+        else if (!Market.CanInstallMaterialFlow(expectedMarketRevision, 1))
+        {
+            rejection = Market.Revision != expectedMarketRevision
+                ? "StaleMarketRevision" : "MarketMutationRejected";
+        }
+        else if (!FiniteSource.CanInstall(expectedSourceRevision, absoluteDay))
+        {
+            rejection = FiniteSource.Revision != expectedSourceRevision
+                ? "StaleSourceRevision" : "SourceRevisionExhausted";
+        }
+        else if (!Market.CanInstallMaterialFlow(expectedMarketRevision, 1))
+        {
+            // The legacy prepared-install path checks admission once while
+            // preparing the paired Market replacement, once before returning
+            // the preparation, and once again at install. Keep the final
+            // recheck here so P12 mutation admission has the same boundary.
+            rejection = Market.Revision != expectedMarketRevision
+                ? "StaleMarketRevision" : "MarketMutationRejected";
+        }
+        else if (!FiniteSource.TryInstall(expectedSourceRevision, absoluteDay, preparedAdvance.Quantity))
+        {
+            rejection = FiniteSource.Revision != expectedSourceRevision
+                ? "StaleSourceRevision" : "SourceRevisionExhausted";
+        }
+        else if (!Market.TryInstall(expectedMarketRevision, 1, preparedMarket))
+        {
+            // Both owners were preflighted above against this single-threaded
+            // operation. This branch is retained as a fail-closed invariant.
+            rejection = Market.Revision != expectedMarketRevision
+                ? "StaleMarketRevision" : "MarketMutationRejected";
+        }
+        else
+        {
+            applied = preparedAdvance.Quantity;
+            Market.NotifyMaterialFlowInstalled();
+        }
+
+        int requestedConsumption = Math.Max(0, UnityMathfCompatibility.RoundToInt(
+            Population.CurrentPopulation / 1000f * itemConfig.consumptionPer1000Population));
+        int actualConsumption = Market.RemoveStockUpTo(item, requestedConsumption);
+        int closing = Market.GetAmount(item);
+        LocalDailyMaterialFlowResult result = new LocalDailyMaterialFlowResult(
+            city.settlementSemanticId,
+            source.productionSourceId,
+            city.marketStoreSemanticId,
+            locationId,
+            item.DefinitionId,
+            source.contentRevision,
+            "Economy.Enabled=true;PaymentMode=Free",
+            "simulation-calendar",
+            calendarVersion,
+            true,
+            Population.CurrentPopulation,
+            itemConfig.consumptionPer1000Population,
+            absoluteDay,
+            opening,
+            source.amountPerDay,
+            applied,
+            rejection,
+            requestedConsumption,
+            actualConsumption,
+            closing);
+
+        logOutput?.Invoke(SimulationLogCategory.EconomyProduction,
+            city.cityName + " source " + source.productionSourceId + ": "
+            + applied + "/" + source.amountPerDay);
+        if (actualConsumption > 0)
+            logOutput?.Invoke(SimulationLogCategory.EconomyConsumption,
+                city.cityName + " consumed " + actualConsumption + " " + item.Values.itemName);
+        return result;
+    }
+
+    /// <summary>
     /// Executes the admitted selected mixed-source City operation against the
     /// exact Core Market and finite-source owners. Production is installed as
     /// one prepared replacement before the existing free-consumption write.

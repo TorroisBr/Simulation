@@ -916,6 +916,16 @@ public class CityRuntime
             return;
         }
 
+        if (RuntimeMaterialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily)
+        {
+            if (selectedRuntimeOwners == null)
+                throw new LocalDailyMaterialFlowRejectedException("Selected City runtime owners are not installed.");
+            lastMaterialFlow = selectedRuntimeOwners.SimulateSelectedFiniteReserveDailyMaterialFlow(
+                RuntimeMaterialFlowLocationId, absoluteDay, calendarVersion,
+                (category, message) => logger?.Log(category, message));
+            return;
+        }
+
         DailyV1CityData city = selectedDailyV1Definition.Values;
         if (city.productionConfigs == null || city.productionConfigs.Count == 0
             || city.productionConfigs[0] == null)
