@@ -428,6 +428,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private readonly AuthoritativeMutationGuard mutationGuard = new AuthoritativeMutationGuard();
     private bool coreMutationGuardAuthoritiesBound;
     private readonly DailyV1ExecutionBoundaryState dailyExecutionBoundary = new DailyV1ExecutionBoundaryState();
+    private Func<DailyV1SelectedRuntimeOwnerGraph> selectedRuntimeOwnerGraphProvider;
     private bool advanceLeaseHeld => dailyExecutionBoundary.AdvanceLeaseHeld;
     private long completedDailyCoreSequence => dailyExecutionBoundary.CompletedCoreSequence;
     private DailyCaptureEligibilityToken currentDailyCaptureToken => dailyExecutionBoundary.CurrentCaptureToken;
@@ -1395,6 +1396,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             TryCreateSelectedRuntimeOwnerGraph(this.cities, this.npcRuntimes);
         if (!dailyExecutionBoundary.TryBindSelectedRuntimeOwnerGraph(selectedOwnerGraph))
             throw new InvalidOperationException("The selected owner graph could not be bound to this runtime boundary.");
+        selectedRuntimeOwnerGraphProvider = () => dailyExecutionBoundary.SelectedRuntimeOwnerGraph;
+        foreach (NpcRuntime npcRuntime in this.npcRuntimes)
+            if (npcRuntime != null && npcRuntime.UsesSelectedDailyV1Definitions
+                && !npcRuntime.TryBindSelectedRuntimeOwnerGraphProvider(selectedRuntimeOwnerGraphProvider))
+                throw new ArgumentException(
+                    "A selected NPC owner graph is already bound to another runtime.",
+                    nameof(npcRuntimes));
 
         this.manpowerSourceConsequencePlanningService = new ManpowerSourceConsequencePlanningService(
             this,
@@ -6117,6 +6125,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
+        if (!isComposingNpcRoster
+            && npcRuntime.UsesSelectedDailyV1Definitions
+            && selectedRuntimeOwnerGraphProvider != null
+            && !npcRuntime.CanBindSelectedRuntimeOwnerGraphProvider(selectedRuntimeOwnerGraphProvider))
+        {
+            failure = WorldNpcRegistryFailure.AlreadyOwnedByAnotherRuntime;
+            return false;
+        }
+
         DailyV1SelectedRuntimeOwnerGraph selectedGraphBeforeMembership = null;
         DailyV1SelectedRuntimeOwnerGraph selectedGraphAfterMembership = null;
         bool replaceSelectedOwnerGraph = false;
@@ -6153,10 +6170,29 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
+        bool boundSelectedOwnerGraphProvider = false;
+        if (!isComposingNpcRoster
+            && replaceSelectedOwnerGraph
+            && selectedRuntimeOwnerGraphProvider != null)
+        {
+            if (!npcRuntime.TryBindSelectedRuntimeOwnerGraphProvider(selectedRuntimeOwnerGraphProvider))
+            {
+                if (!dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(
+                        selectedGraphAfterMembership,
+                        selectedGraphBeforeMembership))
+                    mutationGuard.MarkFaulted(AuthoritativeMutationFaultReason.RollbackRestoreFailed);
+                failure = WorldNpcRegistryFailure.AlreadyOwnedByAnotherRuntime;
+                return false;
+            }
+            boundSelectedOwnerGraphProvider = true;
+        }
+
         bool insertedIdentity = requireP12RuntimeIdentitySpatialCensusOwners
             && !identityAlreadyRegistered;
         if (insertedIdentity && !p12RuntimeIdentityRegistry.RegisterNpc(npcRuntime))
         {
+            if (boundSelectedOwnerGraphProvider)
+                npcRuntime.UnbindSelectedRuntimeOwnerGraphProvider(selectedRuntimeOwnerGraphProvider);
             if (replaceSelectedOwnerGraph
                 && !dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(
                     selectedGraphAfterMembership,

@@ -26,6 +26,7 @@ public class NpcRuntime : ICapabilityConditionSource
     [NonSerialized]private PersonRuntime personRuntime;
     [SerializeField]private NpcData npcData;
     [NonSerialized]private DailyV1NpcRuntimeOwners selectedRuntimeOwners;
+    [NonSerialized]private Func<DailyV1SelectedRuntimeOwnerGraph> selectedRuntimeOwnerGraphProvider;
     [NonSerialized]private DailyV1DefinitionAdapter.SelectedBindings selectedDefinitionBindings;
     private DailyV1NpcDefinition selectedDailyV1Definition => selectedRuntimeOwners?.Definition;
     private DailyV1EffectiveDefinitions selectedDefinitionGraph => selectedRuntimeOwners?.Definitions;
@@ -101,6 +102,28 @@ public class NpcRuntime : ICapabilityConditionSource
     internal DailyV1NpcDefinition SelectedDailyV1Definition => selectedDailyV1Definition;
     internal DailyV1EffectiveDefinitions SelectedDailyV1DefinitionGraph => selectedDefinitionGraph;
     internal DailyV1NpcRuntimeOwners SelectedRuntimeOwners => selectedRuntimeOwners;
+
+    internal bool CanBindSelectedRuntimeOwnerGraphProvider(
+        Func<DailyV1SelectedRuntimeOwnerGraph> provider) =>
+        provider != null
+        && (selectedRuntimeOwnerGraphProvider == null
+            || ReferenceEquals(selectedRuntimeOwnerGraphProvider, provider));
+
+    internal bool TryBindSelectedRuntimeOwnerGraphProvider(
+        Func<DailyV1SelectedRuntimeOwnerGraph> provider)
+    {
+        if (!CanBindSelectedRuntimeOwnerGraphProvider(provider)) return false;
+        selectedRuntimeOwnerGraphProvider = provider;
+        return true;
+    }
+
+    internal bool UnbindSelectedRuntimeOwnerGraphProvider(
+        Func<DailyV1SelectedRuntimeOwnerGraph> provider)
+    {
+        if (!ReferenceEquals(selectedRuntimeOwnerGraphProvider, provider)) return false;
+        selectedRuntimeOwnerGraphProvider = null;
+        return true;
+    }
     internal DailyV1NpcStatusOwner SelectedDailyV1StatusOwner => selectedDailyV1StatusOwner;
     internal bool TryCopySelectedCurrentStatusDefinitionIds(List<string> destination) =>
         UsesSelectedDailyV1Definitions
@@ -2582,7 +2605,12 @@ public class NpcRuntime : ICapabilityConditionSource
         if (!plan.IsNoOp || admitNoOp)
             preCommitAdmission = () => CanCommitP12TravelStateMutation(
                 plan.TravelRevisionChanges, changedCities);
-        if (!plan.TryCommit(preCommitAdmission)) return false;
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph = selectedRuntimeOwnerGraphProvider?.Invoke();
+        bool committed = selectedGraph != null
+            && selectedGraph.ContainsExactNpcOwner(selectedRuntimeOwners)
+                ? selectedGraph.TryCommitTravelTransition(selectedRuntimeOwners, plan, preCommitAdmission)
+                : plan.TryCommit(preCommitAdmission);
+        if (!committed) return false;
 
         foreach (CityRuntime changedCity in changedCities)
         {

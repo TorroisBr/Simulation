@@ -37,13 +37,36 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(origin.Definitions, Is.SameAs(graph.Definitions));
         Assert.That(destination.Definitions, Is.SameAs(graph.Definitions));
 
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
+            "npc-outside-graph", definitions, npc.Definition, 0f,
+            out DailyV1NpcRuntimeOwners outsideNpc), Is.True);
+        Assert.That(outsideNpc.Travel.TryInstallState(
+            origin.LocationRuntimeId, origin.RuntimeId,
+            null, null, 0, 0, null, false, null, null, 0L), Is.True);
+        Assert.That(DailyV1SelectedTravelTransitionPlan.TryStartTravel(
+            outsideNpc, origin, origin.LocationRuntimeId,
+            destination.LocationRuntimeId, destination,
+            requestedTravelDays: 2, originDecisionId: "unregistered", routeId: "route-core-host",
+            out DailyV1SelectedTravelTransitionPlan outsidePlan), Is.True);
+        int rejectedAdmissionCalls = 0;
+        Assert.That(graph.TryCommitTravelTransition(outsideNpc, outsidePlan, () =>
+        {
+            rejectedAdmissionCalls++;
+            return true;
+        }), Is.False);
+        Assert.That(rejectedAdmissionCalls, Is.Zero,
+            "A prepared plan for an NPC outside this runtime is rejected before host admission.");
+        Assert.That(outsideNpc.Travel.CurrentCityRuntimeId, Is.EqualTo(origin.RuntimeId));
+        Assert.That(outsideNpc.Travel.DestinationCityRuntimeId, Is.Null);
+        Assert.That(outsideNpc.Travel.Revision, Is.Zero);
+
         Assert.That(DailyV1SelectedTravelTransitionPlan.TryStartTravel(
             npc, origin, origin.LocationRuntimeId, destination.LocationRuntimeId, destination,
             requestedTravelDays: 2, originDecisionId: "decision-core-host", routeId: "route-core-host",
             out DailyV1SelectedTravelTransitionPlan plan), Is.True);
 
         int admissionCalls = 0;
-        Assert.That(plan.TryCommit(() =>
+        Assert.That(graph.TryCommitTravelTransition(npc, plan, () =>
         {
             admissionCalls++;
             Assert.That(origin.NpcPresence.Contains(npc.RuntimeId), Is.True,

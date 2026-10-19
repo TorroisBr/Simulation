@@ -325,11 +325,45 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         return true;
     }
 
-    private bool ContainsExactNpcOwner(DailyV1NpcRuntimeOwners candidate)
+    internal bool ContainsExactCityOwner(DailyV1CityRuntimeOwners candidate)
     {
+        if (candidate == null || !ReferenceEquals(candidate.Definitions, Definitions)) return false;
+        foreach (DailyV1CityRuntimeOwners owner in cities)
+            if (ReferenceEquals(owner, candidate)) return true;
+        return false;
+    }
+
+    internal bool ContainsExactNpcOwner(DailyV1NpcRuntimeOwners candidate)
+    {
+        if (candidate == null || !ReferenceEquals(candidate.Definitions, Definitions)) return false;
         foreach (DailyV1NpcRuntimeOwners owner in npcs)
             if (ReferenceEquals(owner, candidate)) return true;
         return false;
+    }
+
+    internal bool ContainsCityRuntimeLocation(string cityRuntimeId, string locationRuntimeId)
+    {
+        if (cityRuntimeId == null) return true;
+        if (string.IsNullOrWhiteSpace(cityRuntimeId) || string.IsNullOrWhiteSpace(locationRuntimeId))
+            return false;
+        foreach (DailyV1CityRuntimeOwners city in cities)
+            if (string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal))
+                return string.Equals(city.LocationRuntimeId, locationRuntimeId, StringComparison.Ordinal);
+        return false;
+    }
+
+    /// <summary>
+    /// Commits one prepared travel/presence operation only when its NPC and all
+    /// affected City authorities are exact members of this selected runtime.
+    /// The host admission callback runs before any owner revision or value changes.
+    /// </summary>
+    internal bool TryCommitTravelTransition(
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1SelectedTravelTransitionPlan plan,
+        Func<bool> preCommitAdmission)
+    {
+        if (!ContainsExactNpcOwner(npc) || plan == null || !plan.IsPreparedFor(npc, this)) return false;
+        return plan.TryCommit(preCommitAdmission);
     }
 
     private static bool MatchesExactOwnerInstances<T>(

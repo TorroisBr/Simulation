@@ -342,6 +342,24 @@ internal sealed class DailyV1SelectedTravelTransitionPlan
         }
     }
 
+    internal bool IsPreparedFor(
+        DailyV1NpcRuntimeOwners candidate,
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (!ReferenceEquals(npc, candidate)
+            || graph == null
+            || !ReferenceEquals(candidate?.Definitions, graph.Definitions)
+            || !graph.ContainsCityRuntimeLocation(expectedCurrentCityId, expectedCurrentLocationId)
+            || !graph.ContainsCityRuntimeLocation(expectedDestinationCityId, expectedDestinationLocationId)
+            || !graph.ContainsCityRuntimeLocation(currentCityId, currentLocationId)
+            || !graph.ContainsCityRuntimeLocation(destinationCityId, destinationLocationId))
+            return false;
+
+        foreach (PresenceChange change in presenceChanges)
+            if (change == null || !graph.ContainsExactCityOwner(change.City)) return false;
+        return true;
+    }
+
     internal bool TryGetPresenceChange(DailyV1CityRuntimeOwners city, out bool add)
     {
         add = false;
