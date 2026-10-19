@@ -803,9 +803,11 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                 out string bindingDiagnostic), Is.True, bindingDiagnostic);
         foreach (CityRuntime city in stagedD.Cities)
         {
-            Assert.That(selectedBindings.TryGet(
-                    city.CityData, anchor.Composition.SelectedDefinitions,
-                    out DailyV1CityDefinition cityNode), Is.True);
+            Assert.That(city.CityData, Is.Null,
+                "Selected P12 City staging retains its typed definition before the Unity projection is attached.");
+            Assert.That(anchor.Composition.SelectedDefinitions.Cities.TryGetValue(
+                    city.DefinitionId, out DailyV1CityDefinition cityNode), Is.True);
+            Assert.That(cityNode.DefinitionId, Is.EqualTo(city.DefinitionId));
             Assert.That(city.TryBindSelectedDailyV1Definition(
                 cityNode, anchor.Composition.SelectedDefinitions, selectedBindings), Is.True);
         }
