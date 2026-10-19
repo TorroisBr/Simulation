@@ -2005,6 +2005,15 @@ public class CityRuntime
         }
 
         if (!CanCommitP12PresenceMutation()) return;
+        if (selectedRuntimeOwners != null && npcRuntime.SelectedRuntimeOwners != null
+            && ReferenceEquals(npcRuntime.CurrentCity, this))
+        {
+            if (!CanRemoveImportantNpcMembership(npcRuntime)
+                || !npcRuntime.ClearCurrentPresenceFromCity(this))
+                return;
+            NotifyP12PresenceMutationCommitted();
+            return;
+        }
         if (!TryRemoveImportantNpcMembership(npcRuntime))
         {
             return;
@@ -2048,6 +2057,66 @@ public class CityRuntime
         if (ContainsDifferentImportantNpcWithSameRuntimeId(npcRuntime)) return false;
         membership.Add(npcRuntime);
         return true;
+    }
+
+    /// <summary>
+    /// Updates only the Unity object-reference projection after the Core
+    /// selected presence owner has committed the corresponding stable ID.
+    /// This method never writes the Core owner or advances its revision.
+    /// </summary>
+    internal bool TryApplySelectedNpcPresenceProjection(NpcRuntime npcRuntime, bool shouldContain)
+    {
+        DailyV1CityRuntimeOwners cityOwners = selectedRuntimeOwners;
+        DailyV1NpcRuntimeOwners npcOwners = npcRuntime?.SelectedRuntimeOwners;
+        if (cityOwners == null || npcOwners == null
+            || !ReferenceEquals(cityOwners.Definitions, npcOwners.Definitions)
+            || string.IsNullOrWhiteSpace(npcRuntime.RuntimeId)
+            || cityOwners.NpcPresence.Contains(npcRuntime.RuntimeId) != shouldContain)
+            return false;
+
+        List<NpcRuntime> membership = EnsureImportantNpcs();
+        bool containsExactProjection = membership.Contains(npcRuntime);
+        if (shouldContain)
+        {
+            if (containsExactProjection) return true;
+            if (ContainsDifferentImportantNpcWithSameRuntimeId(npcRuntime)) return false;
+            membership.Add(npcRuntime);
+            readOnlyImportantNpcs = null;
+            return true;
+        }
+
+        if (!containsExactProjection)
+            return !ContainsDifferentImportantNpcWithSameRuntimeId(npcRuntime);
+        membership.Remove(npcRuntime);
+        readOnlyImportantNpcs = null;
+        return true;
+    }
+
+    internal bool CanPrepareSelectedNpcPresenceProjection(NpcRuntime npcRuntime, bool shouldContain)
+    {
+        DailyV1CityRuntimeOwners cityOwners = selectedRuntimeOwners;
+        DailyV1NpcRuntimeOwners npcOwners = npcRuntime?.SelectedRuntimeOwners;
+        if (cityOwners == null || npcOwners == null
+            || !ReferenceEquals(cityOwners.Definitions, npcOwners.Definitions)
+            || string.IsNullOrWhiteSpace(npcRuntime.RuntimeId))
+            return false;
+        bool containsExactProjection = EnsureImportantNpcs().Contains(npcRuntime);
+        if (shouldContain)
+            return containsExactProjection || !ContainsDifferentImportantNpcWithSameRuntimeId(npcRuntime);
+        return !ContainsDifferentImportantNpcWithSameRuntimeId(npcRuntime);
+    }
+
+    internal bool HasConsistentSelectedNpcPresenceProjection(NpcRuntime npcRuntime)
+    {
+        DailyV1CityRuntimeOwners cityOwners = selectedRuntimeOwners;
+        DailyV1NpcRuntimeOwners npcOwners = npcRuntime?.SelectedRuntimeOwners;
+        if (cityOwners == null || npcOwners == null
+            || !ReferenceEquals(cityOwners.Definitions, npcOwners.Definitions)
+            || string.IsNullOrWhiteSpace(npcRuntime.RuntimeId)
+            || ContainsDifferentImportantNpcWithSameRuntimeId(npcRuntime))
+            return false;
+        return cityOwners.NpcPresence.Contains(npcRuntime.RuntimeId)
+            == EnsureImportantNpcs().Contains(npcRuntime);
     }
 
     internal bool CanAddImportantNpcMembership(NpcRuntime npcRuntime)
