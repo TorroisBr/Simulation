@@ -580,11 +580,11 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         RuntimeIdAllocator runtimeIds = new RuntimeIdAllocator();
         DailyV1SelectedRuntimeOwnerGraphBuilder builder =
             new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
-        List<string> registeredLocationIds = new List<string>();
+        List<SpatialLocationRuntime> registeredLocations = new List<SpatialLocationRuntime>();
 
-        Assert.That(builder.TryCreateConfiguredCities(runtimeIds, locationRuntimeId =>
+        Assert.That(builder.TryCreateConfiguredCities(runtimeIds, location =>
         {
-            registeredLocationIds.Add(locationRuntimeId);
+            registeredLocations.Add(location);
             return true;
         }), Is.True);
 
@@ -600,7 +600,7 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         expectedCityDefinitions.RemoveAll(string.IsNullOrWhiteSpace);
         expectedCityDefinitions.Sort(System.StringComparer.Ordinal);
         Assert.That(graph.Cities, Has.Count.EqualTo(expectedCityDefinitions.Count));
-        Assert.That(registeredLocationIds, Has.Count.EqualTo(expectedCityDefinitions.Count));
+        Assert.That(registeredLocations, Has.Count.EqualTo(expectedCityDefinitions.Count));
         for (int index = 0; index < graph.Cities.Count; index++)
         {
             Assert.That(graph.Cities[index].Definition.DefinitionId,
@@ -609,7 +609,10 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
                 Is.EqualTo("city-" + (index + 1).ToString("D6")));
             Assert.That(builder.TryGetLocationRuntimeId(graph.Cities[index], out string locationRuntimeId), Is.True);
             Assert.That(locationRuntimeId, Is.EqualTo("location-" + (index + 1).ToString("D6")));
-            Assert.That(registeredLocationIds[index], Is.EqualTo(locationRuntimeId));
+            Assert.That(registeredLocations[index].RuntimeId, Is.EqualTo(locationRuntimeId));
+            Assert.That(graph.SpatialNetwork.TryGetLocation(locationRuntimeId,
+                out SpatialLocationRuntime graphLocation), Is.True);
+            Assert.That(graphLocation, Is.SameAs(registeredLocations[index]));
         }
 
         List<DailyV1NpcSimulationConfig> expectedNpcRows = definitions.Configuration.npcs
@@ -653,6 +656,20 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
             "npc-runtime-1", definitions.Npcs[firstRow.npc], firstRow, out _), Is.True);
         Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph stillIncomplete), Is.False);
         Assert.That(stillIncomplete, Is.Null);
+    }
+
+    [Test]
+    public void FailedCoreGenesisCityOwnerCreationRollsBackItsSpatialLocation()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+
+        Assert.That(builder.TryAddInitialCity("city-runtime-invalid", "location-runtime-orphan", null, out _), Is.False);
+        Assert.That(builder.Cities, Is.Empty);
+        Assert.That(builder.SpatialNetwork.LocationCount, Is.Zero);
+        Assert.That(builder.SpatialNetwork.Revision, Is.Zero);
+        Assert.That(builder.SpatialNetwork.ContainsLocationId("location-runtime-orphan"), Is.False);
     }
 
     [Test]

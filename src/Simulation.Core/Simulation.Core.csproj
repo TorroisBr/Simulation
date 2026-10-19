@@ -43,6 +43,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/GeographyRecords.cs" Link="Geography/GeographyRecords.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialPassageIdentity.cs" Link="Geography/SpatialPassageIdentity.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialRuntimeValues.cs" Link="Geography/SpatialRuntimeValues.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialNetworkOwner.cs" Link="Geography/SpatialNetworkOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialGeography.cs" Link="Geography/SpatialGeography.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationHost.cs" Link="Application/DailyV1ApplicationHost.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyCaptureEligibilityToken.cs" Link="Application/DailyCaptureEligibilityToken.cs" />

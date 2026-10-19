@@ -186,13 +186,34 @@ public sealed class SpatialNetworkCensusTests
     {
         RuntimeIdentityRegistry registry = new RuntimeIdentityRegistry();
         SpatialNetworkRuntime owner = new SpatialNetworkRuntime(registry);
-        typeof(SpatialNetworkRuntime).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(owner, long.MaxValue);
+        SpatialLocationRuntime existingLocation = new SpatialLocationRuntime("existing-location");
+        SpatialLocationRuntime destination = new SpatialLocationRuntime("destination-location");
+        Assert.That(owner.RegisterLocation(existingLocation), Is.True);
+        Assert.That(owner.RegisterLocation(destination), Is.True);
+        SpatialRouteRuntime existingRoute = new SpatialRouteRuntime("existing-route", existingLocation, destination, 1);
+        Assert.That(owner.RegisterRoute(existingRoute), Is.True);
+        FieldInfo ownerField = typeof(SpatialNetworkRuntime).GetField("owner", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(ownerField, Is.Not.Null);
+        object spatialOwner = ownerField.GetValue(owner);
+        FieldInfo revisionField = typeof(SpatialNetworkOwner).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(revisionField, Is.Not.Null);
+        revisionField.SetValue(spatialOwner, long.MaxValue);
 
         LogAssert.Expect(LogType.Error, "Cannot register spatial location: spatial network census revision is exhausted.");
+        Assert.That(owner.RegisterLocation(new SpatialLocationRuntime("existing-location")), Is.False);
+        LogAssert.Expect(LogType.Error, "Cannot register spatial location: spatial network census revision is exhausted.");
         Assert.That(owner.RegisterLocation(new SpatialLocationRuntime("saturated-location")), Is.False);
-        Assert.That(owner.LocationCount, Is.Zero);
+        LogAssert.Expect(LogType.Error, "Cannot register spatial route: spatial network census revision is exhausted.");
+        Assert.That(owner.RegisterRoute(new SpatialRouteRuntime("existing-route", existingLocation, destination, 1)), Is.False);
+        LogAssert.Expect(LogType.Error, "Cannot register spatial route: spatial network census revision is exhausted.");
+        Assert.That(owner.RegisterRoute(new SpatialRouteRuntime("saturated-route", existingLocation, destination, 1)), Is.False);
+        Assert.That(owner.LocationCount, Is.EqualTo(2));
+        Assert.That(owner.RouteCount, Is.EqualTo(1));
         Assert.That(owner.Revision, Is.EqualTo(long.MaxValue));
+        Assert.That(owner.TryGetLocation("existing-location", out SpatialLocationRuntime foundLocation), Is.True);
+        Assert.That(foundLocation, Is.SameAs(existingLocation));
+        Assert.That(owner.TryGetRoute("existing-route", out SpatialRouteRuntime foundRoute), Is.True);
+        Assert.That(foundRoute, Is.SameAs(existingRoute));
         Assert.That(owner.TryGetLocation("saturated-location", out _), Is.False);
     }
 

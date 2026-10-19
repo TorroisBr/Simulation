@@ -167,6 +167,21 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(initialOwnerGraph.MatchesExactOwnerInstances(
             simulation.Runtime.Cities.Select(city => city?.SelectedRuntimeOwners),
             simulation.Runtime.NpcRuntimes.Select(npc => npc?.SelectedRuntimeOwners)), Is.True);
+        Assert.That(initialOwnerGraph.SpatialNetwork, Is.SameAs(simulation.SpatialNetwork.SelectedOwner),
+            "The selected owner graph must bind the SpatialNetworkRuntime's exact Core owner.");
+        foreach (CityRuntime city in simulation.Runtime.Cities)
+        {
+            Assert.That(initialOwnerGraph.SpatialNetwork.TryGetLocation(
+                city.Location.RuntimeId, out SpatialLocationRuntime graphLocation), Is.True);
+            Assert.That(graphLocation, Is.SameAs(city.Location),
+                "City projection and selected graph must share the exact admitted spatial location.");
+            RuntimeIdentityRegistry identityRegistry =
+                ReadPrivateField<SimulationActiveSession>(simulation, "activeSession").IdentityRegistry;
+            Assert.That(identityRegistry.TryGetLocation(
+                city.Location.RuntimeId, out SpatialLocationRuntime registryLocation), Is.True);
+            Assert.That(registryLocation, Is.SameAs(city.Location),
+                "The host identity index must retain the same location object as the shared owner graph.");
+        }
         IAuthoritativeRandomSource randomSource =
             ReadPrivateField<SimulationActiveSession>(simulation, "activeSession").RandomSource;
         Assert.That(randomSource, Is.TypeOf<DeterministicRandomSource>());

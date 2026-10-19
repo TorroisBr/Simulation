@@ -2284,19 +2284,20 @@ public class TesteSimulacao : MonoBehaviour
                 throw new System.InvalidOperationException(
                     "Selected City construction requires the admitted typed graph and its captured configuration.");
 
-            selectedRuntimeOwnerGraphBuilder = new DailyV1SelectedRuntimeOwnerGraphBuilder(selectedDefinitions);
+            selectedRuntimeOwnerGraphBuilder = new DailyV1SelectedRuntimeOwnerGraphBuilder(
+                selectedDefinitions, spatialNetwork.SelectedOwner);
             selectedInitialRuntimeOwnerGraph = null;
             Dictionary<string, SpatialLocationRuntime> selectedLocationsByRuntimeId =
                 new Dictionary<string, SpatialLocationRuntime>(System.StringComparer.Ordinal);
             if (!selectedRuntimeOwnerGraphBuilder.TryCreateConfiguredCities(
                     runtimeIdAllocator,
-                    locationRuntimeId =>
+                    selectedLocation =>
                     {
-                        SpatialLocationRuntime selectedLocation = new SpatialLocationRuntime(locationRuntimeId);
-                        if (!spatialNetwork.RegisterLocation(selectedLocation)) return false;
-                        selectedLocationsByRuntimeId.Add(locationRuntimeId, selectedLocation);
+                        if (!runtimeIdentityRegistry.RegisterLocation(selectedLocation)) return false;
+                        selectedLocationsByRuntimeId.Add(selectedLocation.RuntimeId, selectedLocation);
                         return true;
-                    }))
+                    },
+                    selectedLocation => runtimeIdentityRegistry.RollbackGenesisLocation(selectedLocation)))
                 throw new System.InvalidOperationException(
                     "The selected City owner graph could not construct the exact admitted Daily-v1 owner set.");
 

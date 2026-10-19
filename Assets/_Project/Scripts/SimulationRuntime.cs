@@ -1394,7 +1394,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             left?.RuntimeId ?? string.Empty,
             right?.RuntimeId ?? string.Empty));
         DailyV1SelectedRuntimeOwnerGraph selectedOwnerGraph =
-            TryCreateSelectedRuntimeOwnerGraph(this.cities, this.npcRuntimes);
+            TryCreateSelectedRuntimeOwnerGraph(this.cities, this.npcRuntimes, spatialNetworkRuntime?.SelectedOwner);
         if (!dailyExecutionBoundary.TryBindSelectedRuntimeOwnerGraph(selectedOwnerGraph))
             throw new InvalidOperationException("The selected owner graph could not be bound to this runtime boundary.");
         selectedRuntimeOwnerGraphProvider = () => dailyExecutionBoundary.SelectedRuntimeOwnerGraph;
@@ -8507,6 +8507,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             || dailyExecutionBoundary.CompletedCoreSequence != 0L
             || dailyExecutionBoundary.AdvanceLeaseHeld
             || !ReferenceEquals(current.Definitions, graph.Definitions)
+            || !ReferenceEquals(current.SpatialNetwork, graph.SpatialNetwork)
             || !graph.MatchesExactOwnerInstances(
                 cities.Select(city => city?.SelectedRuntimeOwners),
                 npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners).Where(owner => owner != null)))
@@ -8517,12 +8518,28 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
     private static DailyV1SelectedRuntimeOwnerGraph TryCreateSelectedRuntimeOwnerGraph(
         IReadOnlyList<CityRuntime> cityRuntimes,
-        IReadOnlyList<NpcRuntime> npcRuntimes)
+        IReadOnlyList<NpcRuntime> npcRuntimes,
+        SpatialNetworkOwner spatialNetwork)
     {
         if (cityRuntimes == null || npcRuntimes == null) return null;
+        if (spatialNetwork != null)
+        {
+            foreach (CityRuntime city in cityRuntimes)
+            {
+                DailyV1CityRuntimeOwners cityOwners = city?.SelectedRuntimeOwners;
+                if (cityOwners == null) continue;
+                SpatialLocationRuntime projectedLocation = city.Location;
+                if (projectedLocation == null
+                    || !string.Equals(cityOwners.LocationRuntimeId, projectedLocation.RuntimeId, StringComparison.Ordinal)
+                    || !spatialNetwork.TryGetLocation(projectedLocation.RuntimeId, out SpatialLocationRuntime ownedLocation)
+                    || !ReferenceEquals(projectedLocation, ownedLocation))
+                    return null;
+            }
+        }
         return DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
             cityRuntimes.Select(city => city?.SelectedRuntimeOwners),
             npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners).Where(owner => owner != null),
+            spatialNetwork,
             out DailyV1SelectedRuntimeOwnerGraph graph) ? graph : null;
     }
 

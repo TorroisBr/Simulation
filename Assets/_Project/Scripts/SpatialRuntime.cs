@@ -117,25 +117,15 @@ public sealed class SpatialNetworkRuntime
 {
     private readonly RuntimeIdentityRegistry identityRegistry;
     private readonly SimulationLogger logger;
-    private readonly HashSet<SpatialLocationRuntime> locations = new HashSet<SpatialLocationRuntime>();
-    private readonly List<SpatialRouteRuntime> routes = new List<SpatialRouteRuntime>();
-    private readonly Dictionary<SpatialLocationRuntime, List<SpatialRouteRuntime>> outgoingRoutes = new Dictionary<SpatialLocationRuntime, List<SpatialRouteRuntime>>();
-    private long revision;
+    private readonly SpatialNetworkOwner owner = new SpatialNetworkOwner();
 
-    public IEnumerable<SpatialLocationRuntime> Locations
-    {
-        get
-        {
-            SpatialLocationRuntime[] snapshot = new SpatialLocationRuntime[locations.Count];
-            locations.CopyTo(snapshot);
-            return Array.AsReadOnly(snapshot);
-        }
-    }
+    public IEnumerable<SpatialLocationRuntime> Locations => owner.Locations;
 
-    public IReadOnlyList<SpatialRouteRuntime> Routes => Array.AsReadOnly(routes.ToArray());
-    public int LocationCount => locations.Count;
-    public int RouteCount => routes.Count;
-    public long Revision => revision;
+    public IReadOnlyList<SpatialRouteRuntime> Routes => owner.Routes;
+    public int LocationCount => owner.LocationCount;
+    public int RouteCount => owner.RouteCount;
+    public long Revision => owner.Revision;
+    internal SpatialNetworkOwner SelectedOwner => owner;
 
     public SpatialNetworkRuntime(RuntimeIdentityRegistry identityRegistry, SimulationLogger logger = null)
     {
@@ -154,17 +144,14 @@ public sealed class SpatialNetworkRuntime
     /// </summary>
     internal SpatialNetworkOwnerSnapshot CaptureOwnerSnapshot()
     {
-        SpatialLocationRuntime[] locationSnapshot = new SpatialLocationRuntime[locations.Count];
-        locations.CopyTo(locationSnapshot);
-
-        List<string> locationIds = new List<string>(locationSnapshot.Length);
-        foreach (SpatialLocationRuntime location in locationSnapshot)
+        List<string> locationIds = new List<string>(owner.LocationCount);
+        foreach (SpatialLocationRuntime location in owner.Locations)
         {
             locationIds.Add(location.RuntimeId);
         }
 
-        List<SpatialRouteOwnerSnapshotRecord> routeRecords = new List<SpatialRouteOwnerSnapshotRecord>(routes.Count);
-        foreach (SpatialRouteRuntime route in routes)
+        List<SpatialRouteOwnerSnapshotRecord> routeRecords = new List<SpatialRouteOwnerSnapshotRecord>(owner.RouteCount);
+        foreach (SpatialRouteRuntime route in owner.Routes)
         {
             routeRecords.Add(new SpatialRouteOwnerSnapshotRecord(
                 route.RuntimeId,
@@ -175,7 +162,7 @@ public sealed class SpatialNetworkRuntime
 
         return new SpatialNetworkOwnerSnapshot(
             SpatialNetworkOwnerSnapshot.CurrentSchemaVersion,
-            revision,
+            owner.Revision,
             locationIds,
             routeRecords);
     }
@@ -321,16 +308,14 @@ public sealed class SpatialNetworkRuntime
         foreach (string locationId in snapshot.LocationRuntimeIds)
         {
             SpatialLocationRuntime location = new SpatialLocationRuntime(locationId);
-            if (!stagedIdentityRegistry.RegisterLocation(location))
+            if (!staged.owner.TryInstallRestoredLocation(
+                    location, () => stagedIdentityRegistry.RegisterLocation(location)))
             {
                 failure = SpatialNetworkSnapshotFailure.Create(
                     SpatialNetworkSnapshotFailureCode.RuntimeIdentityCollision,
-                    "The staged identity registry rejected a validated legacy location identity.");
+                    "The staged spatial owner rejected a validated legacy location identity.");
                 return false;
             }
-
-            staged.locations.Add(location);
-            staged.outgoingRoutes.Add(location, new List<SpatialRouteRuntime>());
             stagedLocations.Add(locationId, location);
         }
 
@@ -341,7 +326,8 @@ public sealed class SpatialNetworkRuntime
                 stagedLocations[routeRecord.OriginLocationRuntimeId],
                 stagedLocations[routeRecord.DestinationLocationRuntimeId],
                 routeRecord.TravelDays);
-            if (!stagedIdentityRegistry.RegisterRoute(route))
+            if (!staged.owner.TryInstallRestoredRoute(
+                    route, () => stagedIdentityRegistry.RegisterRoute(route)))
             {
                 failure = SpatialNetworkSnapshotFailure.Create(
                     SpatialNetworkSnapshotFailureCode.RuntimeIdentityCollision,
@@ -349,11 +335,15 @@ public sealed class SpatialNetworkRuntime
                 return false;
             }
 
-            staged.routes.Add(route);
-            staged.outgoingRoutes[route.Origin].Add(route);
         }
 
-        staged.revision = snapshot.Revision;
+        if (!staged.owner.TryInstallRestoredRevision(snapshot.Revision))
+        {
+            failure = SpatialNetworkSnapshotFailure.Create(
+                SpatialNetworkSnapshotFailureCode.InvalidSnapshot,
+                "The spatial owner snapshot revision is below its staged registration count.");
+            return false;
+        }
         stagedNetwork = staged;
         failure = SpatialNetworkSnapshotFailure.None;
         return true;
@@ -377,65 +367,45 @@ public sealed class SpatialNetworkRuntime
             return false;
         }
 
-        if (locations.Contains(location) == true)
+        if (owner.ContainsLocation(location))
         {
             logger.LogError($"Spatial location '{location.RuntimeId}' is already registered in this network.");
             return false;
         }
 
-        if (CanAdvanceRevision("spatial location") == false)
+        if (!owner.CanAdvanceRevision)
         {
+            logger.LogError("Cannot register spatial location: spatial network census revision is exhausted.");
             return false;
         }
 
-        bool identityRegistered = false;
-        bool networkLocationAdded = false;
-        bool outgoingRoutesAdded = false;
-        bool revisionAdvanced = false;
-        try
+        if (owner.ContainsLocationId(location.RuntimeId))
         {
-            bool identityAdded = completedMutation == null
+            if (!identityRegistry.IsRuntimeIdAvailable(location.RuntimeId))
+                identityRegistry.RegisterLocation(location);
+            else
+                logger.LogError($"Duplicate RuntimeId '{location.RuntimeId}' while registering Location.");
+            return false;
+        }
+
+        return owner.TryRegisterLocation(
+            location,
+            () => completedMutation == null
                 ? identityRegistry.RegisterLocation(location)
-                : identityRegistry.RegisterLocationForP10Genesis(location, completedMutation);
-            if (!identityAdded) return false;
-            identityRegistered = true;
-            completedMutation?.Invoke("SpatialNetwork.Location.IdentityRegistered");
-
-            if (!locations.Add(location))
-                throw new InvalidOperationException("Spatial location became registered during genesis publication.");
-            networkLocationAdded = true;
-            completedMutation?.Invoke("SpatialNetwork.Location.NetworkIndex");
-
-            outgoingRoutes.Add(location, new List<SpatialRouteRuntime>());
-            outgoingRoutesAdded = true;
-            completedMutation?.Invoke("SpatialNetwork.Location.OutgoingIndex");
-
-            revision++;
-            revisionAdvanced = true;
-            completedMutation?.Invoke("SpatialNetwork.Location.Revision");
-            return true;
-        }
-        catch
-        {
-            if (revisionAdvanced) revision--;
-            if (outgoingRoutesAdded) outgoingRoutes.Remove(location);
-            if (networkLocationAdded) locations.Remove(location);
-            if (identityRegistered) identityRegistry.RollbackGenesisLocation(location);
-            throw;
-        }
+                : identityRegistry.RegisterLocationForP10Genesis(location, completedMutation),
+            () => identityRegistry.RollbackGenesisLocation(location),
+            completedMutation);
     }
 
     internal void RollbackGenesisLocation(SpatialLocationRuntime location)
     {
-        if (location == null || !locations.Contains(location) || revision <= 0
-            || (outgoingRoutes.TryGetValue(location, out List<SpatialRouteRuntime> outgoing) && outgoing.Count != 0)
+        if (location == null
+            || !owner.ContainsLocation(location)
             || !identityRegistry.TryGetLocation(location.RuntimeId, out SpatialLocationRuntime current)
             || !ReferenceEquals(location, current))
             throw new InvalidOperationException("Cannot roll back the P10-B spatial Location insertion.");
-        locations.Remove(location);
-        outgoingRoutes.Remove(location);
-        identityRegistry.RollbackGenesisLocation(location);
-        revision--;
+        if (!owner.TryRollbackGenesisLocation(location, () => identityRegistry.RollbackGenesisLocation(location)))
+            throw new InvalidOperationException("Cannot roll back the P10-B spatial Location insertion.");
     }
 
     public bool RegisterRoute(SpatialRouteRuntime route)
@@ -446,46 +416,45 @@ public sealed class SpatialNetworkRuntime
             return false;
         }
 
-        if (locations.Contains(route.Origin) == false || locations.Contains(route.Destination) == false)
+        if (!owner.ContainsLocation(route.Origin) || !owner.ContainsLocation(route.Destination))
         {
             logger.LogError($"Cannot register spatial route '{route.RuntimeId}': origin and destination must both be registered locations.");
             return false;
         }
 
-        if (CanAdvanceRevision("spatial route") == false)
+        if (!owner.CanAdvanceRevision)
         {
+            logger.LogError("Cannot register spatial route: spatial network census revision is exhausted.");
             return false;
         }
 
-        if (identityRegistry.RegisterRoute(route) == false)
+        if (owner.ContainsLocationId(route.RuntimeId) || owner.ContainsRouteId(route.RuntimeId))
         {
+            if (!identityRegistry.IsRuntimeIdAvailable(route.RuntimeId))
+                identityRegistry.RegisterRoute(route);
+            else
+                logger.LogError($"Duplicate RuntimeId '{route.RuntimeId}' while registering Route.");
             return false;
         }
 
-        routes.Add(route);
-        outgoingRoutes[route.Origin].Add(route);
-        revision++;
-        return true;
+        return owner.TryRegisterRoute(route, () => identityRegistry.RegisterRoute(route));
     }
 
     public bool TryGetLocation(string runtimeId, out SpatialLocationRuntime location)
     {
+        if (owner.TryGetLocation(runtimeId, out location)) return true;
         return identityRegistry.TryGetLocation(runtimeId, out location);
     }
 
     public bool TryGetRoute(string runtimeId, out SpatialRouteRuntime route)
     {
+        if (owner.TryGetRoute(runtimeId, out route)) return true;
         return identityRegistry.TryGetRoute(runtimeId, out route);
     }
 
     public IReadOnlyList<SpatialRouteRuntime> GetOutgoingRoutes(SpatialLocationRuntime origin)
     {
-        if (origin != null && outgoingRoutes.TryGetValue(origin, out List<SpatialRouteRuntime> foundRoutes) == true)
-        {
-            return Array.AsReadOnly(foundRoutes.ToArray());
-        }
-
-        return Array.Empty<SpatialRouteRuntime>();
+        return owner.GetOutgoingRoutes(origin);
     }
 
     public bool TryGetSingleDirectRoute(
@@ -493,49 +462,11 @@ public sealed class SpatialNetworkRuntime
         SpatialLocationRuntime destination,
         out SpatialRouteRuntime route)
     {
-        route = null;
-
-        if (origin == null || destination == null || outgoingRoutes.TryGetValue(origin, out List<SpatialRouteRuntime> foundRoutes) == false)
-        {
-            return false;
-        }
-
-        int directRouteCount = 0;
-
-        foreach (SpatialRouteRuntime candidate in foundRoutes)
-        {
-            if (candidate == null || candidate.Destination != destination)
-            {
-                continue;
-            }
-
-            directRouteCount++;
-            route = candidate;
-        }
-
-        if (directRouteCount == 1)
-        {
-            return true;
-        }
-
-        route = null;
-
-        if (directRouteCount > 1)
+        bool found = owner.TryGetSingleDirectRoute(origin, destination, out route, out int directRouteCount);
+        if (!found && directRouteCount > 1)
         {
             logger.LogError($"Direct route from location '{origin.RuntimeId}' to '{destination.RuntimeId}' is ambiguous: {directRouteCount} routes exist.");
         }
-
-        return false;
-    }
-
-    private bool CanAdvanceRevision(string registrationKind)
-    {
-        if (revision < long.MaxValue)
-        {
-            return true;
-        }
-
-        logger.LogError($"Cannot register {registrationKind}: spatial network census revision is exhausted.");
-        return false;
+        return found;
     }
 }

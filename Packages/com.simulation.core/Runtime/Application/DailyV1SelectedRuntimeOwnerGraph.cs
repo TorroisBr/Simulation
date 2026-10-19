@@ -15,21 +15,34 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal DailyV1EffectiveDefinitions Definitions { get; }
     internal IReadOnlyList<DailyV1CityRuntimeOwners> Cities => cities;
     internal IReadOnlyList<DailyV1NpcRuntimeOwners> Npcs => npcs;
+    internal SpatialNetworkOwner SpatialNetwork { get; }
 
     private DailyV1SelectedRuntimeOwnerGraph(
         DailyV1EffectiveDefinitions definitions,
         List<DailyV1CityRuntimeOwners> cities,
-        List<DailyV1NpcRuntimeOwners> npcs)
+        List<DailyV1NpcRuntimeOwners> npcs,
+        SpatialNetworkOwner spatialNetwork)
     {
         Definitions = definitions;
         this.cities = cities.AsReadOnly();
         this.npcs = npcs.AsReadOnly();
+        SpatialNetwork = spatialNetwork;
     }
 
     internal static bool TryCreate(
         DailyV1EffectiveDefinitions definitions,
         IEnumerable<DailyV1CityRuntimeOwners> cityOwners,
         IEnumerable<DailyV1NpcRuntimeOwners> npcOwners,
+        out DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        return TryCreate(definitions, cityOwners, npcOwners, null, out graph);
+    }
+
+    internal static bool TryCreate(
+        DailyV1EffectiveDefinitions definitions,
+        IEnumerable<DailyV1CityRuntimeOwners> cityOwners,
+        IEnumerable<DailyV1NpcRuntimeOwners> npcOwners,
+        SpatialNetworkOwner spatialNetwork,
         out DailyV1SelectedRuntimeOwnerGraph graph)
     {
         graph = null;
@@ -46,6 +59,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 || owner.Definition == null || !ReferenceEquals(owner.Definitions, definitions)
                 || !definitions.Cities.TryGetValue(owner.Definition.DefinitionId, out DailyV1CityDefinition city)
                 || !ReferenceEquals(city, owner.Definition)
+                || (spatialNetwork != null && !spatialNetwork.ContainsLocationId(owner.LocationRuntimeId))
                 || !runtimeIds.Add(owner.RuntimeId)
                 || !locationIds.Add(owner.LocationRuntimeId)) return false;
             cities.Add(owner);
@@ -62,17 +76,36 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 || !MatchesCityLocation(cities, owner.Travel?.CurrentCityRuntimeId,
                     owner.Travel?.CurrentLocationRuntimeId)
                 || !MatchesCityLocation(cities, owner.Travel?.DestinationCityRuntimeId,
-                    owner.Travel?.DestinationLocationRuntimeId)) return false;
+                    owner.Travel?.DestinationLocationRuntimeId)
+                || (spatialNetwork != null
+                    && (!ContainsLocationWhenPresent(spatialNetwork, owner.Travel?.CurrentLocationRuntimeId)
+                        || !ContainsLocationWhenPresent(spatialNetwork, owner.Travel?.DestinationLocationRuntimeId)))) return false;
             npcs.Add(owner);
         }
 
-        graph = new DailyV1SelectedRuntimeOwnerGraph(definitions, cities, npcs);
+        graph = new DailyV1SelectedRuntimeOwnerGraph(definitions, cities, npcs, spatialNetwork);
         return true;
+    }
+
+    private static bool ContainsLocationWhenPresent(SpatialNetworkOwner spatialNetwork, string locationRuntimeId)
+    {
+        return locationRuntimeId == null
+            || (!string.IsNullOrWhiteSpace(locationRuntimeId)
+                && spatialNetwork.ContainsLocationId(locationRuntimeId));
     }
 
     internal static bool TryCreateFromExactOwners(
         IEnumerable<DailyV1CityRuntimeOwners> cityOwners,
         IEnumerable<DailyV1NpcRuntimeOwners> npcOwners,
+        out DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        return TryCreateFromExactOwners(cityOwners, npcOwners, null, out graph);
+    }
+
+    internal static bool TryCreateFromExactOwners(
+        IEnumerable<DailyV1CityRuntimeOwners> cityOwners,
+        IEnumerable<DailyV1NpcRuntimeOwners> npcOwners,
+        SpatialNetworkOwner spatialNetwork,
         out DailyV1SelectedRuntimeOwnerGraph graph)
     {
         graph = null;
@@ -96,7 +129,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
             npcs.Add(owner);
         }
 
-        return definitions != null && TryCreate(definitions, cities, npcs, out graph);
+        return definitions != null && TryCreate(definitions, cities, npcs, spatialNetwork, out graph);
     }
 
     internal static bool TryCreateInitialCityOwner(
@@ -251,7 +284,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         {
             owner
         };
-        return TryCreate(Definitions, cities, updatedNpcs, out graph);
+        return TryCreate(Definitions, cities, updatedNpcs, SpatialNetwork, out graph);
     }
 
     /// <summary>
@@ -278,7 +311,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
             updatedNpcs.Add(current);
         }
 
-        return removed && TryCreate(Definitions, cities, updatedNpcs, out graph);
+        return removed && TryCreate(Definitions, cities, updatedNpcs, SpatialNetwork, out graph);
     }
 
     /// <summary>
@@ -507,6 +540,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
 internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
 {
     private readonly DailyV1EffectiveDefinitions definitions;
+    private readonly SpatialNetworkOwner spatialNetwork;
     private readonly List<DailyV1CityRuntimeOwners> cities = new List<DailyV1CityRuntimeOwners>();
     private readonly List<DailyV1NpcRuntimeOwners> npcs = new List<DailyV1NpcRuntimeOwners>();
     private readonly Dictionary<string, List<DailyV1CityRuntimeOwners>> citiesByDefinition =
@@ -515,13 +549,17 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
     private readonly HashSet<string> locationIds = new HashSet<string>(StringComparer.Ordinal);
     private bool built;
 
-    internal DailyV1SelectedRuntimeOwnerGraphBuilder(DailyV1EffectiveDefinitions definitions)
+    internal DailyV1SelectedRuntimeOwnerGraphBuilder(
+        DailyV1EffectiveDefinitions definitions,
+        SpatialNetworkOwner spatialNetwork = null)
     {
         this.definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
+        this.spatialNetwork = spatialNetwork ?? new SpatialNetworkOwner();
     }
 
     internal IReadOnlyList<DailyV1CityRuntimeOwners> Cities => cities.AsReadOnly();
     internal IReadOnlyList<DailyV1NpcRuntimeOwners> Npcs => npcs.AsReadOnly();
+    internal SpatialNetworkOwner SpatialNetwork => spatialNetwork;
 
     /// <summary>
     /// Performs the selected City's identity allocation and authoritative
@@ -531,9 +569,10 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
     /// </summary>
     internal bool TryCreateConfiguredCities(
         RuntimeIdAllocator runtimeIds,
-        Func<string, bool> tryRegisterLocationProjection)
+        Func<SpatialLocationRuntime, bool> tryRegisterLocationIdentity,
+        Action<SpatialLocationRuntime> rollbackLocationIdentity = null)
     {
-        if (built || runtimeIds == null || tryRegisterLocationProjection == null
+        if (built || runtimeIds == null || tryRegisterLocationIdentity == null
             || definitions.Configuration == null)
             return false;
 
@@ -549,10 +588,25 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
                 return false;
 
             string locationRuntimeId = runtimeIds.AllocateLocationId();
-            if (!tryRegisterLocationProjection(locationRuntimeId)) continue;
+            SpatialLocationRuntime location = new SpatialLocationRuntime(locationRuntimeId);
+            if (!spatialNetwork.TryRegisterLocation(
+                    location,
+                    () => tryRegisterLocationIdentity(location),
+                    () => rollbackLocationIdentity?.Invoke(location),
+                    null))
+                continue;
 
             string cityRuntimeId = runtimeIds.AllocateCityId();
-            if (!TryAddInitialCity(cityRuntimeId, locationRuntimeId, definition, out _)) return false;
+            if (!TryAddInitialCity(cityRuntimeId, locationRuntimeId, definition, out _))
+            {
+                Action rollback = rollbackLocationIdentity == null
+                    ? (Action)(() => { })
+                    : () => rollbackLocationIdentity(location);
+                if (!spatialNetwork.TryRollbackGenesisLocation(location, rollback))
+                    throw new InvalidOperationException(
+                        "A failed selected City genesis insertion could not roll back its spatial location.");
+                return false;
+            }
         }
 
         return true;
@@ -624,12 +678,28 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
             runtimeIds.Remove(runtimeId);
             return false;
         }
+        SpatialLocationRuntime registeredLocationHere = null;
+        if (!spatialNetwork.ContainsLocationId(locationRuntimeId))
+        {
+            SpatialLocationRuntime location = new SpatialLocationRuntime(locationRuntimeId);
+            if (!spatialNetwork.TryRegisterLocation(location, () => true, () => { }, null))
+            {
+                runtimeIds.Remove(runtimeId);
+                locationIds.Remove(locationRuntimeId);
+                return false;
+            }
+            registeredLocationHere = location;
+        }
         if (!DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialCityOwner(
                 runtimeId, locationRuntimeId, definitions, definition, null,
                 out DailyV1CityRuntimeOwners candidate))
         {
             runtimeIds.Remove(runtimeId);
             locationIds.Remove(locationRuntimeId);
+            if (registeredLocationHere != null
+                && !spatialNetwork.TryRollbackGenesisLocation(registeredLocationHere, () => { }))
+                throw new InvalidOperationException(
+                    "A failed selected City owner creation could not roll back its spatial location.");
             return false;
         }
 
@@ -724,7 +794,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
         graph = null;
         if (built || !MatchesConfiguredCityRows() || !MatchesConfiguredNpcRows()
             || !HasConsistentInitialPresence()) return false;
-        if (!DailyV1SelectedRuntimeOwnerGraph.TryCreate(definitions, cities, npcs, out graph))
+        if (!DailyV1SelectedRuntimeOwnerGraph.TryCreate(definitions, cities, npcs, spatialNetwork, out graph))
             return false;
         built = true;
         return true;
