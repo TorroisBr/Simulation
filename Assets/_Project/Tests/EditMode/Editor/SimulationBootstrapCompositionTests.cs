@@ -2334,6 +2334,8 @@ public sealed class SimulationBootstrapCompositionTests
         NpcData npc = SimulationTestFactory.CreateNpc("typed-npc-without-bindings");
         NpcStatusData status = SimulationTestFactory.CreateStatus("typed-npc-without-bindings-status");
         ItemData item = SimulationTestFactory.CreateItem("typed-npc-without-bindings-item");
+        NpcActionData action = SimulationTestFactory.CreateAction(
+            "typed-npc-without-bindings-action", NpcActionType.Normal);
         npc.statusPadrao.Add(status);
         NpcSimulationConfig npcConfiguration = new NpcSimulationConfig { npc = npc, initialMoney = 42f };
         npcConfiguration.InitialInventory.Add(new NpcInitialInventoryItemConfig
@@ -2344,6 +2346,7 @@ public sealed class SimulationBootstrapCompositionTests
         });
         config.Npcs.Add(npcConfiguration);
         config.Statuses.Add(status);
+        config.Actions.Add(action);
 
         EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
             contentOverrides: config.CreateConfigurationOverrides());
