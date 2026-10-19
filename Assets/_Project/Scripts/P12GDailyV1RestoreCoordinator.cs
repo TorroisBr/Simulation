@@ -1193,7 +1193,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
             if (npc == null
                 || !selectedBindings.TryGet(npc.NpcData, selectedDefinitions, out DailyV1NpcDefinition npcNode)
                 || !npc.TryBindSelectedDailyV1Definition(npcNode, selectedDefinitions, selectedBindings,
-                    cityRuntimeId => stagedD.Cities.Find(city => city != null
+                    cityRuntimeId => stagedD.Cities.FirstOrDefault(city => city != null
                         && string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal))))
             {
                 diagnostic = "A detached NPC did not retain the exact admitted typed definition node.";
