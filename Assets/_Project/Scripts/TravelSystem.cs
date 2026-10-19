@@ -239,6 +239,73 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
         return transactionService.CanChargeTravel(npcRuntime, travelCost);
     }
 
+    /// <summary>
+    /// Advances solo travel through the exact selected Core owner graph while
+    /// retaining this system's established P12 adapter, party-store, event,
+    /// knowledge, and logging responsibilities. Returns false only when the
+    /// exact runtime-to-owner join cannot be established before any writes.
+    /// </summary>
+    internal bool TryAdvanceSelectedSoloTravels(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        List<NpcRuntime> npcRuntimeList,
+        out IReadOnlyList<NpcRuntime> arrivedNpcs)
+    {
+        arrivedNpcs = null;
+        ThrowIfFaulted();
+        if (graph == null || npcRuntimeList == null) return false;
+
+        Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime> adapters =
+            new Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime>();
+        foreach (NpcRuntime runtime in npcRuntimeList)
+        {
+            DailyV1NpcRuntimeOwners owner = runtime?.SelectedRuntimeOwners;
+            if (owner == null
+                || !ReferenceEquals(owner.Definitions, graph.Definitions)
+                || !adapters.TryAdd(owner, runtime))
+                return false;
+        }
+        if (adapters.Count != graph.Npcs.Count) return false;
+        foreach (DailyV1NpcRuntimeOwners owner in graph.Npcs)
+            if (!adapters.ContainsKey(owner)) return false;
+
+        List<NpcRuntime> arrivals = new List<NpcRuntime>();
+        bool advanced = graph.TryAdvanceSoloTravelDay(
+            graph.Npcs,
+            owner => IsManagedByTravelParty(adapters[owner]),
+            (owner, plan, arriving) =>
+                adapters[owner].TryCommitPreparedSelectedTravelDay(plan, arriving, out _),
+            (owner, arrived, originDecisionId) =>
+            {
+                NpcRuntime runtime = adapters[owner];
+                if (arrived)
+                {
+                    runtime.SpatialKnowledge.DiscoverLocation(runtime.CurrentLocation?.RuntimeId);
+                    arrivals.Add(runtime);
+                    domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcArrivedEvent(
+                        eventId,
+                        absoluteDay,
+                        recordSequence,
+                        runtime.RuntimeId,
+                        runtime.CurrentLocation?.RuntimeId,
+                        originDecisionId));
+                    string destinationName = runtime.CurrentCity != null
+                        ? runtime.CurrentCity.CityName
+                        : runtime.CurrentLocation?.RuntimeId ?? "destino desconhecido";
+                    logger.Log(SimulationLogCategory.Travel, $"{runtime.NpcName} chegou em {destinationName}");
+                    return;
+                }
+
+                string verb = runtime.TravelDaysRemaining == 1 ? "Resta" : "Restam";
+                string dayText = runtime.TravelDaysRemaining == 1 ? "dia" : "dias";
+                logger.Log(SimulationLogCategory.Travel,
+                    $"{runtime.NpcName} esta viajando. {verb} {runtime.TravelDaysRemaining} {dayText}.");
+            });
+        if (!advanced) return false;
+
+        arrivedNpcs = arrivals.AsReadOnly();
+        return true;
+    }
+
     public IReadOnlyList<NpcRuntime> AdvanceTravels(List<NpcRuntime> npcRuntimeList)
     {
         ThrowIfFaulted();

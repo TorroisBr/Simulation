@@ -143,4 +143,106 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(npc.Travel.TravelDaysRemaining, Is.EqualTo(2));
         Assert.That(npc.Travel.Revision, Is.EqualTo(1L));
     }
+
+    [Test]
+    public void SelectedSoloTravelDayUsesExactSortedOwnersAndPreservesAdmissionAndPartyRules()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(
+            allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        List<DailyV1NpcRuntimeOwners> selected = graph.Npcs
+            .OrderBy(owner => owner.RuntimeId, StringComparer.Ordinal)
+            .Take(4)
+            .ToList();
+        DailyV1NpcRuntimeOwners startedToday = selected[0];
+        DailyV1NpcRuntimeOwners rejectedAdvance = selected[1];
+        DailyV1NpcRuntimeOwners arriving = selected[2];
+        DailyV1NpcRuntimeOwners partyMember = selected[3];
+        foreach (DailyV1NpcRuntimeOwners npc in selected)
+        {
+            DailyV1CityRuntimeOwners origin = graph.Cities.Single(city =>
+                string.Equals(city.RuntimeId, npc.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+            DailyV1CityRuntimeOwners destination = graph.Cities.Single(city => !ReferenceEquals(city, origin));
+            Assert.That(DailyV1SelectedTravelTransitionPlan.TryStartTravel(
+                npc, origin, origin.LocationRuntimeId,
+                destination.LocationRuntimeId, destination,
+                requestedTravelDays: 3,
+                originDecisionId: "decision-" + npc.RuntimeId,
+                routeId: "route-" + npc.RuntimeId,
+                out DailyV1SelectedTravelTransitionPlan startPlan), Is.True);
+            Assert.That(graph.TryCommitTravelTransition(npc, startPlan, () => true), Is.True);
+        }
+
+        DailyV1CityRuntimeOwners arrivingDestination = graph.Cities.Single(city =>
+            string.Equals(city.RuntimeId, arriving.Travel.DestinationCityRuntimeId, StringComparison.Ordinal));
+        Assert.That(startedToday.Travel.TravelStartedToday, Is.True);
+        Assert.That(startedToday.Travel.TryInstallState(
+            null, null, startedToday.Travel.DestinationLocationRuntimeId,
+            startedToday.Travel.DestinationCityRuntimeId, 3, 3,
+            startedToday.Travel.TravelRouteRuntimeId, true,
+            startedToday.Travel.TravelOriginDecisionId, null, startedToday.Travel.Revision), Is.True);
+        Assert.That(rejectedAdvance.Travel.TryInstallState(
+            null, null, rejectedAdvance.Travel.DestinationLocationRuntimeId,
+            rejectedAdvance.Travel.DestinationCityRuntimeId, 2, 3,
+            rejectedAdvance.Travel.TravelRouteRuntimeId, false,
+            rejectedAdvance.Travel.TravelOriginDecisionId, null, rejectedAdvance.Travel.Revision), Is.True);
+        Assert.That(arriving.Travel.TryInstallState(
+            null, null, arriving.Travel.DestinationLocationRuntimeId,
+            arriving.Travel.DestinationCityRuntimeId, 1, 3,
+            arriving.Travel.TravelRouteRuntimeId, false,
+            arriving.Travel.TravelOriginDecisionId, null, arriving.Travel.Revision), Is.True);
+        Assert.That(partyMember.Travel.TryInstallState(
+            null, null, partyMember.Travel.DestinationLocationRuntimeId,
+            partyMember.Travel.DestinationCityRuntimeId, 2, 3,
+            partyMember.Travel.TravelRouteRuntimeId, false,
+            partyMember.Travel.TravelOriginDecisionId, "party-1", partyMember.Travel.Revision), Is.True);
+
+        long[] revisionsBeforeRejectedRoster = graph.Npcs.Select(npc => npc.Travel.Revision).ToArray();
+        int preflightCommitCalls = 0;
+        Assert.That(graph.TryAdvanceSoloTravelDay(
+            graph.Npcs.Reverse(),
+            _ => false,
+            (_, _, _) => { preflightCommitCalls++; return true; },
+            (_, _, _) => Assert.Fail("An inexact roster must not emit travel results.")), Is.False);
+        Assert.That(preflightCommitCalls, Is.Zero);
+        Assert.That(graph.Npcs.Select(npc => npc.Travel.Revision), Is.EqualTo(revisionsBeforeRejectedRoster));
+
+        List<string> reported = new List<string>();
+        Assert.That(graph.TryAdvanceSoloTravelDay(
+            graph.Npcs,
+            npc => npc.Travel.ActiveTravelPartyId != null,
+            (npc, plan, _) => graph.TryCommitTravelTransition(
+                npc, plan, () => !ReferenceEquals(npc, rejectedAdvance)),
+            (npc, didArrive, originDecisionId) => reported.Add(
+                npc.RuntimeId + ":" + didArrive + ":" + originDecisionId)), Is.True);
+
+        Assert.That(startedToday.Travel.TravelDaysRemaining, Is.EqualTo(3),
+            "Travel started today is cleared without consuming a travel day.");
+        Assert.That(startedToday.Travel.TravelStartedToday, Is.False);
+        Assert.That(startedToday.Travel.Revision, Is.EqualTo(2L));
+        Assert.That(rejectedAdvance.Travel.TravelDaysRemaining, Is.EqualTo(2),
+            "Rejected host admission leaves authoritative travel state unchanged.");
+        Assert.That(rejectedAdvance.Travel.Revision, Is.EqualTo(1L));
+        Assert.That(arriving.Travel.CurrentCityRuntimeId, Is.EqualTo(arrivingDestination.RuntimeId));
+        Assert.That(arriving.Travel.CurrentLocationRuntimeId, Is.EqualTo(arrivingDestination.LocationRuntimeId));
+        Assert.That(arriving.Travel.DestinationCityRuntimeId, Is.Null);
+        Assert.That(arrivingDestination.NpcPresence.Contains(arriving.RuntimeId), Is.True);
+        Assert.That(arriving.Travel.Revision, Is.EqualTo(2L));
+        Assert.That(partyMember.Travel.TravelDaysRemaining, Is.EqualTo(2),
+            "TravelParty membership keeps the owner out of solo advancement.");
+        Assert.That(partyMember.Travel.Revision, Is.EqualTo(1L));
+
+        Assert.That(reported, Is.EqualTo(new[]
+        {
+            rejectedAdvance.RuntimeId + ":False:" + rejectedAdvance.Travel.TravelOriginDecisionId,
+            arriving.RuntimeId + ":True:" + "decision-" + arriving.RuntimeId
+        }.OrderBy(value => value.Split(':')[0], StringComparer.Ordinal)));
+    }
 }

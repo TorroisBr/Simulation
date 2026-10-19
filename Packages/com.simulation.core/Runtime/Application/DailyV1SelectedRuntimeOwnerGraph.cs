@@ -367,6 +367,71 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     }
 
     /// <summary>
+    /// Runs the selected solo-travel portion of one daily turn in stable
+    /// RuntimeId order. Core selects the exact eligible owners and prepares
+    /// their existing travel plans; the host adapter retains party lookup,
+    /// mutation admission, compatibility projection, and presentation effects.
+    /// A false return is restricted to exact-roster/callback preflight, before
+    /// any travel owner can be changed.
+    /// </summary>
+    internal bool TryAdvanceSoloTravelDay(
+        IEnumerable<DailyV1NpcRuntimeOwners> exactNpcOwners,
+        Func<DailyV1NpcRuntimeOwners, bool> isManagedByTravelParty,
+        Func<DailyV1NpcRuntimeOwners, DailyV1SelectedTravelTransitionPlan, bool, bool> commitTransition,
+        Action<DailyV1NpcRuntimeOwners, bool, string> reportTravelDay)
+    {
+        if (!MatchesExactOwnerInstances(npcs, exactNpcOwners)
+            || isManagedByTravelParty == null
+            || commitTransition == null
+            || reportTravelDay == null)
+            return false;
+
+        List<DailyV1NpcRuntimeOwners> ordered = new List<DailyV1NpcRuntimeOwners>(npcs);
+        ordered.Sort((left, right) => string.CompareOrdinal(left.RuntimeId, right.RuntimeId));
+
+        foreach (DailyV1NpcRuntimeOwners npc in ordered)
+        {
+            if (npc.Lifecycle.LifeState != NpcLifeState.Alive
+                || !npc.Travel.IsTraveling
+                || isManagedByTravelParty(npc))
+                continue;
+
+            if (npc.Travel.TravelStartedToday)
+            {
+                if (DailyV1SelectedTravelTransitionPlan.TryClearTravelStartedToday(
+                        npc, out DailyV1SelectedTravelTransitionPlan clearStartedPlan))
+                    commitTransition(npc, clearStartedPlan, false);
+                continue;
+            }
+
+            string originDecisionId = npc.Travel.TravelOriginDecisionId;
+            DailyV1CityRuntimeOwners destination = null;
+            if (npc.Travel.DestinationCityRuntimeId != null)
+                foreach (DailyV1CityRuntimeOwners city in cities)
+                    if (string.Equals(city.RuntimeId, npc.Travel.DestinationCityRuntimeId,
+                            StringComparison.Ordinal))
+                    {
+                        destination = city;
+                        break;
+                    }
+
+            bool arrived = false;
+            if (DailyV1SelectedTravelTransitionPlan.TryAdvanceTravelDay(
+                    npc, destination,
+                    out DailyV1SelectedTravelTransitionPlan advancePlan,
+                    out bool willArrive))
+            {
+                bool committed = commitTransition(npc, advancePlan, willArrive);
+                arrived = willArrive && committed;
+            }
+
+            reportTravelDay(npc, arrived, originDecisionId);
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Executes the existing selected-City daily economy in its established
     /// global pass order: local material flow, ordinary production, then
     /// consumption and price refresh per City. The host callbacks are projections

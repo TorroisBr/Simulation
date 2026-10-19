@@ -9377,7 +9377,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         if (travelSystem != null)
         {
-            arrivedNpcs.AddRange(travelSystem.AdvanceTravels(npcRuntimes));
+            DailyV1SelectedRuntimeOwnerGraph selectedGraph = SelectedRuntimeOwnerGraph;
+            if (selectedGraph != null
+                && travelSystem.TryAdvanceSelectedSoloTravels(
+                    selectedGraph, npcRuntimes, out IReadOnlyList<NpcRuntime> selectedArrivals))
+                arrivedNpcs.AddRange(selectedArrivals);
+            else
+                arrivedNpcs.AddRange(travelSystem.AdvanceTravels(npcRuntimes));
         }
 
         foreach (NpcRuntime arrivedNpc in arrivedNpcs)

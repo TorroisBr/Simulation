@@ -2321,20 +2321,8 @@ public class NpcRuntime : ICapabilityConditionSource
                     out DailyV1SelectedTravelTransitionPlan selectedPlan,
                     out bool selectedArriving))
                 return false;
-
-            CityRuntime nextCurrentCity = selectedArriving ? destinationCity : currentCity;
-            SpatialLocationRuntime nextCurrentLocation = selectedArriving ? destinationLocation : currentLocation;
-            CityRuntime nextDestinationCity = selectedArriving ? null : destinationCity;
-            SpatialLocationRuntime nextDestinationLocation = selectedArriving ? null : destinationLocation;
-            CityRuntime[] projectionCandidates = destinationCity == null
-                ? Array.Empty<CityRuntime>()
-                : new[] { destinationCity };
-            if (!TryCommitSelectedTravelTransition(
-                    selectedPlan, projectionCandidates,
-                    nextCurrentLocation, nextCurrentCity, nextDestinationLocation, nextDestinationCity,
-                    notifyBoundary: true))
+            if (!TryCommitPreparedSelectedTravelDay(selectedPlan, selectedArriving, out arrivedCity))
                 return false;
-            if (selectedArriving) arrivedCity = nextCurrentCity;
             return selectedArriving;
         }
 
@@ -2393,6 +2381,35 @@ public class NpcRuntime : ICapabilityConditionSource
 
         NotifyP12TravelStateMutationCommitted(true, changedCities);
 
+        return true;
+    }
+
+    /// <summary>
+    /// Applies an already prepared Core travel-day transition through this
+    /// runtime's established P12 admission and Unity projection boundary.
+    /// </summary>
+    internal bool TryCommitPreparedSelectedTravelDay(
+        DailyV1SelectedTravelTransitionPlan plan,
+        bool arriving,
+        out CityRuntime arrivedCity)
+    {
+        arrivedCity = null;
+        if (selectedRuntimeOwners == null || plan == null) return false;
+
+        CityRuntime nextCurrentCity = arriving ? destinationCity : currentCity;
+        SpatialLocationRuntime nextCurrentLocation = arriving ? destinationLocation : currentLocation;
+        CityRuntime nextDestinationCity = arriving ? null : destinationCity;
+        SpatialLocationRuntime nextDestinationLocation = arriving ? null : destinationLocation;
+        CityRuntime[] projectionCandidates = arriving && destinationCity != null
+            ? new[] { destinationCity }
+            : Array.Empty<CityRuntime>();
+        if (!TryCommitSelectedTravelTransition(
+                plan, projectionCandidates,
+                nextCurrentLocation, nextCurrentCity, nextDestinationLocation, nextDestinationCity,
+                notifyBoundary: true))
+            return false;
+
+        if (arriving) arrivedCity = nextCurrentCity;
         return true;
     }
 
