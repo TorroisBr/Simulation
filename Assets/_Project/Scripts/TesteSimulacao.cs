@@ -2296,7 +2296,11 @@ public class TesteSimulacao : MonoBehaviour
 
                 CityRuntime selectedCity = CityRuntime.CreateSelectedDailyV1(
                     runtimeIdAllocator.AllocateCityId(), cityDefinition,
-                    selectedDefinitions, selectedBindings, selectedLocation, logger);
+                    selectedDefinitions, selectedLocation, logger);
+                if (!selectedCity.TryBindSelectedDailyV1Definition(
+                        cityDefinition, selectedDefinitions, selectedBindings))
+                    throw new System.InvalidOperationException(
+                        "The selected City Unity/P12 identity projection could not attach to its Core-owned runtime.");
                 if (!runtimeIdentityRegistry.RegisterCity(selectedCity))
                     continue;
 
@@ -2675,8 +2679,12 @@ public class TesteSimulacao : MonoBehaviour
 
                 NpcRuntime selectedNpc = NpcRuntime.CreateSelectedDailyV1(
                     runtimeIdAllocator.AllocateNpcId(), npcDefinition,
-                    selectedDefinitions, selectedBindings,
-                    startingCity, selectedConfig.initialMoney);
+                    selectedDefinitions, null, selectedConfig.initialMoney);
+                if (!selectedNpc.TryBindSelectedDailyV1Definition(
+                        npcDefinition, selectedDefinitions, selectedBindings))
+                    throw new System.InvalidOperationException(
+                        "The selected NPC Unity/P12 identity projection could not attach to its Core-owned runtime.");
+                startingCity?.AddImportantNpc(selectedNpc);
                 if (!runtimeIdentityRegistry.RegisterNpc(selectedNpc))
                 {
                     startingCity?.RemoveImportantNpc(selectedNpc);

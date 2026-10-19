@@ -2241,6 +2241,16 @@ public sealed class SimulationBootstrapCompositionTests
         CityData city = SimulationTestFactory.CreateCityData("typed-city-without-bindings");
         city.cityName = "Typed City Without Bindings";
         city.initialPopulation = 4000;
+        city.marketLiquidity = new MarketLiquidityConfig
+        {
+            liquidityMode = MarketLiquidityMode.AccountBacked,
+            initialPurchasingPower = 10f
+        };
+        city.populationConsumption = new PopulationConsumptionConfig
+        {
+            paymentMode = ConsumptionPaymentMode.AccountBacked,
+            initialPurchasingPower = 100f
+        };
         ItemData item = SimulationTestFactory.CreateItem("typed-city-without-bindings-item", 8f);
         city.marketItems.Add(new MarketItemConfig
         {
@@ -2260,7 +2270,7 @@ public sealed class SimulationBootstrapCompositionTests
             contentOverrides: config.CreateConfigurationOverrides());
         CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(config.Calendar, out _);
         DailyV1EffectiveDefinitions graph = SimulationGenesisPipeline.CreateSelectedDefinitions(
-            config, effective, calendar, out _);
+            config, effective, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
         DailyV1CityDefinition definition = graph.Cities[city.DefinitionId];
         DailyV1ItemDefinition itemDefinition = graph.Items[item.DefinitionId];
 
@@ -2293,7 +2303,19 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(results[0].ItemDefinitionId, Is.EqualTo(itemDefinition.DefinitionId));
         Assert.That(results[0].RequestedQuantity, Is.EqualTo(5));
         Assert.That(results[0].ConsumedQuantity, Is.EqualTo(5));
+        Assert.That(results[0].PaymentMode, Is.EqualTo(ConsumptionPaymentMode.AccountBacked));
+        Assert.That(results[0].TotalPaid, Is.GreaterThan(0f));
         Assert.That(runtime.Market.SelectedDailyV1Owner.GetAmount(itemDefinition), Is.EqualTo(5));
+        Assert.That(runtime.PopulationEconomy.MoneyAccount.Balance
+            + runtime.MarketCounterparty.MoneyAccount.Balance, Is.EqualTo(110f).Within(0.001f));
+
+        DailyV1CityRuntimeOwners exactOwners = runtime.SelectedRuntimeOwners;
+        Assert.That(runtime.TryBindSelectedDailyV1Definition(definition, graph, bindings), Is.True);
+        Assert.That(runtime.CityData, Is.SameAs(city));
+        Assert.That(runtime.Market.Items, Has.Count.EqualTo(1));
+        Assert.That(runtime.Market.Items[0].Item, Is.SameAs(item));
+        Assert.That(runtime.SelectedRuntimeOwners, Is.SameAs(exactOwners),
+            "Attaching the Unity/P12 projection must preserve the exact Core owner instances.");
     }
 
     [Test]
