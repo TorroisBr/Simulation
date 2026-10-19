@@ -2578,10 +2578,11 @@ public class NpcRuntime : ICapabilityConditionSource
             changedCities.Add(projection);
         }
 
-        if ((!plan.IsNoOp || admitNoOp)
-            && !CanCommitP12TravelStateMutation(plan.TravelRevisionChanges, changedCities))
-            return false;
-        if (!plan.TryCommit()) return false;
+        Func<bool> preCommitAdmission = null;
+        if (!plan.IsNoOp || admitNoOp)
+            preCommitAdmission = () => CanCommitP12TravelStateMutation(
+                plan.TravelRevisionChanges, changedCities);
+        if (!plan.TryCommit(preCommitAdmission)) return false;
 
         foreach (CityRuntime changedCity in changedCities)
         {

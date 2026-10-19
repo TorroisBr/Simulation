@@ -149,6 +149,51 @@ public sealed class DailyV1SelectedTravelTransitionPlanTests
     }
 
     [Test]
+    public void RejectedAdmissionLeavesPreparedCityAndNpcOwnersUntouchedAndCanRetry()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1CityRuntimeOwners origin = CreateCity(definitions, "city-origin", new[] { "npc-1" }, 2L);
+        DailyV1CityRuntimeOwners destination = CreateCity(definitions, "city-destination", System.Array.Empty<string>(), 4L);
+        DailyV1NpcRuntimeOwners npc = CreateNpc(definitions, "npc-1", "location-origin", origin.RuntimeId, 6L);
+        Assert.That(DailyV1SelectedTravelTransitionPlan.TryStartTravel(
+            npc, origin, "location-origin", "location-destination", destination,
+            requestedTravelDays: 2, originDecisionId: "decision-1", routeId: "route-1",
+            out DailyV1SelectedTravelTransitionPlan plan), Is.True);
+
+        int admissionCalls = 0;
+        Assert.That(plan.TryCommit(() =>
+        {
+            admissionCalls++;
+            return false;
+        }), Is.False);
+        Assert.That(admissionCalls, Is.EqualTo(1));
+        Assert.That(origin.NpcPresence.Contains(npc.RuntimeId), Is.True);
+        Assert.That(origin.NpcPresence.Revision, Is.EqualTo(2L));
+        Assert.That(destination.NpcPresence.Contains(npc.RuntimeId), Is.False);
+        Assert.That(destination.NpcPresence.Revision, Is.EqualTo(4L));
+        Assert.That(npc.Travel.CurrentLocationRuntimeId, Is.EqualTo("location-origin"));
+        Assert.That(npc.Travel.CurrentCityRuntimeId, Is.EqualTo(origin.RuntimeId));
+        Assert.That(npc.Travel.DestinationLocationRuntimeId, Is.Null);
+        Assert.That(npc.Travel.TravelDaysRemaining, Is.Zero);
+        Assert.That(npc.Travel.Revision, Is.EqualTo(6L));
+
+        Assert.That(plan.TryCommit(() =>
+        {
+            admissionCalls++;
+            return true;
+        }), Is.True);
+        Assert.That(admissionCalls, Is.EqualTo(2));
+        Assert.That(origin.NpcPresence.Contains(npc.RuntimeId), Is.False);
+        Assert.That(origin.NpcPresence.Revision, Is.EqualTo(3L));
+        Assert.That(destination.NpcPresence.Contains(npc.RuntimeId), Is.False);
+        Assert.That(destination.NpcPresence.Revision, Is.EqualTo(4L));
+        Assert.That(npc.Travel.CurrentLocationRuntimeId, Is.Null);
+        Assert.That(npc.Travel.DestinationLocationRuntimeId, Is.EqualTo("location-destination"));
+        Assert.That(npc.Travel.TravelDaysRemaining, Is.EqualTo(2));
+        Assert.That(npc.Travel.Revision, Is.EqualTo(7L));
+    }
+
+    [Test]
     public void SaturatedDestinationPresenceRevisionBlocksOnlyTheArrivalWrite()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

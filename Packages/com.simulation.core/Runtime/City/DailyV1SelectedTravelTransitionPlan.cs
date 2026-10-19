@@ -394,6 +394,18 @@ internal sealed class DailyV1SelectedTravelTransitionPlan
         return true;
     }
 
+    /// <summary>
+    /// Runs the host's admission check immediately before the prepared Core
+    /// owner install. A rejected admission leaves every City and NPC owner
+    /// untouched, and a successful admission still goes through the same
+    /// stale-state and revision-capacity checks as a direct commit.
+    /// </summary>
+    internal bool TryCommit(Func<bool> preCommitAdmission)
+    {
+        if (preCommitAdmission != null && !preCommitAdmission()) return false;
+        return TryCommit();
+    }
+
     private bool IsCurrentAndAdmissible()
     {
         if (!IsValidNpc(npc)
