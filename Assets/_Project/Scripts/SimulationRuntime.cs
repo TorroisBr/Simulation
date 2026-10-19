@@ -9395,10 +9395,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         if (travelSystem != null)
         {
             DailyV1SelectedRuntimeOwnerGraph selectedGraph = SelectedRuntimeOwnerGraph;
-            if (selectedGraph != null
-                && travelSystem.TryAdvanceSelectedSoloTravels(
-                    selectedGraph, npcRuntimes, out IReadOnlyList<NpcRuntime> selectedArrivals))
+            if (selectedGraph != null)
+            {
+                if (!travelSystem.TryAdvanceSelectedSoloTravels(
+                        selectedGraph, npcRuntimes, out IReadOnlyList<NpcRuntime> selectedArrivals))
+                    throw new InvalidOperationException(
+                        "The selected Core solo-travel stage could not admit its exact runtime owner graph.");
                 arrivedNpcs.AddRange(selectedArrivals);
+            }
             else
                 arrivedNpcs.AddRange(travelSystem.AdvanceTravels(npcRuntimes));
         }
@@ -11059,8 +11063,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
     private void SimulateEconomyDay()
     {
-        if (TrySimulateSelectedDailyEconomyDay())
+        if (SelectedRuntimeOwnerGraph != null)
+        {
+            if (!TrySimulateSelectedDailyEconomyDay())
+                throw new InvalidOperationException(
+                    "The selected Core economy stage could not admit its exact runtime owner graph.");
             return;
+        }
 
         foreach (CityRuntime cityRuntime in cities)
         {
@@ -11098,29 +11107,28 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         if (calendar == null && graph.Cities.Any(city => city.HasLocalDailyMaterialFlow))
             return false;
 
-        List<CityRuntime> adapters = new List<CityRuntime>(cities.Count);
         for (int index = 0; index < cities.Count; index++)
         {
             CityRuntime city = cities[index];
             if (city == null || !ReferenceEquals(city.SelectedRuntimeOwners, graph.Cities[index]))
                 return false;
-            adapters.Add(city);
-        }
-
-        CityRuntime ResolveAdapter(DailyV1CityRuntimeOwners owner)
-        {
-            for (int index = 0; index < graph.Cities.Count; index++)
-                if (ReferenceEquals(graph.Cities[index], owner))
-                    return adapters[index];
-            throw new InvalidOperationException("A selected City economy callback referenced an owner outside the runtime graph.");
         }
 
         return graph.TrySimulateDailyEconomyDay(
             graph.Cities,
             CurrentDay,
             calendar?.SemanticVersion,
-            (owner, category, message) => ResolveAdapter(owner).LogSelectedDailyEconomy(category, message),
-            (owner, result) => ResolveAdapter(owner).ProjectSelectedLocalMaterialFlow(owner, result));
+            (owner, category, message) => LogSelectedDailyEconomy(owner, category, message));
+    }
+
+    private void LogSelectedDailyEconomy(
+        DailyV1CityRuntimeOwners owner,
+        SimulationLogCategory category,
+        string message)
+    {
+        if (owner == null || !SelectedRuntimeOwnerGraph.ContainsExactCityOwner(owner))
+            throw new InvalidOperationException("A selected City economy log referenced an owner outside the runtime graph.");
+        logger?.Log(category, message);
     }
 
     private void RefreshLocalKnowledgeAndShare()

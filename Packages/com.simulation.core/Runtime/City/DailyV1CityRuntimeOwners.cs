@@ -18,6 +18,10 @@ internal sealed partial class DailyV1CityRuntimeOwners
     internal PopulationEconomyRuntime PopulationEconomy { get; }
     internal DailyV1CityNpcPresenceOwner NpcPresence { get; }
     internal DailyV1FiniteProductionSourceOwner FiniteSource { get; }
+    // Latest deterministic material-flow receipt is a read-only diagnostic
+    // projection of the authoritative Core operation. It is not a persisted
+    // owner value and does not participate in mutation revision accounting.
+    internal LocalDailyMaterialFlowResult LastMaterialFlow { get; private set; }
 
     private DailyV1CityRuntimeOwners(
         string runtimeId,
@@ -156,6 +160,11 @@ internal sealed partial class DailyV1CityRuntimeOwners
         PopulationEconomy?.PaymentMode == ConsumptionPaymentMode.AccountBacked
         && (Definition?.Values?.marketItems ?? Array.Empty<DailyV1MarketItemConfig>())
             .Any(row => row != null && row.consumptionPer1000Population > 0f);
+
+    internal void RecordSelectedMaterialFlow(LocalDailyMaterialFlowResult result)
+    {
+        LastMaterialFlow = result;
+    }
 
     /// <summary>
     /// Applies the selected City's existing ordinary production pass through

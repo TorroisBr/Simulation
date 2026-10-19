@@ -1006,6 +1006,32 @@ public class NpcRuntime : ICapabilityConditionSource
             travelStateRevision++;
         }
 
+        RecordP12TravelMutationCommitted(travelStateChanged, changedCities);
+    }
+
+    /// <summary>
+    /// Records the existing P12 section mutation immediately after the Core
+    /// selected travel owners and their Unity projections commit. Ordinary
+    /// compatibility callers still use the method above which verifies the
+    /// projection before notifying P12.
+    /// </summary>
+    internal void RecordSelectedTravelOwnerMutationCommitted(
+        DailyV1SelectedTravelTransitionPlan plan,
+        IReadOnlyList<CityRuntime> changedCities)
+    {
+        if (selectedRuntimeOwners == null
+            || plan == null
+            || !ReferenceEquals(plan.Npc, selectedRuntimeOwners)
+            || !plan.IsCommitted)
+            throw new InvalidOperationException("Only the committed exact Core travel owner can advance its P12 boundary.");
+
+        RecordP12TravelMutationCommitted(plan.TravelRevisionChanges, changedCities);
+    }
+
+    private void RecordP12TravelMutationCommitted(
+        bool travelStateChanged,
+        IReadOnlyList<CityRuntime> changedCities)
+    {
         if (p12TravelStateMutationCommitted == null) return;
         try { p12TravelStateMutationCommitted(travelStateChanged, changedCities); }
         catch { }
@@ -2470,6 +2496,94 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
 
         if (arriving) arrivedCity = nextCurrentCity;
+        return true;
+    }
+
+    /// <summary>
+    /// Compatibility preflight for the Core-owned selected solo-travel stage.
+    /// This checks only Unity projection readiness and the existing P12 section
+    /// admission; the Core owner graph performs the authoritative plan commit.
+    /// </summary>
+    internal bool CanAdmitPreparedSelectedTravelDay(
+        DailyV1SelectedTravelTransitionPlan plan,
+        IReadOnlyList<CityRuntime> projectionCandidates,
+        out CityRuntime[] changedCities)
+    {
+        changedCities = null;
+        if (selectedRuntimeOwners == null
+            || plan == null
+            || !ReferenceEquals(plan.Npc, selectedRuntimeOwners)
+            || !HasConsistentSelectedTravelState)
+            return false;
+
+        foreach (CityRuntime candidate in projectionCandidates ?? Array.Empty<CityRuntime>())
+            if (candidate != null && !candidate.HasConsistentSelectedNpcPresenceProjection(this))
+                return false;
+
+        List<CityRuntime> changed = new List<CityRuntime>();
+        foreach (DailyV1CityRuntimeOwners changedOwner in plan.ChangedCityOwners)
+        {
+            CityRuntime projection = null;
+            foreach (CityRuntime candidate in projectionCandidates ?? Array.Empty<CityRuntime>())
+                if (candidate != null && ReferenceEquals(candidate.SelectedRuntimeOwners, changedOwner))
+                {
+                    projection = candidate;
+                    break;
+                }
+            if (projection == null || !plan.TryGetPresenceChange(changedOwner, out bool add))
+                return false;
+            if ((add ? !projection.CanAddImportantNpcMembership(this)
+                     : !projection.CanRemoveImportantNpcMembership(this))
+                || !projection.CanPrepareSelectedNpcPresenceProjection(this, add))
+                return false;
+            changed.Add(projection);
+        }
+
+        if (!plan.IsNoOp && !CanCommitP12TravelStateMutation(plan.TravelRevisionChanges, changed))
+            return false;
+        changedCities = changed.ToArray();
+        return true;
+    }
+
+    /// <summary>
+    /// Publishes the Unity-facing projection only after Core has committed the
+    /// prepared travel owner. The selected P12 section invalidation follows once
+    /// the reciprocal projection is current.
+    /// </summary>
+    internal bool TryProjectCommittedSelectedTravelDay(
+        DailyV1SelectedTravelTransitionPlan plan,
+        bool arriving,
+        IReadOnlyList<CityRuntime> changedCities,
+        out CityRuntime arrivedCity)
+    {
+        arrivedCity = null;
+        if (selectedRuntimeOwners == null
+            || plan == null
+            || !ReferenceEquals(plan.Npc, selectedRuntimeOwners)
+            || !plan.IsCommitted)
+            return false;
+
+        foreach (CityRuntime changedCity in changedCities ?? Array.Empty<CityRuntime>())
+        {
+            bool shouldContain = changedCity.SelectedRuntimeOwners.NpcPresence.Contains(RuntimeId);
+            if (!changedCity.TryApplySelectedNpcPresenceProjection(this, shouldContain))
+                throw new InvalidOperationException("A committed Core presence transition could not update its Unity object projection.");
+        }
+
+        currentLocation = arriving ? destinationLocation : currentLocation;
+        currentCity = arriving ? destinationCity : currentCity;
+        destinationLocation = arriving ? null : destinationLocation;
+        destinationCity = arriving ? null : destinationCity;
+        travelDaysRemaining = selectedRuntimeOwners.Travel.TravelDaysRemaining;
+        travelDaysTotal = selectedRuntimeOwners.Travel.TravelDaysTotal;
+        travelRouteRuntimeId = selectedRuntimeOwners.Travel.TravelRouteRuntimeId;
+        travelStartedToday = selectedRuntimeOwners.Travel.TravelStartedToday;
+        travelOriginDecisionId = selectedRuntimeOwners.Travel.TravelOriginDecisionId;
+        activeTravelPartyId = selectedRuntimeOwners.Travel.ActiveTravelPartyId;
+        if (!HasConsistentSelectedTravelState)
+            throw new InvalidOperationException("The selected NPC projection differs from the committed Core travel owner.");
+
+        if (arriving) arrivedCity = currentCity;
         return true;
     }
 

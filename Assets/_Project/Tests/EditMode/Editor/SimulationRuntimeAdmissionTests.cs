@@ -795,6 +795,160 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
     [Test]
+    public void SelectedSoloTravelProjectsEachArrivalBeforeP12CensusInvalidation()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject simulationObject = new GameObject("daily-selected-travel-p12-projection-order");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+        simulation.Start();
+
+        SimulationRuntime runtime = simulation.Runtime;
+        Assert.That(runtime, Is.Not.Null);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialCensus), Is.True,
+            initialCensus.ToString());
+
+        IGrouping<CityRuntime, NpcRuntime> sourceGroup = runtime.NpcRuntimes
+            .Where(npc => npc != null && npc.IsAlive && !npc.IsTraveling && npc.CurrentCity != null)
+            .GroupBy(npc => npc.CurrentCity)
+            .Where(group => group.Count() >= 2)
+            .OrderBy(group => group.Key.RuntimeId, StringComparer.Ordinal)
+            .FirstOrDefault();
+        Assert.That(sourceGroup, Is.Not.Null,
+            "The arrival regression needs two selected NPC owners sharing one origin City.");
+        NpcRuntime[] travelers = sourceGroup.OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal)
+            .Take(2).ToArray();
+        Assert.That(travelers, Has.Length.EqualTo(2),
+            "The accepted Daily-v1 profile supplies two independent selected NPC owners for the arrival witness.");
+
+        CityRuntime commonDestination = runtime.Cities.FirstOrDefault(city =>
+            city != null && city.Location != null
+            && !ReferenceEquals(city, sourceGroup.Key));
+        Assert.That(commonDestination, Is.Not.Null,
+            "The arrival regression uses one destination City shared by both selected travel owners.");
+        Dictionary<NpcRuntime, CityRuntime> destinations = new Dictionary<NpcRuntime, CityRuntime>();
+        foreach (NpcRuntime npc in travelers)
+        {
+            CityRuntime destination = commonDestination;
+            Assert.That(npc.StartTravel(destination, 1, "p12-selected-arrival-" + npc.RuntimeId), Is.True,
+                "Starting travel must use the selected Core owner and admitted P12 boundary.");
+            destinations.Add(npc, destination);
+        }
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure departureCensus), Is.True,
+            departureCensus.ToString());
+
+        TravelSystem travelSystem = ReadPrivateField<TravelSystem>(runtime, "travelSystem");
+        MethodInfo advanceSelectedSoloTravels = typeof(TravelSystem).GetMethod(
+            "TryAdvanceSelectedSoloTravels", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(travelSystem, Is.Not.Null);
+        Assert.That(advanceSelectedSoloTravels, Is.Not.Null);
+
+        object[] arguments = { runtime.SelectedRuntimeOwnerGraph, runtime.NpcRuntimes.ToList(), null };
+        Assert.That((bool)advanceSelectedSoloTravels.Invoke(travelSystem, arguments), Is.True,
+            "The first boundary clears the established TravelStartedToday marker.");
+        Assert.That(arguments[2] as IReadOnlyList<NpcRuntime>, Is.Empty);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure clearedCensus), Is.True,
+            clearedCensus.ToString());
+        Dictionary<CityRuntime, long> cityPresenceRevisions = runtime.Cities.ToDictionary(
+            city => city, city => city.SelectedRuntimeOwners.NpcPresence.Revision);
+
+        arguments = new object[] { runtime.SelectedRuntimeOwnerGraph, runtime.NpcRuntimes.ToList(), null };
+        Assert.That((bool)advanceSelectedSoloTravels.Invoke(travelSystem, arguments), Is.True,
+            "Each arrival must project reciprocal Core/Unity presence before its P12 census notification and before the next NPC commits.");
+        IReadOnlyList<NpcRuntime> arrivals = arguments[2] as IReadOnlyList<NpcRuntime>;
+        Assert.That(arrivals, Has.Count.EqualTo(2));
+        foreach (NpcRuntime npc in travelers)
+        {
+            Assert.That(npc.CurrentCity, Is.SameAs(destinations[npc]));
+            Assert.That(destinations[npc].ContainsImportantNpc(npc), Is.True);
+            Assert.That(npc.HasConsistentSelectedTravelState, Is.True);
+        }
+        foreach (CityRuntime city in runtime.Cities)
+        {
+            long expectedArrivals = ReferenceEquals(city, commonDestination) ? travelers.Length : 0L;
+            Assert.That(city.SelectedRuntimeOwners.NpcPresence.Revision,
+                Is.EqualTo(cityPresenceRevisions[city] + expectedArrivals),
+                "Only the shared destination presence owner advances, exactly once for each committed arrival.");
+        }
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure arrivalCensus), Is.True,
+            arrivalCensus.ToString());
+    }
+
+    [Test]
+    public void SelectedSoloTravelValidatesUnchangedDestinationProjectionBeforeNonArrivalCommit()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject simulationObject = new GameObject("daily-selected-travel-destination-preflight");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+        simulation.Start();
+
+        SimulationRuntime runtime = simulation.Runtime;
+        NpcRuntime traveler = runtime.NpcRuntimes
+            .Where(npc => npc != null && npc.IsAlive && !npc.IsTraveling && npc.CurrentCity != null)
+            .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal)
+            .FirstOrDefault();
+        Assert.That(traveler, Is.Not.Null);
+        CityRuntime destination = runtime.Cities.First(city =>
+            city != null && city.Location != null && !ReferenceEquals(city, traveler.CurrentCity));
+        Assert.That(traveler.StartTravel(destination, 2, "p12-destination-preflight"), Is.True);
+
+        TravelSystem travelSystem = ReadPrivateField<TravelSystem>(runtime, "travelSystem");
+        MethodInfo advanceSelectedSoloTravels = typeof(TravelSystem).GetMethod(
+            "TryAdvanceSelectedSoloTravels", BindingFlags.Instance | BindingFlags.NonPublic);
+        object[] arguments = { runtime.SelectedRuntimeOwnerGraph, runtime.NpcRuntimes.ToList(), null };
+        Assert.That((bool)advanceSelectedSoloTravels.Invoke(travelSystem, arguments), Is.True,
+            "The first boundary clears TravelStartedToday before testing the next travel day.");
+        Assert.That(traveler.TravelDaysRemaining, Is.EqualTo(2));
+
+        FieldInfo membershipField = typeof(CityRuntime).GetField("importantNpcs",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(membershipField, Is.Not.Null);
+        List<NpcRuntime> destinationProjection = (List<NpcRuntime>)membershipField.GetValue(destination);
+        Assert.That(destinationProjection, Is.Not.Null);
+        Assert.That(destinationProjection.Contains(traveler), Is.False);
+        destinationProjection.Add(traveler);
+        Assert.That(ReadPrivateField<object>(destination, "selectedRuntimeOwners"), Is.Not.Null);
+        Assert.That(traveler.SelectedRuntimeOwners.Travel.DestinationCityRuntimeId,
+            Is.EqualTo(destination.RuntimeId));
+
+        long travelRevision = traveler.SelectedRuntimeOwners.Travel.Revision;
+        long destinationPresenceRevision = destination.SelectedRuntimeOwners.NpcPresence.Revision;
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long mutationEpoch, out ContinuationCensusFailure epochFailure), Is.True,
+            epochFailure.ToString());
+        arguments = new object[] { runtime.SelectedRuntimeOwnerGraph, runtime.NpcRuntimes.ToList(), null };
+        Assert.That((bool)advanceSelectedSoloTravels.Invoke(travelSystem, arguments), Is.True,
+            "A failed per-owner preflight does not fail the surrounding daily pass.");
+        Assert.That(arguments[2] as IReadOnlyList<NpcRuntime>, Is.Empty,
+            "A non-arrival with inconsistent destination projection must not report arrival.");
+        Assert.That(traveler.TravelDaysRemaining, Is.EqualTo(2),
+            "The unchanged destination is validation-only; its stale reciprocal projection must reject the Core travel commit.");
+        Assert.That(traveler.SelectedRuntimeOwners.Travel.Revision, Is.EqualTo(travelRevision));
+        Assert.That(destination.SelectedRuntimeOwners.NpcPresence.Revision,
+            Is.EqualTo(destinationPresenceRevision));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long mutationEpochAfter, out ContinuationCensusFailure epochFailureAfter), Is.True,
+            epochFailureAfter.ToString());
+        Assert.That(mutationEpochAfter, Is.EqualTo(mutationEpoch),
+            "A rejected unchanged-destination preflight must not invalidate the P12 census epoch.");
+        Assert.That(traveler.CurrentCity, Is.Null);
+        Assert.That(traveler.DestinationCity, Is.SameAs(destination));
+    }
+
+    [Test]
     public void DailyProfileAdmissionAcceptsExactInitialSpatialIdentityAndLegacyNetworkCardinalities()
     {
         SimulationRuntime runtime = CreateSpatialAdmissionRuntime();

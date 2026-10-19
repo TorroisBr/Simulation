@@ -123,21 +123,22 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
 
         long[] originalRevisions = graph.Cities.Select(city => city.Market.Revision).ToArray();
         int[][] originalStock = graph.Cities.Select(city => city.Market.Items.Select(row => row.Amount).ToArray()).ToArray();
+        LocalDailyMaterialFlowResult[] originalMaterialFlow = graph.Cities.Select(city => city.LastMaterialFlow).ToArray();
         List<string> events = new List<string>();
 
         Assert.That(graph.TrySimulateDailyEconomyDay(
             graph.Cities.Reverse(), 1, "calendar-v1",
-            (owner, category, _) => events.Add(owner.Definition.DefinitionId + ":" + category),
-            (_, _) => Assert.Fail("A rejected owner sequence must not project material flow.")), Is.False);
+            (owner, category, _) => events.Add(owner.Definition.DefinitionId + ":" + category)), Is.False);
         Assert.That(events, Is.Empty, "A mismatched City order is rejected before any writes or callbacks.");
         Assert.That(graph.Cities.Select(city => city.Market.Revision), Is.EqualTo(originalRevisions));
         Assert.That(graph.Cities.Select(city => city.Market.Items.Select(row => row.Amount).ToArray()),
             Is.EqualTo(originalStock));
+        Assert.That(graph.Cities.Select(city => city.LastMaterialFlow), Is.EqualTo(originalMaterialFlow),
+            "A rejected owner sequence cannot publish a partial Core material-flow report.");
 
         Assert.That(graph.TrySimulateDailyEconomyDay(
             graph.Cities, 1, "calendar-v1",
-            (owner, category, _) => events.Add(owner.Definition.DefinitionId + ":" + category),
-            (_, _) => { }), Is.True);
+            (owner, category, _) => events.Add(owner.Definition.DefinitionId + ":" + category)), Is.True);
 
         string[] productionEvents = events.Where(value => value.EndsWith(":" + SimulationLogCategory.EconomyProduction,
             StringComparison.Ordinal)).ToArray();
@@ -193,8 +194,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
 
         int consumptionLogs = 0;
         Assert.That(graph.TrySimulateDailyEconomyDay(graph.Cities, 1, "calendar-v1",
-            (_, category, _) => { if (category == SimulationLogCategory.EconomyConsumption) consumptionLogs++; },
-            null), Is.True);
+            (_, category, _) => { if (category == SimulationLogCategory.EconomyConsumption) consumptionLogs++; }), Is.True);
 
         DailyV1ItemDefinition item = definitions.Items["item/paid"];
         Assert.That(city.Market.GetAmount(item), Is.EqualTo(4));
@@ -204,6 +204,45 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(city.Counterparty.MoneyAccount.Revision, Is.EqualTo(1));
         Assert.That(city.Market.Revision, Is.EqualTo(1), "The selected consumption commits one Market owner write.");
         Assert.That(consumptionLogs, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void SelectedDailyEconomyKeepsMaterialFlowResultOnTheCoreOwnerWithoutProjectionCallback()
+    {
+        DailyV1CityData cityValues = new DailyV1CityData(
+            "city/finite", "Finite City", "settlement/finite", "location/finite", "market/finite",
+            new DailyV1EnumValue((int)LocalMaterialFlowProfile.FiniteReserveDaily, "FiniteReserveDaily"),
+            1000, null,
+            new DailyV1PopulationConsumptionConfig(
+                new DailyV1EnumValue((int)ConsumptionPaymentMode.Free, "Free"), 0f),
+            new[] { new DailyV1MarketItemConfig("item/finite", 5, 100, 0f) },
+            new[] { new DailyV1CityProductionConfig("item/finite", 3, 7,
+                "source/finite", "content-v1",
+                new DailyV1EnumValue((int)CityProductionSourceKind.FiniteReserveDaily, "FiniteReserveDaily")) },
+            Array.Empty<DailyV1CityConnection>());
+        DailyV1EffectiveDefinitions definitions = DailyV1EffectiveDefinitions.CreateSelectedSchema(
+            DailyV1TypedDefinitionGraphTests.CreateConfiguration(1f, new[] { "city/finite" }),
+            SimulationConfigurationDefaults.Create(), new DailyV1CalendarDefinition(1, 1, 1, null),
+            new[] { cityValues }, new[] { new DailyV1ItemData("item/finite", "Iron", 4f, null) },
+            Array.Empty<DailyV1NpcData>(), Array.Empty<DailyV1NpcJobData>(),
+            Array.Empty<DailyV1NpcActionData>(), Array.Empty<DailyV1NpcStatusData>(), Array.Empty<string>(),
+            "test.daily-v1", "test.geography-v1", "test.geography-stage/v1", "hex-v1", "q-r-s");
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialCityOwner(
+            "city-runtime-finite", "location-runtime-finite", definitions,
+            definitions.Cities["city/finite"], null, out DailyV1CityRuntimeOwners city), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, new[] { city }, Array.Empty<DailyV1NpcRuntimeOwners>(),
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        Assert.That(graph.TrySimulateDailyEconomyDay(graph.Cities, 1, "calendar-v1", null), Is.True);
+
+        Assert.That(city.LastMaterialFlow, Is.Not.Null,
+            "The Core stage stores the completed result on its selected owner instead of calling Unity to publish it.");
+        Assert.That(city.LastMaterialFlow.AbsoluteDay, Is.EqualTo(1L));
+        Assert.That(city.LastMaterialFlow.OpeningStock, Is.EqualTo(5));
+        Assert.That(city.LastMaterialFlow.AppliedSourceQuantity, Is.EqualTo(3));
+        Assert.That(city.LastMaterialFlow.ClosingStock, Is.EqualTo(8));
+        Assert.That(city.FiniteSource.RemainingReserve, Is.EqualTo(4));
     }
 
     [Test]
@@ -346,26 +385,56 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             null, null, partyMember.Travel.DestinationLocationRuntimeId,
             partyMember.Travel.DestinationCityRuntimeId, 2, 3,
             partyMember.Travel.TravelRouteRuntimeId, false,
-            partyMember.Travel.TravelOriginDecisionId, "party-1", partyMember.Travel.Revision), Is.True);
+            partyMember.Travel.TravelOriginDecisionId, null, partyMember.Travel.Revision), Is.True);
 
         long[] revisionsBeforeRejectedRoster = graph.Npcs.Select(npc => npc.Travel.Revision).ToArray();
         int preflightCommitCalls = 0;
         Assert.That(graph.TryAdvanceSoloTravelDay(
             graph.Npcs.Reverse(),
-            _ => false,
+            Array.Empty<string>(),
             (_, _, _) => { preflightCommitCalls++; return true; },
-            (_, _, _) => Assert.Fail("An inexact roster must not emit travel results.")), Is.False);
+            (_, _, _) => Assert.Fail("An inexact roster must not commit travel."),
+            _ => Assert.Fail("An inexact roster must not publish travel results."),
+            out IReadOnlyList<DailyV1SelectedSoloTravelDayResult> rejectedRosterResults), Is.False);
         Assert.That(preflightCommitCalls, Is.Zero);
+        Assert.That(rejectedRosterResults, Is.Null);
         Assert.That(graph.Npcs.Select(npc => npc.Travel.Revision), Is.EqualTo(revisionsBeforeRejectedRoster));
 
-        List<string> reported = new List<string>();
+        List<string> transitionOrder = new List<string>();
         Assert.That(graph.TryAdvanceSoloTravelDay(
             graph.Npcs,
-            npc => npc.Travel.ActiveTravelPartyId != null,
-            (npc, plan, _) => graph.TryCommitTravelTransition(
-                npc, plan, () => !ReferenceEquals(npc, rejectedAdvance)),
-            (npc, didArrive, originDecisionId) => reported.Add(
-                npc.RuntimeId + ":" + didArrive + ":" + originDecisionId)), Is.True);
+            new[] { partyMember.RuntimeId },
+            (npc, _, _) =>
+            {
+                transitionOrder.Add("pre:" + npc.RuntimeId);
+                return !ReferenceEquals(npc, rejectedAdvance);
+            },
+            (npc, plan, _) =>
+            {
+                Assert.That(plan.IsCommitted, Is.True);
+                transitionOrder.Add("publish:" + npc.RuntimeId);
+            },
+            result => transitionOrder.Add("result:" + result.Npc.RuntimeId),
+            out IReadOnlyList<DailyV1SelectedSoloTravelDayResult> travelResults), Is.True);
+
+        foreach (DailyV1NpcRuntimeOwners committedOwner in new[] { startedToday, arriving })
+        {
+            int publishIndex = transitionOrder.IndexOf("publish:" + committedOwner.RuntimeId);
+            Assert.That(publishIndex, Is.GreaterThanOrEqualTo(0));
+            int nextPreflightIndex = transitionOrder
+                .Select((value, index) => new { value, index })
+                .Where(entry => entry.index > publishIndex && entry.value.StartsWith("pre:", StringComparison.Ordinal))
+                .Select(entry => entry.index)
+                .DefaultIfEmpty(int.MaxValue)
+                .First();
+            Assert.That(publishIndex, Is.LessThan(nextPreflightIndex),
+                "Each committed owner must publish its projection/P12 boundary before Core evaluates the next owner.");
+            int resultIndex = transitionOrder.IndexOf("result:" + committedOwner.RuntimeId);
+            Assert.That(resultIndex, Is.GreaterThan(publishIndex),
+                "Each owner result must be consumed after commit publication.");
+            Assert.That(resultIndex, Is.LessThan(nextPreflightIndex),
+                "Per-NPC event/knowledge/report adapters must retain deterministic owner order.");
+        }
 
         Assert.That(startedToday.Travel.TravelDaysRemaining, Is.EqualTo(3),
             "Travel started today is cleared without consuming a travel day.");
@@ -383,10 +452,13 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             "TravelParty membership keeps the owner out of solo advancement.");
         Assert.That(partyMember.Travel.Revision, Is.EqualTo(1L));
 
-        Assert.That(reported, Is.EqualTo(new[]
+        Assert.That(travelResults.Where(result => result.ShouldReport).Select(result =>
+            result.Npc.RuntimeId + ":" + result.Arrived + ":" + result.OriginDecisionId), Is.EqualTo(new[]
         {
             rejectedAdvance.RuntimeId + ":False:" + rejectedAdvance.Travel.TravelOriginDecisionId,
             arriving.RuntimeId + ":True:" + "decision-" + arriving.RuntimeId
         }.OrderBy(value => value.Split(':')[0], StringComparer.Ordinal)));
+        Assert.That(travelResults.Single(result => ReferenceEquals(result.Npc, startedToday)).WasCommitted, Is.True);
+        Assert.That(travelResults.Any(result => ReferenceEquals(result.Npc, partyMember)), Is.False);
     }
 }

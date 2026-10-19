@@ -173,7 +173,9 @@ public class CityRuntime
                         && (!string.IsNullOrWhiteSpace(source.productionSourceId) || source.initialReserve != 0))
                 : (RuntimeProductionConfigs != null && RuntimeProductionConfigs.Exists(source =>
                     source != null && (!string.IsNullOrWhiteSpace(source.productionSourceId) || source.initialReserve != 0)))));
-    public LocalDailyMaterialFlowResult LastMaterialFlow => lastMaterialFlow;
+    public LocalDailyMaterialFlowResult LastMaterialFlow => selectedRuntimeOwners != null
+        ? selectedRuntimeOwners.LastMaterialFlow
+        : lastMaterialFlow;
     public FiniteProductionSourceStore FiniteProductionSources => finiteProductionSources;
 
     internal bool TryGetInstalledSnapshotOwners(
@@ -446,6 +448,7 @@ public class CityRuntime
             lastMaterialFlow = selectedRuntimeOwners.SimulateSelectedLocalDailyMaterialFlow(
                 RuntimeMaterialFlowLocationId, absoluteDay, calendarVersion,
                 (category, message) => logger?.Log(category, message));
+            selectedRuntimeOwners.RecordSelectedMaterialFlow(lastMaterialFlow);
             return;
         }
 
@@ -911,6 +914,7 @@ public class CityRuntime
         lastMaterialFlow = selectedRuntimeOwners.SimulateSelectedLocalDailyMaterialFlow(
             RuntimeMaterialFlowLocationId, absoluteDay, calendarVersion,
             (category, message) => logger?.Log(category, message));
+        selectedRuntimeOwners.RecordSelectedMaterialFlow(lastMaterialFlow);
     }
 
     public bool TryResolveDailyEconomyReceipt(
@@ -1964,6 +1968,7 @@ public class CityRuntime
         if (!ReferenceEquals(selectedRuntimeOwners, expectedOwner))
             throw new InvalidOperationException("The selected City material-flow projection is not bound to its exact Core owner.");
         lastMaterialFlow = result;
+        expectedOwner.RecordSelectedMaterialFlow(result);
     }
 
     internal int ExecuteSelectedAccountBackedPopulationConsumption(

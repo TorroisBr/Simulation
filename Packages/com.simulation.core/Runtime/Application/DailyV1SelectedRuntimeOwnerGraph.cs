@@ -510,39 +510,56 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
 
     /// <summary>
     /// Runs the selected solo-travel portion of one daily turn in stable
-    /// RuntimeId order. Core selects the exact eligible owners and prepares
-    /// their existing travel plans; the host adapter retains party lookup,
-    /// mutation admission, compatibility projection, and presentation effects.
-    /// A false return is restricted to exact-roster/callback preflight, before
-    /// any travel owner can be changed.
+    /// RuntimeId order. Core selects eligible owners, prepares each existing
+    /// travel plan, and installs it into the exact travel/presence owners. The
+    /// host supplies a read-only party-membership snapshot, a compatibility
+    /// boundary preflight, and a per-owner projection/invalidation publisher.
+    /// Core chooses and commits each travel result; the publisher reconciles its
+    /// Unity projection and P12 mutation boundary before the next owner is read.
     /// </summary>
     internal bool TryAdvanceSoloTravelDay(
         IEnumerable<DailyV1NpcRuntimeOwners> exactNpcOwners,
-        Func<DailyV1NpcRuntimeOwners, bool> isManagedByTravelParty,
-        Func<DailyV1NpcRuntimeOwners, DailyV1SelectedTravelTransitionPlan, bool, bool> commitTransition,
-        Action<DailyV1NpcRuntimeOwners, bool, string> reportTravelDay)
+        IReadOnlyCollection<string> managedTravelPartyNpcRuntimeIds,
+        Func<DailyV1NpcRuntimeOwners, DailyV1SelectedTravelTransitionPlan, bool, bool> preCommitAdmission,
+        Action<DailyV1NpcRuntimeOwners, DailyV1SelectedTravelTransitionPlan, bool> publishCommitted,
+        Action<DailyV1SelectedSoloTravelDayResult> publishResult,
+        out IReadOnlyList<DailyV1SelectedSoloTravelDayResult> results)
     {
+        results = null;
         if (!MatchesExactOwnerInstances(npcs, exactNpcOwners)
-            || isManagedByTravelParty == null
-            || commitTransition == null
-            || reportTravelDay == null)
+            || managedTravelPartyNpcRuntimeIds == null
+            || preCommitAdmission == null
+            || publishCommitted == null
+            || publishResult == null)
             return false;
 
+        HashSet<string> managedIds = new HashSet<string>(managedTravelPartyNpcRuntimeIds, StringComparer.Ordinal);
         List<DailyV1NpcRuntimeOwners> ordered = new List<DailyV1NpcRuntimeOwners>(npcs);
         ordered.Sort((left, right) => string.CompareOrdinal(left.RuntimeId, right.RuntimeId));
+        List<DailyV1SelectedSoloTravelDayResult> completed = new List<DailyV1SelectedSoloTravelDayResult>();
 
         foreach (DailyV1NpcRuntimeOwners npc in ordered)
         {
             if (npc.Lifecycle.LifeState != NpcLifeState.Alive
                 || !npc.Travel.IsTraveling
-                || isManagedByTravelParty(npc))
+                || !string.IsNullOrWhiteSpace(npc.Travel.ActiveTravelPartyId)
+                || managedIds.Contains(npc.RuntimeId))
                 continue;
 
             if (npc.Travel.TravelStartedToday)
             {
                 if (DailyV1SelectedTravelTransitionPlan.TryClearTravelStartedToday(
                         npc, out DailyV1SelectedTravelTransitionPlan clearStartedPlan))
-                    commitTransition(npc, clearStartedPlan, false);
+                {
+                    bool committed = preCommitAdmission(npc, clearStartedPlan, false)
+                        && TryCommitTravelTransition(npc, clearStartedPlan, null);
+                    if (committed) publishCommitted(npc, clearStartedPlan, false);
+                    DailyV1SelectedSoloTravelDayResult result = new DailyV1SelectedSoloTravelDayResult(
+                        npc, clearStartedPlan, false, committed, false,
+                        npc.Travel.TravelOriginDecisionId);
+                    completed.Add(result);
+                    publishResult(result);
+                }
                 continue;
             }
 
@@ -557,19 +574,27 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                         break;
                     }
 
-            bool arrived = false;
+            DailyV1SelectedTravelTransitionPlan advancePlan = null;
+            bool willArrive = false;
+            bool committedAdvance = false;
             if (DailyV1SelectedTravelTransitionPlan.TryAdvanceTravelDay(
                     npc, destination,
-                    out DailyV1SelectedTravelTransitionPlan advancePlan,
-                    out bool willArrive))
+                    out advancePlan,
+                    out willArrive))
             {
-                bool committed = commitTransition(npc, advancePlan, willArrive);
-                arrived = willArrive && committed;
+                committedAdvance = preCommitAdmission(npc, advancePlan, willArrive)
+                    && TryCommitTravelTransition(npc, advancePlan, null);
+                if (committedAdvance) publishCommitted(npc, advancePlan, willArrive);
             }
 
-            reportTravelDay(npc, arrived, originDecisionId);
+            DailyV1SelectedSoloTravelDayResult advanceResult = new DailyV1SelectedSoloTravelDayResult(
+                npc, advancePlan, shouldReport: true, committedAdvance,
+                arrived: willArrive && committedAdvance, originDecisionId);
+            completed.Add(advanceResult);
+            publishResult(advanceResult);
         }
 
+        results = completed.AsReadOnly();
         return true;
     }
 
@@ -584,8 +609,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         IEnumerable<DailyV1CityRuntimeOwners> exactCityOwners,
         long absoluteDay,
         string calendarVersion,
-        Action<DailyV1CityRuntimeOwners, SimulationLogCategory, string> logOutput,
-        Action<DailyV1CityRuntimeOwners, LocalDailyMaterialFlowResult> localFlowOutput)
+        Action<DailyV1CityRuntimeOwners, SimulationLogCategory, string> logOutput)
     {
         if (!MatchesExactOwnerInstances(cities, exactCityOwners)) return false;
 
@@ -597,7 +621,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 absoluteDay,
                 calendarVersion,
                 logOutput == null ? null : (category, message) => logOutput(city, category, message));
-            localFlowOutput?.Invoke(city, result);
+            city.RecordSelectedMaterialFlow(result);
         }
 
         foreach (DailyV1CityRuntimeOwners city in cities)
@@ -633,6 +657,37 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         }
 
         return index == expected.Count;
+    }
+}
+
+/// <summary>
+/// Immutable host-projection receipt for one selected NPC's solo-travel turn.
+/// A receipt is emitted only after Core has selected and evaluated that NPC;
+/// its plan is committed when <see cref="WasCommitted"/> is true.
+/// </summary>
+internal sealed class DailyV1SelectedSoloTravelDayResult
+{
+    internal DailyV1NpcRuntimeOwners Npc { get; }
+    internal DailyV1SelectedTravelTransitionPlan Plan { get; }
+    internal bool ShouldReport { get; }
+    internal bool WasCommitted { get; }
+    internal bool Arrived { get; }
+    internal string OriginDecisionId { get; }
+
+    internal DailyV1SelectedSoloTravelDayResult(
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1SelectedTravelTransitionPlan plan,
+        bool shouldReport,
+        bool wasCommitted,
+        bool arrived,
+        string originDecisionId)
+    {
+        Npc = npc ?? throw new ArgumentNullException(nameof(npc));
+        Plan = plan;
+        ShouldReport = shouldReport;
+        WasCommitted = wasCommitted;
+        Arrived = arrived;
+        OriginDecisionId = originDecisionId;
     }
 }
 

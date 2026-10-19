@@ -50,6 +50,8 @@ internal sealed class DailyV1SelectedTravelTransitionPlan
     private bool committed;
 
     internal bool TravelRevisionChanges => advanceTravelRevision;
+    internal DailyV1NpcRuntimeOwners Npc => npc;
+    internal bool IsCommitted => committed;
     internal bool IsNoOp => !HasTravelStateDifference() && presenceChanges.Count == 0;
 
     private DailyV1SelectedTravelTransitionPlan(

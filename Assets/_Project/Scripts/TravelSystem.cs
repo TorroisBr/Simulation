@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 public class TravelSystem : IAuthoritativeMutationGuardBindable
 {
@@ -268,16 +269,41 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
         foreach (DailyV1NpcRuntimeOwners owner in graph.Npcs)
             if (!adapters.ContainsKey(owner)) return false;
 
+        Dictionary<DailyV1NpcRuntimeOwners, CityRuntime[]> changedCitiesByOwner =
+            new Dictionary<DailyV1NpcRuntimeOwners, CityRuntime[]>();
+        IReadOnlyCollection<string> managedTravelPartyNpcRuntimeIds = GetManagedTravelPartyNpcRuntimeIds();
         List<NpcRuntime> arrivals = new List<NpcRuntime>();
         bool advanced = graph.TryAdvanceSoloTravelDay(
             graph.Npcs,
-            owner => IsManagedByTravelParty(adapters[owner]),
+            managedTravelPartyNpcRuntimeIds,
+            (owner, plan, _) =>
+            {
+                if (!TryGetSelectedTravelProjectionCandidates(graph, plan, out CityRuntime[] candidates)) return false;
+                if (!adapters[owner].CanAdmitPreparedSelectedTravelDay(
+                        plan, candidates, out CityRuntime[] changedCities))
+                    return false;
+                changedCitiesByOwner[owner] = changedCities;
+                return true;
+            },
             (owner, plan, arriving) =>
-                adapters[owner].TryCommitPreparedSelectedTravelDay(plan, arriving, out _),
-            (owner, arrived, originDecisionId) =>
             {
                 NpcRuntime runtime = adapters[owner];
-                if (arrived)
+                if (!changedCitiesByOwner.TryGetValue(owner, out CityRuntime[] changedCities)
+                    || !runtime.TryProjectCommittedSelectedTravelDay(
+                        plan, arriving, changedCities, out _))
+                    throw new InvalidOperationException("A committed selected solo-travel transition could not publish its Unity projection.");
+
+                // The selected P12 census verifies the reciprocal Core/Unity
+                // presence join, so publish projection before invalidating the
+                // owner's captured section and before Core advances to the next
+                // NPC in RuntimeId order.
+                runtime.RecordSelectedTravelOwnerMutationCommitted(plan, changedCities);
+            },
+            result =>
+            {
+                NpcRuntime runtime = adapters[result.Npc];
+                if (!result.ShouldReport) return;
+                if (result.Arrived)
                 {
                     runtime.SpatialKnowledge.DiscoverLocation(runtime.CurrentLocation?.RuntimeId);
                     arrivals.Add(runtime);
@@ -287,7 +313,7 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
                         recordSequence,
                         runtime.RuntimeId,
                         runtime.CurrentLocation?.RuntimeId,
-                        originDecisionId));
+                        result.OriginDecisionId));
                     string destinationName = runtime.CurrentCity != null
                         ? runtime.CurrentCity.CityName
                         : runtime.CurrentLocation?.RuntimeId ?? "destino desconhecido";
@@ -299,11 +325,82 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
                 string dayText = runtime.TravelDaysRemaining == 1 ? "dia" : "dias";
                 logger.Log(SimulationLogCategory.Travel,
                     $"{runtime.NpcName} esta viajando. {verb} {runtime.TravelDaysRemaining} {dayText}.");
-            });
+            },
+            out _);
         if (!advanced) return false;
 
         arrivedNpcs = arrivals.AsReadOnly();
         return true;
+    }
+
+    private bool TryGetSelectedTravelProjectionCandidates(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1SelectedTravelTransitionPlan plan,
+        out CityRuntime[] projections)
+    {
+        projections = null;
+        if (graph == null || plan == null) return false;
+
+        List<CityRuntime> candidates = new List<CityRuntime>();
+        foreach (DailyV1CityRuntimeOwners changedOwner in plan.ChangedCityOwners)
+        {
+            if (changedOwner == null
+                || !spatialNetwork.TryGetLocation(changedOwner.LocationRuntimeId, out SpatialLocationRuntime location))
+                return false;
+            CityRuntime projection = getCityRuntimeByLocation(location);
+            if (projection == null
+                || !ReferenceEquals(projection.SelectedRuntimeOwners, changedOwner))
+                return false;
+            candidates.Add(projection);
+        }
+
+        // Destination is validation-only until the arrival plan changes its
+        // presence owner. Still validate its current Core/Unity reciprocal
+        // projection on every travel day, without admitting it as a changed
+        // City for projection or P12 revision accounting.
+        string destinationCityId = plan.Npc.Travel.DestinationCityRuntimeId;
+        if (!string.IsNullOrWhiteSpace(destinationCityId))
+        {
+            DailyV1CityRuntimeOwners destinationOwner = graph.Cities.FirstOrDefault(city =>
+                string.Equals(city.RuntimeId, destinationCityId, StringComparison.Ordinal));
+            if (destinationOwner == null
+                || !spatialNetwork.TryGetLocation(destinationOwner.LocationRuntimeId,
+                    out SpatialLocationRuntime destinationLocation))
+                return false;
+            CityRuntime destinationProjection = getCityRuntimeByLocation(destinationLocation);
+            if (destinationProjection == null
+                || !ReferenceEquals(destinationProjection.SelectedRuntimeOwners, destinationOwner))
+                return false;
+            if (!candidates.Contains(destinationProjection)) candidates.Add(destinationProjection);
+        }
+
+        projections = candidates.ToArray();
+        return true;
+    }
+
+    private IReadOnlyCollection<string> GetManagedTravelPartyNpcRuntimeIds()
+    {
+        HashSet<string> memberRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+        TravelPartyStore store = travelPartyStore;
+        if (store == null) return memberRuntimeIds;
+
+        IDisposable readWindow = store.EnterReadWindow();
+        try
+        {
+            foreach (TravelPartyRuntime party in store.ActiveParties)
+            {
+                if (party == null || !party.IsActive || party.MemberRuntimeIds == null) continue;
+                foreach (string memberRuntimeId in party.MemberRuntimeIds)
+                    if (!string.IsNullOrWhiteSpace(memberRuntimeId))
+                        memberRuntimeIds.Add(memberRuntimeId);
+            }
+        }
+        finally
+        {
+            readWindow.Dispose();
+        }
+
+        return memberRuntimeIds;
     }
 
     public IReadOnlyList<NpcRuntime> AdvanceTravels(List<NpcRuntime> npcRuntimeList)
