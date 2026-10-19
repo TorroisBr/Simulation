@@ -659,8 +659,12 @@ public class TesteSimulacao : MonoBehaviour
                             requireP12ReceiptCensusOwners: runtimeAdmissionContext != null,
                             runtimeIdentityRegistry: runtimeIdentityRegistry,
                             spatialNetworkRuntime: spatialNetwork,
-                            requireP12RuntimeIdentitySpatialCensusOwners: runtimeAdmissionContext != null,
-                            initialSelectedRuntimeOwnerGraph: selectedInitialRuntimeOwnerGraph);
+                            requireP12RuntimeIdentitySpatialCensusOwners: runtimeAdmissionContext != null);
+                        if (selectedInitialRuntimeOwnerGraph != null
+                            && !simulationRuntime.TryAdoptInitialSelectedRuntimeOwnerGraph(
+                                selectedInitialRuntimeOwnerGraph))
+                            throw new System.InvalidOperationException(
+                                "The constructed runtime did not adopt the exact unpublished selected Core owner graph.");
                         simulationRuntime.BindP12EconomyTransactionService(economyTransactionService);
                         if (runtimeAdmissionContext != null
                             && !simulationRuntime.TryBeginBootstrapPublicationScope(out bootstrapPublicationScope))
