@@ -384,6 +384,38 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         return false;
     }
 
+    /// <summary>
+    /// Prepares the ordinary, unkeyed open-market sale against the exact City
+    /// and NPC authorities in this graph. The host supplies the P12 operation
+    /// admission only when the prepared plan is ready to commit.
+    /// </summary>
+    internal bool TryPrepareOpenMarketSale(
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1MarketOwner market,
+        DailyV1ItemDefinition item,
+        int requestedQuantity,
+        out DailyV1SelectedOpenMarketSalePlan plan,
+        out DailyV1SelectedOpenMarketSaleFailure failure)
+    {
+        plan = null;
+        failure = DailyV1SelectedOpenMarketSaleFailure.InvalidInput;
+        if (!ContainsExactNpcOwner(npc) || market == null)
+            return false;
+
+        DailyV1CityRuntimeOwners city = null;
+        foreach (DailyV1CityRuntimeOwners candidate in cities)
+        {
+            if (candidate != null && ReferenceEquals(candidate.Market, market))
+            {
+                city = candidate;
+                break;
+            }
+        }
+
+        return DailyV1SelectedOpenMarketSalePlan.TryPrepare(
+            this, npc, city, market, item, requestedQuantity, out plan, out failure);
+    }
+
     internal bool ContainsCityRuntimeLocation(string cityRuntimeId, string locationRuntimeId)
     {
         if (cityRuntimeId == null) return true;

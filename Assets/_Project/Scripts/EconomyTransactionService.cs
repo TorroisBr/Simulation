@@ -1206,6 +1206,15 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 actorRuntimeId: npc.RuntimeId);
         }
 
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph = item.Definition != null
+            ? npc.SelectedRuntimeOwnerGraph
+            : null;
+        if (!accountBacked && selectedGraph != null)
+        {
+            return ExecuteSelectedOpenMarketSale(
+                npc, market, item, requestedQuantity, selectedGraph);
+        }
+
         if (requestedQuantity <= 0)
         {
             return EconomyTransactionResult.CreateFailure(
@@ -1416,6 +1425,121 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             operationScope?.Dispose();
         }
     }
+
+    private EconomyTransactionResult ExecuteSelectedOpenMarketSale(
+        NpcRuntime npc,
+        MarketRuntime market,
+        TradeItem item,
+        int requestedQuantity,
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph)
+    {
+        if (selectedGraph == null)
+        {
+            return EconomyTransactionResult.CreateFailure(
+                EconomyTransactionType.OpenMarketSale,
+                MoneyEffect.ExplicitSource,
+                EconomyTransactionFailureReason.TransactionCommitFailed,
+                actorRuntimeId: npc.RuntimeId);
+        }
+
+        if (!selectedGraph.TryPrepareOpenMarketSale(
+            npc.SelectedRuntimeOwners,
+            market.SelectedDailyV1Owner,
+            item.Definition,
+            requestedQuantity,
+            out DailyV1SelectedOpenMarketSalePlan plan,
+            out DailyV1SelectedOpenMarketSaleFailure preparationFailure))
+        {
+            return EconomyTransactionResult.CreateFailure(
+                EconomyTransactionType.OpenMarketSale,
+                MoneyEffect.ExplicitSource,
+                MapSelectedSaleFailure(preparationFailure),
+                actorRuntimeId: npc.RuntimeId);
+        }
+
+        bool p12Tracking = p12CensusRuntime != null
+            && p12CensusRuntime.HasP12MarketOperationAdapter;
+        SimulationOperationScope operationScope = null;
+        string accountSectionId = null;
+        string inventorySectionId = null;
+        string marketSectionId = null;
+        Func<bool> beginOperation = p12Tracking
+            ? (Func<bool>)(() => p12CensusRuntime.TryBeginP12MarketOperation(
+                npc,
+                market,
+                EconomyTransactionType.OpenMarketSale,
+                out operationScope,
+                out accountSectionId,
+                out inventorySectionId,
+                out marketSectionId))
+            : null;
+
+        DailyV1SelectedOpenMarketSaleCommitResult commit;
+        try
+        {
+            commit = plan.TryCommit(beginOperation);
+
+            if (commit.AccountMutationCount > 0)
+            {
+                bool ownerNotifiesCommit = MoneyAccountOwnerBridge.HasP12MutationBoundary(npc.MoneyAccount);
+                for (int i = 0; i < commit.AccountMutationCount; i++)
+                    NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId, ownerNotifiesCommit);
+            }
+            if (commit.InventoryMutationCount > 0)
+            {
+                bool ownerNotifiesCommit = npc.Inventory.HasP12MutationBoundary;
+                for (int i = 0; i < commit.InventoryMutationCount; i++)
+                    NotifyP12MarketOwnerMutation(p12Tracking, inventorySectionId, ownerNotifiesCommit);
+            }
+
+            if (commit.Succeeded)
+            {
+                bool ownerNotifiesCommit = market.SelectedDailyV1Owner.HasMutationBoundary;
+                NotifyP12MarketOwnerMutation(p12Tracking, marketSectionId, ownerNotifiesCommit);
+            }
+
+            if (commit.PartialCommit && p12Tracking)
+                p12CensusRuntime.FaultRuntimeAdmission();
+        }
+        finally
+        {
+            operationScope?.Dispose();
+        }
+
+        if (!commit.Succeeded)
+        {
+            return EconomyTransactionResult.CreateFailure(
+                EconomyTransactionType.OpenMarketSale,
+                MoneyEffect.ExplicitSource,
+                MapSelectedSaleFailure(commit.Failure),
+                actorRuntimeId: npc.RuntimeId);
+        }
+
+        return EconomyTransactionResult.CreateSuccess(
+            EconomyTransactionType.OpenMarketSale,
+            MoneyEffect.ExplicitSource,
+            plan.TotalPrice,
+            plan.ItemDefinitionId,
+            plan.RequestedQuantity,
+            plan.Quantity,
+            plan.UnitPrice,
+            plan.TotalPrice,
+            actorRuntimeId: npc.RuntimeId,
+            itemSourceRuntimeId: npc.RuntimeId,
+            itemDestinationRuntimeId: plan.MarketRuntimeId);
+    }
+
+    private static EconomyTransactionFailureReason MapSelectedSaleFailure(
+        DailyV1SelectedOpenMarketSaleFailure failure) => failure switch
+        {
+            DailyV1SelectedOpenMarketSaleFailure.InvalidQuantity => EconomyTransactionFailureReason.InvalidQuantity,
+            DailyV1SelectedOpenMarketSaleFailure.InsufficientInventory => EconomyTransactionFailureReason.InsufficientInventory,
+            DailyV1SelectedOpenMarketSaleFailure.InvalidPrice => EconomyTransactionFailureReason.InvalidPrice,
+            DailyV1SelectedOpenMarketSaleFailure.CreditRejected => EconomyTransactionFailureReason.CreditRejected,
+            DailyV1SelectedOpenMarketSaleFailure.MarketCapacity => EconomyTransactionFailureReason.MarketCapacity,
+            DailyV1SelectedOpenMarketSaleFailure.None => EconomyTransactionFailureReason.None,
+            _ => EconomyTransactionFailureReason.TransactionCommitFailed
+        };
 
     private void NotifyP12MarketOwnerMutation(bool tracking, string sectionId, bool ownerNotifiesCommit)
     {

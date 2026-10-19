@@ -796,6 +796,88 @@ public sealed class EconomyTransactionTests
     }
 
     [Test]
+    public void DailySelectedSellGoodsExecutesThroughTheCoreOwnerGraphWithoutKeyedReceipt()
+    {
+        ItemData itemAsset = SimulationTestFactory.CreateItem("daily-selected-sale-item", 10f);
+        CityData cityAsset = SimulationTestFactory.CreateCityData("daily-selected-sale-city",
+            SimulationTestFactory.CreateMarketItem(itemAsset, 0, 8));
+        NpcData npcAsset = SimulationTestFactory.CreateNpc(
+            "daily-selected-sale-merchant", NpcJobType.Merchant, MerchantBehavior.Traveling);
+        NpcActionData sellAction = SimulationTestFactory.CreateAction(
+            "daily-selected-sale-action", NpcActionType.SellGoods, NpcActionCategory.Commerce);
+        npcAsset.acoesPadrao.Add(new NPCDefaultAction { action = sellAction, baseUtility = 10f });
+        NpcSimulationConfig npcConfig = new NpcSimulationConfig
+        {
+            npc = npcAsset,
+            startingCity = cityAsset,
+            initialMoney = 20f
+        };
+        npcConfig.InitialInventory.Add(new NpcInitialInventoryItemConfig
+        {
+            item = itemAsset,
+            amount = 2,
+            averageUnitCost = 1f
+        });
+        SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
+        authoring.enabledModules.Add(SimulationModule.Merchant);
+        authoring.Cities.Add(cityAsset);
+        authoring.Npcs.Add(npcConfig);
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: authoring.CreateConfigurationOverrides());
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(authoring.Calendar, out _);
+        DailyV1EffectiveDefinitions definitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            authoring, effective, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        DailyV1ItemDefinition item = definitions.Items[itemAsset.DefinitionId];
+        CityRuntime city = CityRuntime.CreateSelectedDailyV1(
+            "daily-selected-sale-city-runtime", definitions.Cities[cityAsset.DefinitionId], definitions,
+            bindings, new SpatialLocationRuntime("daily-selected-sale-location"));
+        NpcRuntime merchant = NpcRuntime.CreateSelectedDailyV1(
+            "daily-selected-sale-merchant-runtime", definitions.Npcs[npcAsset.DefinitionId],
+            definitions, bindings, city, 20f);
+        SimulationTime time = new SimulationTime();
+        EconomyTransactionService transactionService = new EconomyTransactionService();
+        MerchantSystem merchantSystem = new MerchantSystem(
+            effective.MerchantTrade,
+            effective.CommercialKnowledge,
+            travelSystem: null,
+            simulationTime: time,
+            decisionRecorder: null,
+            transactionService: transactionService);
+        SimulationRuntime runtime = new SimulationRuntime(
+            time,
+            new[] { city },
+            new[] { merchant },
+            configuredActions: new[] { sellAction },
+            npcDecisionSystem: new NpcDecisionSystem(new List<INpcActionProvider> { merchantSystem }),
+            merchantSystem: merchantSystem,
+            configuration: effective);
+
+        int inventoryBefore = merchant.Inventory.SelectedDailyV1Owner.GetAmount(item);
+        int marketBefore = city.Market.SelectedDailyV1Owner.GetAmount(item);
+        float moneyBefore = merchant.Money;
+        long accountRevisionBefore = merchant.MoneyAccount.Revision;
+        long inventoryRevisionBefore = merchant.Inventory.Revision;
+        long marketRevisionBefore = city.Market.Revision;
+
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure), Is.True, failure.ToString());
+
+        Assert.That(merchant.CurrentAction, Is.SameAs(sellAction));
+        Assert.That(merchant.CurrentActionRuntime, Is.Not.Null);
+        Assert.That(merchant.CurrentActionRuntime.TargetItem, Is.SameAs(itemAsset));
+        Assert.That(merchant.CurrentActionRuntime.Amount, Is.EqualTo(2));
+        Assert.That(merchant.Inventory.SelectedDailyV1Owner.GetAmount(item), Is.EqualTo(inventoryBefore - 2));
+        Assert.That(city.Market.SelectedDailyV1Owner.GetAmount(item), Is.EqualTo(marketBefore + 2));
+        Assert.That(merchant.Money, Is.GreaterThan(moneyBefore));
+        Assert.That(merchant.MoneyAccount.Revision, Is.EqualTo(accountRevisionBefore + 1));
+        Assert.That(merchant.Inventory.Revision, Is.EqualTo(inventoryRevisionBefore + 1));
+        Assert.That(city.Market.Revision, Is.EqualTo(marketRevisionBefore + 1));
+        OwnerSectionCensusWitness receipts = transactionService.GetKeyedSaleReceiptCensus();
+        Assert.That(receipts.Cardinality, Is.Zero,
+            "The ordinary Daily-v1 sale must not create a P18-D keyed receipt.");
+        Assert.That(receipts.Revision, Is.Zero);
+    }
+
+    [Test]
     public void P12SelectedNpcTradeNotifiesBothAccountAndInventoryOwnerCommits()
     {
         ItemData itemAsset = SimulationTestFactory.CreateItem("p12-selected-npc-trade-item", 7f);

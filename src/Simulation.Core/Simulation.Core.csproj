@@ -100,6 +100,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Genealogy/GenealogyStore.cs" Link="Genealogy/GenealogyStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketItemDefinition.cs" Link="Economy/MarketItemDefinition.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1InventoryMarketOwners.cs" Link="Economy/DailyV1InventoryMarketOwners.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedOpenMarketSale.cs" Link="Economy/DailyV1SelectedOpenMarketSale.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MoneyAccountRuntime.cs" Link="Economy/MoneyAccountRuntime.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketCounterpartyRuntime.cs" Link="Economy/MarketCounterpartyRuntime.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/PopulationEconomyRuntime.cs" Link="Economy/PopulationEconomyRuntime.cs" />
