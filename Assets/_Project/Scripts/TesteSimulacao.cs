@@ -1345,14 +1345,6 @@ public class TesteSimulacao : MonoBehaviour
             if (runtime == null)
                 throw new System.InvalidOperationException("Authored city owner output is incomplete.");
             DailyV1CityData selectedCityValues = selectedCityDefinition?.Values;
-            IReadOnlyList<MarketItemConfig> expectedMarketInputs = selectedCityDefinition != null
-                ? runtime.SelectedDailyV1MarketInputs
-                : city.marketItems;
-            IReadOnlyList<CityProductionConfig> expectedProductionInputs = selectedCityDefinition != null
-                ? runtime.SelectedDailyV1ProductionInputs
-                : city.productionConfigs;
-            if (expectedMarketInputs == null || expectedProductionInputs == null)
-                throw new System.InvalidOperationException("Selected City owner inputs were not created from the admitted definition graph.");
             int admittedMarketInputCount = selectedCityValues != null
                 ? selectedCityValues.marketItems?.Count ?? 0
                 : city.marketItems.Count;
@@ -1370,10 +1362,8 @@ public class TesteSimulacao : MonoBehaviour
             float expectedPopulationPurchasingPower = selectedCityValues?.populationConsumption?.initialPurchasingPower
                 ?? city.PopulationConsumption.initialPurchasingPower;
             if (runtime.CurrentPopulation != expectedInitialPopulation
-                || runtime.CityData != cityIdentity || runtime.Market.Items.Count != expectedMarketInputs.Count
-                || expectedMarketInputs.Count != admittedMarketInputCount
+                || runtime.CityData != cityIdentity || runtime.Market.Items.Count != admittedMarketInputCount
                 || (selectedCityDefinition == null && runtime.CityData.productionConfigs.Count != city.productionConfigs.Count)
-                || expectedProductionInputs.Count != admittedProductionInputCount
                 || runtime.MarketCounterparty.LiquidityMode != expectedLiquidityMode
                 || runtime.PopulationEconomy.PaymentMode != expectedPopulationPaymentMode
                 || runtime.MarketCounterparty.CounterpartyRuntimeId != runtime.RuntimeId
@@ -1384,47 +1374,36 @@ public class TesteSimulacao : MonoBehaviour
                     && (runtime.PopulationEconomy.MoneyAccount == null
                         || runtime.PopulationEconomy.MoneyAccount.Balance != expectedPopulationPurchasingPower)))
                 throw new System.InvalidOperationException("Authored city owner output is incomplete.");
-            for (int i = 0; i < expectedMarketInputs.Count; i++)
+            for (int i = 0; i < admittedMarketInputCount; i++)
             {
-                MarketItemConfig input = expectedMarketInputs[i];
                 MarketItemRuntime output = runtime.Market.Items[i];
-                if (input.item != output.Item || input.initialAmount != output.Amount || input.desiredAmount != output.DesiredAmount)
-                    throw new System.InvalidOperationException("Authored city market output does not match its selected row.");
                 if (selectedCityValues != null)
                 {
                     DailyV1MarketItemConfig admittedInput = selectedCityValues.marketItems[i];
+                    bool bindingMatches = selectedDefinitionBindings != null
+                        && TryResolveSelectedItem(admittedInput?.item, out ItemData admittedItem)
+                        && ReferenceEquals(output.Item, admittedItem);
                     if (admittedInput == null
-                        || !TryResolveSelectedItem(admittedInput.item, out ItemData admittedItem)
-                        || !ReferenceEquals(input.item, admittedItem)
-                        || input.initialAmount != admittedInput.initialAmount
-                        || input.desiredAmount != admittedInput.desiredAmount
-                        || input.consumptionPer1000Population != admittedInput.consumptionPer1000Population)
+                        || !string.Equals(output.Item?.DefinitionId, admittedInput.item, System.StringComparison.Ordinal)
+                        || output.Amount != admittedInput.initialAmount
+                        || output.DesiredAmount != admittedInput.desiredAmount
+                        || (selectedDefinitionBindings != null && !bindingMatches))
                         throw new System.InvalidOperationException("Selected City market inputs do not match the admitted effective definition.");
-                }
-            }
-            for (int i = 0; i < expectedProductionInputs.Count; i++)
-            {
-                CityProductionConfig input = expectedProductionInputs[i];
-                if (selectedCityValues == null)
-                {
-                    CityProductionConfig authoringInput = city.productionConfigs[i];
-                    if (input.item != authoringInput.item || input.amountPerDay != authoringInput.amountPerDay)
-                        throw new System.InvalidOperationException("Authored city production inputs do not match their selected rows.");
                 }
                 else
                 {
-                    DailyV1CityProductionConfig admittedInput = selectedCityValues.productionConfigs[i];
-                    if (admittedInput == null
-                        || !TryResolveSelectedItem(admittedInput.item, out ItemData admittedItem)
-                        || !ReferenceEquals(input.item, admittedItem)
-                        || input.amountPerDay != admittedInput.amountPerDay
-                        || input.initialReserve != admittedInput.initialReserve
-                        || !string.Equals(input.productionSourceId, admittedInput.productionSourceId, System.StringComparison.Ordinal)
-                        || !string.Equals(input.contentRevision, admittedInput.contentRevision, System.StringComparison.Ordinal)
-                        || (int)input.sourceKind != (admittedInput.sourceKind?.Value ?? (int)CityProductionSourceKind.Unspecified))
-                        throw new System.InvalidOperationException("Selected City production inputs do not match the admitted effective definition.");
+                    MarketItemConfig input = city.marketItems[i];
+                    if (input.item != output.Item || input.initialAmount != output.Amount || input.desiredAmount != output.DesiredAmount)
+                        throw new System.InvalidOperationException("Authored city market output does not match its selected row.");
                 }
             }
+            if (selectedCityDefinition != null
+                && (!ReferenceEquals(runtime.SelectedRuntimeOwners?.Definition, selectedCityDefinition)
+                    || !ReferenceEquals(runtime.SelectedRuntimeOwners?.Definitions, selectedDefinitions)
+                    || (selectedCityValues.productionConfigs ?? System.Array.Empty<DailyV1CityProductionConfig>())
+                        .Any(row => row != null && !string.IsNullOrWhiteSpace(row.item)
+                            && !selectedDefinitions.Items.ContainsKey(row.item))))
+                throw new System.InvalidOperationException("Selected City production inputs are not owned by the exact admitted definition graph.");
         }
         expectedRouteCount += expectedSiteCount * 2;
         if (spatialNetwork.Routes.Count != expectedRouteCount)

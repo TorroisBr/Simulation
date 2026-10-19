@@ -1043,6 +1043,26 @@ public class NpcRuntime : ICapabilityConditionSource
 			selectedDefinition, selectedDefinitions, selectedBindings);
 	}
 
+	/// <summary>
+	/// Creates the selected NPC owner composition directly from the admitted
+	/// Core graph. Unity asset bindings may be attached later for compatibility
+	/// projections, but do not participate in owner construction.
+	/// </summary>
+	internal static NpcRuntime CreateSelectedDailyV1(
+		string runtimeId,
+		DailyV1NpcDefinition selectedDefinition,
+		DailyV1EffectiveDefinitions selectedDefinitions,
+		CityRuntime startingCity,
+		float initialMoney)
+	{
+		if (selectedDefinition == null)
+			throw new ArgumentNullException(nameof(selectedDefinition));
+		if (selectedDefinitions == null)
+			throw new ArgumentNullException(nameof(selectedDefinitions));
+		return new NpcRuntime(runtimeId, null, startingCity, initialMoney,
+			selectedDefinition, selectedDefinitions, null);
+	}
+
 	private NpcRuntime(string runtimeId, NpcData npcData, CityRuntime startingCity, float initialMoney,
 		DailyV1NpcDefinition selectedDefinition,
 		DailyV1EffectiveDefinitions selectedDefinitions = null,
@@ -1053,16 +1073,17 @@ public class NpcRuntime : ICapabilityConditionSource
             throw new ArgumentException("NpcRuntime requires a non-empty RuntimeId.", nameof(runtimeId));
         }
 		if (selectedDefinition != null
-			&& (selectedDefinitions == null || selectedBindings == null
-				|| !selectedBindings.TryGetAsset(selectedDefinition, out NpcData exactAsset)
-				|| exactAsset == null
-				|| (npcData != null && !ReferenceEquals(exactAsset, npcData))
-				|| !string.Equals(selectedDefinition.DefinitionId, exactAsset.DefinitionId, StringComparison.Ordinal)
+			&& (selectedDefinitions == null
+				|| (selectedBindings != null
+					&& (!selectedBindings.TryGetAsset(selectedDefinition, out NpcData exactAsset)
+						|| exactAsset == null
+						|| (npcData != null && !ReferenceEquals(exactAsset, npcData))
+						|| !string.Equals(selectedDefinition.DefinitionId, exactAsset.DefinitionId, StringComparison.Ordinal)))
 				|| !selectedDefinitions.Npcs.TryGetValue(selectedDefinition.DefinitionId, out DailyV1NpcDefinition graphNode)
 				|| !ReferenceEquals(graphNode, selectedDefinition)))
 		{
 			throw new ArgumentException(
-				"The selected NPC runtime must bind the exact typed definition identity admitted for its authoring object.",
+				"The selected NPC runtime must consume an exact admitted typed definition graph node and any supplied authoring projection must map to it.",
 				nameof(selectedDefinition));
 		}
 
@@ -1082,7 +1103,8 @@ public class NpcRuntime : ICapabilityConditionSource
             commercialKnowledge = new CommercialKnowledgeRuntime(
                 selectedOwners.CommercialKnowledge, selectedBindings);
             inventory = new InventoryRuntime(selectedOwners.Inventory);
-            if (!inventory.TryBindSelectedDailyV1Owner(selectedDefinitions, selectedBindings))
+            if (selectedBindings != null
+                && !inventory.TryBindSelectedDailyV1Owner(selectedDefinitions, selectedBindings))
                 throw new ArgumentException("The selected NPC Inventory could not bind the exact admitted Daily-v1 item graph.", nameof(selectedDefinitions));
             moneyAccount = selectedOwners.MoneyAccount;
         }
@@ -1093,7 +1115,7 @@ public class NpcRuntime : ICapabilityConditionSource
 		if (selectedDefinition == null)
             moneyAccount = new MoneyAccountRuntime(initialMoney);
 
-        if (selectedDefinition != null)
+        if (selectedDefinition != null && selectedBindings != null)
         {
             foreach (DailyV1StatusDefinition statusNode in selectedDailyV1StatusOwner.Statuses)
             {
@@ -1173,21 +1195,42 @@ public class NpcRuntime : ICapabilityConditionSource
                 return false;
 
             IReadOnlyList<DailyV1StatusDefinition> selectedStatuses = selectedDailyV1StatusOwner.Statuses;
-            if (selectedStatuses == null || currentStatus == null
-                || selectedStatuses.Count != currentStatus.Count)
+            List<NpcStatusData> stagedStatusProjection = null;
+            if (selectedStatuses == null)
                 return false;
-            for (int i = 0; i < selectedStatuses.Count; i++)
+            if (selectedDefinitionBindings == null)
             {
-                DailyV1StatusDefinition statusNode = selectedStatuses[i];
-                NpcStatusData statusAsset = currentStatus[i];
-                if (statusNode == null || statusAsset == null
-                    || !definitions.Statuses.TryGetValue(statusNode.DefinitionId,
-                        out DailyV1StatusDefinition admittedStatus)
-                    || !ReferenceEquals(admittedStatus, statusNode)
-                    || !string.Equals(statusNode.DefinitionId, statusAsset.DefinitionId, StringComparison.Ordinal)
-                    || !bindings.TryGetAsset(statusNode, out NpcStatusData exactStatusAsset)
-                    || !ReferenceEquals(exactStatusAsset, statusAsset))
+                stagedStatusProjection = new List<NpcStatusData>(selectedStatuses.Count);
+                foreach (DailyV1StatusDefinition statusNode in selectedStatuses)
+                {
+                    if (statusNode == null
+                        || !definitions.Statuses.TryGetValue(statusNode.DefinitionId,
+                            out DailyV1StatusDefinition admittedStatus)
+                        || !ReferenceEquals(admittedStatus, statusNode)
+                        || !bindings.TryGetAsset(statusNode, out NpcStatusData statusAsset)
+                        || statusAsset == null
+                        || !string.Equals(statusNode.DefinitionId, statusAsset.DefinitionId, StringComparison.Ordinal))
+                        return false;
+                    stagedStatusProjection.Add(statusAsset);
+                }
+            }
+            else
+            {
+                if (currentStatus == null || selectedStatuses.Count != currentStatus.Count)
                     return false;
+                for (int i = 0; i < selectedStatuses.Count; i++)
+                {
+                    DailyV1StatusDefinition statusNode = selectedStatuses[i];
+                    NpcStatusData statusAsset = currentStatus[i];
+                    if (statusNode == null || statusAsset == null
+                        || !definitions.Statuses.TryGetValue(statusNode.DefinitionId,
+                            out DailyV1StatusDefinition admittedStatus)
+                        || !ReferenceEquals(admittedStatus, statusNode)
+                        || !string.Equals(statusNode.DefinitionId, statusAsset.DefinitionId, StringComparison.Ordinal)
+                        || !bindings.TryGetAsset(statusNode, out NpcStatusData exactStatusAsset)
+                        || !ReferenceEquals(exactStatusAsset, statusAsset))
+                        return false;
+                }
             }
 
             if (ExistingInventory != null
@@ -1204,6 +1247,11 @@ public class NpcRuntime : ICapabilityConditionSource
             // A detached P12 stage already owns the canonical status nodes.
             // Bind only the Unity compatibility projection here; never rebuild
             // authoritative membership from NpcStatusData during rebind.
+            if (stagedStatusProjection != null)
+            {
+                currentStatus = stagedStatusProjection;
+                currentStatusView = null;
+            }
             selectedDefinitionBindings = bindings;
             npcData = null;
             return true;

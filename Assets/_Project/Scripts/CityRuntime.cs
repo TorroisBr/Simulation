@@ -26,10 +26,6 @@ public class CityRuntime
     [NonSerialized] private long importantNpcRevision;
     [NonSerialized] private SimulationLogger logger;
     [NonSerialized] private DailyV1DefinitionAdapter.SelectedBindings selectedDefinitionBindings;
-    [NonSerialized] private List<MarketItemConfig> selectedMarketItems;
-    [NonSerialized] private List<CityProductionConfig> selectedProductionConfigs;
-    [NonSerialized] private DailyV1MarketLiquidityConfig selectedMarketLiquidity;
-    [NonSerialized] private DailyV1PopulationConsumptionConfig selectedPopulationConsumption;
     [NonSerialized] private Dictionary<string, CityDailyEconomyReceipt> dailyEconomyReceipts =
         new Dictionary<string, CityDailyEconomyReceipt>(StringComparer.Ordinal);
     [NonSerialized] private long dailyEconomyReceiptRevision;
@@ -61,14 +57,10 @@ public class CityRuntime
     internal DailyV1CityDefinition SelectedDailyV1Definition => selectedDailyV1Definition;
     internal DailyV1EffectiveDefinitions SelectedDailyV1DefinitionGraph => selectedDefinitionGraph;
     internal DailyV1CityRuntimeOwners SelectedRuntimeOwners => selectedRuntimeOwners;
-    internal IReadOnlyList<MarketItemConfig> SelectedDailyV1MarketInputs =>
-        selectedDailyV1Definition != null && selectedMarketItems != null
-            ? selectedMarketItems.AsReadOnly()
-            : null;
-    internal IReadOnlyList<CityProductionConfig> SelectedDailyV1ProductionInputs =>
-        selectedDailyV1Definition != null && selectedProductionConfigs != null
-            ? selectedProductionConfigs.AsReadOnly()
-            : null;
+    internal IReadOnlyList<DailyV1MarketItemConfig> SelectedDailyV1MarketInputs =>
+        selectedDailyV1Definition?.Values?.marketItems;
+    internal IReadOnlyList<DailyV1CityProductionConfig> SelectedDailyV1ProductionInputs =>
+        selectedDailyV1Definition?.Values?.productionConfigs;
     internal IReadOnlyList<DailyV1CityConnection> SelectedDailyV1Connections =>
         selectedDailyV1Definition != null ? selectedDailyV1Definition.Values.connections : null;
     public SpatialLocationRuntime Location => location;
@@ -132,23 +124,25 @@ public class CityRuntime
     public string CityName => selectedDailyV1Definition != null
         ? selectedDailyV1Definition.Values.cityName
         : cityData != null ? cityData.cityName : "Cidade desconhecida";
-    private List<MarketItemConfig> RuntimeMarketItems => selectedDailyV1Definition != null
-        ? selectedMarketItems
-        : cityData != null ? cityData.marketItems : null;
-    private List<CityProductionConfig> RuntimeProductionConfigs => selectedDailyV1Definition != null
-        ? selectedProductionConfigs
-        : cityData != null ? cityData.productionConfigs : null;
+    // Selected gameplay reads the canonical typed graph directly. These legacy
+    // projections are used only by non-selected Unity compatibility paths.
+    private List<MarketItemConfig> RuntimeMarketItems => selectedDailyV1Definition == null
+        ? cityData != null ? cityData.marketItems : null
+        : null;
+    private List<CityProductionConfig> RuntimeProductionConfigs => selectedDailyV1Definition == null
+        ? cityData != null ? cityData.productionConfigs : null
+        : null;
     private MarketLiquidityMode RuntimeMarketLiquidityMode => selectedDailyV1Definition != null
-        ? (MarketLiquidityMode)(selectedMarketLiquidity?.liquidityMode?.Value ?? (int)MarketLiquidityMode.Open)
+        ? (MarketLiquidityMode)(selectedDailyV1Definition.Values.marketLiquidity?.liquidityMode?.Value ?? (int)MarketLiquidityMode.Open)
         : cityData != null ? cityData.MarketLiquidity.liquidityMode : MarketLiquidityMode.Open;
     private float RuntimeMarketLiquidityPurchasingPower => selectedDailyV1Definition != null
-        ? selectedMarketLiquidity?.initialPurchasingPower ?? 0f
+        ? selectedDailyV1Definition.Values.marketLiquidity?.initialPurchasingPower ?? 0f
         : cityData != null ? cityData.MarketLiquidity.initialPurchasingPower : 0f;
     private ConsumptionPaymentMode RuntimePopulationPaymentMode => selectedDailyV1Definition != null
-        ? (ConsumptionPaymentMode)(selectedPopulationConsumption?.paymentMode?.Value ?? (int)ConsumptionPaymentMode.Free)
+        ? (ConsumptionPaymentMode)(selectedDailyV1Definition.Values.populationConsumption?.paymentMode?.Value ?? (int)ConsumptionPaymentMode.Free)
         : cityData != null ? cityData.PopulationConsumption.paymentMode : ConsumptionPaymentMode.Free;
     private float RuntimePopulationPurchasingPower => selectedDailyV1Definition != null
-        ? selectedPopulationConsumption?.initialPurchasingPower ?? 0f
+        ? selectedDailyV1Definition.Values.populationConsumption?.initialPurchasingPower ?? 0f
         : cityData != null ? cityData.PopulationConsumption.initialPurchasingPower : 0f;
     private int RuntimeInitialPopulation => selectedDailyV1Definition != null
         ? selectedDailyV1Definition.Values.initialPopulation
@@ -1589,6 +1583,27 @@ public class CityRuntime
             selectedDefinition, selectedDefinitions, selectedBindings);
     }
 
+    /// <summary>
+    /// Creates the selected runtime from the admitted Core definition graph.
+    /// Unity authoring bindings are optional presentation/compatibility views;
+    /// they are not inputs to City owner construction or selected material flow.
+    /// </summary>
+    internal static CityRuntime CreateSelectedDailyV1(
+        string runtimeId,
+        DailyV1CityDefinition selectedDefinition,
+        DailyV1EffectiveDefinitions selectedDefinitions,
+        SpatialLocationRuntime location,
+        SimulationLogger logger = null,
+        MarketCounterpartyRuntime marketCounterparty = null)
+    {
+        if (selectedDefinition == null)
+            throw new ArgumentNullException(nameof(selectedDefinition));
+        if (selectedDefinitions == null)
+            throw new ArgumentNullException(nameof(selectedDefinitions));
+        return new CityRuntime(runtimeId, null, location, logger, marketCounterparty,
+            selectedDefinition, selectedDefinitions, null);
+    }
+
     private CityRuntime(
         string runtimeId,
         CityData cityData,
@@ -1609,15 +1624,17 @@ public class CityRuntime
             throw new ArgumentNullException(nameof(location));
         }
         if (selectedDefinition != null
-            && (selectedDefinitions == null || selectedBindings == null
-                || !selectedBindings.TryGetAsset(selectedDefinition, out CityData exactAsset)
-                || exactAsset == null
-                || !string.Equals(selectedDefinition.DefinitionId, exactAsset.DefinitionId, StringComparison.Ordinal)
+            && (selectedDefinitions == null
+                || (selectedBindings != null
+                    && (!selectedBindings.TryGetAsset(selectedDefinition, out CityData exactAsset)
+                        || exactAsset == null
+                        || !string.Equals(selectedDefinition.DefinitionId, exactAsset.DefinitionId, StringComparison.Ordinal)))
                 || !selectedDefinitions.Cities.TryGetValue(selectedDefinition.DefinitionId, out DailyV1CityDefinition graphNode)
-                || !ReferenceEquals(graphNode, selectedDefinition)))
+                || !ReferenceEquals(graphNode, selectedDefinition)
+                || !AreSelectedDefinitionInputsAdmitted(selectedDefinition, selectedDefinitions)))
         {
             throw new ArgumentException(
-                "The selected City runtime must bind the exact typed definition identity admitted for its authoring object.",
+                "The selected City runtime must consume an exact admitted typed definition graph node and its admitted item identities.",
                 nameof(selectedDefinition));
         }
 
@@ -1626,15 +1643,6 @@ public class CityRuntime
         selectedDailyV1Definition = selectedDefinition;
         selectedDefinitionGraph = selectedDefinitions;
         selectedDefinitionBindings = selectedBindings;
-        if (selectedDefinition != null
-            && !TryCreateSelectedDefinitionInputs(selectedDefinition, selectedDefinitions, selectedBindings,
-                out selectedMarketItems, out selectedProductionConfigs,
-                out selectedMarketLiquidity, out selectedPopulationConsumption))
-        {
-            throw new ArgumentException(
-                "The selected City typed values could not be resolved through the exact admitted Unity asset bindings.",
-                nameof(selectedDefinition));
-        }
         this.location = location;
         this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
         if (selectedDefinition != null)
@@ -1649,9 +1657,10 @@ public class CityRuntime
             this.marketCounterparty = selectedOwners.Counterparty;
             population = selectedOwners.Population;
             market = new MarketRuntime(selectedOwners.Market);
-            if (!market.TryBindSelectedDailyV1Owner(selectedDefinitions, selectedBindings))
+            if (selectedBindings != null
+                && !market.TryBindSelectedDailyV1Owner(selectedDefinitions, selectedBindings))
                 throw new ArgumentException(
-                    "The selected City Market could not retain the exact admitted Daily-v1 owner.",
+                    "The selected City Market could not bind its optional Unity compatibility projection.",
                     nameof(selectedBindings));
         }
         else
@@ -1739,6 +1748,26 @@ public class CityRuntime
 
         if (!HasConfiguredDefinition || RuntimeProductionConfigs == null)
         {
+            if (selectedDailyV1Definition != null && selectedRuntimeOwners != null)
+            {
+                foreach (DailyV1CityProductionConfig selectedProduction in
+                    selectedDailyV1Definition.Values.productionConfigs ?? Array.Empty<DailyV1CityProductionConfig>())
+                {
+                    if (selectedProduction == null || selectedProduction.amountPerDay <= 0
+                        || !TryResolveSelectedItemDefinition(selectedProduction.item, out DailyV1ItemDefinition selectedItem))
+                        continue;
+
+                    int selectedProduced = Market.AddSelectedStock(selectedItem, selectedProduction.amountPerDay);
+                    if (selectedProduced <= 0)
+                        continue;
+
+                    results.Add(new CityProductionResult(
+                        RuntimeId, selectedItem.DefinitionId, selectedProduced, Market.StockOwnerRuntimeId));
+                    logger?.Log(SimulationLogCategory.EconomyProduction,
+                        $"{CityName} produziu {selectedProduced} {selectedItem.Values.itemName}");
+                }
+                return results.AsReadOnly();
+            }
             return results.AsReadOnly();
         }
 
@@ -1770,10 +1799,71 @@ public class CityRuntime
     {
         List<CityConsumptionResult> results = new List<CityConsumptionResult>();
 
-        if (!HasConfiguredDefinition || RuntimeMarketItems == null)
+        if (!HasConfiguredDefinition)
         {
             return results.AsReadOnly();
         }
+
+        if (selectedDailyV1Definition != null)
+        {
+            foreach (DailyV1MarketItemConfig selectedConfig in
+                selectedDailyV1Definition.Values.marketItems ?? Array.Empty<DailyV1MarketItemConfig>())
+            {
+                if (selectedConfig == null || selectedConfig.consumptionPer1000Population <= 0f
+                    || !TryResolveSelectedItemDefinition(selectedConfig.item, out DailyV1ItemDefinition selectedItem))
+                    continue;
+
+                int desiredConsumption = UnityMathfCompatibility.RoundToInt(
+                    Population.CurrentPopulation / 1000f * selectedConfig.consumptionPer1000Population);
+                if (desiredConsumption <= 0)
+                {
+                    results.Add(new CityConsumptionResult(
+                        RuntimeId,
+                        PopulationEconomy.PopulationEconomicRuntimeId,
+                        selectedItem.DefinitionId,
+                        desiredConsumption,
+                        0,
+                        PopulationEconomy.PaymentMode,
+                        0f,
+                        0f));
+                    continue;
+                }
+
+                int consumed;
+                float unitPrice = 0f;
+                float totalPaid = 0f;
+                if (PopulationEconomy.PaymentMode == ConsumptionPaymentMode.Free)
+                {
+                    consumed = Market.RemoveSelectedStock(selectedItem, desiredConsumption);
+                }
+                else
+                {
+                    EconomyTransactionResult receipt = new EconomyTransactionService()
+                        .TryExecutePopulationConsumption(PopulationEconomy, Market, selectedItem, desiredConsumption);
+                    consumed = receipt.Quantity;
+                    unitPrice = receipt.UnitPrice;
+                    totalPaid = receipt.TotalPrice;
+                }
+
+                results.Add(new CityConsumptionResult(
+                    RuntimeId,
+                    PopulationEconomy.PopulationEconomicRuntimeId,
+                    selectedItem.DefinitionId,
+                    desiredConsumption,
+                    consumed,
+                    PopulationEconomy.PaymentMode,
+                    unitPrice,
+                    totalPaid));
+
+                if (consumed > 0)
+                    logger?.Log(SimulationLogCategory.EconomyConsumption,
+                        $"{CityName} consumiu {consumed} {selectedItem.Values.itemName}");
+            }
+            return results.AsReadOnly();
+        }
+
+        if (RuntimeMarketItems == null)
+            return results.AsReadOnly();
 
         foreach (MarketItemConfig config in RuntimeMarketItems)
         {
@@ -2085,24 +2175,22 @@ public class CityRuntime
         DailyV1EffectiveDefinitions definitions,
         DailyV1DefinitionAdapter.SelectedBindings bindings)
     {
-        if (definition == null || definitions == null || bindings == null
-            || !bindings.TryGetAsset(definition, out CityData assetIdentity)
-            || assetIdentity == null
-            || (cityData != null && !ReferenceEquals(assetIdentity, cityData))
-            || !string.Equals(definition.DefinitionId, assetIdentity.DefinitionId, StringComparison.Ordinal)
+        if (definition == null || definitions == null
+            || (bindings != null
+                && (!bindings.TryGetAsset(definition, out CityData assetIdentity)
+                    || assetIdentity == null
+                    || (cityData != null && !ReferenceEquals(assetIdentity, cityData))
+                    || !string.Equals(definition.DefinitionId, assetIdentity.DefinitionId, StringComparison.Ordinal)))
             || !definitions.Cities.TryGetValue(definition.DefinitionId, out DailyV1CityDefinition graphNode)
-            || !ReferenceEquals(graphNode, definition))
+            || !ReferenceEquals(graphNode, definition)
+            || !AreSelectedDefinitionInputsAdmitted(definition, definitions))
             return false;
         if (selectedDailyV1Definition != null)
             return ReferenceEquals(selectedDailyV1Definition, definition)
                 && ReferenceEquals(selectedDefinitionGraph, definitions)
-                && ReferenceEquals(selectedDefinitionBindings, bindings);
-        if (!TryCreateSelectedDefinitionInputs(definition, definitions, bindings,
-                out List<MarketItemConfig> marketItems,
-                out List<CityProductionConfig> productionConfigs,
-                out DailyV1MarketLiquidityConfig marketLiquidity,
-                out DailyV1PopulationConsumptionConfig populationConsumption))
-            return false;
+                && (selectedDefinitionBindings == null || bindings == null
+                    || ReferenceEquals(selectedDefinitionBindings, bindings))
+                && TryAttachSelectedDefinitionBindings(definitions, bindings);
         DailyV1CityRuntimeOwners stagedOwners = null;
         if (market != null && market.SelectedDailyV1Owner != null
             && !DailyV1SelectedRuntimeOwnerGraph.TryCreateBoundCityOwner(
@@ -2116,11 +2204,20 @@ public class CityRuntime
         selectedDailyV1Definition = definition;
         selectedDefinitionGraph = definitions;
         selectedDefinitionBindings = bindings;
-        selectedMarketItems = marketItems;
-        selectedProductionConfigs = productionConfigs;
-        selectedMarketLiquidity = marketLiquidity;
-        selectedPopulationConsumption = populationConsumption;
         selectedRuntimeOwners = stagedOwners;
+        return true;
+    }
+
+    private bool TryAttachSelectedDefinitionBindings(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1DefinitionAdapter.SelectedBindings bindings)
+    {
+        if (bindings == null || selectedDefinitionBindings != null)
+            return true;
+        if (market != null && market.SelectedDailyV1Owner != null
+            && !market.TryBindSelectedDailyV1Owner(definitions, bindings))
+            return false;
+        selectedDefinitionBindings = bindings;
         return true;
     }
 
@@ -2134,77 +2231,26 @@ public class CityRuntime
             && city != null;
     }
 
-    private static bool TryCreateSelectedDefinitionInputs(
+    private static bool AreSelectedDefinitionInputsAdmitted(
         DailyV1CityDefinition definition,
-        DailyV1EffectiveDefinitions definitions,
-        DailyV1DefinitionAdapter.SelectedBindings bindings,
-        out List<MarketItemConfig> marketItems,
-        out List<CityProductionConfig> productionConfigs,
-        out DailyV1MarketLiquidityConfig marketLiquidity,
-        out DailyV1PopulationConsumptionConfig populationConsumption)
+        DailyV1EffectiveDefinitions definitions)
     {
-        marketItems = null;
-        productionConfigs = null;
-        marketLiquidity = null;
-        populationConsumption = null;
-        if (definition == null || definitions == null || bindings == null)
+        if (definition?.Values == null || definitions == null
+            || !definitions.Cities.TryGetValue(definition.DefinitionId, out DailyV1CityDefinition admittedCity)
+            || !ReferenceEquals(admittedCity, definition))
             return false;
 
         DailyV1CityData values = definition.Values;
-        if (values.marketItems != null)
+        foreach (DailyV1MarketItemConfig row in values.marketItems ?? Array.Empty<DailyV1MarketItemConfig>())
         {
-            marketItems = new List<MarketItemConfig>(values.marketItems.Count);
-            foreach (DailyV1MarketItemConfig row in values.marketItems)
-            {
-                if (row == null)
-                {
-                    marketItems.Add(null);
-                    continue;
-                }
-                ItemData item = null;
-                if (!string.IsNullOrWhiteSpace(row.item)
-                    && (!definitions.Items.TryGetValue(row.item, out DailyV1ItemDefinition itemNode)
-                        || !bindings.TryGetAsset(itemNode, out item)))
-                    return false;
-                marketItems.Add(new MarketItemConfig
-                {
-                    item = item,
-                    initialAmount = row.initialAmount,
-                    desiredAmount = row.desiredAmount,
-                    consumptionPer1000Population = row.consumptionPer1000Population
-                });
-            }
+            if (row != null && !string.IsNullOrWhiteSpace(row.item)
+                && !definitions.Items.ContainsKey(row.item)) return false;
         }
-
-        if (values.productionConfigs != null)
+        foreach (DailyV1CityProductionConfig row in values.productionConfigs ?? Array.Empty<DailyV1CityProductionConfig>())
         {
-            productionConfigs = new List<CityProductionConfig>(values.productionConfigs.Count);
-            foreach (DailyV1CityProductionConfig row in values.productionConfigs)
-            {
-                if (row == null)
-                {
-                    productionConfigs.Add(null);
-                    continue;
-                }
-                ItemData item = null;
-                if (!string.IsNullOrWhiteSpace(row.item)
-                    && (!definitions.Items.TryGetValue(row.item, out DailyV1ItemDefinition itemNode)
-                        || !bindings.TryGetAsset(itemNode, out item)))
-                    return false;
-                productionConfigs.Add(new CityProductionConfig
-                {
-                    item = item,
-                    amountPerDay = row.amountPerDay,
-                    initialReserve = row.initialReserve,
-                    productionSourceId = row.productionSourceId,
-                    contentRevision = row.contentRevision,
-                    sourceKind = (CityProductionSourceKind)(row.sourceKind?.Value ?? 0)
-                });
-            }
+            if (row != null && !string.IsNullOrWhiteSpace(row.item)
+                && !definitions.Items.ContainsKey(row.item)) return false;
         }
-
-        marketLiquidity = values.marketLiquidity;
-        populationConsumption = values.populationConsumption;
         return true;
     }
 }

@@ -2235,6 +2235,113 @@ public sealed class SimulationBootstrapCompositionTests
     }
 
     [Test]
+    public void SelectedCityRuntimeConstructsAndConsumesWithoutUnityDefinitionBindings()
+    {
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        CityData city = SimulationTestFactory.CreateCityData("typed-city-without-bindings");
+        city.cityName = "Typed City Without Bindings";
+        city.initialPopulation = 4000;
+        ItemData item = SimulationTestFactory.CreateItem("typed-city-without-bindings-item", 8f);
+        city.marketItems.Add(new MarketItemConfig
+        {
+            item = item,
+            initialAmount = 7,
+            desiredAmount = 10,
+            consumptionPer1000Population = 1.25f
+        });
+        city.productionConfigs.Add(new CityProductionConfig
+        {
+            item = item,
+            amountPerDay = 3
+        });
+        config.Cities.Add(city);
+
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: config.CreateConfigurationOverrides());
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(config.Calendar, out _);
+        DailyV1EffectiveDefinitions graph = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            config, effective, calendar, out _);
+        DailyV1CityDefinition definition = graph.Cities[city.DefinitionId];
+        DailyV1ItemDefinition itemDefinition = graph.Items[item.DefinitionId];
+
+        // Mutating authored values after admission must not affect the Core-owned City.
+        city.initialPopulation = 999;
+        city.marketItems[0].initialAmount = 901;
+        city.marketItems[0].consumptionPer1000Population = 9.5f;
+        city.productionConfigs[0].amountPerDay = 88;
+
+        CityRuntime runtime = CityRuntime.CreateSelectedDailyV1(
+            "city-runtime-without-bindings", definition, graph,
+            new SpatialLocationRuntime("location-runtime-without-bindings"));
+
+        Assert.That(runtime.CityData, Is.Null,
+            "The selected runtime must be constructible without an authoring asset identity projection.");
+        Assert.That(runtime.SelectedRuntimeOwners.Definition, Is.SameAs(definition));
+        Assert.That(runtime.SelectedRuntimeOwners.Definitions, Is.SameAs(graph));
+        Assert.That(runtime.CurrentPopulation, Is.EqualTo(4000));
+        Assert.That(runtime.Market.SelectedDailyV1Owner.GetAmount(itemDefinition), Is.EqualTo(7));
+
+        IReadOnlyList<CityProductionResult> production = runtime.SimulateProductionDay();
+        Assert.That(production, Has.Count.EqualTo(1));
+        Assert.That(production[0].ItemDefinitionId, Is.EqualTo(itemDefinition.DefinitionId));
+        Assert.That(production[0].QuantityProduced, Is.EqualTo(3));
+        Assert.That(runtime.Market.SelectedDailyV1Owner.GetAmount(itemDefinition), Is.EqualTo(10));
+
+        IReadOnlyList<CityConsumptionResult> results = runtime.SimulateConsumptionDay();
+
+        Assert.That(results, Has.Count.EqualTo(1));
+        Assert.That(results[0].ItemDefinitionId, Is.EqualTo(itemDefinition.DefinitionId));
+        Assert.That(results[0].RequestedQuantity, Is.EqualTo(5));
+        Assert.That(results[0].ConsumedQuantity, Is.EqualTo(5));
+        Assert.That(runtime.Market.SelectedDailyV1Owner.GetAmount(itemDefinition), Is.EqualTo(5));
+    }
+
+    [Test]
+    public void SelectedNpcOwnersConstructFromCoreGraphBeforeUnityBindingsAreAttached()
+    {
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        NpcData npc = SimulationTestFactory.CreateNpc("typed-npc-without-bindings");
+        NpcStatusData status = SimulationTestFactory.CreateStatus("typed-npc-without-bindings-status");
+        ItemData item = SimulationTestFactory.CreateItem("typed-npc-without-bindings-item");
+        npc.statusPadrao.Add(status);
+        config.Npcs.Add(new NpcSimulationConfig { npc = npc, initialMoney = 42f });
+        config.Statuses.Add(status);
+        config.Items.Add(item);
+
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: config.CreateConfigurationOverrides());
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(config.Calendar, out _);
+        DailyV1EffectiveDefinitions graph = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            config, effective, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        DailyV1NpcDefinition definition = graph.Npcs[npc.DefinitionId];
+        DailyV1ItemDefinition itemDefinition = graph.Items[item.DefinitionId];
+
+        npc.statusPadrao.Clear();
+
+        NpcRuntime runtime = NpcRuntime.CreateSelectedDailyV1(
+            "npc-runtime-without-bindings", definition, graph, null, 42f);
+
+        Assert.That(runtime.NpcData, Is.Null);
+        Assert.That(runtime.SelectedRuntimeOwners.Definition, Is.SameAs(definition));
+        Assert.That(runtime.SelectedRuntimeOwners.Definitions, Is.SameAs(graph));
+        Assert.That(runtime.SelectedRuntimeOwners.MoneyAccount, Is.SameAs(runtime.MoneyAccount));
+        Assert.That(runtime.SelectedRuntimeOwners.Inventory, Is.SameAs(runtime.Inventory.SelectedDailyV1Owner));
+        Assert.That(runtime.SelectedRuntimeOwners.CommercialKnowledge,
+            Is.SameAs(runtime.CommercialKnowledge.SelectedOwner));
+        Assert.That(runtime.TryCopySelectedCurrentStatusDefinitionIds(out List<string> statusIds), Is.True);
+        Assert.That(statusIds, Is.EqualTo(new[] { status.DefinitionId }));
+        Assert.That(runtime.TryAddSelectedDailyV1InventoryItem(itemDefinition, 2, 5f), Is.True);
+        Assert.That(runtime.Inventory.SelectedDailyV1Owner.GetAmount(itemDefinition), Is.EqualTo(2));
+
+        Assert.That(runtime.TryBindSelectedDailyV1Definition(definition, graph, bindings), Is.True,
+            "The Unity compatibility projection must attach to the existing owners without rebuilding them.");
+        Assert.That(runtime.NpcData, Is.SameAs(npc));
+        Assert.That(runtime.CurrentStatus, Has.Count.EqualTo(1));
+        Assert.That(runtime.CurrentStatus[0], Is.SameAs(status));
+        Assert.That(runtime.SelectedRuntimeOwners.Inventory, Is.SameAs(runtime.Inventory.SelectedDailyV1Owner));
+    }
+
+    [Test]
     public void SelectedRuntimeConstructionUsesGraphInventoriesAfterAuthoringRootListsChange()
     {
         SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();

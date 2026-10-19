@@ -1528,10 +1528,28 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         ItemData item,
         int requestedQuantity)
     {
+        return ExecutePopulationConsumption(population, market, new TradeItem(item), requestedQuantity);
+    }
+
+    internal EconomyTransactionResult TryExecutePopulationConsumption(
+        PopulationEconomyRuntime population,
+        MarketRuntime market,
+        DailyV1ItemDefinition item,
+        int requestedQuantity)
+    {
+        return ExecutePopulationConsumption(population, market, new TradeItem(item), requestedQuantity);
+    }
+
+    private EconomyTransactionResult ExecutePopulationConsumption(
+        PopulationEconomyRuntime population,
+        MarketRuntime market,
+        TradeItem item,
+        int requestedQuantity)
+    {
         EconomyTransactionType transactionType = EconomyTransactionType.PopulationConsumption;
         MoneyEffect moneyEffect = MoneyEffect.Transfer;
 
-        if (population == null || market == null || item == null)
+        if (population == null || market == null || !item.IsValid)
         {
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
@@ -1563,9 +1581,17 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         }
 
         MarketCounterpartyRuntime settlement = market.Counterparty;
-        MarketItemRuntime marketItem = market.GetItem(item);
+        DailyV1MarketItemState selectedMarketItem = item.Definition != null
+            ? market.GetSelectedItem(item.Definition)
+            : null;
+        MarketItemRuntime legacyMarketItem = item.AuthoringItem != null
+            ? market.GetItem(item.AuthoringItem)
+            : null;
+        int available = selectedMarketItem?.Amount ?? legacyMarketItem?.Amount ?? 0;
+        float currentPrice = selectedMarketItem?.CurrentPrice ?? legacyMarketItem?.CurrentPrice ?? 0f;
 
-        if (marketItem == null || marketItem.Amount <= 0)
+        if (available <= 0 || (item.Definition != null && selectedMarketItem == null)
+            || (item.AuthoringItem != null && legacyMarketItem == null))
         {
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
@@ -1574,7 +1600,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 actorRuntimeId: population.PopulationEconomicRuntimeId);
         }
 
-        float unitPrice = marketItem.CurrentPrice;
+        float unitPrice = currentPrice;
 
         if (IsValidNonNegativeFiniteAmount(unitPrice) == false)
         {
@@ -1587,11 +1613,11 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
 
         unitPrice = UnityMathfCompatibility.Max(0.01f, unitPrice);
         int affordableQuantity = GetAffordableQuantity(population.MoneyAccount.Balance, unitPrice);
-        int quantity = UnityMathfCompatibility.Min(requestedQuantity, marketItem.Amount, affordableQuantity);
+        int quantity = UnityMathfCompatibility.Min(requestedQuantity, available, affordableQuantity);
 
         if (quantity <= 0)
         {
-            EconomyTransactionFailureReason reason = marketItem.Amount <= 0
+            EconomyTransactionFailureReason reason = available <= 0
                 ? EconomyTransactionFailureReason.InsufficientStock
                 : EconomyTransactionFailureReason.InsufficientFunds;
             return EconomyTransactionResult.CreateFailure(
@@ -1631,7 +1657,10 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 actorRuntimeId: population.PopulationEconomicRuntimeId);
         }
 
-        if (market.RemoveStockUpTo(item, quantity) != quantity)
+        int removed = item.Definition != null
+            ? market.RemoveSelectedStock(item.Definition, quantity)
+            : market.RemoveStockUpTo(item.AuthoringItem, quantity);
+        if (removed != quantity)
         {
             TryCommitMoneyTransfer(settlement.MoneyAccount, population.MoneyAccount, totalPrice);
             return EconomyTransactionResult.CreateFailure(

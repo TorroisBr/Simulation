@@ -493,7 +493,6 @@ public sealed class CommercialKnowledgeRuntime
         DailyV1DefinitionAdapter.SelectedBindings selectedBindings)
     {
         if (selectedOwner == null) throw new ArgumentNullException(nameof(selectedOwner));
-        if (selectedBindings == null) throw new ArgumentNullException(nameof(selectedBindings));
         this.selectedOwner = selectedOwner;
         this.selectedBindings = selectedBindings;
         selectedReceiptProjections = new Dictionary<DailyV1CommercialKnowledgeShareReceipt, CommercialKnowledgeShareReceipt>();
