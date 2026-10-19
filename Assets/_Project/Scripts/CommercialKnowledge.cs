@@ -1476,7 +1476,10 @@ public sealed class CommercialKnowledgePolicy
 
     internal float GetFreshness(DailyV1CommercialMarketObservation observation, long currentAbsoluteDay)
     {
-        return observation == null ? 0f : GetFreshness(observation.ObservedDay, currentAbsoluteDay);
+        return observation == null ? 0f : DailyV1CommercialKnowledgeFreshness.GetFreshness(
+            observation.ObservedDay,
+            currentAbsoluteDay,
+            new EffectiveCommercialKnowledgeConfiguration(freshForDays, maxUsefulAgeDays));
     }
 
     public long GetAgeDays(CommercialLiquidityObservation observation, long currentAbsoluteDay)
@@ -1496,7 +1499,10 @@ public sealed class CommercialKnowledgePolicy
 
     internal float GetFreshness(DailyV1CommercialLiquidityObservation observation, long currentAbsoluteDay)
     {
-        return observation == null ? 0f : GetFreshness(observation.ObservedDay, currentAbsoluteDay);
+        return observation == null ? 0f : DailyV1CommercialKnowledgeFreshness.GetFreshness(
+            observation.ObservedDay,
+            currentAbsoluteDay,
+            new EffectiveCommercialKnowledgeConfiguration(freshForDays, maxUsefulAgeDays));
     }
 
     private long GetAgeDays(long observedDay, long currentAbsoluteDay)

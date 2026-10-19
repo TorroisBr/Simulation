@@ -7,6 +7,93 @@ using NUnit.Framework;
 public sealed class DailyV1SelectedRuntimeOwnerGraphTests
 {
     [Test]
+    public void MerchantTradePlanTransitionRequiresExactGraphMembersAndPreservesDecisionIdentity()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[0];
+        DailyV1CityRuntimeOwners origin = graph.Cities[0];
+        DailyV1CityRuntimeOwners target = graph.Cities[1];
+        DailyV1ItemDefinition item = definitions.Items.Values.First();
+
+        Assert.That(graph.TryInstallMerchantTradePlan(npc, item, origin.RuntimeId,
+            target.RuntimeId, 3, 2.5f, "decision-merchant-buy"), Is.True);
+        Assert.That(npc.MerchantTradePlan.Revision, Is.EqualTo(1));
+        Assert.That(npc.MerchantTradePlan.RawRemainingAmount, Is.EqualTo(3));
+        Assert.That(npc.MerchantTradePlan.ItemDefinition, Is.SameAs(item));
+        Assert.That(npc.MerchantTradePlan.OriginDecisionId, Is.EqualTo("decision-merchant-buy"));
+        Assert.That(graph.TryInstallMerchantTradePlan(npc, item, origin.RuntimeId,
+            target.RuntimeId, 3, 2.5f, "decision-merchant-buy"), Is.True,
+            "An exact repeated transition is a no-op.");
+        Assert.That(npc.MerchantTradePlan.Revision, Is.EqualTo(1));
+
+        Assert.That(graph.TryInstallMerchantTradePlan(npc, item, origin.RuntimeId,
+            "outside-city", 4, 2.5f, "decision-next"), Is.False);
+        Assert.That(npc.MerchantTradePlan.Revision, Is.EqualTo(1));
+        Assert.That(npc.MerchantTradePlan.OriginDecisionId, Is.EqualTo("decision-merchant-buy"));
+    }
+
+    [Test]
+    public void MerchantTradeTravelPlanUsesCoreDirectRouteAndAdmissionBeforeOwnerCommit()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        SpatialNetworkOwner spatial = new SpatialNetworkOwner();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions, spatial);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        DailyV1CityRuntimeOwners routeOrigin = builder.Cities.Single(owner =>
+            string.Equals(owner.Definition.DefinitionId, "CAMPO_VERDE", StringComparison.Ordinal));
+        DailyV1CityRuntimeOwners routeDestination = builder.Cities.Single(owner =>
+            string.Equals(owner.Definition.DefinitionId, "SERRA_DE_FERRO", StringComparison.Ordinal));
+        Assert.That(spatial.TryGetLocation(routeOrigin.LocationRuntimeId,
+            out SpatialLocationRuntime originLocation), Is.True);
+        Assert.That(spatial.TryGetLocation(routeDestination.LocationRuntimeId,
+            out SpatialLocationRuntime destinationLocation), Is.True);
+        Assert.That(spatial.TryRegisterRoute(new SpatialRouteRuntime("route/merchant-test",
+            originLocation, destinationLocation, 3), () => true), Is.True);
+        Assert.That(spatial.TryRegisterRoute(new SpatialRouteRuntime("route/merchant-test-return",
+            destinationLocation, originLocation, 3), () => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        DailyV1NpcRuntimeOwners npc = graph.Npcs.Single(owner =>
+            string.Equals(owner.Definition.DefinitionId, "JORGE", StringComparison.Ordinal));
+        DailyV1CityRuntimeOwners origin = graph.Cities.Single(owner =>
+            string.Equals(owner.RuntimeId, npc.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        DailyV1CityRuntimeOwners destination = graph.Cities.Single(owner =>
+            !string.Equals(owner.RuntimeId, origin.RuntimeId, StringComparison.Ordinal));
+        Assert.That(graph.TryInstallMerchantTradePlan(npc, definitions.Items.Values.First(),
+            origin.RuntimeId, destination.RuntimeId, 2, 1f, "decision-buy"), Is.True);
+
+        int admissionCalls = 0;
+        long priorRevision = npc.TravelPlan.Revision;
+        Assert.That(graph.TryCommitMerchantTradeTravelPlan(npc, destination.RuntimeId,
+            70f, "decision-buy", () => { admissionCalls++; return false; }, out _), Is.False);
+        Assert.That(admissionCalls, Is.EqualTo(1));
+        Assert.That(npc.TravelPlan.Revision, Is.EqualTo(priorRevision));
+
+        Assert.That(graph.TryCommitMerchantTradeTravelPlan(npc, destination.RuntimeId,
+            70f, "decision-buy", () => { admissionCalls++; return true; },
+            out float expectedCost), Is.True);
+        Assert.That(expectedCost, Is.GreaterThan(0f));
+        Assert.That(npc.TravelPlan.Revision, Is.EqualTo(priorRevision + 1));
+        Assert.That(npc.TravelPlan.TargetCityRuntimeId, Is.EqualTo(destination.RuntimeId));
+        Assert.That(npc.TravelPlan.OriginDecisionId, Is.EqualTo("decision-buy"));
+
+        Assert.That(graph.TryCommitMerchantTradeTravelPlan(npc, destination.RuntimeId,
+            70f, "decision-buy", () => { admissionCalls++; return true; }, out _), Is.True);
+        Assert.That(admissionCalls, Is.EqualTo(2), "An exact no-op skips P12 admission.");
+        Assert.That(npc.TravelPlan.Revision, Is.EqualTo(priorRevision + 1));
+    }
+
+    [Test]
     public void GraphRejectsRuntimeIdentityCollisionsAcrossSelectedOwnerAndSpatialFamilies()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

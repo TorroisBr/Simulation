@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>Current market facts paired with an exact admitted Daily-v1 item node.</summary>
 internal sealed class DailyV1MerchantLocalSaleFact
@@ -32,6 +33,9 @@ internal sealed class DailyV1MerchantLocalSalePlan
     internal float LocalPrice { get; }
     internal float ProfitPerItem { get; }
     internal float Score { get; }
+    internal CommercialDecisionEvidence Evidence { get; }
+    internal float Utility { get; }
+    internal DailyV1NpcActionPayloadOwner SelectedPayload { get; }
 
     internal DailyV1MerchantLocalSalePlan(
         int marketFactIndex,
@@ -40,7 +44,10 @@ internal sealed class DailyV1MerchantLocalSalePlan
         float referencePrice,
         float localPrice,
         float profitPerItem,
-        float score)
+        float score,
+        float utility = 0f,
+        CommercialDecisionEvidence evidence = null,
+        DailyV1NpcActionPayloadOwner selectedPayload = null)
     {
         MarketFactIndex = marketFactIndex;
         Item = item;
@@ -49,6 +56,9 @@ internal sealed class DailyV1MerchantLocalSalePlan
         LocalPrice = localPrice;
         ProfitPerItem = profitPerItem;
         Score = score;
+        Utility = utility;
+        Evidence = evidence;
+        SelectedPayload = selectedPayload;
     }
 }
 
@@ -100,6 +110,8 @@ internal sealed class DailyV1MerchantTradePlan
     internal float ProfitPerItem { get; }
     internal float NetProfit { get; }
     internal float Score { get; }
+    internal CommercialDecisionEvidence Evidence { get; }
+    internal DailyV1NpcActionPayloadOwner SelectedPayload { get; }
 
     internal DailyV1MerchantTradePlan(
         int candidateIndex,
@@ -110,7 +122,9 @@ internal sealed class DailyV1MerchantTradePlan
         float sellPrice,
         float profitPerItem,
         float netProfit,
-        float score)
+        float score,
+        CommercialDecisionEvidence evidence = null,
+        DailyV1NpcActionPayloadOwner selectedPayload = null)
     {
         CandidateIndex = candidateIndex;
         Item = item;
@@ -121,12 +135,345 @@ internal sealed class DailyV1MerchantTradePlan
         ProfitPerItem = profitPerItem;
         NetProfit = netProfit;
         Score = score;
+        Evidence = evidence;
+        SelectedPayload = selectedPayload;
     }
 }
 
 /// <summary>Core decision portion of selected Daily-v1 merchant local-sale planning.</summary>
 internal static class DailyV1MerchantActionPlanning
 {
+    /// <summary>Builds selected BuyGoods candidates from the graph's exact commercial and spatial owners.</summary>
+    internal static bool TryPlanSelectedTradeOpportunity(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners merchant,
+        DailyV1ActionDefinition buyAction,
+        string originCityRuntimeId,
+        long currentAbsoluteDay,
+        float additionalTravelCost,
+        int additionalTravelDays,
+        out DailyV1MerchantTradePlan plan)
+    {
+        plan = null;
+        if (graph == null || merchant == null || !graph.ContainsExactNpcOwner(merchant)
+            || !DailyV1NpcDefinitionRules.IsAdmittedNpc(graph.Definitions, merchant.Definition)
+            || (buyAction != null
+                && (!DailyV1NpcDefinitionRules.IsAdmittedAction(graph.Definitions, buyAction)
+                    || buyAction.Values.actionType?.Value != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
+                    || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                        graph.Definitions, buyAction, merchant.Status?.Statuses)))
+            || merchant.Lifecycle?.LifeState != NpcLifeState.Alive
+            || merchant.Travel == null || merchant.Travel.IsTraveling
+            || merchant.CommercialKnowledge == null
+            || !ReferenceEquals(merchant.CommercialKnowledge.Definitions, graph.Definitions)
+            || merchant.MoneyAccount == null || merchant.SpatialKnowledge == null
+            || graph.SpatialNetwork == null
+            || additionalTravelCost < 0f || float.IsNaN(additionalTravelCost)
+            || float.IsInfinity(additionalTravelCost) || additionalTravelDays < 0)
+            return false;
+
+        DailyV1CityRuntimeOwners origin = null;
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            if (string.Equals(city.RuntimeId, originCityRuntimeId, StringComparison.Ordinal))
+            { origin = city; break; }
+        if (origin == null || !graph.ContainsExactCityOwner(origin)
+            || !string.Equals(origin.RuntimeId, merchant.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
+            || !string.Equals(origin.LocationRuntimeId, merchant.Travel.CurrentLocationRuntimeId, StringComparison.Ordinal)
+            || !graph.SpatialNetwork.TryGetLocation(origin.LocationRuntimeId, out SpatialLocationRuntime originLocation)
+            || !merchant.SpatialKnowledge.KnowsLocation(originLocation.RuntimeId))
+            return false;
+
+        EffectiveSimulationConfiguration effective = graph.Definitions.EffectiveConfiguration;
+        EffectiveMerchantTradeConfiguration trade = effective?.MerchantTrade
+            ?? new EffectiveMerchantTradeConfiguration(enabled: true);
+        if (trade.MaxTradeAmount <= 0) return false;
+        EffectiveCommercialKnowledgeConfiguration knowledge = effective?.CommercialKnowledge
+            ?? new EffectiveCommercialKnowledgeConfiguration();
+        float travelCostPerDay = effective?.Travel?.TravelCostPerDay ?? 1f;
+        List<SpatialRouteRuntime> routes = new List<SpatialRouteRuntime>(
+            graph.SpatialNetwork.GetOutgoingRoutes(originLocation));
+        routes.Sort((left, right) => string.CompareOrdinal(left?.RuntimeId ?? string.Empty,
+            right?.RuntimeId ?? string.Empty));
+
+        List<DailyV1MerchantTradeCandidate> candidates = new List<DailyV1MerchantTradeCandidate>();
+        List<DailyV1CommercialMarketObservation> originObservations = new List<DailyV1CommercialMarketObservation>();
+        List<DailyV1CommercialMarketObservation> destinationObservations = new List<DailyV1CommercialMarketObservation>();
+        List<DailyV1CommercialLiquidityObservation> liquidityObservations = new List<DailyV1CommercialLiquidityObservation>();
+        List<float> originFreshness = new List<float>();
+        List<float> destinationFreshness = new List<float>();
+        List<float> liquidityFreshness = new List<float>();
+        foreach (DailyV1CommercialMarketObservation observedOrigin in merchant.CommercialKnowledge.Observations)
+        {
+            if (observedOrigin == null
+                || !string.Equals(observedOrigin.LocationRuntimeId, origin.LocationRuntimeId, StringComparison.Ordinal)
+                || observedOrigin.ObservedStock <= 0
+                || !graph.Definitions.Items.TryGetValue(observedOrigin.ItemDefinitionId, out DailyV1ItemDefinition item)
+                || !ReferenceEquals(item, observedOrigin.ItemDefinition)) continue;
+            float originFresh = DailyV1CommercialKnowledgeFreshness.GetFreshness(
+                observedOrigin.ObservedDay, currentAbsoluteDay, knowledge);
+            float buyPrice = observedOrigin.ObservedPrice;
+            if (originFresh <= 0f || buyPrice <= 0f) continue;
+
+            foreach (SpatialRouteRuntime route in routes)
+            {
+                if (route == null || !merchant.SpatialKnowledge.KnowsRoute(route.RuntimeId)
+                    || !merchant.SpatialKnowledge.KnowsLocation(route.Destination.RuntimeId)
+                    || !graph.SpatialNetwork.TryGetSingleDirectRoute(
+                        originLocation, route.Destination, out SpatialRouteRuntime direct, out _)
+                    || !ReferenceEquals(direct, route)) continue;
+                DailyV1CityRuntimeOwners target = null;
+                foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+                    if (string.Equals(city.LocationRuntimeId, route.Destination.RuntimeId, StringComparison.Ordinal))
+                    { target = city; break; }
+                if (target == null || ReferenceEquals(target, origin)) continue;
+                int travelDays = route.TravelDays;
+                if (travelDays <= 0) continue;
+                float travelCost = UnityMathfCompatibility.Max(1, travelDays) * travelCostPerDay;
+                float totalCost = additionalTravelCost + travelCost;
+                float spendable = merchant.MoneyAccount.Balance - totalCost;
+                if (spendable <= 0f) continue;
+                int available = UnityMathfCompatibility.Min(trade.MaxTradeAmount,
+                    observedOrigin.ObservedStock,
+                    UnityMathfCompatibility.FloorToInt(spendable / buyPrice));
+                if (available <= 0
+                    || !merchant.CommercialKnowledge.TryGetObservation(
+                        target.LocationRuntimeId, item.DefinitionId,
+                        out DailyV1CommercialMarketObservation observedDestination)
+                    || !ReferenceEquals(observedDestination.ItemDefinition, item)) continue;
+                float destinationFresh = DailyV1CommercialKnowledgeFreshness.GetFreshness(
+                    observedDestination.ObservedDay, currentAbsoluteDay, knowledge);
+                if (destinationFresh <= 0f) continue;
+                int amount = LimitAmountFromKnowledge(merchant.CommercialKnowledge,
+                    target.LocationRuntimeId, observedDestination.ObservedPrice, available,
+                    currentAbsoluteDay, knowledge);
+                if (amount <= 0) continue;
+
+                candidates.Add(new DailyV1MerchantTradeCandidate(item, target.RuntimeId,
+                    amount, buyPrice, observedDestination.ObservedPrice, totalCost,
+                    additionalTravelDays + travelDays, originFresh, destinationFresh));
+                originObservations.Add(observedOrigin);
+                destinationObservations.Add(observedDestination);
+                originFreshness.Add(originFresh);
+                destinationFreshness.Add(destinationFresh);
+                if (merchant.CommercialKnowledge.TryGetLiquidityObservation(
+                        target.LocationRuntimeId, out DailyV1CommercialLiquidityObservation liquidity))
+                {
+                    liquidityObservations.Add(liquidity);
+                    liquidityFreshness.Add(DailyV1CommercialKnowledgeFreshness.GetFreshness(
+                        liquidity.ObservedDay, currentAbsoluteDay, knowledge));
+                }
+                else
+                {
+                    liquidityObservations.Add(null);
+                    liquidityFreshness.Add(0f);
+                }
+            }
+        }
+
+        if (!TryPlanTradeOpportunity(graph.Definitions, merchant.Definition, candidates,
+                DailyV1NpcDefinitionRules.MinimumProfitPerItem(merchant.Definition, graph.Definitions),
+                out DailyV1MerchantTradePlan selected) || selected == null) return true;
+
+        DailyV1CommercialMarketObservation originFact = originObservations[selected.CandidateIndex];
+        DailyV1CommercialMarketObservation destinationFact = destinationObservations[selected.CandidateIndex];
+        DailyV1CommercialLiquidityObservation liquidityFact = liquidityObservations[selected.CandidateIndex];
+        float gross = selected.ProfitPerItem * selected.Amount;
+        CommercialDecisionEvidence evidence = new CommercialDecisionEvidence(
+            selected.Item.DefinitionId, origin.LocationRuntimeId, origin.LocationRuntimeId,
+            graph.Cities.First(city => string.Equals(city.RuntimeId, selected.TargetRuntimeId, StringComparison.Ordinal)).LocationRuntimeId,
+            null, CommercialObservationEvidence.Capture(originFact.LocationRuntimeId,
+                originFact.ObservedPrice, originFact.ObservedStock, originFact.ObservedDay,
+                originFact.ReceivedDay, originFreshness[selected.CandidateIndex],
+                (CommercialKnowledgeSource)(int)originFact.Source, originFact.SourceRuntimeId),
+            CommercialObservationEvidence.Capture(destinationFact.LocationRuntimeId,
+                destinationFact.ObservedPrice, destinationFact.ObservedStock, destinationFact.ObservedDay,
+                destinationFact.ReceivedDay, destinationFreshness[selected.CandidateIndex],
+                (CommercialKnowledgeSource)(int)destinationFact.Source, destinationFact.SourceRuntimeId),
+            selected.Amount, selected.BuyPrice, selected.SellPrice,
+            candidates[selected.CandidateIndex].TotalTravelCost, gross, selected.NetProfit,
+            selected.Score, liquidityFact == null ? null : CommercialLiquidityEvidence.Capture(
+                liquidityFact.LocationRuntimeId, liquidityFact.LiquidityMode,
+                liquidityFact.ObservedPurchasingPower, liquidityFact.ObservedDay,
+                liquidityFact.ReceivedDay, liquidityFreshness[selected.CandidateIndex],
+                (CommercialKnowledgeSource)(int)liquidityFact.Source, liquidityFact.SourceRuntimeId));
+        DailyV1NpcActionPayloadOwner selectedPayload = null;
+        if (buyAction != null && !DailyV1NpcActionPayloadOwner.TryCreate(
+                graph.Definitions, buyAction, null, selected.TargetRuntimeId,
+                selected.Item, selected.Amount, selected.BuyPrice, 1f,
+                NpcTravelReason.None, 0f, null, null, evidence, null,
+                out selectedPayload)) return true;
+        plan = new DailyV1MerchantTradePlan(selected.CandidateIndex, selected.Item,
+            selected.TargetRuntimeId, selected.Amount, selected.BuyPrice, selected.SellPrice,
+            selected.ProfitPerItem, selected.NetProfit, selected.Score, evidence, selectedPayload);
+        return true;
+    }
+
+    /// <summary>
+    /// Builds and selects the existing autonomous selected-definition local
+    /// SellGoods action from the exact runtime owners. Unity only projects the
+    /// returned target to its existing action wrapper.
+    /// </summary>
+    internal static bool TryPlanSelectedLocalSale(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1ActionDefinition action,
+        long currentAbsoluteDay,
+        float currentUtility,
+        out DailyV1MerchantLocalSalePlan plan)
+    {
+        plan = null;
+        if (graph == null || npc == null || action == null
+            || !graph.ContainsExactNpcOwner(npc)
+            || !DailyV1NpcDefinitionRules.IsAdmittedAction(graph.Definitions, action)
+            || action.Values.actionType?.Value != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                graph.Definitions, action, npc.Status?.Statuses)
+            || !DailyV1NpcDefinitionRules.HasJobType(
+                npc.Definition, graph.Definitions, DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+            || npc.Lifecycle?.LifeState != NpcLifeState.Alive
+            || npc.Travel == null || npc.Travel.IsTraveling
+            || npc.MerchantTradePlan == null || npc.MerchantTradePlan.IsActive
+            || npc.Inventory == null || !ReferenceEquals(npc.Inventory.Definitions, graph.Definitions)
+            || npc.CommercialKnowledge == null
+            || !ReferenceEquals(npc.CommercialKnowledge.Definitions, graph.Definitions))
+            return false;
+
+        DailyV1CityRuntimeOwners city = null;
+        foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+            if (string.Equals(candidate.RuntimeId, npc.Travel.CurrentCityRuntimeId, StringComparison.Ordinal))
+            {
+                city = candidate;
+                break;
+            }
+        if (city == null || !graph.ContainsExactCityOwner(city)
+            || string.IsNullOrWhiteSpace(city.LocationRuntimeId)
+            || city.Market == null || !ReferenceEquals(city.Market.Definitions, graph.Definitions))
+            return false;
+
+        EffectiveSimulationConfiguration effective = graph.Definitions.EffectiveConfiguration;
+        EffectiveMerchantTradeConfiguration trade = effective?.MerchantTrade
+            ?? new EffectiveMerchantTradeConfiguration(enabled: true);
+        EffectiveCommercialKnowledgeConfiguration knowledge = effective?.CommercialKnowledge
+            ?? new EffectiveCommercialKnowledgeConfiguration();
+        int maximumTradeAmount = trade.MaxTradeAmount;
+        if (maximumTradeAmount <= 0) return false;
+
+        List<DailyV1MerchantLocalSaleFact> facts = new List<DailyV1MerchantLocalSaleFact>();
+        List<DailyV1CommercialMarketObservation> observations =
+            new List<DailyV1CommercialMarketObservation>();
+        List<float> freshnessValues = new List<float>();
+        foreach (DailyV1ItemDefinition item in graph.Definitions.Items.Values)
+        {
+            if (item == null
+                || !npc.CommercialKnowledge.TryGetObservation(
+                    city.LocationRuntimeId, item.DefinitionId,
+                    out DailyV1CommercialMarketObservation observation)
+                || !ReferenceEquals(observation.ItemDefinition, item))
+                continue;
+
+            float freshness = DailyV1CommercialKnowledgeFreshness.GetFreshness(
+                observation.ObservedDay, currentAbsoluteDay, knowledge);
+            if (freshness <= 0f) continue;
+
+            int availableAmount = LimitAmountFromKnowledge(
+                npc.CommercialKnowledge, city.LocationRuntimeId,
+                observation.ObservedPrice, maximumTradeAmount,
+                currentAbsoluteDay, knowledge);
+            facts.Add(new DailyV1MerchantLocalSaleFact(
+                item, observation.ObservedPrice, freshness, availableAmount));
+            observations.Add(observation);
+            freshnessValues.Add(freshness);
+        }
+
+        float minimumProfit = UnityMathfCompatibility.Max(
+            0f, DailyV1NpcDefinitionRules.MinimumProfitPerItem(npc.Definition, graph.Definitions));
+        if (!TryPlanLocalSale(graph.Definitions, npc.Definition, npc.Inventory,
+                facts, maximumTradeAmount, minimumProfit, out DailyV1MerchantLocalSalePlan selected)
+            || selected == null)
+            return true;
+
+        DailyV1CommercialMarketObservation marketObservation = observations[selected.MarketFactIndex];
+        float selectedFreshness = freshnessValues[selected.MarketFactIndex];
+        DailyV1CommercialLiquidityObservation liquidityObservation = null;
+        float liquidityFreshness = 0f;
+        if (npc.CommercialKnowledge.TryGetLiquidityObservation(
+                city.LocationRuntimeId, out DailyV1CommercialLiquidityObservation liquidity))
+        {
+            liquidityObservation = liquidity;
+            liquidityFreshness = DailyV1CommercialKnowledgeFreshness.GetFreshness(
+                liquidity.ObservedDay, currentAbsoluteDay, knowledge);
+        }
+
+        float grossProfit = selected.ProfitPerItem * selected.Amount;
+        CommercialDecisionEvidence evidence = new CommercialDecisionEvidence(
+            selected.Item.DefinitionId,
+            city.LocationRuntimeId,
+            city.LocationRuntimeId,
+            city.LocationRuntimeId,
+            null,
+            null,
+            CommercialObservationEvidence.Capture(
+                marketObservation.LocationRuntimeId,
+                marketObservation.ObservedPrice,
+                marketObservation.ObservedStock,
+                marketObservation.ObservedDay,
+                marketObservation.ReceivedDay,
+                selectedFreshness,
+                (CommercialKnowledgeSource)(int)marketObservation.Source,
+                marketObservation.SourceRuntimeId),
+            selected.Amount,
+            selected.ReferencePrice,
+            selected.LocalPrice,
+            0f,
+            grossProfit,
+            grossProfit,
+            selected.Score,
+            liquidityObservation == null ? null : CommercialLiquidityEvidence.Capture(
+                liquidityObservation.LocationRuntimeId,
+                liquidityObservation.LiquidityMode,
+                liquidityObservation.ObservedPurchasingPower,
+                liquidityObservation.ObservedDay,
+                liquidityObservation.ReceivedDay,
+                liquidityFreshness,
+                (CommercialKnowledgeSource)(int)liquidityObservation.Source,
+                liquidityObservation.SourceRuntimeId));
+
+        if (!DailyV1NpcActionPayloadOwner.TryCreate(
+                graph.Definitions, action, null, city.RuntimeId, selected.Item,
+                selected.Amount, selected.LocalPrice, 1f, NpcTravelReason.None,
+                0f, null, null, evidence, null,
+                out DailyV1NpcActionPayloadOwner selectedPayload))
+            return true;
+
+        plan = new DailyV1MerchantLocalSalePlan(
+            selected.MarketFactIndex, selected.Item, selected.Amount,
+            selected.ReferencePrice, selected.LocalPrice, selected.ProfitPerItem,
+            selected.Score, UnityMathfCompatibility.Max(currentUtility, 25f + selected.Score),
+            evidence, selectedPayload);
+        return true;
+    }
+
+    private static int LimitAmountFromKnowledge(
+        DailyV1CommercialKnowledgeOwner knowledgeOwner,
+        string locationRuntimeId,
+        float expectedUnitPrice,
+        int requestedAmount,
+        long currentAbsoluteDay,
+        EffectiveCommercialKnowledgeConfiguration knowledgeConfiguration)
+    {
+        if (requestedAmount <= 0 || expectedUnitPrice <= 0f)
+            return Math.Max(0, requestedAmount);
+        if (!knowledgeOwner.TryGetLiquidityObservation(
+                locationRuntimeId, out DailyV1CommercialLiquidityObservation observation)
+            || DailyV1CommercialKnowledgeFreshness.GetFreshness(
+                observation.ObservedDay, currentAbsoluteDay, knowledgeConfiguration) <= 0f
+            || observation.LiquidityMode == MarketLiquidityMode.Open)
+            return requestedAmount;
+        return UnityMathfCompatibility.Min(
+            requestedAmount,
+            UnityMathfCompatibility.FloorToInt(observation.ObservedPurchasingPower / expectedUnitPrice));
+    }
+
     internal static bool TryPlanLocalSale(
         DailyV1EffectiveDefinitions definitions,
         DailyV1NpcDefinition merchant,
@@ -295,5 +642,29 @@ internal static class DailyV1MerchantActionPlanning
         }
 
         return true;
+    }
+}
+
+/// <summary>Selected-owner commercial freshness with the existing Unity policy bounds.</summary>
+internal static class DailyV1CommercialKnowledgeFreshness
+{
+    internal static float GetFreshness(
+        long observedDay,
+        long currentAbsoluteDay,
+        EffectiveCommercialKnowledgeConfiguration configuration)
+    {
+        int configuredFreshDays = configuration?.FreshForDays ?? 7;
+        int configuredMaxAge = configuration?.MaxUsefulAgeDays ?? 30;
+        int freshForDays = Math.Min(Math.Max(0, configuredFreshDays), int.MaxValue - 1);
+        if (configuredMaxAge <= 0) configuredMaxAge = 30;
+        int maxUsefulAgeDays = configuredMaxAge > freshForDays
+            ? configuredMaxAge
+            : freshForDays + 1;
+        long effectiveDay = Math.Max(0L, currentAbsoluteDay);
+        long ageDays = effectiveDay <= observedDay ? 0L : effectiveDay - observedDay;
+        if (ageDays <= freshForDays) return 1f;
+        if (ageDays >= maxUsefulAgeDays) return 0f;
+        float decayRange = maxUsefulAgeDays - freshForDays;
+        return 1f - (ageDays - freshForDays) / decayRange;
     }
 }

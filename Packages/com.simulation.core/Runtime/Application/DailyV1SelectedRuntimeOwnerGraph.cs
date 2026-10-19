@@ -307,6 +307,90 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
             && MatchesExactOwnerInstances(npcs, npcOwners);
     }
 
+    /// <summary>Installs a selected merchant plan into its exact NPC owner.</summary>
+    internal bool TryInstallMerchantTradePlan(
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1ItemDefinition item,
+        string originCityRuntimeId,
+        string targetCityRuntimeId,
+        int plannedAmount,
+        float purchasePricePerItem,
+        string originDecisionId)
+    {
+        if (npc == null || item == null || !ContainsExactNpc(npc)
+            || !Definitions.Items.TryGetValue(item.DefinitionId, out DailyV1ItemDefinition admittedItem)
+            || !ReferenceEquals(admittedItem, item)
+            || !ContainsCityId(originCityRuntimeId) || !ContainsCityId(targetCityRuntimeId)
+            || plannedAmount <= 0 || float.IsNaN(purchasePricePerItem)
+            || float.IsInfinity(purchasePricePerItem) || purchasePricePerItem < 0f)
+            return false;
+
+        return npc.MerchantTradePlan.TryInstallState(item, originCityRuntimeId,
+            targetCityRuntimeId, plannedAmount, plannedAmount, purchasePricePerItem, 0, 0,
+            originDecisionId);
+    }
+
+    /// <summary>Plans and installs the selected merchant's direct trade route.</summary>
+    internal bool TryCommitMerchantTradeTravelPlan(
+        DailyV1NpcRuntimeOwners npc,
+        string targetCityRuntimeId,
+        float utility,
+        string originDecisionId,
+        Func<bool> admitMutation,
+        out float expectedCost)
+    {
+        expectedCost = -1f;
+        if (npc == null || !ContainsExactNpc(npc) || SpatialNetwork == null
+            || float.IsNaN(utility) || float.IsInfinity(utility) || utility < 0f
+            || string.IsNullOrWhiteSpace(targetCityRuntimeId)
+            || !string.Equals(targetCityRuntimeId,
+                npc.MerchantTradePlan?.TargetCityRuntimeId, StringComparison.Ordinal)
+            || !SpatialNetwork.TryGetLocation(npc.Travel?.CurrentLocationRuntimeId,
+                out SpatialLocationRuntime origin)
+            || !TryFindCity(targetCityRuntimeId, out DailyV1CityRuntimeOwners target)
+            || !SpatialNetwork.TryGetLocation(target.LocationRuntimeId,
+                out SpatialLocationRuntime destination)
+            || !SpatialNetwork.TryGetSingleDirectRoute(origin, destination,
+                out SpatialRouteRuntime route, out _)) return false;
+
+        float cost = Math.Max(1, route.TravelDays)
+            * (Definitions.EffectiveConfiguration?.Travel?.TravelCostPerDay ?? 1f);
+        if (float.IsNaN(cost) || float.IsInfinity(cost) || cost < 0f
+            || !npc.TravelPlan.CanCommit(destination.RuntimeId, target.RuntimeId,
+                NpcTravelReason.Trade, utility, cost, originDecisionId)
+            || (!npc.TravelPlan.Matches(destination.RuntimeId, target.RuntimeId,
+                    NpcTravelReason.Trade, utility, cost, originDecisionId)
+                && (admitMutation == null || !admitMutation()))
+            || !npc.TravelPlan.TryCommit(destination.RuntimeId, target.RuntimeId,
+                NpcTravelReason.Trade, utility, cost, originDecisionId)) return false;
+        expectedCost = cost;
+        return true;
+    }
+
+    private bool TryFindCity(string runtimeId, out DailyV1CityRuntimeOwners city)
+    {
+        city = null;
+        for (int i = 0; i < cities.Count; i++)
+            if (string.Equals(cities[i].RuntimeId, runtimeId, StringComparison.Ordinal))
+            { city = cities[i]; return true; }
+        return false;
+    }
+
+    private bool ContainsExactNpc(DailyV1NpcRuntimeOwners candidate)
+    {
+        for (int i = 0; i < npcs.Count; i++)
+            if (ReferenceEquals(npcs[i], candidate)) return true;
+        return false;
+    }
+
+    private bool ContainsCityId(string runtimeId)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId)) return false;
+        for (int i = 0; i < cities.Count; i++)
+            if (string.Equals(cities[i].RuntimeId, runtimeId, StringComparison.Ordinal)) return true;
+        return false;
+    }
+
     /// <summary>
     /// Creates the exact selected-owner graph for a roster that has admitted
     /// one additional NPC. The existing graph and all owner authorities stay
@@ -444,6 +528,28 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
 
         return DailyV1SelectedOpenMarketSalePlan.TryPrepare(
             this, npc, city, market, item, requestedQuantity, out plan, out failure);
+    }
+
+    /// <summary>Prepares an ordinary selected open-market purchase on exact Core owners.</summary>
+    internal bool TryPrepareOpenMarketPurchase(
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1MarketOwner market,
+        DailyV1ItemDefinition item,
+        int requestedQuantity,
+        bool allowAccountBacked,
+        out DailyV1SelectedOpenMarketPurchasePlan plan,
+        out DailyV1SelectedOpenMarketPurchaseFailure failure)
+    {
+        plan = null;
+        failure = DailyV1SelectedOpenMarketPurchaseFailure.InvalidInput;
+        if (!ContainsExactNpcOwner(npc) || market == null) return false;
+        DailyV1CityRuntimeOwners city = null;
+        foreach (DailyV1CityRuntimeOwners candidate in cities)
+            if (candidate != null && ReferenceEquals(candidate.Market, market))
+            { city = candidate; break; }
+        return DailyV1SelectedOpenMarketPurchasePlan.TryPrepare(
+            this, npc, city, market, item, requestedQuantity, allowAccountBacked,
+            out plan, out failure);
     }
 
     internal bool ContainsCityRuntimeLocation(string cityRuntimeId, string locationRuntimeId)

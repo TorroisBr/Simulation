@@ -39,6 +39,70 @@ internal sealed class DailyV1SelectedOpenMarketSaleCommitResult
 }
 
 /// <summary>
+/// The existing Unity P12 adapter for the selected open-market sale. It only
+/// admits and records the already-defined market operation; Core owns action
+/// validation, plan creation, mutation, and partial-commit classification.
+/// </summary>
+internal interface IDailyV1SelectedOpenMarketSaleBoundary
+{
+    bool TryBegin();
+    void Complete(DailyV1SelectedOpenMarketSaleCommitResult result);
+    void Dispose();
+}
+
+/// <summary>The complete selected Daily-v1 open-market sale owner operation.</summary>
+internal sealed class DailyV1SelectedOpenMarketSaleExecution
+{
+    internal DailyV1SelectedOpenMarketSalePlan Plan { get; }
+    internal DailyV1SelectedOpenMarketSaleCommitResult Commit { get; }
+    internal DailyV1SelectedOpenMarketSaleFailure PreparationFailure { get; }
+
+    internal bool Prepared => Plan != null;
+
+    private DailyV1SelectedOpenMarketSaleExecution(
+        DailyV1SelectedOpenMarketSalePlan plan,
+        DailyV1SelectedOpenMarketSaleCommitResult commit,
+        DailyV1SelectedOpenMarketSaleFailure preparationFailure)
+    {
+        Plan = plan;
+        Commit = commit;
+        PreparationFailure = preparationFailure;
+    }
+
+    internal static DailyV1SelectedOpenMarketSaleExecution TryExecute(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1MarketOwner market,
+        DailyV1ItemDefinition item,
+        int requestedQuantity,
+        IDailyV1SelectedOpenMarketSaleBoundary boundary)
+    {
+        DailyV1SelectedOpenMarketSaleFailure preparationFailure =
+            DailyV1SelectedOpenMarketSaleFailure.InvalidInput;
+        if (graph == null
+            || !graph.TryPrepareOpenMarketSale(npc, market, item, requestedQuantity,
+                out DailyV1SelectedOpenMarketSalePlan plan,
+                out preparationFailure))
+            return new DailyV1SelectedOpenMarketSaleExecution(null, null,
+                preparationFailure);
+
+        DailyV1SelectedOpenMarketSaleCommitResult commit = null;
+        try
+        {
+            commit = plan.TryCommit(boundary == null ? null : (Func<bool>)boundary.TryBegin);
+            boundary?.Complete(commit);
+        }
+        finally
+        {
+            boundary?.Dispose();
+        }
+
+        return new DailyV1SelectedOpenMarketSaleExecution(plan, commit,
+            DailyV1SelectedOpenMarketSaleFailure.None);
+    }
+}
+
+/// <summary>
 /// Prepared ordinary Daily-v1 open-market sale over the exact selected Core
 /// owners. This is deliberately separate from P18-D keyed receipt execution.
 /// </summary>

@@ -4,6 +4,12 @@ using System.Collections.Generic;
 /// <summary>Selected NPC job and trade policy evaluated from the admitted Core definition graph.</summary>
 internal static class DailyV1NpcDefinitionRules
 {
+    // Serialized enum ordinals from the admitted Unity enums. Keep these named
+    // values aligned with NpcJobType.Merchant and NpcActionType.SellGoods.
+    internal const int MerchantJobTypeValue = 1;
+    internal const int BuyGoodsActionTypeValue = 1;
+    internal const int SellGoodsActionTypeValue = 2;
+
     internal static bool HasConfiguredDefaultAction(
         DailyV1NpcDefinition npc,
         DailyV1EffectiveDefinitions definitions,

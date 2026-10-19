@@ -2872,6 +2872,17 @@ public class NpcRuntime : ICapabilityConditionSource
         TravelPlan.Set(targetCity, reason, utility, expectedCost, originDecisionId);
     }
 
+    internal bool TrySetSelectedTradeTravelPlan(
+        CityRuntime targetCity,
+        float utility,
+        string originDecisionId)
+    {
+        return selectedRuntimeOwners != null && targetCity != null
+            && TravelPlan.TryInstallSelectedTradePlan(
+                selectedRuntimeOwnerGraphProvider?.Invoke(), selectedRuntimeOwners,
+                targetCity.RuntimeId, utility, originDecisionId);
+    }
+
     public void SetTravelPlan(
         SpatialLocationRuntime targetLocation,
         CityRuntime targetCityProjection,
@@ -2953,6 +2964,24 @@ public class NpcRuntime : ICapabilityConditionSource
     public void SetMerchantTradePlan(ItemData item, CityRuntime originCity, CityRuntime targetCity, int plannedAmount, float purchasePricePerItem, string originDecisionId = null)
     {
         MerchantTradePlan.Set(item, originCity, targetCity, plannedAmount, purchasePricePerItem, originDecisionId);
+    }
+
+    internal bool TrySetSelectedMerchantTradePlan(
+        ItemData item,
+        CityRuntime originCity,
+        CityRuntime targetCity,
+        int plannedAmount,
+        float purchasePricePerItem,
+        string originDecisionId)
+    {
+        return selectedRuntimeOwners != null
+            && selectedDefinitionBindings != null
+            && selectedDefinitionBindings.TryGet(item, out DailyV1ItemDefinition itemNode)
+            && originCity != null && targetCity != null
+            && MerchantTradePlan.TryInstallSelectedPlan(
+                selectedRuntimeOwnerGraphProvider?.Invoke(), selectedRuntimeOwners,
+                itemNode, originCity.RuntimeId, targetCity.RuntimeId,
+                plannedAmount, purchasePricePerItem, originDecisionId);
     }
 
     public void ClearMerchantTradePlan()

@@ -6,6 +6,87 @@ using NUnit.Framework;
 public sealed class DailyV1SelectedOpenMarketSaleTests
 {
     [Test]
+    public void CoreExecutionOwnsSelectedSaleAndCompletesP12BoundaryAfterOwnerCommit()
+    {
+        CreateFixture(out _, out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners npc,
+            out DailyV1CityRuntimeOwners city,
+            out DailyV1ItemDefinition item);
+        float balanceBefore = npc.MoneyAccount.Balance;
+        int inventoryBefore = npc.Inventory.GetAmount(item);
+        int marketBefore = city.Market.GetAmount(item);
+        RecordingSaleBoundary boundary = new RecordingSaleBoundary(allow: true);
+
+        DailyV1SelectedOpenMarketSaleExecution execution =
+            DailyV1SelectedOpenMarketSaleExecution.TryExecute(
+                graph, npc, city.Market, item, 1, boundary);
+
+        Assert.That(execution.Prepared, Is.True);
+        Assert.That(execution.Commit.Succeeded, Is.True);
+        Assert.That(boundary.BeginCalls, Is.EqualTo(1));
+        Assert.That(boundary.CompleteCalls, Is.EqualTo(1));
+        Assert.That(boundary.DisposeCalls, Is.EqualTo(1));
+        Assert.That(boundary.LastResult, Is.SameAs(execution.Commit));
+        Assert.That(npc.MoneyAccount.Balance, Is.EqualTo(balanceBefore + execution.Plan.TotalPrice).Within(0.001f));
+        Assert.That(npc.Inventory.GetAmount(item), Is.EqualTo(inventoryBefore - execution.Plan.Quantity));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(marketBefore + execution.Plan.Quantity));
+    }
+
+    [Test]
+    public void CoreExecutionPreservesRejectedP12AdmissionAndCompletesWithoutOwnerMutation()
+    {
+        CreateFixture(out _, out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners npc,
+            out DailyV1CityRuntimeOwners city,
+            out DailyV1ItemDefinition item);
+        float balanceBefore = npc.MoneyAccount.Balance;
+        int inventoryBefore = npc.Inventory.GetAmount(item);
+        int marketBefore = city.Market.GetAmount(item);
+        long accountRevisionBefore = npc.MoneyAccount.Revision;
+        RecordingSaleBoundary boundary = new RecordingSaleBoundary(allow: false);
+
+        DailyV1SelectedOpenMarketSaleExecution execution =
+            DailyV1SelectedOpenMarketSaleExecution.TryExecute(
+                graph, npc, city.Market, item, 1, boundary);
+
+        Assert.That(execution.Prepared, Is.True);
+        Assert.That(execution.Commit.Succeeded, Is.False);
+        Assert.That(execution.Commit.Failure, Is.EqualTo(DailyV1SelectedOpenMarketSaleFailure.AdmissionRejected));
+        Assert.That(boundary.BeginCalls, Is.EqualTo(1));
+        Assert.That(boundary.CompleteCalls, Is.EqualTo(1));
+        Assert.That(boundary.DisposeCalls, Is.EqualTo(1));
+        Assert.That(npc.MoneyAccount.Balance, Is.EqualTo(balanceBefore));
+        Assert.That(npc.Inventory.GetAmount(item), Is.EqualTo(inventoryBefore));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(marketBefore));
+        Assert.That(npc.MoneyAccount.Revision, Is.EqualTo(accountRevisionBefore));
+    }
+
+    [Test]
+    public void CoreExecutionReportsRefundWritesBeforeDisposingP12Boundary()
+    {
+        CreateFixture(out _, out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners npc,
+            out DailyV1CityRuntimeOwners city,
+            out DailyV1ItemDefinition item);
+        float balanceBefore = npc.MoneyAccount.Balance;
+        long accountRevisionBefore = npc.MoneyAccount.Revision;
+        Assert.That(npc.Inventory.TryBindMutationBoundary(() => false, () => { }), Is.True);
+        RecordingSaleBoundary boundary = new RecordingSaleBoundary(allow: true);
+
+        DailyV1SelectedOpenMarketSaleExecution execution =
+            DailyV1SelectedOpenMarketSaleExecution.TryExecute(
+                graph, npc, city.Market, item, 1, boundary);
+
+        Assert.That(execution.Commit.Succeeded, Is.False);
+        Assert.That(execution.Commit.AccountMutationCount, Is.EqualTo(2));
+        Assert.That(execution.Commit.InventoryMutationCount, Is.Zero);
+        Assert.That(boundary.LastResult, Is.SameAs(execution.Commit));
+        Assert.That(boundary.DisposeCalls, Is.EqualTo(1));
+        Assert.That(npc.MoneyAccount.Balance, Is.EqualTo(balanceBefore).Within(0.001f));
+        Assert.That(npc.MoneyAccount.Revision, Is.EqualTo(accountRevisionBefore + 2));
+    }
+
+    [Test]
     public void PreparedSaleIsSideEffectFreeAndRejectedAdmissionCanRetry()
     {
         CreateFixture(out DailyV1EffectiveDefinitions definitions,
@@ -187,5 +268,30 @@ public sealed class DailyV1SelectedOpenMarketSaleTests
         Assert.That(npc.Travel.CurrentLocationRuntimeId, Is.EqualTo(city.LocationRuntimeId));
         Assert.That(npc.Inventory.GetAmount(item), Is.GreaterThan(0));
         Assert.That(city.Market.GetItem(item), Is.Not.Null);
+    }
+
+    private sealed class RecordingSaleBoundary : IDailyV1SelectedOpenMarketSaleBoundary
+    {
+        private readonly bool allow;
+        internal int BeginCalls { get; private set; }
+        internal int CompleteCalls { get; private set; }
+        internal int DisposeCalls { get; private set; }
+        internal DailyV1SelectedOpenMarketSaleCommitResult LastResult { get; private set; }
+
+        internal RecordingSaleBoundary(bool allow) => this.allow = allow;
+
+        public bool TryBegin()
+        {
+            BeginCalls++;
+            return allow;
+        }
+
+        public void Complete(DailyV1SelectedOpenMarketSaleCommitResult result)
+        {
+            CompleteCalls++;
+            LastResult = result;
+        }
+
+        public void Dispose() => DisposeCalls++;
     }
 }
