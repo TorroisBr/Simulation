@@ -1087,7 +1087,8 @@ public class NpcRuntime : ICapabilityConditionSource
     private void NotifyP12LifecycleMutationCommitted(
         bool lifeStateChanged,
         bool residenceChanged,
-        bool currentActionChanged = false)
+        bool currentActionChanged = false,
+        bool currentActionRevisionAlreadyCommitted = false)
     {
         if (lifeStateChanged)
         {
@@ -1097,7 +1098,7 @@ public class NpcRuntime : ICapabilityConditionSource
                 lifeStateRevision++;
         }
         if (residenceChanged && residenceRevision < long.MaxValue) residenceRevision++;
-        if (currentActionChanged)
+        if (currentActionChanged && !currentActionRevisionAlreadyCommitted)
         {
             if (selectedRuntimeOwners != null)
                 selectedRuntimeOwners.ActionSlot.NotifyCurrentActionMutationCommitted();
@@ -1776,11 +1777,7 @@ public class NpcRuntime : ICapabilityConditionSource
                     || (p12Bound
                         ? !actionRuntime.CanBindToP12Owner(this)
                         : actionRuntime.IsP12Bound)))
-            || !CanCommitP12LifecycleMutation(
-                false,
-                false,
-                true,
-                actionRuntime))
+            || (p12Bound && !CanAdvanceP12LifecycleRevisions(0, 0, 1)))
             return false;
 
         if (selectedRuntimeOwners != null && actionRuntime != null
@@ -1805,9 +1802,30 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         }
 
-        if (selectedRuntimeOwners != null
-            && !selectedRuntimeOwners.ActionSlot.TrySetCurrentAction(
-                selectedActionNode, selectedActionPayload))
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph = selectedRuntimeOwners == null
+            ? null
+            : selectedRuntimeOwnerGraphProvider?.Invoke();
+        bool graphCommittedActionSlot = selectedGraph != null
+            && selectedGraph.ContainsExactNpcOwner(selectedRuntimeOwners);
+        bool actionSlotCommitted;
+        if (graphCommittedActionSlot)
+        {
+            actionSlotCommitted = selectedGraph.TryCommitCurrentActionSlot(
+                selectedRuntimeOwners,
+                selectedActionNode,
+                selectedActionPayload,
+                () => CanCommitP12LifecycleMutation(false, false, true, actionRuntime));
+        }
+        else
+        {
+            actionSlotCommitted = CanCommitP12LifecycleMutation(false, false, true, actionRuntime);
+            if (actionSlotCommitted && selectedRuntimeOwners != null)
+            {
+                actionSlotCommitted = selectedRuntimeOwners.ActionSlot.TrySetCurrentAction(
+                    selectedActionNode, selectedActionPayload);
+            }
+        }
+        if (!actionSlotCommitted)
         {
             if (p12Bound && previous != null) previous.TryBindP12Owner(this);
             if (p12Bound && actionRuntime != null) actionRuntime.UnbindP12Owner(this);
@@ -1819,7 +1837,8 @@ public class NpcRuntime : ICapabilityConditionSource
             previous.UnbindSelectedOwner();
         currentActionRuntime = actionRuntime;
         currentAction = actionRuntime != null ? actionRuntime.Action : null;
-        NotifyP12LifecycleMutationCommitted(false, false, true);
+        NotifyP12LifecycleMutationCommitted(
+            false, false, true, currentActionRevisionAlreadyCommitted: graphCommittedActionSlot);
         return true;
     }
 

@@ -44,6 +44,71 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
     }
 
     [Test]
+    public void CurrentActionSlotCommitUsesExactGraphAdmissionBeforeCoreOwnerMutation()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(
+            allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[0];
+        DailyV1ActionDefinition action = definitions.Actions.Values.First();
+        DailyV1EffectiveDefinitions foreignDefinitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ActionDefinition foreignAction = foreignDefinitions.Actions[action.DefinitionId];
+        int admissionCalls = 0;
+
+        Assert.That(graph.TryCommitCurrentActionSlot(npc, foreignAction, null, () =>
+        {
+            admissionCalls++;
+            return true;
+        }), Is.False, "A foreign action definition is rejected before host admission.");
+        Assert.That(admissionCalls, Is.Zero);
+        Assert.That(npc.ActionSlot.CurrentAction, Is.Null);
+        Assert.That(npc.ActionSlot.Revision, Is.Zero);
+
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
+            "outside-runtime", definitions, npc.Definition, 0f,
+            out DailyV1NpcRuntimeOwners outsideNpc), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(outsideNpc, action, null, () =>
+        {
+            admissionCalls++;
+            return true;
+        }), Is.False, "An owner outside this exact graph is rejected before host admission.");
+        Assert.That(admissionCalls, Is.Zero);
+
+        Assert.That(graph.TryCommitCurrentActionSlot(npc, action, null, () =>
+        {
+            admissionCalls++;
+            Assert.That(npc.ActionSlot.CurrentAction, Is.Null,
+                "Host admission runs while the prior authoritative action remains installed.");
+            Assert.That(npc.ActionSlot.Revision, Is.Zero,
+                "Host admission observes the pre-commit local revision.");
+            return false;
+        }), Is.False);
+        Assert.That(admissionCalls, Is.EqualTo(1));
+        Assert.That(npc.ActionSlot.CurrentAction, Is.Null);
+        Assert.That(npc.ActionSlot.Revision, Is.Zero,
+            "Rejected admission preserves both authoritative action value and revision.");
+
+        Assert.That(graph.TryCommitCurrentActionSlot(npc, action, null, () =>
+        {
+            admissionCalls++;
+            Assert.That(npc.ActionSlot.CurrentAction, Is.Null);
+            Assert.That(npc.ActionSlot.Revision, Is.Zero);
+            return true;
+        }), Is.True);
+        Assert.That(admissionCalls, Is.EqualTo(2));
+        Assert.That(npc.ActionSlot.CurrentAction, Is.SameAs(action));
+        Assert.That(npc.ActionSlot.Revision, Is.EqualTo(1));
+    }
+
+    [Test]
     public void SelectedDailyEconomyPreflightsExactCityOwnersAndPreservesGlobalPassOrder()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

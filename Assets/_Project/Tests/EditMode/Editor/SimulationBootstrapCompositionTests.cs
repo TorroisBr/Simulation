@@ -3165,6 +3165,70 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(validationArgs[1], Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
     }
 
+    [Test]
+    public void SelectedP12CurrentActionReplacementRejectionRestoresPreviousCoreAndUnityOwners()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject simulationObject = new GameObject("selected-p12-current-action-replacement-rollback-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+
+        simulation.Start();
+
+        SimulationRuntime runtime = simulation.Bootstrap.Runtime;
+        NpcRuntime npc = runtime.NpcRuntimes
+            .OrderBy(candidate => candidate.RuntimeId, System.StringComparer.Ordinal)
+            .First();
+        List<NpcActionData> actions = new List<NpcActionData>();
+        Assert.That(npc.TryGetSelectedDailyV1Actions(actions), Is.True);
+        Assert.That(actions, Is.Not.Empty);
+        NpcActionData admittedAction = actions[0];
+        NpcActionRuntime previous = new NpcActionRuntime(admittedAction);
+        using (EnterDailyAdvanceOperation(runtime))
+            npc.SetCurrentActionRuntime(previous);
+
+        Assert.That(npc.CurrentActionRuntime, Is.SameAs(previous));
+        Assert.That(npc.SelectedRuntimeOwners.ActionSlot.CurrentPayload,
+            Is.SameAs(previous.SelectedOwner));
+        Assert.That(npc.SelectedRuntimeOwners.ActionSlot.Revision, Is.EqualTo(1L));
+        Assert.That(new NpcCurrentActionCensusProvider(npc).GetCurrentCensus().Revision, Is.EqualTo(1L));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epochBeforeReject, out _), Is.True);
+
+        NpcActionRuntime rejectedReplacement = new NpcActionRuntime(admittedAction);
+        npc.SetCurrentActionRuntime(rejectedReplacement);
+
+        Assert.That(npc.CurrentActionRuntime, Is.SameAs(previous),
+            "A rejected host admission must retain the prior Unity action runtime.");
+        Assert.That(npc.CurrentAction, Is.SameAs(admittedAction));
+        Assert.That(npc.HasConsistentCurrentActionSlot, Is.True);
+        Assert.That(npc.SelectedRuntimeOwners.ActionSlot.CurrentAction,
+            Is.SameAs(previous.SelectedOwner.Action));
+        Assert.That(npc.SelectedRuntimeOwners.ActionSlot.CurrentPayload,
+            Is.SameAs(previous.SelectedOwner),
+            "The Core owner slot must retain the exact previously committed payload owner.");
+        Assert.That(npc.SelectedRuntimeOwners.ActionSlot.Revision, Is.EqualTo(1L));
+        Assert.That(npc.CurrentActionRevision, Is.EqualTo(1L));
+        Assert.That(previous.IsP12Bound, Is.True,
+            "Rollback must restore the previous action's P12 owner binding.");
+        Assert.That(previous.SelectedOwner, Is.SameAs(npc.SelectedRuntimeOwners.ActionSlot.CurrentPayload));
+        Assert.That(rejectedReplacement.IsP12Bound, Is.False,
+            "The rejected replacement must release its provisional P12 owner binding.");
+        Assert.That(rejectedReplacement.SelectedOwner, Is.Null,
+            "The rejected replacement must release its provisional selected Core payload binding.");
+        Assert.That(new NpcCurrentActionCensusProvider(npc).GetCurrentCensus().Revision, Is.EqualTo(1L));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epochAfterReject, out _), Is.True);
+        Assert.That(epochAfterReject, Is.EqualTo(epochBeforeReject),
+            "A rejected replacement must not advance the shared P12 mutation epoch.");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure), Is.True,
+            censusFailure.ToString());
+    }
+
     private static void AssertSelectedDailyNpcOwnerFamilies(SimulationRuntime runtime)
     {
         NpcRuntime[] roster = runtime.NpcRuntimes
@@ -4810,6 +4874,18 @@ public sealed class SimulationBootstrapCompositionTests
         object value = ReadNonPublicProperty(target, propertyName);
         Assert.That(value, Is.TypeOf<int>(), "Expected int property " + propertyName + ".");
         return (int)value;
+    }
+
+    private static System.IDisposable EnterDailyAdvanceOperation(SimulationRuntime runtime)
+    {
+        MethodInfo begin = typeof(SimulationRuntime).GetMethod(
+            "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(begin, Is.Not.Null);
+        object[] arguments = { "runtime.advance-day", null };
+        Assert.That(begin.Invoke(runtime, arguments), Is.EqualTo(true));
+        System.IDisposable scope = arguments[1] as System.IDisposable;
+        Assert.That(scope, Is.Not.Null);
+        return scope;
     }
 
     private static void InvokeBootstrapInitialize(TesteSimulacao simulation, System.Action<string> stageCompleted)

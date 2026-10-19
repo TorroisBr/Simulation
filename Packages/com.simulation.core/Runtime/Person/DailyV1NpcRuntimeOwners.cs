@@ -227,6 +227,17 @@ internal sealed class DailyV1NpcActionSlotOwner
         DailyV1ActionDefinition action,
         DailyV1NpcActionPayloadOwner payload)
     {
+        if (!CanSetCurrentAction(action, payload)) return false;
+
+        CurrentAction = action;
+        CurrentPayload = payload;
+        return true;
+    }
+
+    internal bool CanSetCurrentAction(
+        DailyV1ActionDefinition action,
+        DailyV1NpcActionPayloadOwner payload)
+    {
         if (action != null
             && (!definitions.Actions.TryGetValue(action.DefinitionId, out DailyV1ActionDefinition admitted)
                 || !ReferenceEquals(action, admitted)))
@@ -234,9 +245,6 @@ internal sealed class DailyV1NpcActionSlotOwner
         if (action == null && payload != null
             || (payload != null && !ReferenceEquals(payload.Action, action)))
             return false;
-
-        CurrentAction = action;
-        CurrentPayload = payload;
         return true;
     }
 

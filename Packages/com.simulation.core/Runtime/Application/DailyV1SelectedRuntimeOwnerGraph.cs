@@ -410,6 +410,43 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     }
 
     /// <summary>
+    /// Commits the exact selected NPC action definition/payload to its Core
+    /// owner slot after host admission. The host still projects its existing
+    /// action object and records the P12 epoch after this authoritative write.
+    /// </summary>
+    internal bool TryCommitCurrentActionSlot(
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1ActionDefinition action,
+        DailyV1NpcActionPayloadOwner payload,
+        Func<bool> preCommitAdmission)
+    {
+        DailyV1NpcActionSlotOwner slot = npc?.ActionSlot;
+        if (!ContainsExactNpcOwner(npc)
+            || slot == null
+            || !slot.CanSetCurrentAction(action, payload))
+            return false;
+
+        if (preCommitAdmission != null)
+        {
+            try
+            {
+                if (!preCommitAdmission()) return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        // Admission executes on the runtime owner thread. The exact slot and
+        // admitted payload were validated above, so no fallible preparation
+        // remains after the boundary accepts the mutation.
+        if (!slot.TrySetCurrentAction(action, payload)) return false;
+        slot.NotifyCurrentActionMutationCommitted();
+        return true;
+    }
+
+    /// <summary>
     /// Runs the selected solo-travel portion of one daily turn in stable
     /// RuntimeId order. Core selects the exact eligible owners and prepares
     /// their existing travel plans; the host adapter retains party lookup,
