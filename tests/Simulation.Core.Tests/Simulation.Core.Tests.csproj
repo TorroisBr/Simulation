@@ -55,6 +55,7 @@
       <Compile Include="DailyV1MerchantActionPlanningTests.cs" Link="Definitions/DailyV1MerchantActionPlanningTests.cs" />
       <Compile Include="DailyV1NpcStatusOwnerTests.cs" Link="Definitions/DailyV1NpcStatusOwnerTests.cs" />
       <Compile Include="DailyV1NpcActionSlotOwnerTests.cs" Link="Person/DailyV1NpcActionSlotOwnerTests.cs" />
+      <Compile Include="DailyV1NpcMerchantTradePlanOwnerTests.cs" Link="Person/DailyV1NpcMerchantTradePlanOwnerTests.cs" />
       <Compile Include="DailyV1CommercialKnowledgeOwnerTests.cs" Link="Knowledge/DailyV1CommercialKnowledgeOwnerTests.cs" />
     <Compile Include="ActionExecutionTests.cs" Link="Application/ActionExecutionTests.cs" />
       <Compile Include="DailyV1ApplicationHostTests.cs" Link="Application/DailyV1ApplicationHostTests.cs" />

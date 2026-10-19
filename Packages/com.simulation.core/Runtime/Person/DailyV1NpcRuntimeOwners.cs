@@ -13,6 +13,7 @@ internal sealed class DailyV1NpcRuntimeOwners
     internal DailyV1NpcDefinition Definition { get; }
     internal DailyV1InventoryOwner Inventory { get; }
     internal DailyV1NpcStatusOwner Status { get; }
+    internal DailyV1NpcMerchantTradePlanOwner MerchantTradePlan { get; }
     internal MoneyAccountRuntime MoneyAccount { get; }
     internal DailyV1CommercialKnowledgeOwner CommercialKnowledge { get; }
     internal DailyV1NpcLifecycleOwner Lifecycle { get; }
@@ -24,6 +25,7 @@ internal sealed class DailyV1NpcRuntimeOwners
         DailyV1EffectiveDefinitions definitions,
         DailyV1NpcDefinition definition,
         DailyV1InventoryOwner inventory,
+        DailyV1NpcMerchantTradePlanOwner merchantTradePlan,
         DailyV1NpcStatusOwner status,
         MoneyAccountRuntime moneyAccount,
         DailyV1CommercialKnowledgeOwner commercialKnowledge)
@@ -32,6 +34,7 @@ internal sealed class DailyV1NpcRuntimeOwners
         Definitions = definitions;
         Definition = definition;
         Inventory = inventory;
+        MerchantTradePlan = merchantTradePlan;
         Status = status;
         MoneyAccount = moneyAccount;
         CommercialKnowledge = commercialKnowledge;
@@ -60,9 +63,42 @@ internal sealed class DailyV1NpcRuntimeOwners
         }
 
         DailyV1InventoryOwner inventory = new DailyV1InventoryOwner(definitions);
+        if (!DailyV1NpcMerchantTradePlanOwner.TryCreateInitial(
+                definitions, out DailyV1NpcMerchantTradePlanOwner merchantTradePlan))
+            return false;
         MoneyAccountRuntime moneyAccount = new MoneyAccountRuntime(initialMoney);
         return TryCreateBound(runtimeId, definitions, definition, statuses, inventory, moneyAccount,
-            new DailyV1CommercialKnowledgeOwner(definitions), out owners);
+            new DailyV1CommercialKnowledgeOwner(definitions), merchantTradePlan, out owners);
+    }
+
+    internal static bool TryCreateBound(
+        string runtimeId,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1NpcDefinition definition,
+        IEnumerable<DailyV1StatusDefinition> statuses,
+        DailyV1InventoryOwner inventory,
+        MoneyAccountRuntime moneyAccount,
+        DailyV1CommercialKnowledgeOwner commercialKnowledge,
+        DailyV1NpcMerchantTradePlanOwner merchantTradePlan,
+        out DailyV1NpcRuntimeOwners owners)
+    {
+        owners = null;
+        if (string.IsNullOrWhiteSpace(runtimeId)
+            || !IsAdmitted(definitions, definition)
+            || statuses == null
+            || moneyAccount == null
+            || commercialKnowledge == null
+            || !ReferenceEquals(commercialKnowledge.Definitions, definitions)
+            || merchantTradePlan == null
+            || !ReferenceEquals(merchantTradePlan.Definitions, definitions)
+            || (inventory != null && !ReferenceEquals(inventory.Definitions, definitions))
+            || !DailyV1NpcStatusOwner.TryCreate(definitions, statuses, out DailyV1NpcStatusOwner statusOwner))
+            return false;
+
+        owners = new DailyV1NpcRuntimeOwners(
+            runtimeId, definitions, definition, inventory, merchantTradePlan,
+            statusOwner, moneyAccount, commercialKnowledge);
+        return true;
     }
 
     internal static bool TryCreateBound(
@@ -76,19 +112,12 @@ internal sealed class DailyV1NpcRuntimeOwners
         out DailyV1NpcRuntimeOwners owners)
     {
         owners = null;
-        if (string.IsNullOrWhiteSpace(runtimeId)
-            || !IsAdmitted(definitions, definition)
-            || statuses == null
-            || moneyAccount == null
-            || commercialKnowledge == null
-            || !ReferenceEquals(commercialKnowledge.Definitions, definitions)
-            || (inventory != null && !ReferenceEquals(inventory.Definitions, definitions))
-            || !DailyV1NpcStatusOwner.TryCreate(definitions, statuses, out DailyV1NpcStatusOwner statusOwner))
+        if (definitions == null
+            || !DailyV1NpcMerchantTradePlanOwner.TryCreateInitial(
+                definitions, out DailyV1NpcMerchantTradePlanOwner merchantTradePlan))
             return false;
-
-        owners = new DailyV1NpcRuntimeOwners(
-            runtimeId, definitions, definition, inventory, statusOwner, moneyAccount, commercialKnowledge);
-        return true;
+        return TryCreateBound(runtimeId, definitions, definition, statuses, inventory,
+            moneyAccount, commercialKnowledge, merchantTradePlan, out owners);
     }
 
     internal static bool TryCreateBound(
@@ -98,9 +127,17 @@ internal sealed class DailyV1NpcRuntimeOwners
         IEnumerable<DailyV1StatusDefinition> statuses,
         DailyV1InventoryOwner inventory,
         MoneyAccountRuntime moneyAccount,
-        out DailyV1NpcRuntimeOwners owners) =>
-        TryCreateBound(runtimeId, definitions, definition, statuses, inventory, moneyAccount,
-            definitions == null ? null : new DailyV1CommercialKnowledgeOwner(definitions), out owners);
+        out DailyV1NpcRuntimeOwners owners)
+    {
+        owners = null;
+        if (definitions == null
+            || !DailyV1NpcMerchantTradePlanOwner.TryCreateInitial(
+                definitions, out DailyV1NpcMerchantTradePlanOwner merchantTradePlan))
+            return false;
+        return TryCreateBound(runtimeId, definitions, definition, statuses, inventory,
+            moneyAccount, new DailyV1CommercialKnowledgeOwner(definitions),
+            merchantTradePlan, out owners);
+    }
 
     private static bool IsAdmitted(
         DailyV1EffectiveDefinitions definitions,

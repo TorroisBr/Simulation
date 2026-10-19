@@ -2685,7 +2685,10 @@ public class TesteSimulacao : MonoBehaviour
                     selectedNpcOwners.RuntimeId, selectedNpcOwners.Definition,
                     selectedDefinitions, selectedBindings, selectedNpcOwners, startingCity);
                 if (!selectedNpc.TryBindSelectedDailyV1Definition(
-                        selectedNpcOwners.Definition, selectedDefinitions, selectedBindings))
+                        selectedNpcOwners.Definition, selectedDefinitions, selectedBindings,
+                        cityRuntimeId => CityRuntimeList.Find(city => city != null
+                            && string.Equals(city.RuntimeId, cityRuntimeId,
+                                System.StringComparison.Ordinal))))
                     throw new System.InvalidOperationException(
                         "The selected NPC Unity/P12 identity projection could not attach to its Core-owned runtime.");
                 if (!runtimeIdentityRegistry.RegisterNpc(selectedNpc))

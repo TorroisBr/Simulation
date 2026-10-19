@@ -2332,6 +2332,7 @@ public sealed class SimulationBootstrapCompositionTests
     {
         SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
         NpcData npc = SimulationTestFactory.CreateNpc("typed-npc-without-bindings");
+        CityData planCityData = SimulationTestFactory.CreateCityData("typed-npc-plan-city");
         NpcStatusData status = SimulationTestFactory.CreateStatus("typed-npc-without-bindings-status");
         ItemData item = SimulationTestFactory.CreateItem("typed-npc-without-bindings-item");
         NpcActionData action = SimulationTestFactory.CreateAction(
@@ -2345,6 +2346,7 @@ public sealed class SimulationBootstrapCompositionTests
             averageUnitCost = item.basePrice
         });
         config.Npcs.Add(npcConfiguration);
+        config.Cities.Add(planCityData);
         config.Statuses.Add(status);
         config.Actions.Add(action);
 
@@ -2355,6 +2357,10 @@ public sealed class SimulationBootstrapCompositionTests
             config, effective, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
         DailyV1NpcDefinition definition = graph.Npcs[npc.DefinitionId];
         DailyV1ItemDefinition itemDefinition = graph.Items[item.DefinitionId];
+        DailyV1CityDefinition planCityDefinition = graph.Cities[planCityData.DefinitionId];
+        CityRuntime planCity = CityRuntime.CreateSelectedDailyV1(
+            "typed-npc-plan-city-runtime", planCityDefinition, graph, bindings,
+            new SpatialLocationRuntime("typed-npc-plan-city-location"));
 
         npc.statusPadrao.Clear();
 
@@ -2374,12 +2380,39 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(runtime.TryAddSelectedDailyV1InventoryItem(itemDefinition, 2, 5f), Is.True);
         Assert.That(runtime.Inventory.SelectedDailyV1Owner.GetAmount(itemDefinition), Is.EqualTo(2));
 
-        Assert.That(runtime.TryBindSelectedDailyV1Definition(definition, graph, bindings), Is.True,
+        Assert.That(runtime.TryBindSelectedDailyV1Definition(definition, graph, bindings,
+            runtimeId => string.Equals(runtimeId, planCity.RuntimeId, System.StringComparison.Ordinal)
+                ? planCity : null), Is.True,
             "The Unity compatibility projection must attach to the existing owners without rebuilding them.");
         Assert.That(runtime.NpcData, Is.SameAs(npc));
         Assert.That(runtime.CurrentStatus, Has.Count.EqualTo(1));
         Assert.That(runtime.CurrentStatus[0], Is.SameAs(status));
         Assert.That(runtime.SelectedRuntimeOwners.Inventory, Is.SameAs(runtime.Inventory.SelectedDailyV1Owner));
+
+        MerchantTradePlanRuntime planProjection = runtime.MerchantTradePlan;
+        DailyV1NpcMerchantTradePlanOwner planAuthority = runtime.SelectedRuntimeOwners.MerchantTradePlan;
+        Assert.That(runtime.MerchantTradePlanAuthority, Is.SameAs(planAuthority));
+        Assert.That(planProjection.TryBindSelectedOwner(planAuthority, bindings,
+            runtimeId => string.Equals(runtimeId, planCity.RuntimeId, System.StringComparison.Ordinal)
+                ? planCity : null), Is.True,
+            "Rebinding the same owner with an equivalent resolver remains idempotent.");
+        runtime.SetMerchantTradePlan(item, planCity, planCity, 3, 4f, "decision.core-plan");
+        Assert.That(planAuthority.ItemDefinition, Is.SameAs(itemDefinition));
+        Assert.That(planAuthority.OriginCityRuntimeId, Is.EqualTo(planCity.RuntimeId));
+        Assert.That(planAuthority.TargetCityRuntimeId, Is.EqualTo(planCity.RuntimeId));
+        Assert.That(planAuthority.Revision, Is.EqualTo(1L));
+        Assert.That(planProjection.Item, Is.SameAs(item));
+        Assert.That(planProjection.OriginCity, Is.SameAs(planCity));
+        Assert.That(planProjection.TargetCity, Is.SameAs(planCity));
+        Assert.That(planProjection.CaptureOwnerState().Item, Is.SameAs(item));
+        planProjection.IncrementWaitDayAtDestination();
+        Assert.That(planAuthority.WaitDaysAtDestination, Is.EqualTo(1));
+        Assert.That(planAuthority.Revision, Is.EqualTo(2L));
+        ItemData foreignItem = SimulationTestFactory.CreateItem(item.DefinitionId);
+        runtime.SetMerchantTradePlan(foreignItem, planCity, planCity, 7, 9f);
+        Assert.That(planAuthority.ItemDefinition, Is.SameAs(itemDefinition),
+            "A non-admitted authoring alias cannot replace the typed plan identity.");
+        Assert.That(planAuthority.Revision, Is.EqualTo(2L));
 
         DailyV1ActionDefinition actionDefinition = graph.Actions.Values.First();
         Assert.That(bindings.TryGetAsset(actionDefinition, out NpcActionData actionAsset), Is.True);

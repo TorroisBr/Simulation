@@ -136,6 +136,8 @@ public static class DailyV1DefinitionAdapter
         private readonly Dictionary<DailyV1DefinitionRecord, object> assetsByNode =
             new Dictionary<DailyV1DefinitionRecord, object>(ReferenceEqualityComparer.Instance);
 
+        internal DailyV1EffectiveDefinitions Definitions { get; private set; }
+
         internal bool TryGet(CityData asset, out DailyV1CityDefinition node) => TryGetNode(asset, out node);
         internal bool TryGet(ItemData asset, out DailyV1ItemDefinition node) => TryGetNode(asset, out node);
         internal bool TryGet(NpcData asset, out DailyV1NpcDefinition node) => TryGetNode(asset, out node);
@@ -181,6 +183,7 @@ public static class DailyV1DefinitionAdapter
             }
 
             var candidate = new SelectedBindings();
+            candidate.Definitions = graph;
             foreach (ScriptableObject asset in assets)
             {
                 if (asset == null)

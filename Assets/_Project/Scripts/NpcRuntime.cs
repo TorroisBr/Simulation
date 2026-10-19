@@ -239,6 +239,8 @@ public class NpcRuntime : ICapabilityConditionSource
     public MerchantTradePlanRuntime MerchantTradePlan => merchantTradePlan ?? (merchantTradePlan = new MerchantTradePlanRuntime());
     public NpcTravelPlanRuntime TravelPlan => travelPlan ?? (travelPlan = new NpcTravelPlanRuntime());
     internal MerchantTradePlanRuntime ExistingMerchantTradePlan => merchantTradePlan;
+    internal object MerchantTradePlanAuthority => selectedRuntimeOwners?.MerchantTradePlan
+        ?? (object)merchantTradePlan;
     internal NpcTravelPlanRuntime ExistingTravelPlan => travelPlan;
     public CommercialKnowledgeRuntime CommercialKnowledge => commercialKnowledge ?? (commercialKnowledge = new CommercialKnowledgeRuntime());
     internal CommercialKnowledgeRuntime ExistingCommercialKnowledge => commercialKnowledge;
@@ -1305,7 +1307,8 @@ public class NpcRuntime : ICapabilityConditionSource
     internal bool TryBindSelectedDailyV1Definition(
         DailyV1NpcDefinition definition,
         DailyV1EffectiveDefinitions definitions,
-        DailyV1DefinitionAdapter.SelectedBindings bindings)
+        DailyV1DefinitionAdapter.SelectedBindings bindings,
+        Func<string, CityRuntime> resolveCityRuntime = null)
     {
 		if (definition == null || definitions == null || bindings == null
 			|| !bindings.TryGetAsset(definition, out NpcData assetIdentity)
@@ -1376,6 +1379,9 @@ public class NpcRuntime : ICapabilityConditionSource
                 || !CommercialKnowledge.TryBindSelectedDailyV1Owner(
                     selectedRuntimeOwners.CommercialKnowledge, bindings))
                 return false;
+            if (!MerchantTradePlan.TryBindSelectedOwner(
+                    selectedRuntimeOwners.MerchantTradePlan, bindings,
+                    resolveCityRuntime ?? (_ => null))) return false;
 
             // A detached P12 stage already owns the canonical status nodes.
             // Bind only the Unity compatibility projection here; never rebuild
@@ -1391,6 +1397,11 @@ public class NpcRuntime : ICapabilityConditionSource
         }
 
         DailyV1ActionDefinition stagedCurrentAction = null;
+        DailyV1NpcMerchantTradePlanOwner stagedMerchantPlan = selectedRuntimeOwners?.MerchantTradePlan
+            ?? ExistingMerchantTradePlan?.SelectedOwner;
+        if (stagedMerchantPlan == null
+            && !DailyV1NpcMerchantTradePlanOwner.TryCreateInitial(definitions, out stagedMerchantPlan))
+            return false;
         if (!CommercialKnowledge.TryCreateSelectedOwner(definitions, bindings,
                 out DailyV1CommercialKnowledgeOwner stagedCommercialKnowledge))
             return false;
@@ -1404,6 +1415,7 @@ public class NpcRuntime : ICapabilityConditionSource
                 runtimeId, definitions, definition, stagedStatuses,
                 ExistingInventory?.SelectedDailyV1Owner, moneyAccount,
                 stagedCommercialKnowledge,
+                stagedMerchantPlan,
                 out DailyV1NpcRuntimeOwners stagedOwners))
             return false;
         if (!stagedOwners.ActionSlot.TrySetCurrentAction(stagedCurrentAction)
@@ -1419,6 +1431,9 @@ public class NpcRuntime : ICapabilityConditionSource
             && ExistingInventory.SelectedDailyV1Owner != null
             && !ExistingInventory.TryBindSelectedDailyV1Owner(definitions, bindings)) return false;
         if (!CommercialKnowledge.TryBindSelectedDailyV1Owner(stagedCommercialKnowledge, bindings)) return false;
+        if (!MerchantTradePlan.TryBindSelectedOwner(
+                stagedOwners.MerchantTradePlan, bindings,
+                resolveCityRuntime ?? (_ => null))) return false;
         selectedRuntimeOwners = stagedOwners;
         selectedDefinitionBindings = bindings;
         return true;
@@ -1510,6 +1525,10 @@ public class NpcRuntime : ICapabilityConditionSource
             || state.CommercialKnowledge == null || state.SpatialKnowledge == null
             || state.ExplorableSiteKnowledge == null || state.LocalTopologyKnowledge == null
             || state.AdventureSiteIntelKnowledge == null
+            || (state.SelectedDefinitions != null
+                && (state.SelectedMerchantTradePlanOwner == null
+                    || !ReferenceEquals(state.SelectedMerchantTradePlanOwner.Definitions,
+                        state.SelectedDefinitions)))
             || state.LifeStateRevision < 0L || state.ResidenceRevision < 0L
             || state.CrimeJusticeRevision < 0L || state.CurrentActionRevision < 0L
             || state.TravelStateRevision < 0L || state.HiddenDaysRemaining < 0
@@ -1569,6 +1588,7 @@ public class NpcRuntime : ICapabilityConditionSource
                     state.Inventory.SelectedDailyV1Owner,
                     state.MoneyAccount,
                     state.CommercialKnowledge.SelectedOwner,
+                    state.SelectedMerchantTradePlanOwner,
                     out stagedSelectedOwners))
                 return false;
 

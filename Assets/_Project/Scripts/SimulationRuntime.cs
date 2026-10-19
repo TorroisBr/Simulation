@@ -470,8 +470,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         new Dictionary<SpatialKnowledgeRuntime, P12NpcOwnerMutationBinding>();
     private readonly Dictionary<CommercialKnowledgeRuntime, P12NpcOwnerMutationBinding> npcCommercialKnowledgeMutationBindings =
         new Dictionary<CommercialKnowledgeRuntime, P12NpcOwnerMutationBinding>();
-    private readonly Dictionary<MerchantTradePlanRuntime, P12NpcOwnerMutationBinding> npcMerchantPlanMutationBindings =
-        new Dictionary<MerchantTradePlanRuntime, P12NpcOwnerMutationBinding>();
+    private readonly Dictionary<object, P12NpcOwnerMutationBinding> npcMerchantPlanMutationBindings =
+        new Dictionary<object, P12NpcOwnerMutationBinding>();
     private readonly Dictionary<NpcTravelPlanRuntime, P12NpcOwnerMutationBinding> npcTravelPlanMutationBindings =
         new Dictionary<NpcTravelPlanRuntime, P12NpcOwnerMutationBinding>();
     private readonly Dictionary<NpcRuntime, P12NpcOwnerMutationBinding> npcTravelStateMutationBindings =
@@ -3278,9 +3278,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     throw new InvalidOperationException("NPC plan census witness is not an exact current owner witness.");
 
                 if (provider.Kind == NpcPlanCensusProvider.MerchantTradePlanKind
-                    && provider.PlanOwner is MerchantTradePlanRuntime merchantPlan
-                    && ReferenceEquals(registeredNpc.ExistingMerchantTradePlan, merchantPlan))
-                    AddP12NpcOwnerMutationSection(merchantPlanBindings, merchantPlan, witness.SectionId);
+                    && (provider.PlanOwner is MerchantTradePlanRuntime legacyMerchantPlan
+                        && ReferenceEquals(registeredNpc.ExistingMerchantTradePlan, legacyMerchantPlan)
+                        || provider.PlanOwner is DailyV1NpcMerchantTradePlanOwner selectedMerchantPlan
+                        && ReferenceEquals(registeredNpc.SelectedRuntimeOwners?.MerchantTradePlan,
+                            selectedMerchantPlan)))
+                    AddP12NpcOwnerMutationSection(merchantPlanBindings, provider.PlanOwner, witness.SectionId);
                 else if (provider.Kind == NpcPlanCensusProvider.TravelPlanKind
                     && provider.PlanOwner is NpcTravelPlanRuntime travelPlan
                     && ReferenceEquals(registeredNpc.ExistingTravelPlan, travelPlan))
@@ -3383,16 +3386,30 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             npcCommercialKnowledgeMutationBindings,
             (binding, admission, committed) => ((CommercialKnowledgeRuntime)binding.Owner)
                 .BindP12MutationBoundary(admission, committed));
-        BindP12MerchantOwnerMutationBoundaries(
-            merchantPlanBindings,
-            npcMerchantPlanMutationBindings,
-            (binding, admission, committed) => ((MerchantTradePlanRuntime)binding.Owner)
-                .BindP12MutationBoundary(admission, committed));
+        foreach (P12NpcOwnerMutationBinding binding in merchantPlanBindings)
+        {
+            Array.Sort(binding.SectionIds, StringComparer.Ordinal);
+            binding.Admission = () => CanCommitP12MerchantOwnerMutation(binding);
+            binding.Committed = () => NotifyP12MerchantOwnerMutation(binding);
+            NpcRuntime ownerNpc = FindNpcForMerchantPlanAuthority(binding.Owner);
+            if (ownerNpc == null || !ReferenceEquals(ownerNpc.MerchantTradePlanAuthority, binding.Owner))
+                throw new InvalidOperationException("The merchant-plan census owner has no exact NPC projection.");
+            ownerNpc.MerchantTradePlan.BindP12MutationBoundary(binding.Admission, binding.Committed);
+            npcMerchantPlanMutationBindings.Add(binding.Owner, binding);
+        }
         BindP12MerchantOwnerMutationBoundaries(
             travelPlanBindings,
             npcTravelPlanMutationBindings,
             (binding, admission, committed) => ((NpcTravelPlanRuntime)binding.Owner)
                 .BindP12MutationBoundary(admission, committed));
+    }
+
+    private NpcRuntime FindNpcForMerchantPlanAuthority(object authority)
+    {
+        if (authority == null) return null;
+        foreach (NpcRuntime npc in npcRuntimes)
+            if (npc != null && ReferenceEquals(npc.MerchantTradePlanAuthority, authority)) return npc;
+        return null;
     }
 
     private void BindP12MerchantOwnerMutationBoundaries<TOwner>(
@@ -3446,10 +3463,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             else
                 succeeded = false;
         }
-        foreach (KeyValuePair<MerchantTradePlanRuntime, P12NpcOwnerMutationBinding> pair in
-            new List<KeyValuePair<MerchantTradePlanRuntime, P12NpcOwnerMutationBinding>>(npcMerchantPlanMutationBindings))
+        foreach (KeyValuePair<object, P12NpcOwnerMutationBinding> pair in
+            new List<KeyValuePair<object, P12NpcOwnerMutationBinding>>(npcMerchantPlanMutationBindings))
         {
-            if (pair.Key.UnbindP12MutationBoundary(pair.Value.Admission, pair.Value.Committed))
+            NpcRuntime ownerNpc = FindNpcForMerchantPlanAuthority(pair.Key);
+            if (ownerNpc != null
+                && ownerNpc.MerchantTradePlan.UnbindP12MutationBoundary(pair.Value.Admission, pair.Value.Committed))
                 npcMerchantPlanMutationBindings.Remove(pair.Key);
             else
                 succeeded = false;
@@ -3601,6 +3620,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             prefix = NpcPlanCensusProvider.MerchantTradePlanSectionPrefix;
             expectedSectionCount = 1;
         }
+        else if (binding.Owner is DailyV1NpcMerchantTradePlanOwner selectedMerchantPlan)
+        {
+            registered = npcMerchantPlanMutationBindings.TryGetValue(selectedMerchantPlan,
+                    out P12NpcOwnerMutationBinding merchantKnown)
+                && ReferenceEquals(merchantKnown, binding);
+            prefix = NpcPlanCensusProvider.MerchantTradePlanSectionPrefix;
+            expectedSectionCount = 1;
+        }
         else if (binding.Owner is NpcTravelPlanRuntime travelPlan)
         {
             registered = npcTravelPlanMutationBindings.TryGetValue(travelPlan, out P12NpcOwnerMutationBinding travelKnown)
@@ -3628,6 +3655,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     ? ReferenceEquals(npc.ExistingCommercialKnowledge, commercialOwner)
                     : binding.Owner is MerchantTradePlanRuntime merchantOwner
                         ? ReferenceEquals(npc.ExistingMerchantTradePlan, merchantOwner)
+                        : binding.Owner is DailyV1NpcMerchantTradePlanOwner selectedMerchantOwner
+                            ? ReferenceEquals(npc.SelectedRuntimeOwners?.MerchantTradePlan, selectedMerchantOwner)
                         : binding.Owner is NpcTravelPlanRuntime travelOwner
                             && ReferenceEquals(npc.ExistingTravelPlan, travelOwner);
             if (!owns) continue;
@@ -4338,7 +4367,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             || npc.ExistingTravelPlan == null
             || npc.ExistingSpatialKnowledge == null
             || npc.ExistingCommercialKnowledge == null
-            || !npcMerchantPlanMutationBindings.TryGetValue(npc.ExistingMerchantTradePlan, out P12NpcOwnerMutationBinding merchantPlanBinding)
+            || !npcMerchantPlanMutationBindings.TryGetValue(npc.MerchantTradePlanAuthority, out P12NpcOwnerMutationBinding merchantPlanBinding)
             || !npcTravelPlanMutationBindings.TryGetValue(npc.ExistingTravelPlan, out P12NpcOwnerMutationBinding travelPlanBinding)
             || !npcSpatialKnowledgeMutationBindings.TryGetValue(npc.ExistingSpatialKnowledge, out P12NpcOwnerMutationBinding spatialBinding)
             || !npcCommercialKnowledgeMutationBindings.TryGetValue(npc.ExistingCommercialKnowledge, out P12NpcOwnerMutationBinding commercialBinding)

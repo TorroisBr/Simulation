@@ -42,7 +42,9 @@ public static class NpcPlanCensusProvider
         public OwnerSectionCensusWitness GetCurrentCensus()
         {
             long revision = kind == MerchantTradePlanKind
-                ? ((MerchantTradePlanRuntime)planOwner).Revision
+                ? planOwner is DailyV1NpcMerchantTradePlanOwner selectedPlan
+                    ? selectedPlan.Revision
+                    : ((MerchantTradePlanRuntime)planOwner).Revision
                 : ((NpcTravelPlanRuntime)planOwner).Revision;
             return new OwnerSectionCensusWitness(sectionId, SchemaVersion, planOwner, 1, revision);
         }
@@ -78,7 +80,7 @@ public static class NpcPlanCensusProvider
                     "NPC plan census requires non-null roster actors with unique RuntimeIds.");
             }
 
-            MerchantTradePlanRuntime merchantPlan = npc.ExistingMerchantTradePlan;
+            object merchantPlan = npc.MerchantTradePlanAuthority;
             NpcTravelPlanRuntime travelPlan = npc.ExistingTravelPlan;
             if (merchantPlan == null || travelPlan == null)
             {
@@ -97,7 +99,7 @@ public static class NpcPlanCensusProvider
         {
             providers[index++] = new SectionProvider(
                 npc,
-                npc.ExistingMerchantTradePlan,
+                npc.MerchantTradePlanAuthority,
                 MerchantTradePlanKind,
                 SectionIdFor(MerchantTradePlanKind, npc.RuntimeId));
             providers[index++] = new SectionProvider(

@@ -844,7 +844,7 @@ public sealed class ContinuationCensusProtocol
                 OwnerSectionContract contract = new OwnerSectionContract(
                     sectionId, NpcPlanCensusProvider.SchemaVersion, OwnerSectionRole.Required);
                 object expectedOwner = planProvider.Kind == NpcPlanCensusProvider.MerchantTradePlanKind
-                    ? (object)planProvider.NpcOwner.ExistingMerchantTradePlan
+                    ? planProvider.NpcOwner.MerchantTradePlanAuthority
                     : planProvider.NpcOwner.ExistingTravelPlan;
                 if (string.IsNullOrWhiteSpace(planProvider.RuntimeId)
                     || planProvider.NpcOwner == null

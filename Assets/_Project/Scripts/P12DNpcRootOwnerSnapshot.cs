@@ -413,6 +413,7 @@ internal sealed class P12DNpcStagedOwnerState
     internal InventoryRuntime Inventory { get; set; }
     internal MoneyAccountRuntime MoneyAccount { get; set; }
     internal MerchantTradePlanRuntime MerchantTradePlan { get; set; }
+    internal DailyV1NpcMerchantTradePlanOwner SelectedMerchantTradePlanOwner { get; set; }
     internal NpcTravelPlanRuntime TravelPlan { get; set; }
     internal CommercialKnowledgeRuntime CommercialKnowledge { get; set; }
     internal SpatialKnowledgeRuntime SpatialKnowledge { get; set; }
@@ -549,6 +550,7 @@ internal static class P12DNpcRootOwnerSnapshot
         InventoryRuntime inventory = npc.ExistingInventory;
         MoneyAccountRuntime account = npc.MoneyAccount;
         MerchantTradePlanRuntime merchantPlan = npc.ExistingMerchantTradePlan;
+        object merchantPlanAuthority = npc.MerchantTradePlanAuthority;
         NpcTravelPlanRuntime travelPlan = npc.ExistingTravelPlan;
         CommercialKnowledgeRuntime commercial = npc.ExistingCommercialKnowledge;
         SpatialKnowledgeRuntime spatial = npc.ExistingSpatialKnowledge;
@@ -570,12 +572,13 @@ internal static class P12DNpcRootOwnerSnapshot
             statuses = npc.ExistingCurrentStatus;
         }
 
-        if (inventory == null || account == null || merchantPlan == null || travelPlan == null
+        if (inventory == null || account == null || merchantPlan == null
+            || merchantPlanAuthority == null || travelPlan == null
             || commercial == null || spatial == null || siteKnowledge == null
             || localTopology == null || adventure == null
             || (!npc.UsesSelectedDailyV1Definitions && statuses == null)
             || !inventoryOwners.Add(inventory) || !accountOwners.Add(account)
-            || !merchantPlanOwners.Add(merchantPlan) || !travelPlanOwners.Add(travelPlan)
+            || !merchantPlanOwners.Add(merchantPlanAuthority) || !travelPlanOwners.Add(travelPlan)
             || !commercialOwners.Add(commercial) || !spatialOwners.Add(spatial)
             || !siteKnowledgeOwners.Add(siteKnowledge) || !adventureOwners.Add(adventure)
             || !string.Equals(spatial.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
@@ -612,7 +615,8 @@ internal static class P12DNpcRootOwnerSnapshot
             return false;
         }
 
-        if (!TryRequireNpcSections(npc, token, inventory, account, merchantPlan,
+        if (!TryRequireNpcSections(npc, token, inventory, account, merchantPlanAuthority,
+                merchantPlan.Revision,
                 travelPlan, commercial, spatial, siteKnowledge, localTopology, adventure,
                 out failure))
             return false;
@@ -1160,11 +1164,18 @@ internal static class P12DNpcRootOwnerSnapshot
 
             P12DNpcMerchantPlanValue merchantValue = f.MerchantPlan;
             ItemData merchantItem = null;
+            DailyV1ItemDefinition selectedMerchantItem = null;
             CityRuntime merchantOriginCity = null;
             CityRuntime merchantTargetCity = null;
             if (merchantValue == null
                 || (merchantValue.ItemDefinitionId != null
                     && !itemsByDefinition.TryGetValue(merchantValue.ItemDefinitionId, out merchantItem))
+                || (selectedDefinitions != null && merchantValue.ItemDefinitionId != null
+                    && (!selectedDefinitions.Items.TryGetValue(merchantValue.ItemDefinitionId,
+                            out selectedMerchantItem)
+                        || selectedMerchantItem == null
+                        || !string.Equals(selectedMerchantItem.DefinitionId,
+                            merchantValue.ItemDefinitionId, StringComparison.Ordinal)))
                 || !ResolveNullable(merchantValue.OriginCityRuntimeId, citiesById, out merchantOriginCity)
                 || !ResolveNullable(merchantValue.TargetCityRuntimeId, citiesById, out merchantTargetCity)
                 || !MerchantTradePlanRuntime.TryCreateFromOwnerSnapshot(
@@ -1173,6 +1184,20 @@ internal static class P12DNpcRootOwnerSnapshot
                     merchantValue.PurchasePricePerItem, merchantValue.WaitDaysAtDestination,
                     merchantValue.PendingTravelDays, merchantValue.OriginDecisionId,
                     merchantValue.Revision, out MerchantTradePlanRuntime stagedMerchantPlan))
+            {
+                failure = P12DNpcRootOwnerSnapshotFailure.InvalidReference;
+                return false;
+            }
+
+            DailyV1NpcMerchantTradePlanOwner selectedMerchantPlanOwner = null;
+            if (selectedDefinitions != null
+                && !DailyV1NpcMerchantTradePlanOwner.TryCreateFromOwnerSnapshot(
+                    selectedDefinitions, selectedMerchantItem,
+                    merchantValue.OriginCityRuntimeId, merchantValue.TargetCityRuntimeId,
+                    merchantValue.PlannedAmount, merchantValue.RawRemainingAmount,
+                    merchantValue.PurchasePricePerItem, merchantValue.WaitDaysAtDestination,
+                    merchantValue.PendingTravelDays, merchantValue.OriginDecisionId,
+                    merchantValue.Revision, out selectedMerchantPlanOwner))
             {
                 failure = P12DNpcRootOwnerSnapshotFailure.InvalidReference;
                 return false;
@@ -1269,6 +1294,7 @@ internal static class P12DNpcRootOwnerSnapshot
                 Inventory = inventory,
                 MoneyAccount = moneyAccount,
                 MerchantTradePlan = stagedMerchantPlan,
+                SelectedMerchantTradePlanOwner = selectedMerchantPlanOwner,
                 TravelPlan = stagedTravelPlan,
                 CommercialKnowledge = stagedCommercial,
                 SpatialKnowledge = stagedSpatial,
@@ -1453,7 +1479,8 @@ internal static class P12DNpcRootOwnerSnapshot
     private static bool TryRequireNpcSections(
         NpcRuntime npc, DailyCaptureEligibilityToken token,
         InventoryRuntime inventory, MoneyAccountRuntime account,
-        MerchantTradePlanRuntime merchantPlan, NpcTravelPlanRuntime travelPlan,
+        object merchantPlanAuthority, long merchantPlanRevision,
+        NpcTravelPlanRuntime travelPlan,
         CommercialKnowledgeRuntime commercial, SpatialKnowledgeRuntime spatial,
         ExplorableSiteKnowledgeRuntime siteKnowledge, LocalTopologyKnowledgeRuntime local,
         AdventureSiteIntelKnowledgeRuntime adventure,
@@ -1481,7 +1508,7 @@ internal static class P12DNpcRootOwnerSnapshot
             || !TryRequireSection(token, NpcPlanCensusProvider.SectionIdFor(
                     NpcPlanCensusProvider.MerchantTradePlanKind, npc.RuntimeId),
                 NpcPlanCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                merchantPlan, 1, merchantPlan.Revision)
+                 merchantPlanAuthority, 1, merchantPlanRevision)
             || !TryRequireSection(token, NpcPlanCensusProvider.SectionIdFor(
                     NpcPlanCensusProvider.TravelPlanKind, npc.RuntimeId),
                 NpcPlanCensusProvider.SchemaVersion, OwnerSectionRole.Required,

@@ -57,6 +57,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 || !definitions.Npcs.TryGetValue(owner.Definition.DefinitionId, out DailyV1NpcDefinition npc)
                 || !ReferenceEquals(npc, owner.Definition)
                 || !runtimeIds.Add(owner.RuntimeId)
+                || !MatchesCity(cities, owner.MerchantTradePlan?.OriginCityRuntimeId)
+                || !MatchesCity(cities, owner.MerchantTradePlan?.TargetCityRuntimeId)
                 || !MatchesCityLocation(cities, owner.Travel?.CurrentCityRuntimeId,
                     owner.Travel?.CurrentLocationRuntimeId)
                 || !MatchesCityLocation(cities, owner.Travel?.DestinationCityRuntimeId,
@@ -152,6 +154,17 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         return false;
     }
 
+    private static bool MatchesCity(
+        IReadOnlyList<DailyV1CityRuntimeOwners> cities,
+        string cityRuntimeId)
+    {
+        if (cityRuntimeId == null) return true;
+        if (string.IsNullOrWhiteSpace(cityRuntimeId)) return false;
+        foreach (DailyV1CityRuntimeOwners city in cities)
+            if (string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal)) return true;
+        return false;
+    }
+
     internal static bool TryCreateInitialNpcOwner(
         string runtimeId,
         DailyV1EffectiveDefinitions definitions,
@@ -180,11 +193,33 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         DailyV1CommercialKnowledgeOwner commercialKnowledge,
         out DailyV1NpcRuntimeOwners owners)
     {
+        return TryCreateBoundNpcOwner(runtimeId, definitions, definition, statuses,
+            inventory, moneyAccount, commercialKnowledge, null, out owners);
+    }
+
+    internal static bool TryCreateBoundNpcOwner(
+        string runtimeId,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1NpcDefinition definition,
+        IEnumerable<DailyV1StatusDefinition> statuses,
+        DailyV1InventoryOwner inventory,
+        MoneyAccountRuntime moneyAccount,
+        DailyV1CommercialKnowledgeOwner commercialKnowledge,
+        DailyV1NpcMerchantTradePlanOwner merchantTradePlan,
+        out DailyV1NpcRuntimeOwners owners)
+    {
         owners = null;
-        if (!DailyV1NpcRuntimeOwners.TryCreateBound(
-                runtimeId, definitions, definition, statuses, inventory, moneyAccount, commercialKnowledge,
-                out DailyV1NpcRuntimeOwners candidate)
-            || !TryCreate(definitions, Array.Empty<DailyV1CityRuntimeOwners>(), new[] { candidate }, out _))
+        bool created = merchantTradePlan == null
+            ? DailyV1NpcRuntimeOwners.TryCreateBound(
+                runtimeId, definitions, definition, statuses, inventory, moneyAccount,
+                commercialKnowledge, out DailyV1NpcRuntimeOwners candidate)
+            : DailyV1NpcRuntimeOwners.TryCreateBound(
+                runtimeId, definitions, definition, statuses, inventory, moneyAccount,
+                commercialKnowledge, merchantTradePlan, out candidate);
+        // A bound NPC can be staged before its City owners are composed (notably
+        // during detached P12 restore). Cross-owner City joins are validated by
+        // the complete runtime graph after all City authorities are available.
+        if (!created || candidate == null || !ReferenceEquals(candidate.Definitions, definitions))
             return false;
 
         owners = candidate;
