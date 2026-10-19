@@ -61,9 +61,12 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         Assert.That(market.TryInitializeFromCity(city), Is.True);
         PopulationEconomyRuntime economy = new PopulationEconomyRuntime(
             runtimeId, ConsumptionPaymentMode.Free, 0f, MarketLiquidityMode.Open);
+        Assert.That(DailyV1CityNpcPresenceOwner.TryCreateInitial(
+            runtimeId, out DailyV1CityNpcPresenceOwner npcPresence), Is.True);
 
         Assert.That(DailyV1CityRuntimeOwners.TryCreateBound(
             runtimeId, definitions, city, population, market, counterparty, economy,
+            npcPresence,
             out DailyV1CityRuntimeOwners owners), Is.True);
         Assert.That(owners.Definitions, Is.SameAs(definitions));
         Assert.That(owners.Definition, Is.SameAs(city));
@@ -71,6 +74,7 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         Assert.That(owners.Market, Is.SameAs(market));
         Assert.That(owners.Counterparty, Is.SameAs(counterparty));
         Assert.That(owners.PopulationEconomy, Is.SameAs(economy));
+        Assert.That(owners.NpcPresence, Is.SameAs(npcPresence));
     }
 
     [Test]
@@ -87,14 +91,17 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         Assert.That(foreignMarket.TryInitializeFromCity(otherDefinitions.Cities[city.DefinitionId]), Is.True);
         PopulationEconomyRuntime economy = new PopulationEconomyRuntime(
             runtimeId, ConsumptionPaymentMode.Free, 0f, MarketLiquidityMode.Open);
+        Assert.That(DailyV1CityNpcPresenceOwner.TryCreateInitial(
+            runtimeId, out DailyV1CityNpcPresenceOwner npcPresence), Is.True);
 
         Assert.That(DailyV1CityRuntimeOwners.TryCreateBound(
             runtimeId, definitions, city, population, foreignMarket, counterparty, economy,
+            npcPresence,
             out DailyV1CityRuntimeOwners owners), Is.False);
         Assert.That(owners, Is.Null);
         Assert.That(DailyV1CityRuntimeOwners.TryCreateBound(
             runtimeId, definitions, city, population, foreignMarket,
-            MarketCounterpartyRuntime.CreateOpen("other-city"), economy, out owners), Is.False);
+            MarketCounterpartyRuntime.CreateOpen("other-city"), economy, npcPresence, out owners), Is.False);
         Assert.That(owners, Is.Null);
     }
 
@@ -117,6 +124,51 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         Assert.That(graph.Npcs, Has.Count.EqualTo(1));
         Assert.That(graph.Cities[0], Is.SameAs(cityOwners));
         Assert.That(graph.Npcs[0], Is.SameAs(npcOwners));
+        Assert.That(cityOwners.NpcPresence.OrderedNpcRuntimeIds, Is.Empty);
+        Assert.That(cityOwners.NpcPresence.Revision, Is.Zero);
+    }
+
+    [Test]
+    public void CityPresenceOwnerPreservesOrderedIdentityAndAdvancesOnlyForMembershipChanges()
+    {
+        Assert.That(DailyV1CityNpcPresenceOwner.TryCreateInitial(
+            "city-runtime", out DailyV1CityNpcPresenceOwner owner), Is.True);
+
+        Assert.That(owner.TryAdd("npc-b"), Is.True);
+        Assert.That(owner.TryAdd("npc-a"), Is.True);
+        Assert.That(owner.TryAdd("npc-b"), Is.True, "Adding the exact existing identity is idempotent.");
+        Assert.That(owner.OrderedNpcRuntimeIds, Is.EqualTo(new[] { "npc-b", "npc-a" }));
+        Assert.That(owner.Revision, Is.EqualTo(2L));
+
+        Assert.That(owner.TryRemove("npc-b"), Is.True);
+        Assert.That(owner.OrderedNpcRuntimeIds, Is.EqualTo(new[] { "npc-a" }));
+        Assert.That(owner.Revision, Is.EqualTo(3L));
+        Assert.That(owner.TryRemove("npc-b"), Is.True);
+        Assert.That(owner.Revision, Is.EqualTo(3L), "Removing an absent identity is idempotent.");
+    }
+
+    [Test]
+    public void CityPresenceOwnerRejectsAliasedSnapshotIdentityAndSaturatedMutation()
+    {
+        Assert.That(DailyV1CityNpcPresenceOwner.TryCreateBound(
+            "city-runtime", new[] { "npc-b", "npc-a" }, 17L,
+            out DailyV1CityNpcPresenceOwner restored), Is.True);
+        Assert.That(restored.CityRuntimeId, Is.EqualTo("city-runtime"));
+        Assert.That(restored.OrderedNpcRuntimeIds, Is.EqualTo(new[] { "npc-b", "npc-a" }));
+        Assert.That(restored.Revision, Is.EqualTo(17L));
+
+        Assert.That(DailyV1CityNpcPresenceOwner.TryCreateBound(
+            "city-runtime", new[] { "npc-a", "npc-a" }, 0L,
+            out DailyV1CityNpcPresenceOwner duplicate), Is.False);
+        Assert.That(duplicate, Is.Null);
+
+        Assert.That(DailyV1CityNpcPresenceOwner.TryCreateBound(
+            "city-runtime", new[] { "npc-a" }, long.MaxValue,
+            out DailyV1CityNpcPresenceOwner saturated), Is.True);
+        Assert.That(saturated.TryAdd("npc-b"), Is.False);
+        Assert.That(saturated.TryRemove("npc-a"), Is.False);
+        Assert.That(saturated.OrderedNpcRuntimeIds, Is.EqualTo(new[] { "npc-a" }));
+        Assert.That(saturated.Revision, Is.EqualTo(long.MaxValue));
     }
 
     [Test]

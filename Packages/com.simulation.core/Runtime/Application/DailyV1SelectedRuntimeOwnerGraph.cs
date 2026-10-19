@@ -116,12 +116,13 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         DailyV1MarketOwner market,
         MarketCounterpartyRuntime counterparty,
         PopulationEconomyRuntime populationEconomy,
+        DailyV1CityNpcPresenceOwner npcPresence,
         out DailyV1CityRuntimeOwners owners)
     {
         owners = null;
         if (!DailyV1CityRuntimeOwners.TryCreateBound(
                 runtimeId, definitions, definition, population, market, counterparty,
-                populationEconomy, out DailyV1CityRuntimeOwners candidate)
+                populationEconomy, npcPresence, out DailyV1CityRuntimeOwners candidate)
             || !TryCreate(definitions, new[] { candidate }, Array.Empty<DailyV1NpcRuntimeOwners>(), out _))
             return false;
 

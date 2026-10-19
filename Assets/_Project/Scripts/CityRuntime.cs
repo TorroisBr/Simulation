@@ -120,7 +120,7 @@ public class CityRuntime
     }
     public IReadOnlyList<NpcRuntime> ImportantNpcs => readOnlyImportantNpcs
         ?? (readOnlyImportantNpcs = EnsureImportantNpcs().AsReadOnly());
-    public long ImportantNpcRevision => importantNpcRevision;
+    public long ImportantNpcRevision => selectedRuntimeOwners?.NpcPresence.Revision ?? importantNpcRevision;
     public string CityName => selectedDailyV1Definition != null
         ? selectedDailyV1Definition.Values.cityName
         : cityData != null ? cityData.cityName : "Cidade desconhecida";
@@ -1975,26 +1975,46 @@ public class CityRuntime
 
     internal bool ContainsImportantNpc(NpcRuntime npcRuntime)
     {
-        return npcRuntime != null && EnsureImportantNpcs().Contains(npcRuntime);
+        if (npcRuntime == null || !EnsureImportantNpcs().Contains(npcRuntime)) return false;
+        return selectedRuntimeOwners == null
+            || selectedRuntimeOwners.NpcPresence.Contains(npcRuntime.RuntimeId);
     }
 
     internal bool CanAddImportantNpcMembership(NpcRuntime npcRuntime)
     {
-        return npcRuntime != null
-            && (ContainsImportantNpc(npcRuntime) || CanApplyImportantNpcRevisionIncrements(1L));
+        if (npcRuntime == null) return false;
+        if (selectedRuntimeOwners != null)
+        {
+            if (string.IsNullOrWhiteSpace(npcRuntime.RuntimeId)) return false;
+            bool inProjection = EnsureImportantNpcs().Contains(npcRuntime);
+            bool inOwner = selectedRuntimeOwners.NpcPresence.Contains(npcRuntime.RuntimeId);
+            if (inProjection != inOwner) return false;
+            if (inProjection) return true;
+        }
+        else if (EnsureImportantNpcs().Contains(npcRuntime)) return true;
+        return CanApplyImportantNpcRevisionIncrements(1L);
     }
 
     internal bool CanRemoveImportantNpcMembership(NpcRuntime npcRuntime)
     {
-        return npcRuntime == null
-            || !ContainsImportantNpc(npcRuntime)
-            || CanApplyImportantNpcRevisionIncrements(1L);
+        if (npcRuntime == null) return true;
+        bool inProjection = EnsureImportantNpcs().Contains(npcRuntime);
+        if (selectedRuntimeOwners != null)
+        {
+            if (string.IsNullOrWhiteSpace(npcRuntime.RuntimeId)) return false;
+            bool inOwner = selectedRuntimeOwners.NpcPresence.Contains(npcRuntime.RuntimeId);
+            if (inProjection != inOwner) return false;
+            if (!inProjection) return true;
+        }
+        else if (!inProjection) return true;
+        return CanApplyImportantNpcRevisionIncrements(1L);
     }
 
     internal bool CanApplyImportantNpcRevisionIncrements(long increments)
     {
-        return increments >= 0L
-            && importantNpcRevision <= long.MaxValue - increments;
+        return selectedRuntimeOwners != null
+            ? selectedRuntimeOwners.NpcPresence.CanApplyRevisionIncrements(increments)
+            : increments >= 0L && importantNpcRevision <= long.MaxValue - increments;
     }
 
     internal bool TryAddImportantNpcMembership(NpcRuntime npcRuntime)
@@ -2007,15 +2027,30 @@ public class CityRuntime
         List<NpcRuntime> membership = EnsureImportantNpcs();
         if (membership.Contains(npcRuntime))
         {
-            return true;
+            return selectedRuntimeOwners == null
+                || selectedRuntimeOwners.NpcPresence.Contains(npcRuntime.RuntimeId);
         }
 
-        if (importantNpcRevision == long.MaxValue)
+        DailyV1CityNpcPresenceOwner presenceOwner = selectedRuntimeOwners?.NpcPresence;
+        if (presenceOwner != null
+            && (string.IsNullOrWhiteSpace(npcRuntime.RuntimeId)
+                || presenceOwner.Contains(npcRuntime.RuntimeId)))
+            return false;
+
+        if (presenceOwner == null && importantNpcRevision == long.MaxValue
+            || presenceOwner != null && !presenceOwner.CanApplyRevisionIncrements(1L))
         {
             return false;
         }
 
         membership.Add(npcRuntime);
+        if (presenceOwner != null)
+        {
+            if (presenceOwner.TryAdd(npcRuntime.RuntimeId)) return true;
+            membership.Remove(npcRuntime);
+            return false;
+        }
+
         importantNpcRevision++;
         return true;
     }
@@ -2028,17 +2063,31 @@ public class CityRuntime
         }
 
         List<NpcRuntime> membership = EnsureImportantNpcs();
-        if (!membership.Contains(npcRuntime))
+        int membershipIndex = membership.IndexOf(npcRuntime);
+        if (membershipIndex < 0)
         {
-            return true;
+            return selectedRuntimeOwners == null
+                || !selectedRuntimeOwners.NpcPresence.Contains(npcRuntime.RuntimeId);
         }
 
-        if (importantNpcRevision == long.MaxValue)
+        DailyV1CityNpcPresenceOwner presenceOwner = selectedRuntimeOwners?.NpcPresence;
+        if (presenceOwner != null
+            && (!presenceOwner.Contains(npcRuntime.RuntimeId)
+                || !presenceOwner.CanApplyRevisionIncrements(1L)))
+            return false;
+        if (presenceOwner == null && importantNpcRevision == long.MaxValue)
         {
             return false;
         }
 
-        membership.Remove(npcRuntime);
+        membership.RemoveAt(membershipIndex);
+        if (presenceOwner != null)
+        {
+            if (presenceOwner.TryRemove(npcRuntime.RuntimeId)) return true;
+            membership.Insert(membershipIndex, npcRuntime);
+            return false;
+        }
+
         importantNpcRevision++;
         return true;
     }
@@ -2192,10 +2241,19 @@ public class CityRuntime
                     || ReferenceEquals(selectedDefinitionBindings, bindings))
                 && TryAttachSelectedDefinitionBindings(definitions, bindings);
         DailyV1CityRuntimeOwners stagedOwners = null;
+        DailyV1CityNpcPresenceOwner stagedPresenceOwner = null;
+        if (market != null && market.SelectedDailyV1Owner != null
+            && !DailyV1CityNpcPresenceOwner.TryCreateBound(
+                runtimeId,
+                EnsureImportantNpcs().Select(npc => npc?.RuntimeId),
+                importantNpcRevision,
+                out stagedPresenceOwner))
+            return false;
         if (market != null && market.SelectedDailyV1Owner != null
             && !DailyV1SelectedRuntimeOwnerGraph.TryCreateBoundCityOwner(
                 runtimeId, definitions, definition, population,
                 market.SelectedDailyV1Owner, MarketCounterparty, PopulationEconomy,
+                stagedPresenceOwner,
                 out stagedOwners))
             return false;
         if (market != null && market.SelectedDailyV1Owner != null

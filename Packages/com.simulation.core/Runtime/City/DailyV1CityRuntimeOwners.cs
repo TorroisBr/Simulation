@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 /// <summary>
 /// Holds the exact selected City owner instances consumed by the Unity runtime
@@ -13,6 +14,7 @@ internal sealed class DailyV1CityRuntimeOwners
     internal DailyV1MarketOwner Market { get; }
     internal MarketCounterpartyRuntime Counterparty { get; }
     internal PopulationEconomyRuntime PopulationEconomy { get; }
+    internal DailyV1CityNpcPresenceOwner NpcPresence { get; }
 
     private DailyV1CityRuntimeOwners(
         string runtimeId,
@@ -21,7 +23,8 @@ internal sealed class DailyV1CityRuntimeOwners
         SettlementPopulationRuntime population,
         DailyV1MarketOwner market,
         MarketCounterpartyRuntime counterparty,
-        PopulationEconomyRuntime populationEconomy)
+        PopulationEconomyRuntime populationEconomy,
+        DailyV1CityNpcPresenceOwner npcPresence)
     {
         RuntimeId = runtimeId;
         Definitions = definitions;
@@ -30,6 +33,7 @@ internal sealed class DailyV1CityRuntimeOwners
         Market = market;
         Counterparty = counterparty;
         PopulationEconomy = populationEconomy;
+        NpcPresence = npcPresence;
     }
 
     internal static bool TryCreateInitial(
@@ -56,9 +60,12 @@ internal sealed class DailyV1CityRuntimeOwners
         float purchasingPower = values.populationConsumption?.initialPurchasingPower ?? 0f;
         PopulationEconomyRuntime populationEconomy = new PopulationEconomyRuntime(
             runtimeId, paymentMode, purchasingPower, counterparty.LiquidityMode);
+        if (!DailyV1CityNpcPresenceOwner.TryCreateInitial(
+                runtimeId, out DailyV1CityNpcPresenceOwner npcPresence))
+            return false;
 
         owners = new DailyV1CityRuntimeOwners(
-            runtimeId, definitions, definition, population, market, counterparty, populationEconomy);
+            runtimeId, definitions, definition, population, market, counterparty, populationEconomy, npcPresence);
         return true;
     }
 
@@ -70,6 +77,7 @@ internal sealed class DailyV1CityRuntimeOwners
         DailyV1MarketOwner market,
         MarketCounterpartyRuntime counterparty,
         PopulationEconomyRuntime populationEconomy,
+        DailyV1CityNpcPresenceOwner npcPresence,
         out DailyV1CityRuntimeOwners owners)
     {
         owners = null;
@@ -86,11 +94,13 @@ internal sealed class DailyV1CityRuntimeOwners
             || !ReferenceEquals(market.Counterparty, counterparty)
             || !string.Equals(counterparty.CounterpartyRuntimeId, runtimeId, StringComparison.Ordinal)
             || populationEconomy == null
-            || !string.Equals(populationEconomy.CityRuntimeId, runtimeId, StringComparison.Ordinal))
+            || !string.Equals(populationEconomy.CityRuntimeId, runtimeId, StringComparison.Ordinal)
+            || npcPresence == null
+            || !string.Equals(npcPresence.CityRuntimeId, runtimeId, StringComparison.Ordinal))
             return false;
 
         owners = new DailyV1CityRuntimeOwners(
-            runtimeId, definitions, definition, population, market, counterparty, populationEconomy);
+            runtimeId, definitions, definition, population, market, counterparty, populationEconomy, npcPresence);
         return true;
     }
 
@@ -186,5 +196,89 @@ internal sealed class DailyV1CityRuntimeOwners
             logOutput?.Invoke(SimulationLogCategory.EconomyConsumption,
                 $"{city.cityName} consumed {actual} {item.Values.itemName}");
         return result;
+    }
+}
+
+/// <summary>
+/// Owns the ordered stable runtime identities for a selected City's NPC
+/// presence relation and the P12 revision that records membership changes.
+/// Unity keeps the exact object-reference projection needed by the existing
+/// runtime and persistence adapters.
+/// </summary>
+internal sealed class DailyV1CityNpcPresenceOwner
+{
+    private readonly List<string> orderedNpcRuntimeIds;
+    private readonly System.Collections.ObjectModel.ReadOnlyCollection<string> readOnlyNpcRuntimeIds;
+
+    internal string CityRuntimeId { get; }
+    internal System.Collections.Generic.IReadOnlyList<string> OrderedNpcRuntimeIds => readOnlyNpcRuntimeIds;
+    internal long Revision { get; private set; }
+
+    private DailyV1CityNpcPresenceOwner(string cityRuntimeId, List<string> orderedNpcRuntimeIds, long revision)
+    {
+        CityRuntimeId = cityRuntimeId;
+        this.orderedNpcRuntimeIds = orderedNpcRuntimeIds;
+        readOnlyNpcRuntimeIds = orderedNpcRuntimeIds.AsReadOnly();
+        Revision = revision;
+    }
+
+    internal static bool TryCreateInitial(string cityRuntimeId, out DailyV1CityNpcPresenceOwner owner)
+    {
+        owner = null;
+        if (string.IsNullOrWhiteSpace(cityRuntimeId)) return false;
+        owner = new DailyV1CityNpcPresenceOwner(cityRuntimeId, new List<string>(), 0L);
+        return true;
+    }
+
+    internal static bool TryCreateBound(
+        string cityRuntimeId,
+        System.Collections.Generic.IEnumerable<string> orderedIds,
+        long revision,
+        out DailyV1CityNpcPresenceOwner owner)
+    {
+        owner = null;
+        if (string.IsNullOrWhiteSpace(cityRuntimeId) || orderedIds == null || revision < 0L) return false;
+
+        List<string> candidate = new List<string>();
+        System.Collections.Generic.HashSet<string> unique =
+            new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+        foreach (string npcRuntimeId in orderedIds)
+        {
+            if (string.IsNullOrWhiteSpace(npcRuntimeId) || !unique.Add(npcRuntimeId)) return false;
+            candidate.Add(npcRuntimeId);
+        }
+
+        owner = new DailyV1CityNpcPresenceOwner(cityRuntimeId, candidate, revision);
+        return true;
+    }
+
+    internal bool Contains(string npcRuntimeId)
+    {
+        if (string.IsNullOrWhiteSpace(npcRuntimeId)) return false;
+        return orderedNpcRuntimeIds.Contains(npcRuntimeId);
+    }
+
+    internal bool CanApplyRevisionIncrements(long increments) =>
+        increments >= 0L && Revision <= long.MaxValue - increments;
+
+    internal bool TryAdd(string npcRuntimeId)
+    {
+        if (string.IsNullOrWhiteSpace(npcRuntimeId)) return false;
+        if (orderedNpcRuntimeIds.Contains(npcRuntimeId)) return true;
+        if (Revision == long.MaxValue) return false;
+        orderedNpcRuntimeIds.Add(npcRuntimeId);
+        Revision++;
+        return true;
+    }
+
+    internal bool TryRemove(string npcRuntimeId)
+    {
+        if (string.IsNullOrWhiteSpace(npcRuntimeId)) return false;
+        int index = orderedNpcRuntimeIds.IndexOf(npcRuntimeId);
+        if (index < 0) return true;
+        if (Revision == long.MaxValue) return false;
+        orderedNpcRuntimeIds.RemoveAt(index);
+        Revision++;
+        return true;
     }
 }

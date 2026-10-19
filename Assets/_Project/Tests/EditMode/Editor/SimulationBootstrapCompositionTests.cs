@@ -2448,6 +2448,21 @@ public sealed class SimulationBootstrapCompositionTests
             "The exact asset remains available to the existing P12 bridge without being a selected-constructor input.");
         Assert.That(npcs[0].CurrentCity, Is.SameAs(cities[0]));
         Assert.That(npcs[0].Money, Is.EqualTo(42f));
+        Assert.That(cities[0].SelectedRuntimeOwners.NpcPresence.OrderedNpcRuntimeIds,
+            Is.EqualTo(new[] { npcs[0].RuntimeId }),
+            "Selected City presence must be owned by Core while retaining the runtime's exact NPC identity.");
+        Assert.That(cities[0].SelectedRuntimeOwners.NpcPresence.Revision,
+            Is.EqualTo(cities[0].ImportantNpcRevision));
+        long presenceRevision = cities[0].ImportantNpcRevision;
+        cities[0].RemoveImportantNpc(npcs[0]);
+        Assert.That(cities[0].ImportantNpcs, Is.Empty);
+        Assert.That(cities[0].SelectedRuntimeOwners.NpcPresence.OrderedNpcRuntimeIds, Is.Empty);
+        Assert.That(cities[0].ImportantNpcRevision, Is.EqualTo(presenceRevision + 1L));
+        cities[0].AddImportantNpc(npcs[0]);
+        Assert.That(cities[0].ImportantNpcs.Single(), Is.SameAs(npcs[0]));
+        Assert.That(cities[0].SelectedRuntimeOwners.NpcPresence.OrderedNpcRuntimeIds,
+            Is.EqualTo(new[] { npcs[0].RuntimeId }));
+        Assert.That(cities[0].ImportantNpcRevision, Is.EqualTo(presenceRevision + 2L));
         List<NpcActionData> configuredActions = (List<NpcActionData>)typeof(TesteSimulacao)
             .GetProperty("ConfiguredActions", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(host);
         Assert.That(configuredActions, Is.EqualTo(new[] { action }),
