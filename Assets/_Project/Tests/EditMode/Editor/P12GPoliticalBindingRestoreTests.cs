@@ -817,7 +817,9 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     npc.NpcData, anchor.Composition.SelectedDefinitions,
                     out DailyV1NpcDefinition npcNode), Is.True);
             Assert.That(npc.TryBindSelectedDailyV1Definition(
-                npcNode, anchor.Composition.SelectedDefinitions, selectedBindings), Is.True);
+                npcNode, anchor.Composition.SelectedDefinitions, selectedBindings,
+                cityRuntimeId => stagedD.Cities.FirstOrDefault(city => city != null
+                    && string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal))), Is.True);
         }
         SimulationRuntime runtime = new SimulationRuntime(
             simulationTime: stagedTime,
