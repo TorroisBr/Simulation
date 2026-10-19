@@ -32,6 +32,7 @@ internal sealed class DailyV1NpcRuntimeOwners
     internal DailyV1NpcTravelOwner Travel { get; }
     internal DailyV1NpcTravelPlanOwner TravelPlan { get; }
     internal DailyV1NpcHiddenStateOwner HiddenState { get; }
+    internal long CrimeJusticeRevision { get; private set; }
 
     private DailyV1NpcRuntimeOwners(
         string runtimeId,
@@ -163,6 +164,18 @@ internal sealed class DailyV1NpcRuntimeOwners
 
     internal bool TryCopyStatusDefinitionIds(List<string> destination) =>
         Status != null && Status.TryCopyDefinitionIds(destination);
+
+    internal bool CanAdvanceCrimeJusticeRevision(int increments) =>
+        increments >= 0 && CrimeJusticeRevision <= long.MaxValue - increments;
+
+    internal bool TryInstallCrimeJusticeRevision(long revision)
+    {
+        if (revision < 0L) return false;
+        CrimeJusticeRevision = revision;
+        return true;
+    }
+
+    internal void NotifyCrimeJusticeMutationCommitted() => CrimeJusticeRevision++;
 }
 
 /// <summary>

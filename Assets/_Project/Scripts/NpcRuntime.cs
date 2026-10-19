@@ -254,7 +254,8 @@ public class NpcRuntime : ICapabilityConditionSource
         ? selectedRuntimeOwners.Lifecycle.LifeStateRevision
         : lifeStateRevision;
     internal long ResidenceRevision => residenceRevision;
-    internal long P12CrimeJusticeRevision => p12CrimeJusticeRevision;
+    internal long P12CrimeJusticeRevision =>
+        selectedRuntimeOwners?.CrimeJusticeRevision ?? p12CrimeJusticeRevision;
     internal bool IsP12CrimeJusticeBound => p12CrimeJusticeMutationAdmission != null;
     public bool IsTraveling => selectedRuntimeOwners != null
         ? selectedRuntimeOwners.Travel.IsTraveling
@@ -1465,6 +1466,7 @@ public class NpcRuntime : ICapabilityConditionSource
         if (!stagedOwners.ActionSlot.TrySetCurrentAction(stagedCurrentAction, stagedCurrentActionPayload)
             || !stagedOwners.ActionSlot.TryInstallRevision(currentActionRevision)
             || !stagedOwners.Lifecycle.TryInstallState(lifeState, injurySeverity, lifeStateRevision)
+            || !stagedOwners.TryInstallCrimeJusticeRevision(p12CrimeJusticeRevision)
             || !stagedOwners.HiddenState.TryInstallExact(hiddenDaysRemaining)
             || travelPlan == null
             || !stagedOwners.TravelPlan.TryInstallExact(
@@ -1489,6 +1491,7 @@ public class NpcRuntime : ICapabilityConditionSource
             && !currentActionRuntime.TryBindSelectedOwner(
                 stagedCurrentActionPayload, definitions, bindings)) return false;
         selectedRuntimeOwners = stagedOwners;
+        p12CrimeJusticeRevision = 0L;
         selectedDefinitionBindings = bindings;
         return true;
     }
@@ -1664,6 +1667,7 @@ public class NpcRuntime : ICapabilityConditionSource
                 || !stagedSelectedOwners.ActionSlot.TryInstallRevision(state.CurrentActionRevision)
                 || !stagedSelectedOwners.Lifecycle.TryInstallState(
                     state.LifeState, state.InjurySeverity, state.LifeStateRevision)
+                || !stagedSelectedOwners.TryInstallCrimeJusticeRevision(state.CrimeJusticeRevision)
                 || !stagedSelectedOwners.HiddenState.TryInstallExact(state.HiddenDaysRemaining)
                 || !stagedSelectedOwners.TravelPlan.TryInstallExact(
                     stagedTravelPlanState.TargetLocation?.RuntimeId,
@@ -1722,7 +1726,7 @@ public class NpcRuntime : ICapabilityConditionSource
         adventureSiteIntelKnowledge = state.AdventureSiteIntelKnowledge;
         lifeStateRevision = stagedSelectedOwners == null ? state.LifeStateRevision : 0L;
         residenceRevision = state.ResidenceRevision;
-        p12CrimeJusticeRevision = state.CrimeJusticeRevision;
+        p12CrimeJusticeRevision = stagedSelectedOwners == null ? state.CrimeJusticeRevision : 0L;
         currentActionRevision = stagedSelectedOwners == null ? state.CurrentActionRevision : 0L;
         travelStateRevision = state.TravelStateRevision;
         if (stagedSelectedOwners != null
@@ -2091,7 +2095,9 @@ public class NpcRuntime : ICapabilityConditionSource
             && p12CrimeJusticeMutationCommitted == null) return;
         if (p12CrimeJusticeMutationAdmission == null
             || p12CrimeJusticeMutationCommitted == null
-            || p12CrimeJusticeRevision == long.MaxValue)
+            || (selectedRuntimeOwners != null
+                ? !selectedRuntimeOwners.CanAdvanceCrimeJusticeRevision(1)
+                : p12CrimeJusticeRevision == long.MaxValue))
             throw new InvalidOperationException("P12 Crime/Justice mutation is faulted.");
         bool admitted;
         try { admitted = p12CrimeJusticeMutationAdmission(this); }
@@ -2103,7 +2109,10 @@ public class NpcRuntime : ICapabilityConditionSource
     private void NotifyP12CrimeJusticeMutationCommitted()
     {
         if (p12CrimeJusticeMutationAdmission == null) return;
-        p12CrimeJusticeRevision++;
+        if (selectedRuntimeOwners != null)
+            selectedRuntimeOwners.NotifyCrimeJusticeMutationCommitted();
+        else
+            p12CrimeJusticeRevision++;
         try { p12CrimeJusticeMutationCommitted?.Invoke(this); }
         catch { }
     }

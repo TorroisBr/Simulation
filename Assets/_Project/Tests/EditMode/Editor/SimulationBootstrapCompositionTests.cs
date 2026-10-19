@@ -2328,6 +2328,45 @@ public sealed class SimulationBootstrapCompositionTests
     }
 
     [Test]
+    public void SelectedNpcCrimeJusticeRevisionMovesIntoCoreOwnerWhenDefinitionsBind()
+    {
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        NpcData npc = SimulationTestFactory.CreateNpc("typed-npc-crime-revision-transfer");
+        NpcStatusData initialStatus = SimulationTestFactory.CreateStatus("typed-npc-crime-initial-status");
+        NpcStatusData addedStatus = SimulationTestFactory.CreateStatus("typed-npc-crime-added-status");
+        npc.statusPadrao.Add(initialStatus);
+        config.Npcs.Add(new NpcSimulationConfig { npc = npc });
+        config.Statuses.Add(initialStatus);
+        config.Statuses.Add(addedStatus);
+
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: config.CreateConfigurationOverrides());
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(config.Calendar, out _);
+        DailyV1EffectiveDefinitions graph = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            config, effective, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        NpcRuntime runtime = new NpcRuntime("typed-npc-crime-revision-transfer-runtime", npc);
+        int committed = 0;
+        Assert.That(runtime.TryBindP12CrimeJusticeMutationBoundary(_ => true, _ => committed++), Is.True);
+
+        runtime.AddStatus(addedStatus);
+        Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(1L));
+        Assert.That(runtime.TryBindSelectedDailyV1Definition(
+            graph.Npcs[npc.DefinitionId], graph, bindings), Is.True);
+        Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(1L));
+        Assert.That(runtime.SelectedRuntimeOwners.CrimeJusticeRevision, Is.EqualTo(1L));
+        Assert.That(typeof(NpcRuntime).GetField("p12CrimeJusticeRevision",
+                BindingFlags.Instance | BindingFlags.NonPublic).GetValue(runtime), Is.EqualTo(0L),
+            "Once the selected owner is published, the legacy adapter revision slot must not retain a duplicate authority.");
+
+        runtime.RemoveStatus(addedStatus);
+        runtime.HideForDays(2);
+        Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(3L));
+        Assert.That(runtime.SelectedRuntimeOwners.CrimeJusticeRevision, Is.EqualTo(3L));
+        Assert.That(runtime.SelectedRuntimeOwners.HiddenState.RemainingDays, Is.EqualTo(3));
+        Assert.That(committed, Is.EqualTo(3));
+    }
+
+    [Test]
     public void SelectedNpcOwnersConstructFromCoreGraphBeforeUnityBindingsAreAttached()
     {
         SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
@@ -2944,6 +2983,9 @@ public sealed class SimulationBootstrapCompositionTests
             Is.EqualTo(new[] { graph.Statuses[actionEffectStatus.DefinitionId] }));
         Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(crimeJusticeRevision + 2),
             "The existing P12 owner revision still advances once for each actual ordered status write.");
+        Assert.That(runtime.SelectedRuntimeOwners.CrimeJusticeRevision,
+            Is.EqualTo(runtime.P12CrimeJusticeRevision),
+            "The selected Core owner graph is the single source of the P12 status/hidden-state section revision.");
         Assert.That(committedStatusMutations, Is.EqualTo(2));
         Assert.That(statusPlan.Apply(
             (owner, remove, add) => ReferenceEquals(owner, runtime.SelectedRuntimeOwners)
@@ -2951,6 +2993,8 @@ public sealed class SimulationBootstrapCompositionTests
             null), Is.EqualTo(DailyV1SelectedActionStatusPlanResult.Applied));
         Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(crimeJusticeRevision + 2),
             "No-op removal/addition does not advance the P12 owner revision.");
+        Assert.That(runtime.SelectedRuntimeOwners.CrimeJusticeRevision,
+            Is.EqualTo(runtime.P12CrimeJusticeRevision));
 
         long beforeLostBindingWrite = runtime.P12CrimeJusticeRevision;
         int notificationsBeforeLostBindingWrite = committedStatusMutations;
