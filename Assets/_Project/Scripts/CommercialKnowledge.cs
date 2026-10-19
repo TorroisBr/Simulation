@@ -2,13 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum CommercialKnowledgeSource
-{
-    DirectObservation,
-    InitialScenarioKnowledge,
-    SharedByNpc
-}
-
 [Serializable]
 public sealed class CommercialMarketObservation
 {

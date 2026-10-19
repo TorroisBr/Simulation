@@ -134,7 +134,10 @@ public sealed class DecisionEventChronicleTests
         CommercialMarketObservation oldObservation = SimulationTestFactory.CreateObservation(
             "location-a", item, 50f, 10, 10, 20, CommercialKnowledgeSource.SharedByNpc, "npc-bruno");
         knowledge.RecordObservation(oldObservation);
-        CommercialObservationEvidence evidence = CommercialObservationEvidence.Capture(oldObservation, 0.4f);
+        CommercialObservationEvidence evidence = CommercialObservationEvidence.Capture(
+            oldObservation.LocationRuntimeId, oldObservation.ObservedPrice, oldObservation.ObservedStock,
+            oldObservation.ObservedDay, oldObservation.ReceivedDay, 0.4f, oldObservation.Source,
+            oldObservation.SourceRuntimeId);
         knowledge.RecordObservation(SimulationTestFactory.CreateObservation(
             "location-a", item, 25f, 10, 11, 11));
 

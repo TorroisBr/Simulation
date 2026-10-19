@@ -664,12 +664,16 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
 
         if (currentActionRuntime == null)
-            return currentAction == null && actionSlot.CurrentAction == null;
+            return currentAction == null && actionSlot.CurrentAction == null
+                && actionSlot.CurrentPayload == null;
 
         NpcActionData actionAsset = currentActionRuntime.Action;
         DailyV1ActionDefinition currentNode = actionSlot.CurrentAction;
         if (actionAsset == null || !ReferenceEquals(currentAction, actionAsset)
             || currentNode == null
+            || actionSlot.CurrentPayload == null
+            || !ReferenceEquals(currentActionRuntime.SelectedOwner, actionSlot.CurrentPayload)
+            || !currentActionRuntime.MatchesSelectedOwner()
             || !definitions.Actions.TryGetValue(actionAsset.DefinitionId, out DailyV1ActionDefinition admittedNode)
             || !ReferenceEquals(currentNode, admittedNode))
             return false;
@@ -1401,6 +1405,10 @@ public class NpcRuntime : ICapabilityConditionSource
                 currentStatus = stagedStatusProjection;
                 currentStatusView = null;
             }
+            if (currentActionRuntime != null
+                && !currentActionRuntime.TryBindSelectedOwner(
+                    selectedRuntimeOwners.ActionSlot.CurrentPayload, definitions, bindings))
+                return false;
             selectedDefinitionBindings = bindings;
             npcData = null;
             return true;
@@ -1415,10 +1423,13 @@ public class NpcRuntime : ICapabilityConditionSource
         if (!CommercialKnowledge.TryCreateSelectedOwner(definitions, bindings,
                 out DailyV1CommercialKnowledgeOwner stagedCommercialKnowledge))
             return false;
+        DailyV1NpcActionPayloadOwner stagedCurrentActionPayload = null;
         if (!HasConsistentCurrentActionSlot
             || (currentActionRuntime != null
-                && !TryResolveSelectedDailyV1Action(definitions, bindings,
-                    currentActionRuntime.Action, out stagedCurrentAction))
+                && (!TryResolveSelectedDailyV1Action(definitions, bindings,
+                        currentActionRuntime.Action, out stagedCurrentAction)
+                    || !currentActionRuntime.TryCreateSelectedOwner(
+                        definitions, stagedCurrentAction, out stagedCurrentActionPayload)))
             || !TryCreateSelectedStatusNodesFromAssets(definitions, bindings, currentStatus,
                 out List<DailyV1StatusDefinition> stagedStatuses)
             || !DailyV1SelectedRuntimeOwnerGraph.TryCreateBoundNpcOwner(
@@ -1428,7 +1439,7 @@ public class NpcRuntime : ICapabilityConditionSource
                 stagedMerchantPlan,
                 out DailyV1NpcRuntimeOwners stagedOwners))
             return false;
-        if (!stagedOwners.ActionSlot.TrySetCurrentAction(stagedCurrentAction)
+        if (!stagedOwners.ActionSlot.TrySetCurrentAction(stagedCurrentAction, stagedCurrentActionPayload)
             || !stagedOwners.ActionSlot.TryInstallRevision(currentActionRevision)
             || !stagedOwners.Lifecycle.TryInstallState(lifeState, injurySeverity, lifeStateRevision)
             || !stagedOwners.HiddenState.TryInstallExact(hiddenDaysRemaining)
@@ -1451,6 +1462,9 @@ public class NpcRuntime : ICapabilityConditionSource
                 stagedOwners.MerchantTradePlan, bindings,
                 resolveCityRuntime ?? (_ => null))) return false;
         if (!TravelPlan.TryBindSelectedOwner(stagedOwners.TravelPlan)) return false;
+        if (currentActionRuntime != null
+            && !currentActionRuntime.TryBindSelectedOwner(
+                stagedCurrentActionPayload, definitions, bindings)) return false;
         selectedRuntimeOwners = stagedOwners;
         selectedDefinitionBindings = bindings;
         return true;
@@ -1617,7 +1631,13 @@ public class NpcRuntime : ICapabilityConditionSource
                 return false;
             NpcTravelPlanState stagedTravelPlanState = state.TravelPlan.CaptureOwnerState();
             if (stagedTravelPlanState == null) return false;
-            if (!stagedSelectedOwners.ActionSlot.TrySetCurrentAction(stagedCurrentAction)
+            DailyV1NpcActionPayloadOwner stagedCurrentActionPayload = null;
+            if (state.CurrentActionRuntime != null
+                && !state.CurrentActionRuntime.TryCreateSelectedOwner(
+                    state.SelectedDefinitions, stagedCurrentAction, out stagedCurrentActionPayload))
+                return false;
+            if (!stagedSelectedOwners.ActionSlot.TrySetCurrentAction(
+                    stagedCurrentAction, stagedCurrentActionPayload)
                 || !stagedSelectedOwners.ActionSlot.TryInstallRevision(state.CurrentActionRevision)
                 || !stagedSelectedOwners.Lifecycle.TryInstallState(
                     state.LifeState, state.InjurySeverity, state.LifeStateRevision)
@@ -1628,7 +1648,10 @@ public class NpcRuntime : ICapabilityConditionSource
                     stagedTravelPlanState.Reason, stagedTravelPlanState.Utility,
                     stagedTravelPlanState.ExpectedCost, stagedTravelPlanState.OriginDecisionId,
                     state.TravelPlan.Revision)
-                || !state.TravelPlan.TryBindSelectedOwner(stagedSelectedOwners.TravelPlan))
+                || !state.TravelPlan.TryBindSelectedOwner(stagedSelectedOwners.TravelPlan)
+                || (state.CurrentActionRuntime != null
+                    && !state.CurrentActionRuntime.TryBindSelectedOwner(
+                        stagedCurrentActionPayload, state.SelectedDefinitions, null)))
                 return false;
         }
         else if (state.SelectedNpcDefinition != null
@@ -1710,6 +1733,7 @@ public class NpcRuntime : ICapabilityConditionSource
             && ReferenceEquals(currentAction, actionRuntime?.Action))
             return HasConsistentCurrentActionSlot;
         DailyV1ActionDefinition selectedActionNode = null;
+        DailyV1NpcActionPayloadOwner selectedActionPayload = null;
         if (selectedRuntimeOwners != null
             && (!HasConsistentCurrentActionSlot
                 || selectedDefinitionBindings == null
@@ -1732,23 +1756,40 @@ public class NpcRuntime : ICapabilityConditionSource
                 actionRuntime))
             return false;
 
-        NpcActionRuntime previous = currentActionRuntime;
-        if (p12Bound && actionRuntime != null && !actionRuntime.TryBindP12Owner(this))
+        if (selectedRuntimeOwners != null && actionRuntime != null
+            && !actionRuntime.TryCreateSelectedOwner(
+                selectedDefinitionGraph, selectedActionNode, out selectedActionPayload))
             return false;
+
+        NpcActionRuntime previous = currentActionRuntime;
+        if (selectedRuntimeOwners != null && actionRuntime != null
+            && !actionRuntime.TryBindSelectedOwner(
+                selectedActionPayload, selectedDefinitionGraph, selectedDefinitionBindings))
+            return false;
+        if (p12Bound && actionRuntime != null && !actionRuntime.TryBindP12Owner(this))
+        {
+            actionRuntime?.UnbindSelectedOwner();
+            return false;
+        }
         if (p12Bound && previous != null && !previous.UnbindP12Owner(this))
         {
             actionRuntime?.UnbindP12Owner(this);
+            actionRuntime?.UnbindSelectedOwner();
             return false;
         }
 
         if (selectedRuntimeOwners != null
-            && !selectedRuntimeOwners.ActionSlot.TrySetCurrentAction(selectedActionNode))
+            && !selectedRuntimeOwners.ActionSlot.TrySetCurrentAction(
+                selectedActionNode, selectedActionPayload))
         {
             if (p12Bound && previous != null) previous.TryBindP12Owner(this);
             if (p12Bound && actionRuntime != null) actionRuntime.UnbindP12Owner(this);
+            actionRuntime?.UnbindSelectedOwner();
             return false;
         }
 
+        if (previous != null && !ReferenceEquals(previous, actionRuntime))
+            previous.UnbindSelectedOwner();
         currentActionRuntime = actionRuntime;
         currentAction = actionRuntime != null ? actionRuntime.Action : null;
         NotifyP12LifecycleMutationCommitted(false, false, true);
@@ -1783,6 +1824,7 @@ public class NpcRuntime : ICapabilityConditionSource
         currentAction = null;
         currentActionRuntime = null;
         previous?.UnbindP12Owner(this);
+        previous?.UnbindSelectedOwner();
     }
 
     private bool TrySetInjurySeverityAfterValidation(NpcInjurySeverity severity)

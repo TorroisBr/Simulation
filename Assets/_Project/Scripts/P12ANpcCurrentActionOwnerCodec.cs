@@ -284,10 +284,9 @@ internal static class P12ANpcCurrentActionOwnerCodec
             return false;
         try
         {
-            CommercialLiquidityObservation observation = new CommercialLiquidityObservation(location,
-                (MarketLiquidityMode)mode, power, observed, received,
-                (CommercialKnowledgeSource)source, sourceRuntimeId);
-            value = CommercialLiquidityEvidence.Capture(observation, freshness);
+            value = CommercialLiquidityEvidence.Capture(location, (MarketLiquidityMode)mode,
+                power, observed, received, freshness, (CommercialKnowledgeSource)source,
+                sourceRuntimeId);
             return value != null;
         }
         catch (ArgumentException) { return false; }

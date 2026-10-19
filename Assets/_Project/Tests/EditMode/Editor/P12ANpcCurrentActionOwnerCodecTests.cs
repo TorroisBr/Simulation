@@ -119,8 +119,8 @@ public sealed class P12ANpcCurrentActionOwnerCodecTests
             "destination-location", 7.5f, 8, 2L, 2L, 1f,
             CommercialKnowledgeSource.DirectObservation, null);
         CommercialLiquidityEvidence liquidity = CommercialLiquidityEvidence.Capture(
-            new CommercialLiquidityObservation("destination-location", MarketLiquidityMode.AccountBacked,
-                25f, 2L, 3L, CommercialKnowledgeSource.InitialScenarioKnowledge), 0.6f);
+            "destination-location", MarketLiquidityMode.AccountBacked,
+            25f, 2L, 3L, 0.6f, CommercialKnowledgeSource.InitialScenarioKnowledge, null);
         CommercialDecisionEvidence decision = new CommercialDecisionEvidence(
             "item-definition", "current-location", "origin-location", "destination-location", null,
             origin, destination, 3, 2.5f, 7.5f, 1.25f, 15f, 13.75f, 0.9f, liquidity);

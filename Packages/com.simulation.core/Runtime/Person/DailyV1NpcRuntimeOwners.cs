@@ -193,6 +193,7 @@ internal sealed class DailyV1NpcActionSlotOwner
     private readonly DailyV1EffectiveDefinitions definitions;
 
     internal DailyV1ActionDefinition CurrentAction { get; private set; }
+    internal DailyV1NpcActionPayloadOwner CurrentPayload { get; private set; }
     internal long Revision { get; private set; }
 
     internal DailyV1NpcActionSlotOwner(DailyV1EffectiveDefinitions definitions)
@@ -202,12 +203,27 @@ internal sealed class DailyV1NpcActionSlotOwner
 
     internal bool TrySetCurrentAction(DailyV1ActionDefinition action)
     {
+        DailyV1NpcActionPayloadOwner payload = action != null
+            && ReferenceEquals(CurrentAction, action)
+            ? CurrentPayload
+            : null;
+        return TrySetCurrentAction(action, payload);
+    }
+
+    internal bool TrySetCurrentAction(
+        DailyV1ActionDefinition action,
+        DailyV1NpcActionPayloadOwner payload)
+    {
         if (action != null
             && (!definitions.Actions.TryGetValue(action.DefinitionId, out DailyV1ActionDefinition admitted)
                 || !ReferenceEquals(action, admitted)))
             return false;
+        if (action == null && payload != null
+            || (payload != null && !ReferenceEquals(payload.Action, action)))
+            return false;
 
         CurrentAction = action;
+        CurrentPayload = payload;
         return true;
     }
 
@@ -225,6 +241,98 @@ internal sealed class DailyV1NpcActionSlotOwner
     {
         if (Revision < long.MaxValue) Revision++;
     }
+}
+
+/// <summary>
+/// Owns the selected NPC's mutable current-action payload. Unity retains only
+/// compatibility object references; admitted definition identities, stable
+/// target IDs, scalar values, and commercial evidence are held here.
+/// </summary>
+internal sealed class DailyV1NpcActionPayloadOwner
+{
+    internal DailyV1ActionDefinition Action { get; }
+    internal string TargetNpcRuntimeId { get; }
+    internal string TargetCityRuntimeId { get; }
+    internal DailyV1ItemDefinition TargetItem { get; }
+    internal int Amount { get; }
+    internal float ExpectedUnitPrice { get; }
+    internal float SuccessChanceMultiplier { get; private set; }
+    internal NpcTravelReason TravelReason { get; }
+    internal float ExpectedNetValue { get; }
+    internal string OriginDecisionId { get; private set; }
+    internal string StableOccurrenceKey { get; private set; }
+    internal CommercialDecisionEvidence CommercialDecisionEvidence { get; private set; }
+    internal CommercialScoutingEvidence CommercialScoutingEvidence { get; private set; }
+
+    private DailyV1NpcActionPayloadOwner(
+        DailyV1ActionDefinition action,
+        string targetNpcRuntimeId,
+        string targetCityRuntimeId,
+        DailyV1ItemDefinition targetItem,
+        int amount,
+        float expectedUnitPrice,
+        float successChanceMultiplier,
+        NpcTravelReason travelReason,
+        float expectedNetValue,
+        string originDecisionId,
+        string stableOccurrenceKey,
+        CommercialDecisionEvidence commercialDecisionEvidence,
+        CommercialScoutingEvidence commercialScoutingEvidence)
+    {
+        Action = action;
+        TargetNpcRuntimeId = targetNpcRuntimeId;
+        TargetCityRuntimeId = targetCityRuntimeId;
+        TargetItem = targetItem;
+        Amount = amount;
+        ExpectedUnitPrice = expectedUnitPrice;
+        SuccessChanceMultiplier = successChanceMultiplier;
+        TravelReason = travelReason;
+        ExpectedNetValue = expectedNetValue;
+        OriginDecisionId = originDecisionId;
+        StableOccurrenceKey = stableOccurrenceKey;
+        CommercialDecisionEvidence = commercialDecisionEvidence;
+        CommercialScoutingEvidence = commercialScoutingEvidence;
+    }
+
+    internal static bool TryCreate(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ActionDefinition action,
+        string targetNpcRuntimeId,
+        string targetCityRuntimeId,
+        DailyV1ItemDefinition targetItem,
+        int amount,
+        float expectedUnitPrice,
+        float successChanceMultiplier,
+        NpcTravelReason travelReason,
+        float expectedNetValue,
+        string originDecisionId,
+        string stableOccurrenceKey,
+        CommercialDecisionEvidence commercialDecisionEvidence,
+        CommercialScoutingEvidence commercialScoutingEvidence,
+        out DailyV1NpcActionPayloadOwner owner)
+    {
+        owner = null;
+        if (definitions == null || action == null
+            || !definitions.Actions.TryGetValue(action.DefinitionId, out DailyV1ActionDefinition admittedAction)
+            || !ReferenceEquals(admittedAction, action)
+            || (targetItem != null
+                && (!definitions.Items.TryGetValue(targetItem.DefinitionId, out DailyV1ItemDefinition admittedItem)
+                    || !ReferenceEquals(admittedItem, targetItem))))
+            return false;
+
+        owner = new DailyV1NpcActionPayloadOwner(action, targetNpcRuntimeId,
+            targetCityRuntimeId, targetItem, amount, expectedUnitPrice,
+            successChanceMultiplier, travelReason, expectedNetValue,
+            originDecisionId, stableOccurrenceKey, commercialDecisionEvidence,
+            commercialScoutingEvidence);
+        return true;
+    }
+
+    internal void SetSuccessChanceMultiplier(float value) => SuccessChanceMultiplier = value;
+    internal void SetOriginDecisionId(string value) => OriginDecisionId = value;
+    internal void SetStableOccurrenceKey(string value) => StableOccurrenceKey = value;
+    internal void SetCommercialDecisionEvidence(CommercialDecisionEvidence value) => CommercialDecisionEvidence = value;
+    internal void SetCommercialScoutingEvidence(CommercialScoutingEvidence value) => CommercialScoutingEvidence = value;
 }
 
 /// <summary>

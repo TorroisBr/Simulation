@@ -2091,8 +2091,16 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             tradeOrigin.Location.RuntimeId,
             tradeDestination.Location.RuntimeId,
             previousDestination?.Location?.RuntimeId,
-            CommercialObservationEvidence.Capture(originObservation, originFreshness),
-            CommercialObservationEvidence.Capture(destinationObservation, destinationFreshness),
+            originObservation == null ? null : CommercialObservationEvidence.Capture(
+                originObservation.LocationRuntimeId, originObservation.ObservedPrice,
+                originObservation.ObservedStock, originObservation.ObservedDay,
+                originObservation.ReceivedDay, originFreshness, originObservation.Source,
+                originObservation.SourceRuntimeId),
+            destinationObservation == null ? null : CommercialObservationEvidence.Capture(
+                destinationObservation.LocationRuntimeId, destinationObservation.ObservedPrice,
+                destinationObservation.ObservedStock, destinationObservation.ObservedDay,
+                destinationObservation.ReceivedDay, destinationFreshness, destinationObservation.Source,
+                destinationObservation.SourceRuntimeId),
             expectedQuantity,
             expectedPurchaseUnitPrice,
             expectedSaleUnitPrice,
@@ -2100,7 +2108,11 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             expectedGrossProfit,
             expectedNetProfit,
             expectedScore,
-            CommercialLiquidityEvidence.Capture(liquidityObservation, liquidityFreshness));
+            liquidityObservation == null ? null : CommercialLiquidityEvidence.Capture(
+                liquidityObservation.LocationRuntimeId, liquidityObservation.LiquidityMode,
+                liquidityObservation.ObservedPurchasingPower, liquidityObservation.ObservedDay,
+                liquidityObservation.ReceivedDay, liquidityFreshness, liquidityObservation.Source,
+                liquidityObservation.SourceRuntimeId));
     }
 
     private float CalculateLocalMerchantUnitPrice(NpcRuntime buyerRuntime, ItemData item, float retailPrice)

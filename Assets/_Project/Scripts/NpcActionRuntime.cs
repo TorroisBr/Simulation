@@ -20,21 +20,125 @@ public class NpcActionRuntime
     [NonSerialized] private NpcRuntime p12Owner;
     [NonSerialized] private Func<bool> p12MutationAdmission;
     [NonSerialized] private Action p12MutationCommitted;
+    [NonSerialized] private DailyV1NpcActionPayloadOwner selectedOwner;
+    [NonSerialized] private DailyV1EffectiveDefinitions selectedDefinitions;
+    [NonSerialized] private DailyV1DefinitionAdapter.SelectedBindings selectedBindings;
 
-    public NpcActionData Action => action;
+    public NpcActionData Action => selectedOwner == null || selectedBindings == null
+        ? action
+        : selectedBindings.TryGetAsset(selectedOwner.Action, out NpcActionData selectedAction)
+            ? selectedAction : null;
     public NpcRuntime TargetNpc => targetNpc;
     public CityRuntime TargetCity => targetCity;
-    public ItemData TargetItem => targetItem;
-    public int Amount => amount;
-    public float ExpectedUnitPrice => expectedUnitPrice;
-    public float ExpectedTravelCost => expectedUnitPrice;
-    public float SuccessChanceMultiplier => successChanceMultiplier;
-    public NpcTravelReason TravelReason => travelReason;
-    public float ExpectedNetValue => expectedNetValue;
-    public string OriginDecisionId => originDecisionId;
-    public string StableOccurrenceKey => stableOccurrenceKey;
-    public CommercialDecisionEvidence CommercialDecisionEvidence => commercialDecisionEvidence;
-    public CommercialScoutingEvidence CommercialScoutingEvidence => commercialScoutingEvidence;
+    public ItemData TargetItem => selectedOwner == null || selectedBindings == null
+        ? targetItem
+        : selectedOwner.TargetItem == null ? null
+        : selectedBindings.TryGetAsset(selectedOwner.TargetItem, out ItemData selectedItem)
+            ? selectedItem : null;
+    public int Amount => selectedOwner == null ? amount : selectedOwner.Amount;
+    public float ExpectedUnitPrice => selectedOwner == null ? expectedUnitPrice : selectedOwner.ExpectedUnitPrice;
+    public float ExpectedTravelCost => selectedOwner == null ? expectedUnitPrice : selectedOwner.ExpectedUnitPrice;
+    public float SuccessChanceMultiplier => selectedOwner == null ? successChanceMultiplier : selectedOwner.SuccessChanceMultiplier;
+    public NpcTravelReason TravelReason => selectedOwner == null ? travelReason : selectedOwner.TravelReason;
+    public float ExpectedNetValue => selectedOwner == null ? expectedNetValue : selectedOwner.ExpectedNetValue;
+    public string OriginDecisionId => selectedOwner == null ? originDecisionId : selectedOwner.OriginDecisionId;
+    public string StableOccurrenceKey => selectedOwner == null ? stableOccurrenceKey : selectedOwner.StableOccurrenceKey;
+    public CommercialDecisionEvidence CommercialDecisionEvidence => selectedOwner == null
+        ? commercialDecisionEvidence : selectedOwner.CommercialDecisionEvidence;
+    public CommercialScoutingEvidence CommercialScoutingEvidence => selectedOwner == null
+        ? commercialScoutingEvidence : selectedOwner.CommercialScoutingEvidence;
+
+    internal DailyV1NpcActionPayloadOwner SelectedOwner => selectedOwner;
+
+    internal bool TryCreateSelectedOwner(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ActionDefinition selectedAction,
+        out DailyV1NpcActionPayloadOwner owner)
+    {
+        owner = null;
+        DailyV1ItemDefinition selectedItem = null;
+        if (targetItem != null
+            && (definitions == null
+                || !definitions.Items.TryGetValue(targetItem.DefinitionId, out selectedItem)
+                || selectedItem == null
+                || !string.Equals(selectedItem.DefinitionId, targetItem.DefinitionId, StringComparison.Ordinal)))
+            return false;
+
+        return DailyV1NpcActionPayloadOwner.TryCreate(definitions, selectedAction,
+            targetNpc?.RuntimeId, targetCity?.RuntimeId, selectedItem, amount,
+            expectedUnitPrice, successChanceMultiplier, travelReason, expectedNetValue,
+            originDecisionId, stableOccurrenceKey, commercialDecisionEvidence,
+            commercialScoutingEvidence, out owner);
+    }
+
+    internal bool TryBindSelectedOwner(
+        DailyV1NpcActionPayloadOwner owner,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1DefinitionAdapter.SelectedBindings bindings)
+    {
+        if (owner == null || definitions == null
+            || !Matches(owner, definitions, bindings)) return false;
+        if (selectedOwner != null)
+        {
+            if (!ReferenceEquals(selectedOwner, owner)) return false;
+            selectedDefinitions = definitions;
+            selectedBindings = bindings;
+            return true;
+        }
+        selectedOwner = owner;
+        selectedDefinitions = definitions;
+        selectedBindings = bindings;
+        return true;
+    }
+
+    internal bool MatchesSelectedOwner() => selectedOwner != null
+        && Matches(selectedOwner, selectedDefinitions, selectedBindings);
+
+    internal void UnbindSelectedOwner()
+    {
+        selectedOwner = null;
+        selectedDefinitions = null;
+        selectedBindings = null;
+    }
+
+    private bool Matches(
+        DailyV1NpcActionPayloadOwner owner,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1DefinitionAdapter.SelectedBindings bindings)
+    {
+        if (owner == null
+            || !string.Equals(owner.TargetNpcRuntimeId, targetNpc?.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(owner.TargetCityRuntimeId, targetCity?.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(owner.TargetItem?.DefinitionId, targetItem?.DefinitionId, StringComparison.Ordinal)
+            || owner.Amount != amount
+            || !owner.ExpectedUnitPrice.Equals(expectedUnitPrice)
+            || !owner.SuccessChanceMultiplier.Equals(successChanceMultiplier)
+            || owner.TravelReason != travelReason
+            || !owner.ExpectedNetValue.Equals(expectedNetValue)
+            || !string.Equals(owner.OriginDecisionId, originDecisionId, StringComparison.Ordinal)
+            || !string.Equals(owner.StableOccurrenceKey, stableOccurrenceKey, StringComparison.Ordinal)
+            || !ReferenceEquals(owner.CommercialDecisionEvidence, commercialDecisionEvidence)
+            || !ReferenceEquals(owner.CommercialScoutingEvidence, commercialScoutingEvidence)) return false;
+
+        if (definitions != null
+            && (!definitions.Actions.TryGetValue(owner.Action.DefinitionId, out DailyV1ActionDefinition admittedAction)
+                || !ReferenceEquals(admittedAction, owner.Action)
+                || (owner.TargetItem != null
+                    && (!definitions.Items.TryGetValue(owner.TargetItem.DefinitionId, out DailyV1ItemDefinition admittedItem)
+                        || !ReferenceEquals(admittedItem, owner.TargetItem))))) return false;
+
+        if (action == null || !string.Equals(action.DefinitionId, owner.Action.DefinitionId, StringComparison.Ordinal))
+            return false;
+        if (bindings == null) return true;
+        return bindings.TryGet(owner.Action, out DailyV1ActionDefinition mappedAction)
+            && ReferenceEquals(mappedAction, owner.Action)
+            && bindings.TryGetAsset(owner.Action, out NpcActionData mappedActionAsset)
+            && ReferenceEquals(mappedActionAsset, action)
+            && (owner.TargetItem == null
+                ? targetItem == null
+                : bindings.TryGetAsset(owner.TargetItem, out ItemData mappedItem)
+                    && ReferenceEquals(mappedItem, targetItem));
+    }
 
     public NpcActionRuntime(NpcActionData action)
     {
@@ -110,8 +214,10 @@ public class NpcActionRuntime
     public void SetSuccessChanceMultiplier(float multiplier)
     {
         float normalized = UnityMathfCompatibility.Max(0f, multiplier);
-        if (successChanceMultiplier.Equals(normalized)) return;
+        float current = selectedOwner == null ? successChanceMultiplier : selectedOwner.SuccessChanceMultiplier;
+        if (current.Equals(normalized)) return;
         if (!CanCommitP12Mutation()) return;
+        selectedOwner?.SetSuccessChanceMultiplier(normalized);
         successChanceMultiplier = normalized;
         NotifyP12MutationCommitted();
     }
@@ -119,8 +225,10 @@ public class NpcActionRuntime
     public void SetOriginDecisionId(string decisionId)
     {
         string normalized = string.IsNullOrWhiteSpace(decisionId) ? null : decisionId;
-        if (string.Equals(originDecisionId, normalized, StringComparison.Ordinal)) return;
+        string current = selectedOwner == null ? originDecisionId : selectedOwner.OriginDecisionId;
+        if (string.Equals(current, normalized, StringComparison.Ordinal)) return;
         if (!CanCommitP12Mutation()) return;
+        selectedOwner?.SetOriginDecisionId(normalized);
         originDecisionId = normalized;
         NotifyP12MutationCommitted();
     }
@@ -134,24 +242,32 @@ public class NpcActionRuntime
         string normalized = string.IsNullOrWhiteSpace(occurrenceKey) == true
             ? null
             : occurrenceKey;
-        if (string.Equals(stableOccurrenceKey, normalized, StringComparison.Ordinal)) return;
+        string current = selectedOwner == null ? stableOccurrenceKey : selectedOwner.StableOccurrenceKey;
+        if (string.Equals(current, normalized, StringComparison.Ordinal)) return;
         if (!CanCommitP12Mutation()) return;
+        selectedOwner?.SetStableOccurrenceKey(normalized);
         stableOccurrenceKey = normalized;
         NotifyP12MutationCommitted();
     }
 
     public void SetCommercialDecisionEvidence(CommercialDecisionEvidence evidence)
     {
-        if (ReferenceEquals(commercialDecisionEvidence, evidence)) return;
+        CommercialDecisionEvidence current = selectedOwner == null
+            ? commercialDecisionEvidence : selectedOwner.CommercialDecisionEvidence;
+        if (ReferenceEquals(current, evidence)) return;
         if (!CanCommitP12Mutation()) return;
+        selectedOwner?.SetCommercialDecisionEvidence(evidence);
         commercialDecisionEvidence = evidence;
         NotifyP12MutationCommitted();
     }
 
     public void SetCommercialScoutingEvidence(CommercialScoutingEvidence evidence)
     {
-        if (ReferenceEquals(commercialScoutingEvidence, evidence)) return;
+        CommercialScoutingEvidence current = selectedOwner == null
+            ? commercialScoutingEvidence : selectedOwner.CommercialScoutingEvidence;
+        if (ReferenceEquals(current, evidence)) return;
         if (!CanCommitP12Mutation()) return;
+        selectedOwner?.SetCommercialScoutingEvidence(evidence);
         commercialScoutingEvidence = evidence;
         NotifyP12MutationCommitted();
     }

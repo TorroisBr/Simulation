@@ -89,6 +89,63 @@ public sealed class DailyV1NpcActionSlotOwnerTests
     }
 
     [Test]
+    public void SelectedActionPayloadRetainsExactDefinitionAndEvidenceOwners()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1EffectiveDefinitions foreign = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ActionDefinition action = definitions.Actions.Values.First();
+        DailyV1ItemDefinition item = definitions.Items.Values.First();
+        CommercialDecisionEvidence evidence = new CommercialDecisionEvidence(
+            item.DefinitionId, "city-a", "city-a", "city-b", null,
+            null, null, 2, 3f, 4f, 1f, 2f, 1f, 0.5f);
+
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            definitions, action, "npc-a", "city-b", item,
+            2, 4f, 1.25f, NpcTravelReason.CommercialScout, 3f,
+            "decision-a", "occurrence-a", evidence, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(payload.Action, Is.SameAs(action));
+        Assert.That(payload.TargetItem, Is.SameAs(item));
+        Assert.That(payload.TargetNpcRuntimeId, Is.EqualTo("npc-a"));
+        Assert.That(payload.TargetCityRuntimeId, Is.EqualTo("city-b"));
+        Assert.That(payload.Amount, Is.EqualTo(2));
+        Assert.That(payload.ExpectedUnitPrice, Is.EqualTo(4f));
+        Assert.That(payload.SuccessChanceMultiplier, Is.EqualTo(1.25f));
+        Assert.That(payload.TravelReason, Is.EqualTo(NpcTravelReason.CommercialScout));
+        Assert.That(payload.ExpectedNetValue, Is.EqualTo(3f));
+        Assert.That(payload.OriginDecisionId, Is.EqualTo("decision-a"));
+        Assert.That(payload.StableOccurrenceKey, Is.EqualTo("occurrence-a"));
+        Assert.That(payload.CommercialDecisionEvidence, Is.SameAs(evidence));
+
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-a", definitions, definitions.Npcs.Values.First(), 0f,
+            out DailyV1NpcRuntimeOwners owners), Is.True);
+        Assert.That(owners.ActionSlot.TrySetCurrentAction(action, payload), Is.True);
+        payload.SetSuccessChanceMultiplier(0.75f);
+        payload.SetOriginDecisionId("decision-b");
+        payload.SetStableOccurrenceKey("occurrence-b");
+        Assert.That(payload.SuccessChanceMultiplier, Is.EqualTo(0.75f));
+        Assert.That(payload.OriginDecisionId, Is.EqualTo("decision-b"));
+        Assert.That(payload.StableOccurrenceKey, Is.EqualTo("occurrence-b"));
+        Assert.That(owners.ActionSlot.CurrentPayload, Is.SameAs(payload));
+        Assert.That(owners.ActionSlot.Revision, Is.Zero,
+            "Payload staging stays separate from the existing committed action-slot revision callback.");
+        owners.ActionSlot.NotifyCurrentActionMutationCommitted();
+        Assert.That(owners.ActionSlot.Revision, Is.EqualTo(1L));
+
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            definitions, foreign.Actions[action.DefinitionId], "npc-a", "city-b", item,
+            2, 4f, 1f, NpcTravelReason.CommercialScout, 3f,
+            null, null, null, null, out _), Is.False,
+            "An action with a matching ID from a different graph is not admitted.");
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            definitions, action, "npc-a", "city-b", foreign.Items[item.DefinitionId],
+            2, 4f, 1f, NpcTravelReason.CommercialScout, 3f,
+            null, null, null, null, out _), Is.False,
+            "An item with a matching ID from a different graph is not admitted.");
+    }
+
+    [Test]
     public void SelectedNpcTravelOwnerPreservesRuntimeIdentitiesAndExactRevision()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

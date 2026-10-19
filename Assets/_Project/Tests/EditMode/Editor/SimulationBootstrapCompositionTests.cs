@@ -2429,10 +2429,21 @@ public sealed class SimulationBootstrapCompositionTests
 
         DailyV1ActionDefinition actionDefinition = graph.Actions.Values.First();
         Assert.That(bindings.TryGetAsset(actionDefinition, out NpcActionData actionAsset), Is.True);
-        runtime.SetCurrentActionRuntime(new NpcActionRuntime(actionAsset));
+        NpcActionRuntime actionRuntime = new NpcActionRuntime(actionAsset);
+        runtime.SetCurrentActionRuntime(actionRuntime);
         Assert.That(runtime.CurrentActionRevision, Is.EqualTo(1L));
         Assert.That(runtime.SelectedRuntimeOwners.ActionSlot.Revision, Is.EqualTo(1L),
             "The selected Core action-slot owner carries the committed revision used by P12.");
+        Assert.That(actionRuntime.SelectedOwner, Is.SameAs(
+            runtime.SelectedRuntimeOwners.ActionSlot.CurrentPayload),
+            "The Core action slot and Unity adapter share one selected action-payload owner.");
+        Assert.That(actionRuntime.SelectedOwner.Action, Is.SameAs(actionDefinition));
+        actionRuntime.SetSuccessChanceMultiplier(0.625f);
+        Assert.That(actionRuntime.SuccessChanceMultiplier, Is.EqualTo(0.625f));
+        Assert.That(actionRuntime.SelectedOwner.SuccessChanceMultiplier, Is.EqualTo(0.625f),
+            "Mutable selected payload values route through the Core owner.");
+        Assert.That(runtime.SelectedRuntimeOwners.ActionSlot.Revision, Is.EqualTo(1L),
+            "The adapter retains existing revision behavior before a P12 mutation boundary is attached.");
         runtime.SetCurrentActionRuntime(null);
         Assert.That(runtime.CurrentActionRevision, Is.EqualTo(2L));
         Assert.That(runtime.SelectedRuntimeOwners.ActionSlot.Revision, Is.EqualTo(2L));
