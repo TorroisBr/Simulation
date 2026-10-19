@@ -92,6 +92,7 @@ public sealed class NpcDecisionParticipant
     }
 }
 
+[Serializable]
 public sealed class NpcDecisionRecord
 {
     private readonly string decisionId;
