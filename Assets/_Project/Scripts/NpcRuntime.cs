@@ -234,8 +234,10 @@ public class NpcRuntime : ICapabilityConditionSource
     public bool IsTraveling => selectedRuntimeOwners != null
         ? selectedRuntimeOwners.Travel.IsTraveling
         : destinationLocation != null && travelDaysRemaining > 0;
-    public int HiddenDaysRemaining => hiddenDaysRemaining;
-    public bool IsHidden => hiddenDaysRemaining > 0;
+    public int HiddenDaysRemaining => selectedRuntimeOwners != null
+        ? selectedRuntimeOwners.HiddenState.RemainingDays
+        : hiddenDaysRemaining;
+    public bool IsHidden => HiddenDaysRemaining > 0;
     public MerchantTradePlanRuntime MerchantTradePlan => merchantTradePlan ?? (merchantTradePlan = new MerchantTradePlanRuntime());
     public NpcTravelPlanRuntime TravelPlan => travelPlan ?? (travelPlan = new NpcTravelPlanRuntime());
     internal MerchantTradePlanRuntime ExistingMerchantTradePlan => merchantTradePlan;
@@ -1421,6 +1423,7 @@ public class NpcRuntime : ICapabilityConditionSource
         if (!stagedOwners.ActionSlot.TrySetCurrentAction(stagedCurrentAction)
             || !stagedOwners.ActionSlot.TryInstallRevision(currentActionRevision)
             || !stagedOwners.Lifecycle.TryInstallState(lifeState, injurySeverity, lifeStateRevision)
+            || !stagedOwners.HiddenState.TryInstallExact(hiddenDaysRemaining)
             || !stagedOwners.Travel.TryInstallState(
                 currentLocation?.RuntimeId, currentCity?.RuntimeId,
                 destinationLocation?.RuntimeId, destinationCity?.RuntimeId,
@@ -1601,7 +1604,8 @@ public class NpcRuntime : ICapabilityConditionSource
             if (!stagedSelectedOwners.ActionSlot.TrySetCurrentAction(stagedCurrentAction)
                 || !stagedSelectedOwners.ActionSlot.TryInstallRevision(state.CurrentActionRevision)
                 || !stagedSelectedOwners.Lifecycle.TryInstallState(
-                    state.LifeState, state.InjurySeverity, state.LifeStateRevision))
+                    state.LifeState, state.InjurySeverity, state.LifeStateRevision)
+                || !stagedSelectedOwners.HiddenState.TryInstallExact(state.HiddenDaysRemaining))
                 return false;
         }
         else if (state.SelectedNpcDefinition != null
@@ -2594,31 +2598,61 @@ public class NpcRuntime : ICapabilityConditionSource
     {
         int followingFullDays = UnityMathfCompatibility.Max(1, days);
         int durationIncludingCurrentDay = followingFullDays + 1;
-        int next = UnityMathfCompatibility.Max(hiddenDaysRemaining, durationIncludingCurrentDay);
-        if (next == hiddenDaysRemaining) return;
+        int current = HiddenDaysRemaining;
+        int next = UnityMathfCompatibility.Max(current, durationIncludingCurrentDay);
+        if (next == current) return;
         EnsureP12CrimeJusticeMutationAllowed();
-        hiddenDaysRemaining = next;
+        if (selectedRuntimeOwners != null)
+        {
+            if (!selectedRuntimeOwners.HiddenState.TrySetRemainingDays(next))
+                throw new InvalidOperationException("The selected NPC hidden-day owner rejected a valid hidden duration.");
+            hiddenDaysRemaining = next;
+        }
+        else
+        {
+            hiddenDaysRemaining = next;
+        }
         NotifyP12CrimeJusticeMutationCommitted();
     }
 
     public bool AdvanceHiddenDay()
     {
-        if (hiddenDaysRemaining <= 0)
+        int current = HiddenDaysRemaining;
+        if (current <= 0)
         {
             return false;
         }
 
         EnsureP12CrimeJusticeMutationAllowed();
-        hiddenDaysRemaining = UnityMathfCompatibility.Max(0, hiddenDaysRemaining - 1);
+        int next = UnityMathfCompatibility.Max(0, current - 1);
+        if (selectedRuntimeOwners != null)
+        {
+            if (!selectedRuntimeOwners.HiddenState.TrySetRemainingDays(next))
+                throw new InvalidOperationException("The selected NPC hidden-day owner rejected a valid daily decrement.");
+            hiddenDaysRemaining = next;
+        }
+        else
+        {
+            hiddenDaysRemaining = next;
+        }
         NotifyP12CrimeJusticeMutationCommitted();
-        return hiddenDaysRemaining <= 0;
+        return next <= 0;
     }
 
     public void ClearHidden()
     {
-        if (hiddenDaysRemaining == 0) return;
+        if (HiddenDaysRemaining == 0) return;
         EnsureP12CrimeJusticeMutationAllowed();
-        hiddenDaysRemaining = 0;
+        if (selectedRuntimeOwners != null)
+        {
+            if (!selectedRuntimeOwners.HiddenState.TrySetRemainingDays(0))
+                throw new InvalidOperationException("The selected NPC hidden-day owner rejected clearing hidden state.");
+            hiddenDaysRemaining = 0;
+        }
+        else
+        {
+            hiddenDaysRemaining = 0;
+        }
         NotifyP12CrimeJusticeMutationCommitted();
     }
 

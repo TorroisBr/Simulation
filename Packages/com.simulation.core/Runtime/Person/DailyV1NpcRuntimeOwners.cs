@@ -19,6 +19,7 @@ internal sealed class DailyV1NpcRuntimeOwners
     internal DailyV1NpcLifecycleOwner Lifecycle { get; }
     internal DailyV1NpcActionSlotOwner ActionSlot { get; }
     internal DailyV1NpcTravelOwner Travel { get; }
+    internal DailyV1NpcHiddenStateOwner HiddenState { get; }
 
     private DailyV1NpcRuntimeOwners(
         string runtimeId,
@@ -41,6 +42,7 @@ internal sealed class DailyV1NpcRuntimeOwners
         Lifecycle = new DailyV1NpcLifecycleOwner();
         ActionSlot = new DailyV1NpcActionSlotOwner(definitions);
         Travel = new DailyV1NpcTravelOwner(runtimeId);
+        HiddenState = new DailyV1NpcHiddenStateOwner();
     }
 
     internal static bool TryCreateInitial(
@@ -148,6 +150,24 @@ internal sealed class DailyV1NpcRuntimeOwners
 
     internal bool TryCopyStatusDefinitionIds(List<string> destination) =>
         Status != null && Status.TryCopyDefinitionIds(destination);
+}
+
+/// <summary>
+/// Holds the selected NPC's existing hidden-day counter. Mutation admission
+/// and P12 invalidation remain with the existing NpcRuntime writer boundary.
+/// </summary>
+internal sealed class DailyV1NpcHiddenStateOwner
+{
+    internal int RemainingDays { get; private set; }
+
+    internal bool TryInstallExact(int remainingDays)
+    {
+        if (remainingDays < 0) return false;
+        RemainingDays = remainingDays;
+        return true;
+    }
+
+    internal bool TrySetRemainingDays(int remainingDays) => TryInstallExact(remainingDays);
 }
 
 /// <summary>

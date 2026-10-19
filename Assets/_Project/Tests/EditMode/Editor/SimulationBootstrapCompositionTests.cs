@@ -2423,6 +2423,22 @@ public sealed class SimulationBootstrapCompositionTests
         runtime.SetCurrentActionRuntime(null);
         Assert.That(runtime.CurrentActionRevision, Is.EqualTo(2L));
         Assert.That(runtime.SelectedRuntimeOwners.ActionSlot.Revision, Is.EqualTo(2L));
+        Assert.That(runtime.SelectedRuntimeOwners.HiddenState.RemainingDays, Is.Zero);
+        runtime.HideForDays(3);
+        Assert.That(runtime.HiddenDaysRemaining, Is.EqualTo(4));
+        Assert.That(runtime.SelectedRuntimeOwners.HiddenState.RemainingDays, Is.EqualTo(4));
+        Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(1L));
+        runtime.HideForDays(2);
+        Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(1L),
+            "A shorter hidden duration remains a no-op in the existing P12 mutation boundary.");
+        Assert.That(runtime.AdvanceHiddenDay(), Is.False);
+        Assert.That(runtime.HiddenDaysRemaining, Is.EqualTo(3));
+        Assert.That(runtime.SelectedRuntimeOwners.HiddenState.RemainingDays, Is.EqualTo(3));
+        Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(2L));
+        runtime.ClearHidden();
+        Assert.That(runtime.HiddenDaysRemaining, Is.Zero);
+        Assert.That(runtime.SelectedRuntimeOwners.HiddenState.RemainingDays, Is.Zero);
+        Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(3L));
         Assert.That(runtime.TryApplyInjury(NpcInjurySeverity.Hurt), Is.True);
         Assert.That(runtime.InjurySeverity, Is.EqualTo(NpcInjurySeverity.Hurt));
         Assert.That(runtime.SelectedRuntimeOwners.Lifecycle.InjurySeverity, Is.EqualTo(NpcInjurySeverity.Hurt));

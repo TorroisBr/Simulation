@@ -310,6 +310,24 @@ public sealed class DailyV1NpcStatusOwnerTests
     }
 
     [Test]
+    public void SelectedNpcHiddenStateOwnerPreservesExactNonNegativeCounterValues()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition npc = definitions.Npcs.Values.First();
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-runtime", definitions, npc, 0f, out DailyV1NpcRuntimeOwners owners), Is.True);
+
+        Assert.That(owners.HiddenState.RemainingDays, Is.Zero);
+        Assert.That(owners.HiddenState.TrySetRemainingDays(4), Is.True);
+        Assert.That(owners.HiddenState.RemainingDays, Is.EqualTo(4));
+        Assert.That(owners.HiddenState.TryInstallExact(2), Is.True);
+        Assert.That(owners.HiddenState.RemainingDays, Is.EqualTo(2));
+        Assert.That(owners.HiddenState.TryInstallExact(-1), Is.False);
+        Assert.That(owners.HiddenState.RemainingDays, Is.EqualTo(2),
+            "A rejected invalid restoration value leaves the existing owner unchanged.");
+    }
+
+    [Test]
     public void SelectedNpcRuntimeOwnerCompositionRejectsForeignGraphOwnerBindings()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
