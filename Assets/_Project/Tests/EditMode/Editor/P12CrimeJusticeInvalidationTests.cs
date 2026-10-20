@@ -372,17 +372,15 @@ public sealed class P12CrimeJusticeInvalidationTests
         Assert.That(initial.Cardinality, Is.EqualTo(2));
         Assert.That(initial.Revision, Is.Zero);
 
-        List<WantedRecordRuntime> wantedRows = ReadRows<WantedRecordRuntime>(justice, "wantedRecords");
-        wantedRows.Add(warrant);
-        Assert.Throws<InvalidOperationException>(() => provider.GetCurrentCensus(),
-            "duplicate aliases cannot masquerade as distinct wanted rows");
-        wantedRows.RemoveAt(wantedRows.Count - 1);
+        IList<WantedRecordRuntime> wantedRows = ReadRows<WantedRecordRuntime>(justice, "wantedRecords");
+        Assert.Throws<InvalidOperationException>(() => wantedRows.Add(warrant),
+            "the authoritative projection rejects a duplicate wanted-row alias before publication");
+        Assert.That(provider.GetCurrentCensus().Cardinality, Is.EqualTo(initial.Cardinality));
 
-        List<PrisonSentenceRuntime> sentenceRows = ReadRows<PrisonSentenceRuntime>(justice, "prisonSentences");
-        sentenceRows.Add(sentence);
-        Assert.Throws<InvalidOperationException>(() => provider.GetCurrentCensus(),
-            "the exact same mutable sentence alias cannot be counted twice");
-        sentenceRows.RemoveAt(sentenceRows.Count - 1);
+        IList<PrisonSentenceRuntime> sentenceRows = ReadRows<PrisonSentenceRuntime>(justice, "prisonSentences");
+        Assert.Throws<InvalidOperationException>(() => sentenceRows.Add(sentence),
+            "the authoritative projection rejects a duplicate sentence-row alias before publication");
+        Assert.That(provider.GetCurrentCensus().Cardinality, Is.EqualTo(initial.Cardinality));
 
         SimulationRuntime runtime = CreateP12Runtime(new[] { city }, new[] { guard, target }, justice: justice);
         Assert.That(runtime.TryAdvanceDays(1, out int advanced, out SimulationRuntimeAdvanceFailure advanceFailure),
@@ -583,11 +581,11 @@ public sealed class P12CrimeJusticeInvalidationTests
         return null;
     }
 
-    private static List<T> ReadRows<T>(JusticeSystem justice, string fieldName)
+    private static IList<T> ReadRows<T>(JusticeSystem justice, string fieldName)
     {
         FieldInfo field = typeof(JusticeSystem).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(field, Is.Not.Null);
-        List<T> rows = field.GetValue(justice) as List<T>;
+        IList<T> rows = field.GetValue(justice) as IList<T>;
         Assert.That(rows, Is.Not.Null);
         return rows;
     }
