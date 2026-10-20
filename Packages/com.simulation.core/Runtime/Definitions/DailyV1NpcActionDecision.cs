@@ -397,6 +397,50 @@ internal interface IDailyV1SelectedNpcActionDecisionBoundary
 /// <summary>Core-owned selection half of one admitted Daily-v1 actor turn.</summary>
 internal static class DailyV1SelectedNpcActionDecisionStage
 {
+    /// <summary>
+    /// Retains selected-definition action choice for admitted Unity runtimes
+    /// that predate selected-owner graph composition. Owner-backed planning is
+    /// intentionally unavailable on this path, matching the host's existing
+    /// provider fallback until the shared runtime graph is bound.
+    /// </summary>
+    internal static bool TryChooseWithoutRuntimeOwners(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1NpcDefinition actor,
+        string actorRuntimeId,
+        IReadOnlyList<DailyV1ActionDefinition> availableActions,
+        IReadOnlyList<DailyV1StatusDefinition> activeStatuses,
+        long currentAbsoluteDay,
+        IAuthoritativeRandomSource randomSource,
+        IDailyV1SelectedNpcActionDecisionBoundary boundary,
+        out DailyV1NpcActionCandidate selected)
+    {
+        selected = null;
+        if (definitions == null || actor == null || string.IsNullOrWhiteSpace(actorRuntimeId)
+            || availableActions == null || activeStatuses == null || randomSource == null
+            || boundary == null
+            || !DailyV1NpcActionDecision.TryCreateCandidates(
+                actor, definitions, availableActions, activeStatuses,
+                out List<DailyV1NpcActionCandidate> candidates))
+            return false;
+
+        foreach (DailyV1NpcActionCandidate candidate in candidates)
+        {
+            if (candidate.Action.Values.actionType?.Value
+                == DailyV1NpcDefinitionRules.NormalActionTypeValue)
+                continue;
+
+            if (!boundary.TryPrepareAutonomousProviderAction(null, candidate, out float utility))
+                candidate.Utility = 0f;
+            else
+                candidate.Utility = UnityMathfCompatibility.Max(0f, utility);
+        }
+
+        selected = DailyV1NpcActionDecision.ChooseWeightedCandidate(
+            candidates, randomSource,
+            "npc-decision|" + actorRuntimeId + "|" + currentAbsoluteDay);
+        return true;
+    }
+
     internal static bool TryChoose(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,

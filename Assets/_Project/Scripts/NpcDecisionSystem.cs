@@ -72,20 +72,37 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
         DailyV1SelectedRuntimeOwnerGraph graph = npcRuntime.SelectedRuntimeOwnerGraph;
         DailyV1NpcRuntimeOwners actor = npcRuntime.SelectedRuntimeOwners;
         if (availableActions == null
-            || graph == null
-            || actor == null
-            || !ReferenceEquals(graph.Definitions, npcRuntime.SelectedDailyV1DefinitionGraph)
-            || !ReferenceEquals(actor.Definitions, npcRuntime.SelectedDailyV1DefinitionGraph)
-            || !graph.ContainsExactNpcOwner(actor)
             || !npcRuntime.TryGetSelectedDailyV1ActiveStatusNodes(activeStatuses))
             return null;
 
         SelectedNpcActionDecisionBoundary boundary =
             new SelectedNpcActionDecisionBoundary(this, npcRuntime);
-        if (!DailyV1SelectedNpcActionDecisionStage.TryChoose(
+        DailyV1NpcActionCandidate selected;
+        if (graph == null && actor == null)
+        {
+            if (!DailyV1SelectedNpcActionDecisionStage.TryChooseWithoutRuntimeOwners(
+                    npcRuntime.SelectedDailyV1DefinitionGraph,
+                    npcRuntime.SelectedDailyV1Definition,
+                    npcRuntime.RuntimeId,
+                    availableActions,
+                    activeStatuses,
+                    currentAbsoluteDay,
+                    randomSource,
+                    boundary,
+                    out selected))
+                return null;
+        }
+        else if (graph == null
+            || actor == null
+            || !ReferenceEquals(graph.Definitions, npcRuntime.SelectedDailyV1DefinitionGraph)
+            || !ReferenceEquals(actor.Definitions, npcRuntime.SelectedDailyV1DefinitionGraph)
+            || !graph.ContainsExactNpcOwner(actor)
+            || !DailyV1SelectedNpcActionDecisionStage.TryChoose(
                 graph, actor, availableActions, activeStatuses, currentAbsoluteDay,
-                randomSource, boundary, out DailyV1NpcActionCandidate selected)
-            || selected == null)
+                randomSource, boundary, out selected))
+            return null;
+
+        if (selected == null)
             return null;
 
         if (boundary.TryGetProjectedAction(selected, out NpcActionRuntime selectedProviderAction))
@@ -235,8 +252,13 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             out float utility)
         {
             utility = 0f;
-            if (!IsExactActor(actor)
-                || !TryGetActionAsset(actor, candidate?.Action, out NpcActionData actionAsset))
+            if ((actor != null && !IsExactActor(actor))
+                || (actor == null
+                    && (npcRuntime.SelectedRuntimeOwnerGraph != null
+                        || npcRuntime.SelectedRuntimeOwners != null
+                        || npcRuntime.SelectedDailyV1DefinitionGraph == null)))
+                return false;
+            if (!TryGetActionAsset(actor, candidate?.Action, out NpcActionData actionAsset))
                 return false;
 
             utility = candidate.Utility;
@@ -258,6 +280,11 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             out NpcActionData asset)
         {
             asset = null;
+            if (actor == null)
+                return npcRuntime.SelectedRuntimeOwnerGraph == null
+                    && npcRuntime.SelectedRuntimeOwners == null
+                    && npcRuntime.SelectedDailyV1DefinitionGraph != null
+                    && npcRuntime.TryGetSelectedDailyV1ActionAsset(action, out asset);
             return IsExactActor(actor)
                 && npcRuntime.TryGetSelectedDailyV1ActionAsset(action, out asset);
         }
