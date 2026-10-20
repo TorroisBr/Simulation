@@ -173,6 +173,100 @@ public sealed class DailyV1SelectedOpenMarketActionExecutionTests
     }
 
     [Test]
+    public void SelectedActionDispatchRoutesOneLocalMarketSaleAndHandlesItsSingleRoll()
+    {
+        CreateActionRollFixture(1f, out _,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor, out DailyV1CityRuntimeOwners city,
+            out DailyV1ActionDefinition sell, out DailyV1ItemDefinition item);
+        int inventoryBefore = actor.Inventory.GetAmount(item);
+        int marketBefore = city.Market.GetAmount(item);
+        List<string> order = new List<string>();
+        FixedActionRandom random = new FixedActionRandom(order, 0.25f);
+        RecordingSaleBoundary saleBoundary = new RecordingSaleBoundary(order);
+        RecordingActionDispatchBoundary boundary =
+            new RecordingActionDispatchBoundary(saleBoundary, null);
+
+        Assert.That(DailyV1SelectedActionDispatchStage.TryDispatch(
+            graph, actor, random, 41L, boundary,
+            out DailyV1SelectedActionDispatchResult result), Is.True);
+
+        Assert.That(result.Kind, Is.EqualTo(DailyV1SelectedActionDispatchKind.OpenMarket));
+        Assert.That(result.ActionRollSucceeded, Is.True);
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(random.Calls, Is.EqualTo(1));
+        Assert.That(order, Is.EqualTo(new[] { "roll", "p12-begin", "p12-complete", "p12-dispose" }));
+        Assert.That(saleBoundary.BeginCalls, Is.EqualTo(1));
+        Assert.That(saleBoundary.CompleteCalls, Is.EqualTo(1));
+        Assert.That(saleBoundary.DisposeCalls, Is.EqualTo(1));
+        Assert.That(actor.Inventory.GetAmount(item),
+            Is.EqualTo(inventoryBefore - result.OpenMarket.Sale.Plan.Quantity));
+        Assert.That(city.Market.GetAmount(item),
+            Is.EqualTo(marketBefore + result.OpenMarket.Sale.Plan.Quantity));
+    }
+
+    [Test]
+    public void SelectedActionDispatchReturnsHandledFailureAfterTheSingleFailedRoll()
+    {
+        CreateActionRollFixture(0.2f, out _,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor, out DailyV1CityRuntimeOwners city,
+            out _, out DailyV1ItemDefinition item);
+        int inventoryBefore = actor.Inventory.GetAmount(item);
+        int marketBefore = city.Market.GetAmount(item);
+        List<string> order = new List<string>();
+        FixedActionRandom random = new FixedActionRandom(order, 0.9f);
+        RecordingSaleBoundary saleBoundary = new RecordingSaleBoundary(order);
+        RecordingActionDispatchBoundary boundary =
+            new RecordingActionDispatchBoundary(saleBoundary, null);
+
+        Assert.That(DailyV1SelectedActionDispatchStage.TryDispatch(
+            graph, actor, random, 42L, boundary,
+            out DailyV1SelectedActionDispatchResult result), Is.True);
+
+        Assert.That(result.ActionRollSucceeded, Is.False);
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(random.Calls, Is.EqualTo(1));
+        Assert.That(order, Is.EqualTo(new[] { "roll" }));
+        Assert.That(saleBoundary.BeginCalls, Is.Zero);
+        Assert.That(saleBoundary.CompleteCalls, Is.Zero);
+        Assert.That(saleBoundary.DisposeCalls, Is.Zero);
+        Assert.That(actor.Inventory.GetAmount(item), Is.EqualTo(inventoryBefore));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(marketBefore));
+    }
+
+    [Test]
+    public void SelectedActionDispatchLeavesUnsupportedProviderFamiliesUnhandledBeforeRandomness()
+    {
+        CreateActionRollFixture(1f, out DailyV1EffectiveDefinitions definitions,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor, out _, out _, out _);
+        DailyV1ActionDefinition unsupported = definitions.Actions.Values.First(value =>
+        {
+            int actionType = value.Values.actionType?.Value ?? int.MinValue;
+            return actionType != DailyV1NpcDefinitionRules.TravelActionTypeValue
+                && actionType != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
+                && actionType != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue;
+        });
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(definitions, unsupported,
+            null, null, null, 0, 0f, 1f, NpcTravelReason.None, 0f,
+            null, null, null, null, out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, unsupported, payload, null), Is.True);
+        FixedActionRandom random = new FixedActionRandom(new List<string>(), 0.1f);
+        RecordingActionDispatchBoundary boundary =
+            new RecordingActionDispatchBoundary(null, null);
+
+        Assert.That(DailyV1SelectedActionDispatchStage.TryDispatch(
+            graph, actor, random, 43L, boundary,
+            out DailyV1SelectedActionDispatchResult result), Is.False);
+
+        Assert.That(result, Is.Null);
+        Assert.That(random.Calls, Is.Zero);
+        Assert.That(boundary.BoundaryResolutionCalls, Is.Zero);
+        Assert.That(boundary.CrossCityCompletionCalls, Is.Zero);
+    }
+
+    [Test]
     public void SelectedMarketDispatcherCompletesLocalPurchaseAfterTheSameActionRollBoundary()
     {
         CreateActionRollFixture(1f, out DailyV1EffectiveDefinitions definitions,
@@ -385,5 +479,57 @@ public sealed class DailyV1SelectedOpenMarketActionExecutionTests
         public void Complete(DailyV1SelectedOpenMarketPurchaseCommitResult result)
             => order.Add("p12-complete");
         public void Dispose() => order.Add("p12-dispose");
+    }
+
+    private sealed class RecordingActionDispatchBoundary : IDailyV1SelectedActionDispatchBoundary
+    {
+        private readonly IDailyV1SelectedOpenMarketSaleBoundary saleBoundary;
+        private readonly IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary;
+        internal int BoundaryResolutionCalls { get; private set; }
+        internal int CrossCityCompletionCalls { get; private set; }
+
+        internal RecordingActionDispatchBoundary(
+            IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
+            IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary)
+        {
+            this.saleBoundary = saleBoundary;
+            this.purchaseBoundary = purchaseBoundary;
+        }
+
+        public bool TryGetSoloTravelBoundary(DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action, out TravelPartyStore partyStore,
+            out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary)
+        {
+            BoundaryResolutionCalls++;
+            partyStore = null;
+            boundary = null;
+            return false;
+        }
+
+        public bool TryGetMarketBoundaries(DailyV1NpcRuntimeOwners actor,
+            out IDailyV1SelectedOpenMarketSaleBoundary sale,
+            out IDailyV1SelectedOpenMarketPurchaseBoundary purchase)
+        {
+            BoundaryResolutionCalls++;
+            sale = saleBoundary;
+            purchase = purchaseBoundary;
+            return true;
+        }
+
+        public bool TryGetNpcTradeBoundary(DailyV1NpcRuntimeOwners seller,
+            DailyV1NpcRuntimeOwners buyer, out IDailyV1SelectedNpcTradeBoundary boundary)
+        {
+            BoundaryResolutionCalls++;
+            boundary = null;
+            return false;
+        }
+
+        public bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) => true;
+        public void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) { }
+        public bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor) => true;
+        public void PublishTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor) { }
+
+        public void CompleteCrossCityBuy(DailyV1NpcRuntimeOwners actor,
+            DailyV1SelectedCrossCityBuyResult result) => CrossCityCompletionCalls++;
     }
 }

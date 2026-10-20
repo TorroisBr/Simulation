@@ -1088,6 +1088,82 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         return true;
     }
 
+    /// <summary>Creates the existing Unity P12 market scopes for a Core-owned
+    /// selected-action dispatcher. These are host admission adapters only; the
+    /// returned Core operations still own preparation and commit semantics.</summary>
+    internal bool TryCreateSelectedActionMarketBoundaries(
+        NpcRuntime npc,
+        out IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
+        out IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary)
+    {
+        saleBoundary = null;
+        purchaseBoundary = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = npc?.SelectedRuntimeOwnerGraph;
+        DailyV1NpcRuntimeOwners actor = npc?.SelectedRuntimeOwners;
+        DailyV1CityRuntimeOwners cityOwner = null;
+        if (graph != null && !string.IsNullOrWhiteSpace(actor?.Travel?.CurrentCityRuntimeId))
+            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+                if (string.Equals(candidate.RuntimeId, actor.Travel.CurrentCityRuntimeId,
+                    StringComparison.Ordinal))
+                { cityOwner = candidate; break; }
+
+        if (npc == null || graph == null || actor == null || cityOwner == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !graph.ContainsExactCityOwner(cityOwner)
+            || !ReferenceEquals(npc.CurrentCity?.SelectedRuntimeOwners, cityOwner)
+            || !ReferenceEquals(npc.CurrentCity?.Market?.SelectedDailyV1Owner, cityOwner.Market))
+            return false;
+
+        bool trackMarket = p12CensusRuntime != null
+            && p12CensusRuntime.HasP12MarketOperationAdapter;
+        if (trackMarket)
+        {
+            saleBoundary = new DailyV1SelectedOpenMarketSaleBoundary(
+                this, npc, npc.CurrentCity.Market);
+            purchaseBoundary = new DailyV1SelectedOpenMarketPurchaseBoundary(
+                this, npc, npc.CurrentCity.Market);
+        }
+        return true;
+    }
+
+    /// <summary>Creates the existing Unity P12 NPC-trade scope when the exact
+    /// selected Core participants are represented by the host roster.</summary>
+    internal bool TryCreateSelectedActionNpcTradeBoundary(
+        NpcRuntime seller,
+        NpcRuntime buyer,
+        out IDailyV1SelectedNpcTradeBoundary boundary)
+    {
+        boundary = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = seller?.SelectedRuntimeOwnerGraph;
+        if (seller == null || buyer == null || graph == null
+            || !ReferenceEquals(graph, buyer.SelectedRuntimeOwnerGraph)
+            || !graph.ContainsExactNpcOwner(seller.SelectedRuntimeOwners)
+            || !graph.ContainsExactNpcOwner(buyer.SelectedRuntimeOwners)
+            || !ReferenceEquals(seller.CurrentCity, buyer.CurrentCity)
+            || !ReferenceEquals(seller.CurrentCity?.SelectedRuntimeOwners,
+                seller.SelectedRuntimeOwners?.Travel == null
+                    ? null
+                    : FindCityOwner(graph, seller.SelectedRuntimeOwners.Travel.CurrentCityRuntimeId)))
+            return false;
+
+        bool trackTrade = p12CensusRuntime != null
+            && p12CensusRuntime.HasNpcTradeCensusAdapter;
+        if (trackTrade)
+            boundary = new DailyV1SelectedNpcTradeBoundary(this, buyer, seller);
+        return true;
+    }
+
+    private static DailyV1CityRuntimeOwners FindCityOwner(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string runtimeId)
+    {
+        if (graph == null || string.IsNullOrWhiteSpace(runtimeId)) return null;
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            if (city != null && string.Equals(city.RuntimeId, runtimeId, StringComparison.Ordinal))
+                return graph.ContainsExactCityOwner(city) ? city : null;
+        return null;
+    }
+
     internal bool TryExecuteSelectedPlannedMarketSale(
         NpcRuntime seller,
         out DailyV1SelectedActionExecutionStage.PlannedMarketSaleResult result)
@@ -1122,8 +1198,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             seller.MerchantTradePlan.CanAdmitSelectedPlanOwnerMutation,
             seller.MerchantTradePlan.PublishSelectedPlanOwnerMutation,
             out result);
-        if (result?.PartialCommit == true)
-            p12CensusRuntime?.FaultRuntimeAdmission();
+        FaultSelectedPlannedMarketSaleIfPartial(result);
         return executed;
     }
 
@@ -1170,9 +1245,15 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
 
         actionRollSucceeded = execution.ActionRollSucceeded;
         result = execution.Sale;
+        FaultSelectedPlannedMarketSaleIfPartial(result);
+        return true;
+    }
+
+    internal void FaultSelectedPlannedMarketSaleIfPartial(
+        DailyV1SelectedActionExecutionStage.PlannedMarketSaleResult result)
+    {
         if (result?.PartialCommit == true)
             p12CensusRuntime?.FaultRuntimeAdmission();
-        return true;
     }
 
     /// <summary>Executes a selected local market action from its exact Core payload.</summary>
@@ -1443,6 +1524,35 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             && npc.TravelPlan.CanProjectSelectedTradePlanTarget(actor.TravelPlan,
                 targetOwner, targetOwner.RuntimeId, targetOwner.LocationRuntimeId,
                 targetLocationProjection, targetCityProjection);
+    }
+
+    /// <summary>Validates the existing exact Unity target projection before the Core dispatcher runs.</summary>
+    internal bool TryResolveSelectedCrossCityBuyTarget(
+        NpcRuntime npc,
+        DailyV1NpcActionPayloadOwner payload,
+        CityRuntime targetCityProjection,
+        out SpatialLocationRuntime targetLocationProjection)
+    {
+        return TryResolveSelectedCrossCityBuy(npc, payload, targetCityProjection,
+            out _, out _, out targetLocationProjection);
+    }
+
+    /// <summary>Preserves the existing P12 fault and Unity travel-plan projection after Core dispatch.</summary>
+    internal void CompleteSelectedCrossCityBuyDispatch(
+        NpcRuntime npc,
+        DailyV1SelectedCrossCityBuyResult result,
+        SpatialLocationRuntime targetLocationProjection,
+        CityRuntime targetCityProjection)
+    {
+        FaultSelectedCrossCityBuyAdmissionIfPartial(result);
+        if (result?.Succeeded != true) return;
+
+        DailyV1NpcRuntimeOwners actor = npc?.SelectedRuntimeOwners;
+        if (actor == null || targetLocationProjection == null || targetCityProjection == null)
+            throw new InvalidOperationException(
+                "The committed selected cross-city buy has no exact Unity travel-plan projection.");
+        npc.TravelPlan.ProjectSelectedTradePlan(
+            actor.TravelPlan, targetLocationProjection, targetCityProjection);
     }
 
     private DailyV1SelectedCrossCityBuyResult ExecuteSelectedCrossCityBuyCore(

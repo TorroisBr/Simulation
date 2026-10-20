@@ -797,3 +797,267 @@ internal static class DailyV1SelectedActionExecutionStage
         return true;
     }
 }
+
+/// <summary>
+/// Host-owned ports needed to admit and publish selected-action operations.
+/// The host resolves the exact Unity projections and P12 operation adapters;
+/// action routing and domain execution stay in Simulation.Core.
+/// </summary>
+internal interface IDailyV1SelectedActionDispatchBoundary
+{
+    bool TryGetSoloTravelBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        out TravelPartyStore partyStore,
+        out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary);
+
+    bool TryGetMarketBoundaries(
+        DailyV1NpcRuntimeOwners actor,
+        out IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
+        out IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary);
+
+    bool TryGetNpcTradeBoundary(
+        DailyV1NpcRuntimeOwners seller,
+        DailyV1NpcRuntimeOwners buyer,
+        out IDailyV1SelectedNpcTradeBoundary boundary);
+
+    bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners actor);
+    void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners actor);
+    bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor);
+    void PublishTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor);
+
+    /// <summary>Completes the existing host projection after Core commits a cross-city buy.</summary>
+    void CompleteCrossCityBuy(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1SelectedCrossCityBuyResult result);
+}
+
+internal enum DailyV1SelectedActionDispatchKind
+{
+    PlannedNpcSale,
+    PlannedMarketSale,
+    OpenMarket,
+    CrossCityBuy,
+    SoloTravel
+}
+
+/// <summary>Result of routing one exact selected owner action slot.</summary>
+internal sealed class DailyV1SelectedActionDispatchResult
+{
+    internal DailyV1SelectedActionDispatchKind Kind { get; }
+    internal bool ActionRollSucceeded { get; }
+    internal bool Succeeded { get; }
+    internal float ReferencePrice { get; }
+    internal float ReferenceUnitCost { get; }
+    internal DailyV1SelectedActionExecutionStage.SelectedPlannedNpcSaleActionResult PlannedNpcSale { get; }
+    internal DailyV1SelectedActionExecutionStage.SelectedPlannedMarketSaleActionResult PlannedMarketSale { get; }
+    internal DailyV1SelectedActionExecutionStage.SelectedOpenMarketActionResult OpenMarket { get; }
+    internal DailyV1SelectedActionExecutionStage.SelectedCrossCityBuyActionResult CrossCityBuy { get; }
+    internal DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult SoloTravel { get; }
+
+    internal DailyV1SelectedActionDispatchResult(
+        DailyV1SelectedActionDispatchKind kind,
+        bool actionRollSucceeded,
+        bool succeeded,
+        float referencePrice = 0f,
+        float referenceUnitCost = 0f,
+        DailyV1SelectedActionExecutionStage.SelectedPlannedNpcSaleActionResult plannedNpcSale = null,
+        DailyV1SelectedActionExecutionStage.SelectedPlannedMarketSaleActionResult plannedMarketSale = null,
+        DailyV1SelectedActionExecutionStage.SelectedOpenMarketActionResult openMarket = null,
+        DailyV1SelectedActionExecutionStage.SelectedCrossCityBuyActionResult crossCityBuy = null,
+        DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult soloTravel = null)
+    {
+        Kind = kind;
+        ActionRollSucceeded = actionRollSucceeded;
+        Succeeded = succeeded;
+        ReferencePrice = referencePrice;
+        ReferenceUnitCost = referenceUnitCost;
+        PlannedNpcSale = plannedNpcSale;
+        PlannedMarketSale = plannedMarketSale;
+        OpenMarket = openMarket;
+        CrossCityBuy = crossCityBuy;
+        SoloTravel = soloTravel;
+    }
+}
+
+/// <summary>
+/// Owns dispatch for the selected Daily-v1 Travel and Merchant action slots
+/// already supported by Core. Unmigrated provider families remain explicitly
+/// unhandled for the existing host-provider path.
+/// </summary>
+internal static class DailyV1SelectedActionDispatchStage
+{
+    internal static bool TryDispatch(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        IDailyV1SelectedActionDispatchBoundary boundary,
+        out DailyV1SelectedActionDispatchResult result)
+    {
+        result = null;
+        if (graph == null || actor == null || randomSource == null || boundary == null
+            || currentAbsoluteDay < 0L
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(graph.Definitions, actor.Definitions))
+            return false;
+
+        DailyV1NpcActionSlotOwner slot = actor.ActionSlot;
+        DailyV1ActionDefinition action = slot?.CurrentAction;
+        DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
+        int actionType = action?.Values.actionType?.Value ?? int.MinValue;
+        if (action == null || payload == null || !ReferenceEquals(payload.Action, action))
+            return false;
+
+        if (actionType == DailyV1NpcDefinitionRules.TravelActionTypeValue)
+        {
+            if (payload.TargetNpcRuntimeId != null || payload.TargetItem != null
+                || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+                || !boundary.TryGetSoloTravelBoundary(actor, action,
+                    out TravelPartyStore partyStore,
+                    out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary travelBoundary)
+                || travelBoundary == null)
+                return false;
+
+            if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
+                    graph, actor, action, partyStore, randomSource, currentAbsoluteDay,
+                    travelBoundary,
+                    out DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult travel))
+                return false;
+
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.SoloTravel,
+                travel?.ActionRollSucceeded == true,
+                travel?.Succeeded == true,
+                soloTravel: travel);
+            return true;
+        }
+
+        if (actionType != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
+            && actionType != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue)
+            return false;
+
+        if (payload.TargetItem == null || payload.Amount <= 0
+            || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+            || actor.Travel == null || actor.Travel.IsTraveling
+            || string.IsNullOrWhiteSpace(actor.Travel.CurrentCityRuntimeId))
+            return false;
+
+        bool activeMerchantPlan = actor.MerchantTradePlan?.IsActive == true;
+        if (actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            && activeMerchantPlan && payload.TargetNpcRuntimeId != null)
+        {
+            DailyV1NpcRuntimeOwners buyer = FindExactNpc(graph, payload.TargetNpcRuntimeId);
+            if (buyer == null
+                || !boundary.TryGetNpcTradeBoundary(actor, buyer,
+                    out IDailyV1SelectedNpcTradeBoundary tradeBoundary)
+                || !boundary.TryGetMarketBoundaries(actor,
+                    out IDailyV1SelectedOpenMarketSaleBoundary marketBoundary, out _))
+                return false;
+
+            float referencePrice = actor.MerchantTradePlan.PurchasePricePerItem;
+            if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedPlannedNpcSaleActionSlot(
+                    graph, actor, buyer, action, randomSource, currentAbsoluteDay,
+                    tradeBoundary, marketBoundary,
+                    () => boundary.CanAdmitMerchantPlanMutation(actor),
+                    () => boundary.PublishMerchantPlanMutation(actor),
+                    out DailyV1SelectedActionExecutionStage.SelectedPlannedNpcSaleActionResult sale))
+                return false;
+
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.PlannedNpcSale,
+                sale?.ActionRollSucceeded == true,
+                sale?.ActionRollSucceeded == true && sale.Succeeded,
+                referencePrice: referencePrice,
+                plannedNpcSale: sale);
+            return true;
+        }
+
+        if (actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            && activeMerchantPlan)
+        {
+            if (payload.TargetNpcRuntimeId != null
+                || !string.Equals(payload.TargetCityRuntimeId,
+                    actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
+                || !boundary.TryGetMarketBoundaries(actor,
+                    out IDailyV1SelectedOpenMarketSaleBoundary marketBoundary, out _))
+                return false;
+
+            float referencePrice = actor.MerchantTradePlan.PurchasePricePerItem;
+            if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedPlannedMarketSaleActionSlot(
+                    graph, actor, action, randomSource, currentAbsoluteDay,
+                    marketBoundary,
+                    () => boundary.CanAdmitMerchantPlanMutation(actor),
+                    () => boundary.PublishMerchantPlanMutation(actor),
+                    out DailyV1SelectedActionExecutionStage.SelectedPlannedMarketSaleActionResult sale))
+                return false;
+
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.PlannedMarketSale,
+                sale?.ActionRollSucceeded == true,
+                sale?.ActionRollSucceeded == true && sale.Succeeded,
+                referencePrice: referencePrice,
+                plannedMarketSale: sale);
+            return true;
+        }
+
+        if (payload.TargetNpcRuntimeId != null) return false;
+        if (!boundary.TryGetMarketBoundaries(actor,
+            out IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
+            out IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary))
+            return false;
+
+        if (string.Equals(payload.TargetCityRuntimeId,
+                actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal))
+        {
+            float referenceUnitCost = actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                ? actor.Inventory?.GetAverageUnitCost(payload.TargetItem) ?? 0f
+                : 0f;
+            if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedOpenMarketActionSlot(
+                    graph, actor, action, randomSource, currentAbsoluteDay,
+                    saleBoundary, purchaseBoundary,
+                    out DailyV1SelectedActionExecutionStage.SelectedOpenMarketActionResult market))
+                return false;
+
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.OpenMarket,
+                market?.ActionRollSucceeded == true,
+                market?.ActionRollSucceeded == true && market.Succeeded,
+                referenceUnitCost: referenceUnitCost,
+                openMarket: market);
+            return true;
+        }
+
+        if (actionType != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue)
+            return false;
+
+        if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedCrossCityBuyActionSlot(
+                graph, actor, action, randomSource, currentAbsoluteDay,
+                purchaseBoundary,
+                () => boundary.CanAdmitMerchantPlanMutation(actor),
+                () => boundary.PublishMerchantPlanMutation(actor),
+                () => boundary.CanAdmitTradeTravelPlanMutation(actor),
+                () => boundary.PublishTradeTravelPlanMutation(actor),
+                out DailyV1SelectedActionExecutionStage.SelectedCrossCityBuyActionResult crossCityBuy))
+            return false;
+
+        result = new DailyV1SelectedActionDispatchResult(
+            DailyV1SelectedActionDispatchKind.CrossCityBuy,
+            crossCityBuy?.ActionRollSucceeded == true,
+            crossCityBuy?.ActionRollSucceeded == true && crossCityBuy.Purchase?.Succeeded == true,
+            crossCityBuy: crossCityBuy);
+        boundary.CompleteCrossCityBuy(actor, crossCityBuy?.Purchase);
+        return true;
+    }
+
+    private static DailyV1NpcRuntimeOwners FindExactNpc(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string runtimeId)
+    {
+        foreach (DailyV1NpcRuntimeOwners candidate in graph.Npcs)
+            if (candidate != null
+                && string.Equals(candidate.RuntimeId, runtimeId, StringComparison.Ordinal))
+                return graph.ContainsExactNpcOwner(candidate) ? candidate : null;
+        return null;
+    }
+}

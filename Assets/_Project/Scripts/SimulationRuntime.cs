@@ -462,6 +462,313 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         public void ClearTravelPlan() => clearTravelPlan();
     }
 
+    /// <summary>
+    /// Resolves only the exact admitted Unity projections and existing P12
+    /// adapters needed by Core's selected-action dispatcher.
+    /// </summary>
+    private sealed class SelectedActionDispatchBoundaryAdapter
+        : IDailyV1SelectedActionDispatchBoundary
+    {
+        private readonly SimulationRuntime runtime;
+        private readonly NpcRuntime actorRuntime;
+        private readonly NpcActionRuntime actionRuntime;
+        private readonly NpcActionData actionAsset;
+        private SpatialLocationRuntime crossCityTargetLocation;
+
+        internal SelectedActionDispatchBoundaryAdapter(
+            SimulationRuntime runtime,
+            NpcRuntime actorRuntime,
+            NpcActionRuntime actionRuntime,
+            NpcActionData actionAsset)
+        {
+            this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+            this.actorRuntime = actorRuntime ?? throw new ArgumentNullException(nameof(actorRuntime));
+            this.actionRuntime = actionRuntime ?? throw new ArgumentNullException(nameof(actionRuntime));
+            this.actionAsset = actionAsset ?? throw new ArgumentNullException(nameof(actionAsset));
+        }
+
+        public bool TryGetSoloTravelBoundary(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action,
+            out TravelPartyStore partyStore,
+            out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary)
+        {
+            partyStore = null;
+            boundary = null;
+            if (!TryGetExactActor(actor, action, out NpcRuntime exactActor)
+                || !ReferenceEquals(exactActor, actorRuntime)
+                || !TryGetExactCityProjection(
+                    runtime.SelectedRuntimeOwnerGraph,
+                    actor.ActionSlot?.CurrentPayload?.TargetCityRuntimeId,
+                    actionRuntime.TargetCity,
+                    out _, out _)
+                || runtime.npcDecisionSystem?.GetProviderForAction(exactActor, actionAsset)
+                    is not TravelActionProvider travelProvider
+                || travelProvider.SelectedTravelPartyStore == null)
+                return false;
+
+            partyStore = travelProvider.SelectedTravelPartyStore;
+            boundary = new SelectedSoloTravelActionBoundaryAdapter(
+                operation =>
+                {
+                    if (runtime.runtimeAdmissionContext == null) return operation();
+                    if (!runtime.TryBeginP12SoloTravelStartOperation(
+                            exactActor, travelProvider,
+                            out P12SoloTravelStartOperationScope travelStartScope))
+                        throw new InvalidOperationException(
+                            "The P12 solo travel-start owner operation could not be admitted.");
+                    using (travelStartScope) return operation();
+                },
+                () => runtime.travelSystem != null
+                    && runtime.travelSystem.CanStartTravel(
+                        exactActor, actionRuntime.TargetCity, out _, out _),
+                () => runtime.merchantSystem?.LogTradeRepositionDecision(
+                    exactActor, exactActor.CurrentCity, actionRuntime),
+                (plan, route, travelCost) => runtime.travelSystem != null
+                    && runtime.travelSystem.CanCommitSelectedSoloTravelTransition(
+                        exactActor, plan, route, travelCost, actionRuntime.TargetCity),
+                plan => actionRuntime.TargetCity != null
+                    && exactActor.TryCommitPreparedSelectedTravelTransition(
+                        plan, actionRuntime.TargetCity.Location, actionRuntime.TargetCity),
+                travel => runtime.travelSystem?.PublishSelectedSoloTravelStarted(
+                    exactActor, actionRuntime.TargetCity, travel),
+                () => runtime.merchantSystem?.LogCommercialScoutingDecision(
+                    exactActor, actionRuntime),
+                () => exactActor.ClearTravelPlan());
+            return true;
+        }
+
+        public bool TryGetMarketBoundaries(
+            DailyV1NpcRuntimeOwners actor,
+            out IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
+            out IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary)
+        {
+            saleBoundary = null;
+            purchaseBoundary = null;
+            crossCityTargetLocation = null;
+            if (!TryGetExactActor(actor, actor?.ActionSlot?.CurrentAction, out NpcRuntime exactActor)
+                || !ReferenceEquals(exactActor, actorRuntime)
+                || runtime.economyTransactionService == null)
+                return false;
+
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            DailyV1NpcActionPayloadOwner payload = actor.ActionSlot?.CurrentPayload;
+            if (graph == null || payload == null)
+                return false;
+
+            if (actionRuntime.TargetCity != null
+                && !ReferenceEquals(actionRuntime.TargetCity, exactActor.CurrentCity))
+            {
+                if (actor.ActionSlot.CurrentAction.Values.actionType?.Value
+                        != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
+                    || !runtime.economyTransactionService.TryResolveSelectedCrossCityBuyTarget(
+                        exactActor, payload, actionRuntime.TargetCity,
+                        out crossCityTargetLocation))
+                    return false;
+            }
+            else if (actionRuntime.TargetCity != null
+                && !TryGetExactCityProjection(graph, payload.TargetCityRuntimeId,
+                    actionRuntime.TargetCity, out _, out _))
+            {
+                return false;
+            }
+            else if (actionRuntime.TargetCity == null
+                && payload.TargetCityRuntimeId != null)
+            {
+                return false;
+            }
+
+            return runtime.economyTransactionService != null
+                && runtime.economyTransactionService.TryCreateSelectedActionMarketBoundaries(
+                    exactActor, out saleBoundary, out purchaseBoundary);
+        }
+
+        public bool TryGetNpcTradeBoundary(
+            DailyV1NpcRuntimeOwners seller,
+            DailyV1NpcRuntimeOwners buyer,
+            out IDailyV1SelectedNpcTradeBoundary boundary)
+        {
+            boundary = null;
+            if (!TryGetExactActor(seller, seller?.ActionSlot?.CurrentAction, out NpcRuntime exactSeller)
+                || !ReferenceEquals(exactSeller, actorRuntime)
+                || runtime.economyTransactionService == null
+                || !TryFindExactNpcRuntime(buyer, out NpcRuntime exactBuyer)
+                || !ReferenceEquals(exactBuyer, actionRuntime.TargetNpc))
+                return false;
+
+            return runtime.economyTransactionService != null
+                && runtime.economyTransactionService.TryCreateSelectedActionNpcTradeBoundary(
+                    exactSeller, exactBuyer, out boundary);
+        }
+
+        public bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners actor)
+        {
+            return TryGetExactActor(actor, actor?.ActionSlot?.CurrentAction,
+                    out NpcRuntime exactActor)
+                && ReferenceEquals(exactActor, actorRuntime)
+                && exactActor.MerchantTradePlan.CanAdmitSelectedPlanOwnerMutation();
+        }
+
+        public void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners actor)
+        {
+            if (!TryGetExactActor(actor, actor?.ActionSlot?.CurrentAction,
+                    out NpcRuntime exactActor)
+                || !ReferenceEquals(exactActor, actorRuntime))
+                throw new InvalidOperationException(
+                    "The selected Merchant plan mutation returned through a mismatched runtime projection.");
+            exactActor.MerchantTradePlan.PublishSelectedPlanOwnerMutation();
+        }
+
+        public bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor)
+        {
+            return TryGetExactActor(actor, actor?.ActionSlot?.CurrentAction,
+                    out NpcRuntime exactActor)
+                && ReferenceEquals(exactActor, actorRuntime)
+                && exactActor.TravelPlan.CanAdmitSelectedTradeTravelPlanMutation();
+        }
+
+        public void PublishTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor)
+        {
+            if (!TryGetExactActor(actor, actor?.ActionSlot?.CurrentAction,
+                    out NpcRuntime exactActor)
+                || !ReferenceEquals(exactActor, actorRuntime))
+                throw new InvalidOperationException(
+                    "The selected Travel plan mutation returned through a mismatched runtime projection.");
+            exactActor.TravelPlan.PublishSelectedTradeTravelPlanMutation();
+        }
+
+        public void CompleteCrossCityBuy(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1SelectedCrossCityBuyResult result)
+        {
+            if (!TryGetExactActor(actor, actor?.ActionSlot?.CurrentAction, out NpcRuntime exactActor)
+                || !ReferenceEquals(exactActor, actorRuntime)
+                || runtime.economyTransactionService == null)
+                throw new InvalidOperationException(
+                    "The selected cross-city buy returned through a mismatched runtime projection.");
+
+            runtime.economyTransactionService.CompleteSelectedCrossCityBuyDispatch(
+                exactActor, result, crossCityTargetLocation, actionRuntime.TargetCity);
+        }
+
+        private bool TryGetExactActor(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition expectedAction,
+            out NpcRuntime exactRuntime)
+        {
+            exactRuntime = null;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            if (actor == null || expectedAction == null || graph == null
+                || !ReferenceEquals(graph, actorRuntime.SelectedRuntimeOwnerGraph)
+                || !graph.ContainsExactNpcOwner(actor)
+                || !ReferenceEquals(actorRuntime.SelectedRuntimeOwners, actor)
+                || !ReferenceEquals(actor.ActionSlot?.CurrentAction, expectedAction)
+                || !ReferenceEquals(actor.ActionSlot?.CurrentPayload, actionRuntime.SelectedOwner)
+                || !ReferenceEquals(actionRuntime.Action, actionAsset)
+                || !actionRuntime.MatchesSelectedOwner()
+                || !actorRuntime.TryGetSelectedDailyV1ActionAsset(expectedAction,
+                    out NpcActionData exactActionAsset)
+                || !ReferenceEquals(exactActionAsset, actionAsset)
+                || !TryFindExactNpcRuntime(actor, out exactRuntime)
+                || !ReferenceEquals(exactRuntime, actorRuntime))
+                return false;
+
+            DailyV1NpcActionPayloadOwner payload = actor.ActionSlot.CurrentPayload;
+            if (payload.TargetNpcRuntimeId == null)
+            {
+                if (actionRuntime.TargetNpc != null) return false;
+            }
+            else if (!TryFindExactNpcRuntime(
+                    FindNpcOwner(graph, payload.TargetNpcRuntimeId),
+                    out NpcRuntime targetNpc)
+                || !ReferenceEquals(targetNpc, actionRuntime.TargetNpc))
+                return false;
+
+            if (payload.TargetCityRuntimeId == null)
+            {
+                if (actionRuntime.TargetCity != null) return false;
+            }
+            else if (!TryGetExactCityProjection(graph, payload.TargetCityRuntimeId,
+                    actionRuntime.TargetCity, out _, out _))
+                return false;
+
+            if (payload.TargetItem == null)
+            {
+                if (actionRuntime.TargetItem != null) return false;
+            }
+            else if (!actorRuntime.TryGetSelectedDailyV1Item(
+                    actionRuntime.TargetItem, out DailyV1ItemDefinition exactItem)
+                || !ReferenceEquals(exactItem, payload.TargetItem))
+                return false;
+
+            return true;
+        }
+
+        private bool TryFindExactNpcRuntime(
+            DailyV1NpcRuntimeOwners owner,
+            out NpcRuntime exactRuntime)
+        {
+            exactRuntime = null;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            if (owner == null || graph == null
+                || !ReferenceEquals(graph, actorRuntime.SelectedRuntimeOwnerGraph)
+                || !graph.ContainsExactNpcOwner(owner))
+                return false;
+
+            foreach (NpcRuntime candidate in runtime.npcRuntimes)
+            {
+                if (!ReferenceEquals(candidate?.SelectedRuntimeOwners, owner)) continue;
+                if (exactRuntime != null) return false;
+                exactRuntime = candidate;
+            }
+            return exactRuntime != null;
+        }
+
+        private static DailyV1NpcRuntimeOwners FindNpcOwner(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            string runtimeId)
+        {
+            if (graph == null || string.IsNullOrWhiteSpace(runtimeId)) return null;
+            foreach (DailyV1NpcRuntimeOwners candidate in graph.Npcs)
+                if (candidate != null
+                    && string.Equals(candidate.RuntimeId, runtimeId, StringComparison.Ordinal))
+                    return graph.ContainsExactNpcOwner(candidate) ? candidate : null;
+            return null;
+        }
+
+        private bool TryGetExactCityProjection(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            string runtimeId,
+            CityRuntime projectedCity,
+            out DailyV1CityRuntimeOwners exactOwner,
+            out SpatialLocationRuntime exactLocation)
+        {
+            exactOwner = null;
+            exactLocation = null;
+            if (graph == null || string.IsNullOrWhiteSpace(runtimeId) || projectedCity == null)
+                return false;
+
+            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+            {
+                if (candidate == null
+                    || !string.Equals(candidate.RuntimeId, runtimeId, StringComparison.Ordinal))
+                    continue;
+                if (exactOwner != null || !graph.ContainsExactCityOwner(candidate)) return false;
+                exactOwner = candidate;
+            }
+            if (exactOwner == null
+                || !ReferenceEquals(projectedCity.SelectedRuntimeOwners, exactOwner)
+                || !ReferenceEquals(projectedCity, runtime.cities.Find(
+                    candidate => ReferenceEquals(candidate?.SelectedRuntimeOwners, exactOwner)))
+                || graph.SpatialNetwork == null
+                || !graph.SpatialNetwork.TryGetLocation(
+                    exactOwner.LocationRuntimeId, out exactLocation)
+                || !ReferenceEquals(projectedCity.Location, exactLocation))
+                return false;
+            return true;
+        }
+    }
+
     private sealed class P12MerchantOperationScope : IDisposable
     {
         private readonly SimulationRuntime owner;
@@ -11701,6 +12008,39 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 "The selected P12 profile cannot admit a Travel action through an unbound provider.");
         }
 
+        // Core owns the supported selected-action route. Enter it only when
+        // the Unity action and every projected payload target are the exact
+        // projection of the graph-owned current slot; otherwise preserve the
+        // existing host/provider behavior without dispatching stale Core data.
+        if (npcRuntime.UsesSelectedDailyV1Definitions
+            && actionRuntime != null
+            && ReferenceEquals(actionRuntime.Action, action)
+            && actionRuntime.MatchesSelectedOwner()
+            && npcRuntime.SelectedRuntimeOwners != null
+            && SelectedRuntimeOwnerGraph != null
+            && ReferenceEquals(npcRuntime.SelectedRuntimeOwnerGraph, SelectedRuntimeOwnerGraph)
+            && SelectedRuntimeOwnerGraph.ContainsExactNpcOwner(npcRuntime.SelectedRuntimeOwners)
+            && npcRuntime.TryGetSelectedDailyV1ActionNode(
+                action, out DailyV1ActionDefinition selectedActionNode)
+            && ReferenceEquals(npcRuntime.SelectedRuntimeOwners.ActionSlot?.CurrentAction,
+                selectedActionNode)
+            && ReferenceEquals(npcRuntime.SelectedRuntimeOwners.ActionSlot?.CurrentPayload,
+                actionRuntime.SelectedOwner))
+        {
+            SelectedActionDispatchBoundaryAdapter dispatchBoundary =
+                new SelectedActionDispatchBoundaryAdapter(
+                    this, npcRuntime, actionRuntime, action);
+            if (DailyV1SelectedActionDispatchStage.TryDispatch(
+                    SelectedRuntimeOwnerGraph,
+                    npcRuntime.SelectedRuntimeOwners,
+                    randomSource,
+                    CurrentDay,
+                    dispatchBoundary,
+                    out DailyV1SelectedActionDispatchResult selectedDispatch))
+                return CompleteSelectedActionDispatch(
+                    npcRuntime, actionRuntime, action, selectedDispatch);
+        }
+
         if (npcRuntime.UsesSelectedDailyV1Definitions
             && actionType == NpcActionType.Travel
             && actionProvider is TravelActionProvider selectedTravelProvider
@@ -12166,6 +12506,116 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return merchantSystem.TryExecuteAction(npcRuntime, actionRuntime);
 
         return actionProvider.TryExecuteAction(npcRuntime, actionRuntime);
+    }
+
+    private NpcActionResult CompleteSelectedActionDispatch(
+        NpcRuntime npcRuntime,
+        NpcActionRuntime actionRuntime,
+        NpcActionData action,
+        DailyV1SelectedActionDispatchResult dispatch)
+    {
+        if (dispatch == null) return NpcActionResult.Failed();
+
+        if (dispatch.Kind == DailyV1SelectedActionDispatchKind.PlannedMarketSale)
+            economyTransactionService?.FaultSelectedPlannedMarketSaleIfPartial(
+                dispatch.PlannedMarketSale?.Sale);
+
+        if (!dispatch.ActionRollSucceeded)
+            return NpcActionResult.Failed(CreateFailureMessage(npcRuntime, actionRuntime, action));
+        if (!dispatch.Succeeded)
+            return NpcActionResult.Failed();
+
+        switch (dispatch.Kind)
+        {
+            case DailyV1SelectedActionDispatchKind.SoloTravel:
+                return NpcActionResult.Succeeded();
+
+            case DailyV1SelectedActionDispatchKind.PlannedNpcSale:
+            {
+                DailyV1SelectedActionExecutionStage.PlannedNpcSaleResult sale =
+                    dispatch.PlannedNpcSale?.Sale;
+                if (sale == null || !sale.Succeeded || actionRuntime.TargetItem == null
+                    || actionRuntime.TargetNpc == null || npcRuntime.CurrentCity == null)
+                    return NpcActionResult.Failed();
+
+                float profit = (sale.UnitPrice - dispatch.ReferencePrice) * sale.Quantity;
+                if (sale.SoldToNpc)
+                {
+                    logger?.Log(SimulationLogCategory.Trade,
+                        $"{npcRuntime.NpcName} vendeu {sale.Quantity} {actionRuntime.TargetItem.itemName} para {actionRuntime.TargetNpc.NpcName} em {npcRuntime.CurrentCity.CityName} por {sale.UnitPrice:0.##} cada");
+                    logger?.Log(SimulationLogCategory.Trade, $"Lucro aproximado: {profit:0.##}");
+                }
+                else
+                {
+                    logger?.Log(SimulationLogCategory.Trade,
+                        $"{npcRuntime.NpcName} vendeu {sale.Quantity} {actionRuntime.TargetItem.itemName} ao mercado de {npcRuntime.CurrentCity.CityName} por {sale.UnitPrice:0.##} cada");
+                    logger?.Log(SimulationLogCategory.Trade, $"Lucro aproximado: {profit:0.##}");
+                }
+                if (sale.PlanCompleted)
+                    logger?.Log(SimulationLogCategory.Trade,
+                        $"{npcRuntime.NpcName} concluiu o plano comercial.");
+                return NpcActionResult.Succeeded();
+            }
+
+            case DailyV1SelectedActionDispatchKind.PlannedMarketSale:
+            {
+                DailyV1SelectedActionExecutionStage.PlannedMarketSaleResult sale =
+                    dispatch.PlannedMarketSale?.Sale;
+                if (sale == null || !sale.Succeeded || actionRuntime.TargetItem == null
+                    || npcRuntime.CurrentCity == null)
+                    return NpcActionResult.Failed();
+
+                float profit = (sale.UnitPrice - dispatch.ReferencePrice) * sale.Quantity;
+                logger?.Log(SimulationLogCategory.Trade,
+                    $"{npcRuntime.NpcName} vendeu {sale.Quantity} {actionRuntime.TargetItem.itemName} ao mercado de {npcRuntime.CurrentCity.CityName} por {sale.UnitPrice:0.##} cada");
+                logger?.Log(SimulationLogCategory.Trade, $"Lucro aproximado: {profit:0.##}");
+                if (sale.PlanCompleted)
+                    logger?.Log(SimulationLogCategory.Trade,
+                        $"{npcRuntime.NpcName} concluiu o plano comercial.");
+                return NpcActionResult.Succeeded();
+            }
+
+            case DailyV1SelectedActionDispatchKind.OpenMarket:
+            {
+                if (actionRuntime.TargetItem == null || npcRuntime.CurrentCity == null)
+                    return NpcActionResult.Failed();
+                if (npcRuntime.GetConfiguredActionType(action) == NpcActionType.BuyGoods)
+                {
+                    DailyV1SelectedOpenMarketPurchasePlan purchase =
+                        dispatch.OpenMarket?.Purchase?.Plan;
+                    if (purchase == null) return NpcActionResult.Failed();
+                    logger?.Log(SimulationLogCategory.Trade,
+                        $"{npcRuntime.NpcName} comprou {purchase.Quantity} {actionRuntime.TargetItem.itemName} em {npcRuntime.CurrentCity.CityName} por {purchase.UnitPrice:0.##} cada para estoque local");
+                }
+                else
+                {
+                    DailyV1SelectedOpenMarketSalePlan sale = dispatch.OpenMarket?.Sale?.Plan;
+                    if (sale == null) return NpcActionResult.Failed();
+                    logger?.Log(SimulationLogCategory.Trade,
+                        $"{npcRuntime.NpcName} vendeu {sale.Quantity} {actionRuntime.TargetItem.itemName} ao mercado de {npcRuntime.CurrentCity.CityName} por {sale.UnitPrice:0.##} cada");
+                    float profit = DailyV1SelectedMarketSaleProfit.Calculate(
+                        dispatch.ReferenceUnitCost, sale.UnitPrice, sale.Quantity);
+                    logger?.Log(SimulationLogCategory.Trade,
+                        $"Lucro aproximado: {profit:0.##}");
+                }
+                return NpcActionResult.Succeeded();
+            }
+
+            case DailyV1SelectedActionDispatchKind.CrossCityBuy:
+            {
+                DailyV1SelectedCrossCityBuyResult purchase =
+                    dispatch.CrossCityBuy?.Purchase;
+                if (purchase?.Succeeded != true || actionRuntime.TargetItem == null
+                    || actionRuntime.TargetCity == null || npcRuntime.CurrentCity == null)
+                    return NpcActionResult.Failed();
+                logger?.Log(SimulationLogCategory.Trade,
+                    $"{npcRuntime.NpcName} comprou {purchase.Quantity} {actionRuntime.TargetItem.itemName} em {npcRuntime.CurrentCity.CityName} por {purchase.UnitPrice:0.##} cada para vender em {actionRuntime.TargetCity.CityName}");
+                return NpcActionResult.Succeeded();
+            }
+
+            default:
+                return NpcActionResult.Failed();
+        }
     }
 
     private List<NpcActionData> GetConfiguredActionsEnabledForRuntime(NpcRuntime npcRuntime)
