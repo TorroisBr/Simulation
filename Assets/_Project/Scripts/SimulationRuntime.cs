@@ -9161,6 +9161,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     private void AdvanceDayAfterClockAdvance()
     {
         activeDailyGameplayExecutionProbeForTest?.RecordAdvanceDayAfterClockAdvanceInvocation();
+        if (runtimeAdmissionContext != null && DailyDemographicSystem.CanAdvanceSelected(this))
+        {
+            DailyV1SelectedDailyExecutionStage.Advance(
+                CurrentDay,
+                new SelectedDailyV1ExecutionBoundary(this));
+            return;
+        }
+
+        AdvanceDayAfterClockAdvanceLegacy();
+    }
+
+    private void AdvanceDayAfterClockAdvanceLegacy()
+    {
         placeContentStore?.AdvanceDays(1);
         logger?.BeginDay(CurrentDay);
         if (runtimeAdmissionContext != null && DailyDemographicSystem.CanAdvanceSelected(this))
@@ -9188,155 +9201,171 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         RefreshLocalKnowledgeAndShare();
         adventureExpeditionAutonomySystem?.AdvanceActiveExpeditions();
 
-        if (adventureExpeditionAutonomySystem != null)
+        StartAutonomousExpeditions();
+
+        AdvanceActorTurnsForCurrentRuntime();
+
+        AdvanceTravelAndObserve();
+    }
+
+    private sealed class SelectedDailyV1ExecutionBoundary
+        : IDailyV1SelectedDailyExecutionBoundary
+    {
+        private readonly SimulationRuntime runtime;
+
+        internal SelectedDailyV1ExecutionBoundary(SimulationRuntime runtime)
         {
-            foreach (NpcRuntime npcRuntime in npcRuntimes)
-            {
-                if (npcRuntime != null
-                    && npcRuntime.IsAlive
-                    && npcRuntime.IsTraveling == false
-                    && (expeditionSystem == null || expeditionSystem.IsNpcOnActiveExpedition(npcRuntime.RuntimeId) == false))
-                {
-                    adventureExpeditionAutonomySystem.TryStartAutonomousExpedition(npcRuntime, npcRuntimes);
-                }
-            }
+            this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         }
 
-        if (!TryAdvanceSelectedDailyV1ActorTurns())
+        public bool EconomyEnabled => runtime.configuration.Economy.Enabled == true;
+        public void AdvancePlaceContent() => runtime.placeContentStore?.AdvanceDays(1);
+        public void BeginLoggerDay(long absoluteDay) => runtime.logger?.BeginDay(absoluteDay);
+
+        public void AdvanceSelectedDemography()
         {
-            if (SelectedRuntimeOwnerGraph != null && runtimeAdmissionContext != null)
-                throw new InvalidOperationException(
-                    "The admitted Daily-v1 actor turn could not bind its exact Core owner graph.");
+            runtime.lastDailyDemographyReport = DailyDemographicSystem.AdvanceSelected(
+                runtime,
+                runtime.naturalMortalitySamples,
+                runtime.aggregateDemographyProvider);
+        }
 
-            for (int actorTurnRosterOrdinal = 0; actorTurnRosterOrdinal < npcRuntimes.Count; actorTurnRosterOrdinal++)
+        public void BeginSimulationDay() => runtime.BeginSimulationDay();
+        public void PrepareScheduledDirectives(long absoluteDay) =>
+            runtime.scheduledDirectiveSystem?.PrepareDay(absoluteDay);
+        public void SimulateEconomyDay() => runtime.SimulateEconomyDay();
+        public void RefreshLocalKnowledgeAndShare() => runtime.RefreshLocalKnowledgeAndShare();
+        public void AdvanceActiveExpeditions() =>
+            runtime.adventureExpeditionAutonomySystem?.AdvanceActiveExpeditions();
+        public void StartAutonomousExpeditions() => runtime.StartAutonomousExpeditions();
+        public void AdvanceActorTurns() => runtime.AdvanceActorTurnsForCurrentRuntime();
+        public void AdvanceTravelAndObserve() => runtime.AdvanceTravelAndObserve();
+    }
+
+    private void StartAutonomousExpeditions()
+    {
+        if (adventureExpeditionAutonomySystem == null) return;
+        foreach (NpcRuntime npcRuntime in npcRuntimes)
+        {
+            if (npcRuntime != null
+                && npcRuntime.IsAlive
+                && npcRuntime.IsTraveling == false
+                && (expeditionSystem == null
+                    || expeditionSystem.IsNpcOnActiveExpedition(npcRuntime.RuntimeId) == false))
             {
-                NpcRuntime npcRuntime = npcRuntimes[actorTurnRosterOrdinal];
-                if (npcRuntime == null)
-                {
-                    continue;
-                }
+                adventureExpeditionAutonomySystem.TryStartAutonomousExpedition(npcRuntime, npcRuntimes);
+            }
+        }
+    }
 
-                if (npcRuntime.IsAlive == false)
-                {
-                    RejectActorChoicesForPerson(npcRuntime.PersonId, actorTurnRosterOrdinal);
-                    continue;
-                }
+    private void AdvanceActorTurnsForCurrentRuntime()
+    {
+        if (TryAdvanceSelectedDailyV1ActorTurns()) return;
+        if (SelectedRuntimeOwnerGraph != null && runtimeAdmissionContext != null)
+            throw new InvalidOperationException(
+                "The admitted Daily-v1 actor turn could not bind its exact Core owner graph.");
 
-                if (HasPendingActorChoiceFor(npcRuntime.PersonId)
-                    && IsCurrentMaterializedPersonActor(npcRuntime) == false)
-                {
-                    RejectActorChoicesForPerson(npcRuntime.PersonId, actorTurnRosterOrdinal);
-                    continue;
-                }
+        for (int actorTurnRosterOrdinal = 0; actorTurnRosterOrdinal < npcRuntimes.Count; actorTurnRosterOrdinal++)
+        {
+            NpcRuntime npcRuntime = npcRuntimes[actorTurnRosterOrdinal];
+            if (npcRuntime == null) continue;
 
-                if (TryDeferActorChoiceForSpatialTransit(npcRuntime, actorTurnRosterOrdinal))
-                {
-                    continue;
-                }
+            if (npcRuntime.IsAlive == false)
+            {
+                RejectActorChoicesForPerson(npcRuntime.PersonId, actorTurnRosterOrdinal);
+                continue;
+            }
 
-                if (npcRuntime.IsTraveling == true)
-                {
-                    TryProcessScheduledDirective(npcRuntime);
-                    DeferActorChoiceForPerson(
-                        npcRuntime.PersonId,
-                        actorTurnRosterOrdinal,
-                        ActorChoiceDeferralReason.Traveling);
-                    continue;
-                }
+            if (HasPendingActorChoiceFor(npcRuntime.PersonId)
+                && IsCurrentMaterializedPersonActor(npcRuntime) == false)
+            {
+                RejectActorChoicesForPerson(npcRuntime.PersonId, actorTurnRosterOrdinal);
+                continue;
+            }
 
-                if (expeditionSystem != null
-                    && expeditionSystem.IsNpcOnActiveExpedition(npcRuntime.RuntimeId) == true)
-                {
-                    TryProcessScheduledDirective(npcRuntime);
-                    DeferActorChoiceForPerson(
-                        npcRuntime.PersonId,
-                        actorTurnRosterOrdinal,
-                        ActorChoiceDeferralReason.ExpeditionParticipant);
-                    continue;
-                }
+            if (TryDeferActorChoiceForSpatialTransit(npcRuntime, actorTurnRosterOrdinal)) continue;
 
-                if (adventureExpeditionAutonomySystem != null
-                    && adventureExpeditionAutonomySystem.IsReservedToday(npcRuntime.RuntimeId))
-                {
-                    DeferActorChoiceForPerson(
-                        npcRuntime.PersonId,
-                        actorTurnRosterOrdinal,
-                        ActorChoiceDeferralReason.ReservedExpeditionActivity);
-                    continue;
-                }
+            if (npcRuntime.IsTraveling == true)
+            {
+                TryProcessScheduledDirective(npcRuntime);
+                DeferActorChoiceForPerson(npcRuntime.PersonId, actorTurnRosterOrdinal,
+                    ActorChoiceDeferralReason.Traveling);
+                continue;
+            }
 
-                EvaluateStatus(npcRuntime);
+            if (expeditionSystem != null
+                && expeditionSystem.IsNpcOnActiveExpedition(npcRuntime.RuntimeId) == true)
+            {
+                TryProcessScheduledDirective(npcRuntime);
+                DeferActorChoiceForPerson(npcRuntime.PersonId, actorTurnRosterOrdinal,
+                    ActorChoiceDeferralReason.ExpeditionParticipant);
+                continue;
+            }
 
-                if (HasPendingActorChoiceFor(npcRuntime.PersonId))
-                {
-                    if (TryProcessScheduledDirective(npcRuntime) == true)
-                    {
-                        DeferActorChoiceForPerson(
-                            npcRuntime.PersonId,
-                            actorTurnRosterOrdinal,
-                            ActorChoiceDeferralReason.ScheduledDirective);
-                        continue;
-                    }
+            if (adventureExpeditionAutonomySystem != null
+                && adventureExpeditionAutonomySystem.IsReservedToday(npcRuntime.RuntimeId))
+            {
+                DeferActorChoiceForPerson(npcRuntime.PersonId, actorTurnRosterOrdinal,
+                    ActorChoiceDeferralReason.ReservedExpeditionActivity);
+                continue;
+            }
 
-                    if (TryProcessActorChoice(npcRuntime, actorTurnRosterOrdinal))
-                    {
-                        continue;
-                    }
-                }
-
-                if (configuration.MerchantTrade.Enabled)
-                {
-                    if (merchantSystem != null)
-                    {
-                        if (runtimeAdmissionContext == null)
-                        {
-                            merchantSystem.AdvanceNpcTradeState(npcRuntime);
-                        }
-                        else if (!TryBeginP12MerchantDailyNpcTradeOperation(
-                            npcRuntime,
-                            out P12MerchantOperationScope merchantOperationScope))
-                        {
-                            throw new InvalidOperationException(
-                                "The P12 daily Merchant owner operation could not be admitted.");
-                        }
-                        else
-                        {
-                            using (merchantOperationScope)
-                                merchantSystem.AdvanceNpcTradeState(npcRuntime);
-                        }
-                    }
-                }
-
+            EvaluateStatus(npcRuntime);
+            if (HasPendingActorChoiceFor(npcRuntime.PersonId))
+            {
                 if (TryProcessScheduledDirective(npcRuntime) == true)
                 {
-                    DeferActorChoiceForPerson(
-                        npcRuntime.PersonId,
-                        actorTurnRosterOrdinal,
+                    DeferActorChoiceForPerson(npcRuntime.PersonId, actorTurnRosterOrdinal,
                         ActorChoiceDeferralReason.ScheduledDirective);
                     continue;
                 }
-
-                if (TryProcessActorChoice(npcRuntime, actorTurnRosterOrdinal))
-                {
-                    continue;
-                }
-
-                EvaluateAction(npcRuntime);
-                if (npcRuntime.CurrentAction?.actionType == NpcActionType.SellGoods
-                    && (npcRuntime.CurrentCity == null || !IsActorAtCurrentCityLocation(npcRuntime)))
-                {
-                    npcRuntime.SetCurrentActionRuntime(null);
-                    continue;
-                }
-                TryExecuteCurrentAction(npcRuntime);
+                if (TryProcessActorChoice(npcRuntime, actorTurnRosterOrdinal)) continue;
             }
 
-            RejectActorChoicesWithoutMaterializedTurn(npcRuntimes.Count);
+            if (configuration.MerchantTrade.Enabled && merchantSystem != null)
+            {
+                if (runtimeAdmissionContext == null)
+                {
+                    merchantSystem.AdvanceNpcTradeState(npcRuntime);
+                }
+                else if (!TryBeginP12MerchantDailyNpcTradeOperation(
+                    npcRuntime, out P12MerchantOperationScope merchantOperationScope))
+                {
+                    throw new InvalidOperationException(
+                        "The P12 daily Merchant owner operation could not be admitted.");
+                }
+                else
+                {
+                    using (merchantOperationScope)
+                        merchantSystem.AdvanceNpcTradeState(npcRuntime);
+                }
+            }
+
+            if (TryProcessScheduledDirective(npcRuntime) == true)
+            {
+                DeferActorChoiceForPerson(npcRuntime.PersonId, actorTurnRosterOrdinal,
+                    ActorChoiceDeferralReason.ScheduledDirective);
+                continue;
+            }
+            if (TryProcessActorChoice(npcRuntime, actorTurnRosterOrdinal)) continue;
+
+            EvaluateAction(npcRuntime);
+            if (npcRuntime.CurrentAction?.actionType == NpcActionType.SellGoods
+                && (npcRuntime.CurrentCity == null || !IsActorAtCurrentCityLocation(npcRuntime)))
+            {
+                npcRuntime.SetCurrentActionRuntime(null);
+                continue;
+            }
+            TryExecuteCurrentAction(npcRuntime);
         }
 
+        RejectActorChoicesWithoutMaterializedTurn(npcRuntimes.Count);
+    }
+
+    private void AdvanceTravelAndObserve()
+    {
         List<NpcRuntime> arrivedNpcs = new List<NpcRuntime>();
         DailyV1SelectedRuntimeOwnerGraph selectedGraph = SelectedRuntimeOwnerGraph;
-
         if (selectedGraph != null)
         {
             if (!TryAdvanceSelectedTravelDayStage(out IReadOnlyList<NpcRuntime> selectedArrivals))
@@ -9372,14 +9401,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         foreach (NpcRuntime arrivedNpc in arrivedNpcs)
         {
             ObserveArrivedExplorableSites(arrivedNpc);
-
-            if (arrivedNpc?.CurrentCity != null)
-            {
-                if (configuration.MerchantTrade.Enabled)
-                {
-                    merchantSystem?.ObserveCurrentMarket(arrivedNpc);
-                }
-            }
+            if (arrivedNpc?.CurrentCity != null && configuration.MerchantTrade.Enabled)
+                merchantSystem?.ObserveCurrentMarket(arrivedNpc);
         }
 
         expeditionSystem?.ReconcileAfterTravel(arrivedNpcs);
