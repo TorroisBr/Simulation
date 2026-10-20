@@ -118,6 +118,14 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
 
     public NpcActionRuntime CreateRequestedAction(NpcRuntime npcRuntime, NpcActionData action)
     {
+        return CreateRequestedAction(npcRuntime, action, 0L);
+    }
+
+    internal NpcActionRuntime CreateRequestedAction(
+        NpcRuntime npcRuntime,
+        NpcActionData action,
+        long currentAbsoluteDay)
+    {
         if (mutationGuardBinding.CanMutate == false)
         {
             return null;
@@ -127,6 +135,30 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             || npcRuntime.HasConfiguredRequiredActionStatuses(action, npcRuntime.CurrentStatus) == false)
         {
             return null;
+        }
+
+        if (npcRuntime.UsesSelectedDailyV1Definitions
+            && npcRuntime.GetConfiguredActionType(action) == NpcActionType.SellGoods)
+        {
+            if (!npcRuntime.TryGetSelectedDailyV1ActionNode(action,
+                    out DailyV1ActionDefinition actionNode)
+                || !DailyV1MerchantActionPlanning.TryPlanSelectedLocalSale(
+                    npcRuntime.SelectedRuntimeOwnerGraph,
+                    npcRuntime.SelectedRuntimeOwners,
+                    actionNode,
+                    currentAbsoluteDay,
+                    0f,
+                    out DailyV1MerchantLocalSalePlan plan)
+                || plan?.SelectedPayload == null
+                || !npcRuntime.TryGetSelectedDailyV1ItemAsset(plan.Item, out ItemData selectedItemAsset))
+                return null;
+
+            NpcActionRuntime selectedAction = new NpcActionRuntime(
+                action, npcRuntime.CurrentCity, selectedItemAsset, plan.Amount, plan.LocalPrice);
+            return selectedAction.TryUseSelectedPayload(
+                plan.SelectedPayload, npcRuntime.SelectedDailyV1DefinitionGraph)
+                ? selectedAction
+                : null;
         }
 
         float ignoredUtility = 0f;

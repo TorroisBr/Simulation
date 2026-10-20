@@ -691,6 +691,16 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 sellerRuntimeId: seller != null ? seller.RuntimeId : null);
         }
 
+        DailyV1SelectedRuntimeOwnerGraph buyerSelectedGraph = buyer.SelectedRuntimeOwnerGraph;
+        if (item.Definition != null
+            && buyer.SelectedRuntimeOwners != null
+            && seller.SelectedRuntimeOwners != null
+            && buyerSelectedGraph != null
+            && ReferenceEquals(buyerSelectedGraph, seller.SelectedRuntimeOwnerGraph)
+            && buyerSelectedGraph.ContainsExactNpcOwner(buyer.SelectedRuntimeOwners)
+            && buyerSelectedGraph.ContainsExactNpcOwner(seller.SelectedRuntimeOwners))
+            return ExecuteSelectedNpcTrade(buyer, seller, item.Definition, quantity, unitPrice);
+
         if (buyer == seller)
         {
             return EconomyTransactionResult.CreateFailure(
@@ -893,6 +903,86 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         }
     }
 
+    private EconomyTransactionResult ExecuteSelectedNpcTrade(
+        NpcRuntime buyer, NpcRuntime seller, DailyV1ItemDefinition item,
+        int quantity, float unitPrice)
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = buyer.SelectedRuntimeOwnerGraph;
+        bool tracking = p12CensusRuntime != null && p12CensusRuntime.HasNpcTradeCensusAdapter;
+        DailyV1SelectedNpcTradeBoundary boundary = tracking
+            ? new DailyV1SelectedNpcTradeBoundary(this, buyer, seller)
+            : null;
+        DailyV1SelectedNpcTradeCommitResult result = DailyV1SelectedNpcTradeExecution.TryExecute(
+            graph, buyer.SelectedRuntimeOwners, seller.SelectedRuntimeOwners,
+            item, quantity, unitPrice, boundary);
+        if (!result.Succeeded)
+            return EconomyTransactionResult.CreateFailure(EconomyTransactionType.NpcToNpcTrade,
+                MoneyEffect.Transfer, result.Failure switch
+                {
+                    DailyV1SelectedNpcTradeFailure.SameAccount => EconomyTransactionFailureReason.SameAccount,
+                    DailyV1SelectedNpcTradeFailure.InvalidQuantity => EconomyTransactionFailureReason.InvalidQuantity,
+                    DailyV1SelectedNpcTradeFailure.InvalidPrice => EconomyTransactionFailureReason.InvalidPrice,
+                    DailyV1SelectedNpcTradeFailure.InsufficientInventory => EconomyTransactionFailureReason.InsufficientInventory,
+                    DailyV1SelectedNpcTradeFailure.InventoryCapacity => EconomyTransactionFailureReason.InventoryCapacity,
+                    DailyV1SelectedNpcTradeFailure.InsufficientFunds => EconomyTransactionFailureReason.InsufficientFunds,
+                    DailyV1SelectedNpcTradeFailure.CreditRejected => EconomyTransactionFailureReason.CreditRejected,
+                    _ => EconomyTransactionFailureReason.TransactionCommitFailed
+                }, buyerRuntimeId: buyer.RuntimeId, sellerRuntimeId: seller.RuntimeId);
+
+        float total = unitPrice * quantity;
+        return EconomyTransactionResult.CreateSuccess(EconomyTransactionType.NpcToNpcTrade,
+            MoneyEffect.Transfer, total, item.DefinitionId, quantity, quantity,
+            unitPrice, total, sourceRuntimeId: buyer.RuntimeId,
+            destinationRuntimeId: seller.RuntimeId, buyerRuntimeId: buyer.RuntimeId,
+            sellerRuntimeId: seller.RuntimeId, itemSourceRuntimeId: seller.RuntimeId,
+            itemDestinationRuntimeId: buyer.RuntimeId);
+    }
+
+    private sealed class DailyV1SelectedNpcTradeBoundary : IDailyV1SelectedNpcTradeBoundary
+    {
+        private readonly EconomyTransactionService service;
+        private readonly NpcRuntime buyer;
+        private readonly NpcRuntime seller;
+        private SimulationOperationScope scope;
+        private string buyerAccount;
+        private string sellerAccount;
+        private string buyerInventory;
+        private string sellerInventory;
+
+        internal DailyV1SelectedNpcTradeBoundary(
+            EconomyTransactionService service, NpcRuntime buyer, NpcRuntime seller)
+        { this.service = service; this.buyer = buyer; this.seller = seller; }
+
+        public bool TryBegin() => service.p12CensusRuntime.TryBeginNpcTradeCensusOperation(
+            buyer, seller, out scope, out buyerAccount, out sellerAccount,
+            out buyerInventory, out sellerInventory);
+
+        public void NotifyMutation(DailyV1SelectedNpcTradeMutation mutation)
+        {
+            switch (mutation)
+            {
+                case DailyV1SelectedNpcTradeMutation.BuyerAccount:
+                    service.NotifyNpcTradeOwnerMutation(true, buyerAccount,
+                        MoneyAccountOwnerBridge.HasP12MutationBoundary(buyer.MoneyAccount));
+                    break;
+                case DailyV1SelectedNpcTradeMutation.SellerAccount:
+                    service.NotifyNpcTradeOwnerMutation(true, sellerAccount,
+                        MoneyAccountOwnerBridge.HasP12MutationBoundary(seller.MoneyAccount));
+                    break;
+                case DailyV1SelectedNpcTradeMutation.BuyerInventory:
+                    service.NotifyNpcTradeOwnerMutation(true, buyerInventory,
+                        buyer.Inventory.HasP12MutationBoundary);
+                    break;
+                case DailyV1SelectedNpcTradeMutation.SellerInventory:
+                    service.NotifyNpcTradeOwnerMutation(true, sellerInventory,
+                        seller.Inventory.HasP12MutationBoundary);
+                    break;
+            }
+        }
+
+        public void Dispose() => scope?.Dispose();
+    }
+
     public EconomyTransactionResult TryExecuteOpenMarketPurchase(
         NpcRuntime npc,
         MarketRuntime market,
@@ -909,6 +999,96 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         int requestedQuantity)
     {
         return ExecuteMarketSale(npc, market, new TradeItem(item), requestedQuantity, MarketLiquidityMode.Open);
+    }
+
+    internal bool TryExecuteSelectedPlannedNpcSale(
+        NpcRuntime seller,
+        NpcRuntime buyer,
+        out DailyV1SelectedActionExecutionStage.PlannedNpcSaleResult result)
+    {
+        result = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = seller?.SelectedRuntimeOwnerGraph;
+        if (seller == null || buyer == null || seller.CurrentCity == null
+            || graph == null || !ReferenceEquals(graph, buyer.SelectedRuntimeOwnerGraph))
+            return false;
+
+        bool trackTrade = p12CensusRuntime != null && p12CensusRuntime.HasNpcTradeCensusAdapter;
+        IDailyV1SelectedNpcTradeBoundary tradeBoundary = trackTrade
+            ? new DailyV1SelectedNpcTradeBoundary(this, buyer, seller)
+            : null;
+        bool trackMarket = p12CensusRuntime != null && p12CensusRuntime.HasP12MarketOperationAdapter;
+        IDailyV1SelectedOpenMarketSaleBoundary marketBoundary = trackMarket
+            ? new DailyV1SelectedOpenMarketSaleBoundary(this, seller, seller.CurrentCity.Market)
+            : null;
+
+        return DailyV1SelectedActionExecutionStage.TryExecutePlannedNpcSaleSlot(
+            graph, seller.SelectedRuntimeOwners, buyer.SelectedRuntimeOwners,
+            tradeBoundary, marketBoundary,
+            seller.MerchantTradePlan.CanAdmitSelectedPlanOwnerMutation,
+            seller.MerchantTradePlan.PublishSelectedPlanOwnerMutation,
+            out result);
+    }
+
+    /// <summary>Executes a selected local market action from its exact Core payload.</summary>
+    internal EconomyTransactionResult TryExecuteSelectedOpenMarketAction(
+        NpcRuntime npc,
+        DailyV1NpcActionPayloadOwner payload)
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = npc?.SelectedRuntimeOwnerGraph;
+        if (npc == null || graph == null || payload == null || npc.CurrentCity == null
+            || !ReferenceEquals(npc.SelectedRuntimeOwners?.ActionSlot?.CurrentPayload, payload))
+        {
+            return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale,
+                MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.TransactionCommitFailed,
+                actorRuntimeId: npc?.RuntimeId);
+        }
+
+        bool p12Tracking = p12CensusRuntime != null
+            && p12CensusRuntime.HasP12MarketOperationAdapter;
+        DailyV1SelectedOpenMarketSaleBoundary saleBoundary = p12Tracking
+            ? new DailyV1SelectedOpenMarketSaleBoundary(this, npc, npc.CurrentCity.Market)
+            : null;
+        DailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary = p12Tracking
+            ? new DailyV1SelectedOpenMarketPurchaseBoundary(this, npc, npc.CurrentCity.Market)
+            : null;
+        bool succeeded = DailyV1SelectedActionExecutionStage.TryExecuteOpenMarketSlot(
+            graph, npc.SelectedRuntimeOwners, saleBoundary, purchaseBoundary,
+            out DailyV1SelectedOpenMarketSaleExecution sale,
+            out DailyV1SelectedOpenMarketPurchaseExecution purchase);
+
+        if (sale != null)
+        {
+            if (!succeeded)
+                return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale,
+                    MoneyEffect.ExplicitSource, MapSelectedSaleFailure(
+                        sale.Commit?.Failure ?? sale.PreparationFailure), actorRuntimeId: npc.RuntimeId);
+            DailyV1SelectedOpenMarketSalePlan plan = sale.Plan;
+            return EconomyTransactionResult.CreateSuccess(EconomyTransactionType.OpenMarketSale,
+                MoneyEffect.ExplicitSource, plan.TotalPrice, plan.ItemDefinitionId,
+                plan.RequestedQuantity, plan.Quantity, plan.UnitPrice, plan.TotalPrice,
+                actorRuntimeId: npc.RuntimeId, itemSourceRuntimeId: npc.RuntimeId,
+                itemDestinationRuntimeId: plan.MarketRuntimeId);
+        }
+        if (purchase != null)
+        {
+            MarketLiquidityMode mode = npc.CurrentCity.Market.Counterparty.LiquidityMode;
+            MoneyEffect effect = mode == MarketLiquidityMode.AccountBacked
+                ? MoneyEffect.Transfer : MoneyEffect.ExplicitSink;
+            if (!succeeded)
+                return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketPurchase,
+                    effect, MapSelectedPurchaseFailure(purchase.Commit?.Failure
+                        ?? purchase.PreparationFailure), actorRuntimeId: npc.RuntimeId);
+            DailyV1SelectedOpenMarketPurchasePlan plan = purchase.Plan;
+            return EconomyTransactionResult.CreateSuccess(EconomyTransactionType.OpenMarketPurchase,
+                effect, plan.TotalPrice, plan.ItemDefinitionId, payload.Amount, plan.Quantity,
+                plan.UnitPrice, plan.TotalPrice, sourceRuntimeId: plan.MarketRuntimeId,
+                destinationRuntimeId: npc.RuntimeId, buyerRuntimeId: npc.RuntimeId,
+                sellerRuntimeId: plan.MarketRuntimeId, actorRuntimeId: npc.RuntimeId,
+                itemSourceRuntimeId: plan.MarketRuntimeId, itemDestinationRuntimeId: npc.RuntimeId);
+        }
+        return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale,
+            MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.TransactionCommitFailed,
+            actorRuntimeId: npc.RuntimeId);
     }
 
     public EconomyTransactionResult TryExecuteMarketPurchase(

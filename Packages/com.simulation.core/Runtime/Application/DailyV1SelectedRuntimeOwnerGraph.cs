@@ -391,6 +391,22 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         return false;
     }
 
+    internal bool TryGetCityLocationRuntimeId(string cityRuntimeId, out string locationRuntimeId)
+    {
+        locationRuntimeId = null;
+        if (!TryFindCity(cityRuntimeId, out DailyV1CityRuntimeOwners city)) return false;
+        locationRuntimeId = city.LocationRuntimeId;
+        return !string.IsNullOrWhiteSpace(locationRuntimeId);
+    }
+
+    internal bool ContainsNpcRuntimeId(string npcRuntimeId)
+    {
+        if (string.IsNullOrWhiteSpace(npcRuntimeId)) return false;
+        for (int i = 0; i < npcs.Count; i++)
+            if (string.Equals(npcs[i].RuntimeId, npcRuntimeId, StringComparison.Ordinal)) return true;
+        return false;
+    }
+
     /// <summary>
     /// Creates the exact selected-owner graph for a roster that has admitted
     /// one additional NPC. The existing graph and all owner authorities stay
@@ -498,6 +514,16 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         return false;
     }
 
+    internal bool TryGetNpcOwner(string runtimeId, out DailyV1NpcRuntimeOwners owner)
+    {
+        owner = null;
+        if (string.IsNullOrWhiteSpace(runtimeId)) return false;
+        foreach (DailyV1NpcRuntimeOwners candidate in npcs)
+            if (string.Equals(candidate.RuntimeId, runtimeId, StringComparison.Ordinal))
+            { owner = candidate; return true; }
+        return false;
+    }
+
     /// <summary>
     /// Prepares the ordinary, unkeyed open-market sale against the exact City
     /// and NPC authorities in this graph. The host supplies the P12 operation
@@ -575,6 +601,42 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     {
         if (!ContainsExactNpcOwner(npc) || plan == null || !plan.IsPreparedFor(npc, this)) return false;
         return plan.TryCommit(preCommitAdmission);
+    }
+
+    /// <summary>Resolves the admitted selected NPC's exact direct route and
+    /// effective Daily-v1 travel cost without consulting Unity projections.</summary>
+    internal bool TryPlanSelectedSoloTravel(
+        DailyV1NpcRuntimeOwners npc,
+        string originLocationRuntimeId,
+        string destinationLocationRuntimeId,
+        string destinationCityRuntimeId,
+        out SpatialRouteRuntime route,
+        out float travelCost)
+    {
+        route = null;
+        travelCost = -1f;
+        if (!ContainsExactNpcOwner(npc) || SpatialNetwork == null
+            || !string.Equals(npc.Travel?.CurrentLocationRuntimeId,
+                originLocationRuntimeId, StringComparison.Ordinal)
+            || !SpatialNetwork.TryGetLocation(originLocationRuntimeId, out SpatialLocationRuntime origin)
+            || !SpatialNetwork.TryGetLocation(destinationLocationRuntimeId, out SpatialLocationRuntime destination)
+            || (destinationCityRuntimeId != null
+                && !ContainsCityRuntimeLocation(destinationCityRuntimeId, destinationLocationRuntimeId))
+            || !SpatialNetwork.TryGetSingleDirectRoute(origin, destination, out route, out _))
+        {
+            route = null;
+            return false;
+        }
+
+        int days = Math.Max(1, route.TravelDays);
+        travelCost = days * (Definitions.EffectiveConfiguration?.Travel?.TravelCostPerDay ?? 0f);
+        if (float.IsNaN(travelCost) || float.IsInfinity(travelCost) || travelCost < 0f)
+        {
+            route = null;
+            travelCost = -1f;
+            return false;
+        }
+        return true;
     }
 
     /// <summary>

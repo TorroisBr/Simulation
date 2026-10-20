@@ -12,6 +12,8 @@
   <ItemGroup>
     <Compile Include="../../Packages/com.simulation.core/Runtime/IAuthoritativeMutationStatus.cs" Link="IAuthoritativeMutationStatus.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/ActionExecution.cs" Link="ActionExecution.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/DailyV1DecisionRecords.cs" Link="DailyV1DecisionRecords.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/DailyV1DecisionRecordOperation.cs" Link="DailyV1DecisionRecordOperation.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/MutationStatusBinding.cs" Link="MutationStatusBinding.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Mutation/AuthoritativeMutationGuard.cs" Link="Mutation/AuthoritativeMutationGuard.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionContracts.cs" Link="Institution/InstitutionContracts.cs" />
@@ -76,7 +78,9 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1PopulationConsumptionOperation.cs" Link="Economy/DailyV1PopulationConsumptionOperation.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1FiniteProductionSourceOwner.cs" Link="City/DailyV1FiniteProductionSourceOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedTravelTransitionPlan.cs" Link="City/DailyV1SelectedTravelTransitionPlan.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedSoloTravelExecution.cs" Link="City/DailyV1SelectedSoloTravelExecution.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedRuntimeOwnerGraph.cs" Link="Application/DailyV1SelectedRuntimeOwnerGraph.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedActionExecutionStage.cs" Link="Application/DailyV1SelectedActionExecutionStage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedTravelDayStage.cs" Link="Application/DailyV1SelectedTravelDayStage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Travel/TravelPartyOwners.cs" Link="Travel/TravelPartyOwners.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonStore.cs" Link="Person/PersonStore.cs" />
@@ -106,6 +110,9 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketItemDefinition.cs" Link="Economy/MarketItemDefinition.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1InventoryMarketOwners.cs" Link="Economy/DailyV1InventoryMarketOwners.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedOpenMarketSale.cs" Link="Economy/DailyV1SelectedOpenMarketSale.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedOpenMarketActionExecution.cs" Link="Economy/DailyV1SelectedOpenMarketActionExecution.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedNpcTradeExecution.cs" Link="Economy/DailyV1SelectedNpcTradeExecution.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedMarketSaleProfit.cs" Link="Economy/DailyV1SelectedMarketSaleProfit.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedOpenMarketPurchase.cs" Link="Economy/DailyV1SelectedOpenMarketPurchase.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MoneyAccountRuntime.cs" Link="Economy/MoneyAccountRuntime.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketCounterpartyRuntime.cs" Link="Economy/MarketCounterpartyRuntime.cs" />

@@ -134,6 +134,60 @@ internal sealed class DailyV1NpcMerchantTradePlanOwner
         return true;
     }
 
+    /// <summary>Applies the established selected-plan sale transition.</summary>
+    internal bool CanRegisterSale(int amountSold)
+    {
+        if (amountSold <= 0) return false;
+        int nextRemaining = Math.Max(0, RemainingAmount - amountSold);
+        bool completed = nextRemaining <= 0;
+        return CanInstallState(
+            completed ? null : ItemDefinition,
+            completed ? null : OriginCityRuntimeId,
+            completed ? null : TargetCityRuntimeId,
+            completed ? 0 : PlannedAmount,
+            completed ? 0 : nextRemaining,
+            completed ? 0f : PurchasePricePerItem,
+            0,
+            completed ? 0 : PendingTravelDays,
+            completed ? null : OriginDecisionId);
+    }
+
+    /// <summary>Applies the established selected-plan sale transition.</summary>
+    internal bool TryRegisterSale(
+        int amountSold,
+        Func<bool> preCommitAdmission,
+        Action publishCommitted,
+        out bool completed)
+    {
+        completed = false;
+        if (amountSold <= 0) return false;
+        int nextRemaining = Math.Max(0, RemainingAmount - amountSold);
+        completed = nextRemaining <= 0;
+        DailyV1ItemDefinition nextItem = completed ? null : ItemDefinition;
+        string nextOrigin = completed ? null : OriginCityRuntimeId;
+        string nextTarget = completed ? null : TargetCityRuntimeId;
+        int nextPlanned = completed ? 0 : PlannedAmount;
+        int nextRawRemaining = completed ? 0 : nextRemaining;
+        float nextPurchasePrice = completed ? 0f : PurchasePricePerItem;
+        int nextWaitDays = 0;
+        int nextPendingDays = completed ? 0 : PendingTravelDays;
+        string nextDecisionId = completed ? null : OriginDecisionId;
+        if (MatchesState(nextItem, nextOrigin, nextTarget, nextPlanned,
+                nextRawRemaining, nextPurchasePrice, nextWaitDays,
+                nextPendingDays, nextDecisionId))
+            return true;
+        if (preCommitAdmission != null)
+        {
+            try { if (!preCommitAdmission()) return false; }
+            catch { return false; }
+        }
+        if (!TryInstallState(nextItem, nextOrigin, nextTarget, nextPlanned,
+                nextRawRemaining, nextPurchasePrice, nextWaitDays,
+                nextPendingDays, nextDecisionId)) return false;
+        publishCommitted?.Invoke();
+        return true;
+    }
+
     private void InstallFields(
         DailyV1ItemDefinition itemDefinition,
         string originCityRuntimeId,

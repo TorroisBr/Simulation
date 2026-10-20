@@ -53,6 +53,13 @@ internal sealed class DailyV1SelectedTravelTransitionPlan
     internal DailyV1NpcRuntimeOwners Npc => npc;
     internal bool IsCommitted => committed;
     internal bool IsNoOp => !HasTravelStateDifference() && presenceChanges.Count == 0;
+    internal string CurrentLocationRuntimeId => currentLocationId;
+    internal string CurrentCityRuntimeId => currentCityId;
+    internal string DestinationLocationRuntimeId => destinationLocationId;
+    internal string DestinationCityRuntimeId => destinationCityId;
+    internal string RouteRuntimeId => routeId;
+    internal int TravelDaysTotal => travelDaysTotal;
+    internal string OriginDecisionId => originDecisionId;
 
     private DailyV1SelectedTravelTransitionPlan(
         DailyV1NpcRuntimeOwners npc,

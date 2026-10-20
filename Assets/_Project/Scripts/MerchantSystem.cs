@@ -638,6 +638,18 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             return false;
         }
 
+        if (npcRuntime.SelectedRuntimeOwners != null
+            && actionRuntime.SelectedOwner != null
+            && actionRuntime.TargetCity == npcRuntime.CurrentCity)
+        {
+            EconomyTransactionResult selectedTransaction = transactionService
+                .TryExecuteSelectedOpenMarketAction(npcRuntime, actionRuntime.SelectedOwner);
+            if (!selectedTransaction.Success || selectedTransaction.Quantity <= 0) return false;
+            logger.Log(SimulationLogCategory.Trade,
+                $"{npcRuntime.NpcName} comprou {selectedTransaction.Quantity} {actionRuntime.TargetItem.itemName} em {npcRuntime.CurrentCity.CityName} por {selectedTransaction.UnitPrice:0.##} cada para estoque local");
+            return true;
+        }
+
         EconomyTransactionResult transaction;
         if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
         {
@@ -795,7 +807,16 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
     {
         float averageUnitCost = GetInventoryAverageUnitCost(npcRuntime, actionRuntime.TargetItem);
         EconomyTransactionResult transaction;
-        if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
+        if (npcRuntime.SelectedRuntimeOwners != null
+            && actionRuntime.SelectedOwner != null
+            && !saleBelongsToPlan
+            && actionRuntime.TargetNpc == null
+            && actionRuntime.TargetCity == npcRuntime.CurrentCity)
+        {
+            transaction = transactionService.TryExecuteSelectedOpenMarketAction(
+                npcRuntime, actionRuntime.SelectedOwner);
+        }
+        else if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
         {
             npcRuntime.TryGetSelectedDailyV1Item(actionRuntime.TargetItem, out DailyV1ItemDefinition selectedItem);
             transaction = transactionService.TryExecuteMarketSale(
@@ -962,7 +983,70 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
 
         float localPrice = localObservation.ObservedPrice;
         float profitPerItem = localPrice - plan.PurchasePricePerItem;
-        MerchantTradeOpportunity localBuyer = FindBestLocalMerchantBuyer(npcRuntime, plan.Item, amount, plan.PurchasePricePerItem);
+        MerchantTradeOpportunity localBuyer = null;
+        if (npcRuntime.SelectedRuntimeOwners != null)
+        {
+            DailyV1SelectedRuntimeOwnerGraph selectedGraph = npcRuntime.SelectedRuntimeOwnerGraph;
+            if (!npcRuntime.TryGetSelectedDailyV1ActionNode(action,
+                    out DailyV1ActionDefinition selectedAction)
+                || !DailyV1MerchantActionPlanning.TryPlanSelectedPlannedLocalBuyer(
+                    selectedGraph, npcRuntime.SelectedRuntimeOwners, selectedAction,
+                    simulationTime.AbsoluteDay, utility,
+                    out DailyV1MerchantLocalSalePlan selectedBuyerPlan))
+            {
+                utility = 0f;
+                return null;
+            }
+            if (selectedBuyerPlan?.SelectedPayload != null)
+            {
+                NpcRuntime selectedBuyer = npcRuntime.CurrentCity.ImportantNpcs?.Find(candidate =>
+                    candidate != null && string.Equals(candidate.RuntimeId,
+                        selectedBuyerPlan.TargetNpcRuntimeId, StringComparison.Ordinal));
+                if (selectedBuyer == null)
+                {
+                    utility = 0f;
+                    return null;
+                }
+                utility = selectedBuyerPlan.Utility;
+                NpcActionRuntime selectedSale = new NpcActionRuntime(
+                    action, selectedBuyer, plan.Item, selectedBuyerPlan.Amount,
+                    selectedBuyerPlan.LocalPrice);
+                if (!selectedSale.TryUseSelectedPayload(
+                        selectedBuyerPlan.SelectedPayload, selectedGraph.Definitions))
+                {
+                    utility = 0f;
+                    return null;
+                }
+                return selectedSale;
+            }
+
+            if (!DailyV1MerchantActionPlanning.TryPlanSelectedPlannedMarketSale(
+                    selectedGraph, npcRuntime.SelectedRuntimeOwners, selectedAction,
+                    simulationTime.AbsoluteDay, utility,
+                    out DailyV1MerchantLocalSalePlan selectedMarketPlan)
+                || selectedMarketPlan?.SelectedPayload == null
+                || !npcRuntime.TryGetSelectedDailyV1ItemAsset(selectedMarketPlan.Item, out ItemData selectedItemAsset))
+            {
+                utility = 0f;
+                return null;
+            }
+            utility = selectedMarketPlan.Utility;
+            NpcActionRuntime selectedMarketSale = new NpcActionRuntime(
+                action, npcRuntime.CurrentCity, selectedItemAsset,
+                selectedMarketPlan.Amount, selectedMarketPlan.LocalPrice);
+            if (!selectedMarketSale.TryUseSelectedPayload(
+                    selectedMarketPlan.SelectedPayload, selectedGraph.Definitions))
+            {
+                utility = 0f;
+                return null;
+            }
+            return selectedMarketSale;
+        }
+        else
+        {
+            localBuyer = FindBestLocalMerchantBuyer(
+                npcRuntime, plan.Item, amount, plan.PurchasePricePerItem);
+        }
 
         if (localBuyer != null)
         {

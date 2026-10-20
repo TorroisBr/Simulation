@@ -117,42 +117,70 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
 
         CityRuntime resolvedTargetCity = targetCityProjection ?? GetCityRuntime(targetLocation);
 
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph = npcRuntime?.SelectedRuntimeOwnerGraph;
+        bool selectedOwners = npcRuntime?.SelectedRuntimeOwners != null
+            && selectedGraph != null
+            && selectedGraph.ContainsExactNpcOwner(npcRuntime.SelectedRuntimeOwners);
+        SpatialRouteRuntime route = null;
+        float travelCost = -1f;
+        if (!selectedOwners && npcRuntime != null
+            && TryGetDirectRoute(npcRuntime.CurrentLocation, targetLocation, out route))
+        {
+            travelCost = GetTravelCost(route.TravelDays);
+        }
+        else if (!selectedOwners)
+        {
+            return false;
+        }
+
         if (npcRuntime == null
             || npcRuntime.IsAlive == false
             || targetLocation == null
             || (targetCityProjection != null && targetCityProjection.Location != targetLocation)
             || !npcRuntime.CanStartTravelPresenceTransition(1L)
-            || IsManagedByTravelParty(npcRuntime)
-            || TryGetDirectRoute(npcRuntime.CurrentLocation, targetLocation, out SpatialRouteRuntime route) == false)
+            || IsManagedByTravelParty(npcRuntime))
         {
             return false;
         }
 
-        int travelDays = route.TravelDays;
-        float travelCost = GetTravelCost(travelDays);
-
-        if (travelCost < 0f || transactionService.CanChargeTravel(npcRuntime, travelCost) == false)
+        if (!selectedOwners
+            && (travelCost < 0f || transactionService.CanChargeTravel(npcRuntime, travelCost) == false))
         {
             return false;
         }
 
         SpatialLocationRuntime originLocation = npcRuntime.CurrentLocation;
+        string travelOriginDecisionId = originDecisionId;
 
-        EconomyTransactionResult charge = transactionService.TryChargeTravel(npcRuntime, travelCost);
-
-        if (charge.Success == false)
+        bool travelStarted;
+        if (selectedOwners)
         {
-            return false;
+            if (targetCityProjection?.SelectedRuntimeOwners == null
+                || !ReferenceEquals(targetCityProjection.Location, targetLocation)
+                || !DailyV1SelectedActionExecutionStage.TryExecuteSoloTravelSlot(
+                    selectedGraph, npcRuntime.SelectedRuntimeOwners,
+                    targetCityProjection.SelectedRuntimeOwners.RuntimeId,
+                    plan => npcRuntime.TryCommitPreparedSelectedTravelTransition(
+                        plan, targetLocation, resolvedTargetCity),
+                    out DailyV1SelectedActionExecutionStage.SoloTravelResult selectedTravel)
+                || !selectedTravel.Succeeded)
+                return false;
+            route = selectedTravel.Route;
+            travelCost = selectedTravel.TravelCost;
+            travelOriginDecisionId = selectedTravel.Transition.OriginDecisionId;
+            travelStarted = true;
+        }
+        else
+        {
+            EconomyTransactionResult charge = transactionService.TryChargeTravel(npcRuntime, travelCost);
+            if (charge.Success == false) return false;
+            travelStarted = npcRuntime.StartTravel(
+                targetLocation, resolvedTargetCity, route.TravelDays, originDecisionId, route.RuntimeId);
+            if (!travelStarted) transactionService.TryRestoreTravelCharge(npcRuntime, travelCost);
         }
 
-        if (npcRuntime.StartTravel(
-            targetLocation,
-            resolvedTargetCity,
-            travelDays,
-            originDecisionId,
-            route.RuntimeId) == false)
+        if (!travelStarted)
         {
-            transactionService.TryRestoreTravelCharge(npcRuntime, travelCost);
             return false;
         }
 
@@ -167,7 +195,7 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
             originLocation.RuntimeId,
             targetLocation.RuntimeId,
             route.RuntimeId,
-            originDecisionId));
+            travelOriginDecisionId));
         string originName = GetCityRuntime(originLocation)?.CityName ?? originLocation.RuntimeId;
         string destinationName = resolvedTargetCity != null ? resolvedTargetCity.CityName : targetLocation.RuntimeId;
         logger.Log(SimulationLogCategory.Travel, $"{npcRuntime.NpcName} iniciou viagem de {originName} para {destinationName}");

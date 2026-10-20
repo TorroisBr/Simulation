@@ -69,6 +69,17 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             string.Equals(owner.RuntimeId, npc.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
         DailyV1CityRuntimeOwners destination = graph.Cities.Single(owner =>
             !string.Equals(owner.RuntimeId, origin.RuntimeId, StringComparison.Ordinal));
+        Assert.That(graph.TryPlanSelectedSoloTravel(npc, origin.LocationRuntimeId,
+            destination.LocationRuntimeId, destination.RuntimeId,
+            out SpatialRouteRuntime selectedRoute, out float selectedCost), Is.True);
+        Assert.That(selectedRoute.RuntimeId, Is.EqualTo("route/merchant-test"));
+        Assert.That(selectedCost, Is.EqualTo(Math.Max(1, selectedRoute.TravelDays)
+            * (definitions.EffectiveConfiguration?.Travel?.TravelCostPerDay ?? 0f)));
+        Assert.That(graph.TryPlanSelectedSoloTravel(npc, "outside-current-location",
+            destination.LocationRuntimeId, destination.RuntimeId, out _, out _), Is.False);
+        Assert.That(graph.TryPlanSelectedSoloTravel(npc, origin.LocationRuntimeId,
+            destination.LocationRuntimeId, origin.RuntimeId, out _, out _), Is.False);
+
         Assert.That(graph.TryInstallMerchantTradePlan(npc, definitions.Items.Values.First(),
             origin.RuntimeId, destination.RuntimeId, 2, 1f, "decision-buy"), Is.True);
 
@@ -91,6 +102,34 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             70f, "decision-buy", () => { admissionCalls++; return true; }, out _), Is.True);
         Assert.That(admissionCalls, Is.EqualTo(2), "An exact no-op skips P12 admission.");
         Assert.That(npc.TravelPlan.Revision, Is.EqualTo(priorRevision + 1));
+
+        DailyV1ActionDefinition travelAction = definitions.Actions.Values.Single(action =>
+            action.Values.actionType?.Value == DailyV1NpcDefinitionRules.TravelActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(definitions, travelAction,
+            null, destination.RuntimeId, null, 0, 0f, 1f, NpcTravelReason.Trade,
+            0f, "decision/selected-travel", null, null, null,
+            out DailyV1NpcActionPayloadOwner travelPayload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(npc, travelAction, travelPayload, null), Is.True);
+        float balanceBeforeTravel = npc.MoneyAccount.Balance;
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSoloTravelSlot(
+            graph, npc, destination.RuntimeId, _ => false,
+            out DailyV1SelectedActionExecutionStage.SoloTravelResult rejectedTravel), Is.True);
+        Assert.That(rejectedTravel.Succeeded, Is.False);
+        Assert.That(rejectedTravel.Execution.Failure,
+            Is.EqualTo(DailyV1SelectedSoloTravelFailure.TransitionRejected));
+        Assert.That(rejectedTravel.Execution.RefundSucceeded, Is.True);
+        Assert.That(npc.MoneyAccount.Balance, Is.EqualTo(balanceBeforeTravel).Within(0.001f));
+        Assert.That(npc.Travel.IsTraveling, Is.False);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSoloTravelSlot(
+            graph, npc, destination.RuntimeId, transition => transition.TryCommit(),
+            out DailyV1SelectedActionExecutionStage.SoloTravelResult stagedTravel), Is.True);
+        Assert.That(stagedTravel.Succeeded, Is.True);
+        Assert.That(stagedTravel.Route.RuntimeId, Is.EqualTo("route/merchant-test"));
+        Assert.That(stagedTravel.Transition.OriginDecisionId, Is.EqualTo("decision/selected-travel"));
+        Assert.That(npc.MoneyAccount.Balance,
+            Is.EqualTo(balanceBeforeTravel - stagedTravel.TravelCost).Within(0.001f));
+        Assert.That(npc.Travel.TravelRouteRuntimeId, Is.EqualTo(stagedTravel.Route.RuntimeId));
     }
 
     [Test]

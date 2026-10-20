@@ -583,17 +583,15 @@ public class NpcRuntime : ICapabilityConditionSource
         out bool succeeded)
     {
         succeeded = false;
-        return selectedDailyV1Definition != null
-            && TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
-            && DailyV1NpcActionDecision.TryRollActionSuccess(
-                selectedDefinitionGraph,
-                actionNode,
-                RuntimeId,
-                decisionId,
-                contextualMultiplier,
-                currentAbsoluteDay,
-                randomSource,
-                out succeeded);
+        if (selectedDailyV1Definition == null
+            || selectedRuntimeOwners == null
+            || !TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
+            || !ReferenceEquals(selectedRuntimeOwners.ActionSlot?.CurrentAction, actionNode))
+            return false;
+
+        return DailyV1SelectedActionExecutionStage.TryRollCurrentActionSlot(
+            selectedDefinitionGraph, selectedRuntimeOwners, randomSource,
+            currentAbsoluteDay, out succeeded);
     }
 
     internal int GetConfiguredActionTypeOrder(NpcActionData action)
@@ -792,6 +790,18 @@ public class NpcRuntime : ICapabilityConditionSource
         out DailyV1ActionDefinition action)
     {
         return TryGetSelectedDailyV1Action(actionAsset, out action);
+    }
+
+    internal bool TryPrepareSelectedActionPayload(
+        NpcActionRuntime actionRuntime,
+        out DailyV1NpcActionPayloadOwner payload)
+    {
+        payload = null;
+        return selectedRuntimeOwners != null && actionRuntime != null
+            && TryGetSelectedDailyV1Action(actionRuntime.Action,
+                out DailyV1ActionDefinition actionNode)
+            && actionRuntime.TryCreateSelectedOwner(selectedDefinitionGraph,
+                actionNode, out payload);
     }
 
     internal bool TryGetSelectedDailyV1ActiveStatusNodes(List<DailyV1StatusDefinition> statuses)
@@ -2715,7 +2725,8 @@ public class NpcRuntime : ICapabilityConditionSource
         CityRuntime destinationCityProjection,
         int travelDays,
         string originDecisionId,
-        string routeRuntimeId)
+        string routeRuntimeId,
+        float? selectedTravelCost = null)
     {
         DailyV1CityRuntimeOwners coreCurrentCity = null;
         if (selectedRuntimeOwners == null
@@ -2753,9 +2764,46 @@ public class NpcRuntime : ICapabilityConditionSource
         CityRuntime[] candidates = coreCurrentCity == null
             ? Array.Empty<CityRuntime>()
             : new[] { currentCity };
-        return TryCommitSelectedTravelTransition(
+        bool CommitTransition() => TryCommitSelectedTravelTransition(
             plan, candidates,
             null, null, destination, destinationCityProjection,
+            notifyBoundary: true,
+            allowUnprojectedCurrentCityProjection: currentCity != null && coreCurrentCity == null);
+        if (!selectedTravelCost.HasValue) return CommitTransition();
+        DailyV1SelectedSoloTravelResult result = DailyV1SelectedSoloTravelExecution.TryExecute(
+            selectedRuntimeOwners, plan, selectedTravelCost.Value, CommitTransition);
+        return result.Succeeded;
+    }
+
+    internal bool TryStartSelectedTravelWithCharge(
+        SpatialLocationRuntime destination,
+        CityRuntime destinationCityProjection,
+        int travelDays,
+        string originDecisionId,
+        string routeRuntimeId,
+        float travelCost) =>
+        TryStartSelectedTravel(destination, destinationCityProjection, travelDays,
+            originDecisionId, routeRuntimeId, travelCost);
+
+    internal bool TryCommitPreparedSelectedTravelTransition(
+        DailyV1SelectedTravelTransitionPlan plan,
+        SpatialLocationRuntime destination,
+        CityRuntime destinationCityProjection)
+    {
+        if (plan == null || selectedRuntimeOwners == null
+            || !ReferenceEquals(plan.Npc, selectedRuntimeOwners)
+            || destination == null
+            || !string.Equals(plan.DestinationLocationRuntimeId, destination.RuntimeId, StringComparison.Ordinal)
+            || (destinationCityProjection?.SelectedRuntimeOwners?.RuntimeId
+                != plan.DestinationCityRuntimeId))
+            return false;
+
+        DailyV1CityRuntimeOwners coreCurrentCity = currentCity?.SelectedRuntimeOwners;
+        CityRuntime[] candidates = currentCity == null
+            ? Array.Empty<CityRuntime>()
+            : new[] { currentCity };
+        return TryCommitSelectedTravelTransition(
+            plan, candidates, null, null, destination, destinationCityProjection,
             notifyBoundary: true,
             allowUnprojectedCurrentCityProjection: currentCity != null && coreCurrentCity == null);
     }

@@ -4,6 +4,39 @@ using NUnit.Framework;
 public sealed class DailyV1SelectedTravelTransitionPlanTests
 {
     [Test]
+    public void SoloTravelExecutionChargesBeforeTransitionAndRefundsRejectedTransition()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1CityRuntimeOwners origin = CreateCity(definitions, "city-origin", new[] { "npc-1" }, 1L);
+        DailyV1CityRuntimeOwners destination = CreateCity(definitions, "city-destination", System.Array.Empty<string>(), 0L);
+        DailyV1NpcRuntimeOwners npc = CreateNpc(definitions, "npc-1", "location-origin", origin.RuntimeId, 0L);
+        Assert.That(npc.MoneyAccount.TryCredit(20f), Is.True);
+        Assert.That(DailyV1SelectedTravelTransitionPlan.TryStartTravel(
+            npc, origin, "location-origin", "location-destination", destination,
+            2, "decision-1", "route-1", out DailyV1SelectedTravelTransitionPlan rejectedPlan), Is.True);
+
+        DailyV1SelectedSoloTravelResult rejected = DailyV1SelectedSoloTravelExecution.TryExecute(
+            npc, rejectedPlan, 3f, () => false);
+        Assert.That(rejected.Succeeded, Is.False);
+        Assert.That(rejected.Failure, Is.EqualTo(DailyV1SelectedSoloTravelFailure.TransitionRejected));
+        Assert.That(rejected.RefundSucceeded, Is.True);
+        Assert.That(npc.MoneyAccount.Balance, Is.EqualTo(20f));
+        Assert.That(npc.Travel.IsTraveling, Is.False);
+        Assert.That(origin.NpcPresence.Contains(npc.RuntimeId), Is.True);
+
+        Assert.That(DailyV1SelectedTravelTransitionPlan.TryStartTravel(
+            npc, origin, "location-origin", "location-destination", destination,
+            2, "decision-1", "route-1", out DailyV1SelectedTravelTransitionPlan acceptedPlan), Is.True);
+        DailyV1SelectedSoloTravelResult accepted = DailyV1SelectedSoloTravelExecution.TryExecute(
+            npc, acceptedPlan, 3f, acceptedPlan.TryCommit);
+        Assert.That(accepted.Succeeded, Is.True);
+        Assert.That(npc.MoneyAccount.Balance, Is.EqualTo(17f));
+        Assert.That(npc.Travel.TravelRouteRuntimeId, Is.EqualTo("route-1"));
+        Assert.That(npc.Travel.TravelOriginDecisionId, Is.EqualTo("decision-1"));
+        Assert.That(origin.NpcPresence.Contains(npc.RuntimeId), Is.False);
+    }
+
+    [Test]
     public void PresenceTransitionIsSideEffectFreeUntilCommitAndPreservesNpcRevision()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

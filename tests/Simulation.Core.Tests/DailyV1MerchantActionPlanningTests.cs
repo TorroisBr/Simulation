@@ -36,6 +36,8 @@ public sealed class DailyV1MerchantActionPlanningTests
         Assert.That(plan.Evidence.TradeOriginLocationRuntimeId, Is.EqualTo(city.LocationRuntimeId));
         Assert.That(plan.Evidence.TradeDestinationLocationRuntimeId, Is.EqualTo(city.LocationRuntimeId));
         Assert.That(plan.Evidence.ExpectedQuantity, Is.EqualTo(plan.Amount));
+        Assert.That(plan.Evidence.ExpectedPurchaseUnitPrice, Is.EqualTo(referencePrice),
+            "The existing selected Trade profit log uses the exact inventory average cost carried by Core evidence.");
         Assert.That(plan.Evidence.ExpectedSaleUnitPrice, Is.EqualTo(referencePrice + 3f));
         Assert.That(plan.Evidence.DestinationObservation.LocationRuntimeId, Is.EqualTo(city.LocationRuntimeId));
         Assert.That(plan.SelectedPayload, Is.Not.Null);
@@ -45,6 +47,93 @@ public sealed class DailyV1MerchantActionPlanningTests
         Assert.That(plan.SelectedPayload.Amount, Is.EqualTo(plan.Amount));
         Assert.That(plan.SelectedPayload.ExpectedUnitPrice, Is.EqualTo(plan.LocalPrice));
         Assert.That(plan.SelectedPayload.CommercialDecisionEvidence, Is.SameAs(plan.Evidence));
+    }
+
+    [Test]
+    public void SelectedPlannedSaleChoosesOrderedLocalBuyerAndUsesFreshnessReserveAndPlanOwners()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder = new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            id => builder.ResolveUniqueStartingCity(id)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        DailyV1NpcRuntimeOwners seller = graph.Npcs.Single(owner => owner.Definition.DefinitionId == "JORGE");
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(owner => owner.Definition.DefinitionId == "CAMPO_VERDE");
+        DailyV1ItemDefinition item = definitions.Items["FERRO"];
+        DailyV1ActionDefinition sell = definitions.Actions["VENDER_MERCADORIA"];
+        Assert.That(seller.Inventory.TryAddItem(item, 5, 10f), Is.True);
+        Assert.That(graph.TryInstallMerchantTradePlan(seller, item, city.RuntimeId,
+            graph.Cities.Single(owner => !ReferenceEquals(owner, city)).RuntimeId,
+            5, 10f, "decision-plan"), Is.True);
+        Assert.That(seller.CommercialKnowledge.RecordObservation(new DailyV1CommercialMarketObservation(
+            city.LocationRuntimeId, item, 100f, 20, 20L, 20L,
+            DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+
+        Assert.That(DailyV1MerchantActionPlanning.TryPlanSelectedPlannedLocalBuyer(
+            graph, seller, sell, 20L, 75f,
+            out DailyV1MerchantLocalSalePlan plan), Is.True);
+
+        Assert.That(plan, Is.Not.Null);
+        Assert.That(plan.TargetNpcRuntimeId, Is.EqualTo(graph.Npcs.Single(owner =>
+            owner.Definition.DefinitionId == "PEDRO").RuntimeId));
+        Assert.That(plan.Utility, Is.EqualTo(Math.Max(75f, 85f + plan.Score)));
+        Assert.That(plan.SelectedPayload.TargetCityRuntimeId, Is.Null,
+            "NPC-targeted selected actions retain the existing null target-city identity.");
+        Assert.That(plan.SelectedPayload.TargetNpcRuntimeId, Is.EqualTo(plan.TargetNpcRuntimeId));
+        Assert.That(plan.SelectedPayload.TargetItem, Is.SameAs(item));
+        Assert.That(plan.SelectedPayload.OriginDecisionId, Is.Null);
+        Assert.That(plan.Evidence.TradeOriginLocationRuntimeId, Is.EqualTo(city.LocationRuntimeId));
+        Assert.That(plan.Evidence.TradeDestinationLocationRuntimeId, Is.EqualTo(city.LocationRuntimeId));
+        Assert.That(plan.Evidence.ExpectedQuantity, Is.EqualTo(plan.Amount));
+        Assert.That(plan.Evidence.ExpectedPurchaseUnitPrice, Is.EqualTo(10f));
+        Assert.That(plan.Evidence.ExpectedSaleUnitPrice, Is.EqualTo(plan.LocalPrice));
+
+        Assert.That(DailyV1MerchantActionPlanning.TryPlanSelectedPlannedLocalBuyer(
+            graph, seller, sell, 20L + definitions.EffectiveConfiguration.CommercialKnowledge.MaxUsefulAgeDays + 2,
+            75f, out DailyV1MerchantLocalSalePlan stalePlan), Is.True);
+        Assert.That(stalePlan, Is.Null, "A stale market observation cannot select a local merchant buyer.");
+    }
+
+    [Test]
+    public void SelectedPlannedMarketFallbackPreservesWaitThresholdAndExactCityPayload()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder = new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            id => builder.ResolveUniqueStartingCity(id)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        DailyV1NpcRuntimeOwners seller = graph.Npcs.Single(owner => owner.Definition.DefinitionId == "JORGE");
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(owner => owner.Definition.DefinitionId == "CAMPO_VERDE");
+        DailyV1ItemDefinition item = definitions.Items["FERRO"];
+        DailyV1ActionDefinition sell = definitions.Actions["VENDER_MERCADORIA"];
+        Assert.That(seller.Inventory.TryAddItem(item, 5, 10f), Is.True);
+        int waitThreshold = definitions.EffectiveConfiguration.MerchantTrade.MaxUnprofitablePlanWaitDays;
+        Assert.That(seller.MerchantTradePlan.TryInstallState(item, city.RuntimeId, city.RuntimeId,
+            5, 5, 100f, waitThreshold, 0, "decision-plan"), Is.True);
+        Assert.That(seller.CommercialKnowledge.RecordObservation(new DailyV1CommercialMarketObservation(
+            city.LocationRuntimeId, item, 20f, 20, 20L, 20L,
+            DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+
+        Assert.That(DailyV1MerchantActionPlanning.TryPlanSelectedPlannedMarketSale(
+            graph, seller, sell, 20L, 75f, out DailyV1MerchantLocalSalePlan liquidation), Is.True);
+        Assert.That(liquidation, Is.Not.Null);
+        Assert.That(liquidation.Amount, Is.EqualTo(5));
+        Assert.That(liquidation.SelectedPayload.TargetCityRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(liquidation.SelectedPayload.TargetNpcRuntimeId, Is.Null);
+        Assert.That(liquidation.SelectedPayload.TargetItem, Is.SameAs(item));
+        Assert.That(liquidation.Evidence.ExpectedPurchaseUnitPrice, Is.EqualTo(100f));
+        Assert.That(liquidation.Evidence.ExpectedSaleUnitPrice, Is.EqualTo(20f));
+        Assert.That(liquidation.Utility, Is.EqualTo(75f));
+
+        Assert.That(seller.MerchantTradePlan.TryInstallState(item, city.RuntimeId, city.RuntimeId,
+            5, 5, 100f, Math.Max(0, waitThreshold - 1), 0, "decision-plan"), Is.True);
+        Assert.That(DailyV1MerchantActionPlanning.TryPlanSelectedPlannedMarketSale(
+            graph, seller, sell, 20L, 0f, out DailyV1MerchantLocalSalePlan premature), Is.True);
+        Assert.That(premature, Is.Null, "Loss liquidation waits until the configured destination threshold.");
     }
 
     [Test]

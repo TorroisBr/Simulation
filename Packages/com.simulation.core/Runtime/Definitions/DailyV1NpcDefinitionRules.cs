@@ -9,6 +9,7 @@ internal static class DailyV1NpcDefinitionRules
     internal const int MerchantJobTypeValue = 1;
     internal const int BuyGoodsActionTypeValue = 1;
     internal const int SellGoodsActionTypeValue = 2;
+    internal const int TravelActionTypeValue = 3;
 
     internal static bool HasConfiguredDefaultAction(
         DailyV1NpcDefinition npc,

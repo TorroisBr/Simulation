@@ -994,6 +994,13 @@ public class MerchantTradePlanRuntime
             return false;
         }
 
+        if (selectedOwner != null)
+        {
+            return selectedOwner.TryRegisterSale(
+                amountSold, CanCommitP12Mutation, NotifyP12MutationCommitted,
+                out bool selectedCompleted) && selectedCompleted;
+        }
+
         int nextRemainingAmount = UnityMathfCompatibility.Max(0, RemainingAmount - amountSold);
         bool completed = nextRemainingAmount <= 0;
         MerchantTradePlanState next = completed
@@ -1003,6 +1010,10 @@ public class MerchantTradePlanRuntime
                 PendingTravelDays, OriginDecisionId);
         return InstallOwnerState(next) && completed;
     }
+
+    internal bool CanAdmitSelectedPlanOwnerMutation() => CanCommitP12Mutation();
+
+    internal void PublishSelectedPlanOwnerMutation() => NotifyP12MutationCommitted();
 
     public void Clear()
     {

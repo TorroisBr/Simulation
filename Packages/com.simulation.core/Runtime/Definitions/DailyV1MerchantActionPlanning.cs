@@ -36,6 +36,7 @@ internal sealed class DailyV1MerchantLocalSalePlan
     internal CommercialDecisionEvidence Evidence { get; }
     internal float Utility { get; }
     internal DailyV1NpcActionPayloadOwner SelectedPayload { get; }
+    internal string TargetNpcRuntimeId { get; }
 
     internal DailyV1MerchantLocalSalePlan(
         int marketFactIndex,
@@ -47,7 +48,8 @@ internal sealed class DailyV1MerchantLocalSalePlan
         float score,
         float utility = 0f,
         CommercialDecisionEvidence evidence = null,
-        DailyV1NpcActionPayloadOwner selectedPayload = null)
+        DailyV1NpcActionPayloadOwner selectedPayload = null,
+        string targetNpcRuntimeId = null)
     {
         MarketFactIndex = marketFactIndex;
         Item = item;
@@ -59,6 +61,7 @@ internal sealed class DailyV1MerchantLocalSalePlan
         Utility = utility;
         Evidence = evidence;
         SelectedPayload = selectedPayload;
+        TargetNpcRuntimeId = targetNpcRuntimeId;
     }
 }
 
@@ -306,6 +309,220 @@ internal static class DailyV1MerchantActionPlanning
             selected.TargetRuntimeId, selected.Amount, selected.BuyPrice, selected.SellPrice,
             selected.ProfitPerItem, selected.NetProfit, selected.Score, evidence, selectedPayload);
         return true;
+    }
+
+    /// <summary>Plans the existing selected planned-sale target from ordered Core city presence.</summary>
+    internal static bool TryPlanSelectedPlannedLocalBuyer(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners seller,
+        DailyV1ActionDefinition action,
+        long currentAbsoluteDay,
+        float currentUtility,
+        out DailyV1MerchantLocalSalePlan plan)
+    {
+        plan = null;
+        if (graph == null || seller == null || action == null
+            || !graph.ContainsExactNpcOwner(seller)
+            || !DailyV1NpcDefinitionRules.IsAdmittedAction(graph.Definitions, action)
+            || action.Values.actionType?.Value != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(graph.Definitions, action, seller.Status?.Statuses)
+            || seller.Lifecycle?.LifeState != NpcLifeState.Alive
+            || seller.Travel == null || seller.Travel.IsTraveling
+            || seller.MerchantTradePlan == null || !seller.MerchantTradePlan.IsActive
+            || seller.Inventory == null || seller.CommercialKnowledge == null)
+            return false;
+
+        DailyV1CityRuntimeOwners city = null;
+        foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+            if (string.Equals(candidate.RuntimeId, seller.Travel.CurrentCityRuntimeId, StringComparison.Ordinal))
+            { city = candidate; break; }
+        DailyV1ItemDefinition item = seller.MerchantTradePlan.ItemDefinition;
+        if (city == null || !graph.ContainsExactCityOwner(city) || city.NpcPresence == null
+            || item == null
+            || !seller.CommercialKnowledge.TryGetObservation(city.LocationRuntimeId,
+                item.DefinitionId, out DailyV1CommercialMarketObservation observation)
+            || !ReferenceEquals(observation.ItemDefinition, item)) return false;
+
+        EffectiveSimulationConfiguration effective = graph.Definitions.EffectiveConfiguration;
+        EffectiveMerchantTradeConfiguration trade = effective?.MerchantTrade
+            ?? new EffectiveMerchantTradeConfiguration(enabled: true);
+        EffectiveCommercialKnowledgeConfiguration knowledge = effective?.CommercialKnowledge
+            ?? new EffectiveCommercialKnowledgeConfiguration();
+        float freshness = DailyV1CommercialKnowledgeFreshness.GetFreshness(
+            observation.ObservedDay, currentAbsoluteDay, knowledge);
+        if (freshness <= 0f || trade.MaxTradeAmount <= 0) return true;
+        int requestedAmount = UnityMathfCompatibility.Min(trade.MaxTradeAmount,
+            seller.MerchantTradePlan.RemainingAmount, seller.Inventory.GetAmount(item));
+        if (requestedAmount <= 0) return true;
+
+        float minimumProfit = UnityMathfCompatibility.Max(0f,
+            DailyV1NpcDefinitionRules.MinimumProfitPerItem(seller.Definition, graph.Definitions));
+        DailyV1NpcRuntimeOwners bestBuyer = null;
+        int bestAmount = 0;
+        float bestPrice = 0f;
+        float bestProfit = 0f;
+        float bestScore = 0f;
+        foreach (string buyerRuntimeId in city.NpcPresence.OrderedNpcRuntimeIds)
+        {
+            if (!graph.TryGetNpcOwner(buyerRuntimeId, out DailyV1NpcRuntimeOwners buyer)
+                || ReferenceEquals(buyer, seller)
+                || buyer.Lifecycle?.LifeState != NpcLifeState.Alive
+                || buyer.Travel == null || buyer.Travel.IsTraveling
+                || !string.Equals(buyer.Travel.CurrentCityRuntimeId, city.RuntimeId, StringComparison.Ordinal)
+                || !DailyV1NpcDefinitionRules.HasJobType(buyer.Definition, graph.Definitions,
+                    DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+                || !DailyV1NpcDefinitionRules.HasMerchantBehavior(buyer.Definition, graph.Definitions, 1)
+                || buyer.MoneyAccount == null) continue;
+
+            float preference = DailyV1NpcDefinitionRules.TryGetPreferredTradeItemMultiplier(
+                buyer.Definition, graph.Definitions, item, out float configuredPreference)
+                ? UnityMathfCompatibility.Max(0.01f, configuredPreference) : 1f;
+            float preferredPriceBonus = UnityMathfCompatibility.Min(0.15f,
+                UnityMathfCompatibility.Max(0f, preference - 1f) * 0.1f);
+            float unitPrice = UnityMathfCompatibility.Max(0.01f, observation.ObservedPrice)
+                * UnityMathfCompatibility.Clamp(trade.LocalWholesalePriceMultiplier + preferredPriceBonus,
+                    0.5f, 0.85f);
+            float profit = unitPrice - seller.MerchantTradePlan.PurchasePricePerItem;
+            if (profit < minimumProfit) continue;
+            float spendable = UnityMathfCompatibility.Max(0f,
+                buyer.MoneyAccount.Balance * (1f - trade.LocalReserveRatio));
+            int amount = UnityMathfCompatibility.Min(requestedAmount,
+                UnityMathfCompatibility.FloorToInt(spendable / unitPrice));
+            if (amount <= 0) continue;
+            float score = profit * amount * freshness * preference;
+            bool prefer = bestBuyer == null || score > bestScore;
+            if (!prefer && UnityMathfCompatibility.Approximately(score, bestScore))
+                prefer = string.CompareOrdinal(buyer.RuntimeId, bestBuyer.RuntimeId) < 0;
+            if (!prefer) continue;
+            bestBuyer = buyer; bestAmount = amount; bestPrice = unitPrice;
+            bestProfit = profit; bestScore = score;
+        }
+
+        if (bestBuyer == null) return true;
+        float grossProfit = bestProfit * bestAmount;
+        CommercialDecisionEvidence evidence = new CommercialDecisionEvidence(
+            item.DefinitionId, city.LocationRuntimeId, city.LocationRuntimeId,
+            city.LocationRuntimeId, null, null,
+            CommercialObservationEvidence.Capture(observation.LocationRuntimeId,
+                observation.ObservedPrice, observation.ObservedStock, observation.ObservedDay,
+                observation.ReceivedDay, freshness,
+                (CommercialKnowledgeSource)(int)observation.Source, observation.SourceRuntimeId),
+            bestAmount, seller.MerchantTradePlan.PurchasePricePerItem, bestPrice,
+            0f, grossProfit, grossProfit, bestScore);
+        if (!DailyV1NpcActionPayloadOwner.TryCreate(graph.Definitions, action,
+                bestBuyer.RuntimeId, null, item, bestAmount, bestPrice, 1f,
+                NpcTravelReason.None, 0f, null, null, evidence, null,
+                out DailyV1NpcActionPayloadOwner payload)) return false;
+        plan = new DailyV1MerchantLocalSalePlan(0, item, bestAmount,
+            seller.MerchantTradePlan.PurchasePricePerItem, bestPrice, bestProfit,
+            bestScore, UnityMathfCompatibility.Max(currentUtility, 85f + bestScore),
+            evidence, payload, bestBuyer.RuntimeId);
+        return true;
+    }
+
+    /// <summary>Plans the established destination-market fallback for an active
+    /// selected trade plan when no eligible local NPC buyer is selected.</summary>
+    internal static bool TryPlanSelectedPlannedMarketSale(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners seller,
+        DailyV1ActionDefinition action,
+        long currentAbsoluteDay,
+        float currentUtility,
+        out DailyV1MerchantLocalSalePlan plan)
+    {
+        plan = null;
+        if (graph == null || seller == null || action == null
+            || !graph.ContainsExactNpcOwner(seller)
+            || !DailyV1NpcDefinitionRules.IsAdmittedAction(graph.Definitions, action)
+            || action.Values.actionType?.Value != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(graph.Definitions, action, seller.Status?.Statuses)
+            || seller.Lifecycle?.LifeState != NpcLifeState.Alive
+            || seller.Travel == null || seller.Travel.IsTraveling
+            || seller.MerchantTradePlan == null || !seller.MerchantTradePlan.IsActive
+            || seller.Inventory == null || seller.CommercialKnowledge == null)
+            return false;
+
+        DailyV1CityRuntimeOwners city = null;
+        foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+            if (string.Equals(candidate.RuntimeId, seller.Travel.CurrentCityRuntimeId, StringComparison.Ordinal))
+            { city = candidate; break; }
+        DailyV1ItemDefinition item = seller.MerchantTradePlan.ItemDefinition;
+        if (city == null || !graph.ContainsExactCityOwner(city) || item == null
+            || !string.Equals(seller.MerchantTradePlan.TargetCityRuntimeId, city.RuntimeId, StringComparison.Ordinal)
+            || !seller.CommercialKnowledge.TryGetObservation(city.LocationRuntimeId,
+                item.DefinitionId, out DailyV1CommercialMarketObservation observation)
+            || !ReferenceEquals(observation.ItemDefinition, item)) return false;
+
+        EffectiveSimulationConfiguration effective = graph.Definitions.EffectiveConfiguration;
+        EffectiveMerchantTradeConfiguration trade = effective?.MerchantTrade
+            ?? new EffectiveMerchantTradeConfiguration(enabled: true);
+        EffectiveCommercialKnowledgeConfiguration knowledge = effective?.CommercialKnowledge
+            ?? new EffectiveCommercialKnowledgeConfiguration();
+        float freshness = DailyV1CommercialKnowledgeFreshness.GetFreshness(
+            observation.ObservedDay, currentAbsoluteDay, knowledge);
+        int amount = Math.Min(trade.MaxTradeAmount, Math.Min(seller.MerchantTradePlan.RemainingAmount,
+            seller.Inventory.GetAmount(item)));
+        if (freshness <= 0f || amount <= 0) return true;
+
+        float localPrice = observation.ObservedPrice;
+        if (localPrice <= 0f) return true;
+        if (seller.CommercialKnowledge.TryGetLiquidityObservation(city.LocationRuntimeId,
+                out DailyV1CommercialLiquidityObservation liquidity)
+            && DailyV1CommercialKnowledgeFreshness.GetFreshness(
+                liquidity.ObservedDay, currentAbsoluteDay, knowledge) > 0f
+            && liquidity.LiquidityMode != MarketLiquidityMode.Open)
+            amount = Math.Min(amount, (int)Math.Floor(liquidity.ObservedPurchasingPower / localPrice));
+        if (amount <= 0) return true;
+
+        float profit = localPrice - seller.MerchantTradePlan.PurchasePricePerItem;
+        float minimumProfit = Math.Max(0f,
+            DailyV1NpcDefinitionRules.MinimumProfitPerItem(seller.Definition, graph.Definitions));
+        bool profitable = profit >= minimumProfit;
+        if (!profitable && seller.MerchantTradePlan.WaitDaysAtDestination < trade.MaxUnprofitablePlanWaitDays)
+            return true;
+
+        float gross = profit * amount;
+        CommercialLiquidityEvidence liquidityEvidence = null;
+        if (liquidity != null)
+            liquidityEvidence = CommercialLiquidityEvidence.Capture(
+                liquidity.LocationRuntimeId, liquidity.LiquidityMode,
+                liquidity.ObservedPurchasingPower, liquidity.ObservedDay,
+                liquidity.ReceivedDay,
+                DailyV1CommercialKnowledgeFreshness.GetFreshness(
+                    liquidity.ObservedDay, currentAbsoluteDay, knowledge),
+                (CommercialKnowledgeSource)(int)liquidity.Source, liquidity.SourceRuntimeId);
+        CommercialDecisionEvidence evidence = new CommercialDecisionEvidence(
+            item.DefinitionId, city.LocationRuntimeId,
+            seller.MerchantTradePlan.OriginCityRuntimeId == null
+                ? city.LocationRuntimeId
+                : FindCityLocation(graph, seller.MerchantTradePlan.OriginCityRuntimeId) ?? city.LocationRuntimeId,
+            city.LocationRuntimeId, null, null,
+            CommercialObservationEvidence.Capture(observation.LocationRuntimeId,
+                observation.ObservedPrice, observation.ObservedStock, observation.ObservedDay,
+                observation.ReceivedDay, freshness,
+                (CommercialKnowledgeSource)(int)observation.Source, observation.SourceRuntimeId),
+            amount, seller.MerchantTradePlan.PurchasePricePerItem, localPrice,
+            0f, gross, gross, profitable ? profit * 5f : 0f, liquidityEvidence);
+        if (!DailyV1NpcActionPayloadOwner.TryCreate(graph.Definitions, action,
+                null, city.RuntimeId, item, amount, localPrice, 1f,
+                NpcTravelReason.None, 0f, null, null, evidence, null,
+                out DailyV1NpcActionPayloadOwner payload)) return false;
+
+        float utility = profitable
+            ? Math.Max(currentUtility, 80f + profit * 5f)
+            : Math.Max(currentUtility, 35f);
+        plan = new DailyV1MerchantLocalSalePlan(0, item, amount,
+            seller.MerchantTradePlan.PurchasePricePerItem, localPrice, profit,
+            profitable ? profit * 5f : 0f, utility, evidence, payload);
+        return true;
+    }
+
+    private static string FindCityLocation(DailyV1SelectedRuntimeOwnerGraph graph, string cityRuntimeId)
+    {
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            if (string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal))
+                return city.LocationRuntimeId;
+        return null;
     }
 
     /// <summary>

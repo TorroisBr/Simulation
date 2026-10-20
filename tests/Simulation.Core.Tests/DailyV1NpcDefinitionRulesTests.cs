@@ -216,6 +216,34 @@ public sealed class DailyV1NpcDefinitionRulesTests
         Assert.That(random.Calls, Is.EqualTo(1));
     }
 
+    [Test]
+    public void SelectedActionSlotRollUsesCommittedNodeAndRejectsStaleSlotWithoutDrawing()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder = new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(
+            allocator, id => builder.ResolveUniqueStartingCity(id)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        DailyV1ActionDefinition action = definitions.Actions.Values.First(value => value.Values.canFail);
+        SequenceRandomSource random = new SequenceRandomSource(0.5f);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryRollCurrentActionSlot(
+            graph, actor, random, 42L, out bool noSlotResult), Is.False);
+        Assert.That(noSlotResult, Is.False);
+        Assert.That(random.Calls, Is.Zero);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, action, null, null), Is.True);
+        Assert.That(DailyV1SelectedActionExecutionStage.TryRollCurrentActionSlot(
+            graph, actor, random, 42L, out bool succeeded), Is.True);
+        Assert.That(succeeded, Is.EqualTo(0.5f <= action.Values.baseSuccessChance));
+        Assert.That(random.Calls, Is.EqualTo(1));
+        Assert.That(random.LastStreamKey,
+            Is.EqualTo("action-success|" + actor.RuntimeId + "|" + action.DefinitionId + "|"
+                + action.DefinitionId + "|42"));
+    }
+
     private sealed class FixedRandomSource : IAuthoritativeRandomSource
     {
         private readonly float value;

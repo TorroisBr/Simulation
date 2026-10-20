@@ -17,6 +17,37 @@ internal sealed class DailyV1NpcActionCandidate
 /// <summary>Core action eligibility, utility and deterministic selection for selected Daily-v1 definitions.</summary>
 internal static class DailyV1NpcActionDecision
 {
+    /// <summary>Rolls the action currently committed in the exact selected
+    /// owner slot. The projected Unity action/payload must not become a second
+    /// source of decision identity or success multiplier.</summary>
+    internal static bool TryRollCurrentActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        out bool succeeded)
+    {
+        succeeded = false;
+        if (graph == null || actor == null || !graph.ContainsExactNpcOwner(actor)
+            || actor.ActionSlot?.CurrentAction == null
+            || !IsAdmittedAction(graph.Definitions, actor.ActionSlot.CurrentAction))
+            return false;
+
+        DailyV1NpcActionPayloadOwner payload = actor.ActionSlot.CurrentPayload;
+        if (payload != null && !ReferenceEquals(payload.Action, actor.ActionSlot.CurrentAction))
+            return false;
+
+        return TryRollActionSuccess(
+            graph.Definitions,
+            actor.ActionSlot.CurrentAction,
+            actor.RuntimeId,
+            payload?.OriginDecisionId ?? actor.ActionSlot.CurrentAction.DefinitionId,
+            payload?.SuccessChanceMultiplier ?? 1f,
+            currentAbsoluteDay,
+            randomSource,
+            out succeeded);
+    }
+
     /// <summary>Applies the admitted Daily-v1 action's existing success-roll contract.</summary>
     internal static bool TryRollActionSuccess(
         DailyV1EffectiveDefinitions definitions,

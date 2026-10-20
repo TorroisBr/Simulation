@@ -9613,7 +9613,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return true;
         }
 
-        NpcActionRuntime requestedAction = npcDecisionSystem.CreateRequestedAction(npcRuntime, requestedDefinition);
+        NpcActionRuntime requestedAction = npcDecisionSystem.CreateRequestedAction(
+            npcRuntime, requestedDefinition, CurrentDay);
         if (requestedAction == null
             || !ReferenceEquals(requestedAction.Action, requestedDefinition)
             || npcRuntime.GetConfiguredActionType(requestedAction.Action) != NpcActionType.SellGoods
@@ -11336,9 +11337,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 ? !npcRuntime.TryGetConfiguredActionStatusNodes(action, out _, out _, out _, out _)
                 : !npcRuntime.TryGetConfiguredActionStatusChanges(action, out _, out _, out _, out _))
             return NpcActionResult.Failed();
+        bool selectedMerchantAction = npcRuntime.UsesSelectedDailyV1Definitions
+            && (actionType == NpcActionType.BuyGoods || actionType == NpcActionType.SellGoods);
         INpcActionProvider actionProvider = actionType == NpcActionType.Normal
             ? null
-            : npcDecisionSystem?.GetProviderForAction(npcRuntime, action);
+            : selectedMerchantAction
+                ? merchantSystem
+                : npcDecisionSystem?.GetProviderForAction(npcRuntime, action);
 
         if (actionType != NpcActionType.Normal && actionProvider == null)
         {
@@ -11388,6 +11393,38 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return NpcActionResult.Failed(CreateFailureMessage(npcRuntime, actionRuntime, action));
         }
 
+        if (selectedMerchantAction
+            && actionType == NpcActionType.SellGoods
+            && actionRuntime?.SelectedOwner != null
+            && actionRuntime.TargetNpc != null
+            && npcRuntime.MerchantTradePlan.IsActive)
+        {
+            if (transactionService.TryExecuteSelectedPlannedNpcSale(
+                    npcRuntime, actionRuntime.TargetNpc,
+                    out DailyV1SelectedActionExecutionStage.PlannedNpcSaleResult sale))
+            {
+                if (!sale.Succeeded)
+                    return NpcActionResult.Failed();
+                float referencePrice = npcRuntime.MerchantTradePlan.PurchasePricePerItem;
+                float profit = (sale.UnitPrice - referencePrice) * sale.Quantity;
+                if (sale.SoldToNpc)
+                {
+                    logger?.Log(SimulationLogCategory.Trade,
+                        $"{npcRuntime.NpcName} vendeu {sale.Quantity} {actionRuntime.TargetItem.itemName} para {actionRuntime.TargetNpc.NpcName} em {npcRuntime.CurrentCity.CityName} por {sale.UnitPrice:0.##} cada");
+                    logger?.Log(SimulationLogCategory.Trade, $"Lucro aproximado: {profit:0.##}");
+                }
+                else
+                {
+                    logger?.Log(SimulationLogCategory.Trade,
+                        $"{npcRuntime.NpcName} vendeu {sale.Quantity} {actionRuntime.TargetItem.itemName} ao mercado de {npcRuntime.CurrentCity.CityName} por {sale.UnitPrice:0.##} cada");
+                    logger?.Log(SimulationLogCategory.Trade, $"Lucro aproximado: {profit:0.##}");
+                }
+                if (sale.PlanCompleted)
+                    logger?.Log(SimulationLogCategory.Trade, $"{npcRuntime.NpcName} concluiu o plano comercial.");
+                return NpcActionResult.Succeeded();
+            }
+        }
+
         if (actionType == NpcActionType.Normal)
         {
             return NpcActionResult.Succeeded(CreateNormalActionMessage(npcRuntime, action));
@@ -11421,6 +11458,53 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             using (crimeJusticeScope)
                 return actionProvider.TryExecuteAction(npcRuntime, actionRuntime);
         }
+
+        if (selectedMerchantAction
+            && actionRuntime?.SelectedOwner != null
+            && (actionType == NpcActionType.BuyGoods || actionType == NpcActionType.SellGoods)
+            && actionRuntime.TargetNpc == null
+            && npcRuntime.CurrentCity != null
+            && npcRuntime.SelectedRuntimeOwnerGraph != null
+            && npcRuntime.SelectedRuntimeOwnerGraph.ContainsExactNpcOwner(npcRuntime.SelectedRuntimeOwners)
+            && (actionType != NpcActionType.SellGoods || !npcRuntime.MerchantTradePlan.IsActive)
+            && actionRuntime.TargetCity == npcRuntime.CurrentCity)
+        {
+            float preSaleAverageUnitCost = 0f;
+            if (actionType == NpcActionType.SellGoods
+                && npcRuntime.SelectedRuntimeOwners.Inventory != null
+                && ReferenceEquals(npcRuntime.SelectedRuntimeOwners.Inventory.Definitions,
+                    npcRuntime.SelectedRuntimeOwnerGraph.Definitions)
+                && actionRuntime.SelectedOwner.TargetItem != null
+                && npcRuntime.SelectedRuntimeOwnerGraph.Definitions.Items.TryGetValue(
+                    actionRuntime.SelectedOwner.TargetItem.DefinitionId,
+                    out DailyV1ItemDefinition selectedSaleItem)
+                && ReferenceEquals(selectedSaleItem, actionRuntime.SelectedOwner.TargetItem))
+                preSaleAverageUnitCost = npcRuntime.SelectedRuntimeOwners.Inventory.GetAverageUnitCost(
+                    actionRuntime.SelectedOwner.TargetItem);
+
+            EconomyTransactionResult selectedPurchase = transactionService.TryExecuteSelectedOpenMarketAction(
+                npcRuntime, actionRuntime.SelectedOwner);
+            if (!selectedPurchase.Success || selectedPurchase.Quantity <= 0)
+                return NpcActionResult.Failed();
+
+            if (actionType == NpcActionType.BuyGoods)
+            {
+                logger?.Log(SimulationLogCategory.Trade,
+                    $"{npcRuntime.NpcName} comprou {selectedPurchase.Quantity} {actionRuntime.TargetItem.itemName} em {npcRuntime.CurrentCity.CityName} por {selectedPurchase.UnitPrice:0.##} cada para estoque local");
+            }
+            else
+            {
+                logger?.Log(SimulationLogCategory.Trade,
+                    $"{npcRuntime.NpcName} vendeu {selectedPurchase.Quantity} {actionRuntime.TargetItem.itemName} ao mercado de {npcRuntime.CurrentCity.CityName} por {selectedPurchase.UnitPrice:0.##} cada");
+                float approximateProfit = DailyV1SelectedMarketSaleProfit.Calculate(
+                    preSaleAverageUnitCost, selectedPurchase.UnitPrice, selectedPurchase.Quantity);
+                logger?.Log(SimulationLogCategory.Trade, $"Lucro aproximado: {approximateProfit:0.##}");
+            }
+            return NpcActionResult.Succeeded();
+        }
+
+        if (selectedMerchantAction)
+            return merchantSystem.TryExecuteAction(npcRuntime, actionRuntime);
 
         return actionProvider.TryExecuteAction(npcRuntime, actionRuntime);
     }
