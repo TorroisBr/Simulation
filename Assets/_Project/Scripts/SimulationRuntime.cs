@@ -11765,6 +11765,68 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             }
         }
 
+        if (selectedMerchantAction
+            && (actionType == NpcActionType.BuyGoods || actionType == NpcActionType.SellGoods)
+            && actionRuntime?.SelectedOwner != null
+            && actionRuntime.TargetNpc == null
+            && actionRuntime.TargetCity != null
+            && ReferenceEquals(actionRuntime.TargetCity, npcRuntime.CurrentCity)
+            && actionRuntime.TargetItem != null
+            && ReferenceEquals(actionRuntime.Action, action)
+            && npcRuntime.TryGetSelectedDailyV1ActionNode(
+                action, out DailyV1ActionDefinition selectedMarketAction)
+            && npcRuntime.TryGetSelectedDailyV1Item(
+                actionRuntime.TargetItem, out DailyV1ItemDefinition selectedMarketItem)
+            && npcRuntime.SelectedRuntimeOwners != null
+            && SelectedRuntimeOwnerGraph != null
+            && SelectedRuntimeOwnerGraph.ContainsExactNpcOwner(npcRuntime.SelectedRuntimeOwners)
+            && ReferenceEquals(npcRuntime.SelectedRuntimeOwners.ActionSlot?.CurrentAction,
+                selectedMarketAction)
+            && ReferenceEquals(npcRuntime.SelectedRuntimeOwners.ActionSlot?.CurrentPayload,
+                actionRuntime.SelectedOwner)
+            && ReferenceEquals(actionRuntime.SelectedOwner.Action, selectedMarketAction)
+            && ReferenceEquals(actionRuntime.SelectedOwner.TargetItem, selectedMarketItem)
+            && actionRuntime.SelectedOwner.TargetNpcRuntimeId == null
+            && actionRuntime.SelectedOwner.Amount == actionRuntime.Amount
+            && actionRuntime.SelectedOwner.SuccessChanceMultiplier.Equals(
+                actionRuntime.SuccessChanceMultiplier)
+            && string.Equals(actionRuntime.SelectedOwner.TargetCityRuntimeId,
+                npcRuntime.CurrentCity.RuntimeId, StringComparison.Ordinal)
+            && string.Equals(actionRuntime.SelectedOwner.OriginDecisionId,
+                actionRuntime.OriginDecisionId, StringComparison.Ordinal)
+            && (actionType != NpcActionType.SellGoods
+                || npcRuntime.SelectedRuntimeOwners.MerchantTradePlan?.IsActive != true))
+        {
+            float preSaleAverageUnitCost = actionType == NpcActionType.SellGoods
+                ? npcRuntime.SelectedRuntimeOwners.Inventory.GetAverageUnitCost(selectedMarketItem)
+                : 0f;
+            if (economyTransactionService.TryExecuteSelectedOpenMarketActionSlot(
+                    npcRuntime, selectedMarketAction, randomSource, CurrentDay,
+                    out bool actionRollSucceeded, out EconomyTransactionResult transaction))
+            {
+                if (!actionRollSucceeded)
+                    return NpcActionResult.Failed(CreateFailureMessage(npcRuntime, actionRuntime, action));
+                if (!transaction.Success || transaction.Quantity <= 0)
+                    return NpcActionResult.Failed();
+
+                if (actionType == NpcActionType.BuyGoods)
+                {
+                    logger?.Log(SimulationLogCategory.Trade,
+                        $"{npcRuntime.NpcName} comprou {transaction.Quantity} {actionRuntime.TargetItem.itemName} em {npcRuntime.CurrentCity.CityName} por {transaction.UnitPrice:0.##} cada para estoque local");
+                }
+                else
+                {
+                    logger?.Log(SimulationLogCategory.Trade,
+                        $"{npcRuntime.NpcName} vendeu {transaction.Quantity} {actionRuntime.TargetItem.itemName} ao mercado de {npcRuntime.CurrentCity.CityName} por {transaction.UnitPrice:0.##} cada");
+                    float approximateProfit = DailyV1SelectedMarketSaleProfit.Calculate(
+                        preSaleAverageUnitCost, transaction.UnitPrice, transaction.Quantity);
+                    logger?.Log(SimulationLogCategory.Trade,
+                        $"Lucro aproximado: {approximateProfit:0.##}");
+                }
+                return NpcActionResult.Succeeded();
+            }
+        }
+
         if (RollActionSuccess(npcRuntime, action, actionRuntime) == false)
         {
             if (actionProvider is INpcActionFailureHandler failureHandler)

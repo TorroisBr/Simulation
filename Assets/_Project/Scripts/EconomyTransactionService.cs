@@ -1130,6 +1130,102 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             actorRuntimeId: npc.RuntimeId);
     }
 
+    /// <summary>Rolls and executes the exact selected local market slot through
+    /// Core while retaining this service's existing P12 transaction adapters.</summary>
+    internal bool TryExecuteSelectedOpenMarketActionSlot(
+        NpcRuntime npc,
+        DailyV1ActionDefinition expectedAction,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        out bool actionRollSucceeded,
+        out EconomyTransactionResult transaction)
+    {
+        actionRollSucceeded = false;
+        transaction = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = npc?.SelectedRuntimeOwnerGraph;
+        DailyV1NpcRuntimeOwners actor = npc?.SelectedRuntimeOwners;
+        DailyV1CityRuntimeOwners cityOwner = null;
+        if (graph != null && !string.IsNullOrWhiteSpace(actor?.Travel?.CurrentCityRuntimeId))
+            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+                if (string.Equals(candidate.RuntimeId, actor.Travel.CurrentCityRuntimeId,
+                    StringComparison.Ordinal))
+                { cityOwner = candidate; break; }
+
+        if (npc == null || expectedAction == null || graph == null || actor == null
+            || npc.CurrentCity?.Market == null || cityOwner == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !graph.ContainsExactCityOwner(cityOwner)
+            || !ReferenceEquals(npc.CurrentCity.SelectedRuntimeOwners, cityOwner)
+            || !ReferenceEquals(npc.CurrentCity.Market.SelectedDailyV1Owner, cityOwner.Market))
+            return false;
+
+        bool trackMarket = p12CensusRuntime != null
+            && p12CensusRuntime.HasP12MarketOperationAdapter;
+        DailyV1SelectedOpenMarketSaleBoundary saleBoundary = trackMarket
+            ? new DailyV1SelectedOpenMarketSaleBoundary(this, npc, npc.CurrentCity.Market)
+            : null;
+        DailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary = trackMarket
+            ? new DailyV1SelectedOpenMarketPurchaseBoundary(this, npc, npc.CurrentCity.Market)
+            : null;
+
+        if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedOpenMarketActionSlot(
+            graph, actor, expectedAction, randomSource, currentAbsoluteDay,
+            saleBoundary, purchaseBoundary,
+            out DailyV1SelectedActionExecutionStage.SelectedOpenMarketActionResult execution))
+            return false;
+
+        actionRollSucceeded = execution.ActionRollSucceeded;
+        if (!actionRollSucceeded)
+            return true;
+
+        DailyV1NpcActionPayloadOwner payload = actor.ActionSlot.CurrentPayload;
+        transaction = CreateSelectedOpenMarketActionResult(npc, payload,
+            execution.Succeeded, execution.Sale, execution.Purchase);
+        return true;
+    }
+
+    private static EconomyTransactionResult CreateSelectedOpenMarketActionResult(
+        NpcRuntime npc,
+        DailyV1NpcActionPayloadOwner payload,
+        bool succeeded,
+        DailyV1SelectedOpenMarketSaleExecution sale,
+        DailyV1SelectedOpenMarketPurchaseExecution purchase)
+    {
+        if (sale != null)
+        {
+            if (!succeeded)
+                return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale,
+                    MoneyEffect.ExplicitSource, MapSelectedSaleFailure(
+                        sale.Commit?.Failure ?? sale.PreparationFailure), actorRuntimeId: npc.RuntimeId);
+            DailyV1SelectedOpenMarketSalePlan plan = sale.Plan;
+            return EconomyTransactionResult.CreateSuccess(EconomyTransactionType.OpenMarketSale,
+                MoneyEffect.ExplicitSource, plan.TotalPrice, plan.ItemDefinitionId,
+                plan.RequestedQuantity, plan.Quantity, plan.UnitPrice, plan.TotalPrice,
+                actorRuntimeId: npc.RuntimeId, itemSourceRuntimeId: npc.RuntimeId,
+                itemDestinationRuntimeId: plan.MarketRuntimeId);
+        }
+        if (purchase != null)
+        {
+            MarketLiquidityMode mode = npc.CurrentCity.Market.Counterparty.LiquidityMode;
+            MoneyEffect effect = mode == MarketLiquidityMode.AccountBacked
+                ? MoneyEffect.Transfer : MoneyEffect.ExplicitSink;
+            if (!succeeded)
+                return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketPurchase,
+                    effect, MapSelectedPurchaseFailure(purchase.Commit?.Failure
+                        ?? purchase.PreparationFailure), actorRuntimeId: npc.RuntimeId);
+            DailyV1SelectedOpenMarketPurchasePlan plan = purchase.Plan;
+            return EconomyTransactionResult.CreateSuccess(EconomyTransactionType.OpenMarketPurchase,
+                effect, plan.TotalPrice, plan.ItemDefinitionId, payload.Amount, plan.Quantity,
+                plan.UnitPrice, plan.TotalPrice, sourceRuntimeId: plan.MarketRuntimeId,
+                destinationRuntimeId: npc.RuntimeId, buyerRuntimeId: npc.RuntimeId,
+                sellerRuntimeId: plan.MarketRuntimeId, actorRuntimeId: npc.RuntimeId,
+                itemSourceRuntimeId: plan.MarketRuntimeId, itemDestinationRuntimeId: npc.RuntimeId);
+        }
+        return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale,
+            MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.TransactionCommitFailed,
+            actorRuntimeId: npc.RuntimeId);
+    }
+
     /// <summary>Executes one selected cross-city BuyGoods purchase and both resulting owner plans in Core.</summary>
     internal EconomyTransactionResult TryExecuteSelectedCrossCityBuy(
         NpcRuntime npc,

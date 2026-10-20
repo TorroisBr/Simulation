@@ -33,6 +33,24 @@ internal static class DailyV1SelectedActionExecutionStage
         { Succeeded = succeeded; ActionRollSucceeded = actionRollSucceeded; Travel = travel; }
     }
 
+    internal sealed class SelectedOpenMarketActionResult
+    {
+        internal bool Succeeded { get; }
+        internal bool ActionRollSucceeded { get; }
+        internal DailyV1SelectedOpenMarketSaleExecution Sale { get; }
+        internal DailyV1SelectedOpenMarketPurchaseExecution Purchase { get; }
+
+        internal SelectedOpenMarketActionResult(bool succeeded, bool actionRollSucceeded,
+            DailyV1SelectedOpenMarketSaleExecution sale,
+            DailyV1SelectedOpenMarketPurchaseExecution purchase)
+        {
+            Succeeded = succeeded;
+            ActionRollSucceeded = actionRollSucceeded;
+            Sale = sale;
+            Purchase = purchase;
+        }
+    }
+
     internal sealed class PlannedNpcSaleResult
     {
         internal bool Succeeded { get; }
@@ -279,6 +297,55 @@ internal static class DailyV1SelectedActionExecutionStage
         return DailyV1SelectedOpenMarketActionExecution.TryExecute(
             graph, actor, actor.ActionSlot.CurrentPayload, saleBoundary, purchaseBoundary,
             out sale, out purchase);
+    }
+
+    /// <summary>Rolls and executes an exact selected local BuyGoods/SellGoods slot.
+    /// The host supplies only the existing P12 transaction boundaries.</summary>
+    internal static bool TryExecuteSelectedOpenMarketActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition expectedAction,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
+        IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary,
+        out SelectedOpenMarketActionResult result)
+    {
+        result = null;
+        DailyV1NpcActionSlotOwner slot = actor?.ActionSlot;
+        DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
+        int actionType = slot?.CurrentAction?.Values.actionType?.Value ?? int.MinValue;
+        if (graph == null || actor == null || expectedAction == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(actor.Definitions, graph.Definitions)
+            || !ReferenceEquals(slot?.CurrentAction, expectedAction)
+            || payload == null || !ReferenceEquals(payload.Action, expectedAction)
+            || (actionType != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                && actionType != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue)
+            || payload.TargetNpcRuntimeId != null
+            || string.IsNullOrWhiteSpace(actor.Travel?.CurrentCityRuntimeId)
+            || !string.Equals(payload.TargetCityRuntimeId,
+                actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
+            || actor.Travel.IsTraveling
+            || (actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                && actor.MerchantTradePlan?.IsActive == true))
+            return false;
+
+        if (!TryRollCurrentActionSlot(graph, actor, randomSource, currentAbsoluteDay,
+            out bool actionRollSucceeded))
+            return false;
+
+        if (!actionRollSucceeded)
+        {
+            result = new SelectedOpenMarketActionResult(false, false, null, null);
+            return true;
+        }
+
+        bool succeeded = TryExecuteOpenMarketSlot(graph, actor, saleBoundary,
+            purchaseBoundary, out DailyV1SelectedOpenMarketSaleExecution sale,
+            out DailyV1SelectedOpenMarketPurchaseExecution purchase);
+        result = new SelectedOpenMarketActionResult(succeeded, true, sale, purchase);
+        return true;
     }
 
     /// <summary>Executes the selected active-plan SellGoods payload against its
