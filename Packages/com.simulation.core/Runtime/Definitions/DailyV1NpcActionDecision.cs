@@ -406,6 +406,7 @@ internal static class DailyV1SelectedNpcActionDecisionStage
     internal static bool TryChooseWithoutRuntimeOwners(
         DailyV1EffectiveDefinitions definitions,
         DailyV1NpcDefinition actor,
+        DailyV1NpcRuntimeOwners runtimeOwner,
         string actorRuntimeId,
         IReadOnlyList<DailyV1ActionDefinition> availableActions,
         IReadOnlyList<DailyV1StatusDefinition> activeStatuses,
@@ -418,6 +419,10 @@ internal static class DailyV1SelectedNpcActionDecisionStage
         if (definitions == null || actor == null || string.IsNullOrWhiteSpace(actorRuntimeId)
             || availableActions == null || activeStatuses == null || randomSource == null
             || boundary == null
+            || (runtimeOwner != null
+                && (!ReferenceEquals(runtimeOwner.Definitions, definitions)
+                    || !ReferenceEquals(runtimeOwner.Definition, actor)
+                    || !string.Equals(runtimeOwner.RuntimeId, actorRuntimeId, StringComparison.Ordinal)))
             || !DailyV1NpcActionDecision.TryCreateCandidates(
                 actor, definitions, availableActions, activeStatuses,
                 out List<DailyV1NpcActionCandidate> candidates))
@@ -429,7 +434,7 @@ internal static class DailyV1SelectedNpcActionDecisionStage
                 == DailyV1NpcDefinitionRules.NormalActionTypeValue)
                 continue;
 
-            if (!boundary.TryPrepareAutonomousProviderAction(null, candidate, out float utility))
+            if (!boundary.TryPrepareAutonomousProviderAction(runtimeOwner, candidate, out float utility))
                 candidate.Utility = 0f;
             else
                 candidate.Utility = UnityMathfCompatibility.Max(0f, utility);

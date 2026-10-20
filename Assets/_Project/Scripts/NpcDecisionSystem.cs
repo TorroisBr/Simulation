@@ -78,11 +78,12 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
         SelectedNpcActionDecisionBoundary boundary =
             new SelectedNpcActionDecisionBoundary(this, npcRuntime);
         DailyV1NpcActionCandidate selected;
-        if (graph == null && actor == null)
+        if (graph == null)
         {
             if (!DailyV1SelectedNpcActionDecisionStage.TryChooseWithoutRuntimeOwners(
                     npcRuntime.SelectedDailyV1DefinitionGraph,
                     npcRuntime.SelectedDailyV1Definition,
+                    actor,
                     npcRuntime.RuntimeId,
                     availableActions,
                     activeStatuses,
@@ -252,11 +253,16 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             out float utility)
         {
             utility = 0f;
-            if ((actor != null && !IsExactActor(actor))
-                || (actor == null
-                    && (npcRuntime.SelectedRuntimeOwnerGraph != null
-                        || npcRuntime.SelectedRuntimeOwners != null
-                        || npcRuntime.SelectedDailyV1DefinitionGraph == null)))
+            DailyV1SelectedRuntimeOwnerGraph graph = npcRuntime.SelectedRuntimeOwnerGraph;
+            bool admittedWithoutGraph = graph == null
+                && npcRuntime.SelectedDailyV1DefinitionGraph != null
+                && (actor == null
+                    ? npcRuntime.SelectedRuntimeOwners == null
+                    : ReferenceEquals(npcRuntime.SelectedRuntimeOwners, actor)
+                        && ReferenceEquals(actor.Definitions,
+                            npcRuntime.SelectedDailyV1DefinitionGraph)
+                        && ReferenceEquals(actor.Definition, npcRuntime.SelectedDailyV1Definition));
+            if (graph == null ? !admittedWithoutGraph : !IsExactActor(actor))
                 return false;
             if (!TryGetActionAsset(actor, candidate?.Action, out NpcActionData actionAsset))
                 return false;
@@ -284,6 +290,12 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
                 return npcRuntime.SelectedRuntimeOwnerGraph == null
                     && npcRuntime.SelectedRuntimeOwners == null
                     && npcRuntime.SelectedDailyV1DefinitionGraph != null
+                    && npcRuntime.TryGetSelectedDailyV1ActionAsset(action, out asset);
+            if (npcRuntime.SelectedRuntimeOwnerGraph == null)
+                return ReferenceEquals(npcRuntime.SelectedRuntimeOwners, actor)
+                    && ReferenceEquals(actor.Definitions,
+                        npcRuntime.SelectedDailyV1DefinitionGraph)
+                    && ReferenceEquals(actor.Definition, npcRuntime.SelectedDailyV1Definition)
                     && npcRuntime.TryGetSelectedDailyV1ActionAsset(action, out asset);
             return IsExactActor(actor)
                 && npcRuntime.TryGetSelectedDailyV1ActionAsset(action, out asset);
