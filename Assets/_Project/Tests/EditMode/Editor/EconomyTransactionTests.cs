@@ -996,6 +996,9 @@ public sealed class EconomyTransactionTests
         NpcRuntime merchant = NpcRuntime.CreateSelectedDailyV1(
             "daily-selected-plan-sale-merchant-runtime", definitions.Npcs[npcAsset.DefinitionId],
             definitions, bindings, city, 20f);
+        Assert.That(merchant.TryBindSelectedDailyV1Definition(
+            definitions.Npcs[npcAsset.DefinitionId], definitions, bindings,
+            runtimeId => string.Equals(runtimeId, city.RuntimeId, StringComparison.Ordinal) ? city : null), Is.True);
         Assert.That(merchant.Inventory.TryAddSelectedItem(item, 2, 1f), Is.True);
         Assert.That(merchant.SelectedRuntimeOwners.MerchantTradePlan.TryInstallState(
             item, city.RuntimeId, city.RuntimeId, 2, 2, 1f, 0, 0,
@@ -1015,6 +1018,7 @@ public sealed class EconomyTransactionTests
         Assert.That(city.Market.SelectedDailyV1Owner.GetAmount(item), Is.Zero);
         Assert.That(merchant.CommercialKnowledge.SelectedOwner.Observations.Count, Is.EqualTo(1));
 
+        WorldId worldId = new WorldId(Guid.NewGuid());
         SimulationRuntime runtime = new SimulationRuntime(
             time,
             new[] { city },
@@ -1024,12 +1028,15 @@ public sealed class EconomyTransactionTests
             merchantSystem: merchantSystem,
             economyTransactionService: transactionService,
             configuration: effective,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            worldId: worldId);
         BindP12CensusRuntime(transactionService, runtime);
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialAssessment),
             Is.True, initialAssessment.ToString());
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long beforeAdvance,
             out ContinuationCensusFailure beforeAdvanceFailure), Is.True, beforeAdvanceFailure.ToString());
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True,
+            "Daily-v1 capture-profile fixtures must complete publication before advancing.");
 
         float moneyBefore = merchant.MoneyAccount.Balance;
         long accountRevisionBefore = merchant.MoneyAccount.Revision;

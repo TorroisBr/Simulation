@@ -1864,10 +1864,10 @@ public class NpcRuntime : ICapabilityConditionSource
             && actionRuntime != null
             && ReferenceEquals(selectedRuntimeOwners.ActionSlot.CurrentAction, selectedActionNode)
             && ReferenceEquals(selectedRuntimeOwners.ActionSlot.CurrentPayload, selectedActionPayload);
-        bool currentSlotProjectionConsistent = selectedRuntimeOwners == null
-            ? HasConsistentCurrentActionSlot
-            : HasConsistentCurrentActionSlot || actionSlotAlreadyCommitted;
         bool p12Bound = p12LifecycleMutationAdmission != null;
+        bool currentSlotProjectionConsistent = selectedRuntimeOwners == null
+            ? HasConsistentCurrentActionSlot || !p12Bound
+            : HasConsistentCurrentActionSlot || actionSlotAlreadyCommitted;
         if (!currentSlotProjectionConsistent
             || (actionRuntime != null
                 && (actionRuntime.Action == null

@@ -268,17 +268,20 @@ public static class SimulationTestFactory
         return network;
     }
 
-    public static RecordFixture CreateRecordFixture(long absoluteDay = 0L)
+    public static RecordFixture CreateRecordFixture(
+        long absoluteDay = 0L,
+        SimulationLogger logger = null)
     {
         RuntimeIdAllocator allocator = new RuntimeIdAllocator();
         SimulationTime time = new SimulationTime(absoluteDay);
         SimulationRecordSequence sequence = new SimulationRecordSequence();
-        NpcDecisionStore decisions = new NpcDecisionStore();
+        NpcDecisionStore decisions = new NpcDecisionStore(logger);
         NpcDecisionRecorder decisionRecorder = new NpcDecisionRecorder(
             allocator,
             time,
             sequence,
-            decisions);
+            decisions,
+            logger);
         HistoryStore history = new HistoryStore();
         DomainEventStore events = new DomainEventStore(history, new HistoryPolicy());
         DomainEventRecorder eventRecorder = new DomainEventRecorder(

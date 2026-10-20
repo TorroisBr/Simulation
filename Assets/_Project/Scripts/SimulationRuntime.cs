@@ -9163,10 +9163,20 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         activeDailyGameplayExecutionProbeForTest?.RecordAdvanceDayAfterClockAdvanceInvocation();
         placeContentStore?.AdvanceDays(1);
         logger?.BeginDay(CurrentDay);
-        lastDailyDemographyReport = DailyDemographicSystem.Advance(
-            this,
-            naturalMortalitySamples,
-            aggregateDemographyProvider);
+        if (runtimeAdmissionContext != null && DailyDemographicSystem.CanAdvanceSelected(this))
+        {
+            lastDailyDemographyReport = DailyDemographicSystem.AdvanceSelected(
+                this,
+                naturalMortalitySamples,
+                aggregateDemographyProvider);
+        }
+        else
+        {
+            lastDailyDemographyReport = DailyDemographicSystem.Advance(
+                this,
+                naturalMortalitySamples,
+                aggregateDemographyProvider);
+        }
         BeginSimulationDay();
         scheduledDirectiveSystem?.PrepareDay(CurrentDay);
 
@@ -9393,9 +9403,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 continue;
             }
 
+            if (!runtime.UsesSelectedDailyV1Definitions)
+            {
+                // P12 permits an unbound dynamic NPC for owner-census purposes.
+                // It has no admitted Daily-v1 actor owner, so preserve its roster
+                // ordinal while excluding it from shared domain execution.
+                roster.Add(new DailyV1ActorTurnRosterEntry(rosterOrdinal, runtime.PersonId, null));
+                continue;
+            }
+
             DailyV1NpcRuntimeOwners owner = runtime.SelectedRuntimeOwners;
-            if (!runtime.UsesSelectedDailyV1Definitions
-                || owner == null
+            if (owner == null
                 || !graph.ContainsExactNpcOwner(owner)
                 || !ReferenceEquals(graph.Definitions, owner.Definitions)
                 || !string.Equals(runtime.RuntimeId, owner.RuntimeId, StringComparison.Ordinal)
@@ -11160,10 +11178,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 new Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime>();
             foreach (NpcRuntime runtime in npcRuntimes)
             {
-                if (runtime == null) continue;
+                if (runtime == null || !runtime.UsesSelectedDailyV1Definitions) continue;
                 DailyV1NpcRuntimeOwners owner = runtime.SelectedRuntimeOwners;
-                if (!runtime.UsesSelectedDailyV1Definitions
-                    || owner == null
+                if (owner == null
                     || !ReferenceEquals(runtime.SelectedRuntimeOwnerGraph, graph)
                     || !graph.ContainsExactNpcOwner(owner)
                     || !ReferenceEquals(owner.Definitions, graph.Definitions)
@@ -11314,10 +11331,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         List<DailyV1NpcRuntimeOwners> owners = new List<DailyV1NpcRuntimeOwners>();
         foreach (NpcRuntime runtime in npcRuntimes)
         {
-            if (runtime == null) continue;
+            if (runtime == null || !runtime.UsesSelectedDailyV1Definitions) continue;
             DailyV1NpcRuntimeOwners owner = runtime.SelectedRuntimeOwners;
-            if (!runtime.UsesSelectedDailyV1Definitions
-                || owner == null
+            if (owner == null
                 || !ReferenceEquals(runtime.SelectedRuntimeOwnerGraph, graph)
                 || !graph.ContainsExactNpcOwner(owner)
                 || !string.Equals(runtime.RuntimeId, owner.RuntimeId, StringComparison.Ordinal))

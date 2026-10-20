@@ -122,6 +122,62 @@ public sealed class DailyDemographyReport
 /// </summary>
 public static class DailyDemographicSystem
 {
+    internal static bool CanAdvanceSelected(SimulationRuntime world)
+    {
+        return world != null
+            && world.SelectedRuntimeOwnerGraph != null
+            && HasExactCityPopulationBindings(world, world.SelectedRuntimeOwnerGraph);
+    }
+
+    /// <summary>
+    /// Runs selected Daily-v1 demography through the exact Core owner graph.
+    /// Death lifecycle remains delegated to SimulationRuntime's existing
+    /// authoritative writer; aggregate changes install on Core City owners.
+    /// </summary>
+    internal static DailyDemographyReport AdvanceSelected(
+        SimulationRuntime world,
+        IPersonNaturalMortalitySampleProvider mortalitySamples,
+        IAggregateDemographyProvider aggregateProvider)
+    {
+        if (world == null) throw new ArgumentNullException(nameof(world));
+        DailyV1SelectedRuntimeOwnerGraph graph = world.SelectedRuntimeOwnerGraph;
+        if (graph == null || !HasExactCityPopulationBindings(world, graph))
+            throw new InvalidOperationException(
+                "The admitted Daily-v1 demographic stage could not bind its exact Core population owners.");
+
+        DailyV1SelectedDemographyResult selected = DailyV1SelectedDemographyStage.Advance(
+            graph,
+            world.PersonStore,
+            world.CurrentDay,
+            world.Calendar,
+            world.Configuration.NaturalMortality,
+            world.Configuration.AggregateDemography,
+            mortalitySamples,
+            aggregateProvider,
+            new RuntimeDemographyBoundary(world, graph));
+
+        DailyDemographyReport report = new DailyDemographyReport(selected.AbsoluteDay)
+        {
+            NamedPersonsEvaluated = selected.NamedPersonsEvaluated,
+            NamedDeathsApplied = selected.NamedDeathsApplied,
+            AggregateSettlementsProcessed = selected.AggregateSettlementsProcessed,
+            AggregateBirthsApplied = selected.AggregateBirthsApplied,
+            AggregateDeathsApplied = selected.AggregateDeathsApplied
+        };
+        foreach (DailyV1SelectedDemographyDiagnostic diagnostic in selected.Diagnostics)
+        {
+            report.Add(
+                diagnostic.IsError
+                    ? DailyDemographyDiagnosticSeverity.Error
+                    : DailyDemographyDiagnosticSeverity.Warning,
+                diagnostic.Code,
+                diagnostic.Identity,
+                diagnostic.Message);
+        }
+
+        return report;
+    }
+
     public static DailyDemographyReport Advance(
         SimulationRuntime world,
         IPersonNaturalMortalitySampleProvider mortalitySamples,
@@ -155,6 +211,73 @@ public static class DailyDemographicSystem
         }
 
         return report;
+    }
+
+    private static bool HasExactCityPopulationBindings(
+        SimulationRuntime world,
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph.Cities.Count != world.Cities.Count) return false;
+        foreach (DailyV1CityRuntimeOwners owner in graph.Cities)
+        {
+            if (owner == null || owner.Population == null) return false;
+            CityRuntime match = null;
+            foreach (CityRuntime city in world.Cities)
+            {
+                if (city != null && string.Equals(city.RuntimeId, owner.RuntimeId, StringComparison.Ordinal))
+                {
+                    if (match != null) return false;
+                    match = city;
+                }
+            }
+
+            if (match == null || !ReferenceEquals(match.Population, owner.Population)) return false;
+        }
+
+        return true;
+    }
+
+    private sealed class RuntimeDemographyBoundary : IDailyV1SelectedDemographyBoundary
+    {
+        private readonly SimulationRuntime world;
+        private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+
+        internal RuntimeDemographyBoundary(
+            SimulationRuntime world,
+            DailyV1SelectedRuntimeOwnerGraph graph)
+        {
+            this.world = world;
+            this.graph = graph;
+        }
+
+        public bool TryApplyPersonDeath(PersonId personId, out string failure)
+        {
+            if (world.TryApplyPersonDeath(
+                    personId,
+                    out _,
+                    out PersonDeathLifecycleFailure deathFailure))
+            {
+                failure = null;
+                return true;
+            }
+
+            failure = deathFailure.ToString();
+            return false;
+        }
+
+        public IReadOnlyDictionary<string, int> BuildRepresentedResidentFloors()
+        {
+            RepresentedResidentFloorSnapshot snapshot = world.BuildRepresentedResidentFloorSnapshot();
+            Dictionary<string, int> floors = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            {
+                if (city != null && snapshot != null
+                    && snapshot.TryGetFloor(city.RuntimeId, out int floor))
+                    floors[city.RuntimeId] = floor;
+            }
+
+            return floors;
+        }
     }
 
     private static void ApplyNaturalMortality(

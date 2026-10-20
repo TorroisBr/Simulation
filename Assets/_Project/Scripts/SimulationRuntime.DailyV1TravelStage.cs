@@ -93,6 +93,9 @@ public sealed partial class SimulationRuntime
                 new Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime>();
             foreach (NpcRuntime npcRuntime in npcRuntimes)
             {
+                if (npcRuntime == null || !npcRuntime.UsesSelectedDailyV1Definitions)
+                    continue;
+
                 DailyV1NpcRuntimeOwners owner = npcRuntime?.SelectedRuntimeOwners;
                 if (owner == null
                     || !ReferenceEquals(owner.Definitions, graph.Definitions)
