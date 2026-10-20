@@ -69,182 +69,206 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             return null;
 
         List<DailyV1StatusDefinition> activeStatuses = new List<DailyV1StatusDefinition>();
-        if (!npcRuntime.TryGetSelectedDailyV1ActiveStatusNodes(activeStatuses)
-            || !DailyV1NpcActionDecision.TryCreateCandidates(
-                npcRuntime.SelectedDailyV1Definition,
-                npcRuntime.SelectedDailyV1DefinitionGraph,
-                availableActions,
-                activeStatuses,
-                out List<DailyV1NpcActionCandidate> candidates))
+        DailyV1SelectedRuntimeOwnerGraph graph = npcRuntime.SelectedRuntimeOwnerGraph;
+        DailyV1NpcRuntimeOwners actor = npcRuntime.SelectedRuntimeOwners;
+        if (availableActions == null
+            || graph == null
+            || actor == null
+            || !ReferenceEquals(graph.Definitions, npcRuntime.SelectedDailyV1DefinitionGraph)
+            || !ReferenceEquals(actor.Definitions, npcRuntime.SelectedDailyV1DefinitionGraph)
+            || !graph.ContainsExactNpcOwner(actor)
+            || !npcRuntime.TryGetSelectedDailyV1ActiveStatusNodes(activeStatuses))
             return null;
 
-        Dictionary<DailyV1NpcActionCandidate, NpcActionRuntime> providerActions =
-            new Dictionary<DailyV1NpcActionCandidate, NpcActionRuntime>();
-        foreach (DailyV1NpcActionCandidate candidate in candidates)
-        {
-            if ((NpcActionType)(candidate.Action.Values.actionType?.Value ?? int.MinValue) == NpcActionType.Normal)
-                continue;
-
-            if (candidate.Action.Values.actionType?.Value
-                    == DailyV1NpcDefinitionRules.TravelActionTypeValue
-                && npcRuntime.TryGetSelectedDailyV1ActionAsset(candidate.Action,
-                    out NpcActionData selectedTravelAsset)
-                && GetProviderForAction(npcRuntime, selectedTravelAsset) is TravelActionProvider travelProvider
-                && DailyV1NpcActionDecision.TryPrepareSelectedExistingTravelCandidate(
-                    npcRuntime.SelectedRuntimeOwnerGraph,
-                    npcRuntime.SelectedRuntimeOwners,
-                    candidate,
-                    travelProvider.SelectedTravelPartyStore))
-            {
-                DailyV1NpcActionPayloadOwner payload = candidate.PreparedPayload;
-                CityRuntime selectedTargetCity = npcRuntime.TravelPlan?.TargetCity;
-                DailyV1CityRuntimeOwners targetOwner = null;
-                foreach (DailyV1CityRuntimeOwners cityOwner in
-                    npcRuntime.SelectedRuntimeOwnerGraph?.Cities
-                    ?? Array.Empty<DailyV1CityRuntimeOwners>())
-                    if (payload != null
-                        && string.Equals(cityOwner.RuntimeId, payload.TargetCityRuntimeId,
-                            StringComparison.Ordinal))
-                    {
-                        targetOwner = cityOwner;
-                        break;
-                    }
-                if (payload == null || selectedTargetCity == null || targetOwner == null
-                    || !ReferenceEquals(selectedTargetCity.SelectedRuntimeOwners, targetOwner)
-                    || !string.Equals(selectedTargetCity.RuntimeId, targetOwner.RuntimeId,
-                        StringComparison.Ordinal))
-                {
-                    candidate.Utility = 0f;
-                    continue;
-                }
-
-                NpcActionRuntime selectedTravelAction = new NpcActionRuntime(
-                    selectedTravelAsset, selectedTargetCity, null, payload.TravelReason,
-                    candidate.ExpectedTravelCost, payload.ExpectedNetValue);
-                if (!selectedTravelAction.TryUseSelectedPayload(
-                        payload, npcRuntime.SelectedDailyV1DefinitionGraph))
-                {
-                    candidate.Utility = 0f;
-                    continue;
-                }
-
-                providerActions.Add(candidate, selectedTravelAction);
-                continue;
-            }
-
-            if (candidate.Action.Values.actionType?.Value
-                    == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
-                && npcRuntime.TryGetSelectedDailyV1ActionAsset(candidate.Action,
-                    out NpcActionData selectedBuyAsset)
-                && GetProviderForAction(npcRuntime, selectedBuyAsset) is MerchantSystem selectedMerchantSystem
-                && DailyV1NpcActionDecision.TryPrepareSelectedBuyGoodsCandidate(
-                    npcRuntime.SelectedRuntimeOwnerGraph,
-                    npcRuntime.SelectedRuntimeOwners,
-                    candidate,
-                    currentAbsoluteDay))
-            {
-                DailyV1NpcActionPayloadOwner payload = candidate.PreparedPayload;
-                if (payload == null
-                    || payload.TargetItem == null
-                    || !selectedMerchantSystem.TryProjectSelectedCityRuntime(
-                        npcRuntime.SelectedRuntimeOwnerGraph,
-                        payload.TargetCityRuntimeId,
-                        out CityRuntime selectedTargetCity)
-                    || !npcRuntime.TryGetSelectedDailyV1ItemAsset(payload.TargetItem,
-                        out ItemData selectedBuyItemAsset))
-                {
-                    candidate.Utility = 0f;
-                    continue;
-                }
-
-                NpcActionRuntime selectedBuyAction = new NpcActionRuntime(
-                    selectedBuyAsset, selectedTargetCity, selectedBuyItemAsset,
-                    payload.Amount, payload.ExpectedUnitPrice);
-                if (!selectedBuyAction.TryUseSelectedPayload(
-                        payload, npcRuntime.SelectedDailyV1DefinitionGraph))
-                {
-                    candidate.Utility = 0f;
-                    continue;
-                }
-
-                providerActions.Add(candidate, selectedBuyAction);
-                continue;
-            }
-
-            if (candidate.Action.Values.actionType?.Value
-                    == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
-                && npcRuntime.TryGetSelectedDailyV1ActionAsset(candidate.Action,
-                    out NpcActionData selectedSaleAsset)
-                && GetProviderForAction(npcRuntime, selectedSaleAsset) is MerchantSystem
-                && DailyV1NpcActionDecision.TryPrepareSelectedSellGoodsCandidate(
-                    npcRuntime.SelectedRuntimeOwnerGraph,
-                    npcRuntime.SelectedRuntimeOwners,
-                    candidate,
-                    currentAbsoluteDay))
-            {
-                DailyV1NpcActionPayloadOwner payload = candidate.PreparedPayload;
-                NpcRuntime selectedBuyer = null;
-                if (!string.IsNullOrWhiteSpace(payload?.TargetNpcRuntimeId))
-                    selectedBuyer = npcRuntime.CurrentCity?.ImportantNpcs?.FirstOrDefault(candidateNpc =>
-                        candidateNpc != null && string.Equals(candidateNpc.RuntimeId,
-                            payload.TargetNpcRuntimeId, StringComparison.Ordinal));
-                if (payload == null
-                    || payload.TargetItem == null
-                    || (!string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
-                        && selectedBuyer == null)
-                    || !npcRuntime.TryGetSelectedDailyV1ItemAsset(payload.TargetItem,
-                        out ItemData selectedSaleItemAsset))
-                {
-                    candidate.Utility = 0f;
-                    continue;
-                }
-
-                NpcActionRuntime selectedSaleAction = selectedBuyer != null
-                    ? new NpcActionRuntime(selectedSaleAsset, selectedBuyer, selectedSaleItemAsset,
-                        payload.Amount, payload.ExpectedUnitPrice)
-                    : new NpcActionRuntime(selectedSaleAsset, npcRuntime.CurrentCity, selectedSaleItemAsset,
-                        payload.Amount, payload.ExpectedUnitPrice);
-                if (!selectedSaleAction.TryUseSelectedPayload(
-                        payload, npcRuntime.SelectedDailyV1DefinitionGraph))
-                {
-                    candidate.Utility = 0f;
-                    continue;
-                }
-
-                providerActions.Add(candidate, selectedSaleAction);
-                continue;
-            }
-
-            if (!npcRuntime.TryGetSelectedDailyV1ActionAsset(candidate.Action, out NpcActionData actionAsset))
-            {
-                candidate.Utility = 0f;
-                continue;
-            }
-
-            float utility = candidate.Utility;
-            NpcActionRuntime providerAction = CreateRuntimeAction(npcRuntime, actionAsset, ref utility, true);
-            if (providerAction == null)
-            {
-                candidate.Utility = 0f;
-                continue;
-            }
-
-            candidate.Utility = UnityMathfCompatibility.Max(0f, utility);
-            providerActions.Add(candidate, providerAction);
-        }
-
-        string randomStreamKey = "npc-decision|" + npcRuntime.RuntimeId + "|" + currentAbsoluteDay;
-        DailyV1NpcActionCandidate selected = DailyV1NpcActionDecision.ChooseWeightedCandidate(
-            candidates, randomSource, randomStreamKey);
-        if (selected == null)
+        SelectedNpcActionDecisionBoundary boundary =
+            new SelectedNpcActionDecisionBoundary(this, npcRuntime);
+        if (!DailyV1SelectedNpcActionDecisionStage.TryChoose(
+                graph, actor, availableActions, activeStatuses, currentAbsoluteDay,
+                randomSource, boundary, out DailyV1NpcActionCandidate selected)
+            || selected == null)
             return null;
 
-        if (providerActions.TryGetValue(selected, out NpcActionRuntime selectedProviderAction))
+        if (boundary.TryGetProjectedAction(selected, out NpcActionRuntime selectedProviderAction))
             return selectedProviderAction;
 
         return npcRuntime.TryGetSelectedDailyV1ActionAsset(selected.Action, out NpcActionData selectedAsset)
             ? new NpcActionRuntime(selectedAsset)
             : null;
+    }
+
+    private sealed class SelectedNpcActionDecisionBoundary
+        : IDailyV1SelectedNpcActionDecisionBoundary
+    {
+        private readonly NpcDecisionSystem decisionSystem;
+        private readonly NpcRuntime npcRuntime;
+        private readonly Dictionary<DailyV1NpcActionCandidate, NpcActionRuntime> projectedActions =
+            new Dictionary<DailyV1NpcActionCandidate, NpcActionRuntime>();
+
+        internal SelectedNpcActionDecisionBoundary(
+            NpcDecisionSystem decisionSystem,
+            NpcRuntime npcRuntime)
+        {
+            this.decisionSystem = decisionSystem;
+            this.npcRuntime = npcRuntime;
+        }
+
+        public bool HasTravelActionProvider(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action) =>
+            TryGetActionAsset(actor, action, out NpcActionData asset)
+            && decisionSystem.GetProviderForAction(npcRuntime, asset) is TravelActionProvider;
+
+        public TravelPartyStore GetTravelPartyStore(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action)
+        {
+            if (!TryGetActionAsset(actor, action, out NpcActionData asset)) return null;
+            return decisionSystem.GetProviderForAction(npcRuntime, asset)
+                is TravelActionProvider provider ? provider.SelectedTravelPartyStore : null;
+        }
+
+        public bool TryProjectTravelAction(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate)
+        {
+            DailyV1NpcActionPayloadOwner payload = candidate?.PreparedPayload;
+            if (!IsExactActor(actor)
+                || payload == null
+                || !TryGetActionAsset(actor, candidate.Action, out NpcActionData actionAsset)
+                || decisionSystem.GetProviderForAction(npcRuntime, actionAsset)
+                    is not TravelActionProvider)
+                return false;
+
+            CityRuntime targetCity = npcRuntime.TravelPlan?.TargetCity;
+            DailyV1CityRuntimeOwners targetOwner = null;
+            foreach (DailyV1CityRuntimeOwners cityOwner in npcRuntime.SelectedRuntimeOwnerGraph.Cities)
+                if (string.Equals(cityOwner.RuntimeId, payload.TargetCityRuntimeId,
+                        StringComparison.Ordinal))
+                {
+                    targetOwner = cityOwner;
+                    break;
+                }
+            if (targetCity == null || targetOwner == null
+                || !ReferenceEquals(targetCity.SelectedRuntimeOwners, targetOwner)
+                || !string.Equals(targetCity.RuntimeId, targetOwner.RuntimeId,
+                    StringComparison.Ordinal))
+                return false;
+
+            NpcActionRuntime projected = new NpcActionRuntime(
+                actionAsset, targetCity, null, payload.TravelReason,
+                candidate.ExpectedTravelCost, payload.ExpectedNetValue);
+            if (!projected.TryUseSelectedPayload(payload, npcRuntime.SelectedDailyV1DefinitionGraph))
+                return false;
+            projectedActions[candidate] = projected;
+            return true;
+        }
+
+        public bool HasMerchantActionProvider(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action) =>
+            TryGetActionAsset(actor, action, out NpcActionData asset)
+            && decisionSystem.GetProviderForAction(npcRuntime, asset) is MerchantSystem;
+
+        public bool TryProjectBuyAction(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate)
+        {
+            DailyV1NpcActionPayloadOwner payload = candidate?.PreparedPayload;
+            if (!IsExactActor(actor)
+                || payload?.TargetItem == null
+                || !TryGetActionAsset(actor, candidate.Action, out NpcActionData actionAsset)
+                || decisionSystem.GetProviderForAction(npcRuntime, actionAsset)
+                    is not MerchantSystem merchantSystem
+                || !merchantSystem.TryProjectSelectedCityRuntime(
+                    npcRuntime.SelectedRuntimeOwnerGraph,
+                    payload.TargetCityRuntimeId,
+                    out CityRuntime targetCity)
+                || !npcRuntime.TryGetSelectedDailyV1ItemAsset(
+                    payload.TargetItem, out ItemData targetItem))
+                return false;
+
+            NpcActionRuntime projected = new NpcActionRuntime(
+                actionAsset, targetCity, targetItem, payload.Amount,
+                payload.ExpectedUnitPrice);
+            if (!projected.TryUseSelectedPayload(payload, npcRuntime.SelectedDailyV1DefinitionGraph))
+                return false;
+            projectedActions[candidate] = projected;
+            return true;
+        }
+
+        public bool TryProjectSellAction(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate)
+        {
+            DailyV1NpcActionPayloadOwner payload = candidate?.PreparedPayload;
+            if (!IsExactActor(actor)
+                || payload?.TargetItem == null
+                || !TryGetActionAsset(actor, candidate.Action, out NpcActionData actionAsset)
+                || decisionSystem.GetProviderForAction(npcRuntime, actionAsset)
+                    is not MerchantSystem
+                || !npcRuntime.TryGetSelectedDailyV1ItemAsset(
+                    payload.TargetItem, out ItemData targetItem))
+                return false;
+
+            NpcRuntime targetNpc = null;
+            if (!string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId))
+                targetNpc = npcRuntime.CurrentCity?.ImportantNpcs?.FirstOrDefault(candidateNpc =>
+                    candidateNpc != null && string.Equals(candidateNpc.RuntimeId,
+                        payload.TargetNpcRuntimeId, StringComparison.Ordinal));
+            if (!string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId) && targetNpc == null)
+                return false;
+
+            NpcActionRuntime projected = targetNpc != null
+                ? new NpcActionRuntime(actionAsset, targetNpc, targetItem,
+                    payload.Amount, payload.ExpectedUnitPrice)
+                : new NpcActionRuntime(actionAsset, npcRuntime.CurrentCity, targetItem,
+                    payload.Amount, payload.ExpectedUnitPrice);
+            if (!projected.TryUseSelectedPayload(payload, npcRuntime.SelectedDailyV1DefinitionGraph))
+                return false;
+            projectedActions[candidate] = projected;
+            return true;
+        }
+
+        public bool TryPrepareAutonomousProviderAction(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate,
+            out float utility)
+        {
+            utility = 0f;
+            if (!IsExactActor(actor)
+                || !TryGetActionAsset(actor, candidate?.Action, out NpcActionData actionAsset))
+                return false;
+
+            utility = candidate.Utility;
+            NpcActionRuntime projected = decisionSystem.CreateRuntimeAction(
+                npcRuntime, actionAsset, ref utility, true);
+            if (projected == null) return false;
+            projectedActions[candidate] = projected;
+            return true;
+        }
+
+        internal bool TryGetProjectedAction(
+            DailyV1NpcActionCandidate candidate,
+            out NpcActionRuntime projected) =>
+            projectedActions.TryGetValue(candidate, out projected);
+
+        private bool TryGetActionAsset(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action,
+            out NpcActionData asset)
+        {
+            asset = null;
+            return IsExactActor(actor)
+                && npcRuntime.TryGetSelectedDailyV1ActionAsset(action, out asset);
+        }
+
+        private bool IsExactActor(DailyV1NpcRuntimeOwners actor) =>
+            actor != null
+            && ReferenceEquals(npcRuntime.SelectedRuntimeOwners, actor)
+            && ReferenceEquals(npcRuntime.SelectedRuntimeOwnerGraph?.Definitions,
+                npcRuntime.SelectedDailyV1DefinitionGraph)
+            && ReferenceEquals(actor.Definitions, npcRuntime.SelectedDailyV1DefinitionGraph)
+            && npcRuntime.SelectedRuntimeOwnerGraph.ContainsExactNpcOwner(actor);
     }
 
     public NpcActionRuntime CreateRequestedAction(NpcRuntime npcRuntime, NpcActionData action)

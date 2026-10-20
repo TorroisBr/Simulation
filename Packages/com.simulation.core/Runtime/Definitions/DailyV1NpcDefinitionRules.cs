@@ -9,6 +9,7 @@ internal static class DailyV1NpcDefinitionRules
     internal const int MerchantJobTypeValue = 1;
     internal const int TravelingMerchantBehaviorValue = 0;
     internal const int LocalMerchantBehaviorValue = 1;
+    internal const int NormalActionTypeValue = 0;
     internal const int BuyGoodsActionTypeValue = 1;
     internal const int SellGoodsActionTypeValue = 2;
     internal const int TravelActionTypeValue = 3;

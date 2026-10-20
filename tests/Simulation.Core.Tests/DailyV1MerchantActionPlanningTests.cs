@@ -6,6 +6,64 @@ using NUnit.Framework;
 public sealed class DailyV1MerchantActionPlanningTests
 {
     [Test]
+    public void SelectedActorDecisionStageOwnsCandidatePreparationAndDrawBoundary()
+    {
+        CreateRuntimeFixture(out DailyV1EffectiveDefinitions definitions,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners npc,
+            out DailyV1CityRuntimeOwners city);
+        DailyV1ItemDefinition iron = definitions.Items["FERRO"];
+        Assert.That(npc.Inventory.TryAddItem(iron, 5, 10f), Is.True);
+        Assert.That(npc.CommercialKnowledge.RecordObservation(
+            new DailyV1CommercialMarketObservation(
+                city.LocationRuntimeId, iron, 13f, 12, 20L, 20L,
+                DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+
+        DailyV1ActionDefinition sale = definitions.Actions["VENDER_MERCADORIA"];
+        RecordingActionDecisionBoundary boundary = new RecordingActionDecisionBoundary(true);
+        FixedActionDecisionRandomSource random = new FixedActionDecisionRandomSource(0f);
+        Assert.That(DailyV1SelectedNpcActionDecisionStage.TryChoose(
+            graph, npc, new[] { sale }, npc.Status.Statuses, 20L,
+            random, boundary, out DailyV1NpcActionCandidate selected), Is.True);
+
+        Assert.That(selected, Is.Not.Null);
+        Assert.That(selected.Action, Is.SameAs(sale));
+        Assert.That(selected.PreparedPayload, Is.Not.Null);
+        Assert.That(boundary.ProjectedPayload, Is.SameAs(selected.PreparedPayload));
+        Assert.That(boundary.SellProjectionCalls, Is.EqualTo(1));
+        Assert.That(boundary.AutonomousProviderCalls, Is.Zero);
+        Assert.That(random.Calls, Is.EqualTo(1));
+        Assert.That(random.LastStreamKey, Is.EqualTo("npc-decision|" + npc.RuntimeId + "|20"));
+    }
+
+    [Test]
+    public void SelectedActorDecisionStageRejectsUnprojectablePreparedActionWithoutDrawing()
+    {
+        CreateRuntimeFixture(out DailyV1EffectiveDefinitions definitions,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners npc,
+            out DailyV1CityRuntimeOwners city);
+        DailyV1ItemDefinition iron = definitions.Items["FERRO"];
+        Assert.That(npc.Inventory.TryAddItem(iron, 5, 10f), Is.True);
+        Assert.That(npc.CommercialKnowledge.RecordObservation(
+            new DailyV1CommercialMarketObservation(
+                city.LocationRuntimeId, iron, 13f, 12, 20L, 20L,
+                DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+
+        RecordingActionDecisionBoundary boundary = new RecordingActionDecisionBoundary(false);
+        FixedActionDecisionRandomSource random = new FixedActionDecisionRandomSource(0f);
+        Assert.That(DailyV1SelectedNpcActionDecisionStage.TryChoose(
+            graph, npc, new[] { definitions.Actions["VENDER_MERCADORIA"] },
+            npc.Status.Statuses, 20L, random, boundary,
+            out DailyV1NpcActionCandidate selected), Is.True);
+
+        Assert.That(selected, Is.Null);
+        Assert.That(boundary.SellProjectionCalls, Is.EqualTo(1));
+        Assert.That(random.Calls, Is.Zero,
+            "A prepared candidate that cannot cross the host boundary must not remain eligible or draw RNG.");
+    }
+
+    [Test]
     public void SelectedAutonomousSellCandidateUsesCorePlanAndRejectsMissingOpportunity()
     {
         CreateRuntimeFixture(out DailyV1EffectiveDefinitions definitions,
@@ -522,5 +580,55 @@ public sealed class DailyV1MerchantActionPlanningTests
         city = graph.Cities.Single(value => value.RuntimeId == cityRuntimeId);
         Assert.That(DailyV1NpcDefinitionRules.HasJobType(npc.Definition, definitions,
             DailyV1NpcDefinitionRules.MerchantJobTypeValue), Is.True);
+    }
+
+    private sealed class RecordingActionDecisionBoundary
+        : IDailyV1SelectedNpcActionDecisionBoundary
+    {
+        private readonly bool projectSale;
+        internal DailyV1NpcActionPayloadOwner ProjectedPayload { get; private set; }
+        internal int SellProjectionCalls { get; private set; }
+        internal int AutonomousProviderCalls { get; private set; }
+
+        internal RecordingActionDecisionBoundary(bool projectSale) => this.projectSale = projectSale;
+
+        public bool HasTravelActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action) => false;
+        public TravelPartyStore GetTravelPartyStore(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action) => null;
+        public bool TryProjectTravelAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate) => false;
+        public bool HasMerchantActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action) => true;
+        public bool TryProjectBuyAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate) => false;
+        public bool TryProjectSellAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate)
+        {
+            SellProjectionCalls++;
+            ProjectedPayload = candidate?.PreparedPayload;
+            return projectSale;
+        }
+        public bool TryPrepareAutonomousProviderAction(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate,
+            out float utility)
+        {
+            AutonomousProviderCalls++;
+            utility = 0f;
+            return false;
+        }
+    }
+
+    private sealed class FixedActionDecisionRandomSource : IAuthoritativeRandomSource
+    {
+        private readonly float value;
+        internal int Calls { get; private set; }
+        internal string LastStreamKey { get; private set; }
+
+        internal FixedActionDecisionRandomSource(float value) => this.value = value;
+
+        public float NextUnit(string streamKey, long drawIndex = 0L)
+        {
+            Calls++;
+            LastStreamKey = streamKey;
+            return value;
+        }
+
+        public DeterministicRandomStream CreateStream(string streamKey) => null;
     }
 }

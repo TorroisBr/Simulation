@@ -373,3 +373,101 @@ internal static class DailyV1NpcActionDecision
         return false;
     }
 }
+
+/// <summary>
+/// Host projection and provider boundary for one selected Daily-v1 actor turn.
+/// Core retains the candidate order, supported owner planning and deterministic
+/// weighted choice; a host may resolve its existing provider-backed actions
+/// without supplying a second decision engine.
+/// </summary>
+internal interface IDailyV1SelectedNpcActionDecisionBoundary
+{
+    bool HasTravelActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
+    TravelPartyStore GetTravelPartyStore(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
+    bool TryProjectTravelAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
+    bool HasMerchantActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
+    bool TryProjectBuyAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
+    bool TryProjectSellAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
+    bool TryPrepareAutonomousProviderAction(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionCandidate candidate,
+        out float utility);
+}
+
+/// <summary>Core-owned selection half of one admitted Daily-v1 actor turn.</summary>
+internal static class DailyV1SelectedNpcActionDecisionStage
+{
+    internal static bool TryChoose(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        IReadOnlyList<DailyV1ActionDefinition> availableActions,
+        IReadOnlyList<DailyV1StatusDefinition> activeStatuses,
+        long currentAbsoluteDay,
+        IAuthoritativeRandomSource randomSource,
+        IDailyV1SelectedNpcActionDecisionBoundary boundary,
+        out DailyV1NpcActionCandidate selected)
+    {
+        selected = null;
+        if (graph == null || actor == null || availableActions == null
+            || randomSource == null || boundary == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(graph.Definitions, actor.Definitions)
+            || actor.Lifecycle?.LifeState != NpcLifeState.Alive
+            || activeStatuses == null
+            || !DailyV1NpcActionDecision.TryCreateCandidates(
+                actor.Definition, graph.Definitions, availableActions,
+                activeStatuses, out List<DailyV1NpcActionCandidate> candidates))
+            return false;
+
+        foreach (DailyV1NpcActionCandidate candidate in candidates)
+        {
+            int? actionType = candidate.Action.Values.actionType?.Value;
+            if (actionType == DailyV1NpcDefinitionRules.NormalActionTypeValue)
+                continue;
+
+            if (actionType == DailyV1NpcDefinitionRules.TravelActionTypeValue
+                && boundary.HasTravelActionProvider(actor, candidate.Action)
+                && DailyV1NpcActionDecision.TryPrepareSelectedExistingTravelCandidate(
+                    graph, actor, candidate,
+                    boundary.GetTravelPartyStore(actor, candidate.Action)))
+            {
+                if (candidate.PreparedPayload == null
+                    || !boundary.TryProjectTravelAction(actor, candidate))
+                    candidate.Utility = 0f;
+                continue;
+            }
+
+            if (actionType == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
+                && boundary.HasMerchantActionProvider(actor, candidate.Action)
+                && DailyV1NpcActionDecision.TryPrepareSelectedBuyGoodsCandidate(
+                    graph, actor, candidate, currentAbsoluteDay))
+            {
+                if (candidate.PreparedPayload == null
+                    || !boundary.TryProjectBuyAction(actor, candidate))
+                    candidate.Utility = 0f;
+                continue;
+            }
+
+            if (actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                && boundary.HasMerchantActionProvider(actor, candidate.Action)
+                && DailyV1NpcActionDecision.TryPrepareSelectedSellGoodsCandidate(
+                    graph, actor, candidate, currentAbsoluteDay))
+            {
+                if (candidate.PreparedPayload == null
+                    || !boundary.TryProjectSellAction(actor, candidate))
+                    candidate.Utility = 0f;
+                continue;
+            }
+
+            if (!boundary.TryPrepareAutonomousProviderAction(actor, candidate, out float utility))
+                candidate.Utility = 0f;
+            else
+                candidate.Utility = UnityMathfCompatibility.Max(0f, utility);
+        }
+
+        selected = DailyV1NpcActionDecision.ChooseWeightedCandidate(
+            candidates, randomSource,
+            "npc-decision|" + actor.RuntimeId + "|" + currentAbsoluteDay);
+        return true;
+    }
+}
