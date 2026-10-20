@@ -1068,6 +1068,54 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         return executed;
     }
 
+    internal bool TryExecuteSelectedPlannedMarketSaleActionSlot(
+        NpcRuntime seller,
+        DailyV1ActionDefinition expectedAction,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        out bool actionRollSucceeded,
+        out DailyV1SelectedActionExecutionStage.PlannedMarketSaleResult result)
+    {
+        actionRollSucceeded = false;
+        result = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = seller?.SelectedRuntimeOwnerGraph;
+        DailyV1NpcRuntimeOwners actor = seller?.SelectedRuntimeOwners;
+        DailyV1CityRuntimeOwners cityOwner = null;
+        if (graph != null && !string.IsNullOrWhiteSpace(actor?.Travel?.CurrentCityRuntimeId))
+            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+                if (string.Equals(candidate.RuntimeId, actor.Travel.CurrentCityRuntimeId,
+                    StringComparison.Ordinal))
+                { cityOwner = candidate; break; }
+
+        bool trackMarket = p12CensusRuntime != null
+            && p12CensusRuntime.HasP12MarketOperationAdapter;
+        if (seller == null || expectedAction == null || graph == null || actor == null
+            || cityOwner == null || seller.CurrentCity?.Market == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !graph.ContainsExactCityOwner(cityOwner)
+            || (trackMarket
+                && !ReferenceEquals(seller.MerchantTradePlan?.SelectedOwner, actor.MerchantTradePlan))
+            || !ReferenceEquals(seller.CurrentCity.SelectedRuntimeOwners, cityOwner)
+            || !ReferenceEquals(seller.CurrentCity.Market.SelectedDailyV1Owner, cityOwner.Market))
+            return false;
+
+        IDailyV1SelectedOpenMarketSaleBoundary marketBoundary = trackMarket
+            ? new DailyV1SelectedOpenMarketSaleBoundary(this, seller, seller.CurrentCity.Market)
+            : null;
+        if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedPlannedMarketSaleActionSlot(
+            graph, actor, expectedAction, randomSource, currentAbsoluteDay, marketBoundary,
+            seller.MerchantTradePlan.CanAdmitSelectedPlanOwnerMutation,
+            seller.MerchantTradePlan.PublishSelectedPlanOwnerMutation,
+            out DailyV1SelectedActionExecutionStage.SelectedPlannedMarketSaleActionResult execution))
+            return false;
+
+        actionRollSucceeded = execution.ActionRollSucceeded;
+        result = execution.Sale;
+        if (result?.PartialCommit == true)
+            p12CensusRuntime?.FaultRuntimeAdmission();
+        return true;
+    }
+
     /// <summary>Executes a selected local market action from its exact Core payload.</summary>
     internal EconomyTransactionResult TryExecuteSelectedOpenMarketAction(
         NpcRuntime npc,

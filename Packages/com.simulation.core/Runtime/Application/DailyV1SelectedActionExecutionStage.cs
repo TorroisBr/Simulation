@@ -51,6 +51,21 @@ internal static class DailyV1SelectedActionExecutionStage
         }
     }
 
+    internal sealed class SelectedPlannedMarketSaleActionResult
+    {
+        internal bool Succeeded { get; }
+        internal bool ActionRollSucceeded { get; }
+        internal PlannedMarketSaleResult Sale { get; }
+
+        internal SelectedPlannedMarketSaleActionResult(bool succeeded,
+            bool actionRollSucceeded, PlannedMarketSaleResult sale)
+        {
+            Succeeded = succeeded;
+            ActionRollSucceeded = actionRollSucceeded;
+            Sale = sale;
+        }
+    }
+
     internal sealed class PlannedNpcSaleResult
     {
         internal bool Succeeded { get; }
@@ -345,6 +360,55 @@ internal static class DailyV1SelectedActionExecutionStage
             purchaseBoundary, out DailyV1SelectedOpenMarketSaleExecution sale,
             out DailyV1SelectedOpenMarketPurchaseExecution purchase);
         result = new SelectedOpenMarketActionResult(succeeded, true, sale, purchase);
+        return true;
+    }
+
+    /// <summary>Rolls and executes the exact selected active-plan local sale.
+    /// Existing P12 plan admission, market transaction, and plan publication
+    /// callbacks retain their established ordering.</summary>
+    internal static bool TryExecuteSelectedPlannedMarketSaleActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners seller,
+        DailyV1ActionDefinition expectedAction,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        IDailyV1SelectedOpenMarketSaleBoundary marketBoundary,
+        Func<bool> planAdmission,
+        Action planCommitted,
+        out SelectedPlannedMarketSaleActionResult result)
+    {
+        result = null;
+        DailyV1NpcActionSlotOwner slot = seller?.ActionSlot;
+        DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
+        if (graph == null || seller == null || expectedAction == null
+            || !graph.ContainsExactNpcOwner(seller)
+            || !ReferenceEquals(seller.Definitions, graph.Definitions)
+            || !ReferenceEquals(slot?.CurrentAction, expectedAction)
+            || payload == null || !ReferenceEquals(payload.Action, expectedAction)
+            || expectedAction.Values.actionType?.Value
+                != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            || payload.TargetNpcRuntimeId != null
+            || string.IsNullOrWhiteSpace(seller.Travel?.CurrentCityRuntimeId)
+            || !string.Equals(payload.TargetCityRuntimeId,
+                seller.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
+            || seller.Travel.IsTraveling
+            || seller.MerchantTradePlan?.IsActive != true)
+            return false;
+
+        if (!TryRollCurrentActionSlot(graph, seller, randomSource, currentAbsoluteDay,
+            out bool actionRollSucceeded))
+            return false;
+
+        if (!actionRollSucceeded)
+        {
+            result = new SelectedPlannedMarketSaleActionResult(false, false, null);
+            return true;
+        }
+
+        bool succeeded = TryExecutePlannedMarketSaleSlot(graph, seller, marketBoundary,
+            planAdmission, planCommitted, out PlannedMarketSaleResult sale);
+        result = new SelectedPlannedMarketSaleActionResult(succeeded && sale?.Succeeded == true,
+            true, sale);
         return true;
     }
 

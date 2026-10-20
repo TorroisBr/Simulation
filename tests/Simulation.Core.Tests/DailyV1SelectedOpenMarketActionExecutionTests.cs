@@ -234,6 +234,53 @@ public sealed class DailyV1SelectedOpenMarketActionExecutionTests
     }
 
     [Test]
+    public void SelectedPlannedMarketSaleDispatcherRollsBeforePlanAdmissionAndMarketCommit()
+    {
+        CreateActionRollFixture(1f, out DailyV1EffectiveDefinitions definitions,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor, out DailyV1CityRuntimeOwners city,
+            out DailyV1ActionDefinition sell, out DailyV1ItemDefinition item);
+        int waitThreshold = definitions.EffectiveConfiguration.MerchantTrade.MaxUnprofitablePlanWaitDays;
+        Assert.That(actor.MerchantTradePlan.TryInstallState(item, city.RuntimeId,
+            city.RuntimeId, 5, 5, 100f, waitThreshold, 0,
+            "decision/selected-market-plan"), Is.True);
+        float observedPrice = city.Market.GetPrice(item);
+        Assert.That(actor.CommercialKnowledge.RecordObservation(
+            new DailyV1CommercialMarketObservation(city.LocationRuntimeId, item,
+                observedPrice, 20, 20L, 20L,
+                DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+        DailyV1NpcActionCandidate candidate = new DailyV1NpcActionCandidate(sell, 75f);
+        Assert.That(DailyV1NpcActionDecision.TryPrepareSelectedSellGoodsCandidate(
+            graph, actor, candidate, 20L), Is.True);
+        DailyV1NpcActionPayloadOwner payload = candidate.PreparedPayload;
+        payload.SetOriginDecisionId("decision/selected-market-plan");
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, sell, payload, null), Is.True);
+
+        int inventoryBefore = actor.Inventory.GetAmount(item);
+        int marketBefore = city.Market.GetAmount(item);
+        List<string> order = new List<string>();
+        FixedActionRandom random = new FixedActionRandom(order, 0.25f);
+        RecordingSaleBoundary boundary = new RecordingSaleBoundary(order);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedPlannedMarketSaleActionSlot(
+            graph, actor, sell, random, 46L, boundary,
+            () => { order.Add("plan-admit"); return true; },
+            () => order.Add("plan-commit"),
+            out DailyV1SelectedActionExecutionStage.SelectedPlannedMarketSaleActionResult result), Is.True);
+
+        Assert.That(result.ActionRollSucceeded, Is.True);
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.Sale.PlanTransitioned, Is.True);
+        Assert.That(order, Is.EqualTo(new[]
+        {
+            "roll", "plan-admit", "p12-begin", "p12-complete", "p12-dispose",
+            "plan-admit", "plan-commit"
+        }));
+        Assert.That(actor.Inventory.GetAmount(item), Is.EqualTo(inventoryBefore - result.Sale.Quantity));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(marketBefore + result.Sale.Quantity));
+    }
+
+    [Test]
     public void SelectedMarketDispatcherRejectsMismatchedActionBeforeRandomness()
     {
         CreateActionRollFixture(1f, out DailyV1EffectiveDefinitions definitions,
