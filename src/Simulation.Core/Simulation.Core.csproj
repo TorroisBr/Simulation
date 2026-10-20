@@ -79,6 +79,9 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonRuntime.cs" Link="Person/PersonRuntime.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/DailyV1NpcRuntimeOwners.cs" Link="Person/DailyV1NpcRuntimeOwners.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/DailyV1JusticeRecordsOwner.cs" Link="Person/DailyV1JusticeRecordsOwner.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Social/CrimeSocialAppraisal.cs" Link="Social/CrimeSocialAppraisal.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Social/SocialAppraisalContracts.cs" Link="Social/SocialAppraisalContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Social/P12CrimeSocialAppraisalBoundaries.cs" Link="Social/P12CrimeSocialAppraisalBoundaries.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/DailyV1NpcMerchantTradePlanOwner.cs" Link="Person/DailyV1NpcMerchantTradePlanOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/NpcLifeState.cs" Link="Person/NpcLifeState.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/DailyV1CommercialKnowledgeOwner.cs" Link="Knowledge/DailyV1CommercialKnowledgeOwner.cs" />

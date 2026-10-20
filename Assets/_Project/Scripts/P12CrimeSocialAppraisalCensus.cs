@@ -2,25 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 
-internal enum P12CrimeSocialAppraisalOperation
-{
-    TheftAcceptance,
-    KnowledgeAndAppraisal
-}
-
-internal interface IP12CrimeSocialAppraisalOwnerMutationBoundary
-{
-    bool CanCommit(object owner);
-    void Committed(object owner);
-    void Fault();
-}
-
-internal interface IP12CrimeSocialAppraisalOperationBoundary
-{
-    bool TryBeginOperation(P12CrimeSocialAppraisalOperation operation);
-    bool EndOperation(P12CrimeSocialAppraisalOperation operation);
-}
-
 /// <summary>Exact selected-profile witnesses for the three CrimeSocialAppraisal stores.</summary>
 public static class P12CrimeSocialAppraisalCensusProvider
 {
