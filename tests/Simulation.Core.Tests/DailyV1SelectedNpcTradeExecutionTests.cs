@@ -194,6 +194,50 @@ public sealed class DailyV1SelectedNpcTradeExecutionTests
     }
 
     [Test]
+    public void PlannedNpcSalePartialTradeDoesNotFallbackToMarketOrAdvancePlan()
+    {
+        CreateActionRollFixture(1f, out _, out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners buyer, out DailyV1NpcRuntimeOwners seller,
+            out DailyV1ActionDefinition sell, out DailyV1ItemDefinition item);
+        PreparePlannedBuyerSale(graph, buyer, seller, sell, item, "decision/partial-npc-sale");
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(value =>
+            string.Equals(value.RuntimeId, seller.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        Assert.That(buyer.Inventory.TryBindMutationBoundary(() => false, () => { }), Is.True);
+
+        float buyerBalance = buyer.MoneyAccount.Balance;
+        float sellerBalance = seller.MoneyAccount.Balance;
+        int sellerInventory = seller.Inventory.GetAmount(item);
+        int buyerInventory = buyer.Inventory.GetAmount(item);
+        int marketStock = city.Market.GetAmount(item);
+        long marketRevision = city.Market.Revision;
+        long planRevision = seller.MerchantTradePlan.Revision;
+        RecordingBoundary tradeBoundary = new RecordingBoundary(true);
+        RecordingSaleBoundary marketBoundary = new RecordingSaleBoundary(true);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecutePlannedNpcSaleSlot(
+            graph, seller, buyer, tradeBoundary, marketBoundary,
+            () => true, () => { }, out var result), Is.True);
+
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(result.NpcTrade.PartialCommit, Is.True);
+        Assert.That(result.MarketSale, Is.Null);
+        Assert.That(marketBoundary.Events, Is.Empty,
+            "A partial NPC trade must not enter a second sale operation against the Market.");
+        Assert.That(tradeBoundary.Events, Is.EqualTo(new[]
+        {
+            "begin", "buyer-account", "seller-account", "seller-inventory", "dispose"
+        }));
+        Assert.That(buyer.MoneyAccount.Balance, Is.LessThan(buyerBalance));
+        Assert.That(seller.MoneyAccount.Balance, Is.GreaterThan(sellerBalance));
+        Assert.That(seller.Inventory.GetAmount(item), Is.LessThan(sellerInventory));
+        Assert.That(buyer.Inventory.GetAmount(item), Is.EqualTo(buyerInventory));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(marketStock));
+        Assert.That(city.Market.Revision, Is.EqualTo(marketRevision));
+        Assert.That(seller.MerchantTradePlan.Revision, Is.EqualTo(planRevision));
+        Assert.That(seller.MerchantTradePlan.IsActive, Is.True);
+    }
+
+    [Test]
     public void SelectedPlannedNpcSaleDispatcherRollsBeforePlanAdmissionAndTradeWrites()
     {
         CreateActionRollFixture(1f, out DailyV1EffectiveDefinitions definitions,

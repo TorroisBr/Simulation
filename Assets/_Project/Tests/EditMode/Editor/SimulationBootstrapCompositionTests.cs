@@ -2988,15 +2988,20 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
             new[] { startingCity.SelectedRuntimeOwners }, new[] { runtime.SelectedRuntimeOwners },
             out DailyV1SelectedRuntimeOwnerGraph selectedOwnerGraph), Is.True);
+        Assert.That(runtime.TryGetSelectedDailyV1ActionNode(defaultAction,
+            out DailyV1ActionDefinition defaultActionNode), Is.True,
+            "The Unity authoring action must bind to the exact admitted Core definition.");
         long beforeMissingTargetPlan = runtime.P12CrimeJusticeRevision;
-        Assert.That(runtime.TryCreateConfiguredActionStatusPlan(
-            defaultAction, selectedOwnerGraph, true, null, out _), Is.False,
+        Assert.That(selectedOwnerGraph.TryCreateActionStatusPlan(
+            runtime.SelectedRuntimeOwners, defaultActionNode, true, null, out _), Is.False,
             "Nonempty target status effects must reject during planning when the target has no selected owner.");
         Assert.That(runtime.P12CrimeJusticeRevision, Is.EqualTo(beforeMissingTargetPlan),
             "A missing target owner must be detected before the actor owner is mutated.");
 
-        Assert.That(runtime.TryCreateConfiguredActionStatusPlan(
-            selectedProviderAction, selectedOwnerGraph, true, null,
+        Assert.That(runtime.TryGetSelectedDailyV1ActionNode(selectedProviderAction,
+            out DailyV1ActionDefinition selectedProviderActionNode), Is.True);
+        Assert.That(selectedOwnerGraph.TryCreateActionStatusPlan(
+            runtime.SelectedRuntimeOwners, selectedProviderActionNode, true, null,
             out DailyV1SelectedActionStatusPlan noTargetEffectsPlan), Is.True,
             "A target without selected owner state is compatible when the admitted action has no target status effects.");
         int actorApplyCount = 0;
@@ -3007,8 +3012,8 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(actorApplyCount, Is.EqualTo(1));
         Assert.That(targetApplyCount, Is.Zero,
             "The plan must not invoke a target callback when the target effects are empty.");
-        Assert.That(runtime.TryCreateConfiguredActionStatusPlan(
-            defaultAction, selectedOwnerGraph, false, null,
+        Assert.That(selectedOwnerGraph.TryCreateActionStatusPlan(
+            runtime.SelectedRuntimeOwners, defaultActionNode, false, null,
             out DailyV1SelectedActionStatusPlan statusPlan), Is.True,
             "The Unity action binding is resolved into a Core-owned plan over the exact selected runtime owner.");
         long crimeJusticeRevision = runtime.P12CrimeJusticeRevision;

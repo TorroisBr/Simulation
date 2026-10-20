@@ -687,6 +687,16 @@ internal static class DailyV1SelectedActionExecutionStage
             return true;
         }
 
+        // A rejected trade can still report that earlier owner writes committed.
+        // Preserve those legacy partial-commit semantics and do not start a
+        // second sale against the market after the first operation was partial.
+        if (trade.PartialCommit)
+        {
+            result = new PlannedNpcSaleResult(false, false, 0, 0f,
+                false, false, trade, null);
+            return true;
+        }
+
         DailyV1SelectedOpenMarketSaleExecution market =
             DailyV1SelectedOpenMarketSaleExecution.TryExecute(
                 graph, seller, city.Market, payload.TargetItem, payload.Amount, marketBoundary);

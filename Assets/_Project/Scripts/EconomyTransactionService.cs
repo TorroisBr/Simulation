@@ -1021,12 +1021,14 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             ? new DailyV1SelectedOpenMarketSaleBoundary(this, seller, seller.CurrentCity.Market)
             : null;
 
-        return DailyV1SelectedActionExecutionStage.TryExecutePlannedNpcSaleSlot(
+        bool executed = DailyV1SelectedActionExecutionStage.TryExecutePlannedNpcSaleSlot(
             graph, seller.SelectedRuntimeOwners, buyer.SelectedRuntimeOwners,
             tradeBoundary, marketBoundary,
             seller.MerchantTradePlan.CanAdmitSelectedPlanOwnerMutation,
             seller.MerchantTradePlan.PublishSelectedPlanOwnerMutation,
             out result);
+        FaultSelectedPlannedNpcSaleIfPartial(result);
+        return executed;
     }
 
     /// <summary>Rolls and executes an exact selected planned NPC sale through
@@ -1085,7 +1087,15 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
 
         actionRollSucceeded = execution.ActionRollSucceeded;
         result = execution.Sale;
+        FaultSelectedPlannedNpcSaleIfPartial(result);
         return true;
+    }
+
+    internal void FaultSelectedPlannedNpcSaleIfPartial(
+        DailyV1SelectedActionExecutionStage.PlannedNpcSaleResult result)
+    {
+        if (result?.NpcTrade?.PartialCommit == true)
+            p12CensusRuntime?.FaultRuntimeAdmission();
     }
 
     /// <summary>Creates the existing Unity P12 market scopes for a Core-owned

@@ -553,12 +553,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     runtime.SelectedRuntimeOwnerGraph,
                     actor.ActionSlot?.CurrentPayload?.TargetCityRuntimeId,
                     actionRuntime.TargetCity,
-                    out CityRuntime exactTargetCity,
-                    out DailyV1CityRuntimeOwners targetCityOwner))
+                    out DailyV1CityRuntimeOwners targetCityOwner,
+                    out _))
                 return false;
 
             boundary = new SelectedFleeCityActionBoundaryAdapter(
-                this, runtime, exactActor, exactTargetCity, targetCityOwner,
+                this, runtime, exactActor, actionRuntime.TargetCity, targetCityOwner,
                 runtime.travelSystem.SelectedTravelPartyStore);
             return true;
         }
@@ -783,14 +783,30 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             }
             if (exactOwner == null
                 || !ReferenceEquals(projectedCity.SelectedRuntimeOwners, exactOwner)
-                || !ReferenceEquals(projectedCity, runtime.cities.Find(
-                    candidate => ReferenceEquals(candidate?.SelectedRuntimeOwners, exactOwner)))
+                || !IsExactCityProjection(exactOwner, projectedCity)
                 || graph.SpatialNetwork == null
                 || !graph.SpatialNetwork.TryGetLocation(
                     exactOwner.LocationRuntimeId, out exactLocation)
                 || !ReferenceEquals(projectedCity.Location, exactLocation))
                 return false;
             return true;
+        }
+
+        private bool IsExactCityProjection(
+            DailyV1CityRuntimeOwners exactOwner,
+            CityRuntime projectedCity)
+        {
+            if (exactOwner == null || projectedCity == null || runtime.cities == null)
+                return false;
+
+            foreach (CityRuntime candidate in runtime.cities)
+            {
+                if (!ReferenceEquals(candidate?.SelectedRuntimeOwners, exactOwner))
+                    continue;
+                return ReferenceEquals(candidate, projectedCity);
+            }
+
+            return false;
         }
 
         private sealed class SelectedFleeCityActionBoundaryAdapter
@@ -12109,9 +12125,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         // Core owns the supported selected-action route. Enter it only when
         // the Unity action and every projected payload target are the exact
-        // projection of the graph-owned current slot; otherwise preserve the
-        // existing host/provider behavior without dispatching stale Core data.
-        if (npcRuntime.UsesSelectedDailyV1Definitions
+        // projection of the graph-owned current slot.
+        bool selectedActionProjectionMatches = npcRuntime.UsesSelectedDailyV1Definitions
             && actionRuntime != null
             && ReferenceEquals(actionRuntime.Action, action)
             && actionRuntime.MatchesSelectedOwner()
@@ -12124,7 +12139,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             && ReferenceEquals(npcRuntime.SelectedRuntimeOwners.ActionSlot?.CurrentAction,
                 selectedActionNode)
             && ReferenceEquals(npcRuntime.SelectedRuntimeOwners.ActionSlot?.CurrentPayload,
-                actionRuntime.SelectedOwner))
+                actionRuntime.SelectedOwner);
+
+        if (selectedActionProjectionMatches)
         {
             SelectedActionDispatchBoundaryAdapter dispatchBoundary =
                 new SelectedActionDispatchBoundaryAdapter(
@@ -12138,6 +12155,20 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     out DailyV1SelectedActionDispatchResult selectedDispatch))
                 return CompleteSelectedActionDispatch(
                     npcRuntime, actionRuntime, action, selectedDispatch);
+        }
+        else if (selectedMerchantAction)
+        {
+            // A selected Daily-v1 merchant operation has no supported Unity
+            // fallback. A broken projection is a failed selected operation,
+            // not permission to execute the legacy provider against a second
+            // authority.
+            if (runtimeAdmissionContext != null)
+            {
+                FaultRuntimeAdmission();
+                throw new InvalidOperationException(
+                    "The selected P12 profile cannot execute a Merchant action without its exact Core action projection.");
+            }
+            return NpcActionResult.Failed();
         }
 
         if (npcRuntime.UsesSelectedDailyV1Definitions
@@ -12618,6 +12649,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         if (dispatch.Kind == DailyV1SelectedActionDispatchKind.PlannedMarketSale)
             economyTransactionService?.FaultSelectedPlannedMarketSaleIfPartial(
                 dispatch.PlannedMarketSale?.Sale);
+        else if (dispatch.Kind == DailyV1SelectedActionDispatchKind.PlannedNpcSale)
+            economyTransactionService?.FaultSelectedPlannedNpcSaleIfPartial(
+                dispatch.PlannedNpcSale?.Sale);
 
         if (!dispatch.ActionRollSucceeded)
             return NpcActionResult.Failed(CreateFailureMessage(npcRuntime, actionRuntime, action));

@@ -30,6 +30,163 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void SelectedMerchantProjectionMismatchFaultsBeforeProviderExecution()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        NpcActionData sellAction = config.Actions.Single(value =>
+            value != null && value.actionType == NpcActionType.SellGoods);
+
+        GameObject hostObject = new GameObject("P12 selected merchant projection mismatch");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationTime simulationTime = ReadPrivateField<SimulationTime>(session.Runtime, "simulationTime");
+        MerchantSystem merchant = new MerchantSystem(
+            new EffectiveMerchantTradeConfiguration(enabled: true),
+            new EffectiveCommercialKnowledgeConfiguration(), null, simulationTime, null);
+        FieldInfo merchantField = typeof(SimulationRuntime).GetField(
+            "merchantSystem", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(merchantField, Is.Not.Null);
+        merchantField.SetValue(session.Runtime, merchant);
+        NpcRuntime seller = null;
+        NpcActionRuntime selectedAction = null;
+        foreach (NpcRuntime candidate in session.Runtime.NpcRuntimes)
+        {
+            if (candidate == null || !candidate.HasJobType(NpcJobType.Merchant)
+                || candidate.CurrentCity == null) continue;
+            ItemData item = candidate.CurrentCity.Market?.Items
+                .Select(row => row?.Item).FirstOrDefault(value => value != null);
+            if (item == null
+                || !candidate.TryGetSelectedDailyV1ActionNode(
+                    sellAction, out DailyV1ActionDefinition actionNode)
+                || !candidate.TryGetSelectedDailyV1Item(
+                    item, out DailyV1ItemDefinition itemNode)
+                || !DailyV1NpcActionPayloadOwner.TryCreate(
+                    candidate.SelectedDailyV1DefinitionGraph,
+                    actionNode,
+                    null,
+                    candidate.CurrentCity.RuntimeId,
+                    itemNode,
+                    1,
+                    1f,
+                    1f,
+                    NpcTravelReason.None,
+                    0f,
+                    "projection-mismatch-test",
+                    null,
+                    null,
+                    null,
+                    out DailyV1NpcActionPayloadOwner payload)
+                || !NpcActionRuntime.TryCreateFromOwnerSnapshot(
+                    sellAction,
+                    null,
+                    candidate.CurrentCity,
+                    item,
+                    1,
+                    1f,
+                    1f,
+                    NpcTravelReason.None,
+                    0f,
+                    "projection-mismatch-test",
+                    null,
+                    null,
+                    null,
+                    out NpcActionRuntime proposal)
+                || !proposal.TryUseSelectedPayload(
+                    payload, candidate.SelectedDailyV1DefinitionGraph)) continue;
+            seller = candidate;
+            selectedAction = proposal;
+            break;
+        }
+
+        Assert.That(seller, Is.Not.Null,
+            "The accepted Daily-v1 fixture must expose a supported Merchant SellGoods proposal.");
+        Assert.That(selectedAction, Is.Not.Null);
+        Assert.That(selectedAction.SelectedOwner, Is.Not.Null,
+            "The supported proposal must carry its exact Core action owner before dispatch.");
+        Assert.That(session.Runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure before),
+            Is.True, before.ToString());
+
+        float balanceBefore = seller.Money;
+        long accountRevisionBefore = seller.MoneyAccount.Revision;
+        long inventoryRevisionBefore = seller.Inventory.Revision;
+        long marketRevisionBefore = seller.CurrentCity.Market.SelectedDailyV1Owner.Revision;
+        int inventoryAmountBefore = seller.Inventory.GetAmount(selectedAction.TargetItem);
+        int marketAmountBefore = seller.CurrentCity.Market.GetAmount(selectedAction.TargetItem);
+
+        FieldInfo selectedOwnerField = typeof(NpcActionRuntime).GetField(
+            "selectedOwner", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(selectedOwnerField, Is.Not.Null);
+        selectedOwnerField.SetValue(selectedAction, null);
+
+        MethodInfo execute = typeof(SimulationRuntime).GetMethod("TryExecuteAction",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(execute, Is.Not.Null);
+        TargetInvocationException failure = Assert.Throws<TargetInvocationException>(() => execute.Invoke(
+            session.Runtime, new object[] { seller, selectedAction, sellAction }));
+        Assert.That(failure.InnerException, Is.TypeOf<InvalidOperationException>());
+        Assert.That(failure.InnerException.Message,
+            Does.Contain("exact Core action projection"));
+
+        Assert.That(seller.Money, Is.EqualTo(balanceBefore));
+        Assert.That(seller.MoneyAccount.Revision, Is.EqualTo(accountRevisionBefore));
+        Assert.That(seller.Inventory.Revision, Is.EqualTo(inventoryRevisionBefore));
+        Assert.That(seller.Inventory.GetAmount(selectedAction.TargetItem), Is.EqualTo(inventoryAmountBefore));
+        Assert.That(seller.CurrentCity.Market.SelectedDailyV1Owner.Revision, Is.EqualTo(marketRevisionBefore));
+        Assert.That(seller.CurrentCity.Market.GetAmount(selectedAction.TargetItem), Is.EqualTo(marketAmountBefore));
+        Assert.That(session.Runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure after), Is.False);
+        Assert.That(after, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
+    [Test]
+    public void PartialPlannedNpcTradeDispatchFaultsP12Admission()
+    {
+        EconomyTransactionService transactionService = new EconomyTransactionService();
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            null,
+            economyTransactionService: transactionService,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            worldId: new WorldId(Guid.NewGuid()));
+        transactionService.BindP12CensusRuntime(runtime);
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
+
+        DailyV1SelectedNpcTradeCommitResult partialTrade =
+            new DailyV1SelectedNpcTradeCommitResult(false,
+                DailyV1SelectedNpcTradeFailure.PartialCommit, partialCommit: true,
+                buyerAccountMutationCount: 1, sellerAccountMutationCount: 1,
+                sellerInventoryMutationCount: 1);
+        DailyV1SelectedActionExecutionStage.PlannedNpcSaleResult sale =
+            new DailyV1SelectedActionExecutionStage.PlannedNpcSaleResult(
+                false, false, 0, 0f, false, false, partialTrade, null);
+        DailyV1SelectedActionExecutionStage.SelectedPlannedNpcSaleActionResult plannedSale =
+            new DailyV1SelectedActionExecutionStage.SelectedPlannedNpcSaleActionResult(
+                false, true, sale);
+        DailyV1SelectedActionDispatchResult dispatch = new DailyV1SelectedActionDispatchResult(
+            DailyV1SelectedActionDispatchKind.PlannedNpcSale,
+            actionRollSucceeded: true,
+            succeeded: false,
+            plannedNpcSale: plannedSale);
+
+        MethodInfo complete = typeof(SimulationRuntime).GetMethod(
+            "CompleteSelectedActionDispatch", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(complete, Is.Not.Null);
+        NpcActionResult result = (NpcActionResult)complete.Invoke(runtime,
+            new object[] { null, null, null, dispatch });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
+    [Test]
     public void DailyProfileScopesAdvancesAndRoutesOwnedClockThroughRuntime()
     {
         RecordFixture records = SimulationTestFactory.CreateRecordFixture();

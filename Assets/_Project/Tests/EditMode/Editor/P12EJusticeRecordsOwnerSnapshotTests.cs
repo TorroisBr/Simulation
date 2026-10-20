@@ -25,11 +25,11 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         WantedRecordRuntime warrant = justice.CreateOrIncreaseWarrant(target, city, 12f, 4);
 
         Assert.That(warrant, Is.Not.Null);
-        Assert.That(justice.WantedRecords, Has.Count.EqualTo(1));
+        Assert.That(justice.P12WantedRecordCount, Is.EqualTo(1));
         Assert.That(justice.P12CrimeJusticeRevision, Is.EqualTo(1));
         Assert.That(committedCalls, Is.EqualTo(1));
         Assert.That(justice.Arrest(guard, target, city), Is.True);
-        Assert.That(justice.PrisonSentences, Has.Count.EqualTo(1));
+        Assert.That(justice.P12PrisonSentenceCount, Is.EqualTo(1));
         Assert.That(justice.P12CrimeJusticeRevision, Is.EqualTo(2));
         Assert.That(committedCalls, Is.EqualTo(2));
     }
