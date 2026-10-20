@@ -90,6 +90,8 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1CityRuntimeOwners.cs" Link="City/DailyV1CityRuntimeOwners.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1CityEconomyContinuation.cs" Link="City/DailyV1CityEconomyContinuation.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1PopulationConsumptionOperation.cs" Link="Economy/DailyV1PopulationConsumptionOperation.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/EconomyTransactionResult.cs" Link="Economy/EconomyTransactionResult.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1MoneyTransferOperation.cs" Link="Economy/DailyV1MoneyTransferOperation.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1FiniteProductionSourceOwner.cs" Link="City/DailyV1FiniteProductionSourceOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedTravelTransitionPlan.cs" Link="City/DailyV1SelectedTravelTransitionPlan.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedSoloTravelExecution.cs" Link="City/DailyV1SelectedSoloTravelExecution.cs" />
