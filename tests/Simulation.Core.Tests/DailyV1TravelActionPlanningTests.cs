@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 public sealed class DailyV1TravelActionPlanningTests
@@ -199,6 +200,171 @@ public sealed class DailyV1TravelActionPlanningTests
         Assert.That(actor.MoneyAccount.TryDebit(actor.MoneyAccount.Balance), Is.True);
         Assert.That(DailyV1SelectedActionExecutionStage.TryPrepareSelectedFleeCityPlan(
             graph, actor, fleeAction, null, out _), Is.False);
+    }
+
+    [Test]
+    public void SelectedFleeDispatchHandlesMalformedPayloadWithoutProviderFallback()
+    {
+        (DailyV1SelectedRuntimeOwnerGraph graph, DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination, _) = CreateTravelCandidateFixture();
+        DailyV1ActionDefinition fleeAction = FindFleeCityAction(actor.Definitions);
+        DailyV1NpcActionPayloadOwner malformedPayload = CreateFleeCityPayload(
+            actor, fleeAction, destination, targetNpcRuntimeId: "npc/not-valid-for-flee-city");
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, fleeAction, malformedPayload, null), Is.True);
+        FixedActionRandom random = new FixedActionRandom(0f);
+        RecordingFleeDispatchBoundary boundary = new RecordingFleeDispatchBoundary(
+            new RecordingFleeActionBoundary());
+
+        Assert.That(DailyV1SelectedActionDispatchStage.TryDispatch(
+            graph, actor, random, 0L, boundary,
+            out DailyV1SelectedActionDispatchResult result), Is.True);
+
+        Assert.That(result.Kind, Is.EqualTo(DailyV1SelectedActionDispatchKind.FleeCity));
+        Assert.That(result.ActionRollSucceeded, Is.False);
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(boundary.FleeBoundaryResolutionCalls, Is.Zero);
+        Assert.That(random.Calls, Is.Zero);
+    }
+
+    [Test]
+    public void SelectedFleeDispatchRejectsMissingBoundaryWithoutProviderFallback()
+    {
+        (DailyV1SelectedRuntimeOwnerGraph graph, DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination, _) = CreateTravelCandidateFixture();
+        DailyV1ActionDefinition fleeAction = FindFleeCityAction(actor.Definitions);
+        DailyV1NpcActionPayloadOwner payload = CreateFleeCityPayload(
+            actor, fleeAction, destination, targetNpcRuntimeId: null);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, fleeAction, payload, null), Is.True);
+        FixedActionRandom random = new FixedActionRandom(0f);
+        RecordingFleeDispatchBoundary boundary = new RecordingFleeDispatchBoundary(null);
+
+        Assert.That(DailyV1SelectedActionDispatchStage.TryDispatch(
+            graph, actor, random, 0L, boundary,
+            out DailyV1SelectedActionDispatchResult result), Is.True);
+
+        Assert.That(result.Kind, Is.EqualTo(DailyV1SelectedActionDispatchKind.FleeCity));
+        Assert.That(result.ActionRollSucceeded, Is.False);
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(boundary.FleeBoundaryResolutionCalls, Is.EqualTo(1));
+        Assert.That(random.Calls, Is.Zero);
+    }
+
+    [Test]
+    public void SelectedFleeDispatchUsesCorePlanAndOperationBoundary()
+    {
+        (DailyV1SelectedRuntimeOwnerGraph graph, DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination, _) = CreateTravelCandidateFixture();
+        DailyV1ActionDefinition fleeAction = FindFleeCityAction(actor.Definitions);
+        DailyV1NpcActionPayloadOwner payload = CreateFleeCityPayload(
+            actor, fleeAction, destination, targetNpcRuntimeId: null);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, fleeAction, payload, null), Is.True);
+        RecordingFleeActionBoundary fleeBoundary = new RecordingFleeActionBoundary();
+        RecordingFleeDispatchBoundary boundary = new RecordingFleeDispatchBoundary(fleeBoundary);
+        FixedActionRandom random = new FixedActionRandom(0f);
+        float balanceBefore = actor.MoneyAccount.Balance;
+        long planRevisionBefore = actor.TravelPlan.Revision;
+
+        Assert.That(DailyV1SelectedActionDispatchStage.TryDispatch(
+            graph, actor, random, 0L, boundary,
+            out DailyV1SelectedActionDispatchResult result), Is.True);
+
+        Assert.That(result.Kind, Is.EqualTo(DailyV1SelectedActionDispatchKind.FleeCity));
+        Assert.That(result.ActionRollSucceeded, Is.True);
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.FleeCity.DestinationCityRuntimeId, Is.EqualTo(destination.RuntimeId));
+        Assert.That(result.FleeCity.TravelCost, Is.GreaterThan(0f));
+        Assert.That(fleeBoundary.OperationCalls, Is.EqualTo(1));
+        Assert.That(fleeBoundary.CommitCalls, Is.EqualTo(1));
+        Assert.That(fleeBoundary.Actor, Is.SameAs(actor));
+        Assert.That(fleeBoundary.Destination, Is.SameAs(destination));
+        Assert.That(fleeBoundary.OriginDecisionId, Is.EqualTo("decision/flee-city"));
+        Assert.That(actor.MoneyAccount.Balance, Is.EqualTo(balanceBefore));
+        Assert.That(actor.TravelPlan.Revision, Is.EqualTo(planRevisionBefore));
+    }
+
+    private static DailyV1ActionDefinition FindFleeCityAction(DailyV1EffectiveDefinitions definitions) =>
+        definitions.Actions.Values.Single(action =>
+            action.Values.actionType?.Value == DailyV1NpcDefinitionRules.FleeCityActionTypeValue);
+
+    private static DailyV1NpcActionPayloadOwner CreateFleeCityPayload(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        DailyV1CityRuntimeOwners destination,
+        string targetNpcRuntimeId)
+    {
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            actor.Definitions, action, targetNpcRuntimeId, destination.RuntimeId, null,
+            0, 0f, 1f, NpcTravelReason.None, 0f,
+            "decision/flee-city", null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        return payload;
+    }
+
+    private sealed class FixedActionRandom : IAuthoritativeRandomSource
+    {
+        private readonly float value;
+        internal int Calls { get; private set; }
+        internal FixedActionRandom(float value) => this.value = value;
+        public float NextUnit(string streamKey, long drawIndex = 0L)
+        { Calls++; return value; }
+        public DeterministicRandomStream CreateStream(string streamKey) => null;
+    }
+
+    private sealed class RecordingFleeDispatchBoundary : IDailyV1SelectedActionDispatchBoundary
+    {
+        private readonly DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary fleeBoundary;
+        internal int FleeBoundaryResolutionCalls { get; private set; }
+        internal RecordingFleeDispatchBoundary(
+            DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary fleeBoundary) =>
+            this.fleeBoundary = fleeBoundary;
+
+        public bool TryGetSoloTravelBoundary(DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action, out TravelPartyStore partyStore,
+            out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary)
+        { partyStore = null; boundary = null; return false; }
+        public bool TryGetMarketBoundaries(DailyV1NpcRuntimeOwners actor,
+            out IDailyV1SelectedOpenMarketSaleBoundary sale,
+            out IDailyV1SelectedOpenMarketPurchaseBoundary purchase)
+        { sale = null; purchase = null; return false; }
+        public bool TryGetNpcTradeBoundary(DailyV1NpcRuntimeOwners seller,
+            DailyV1NpcRuntimeOwners buyer, out IDailyV1SelectedNpcTradeBoundary boundary)
+        { boundary = null; return false; }
+        public bool TryGetFleeCityActionBoundary(DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action,
+            out DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary boundary)
+        {
+            FleeBoundaryResolutionCalls++;
+            boundary = fleeBoundary;
+            return fleeBoundary != null;
+        }
+        public bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) => true;
+        public void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) { }
+        public bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor) => true;
+        public void PublishTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor) { }
+        public void CompleteCrossCityBuy(DailyV1NpcRuntimeOwners actor,
+            DailyV1SelectedCrossCityBuyResult result) { }
+    }
+
+    private sealed class RecordingFleeActionBoundary
+        : DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary
+    {
+        internal int OperationCalls { get; private set; }
+        internal int CommitCalls { get; private set; }
+        internal DailyV1NpcRuntimeOwners Actor { get; private set; }
+        internal DailyV1CityRuntimeOwners Destination { get; private set; }
+        internal string OriginDecisionId { get; private set; }
+        public TravelPartyStore TravelPartyStore => null;
+        public bool ExecuteWithinOperation(Func<bool> operation)
+        { OperationCalls++; return operation != null && operation(); }
+        public bool CommitTravelPlan(DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination, float travelCost, string originDecisionId)
+        {
+            CommitCalls++;
+            Actor = actor;
+            Destination = destination;
+            OriginDecisionId = originDecisionId;
+            return travelCost > 0f;
+        }
     }
 
     private static (DailyV1SelectedRuntimeOwnerGraph Graph, DailyV1NpcRuntimeOwners Actor,

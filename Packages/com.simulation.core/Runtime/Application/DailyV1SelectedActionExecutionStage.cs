@@ -1094,11 +1094,17 @@ internal static class DailyV1SelectedActionDispatchStage
                 || !boundary.TryGetFleeCityActionBoundary(actor, action,
                     out DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary fleeBoundary)
                 || fleeBoundary == null)
-                return false;
+            {
+                result = RejectedSelectedFleeCity(payload.TargetCityRuntimeId);
+                return true;
+            }
 
             if (!DailyV1SelectedActionExecutionStage.TryRollCurrentActionSlot(
                     graph, actor, randomSource, currentAbsoluteDay, out bool actionRollSucceeded))
-                return false;
+            {
+                result = RejectedSelectedFleeCity(payload.TargetCityRuntimeId);
+                return true;
+            }
             if (!actionRollSucceeded)
             {
                 result = new DailyV1SelectedActionDispatchResult(
@@ -1249,6 +1255,14 @@ internal static class DailyV1SelectedActionDispatchStage
         boundary.CompleteCrossCityBuy(actor, crossCityBuy?.Purchase);
         return true;
     }
+
+    private static DailyV1SelectedActionDispatchResult RejectedSelectedFleeCity(
+        string destinationCityRuntimeId) => new DailyV1SelectedActionDispatchResult(
+            DailyV1SelectedActionDispatchKind.FleeCity,
+            false,
+            false,
+            fleeCity: new DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult(
+                false, destinationCityRuntimeId, 0f));
 
     private static DailyV1NpcRuntimeOwners FindExactNpc(
         DailyV1SelectedRuntimeOwnerGraph graph,
