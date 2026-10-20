@@ -84,7 +84,7 @@ public sealed class ActorChoiceStoreTests
             returned.InputId, 1L, 0, ActorChoiceFailure.ActionUnavailable, out ActorChoiceStoreFailureCode rejectAfterStart), rejectAfterStart);
 
         Assert.That(store.TryRecordAttemptReturned(
-            returned.InputId, 1L, 0, NpcActionResult.Succeeded(), out ActorChoiceStoreFailureCode returnFailure),
+            returned.InputId, 1L, 0, NpcActionResult.Succeeded().ResultType, out ActorChoiceStoreFailureCode returnFailure),
             Is.True, returnFailure.ToString());
         Assert.That(store.TryRecordAttemptThrew(threw.InputId, 1L, 1, out ActorChoiceStoreFailureCode threwFailure),
             Is.True, threwFailure.ToString());
@@ -99,7 +99,7 @@ public sealed class ActorChoiceStoreTests
         Assert.That(threwInput.Dispositions[1].ReturnedResultStatus, Is.Null);
 
         AssertTransitionRejected(store.TryRecordAttemptReturned(
-            returned.InputId, 1L, 0, NpcActionResult.Failed(), out ActorChoiceStoreFailureCode secondReturn), secondReturn);
+            returned.InputId, 1L, 0, NpcActionResult.Failed().ResultType, out ActorChoiceStoreFailureCode secondReturn), secondReturn);
         AssertTransitionRejected(store.TryRecordAttemptThrew(
             threw.InputId, 1L, 1, out ActorChoiceStoreFailureCode secondThrow), secondThrow);
         Assert.That(store.ValidateInvariants().IsValid, Is.True);
@@ -138,7 +138,7 @@ public sealed class ActorChoiceStoreTests
         Assert.That(invalidCapture, Is.EqualTo(ActorChoiceStoreFailureCode.InvalidInput));
 
         AssertTransitionRejected(store.TryRecordAttemptReturned(
-            first.InputId, 1L, 0, NpcActionResult.Succeeded(), out ActorChoiceStoreFailureCode beforeDispatch), beforeDispatch);
+            first.InputId, 1L, 0, NpcActionResult.Succeeded().ResultType, out ActorChoiceStoreFailureCode beforeDispatch), beforeDispatch);
         Assert.That(store.TryDefer(
             first.InputId, -1L, 0, ActorChoiceDeferralReason.Traveling, out ActorChoiceStoreFailureCode invalidBoundary), Is.False);
         Assert.That(invalidBoundary, Is.EqualTo(ActorChoiceStoreFailureCode.InvalidBoundary));
@@ -223,7 +223,7 @@ public sealed class ActorChoiceStoreTests
         Assert.That(clone.TryGet(consumed.InputId, out clonedConsumed), Is.True);
         Assert.That(clonedConsumed.Status, Is.EqualTo(ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt));
         Assert.That(clone.TryRecordAttemptReturned(
-            consumed.InputId, 2L, 1, NpcActionResult.Failed(), out _), Is.True);
+            consumed.InputId, 2L, 1, NpcActionResult.Failed().ResultType, out _), Is.True);
         Assert.That(source.TryGet(consumed.InputId, out ActorChoiceInput sourceConsumed), Is.True);
         Assert.That(sourceConsumed.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptThrew));
 
@@ -281,7 +281,7 @@ public sealed class ActorChoiceStoreTests
             new ActorChoiceTemporalBoundaryReference("profile-a", new LogicalTick(150), "receipt-2", 4),
             "dispatch-op", "decision-1", out failure), Is.False);
         Assert.That(failure, Is.EqualTo(ActorChoiceStoreFailureCode.CorrelationConflict));
-        Assert.That(store.TryRecordTemporalAttemptReturned(captured.InputId, boundary, "finish-op", NpcActionResult.Succeeded(), out failure), Is.True, failure.ToString());
+        Assert.That(store.TryRecordTemporalAttemptReturned(captured.InputId, boundary, "finish-op", NpcActionResult.Succeeded().ResultType, out failure), Is.True, failure.ToString());
         Assert.That(store.TryGet(captured.InputId, out ActorChoiceInput finished), Is.True);
         Assert.That(finished.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
         Assert.That(finished.TemporalDispositions, Has.Count.EqualTo(2));

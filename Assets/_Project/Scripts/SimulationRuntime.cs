@@ -9648,7 +9648,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     input.InputId,
                     CurrentDay,
                     actorTurnRosterOrdinal,
-                    result,
+                    result?.ResultType,
                     out ActorChoiceStoreFailureCode returnFailure))
             {
                 throw new InvalidOperationException(

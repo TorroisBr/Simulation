@@ -16,25 +16,6 @@ public enum WorldCommandKind
     ActorActionChoice
 }
 
-public enum WorldCommandOrigin
-{
-    GM,
-    Table,
-    Scenario,
-    ExternalImport,
-    System,
-    Internal,
-    LocalPlayer
-}
-
-public enum WorldCommandAuthorityMode
-{
-    Suggest,
-    Request,
-    Declare,
-    ForceOutcome
-}
-
 public sealed class WorldCommandIdAllocator
 {
     private long nextSequence = 1L;

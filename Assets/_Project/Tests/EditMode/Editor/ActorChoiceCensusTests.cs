@@ -55,7 +55,7 @@ public sealed class ActorChoiceCensusTests
         AssertP11(provider, 2, 4L);
         Assert.That(store.TryMarkDispatchStarted(returned.InputId, 1L, 1, "decision-return", out _), Is.True);
         AssertP11(provider, 2, 5L);
-        Assert.That(store.TryRecordAttemptReturned(returned.InputId, 1L, 1, NpcActionResult.Succeeded(), out _), Is.True);
+        Assert.That(store.TryRecordAttemptReturned(returned.InputId, 1L, 1, NpcActionResult.Succeeded().ResultType, out _), Is.True);
         AssertP11(provider, 2, 6L);
 
         ActorChoiceInput threw = CaptureP11(store, "p11-throw", "actor-throw");
@@ -91,7 +91,7 @@ public sealed class ActorChoiceCensusTests
             "temporal-dispatch-return", "decision-return", out _), Is.True);
         AssertSections(p11Provider, temporalProvider, 0, 1, 2L);
         Assert.That(store.TryRecordTemporalAttemptReturned(returned.InputId, firstBoundary,
-            "temporal-attempt-return", NpcActionResult.Succeeded(), out _), Is.True);
+            "temporal-attempt-return", NpcActionResult.Succeeded().ResultType, out _), Is.True);
         AssertSections(p11Provider, temporalProvider, 0, 1, 3L);
 
         ActorChoiceInput rejected = CaptureTemporal(store, "temporal-reject", TemporalReference(2));
@@ -222,7 +222,7 @@ public sealed class ActorChoiceCensusTests
         AssertRuntimeP11(runtime, provider, 2, 4L, 4L);
         Assert.That(store.TryMarkDispatchStarted(returned.InputId, 1L, 1, "p12-choice-return-decision", out _), Is.True);
         AssertRuntimeP11(runtime, provider, 2, 5L, 5L);
-        Assert.That(store.TryRecordAttemptReturned(returned.InputId, 1L, 1, NpcActionResult.Succeeded(), out _), Is.True);
+        Assert.That(store.TryRecordAttemptReturned(returned.InputId, 1L, 1, NpcActionResult.Succeeded().ResultType, out _), Is.True);
         AssertRuntimeP11(runtime, provider, 2, 6L, 6L);
 
         ActorChoiceInput threw = CaptureP11(store, "p12-choice-throw", "p12-choice-throw-actor");

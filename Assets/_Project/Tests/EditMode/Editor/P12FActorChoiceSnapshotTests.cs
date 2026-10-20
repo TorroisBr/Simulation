@@ -27,7 +27,7 @@ public sealed class P12FActorChoiceSnapshotTests
         ActorChoiceStore source = new ActorChoiceStore(new PersonStore());
         ActorChoiceInput returned = Capture(source, "command-1", "person-1");
         Assert.That(source.TryMarkDispatchStarted(returned.InputId, 1L, 0, "decision-1", out _), Is.True);
-        Assert.That(source.TryRecordAttemptReturned(returned.InputId, 1L, 0, NpcActionResult.Succeeded(), out _), Is.True);
+        Assert.That(source.TryRecordAttemptReturned(returned.InputId, 1L, 0, NpcActionResult.Succeeded().ResultType, out _), Is.True);
         ActorChoiceInput rejected = Capture(source, "command-2", "person-1");
         Assert.That(source.TryReject(rejected.InputId, 2L, 0, ActorChoiceFailure.ActionUnavailable, out _), Is.True);
         ActorChoiceInput threw = Capture(source, "command-3", "person-1");

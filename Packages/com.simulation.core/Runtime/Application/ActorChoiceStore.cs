@@ -221,9 +221,8 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
                 null, reason, null, null, out failure);
 
     public bool TryRecordTemporalAttemptReturned(ActorChoiceInputId inputId, ActorChoiceTemporalBoundaryReference boundary,
-        string operationId, NpcActionResult result, out ActorChoiceStoreFailureCode failure)
+        string operationId, NpcActionResultType? status, out ActorChoiceStoreFailureCode failure)
     {
-        NpcActionResultType? status = result == null ? (NpcActionResultType?)null : result.ResultType;
         if (status.HasValue && !Enum.IsDefined(typeof(NpcActionResultType), status.Value)) return FailTemporal(out failure);
         ActorChoiceAttemptOutcome? outcome = !status.HasValue ? ActorChoiceAttemptOutcome.ReturnedNoResult
             : status.Value == NpcActionResultType.Success ? ActorChoiceAttemptOutcome.Succeeded : ActorChoiceAttemptOutcome.Failed;
@@ -424,7 +423,7 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         ActorChoiceInputId inputId,
         long absoluteDay,
         int actorTurnRosterOrdinal,
-        NpcActionResult result,
+        NpcActionResultType? resultStatus,
         out ActorChoiceStoreFailureCode failure)
     {
         if (!CanBeginTransition(inputId, absoluteDay, actorTurnRosterOrdinal, out ActorChoiceInput current, out failure))
@@ -438,7 +437,6 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
-        NpcActionResultType? resultStatus = result == null ? (NpcActionResultType?)null : result.ResultType;
         if (resultStatus.HasValue && !Enum.IsDefined(typeof(NpcActionResultType), resultStatus.Value))
         {
             failure = ActorChoiceStoreFailureCode.InvalidInput;

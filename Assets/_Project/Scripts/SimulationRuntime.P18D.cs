@@ -794,7 +794,7 @@ public sealed partial class SimulationRuntime
             : execution.TerminalKind == P18DActorChoiceTerminalKind.Returned
                 ? actorChoiceStore.TryRecordTemporalAttemptReturned(
                     new ActorChoiceInputId(execution.InputId), boundary, operationId,
-                    execution.Result, out _)
+                    execution.Result?.ResultType, out _)
                 : actorChoiceStore.TryRecordTemporalAttemptThrew(
                     new ActorChoiceInputId(execution.InputId), boundary, operationId, out _);
         if (!recorded)

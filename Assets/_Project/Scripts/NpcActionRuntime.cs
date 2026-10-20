@@ -652,12 +652,6 @@ internal sealed class NpcTravelPlanState
     }
 }
 
-public enum NpcActionResultType
-{
-    Success,
-    Failure
-}
-
 public class NpcActionResult
 {
     public NpcActionResultType ResultType { get; }

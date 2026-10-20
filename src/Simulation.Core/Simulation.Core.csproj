@@ -12,6 +12,7 @@
   <ItemGroup>
     <Compile Include="../../Packages/com.simulation.core/Runtime/IAuthoritativeMutationStatus.cs" Link="IAuthoritativeMutationStatus.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/ActionExecution.cs" Link="ActionExecution.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/WorldCommandValues.cs" Link="WorldCommandValues.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/DailyV1DecisionRecords.cs" Link="DailyV1DecisionRecords.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/DailyV1DecisionRecordOperation.cs" Link="DailyV1DecisionRecordOperation.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/MutationStatusBinding.cs" Link="MutationStatusBinding.cs" />
@@ -48,6 +49,8 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialNetworkOwner.cs" Link="Geography/SpatialNetworkOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialGeography.cs" Link="Geography/SpatialGeography.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationHost.cs" Link="Application/DailyV1ApplicationHost.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/ActorChoiceContracts.cs" Link="Application/ActorChoiceContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/ActorChoiceStore.cs" Link="Application/ActorChoiceStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyCaptureEligibilityToken.cs" Link="Application/DailyCaptureEligibilityToken.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ExecutionBoundaryState.cs" Link="Application/DailyV1ExecutionBoundaryState.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/SimulationRuntimeAdmissionContext.cs" Link="Application/SimulationRuntimeAdmissionContext.cs" />

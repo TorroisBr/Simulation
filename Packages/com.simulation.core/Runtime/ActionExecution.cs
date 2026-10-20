@@ -1,6 +1,13 @@
 using System;
 using System.Collections.Generic;
 
+/// <summary>Returned status from one domain action attempt.</summary>
+public enum NpcActionResultType
+{
+    Success,
+    Failure
+}
+
 [Serializable]
 public sealed class ActionExecutionParticipant
 {
