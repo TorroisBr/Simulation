@@ -206,4 +206,3 @@ public sealed class EconomyTransactionResult
             itemDestinationRuntimeId);
     }
 }
-
