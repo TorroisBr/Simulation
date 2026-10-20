@@ -552,6 +552,51 @@ public class NpcTravelPlanRuntime
         return true;
     }
 
+    internal bool CanAdmitSelectedTradeTravelPlanMutation() => CanCommitP12Mutation();
+
+    internal void PublishSelectedTradeTravelPlanMutation() => NotifyP12MutationCommitted();
+
+    internal bool CanProjectSelectedTradePlan(
+        DailyV1NpcTravelPlanOwner owner,
+        SpatialLocationRuntime location,
+        CityRuntime city) => selectedOwner != null
+        && ReferenceEquals(selectedOwner, owner)
+        && location != null && city != null
+        && ReferenceEquals(city.Location, location)
+        && string.Equals(owner.TargetLocationRuntimeId, location.RuntimeId, StringComparison.Ordinal)
+        && string.Equals(owner.TargetCityRuntimeId, city.RuntimeId, StringComparison.Ordinal);
+
+    internal bool CanProjectSelectedTradePlanTarget(
+        DailyV1NpcTravelPlanOwner owner,
+        DailyV1CityRuntimeOwners cityOwner,
+        string targetCityRuntimeId,
+        string targetLocationRuntimeId,
+        SpatialLocationRuntime location,
+        CityRuntime city) => selectedOwner != null
+        && ReferenceEquals(selectedOwner, owner)
+        && location != null && city != null
+        && cityOwner != null
+        && ReferenceEquals(city.SelectedRuntimeOwners, cityOwner)
+        && ReferenceEquals(city.Location, location)
+        && string.Equals(location.RuntimeId, targetLocationRuntimeId, StringComparison.Ordinal)
+        && string.Equals(city.RuntimeId, targetCityRuntimeId, StringComparison.Ordinal);
+
+    internal void ProjectSelectedTradePlan(
+        DailyV1NpcTravelPlanOwner owner,
+        SpatialLocationRuntime location,
+        CityRuntime city)
+    {
+        if (!CanProjectSelectedTradePlan(owner, location, city))
+            throw new InvalidOperationException("The committed selected trade travel plan has no exact Unity projection.");
+        targetLocation = location;
+        targetCity = city;
+        reason = owner.Reason;
+        utility = owner.Utility;
+        expectedCost = owner.ExpectedCost;
+        originDecisionId = owner.OriginDecisionId;
+        revision = owner.Revision;
+    }
+
     internal void BindP12MutationBoundary(Func<bool> admission, Action committed)
     {
         if (admission == null) throw new ArgumentNullException(nameof(admission));

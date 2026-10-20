@@ -114,6 +114,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedNpcTradeExecution.cs" Link="Economy/DailyV1SelectedNpcTradeExecution.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedMarketSaleProfit.cs" Link="Economy/DailyV1SelectedMarketSaleProfit.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedOpenMarketPurchase.cs" Link="Economy/DailyV1SelectedOpenMarketPurchase.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedCrossCityBuyExecution.cs" Link="Economy/DailyV1SelectedCrossCityBuyExecution.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MoneyAccountRuntime.cs" Link="Economy/MoneyAccountRuntime.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketCounterpartyRuntime.cs" Link="Economy/MarketCounterpartyRuntime.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/PopulationEconomyRuntime.cs" Link="Economy/PopulationEconomyRuntime.cs" />

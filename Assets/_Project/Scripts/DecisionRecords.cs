@@ -37,14 +37,26 @@ public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
         bool committed;
         try
         {
-            committed = DailyV1DecisionRecordOperation.TryRecordAndCommitSelectedActionSlot(
-                idAllocator, recordSequence, decisionStore, simulationTime.AbsoluteDay,
-                actor.SelectedRuntimeOwnerGraph, actor.SelectedRuntimeOwners, payload,
-                GetDecisionType(actionRuntime), origin,
-                candidate => actionRuntime.TryUseSelectedPayload(
-                    candidate, actor.SelectedDailyV1DefinitionGraph),
-                () => actor.CanCommitP12LifecycleMutation(
-                    false, false, true, actionRuntime), out decision);
+            Func<DailyV1NpcActionPayloadOwner, bool> prepareProjection = candidate =>
+                actionRuntime.TryUseSelectedPayload(
+                    candidate, actor.SelectedDailyV1DefinitionGraph);
+            Func<bool> slotAdmission = () => actor.CanCommitP12LifecycleMutation(
+                false, false, true, actionRuntime);
+            if (actionRuntime.Action.actionType == NpcActionType.Travel
+                && !string.IsNullOrWhiteSpace(actionRuntime.OriginDecisionId))
+            {
+                committed = DailyV1DecisionRecordOperation.TryCommitSelectedActionSlotWithExistingIdentity(
+                    actor.SelectedRuntimeOwnerGraph, actor.SelectedRuntimeOwners, payload,
+                    prepareProjection, slotAdmission);
+            }
+            else
+            {
+                committed = DailyV1DecisionRecordOperation.TryRecordAndCommitSelectedActionSlot(
+                    idAllocator, recordSequence, decisionStore, simulationTime.AbsoluteDay,
+                    actor.SelectedRuntimeOwnerGraph, actor.SelectedRuntimeOwners, payload,
+                    GetDecisionType(actionRuntime), origin,
+                    prepareProjection, slotAdmission, out decision);
+            }
         }
         catch (ArgumentException exception)
         {

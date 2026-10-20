@@ -371,7 +371,8 @@ internal static class DailyV1MerchantActionPlanning
                 || !string.Equals(buyer.Travel.CurrentCityRuntimeId, city.RuntimeId, StringComparison.Ordinal)
                 || !DailyV1NpcDefinitionRules.HasJobType(buyer.Definition, graph.Definitions,
                     DailyV1NpcDefinitionRules.MerchantJobTypeValue)
-                || !DailyV1NpcDefinitionRules.HasMerchantBehavior(buyer.Definition, graph.Definitions, 1)
+                || !DailyV1NpcDefinitionRules.HasMerchantBehavior(buyer.Definition, graph.Definitions,
+                    DailyV1NpcDefinitionRules.LocalMerchantBehaviorValue)
                 || buyer.MoneyAccount == null) continue;
 
             float preference = DailyV1NpcDefinitionRules.TryGetPreferredTradeItemMultiplier(

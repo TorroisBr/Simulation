@@ -194,6 +194,53 @@ public sealed class DailyV1DecisionRecordsTests
         Assert.That(rejectedActor.ActionSlot.Revision, Is.Zero);
     }
 
+    [Test]
+    public void ExistingTravelDecisionIdentityCommitsSlotWithoutAllocatingOrOverwritingRecord()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator setupIds = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(setupIds, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(setupIds,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        DailyV1ActionDefinition action = definitions.Actions.Values.First();
+        const string existingDecisionId = "decision/travel-plan-origin";
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(definitions, action,
+            null, null, null, 0, 0f, 1f, NpcTravelReason.None,
+            0f, existingDecisionId, null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        RuntimeIdAllocator ids = new RuntimeIdAllocator();
+        SimulationRecordSequence sequence = new SimulationRecordSequence();
+        NpcDecisionStore store = new NpcDecisionStore();
+        int projectionCalls = 0;
+
+        Assert.That(DailyV1DecisionRecordOperation.TryCommitSelectedActionSlotWithExistingIdentity(
+            graph, actor, payload,
+            candidate =>
+            {
+                projectionCalls++;
+                Assert.That(candidate.OriginDecisionId, Is.EqualTo(existingDecisionId));
+                Assert.That(store.Decisions, Is.Empty);
+                Assert.That(actor.ActionSlot.CurrentAction, Is.Null);
+                return true;
+            }, () => true), Is.True);
+
+        Assert.That(projectionCalls, Is.EqualTo(1));
+        Assert.That(payload.OriginDecisionId, Is.EqualTo(existingDecisionId));
+        Assert.That(actor.ActionSlot.CurrentPayload, Is.SameAs(payload));
+        Assert.That(actor.ActionSlot.Revision, Is.EqualTo(1L));
+        Assert.That(store.Decisions, Is.Empty);
+        Assert.That(sequence.CaptureSnapshot().NextSequence, Is.EqualTo(1L));
+        NpcDecisionRecord next = DailyV1DecisionRecordOperation.Record(
+            ids, sequence, store, 1L, "npc/actor", NpcDecisionType.Action,
+            NpcDecisionOrigin.Autonomous, "action/next", null, null, null, null, null);
+        Assert.That(next.DecisionId, Is.EqualTo("decision-000001"));
+        Assert.That(next.RecordSequence, Is.EqualTo(1L));
+    }
+
     private static DailyV1NpcActionPayloadOwner CreatePayload(
         DailyV1EffectiveDefinitions definitions,
         DailyV1ActionDefinition action)

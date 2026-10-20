@@ -6,6 +6,7 @@ internal sealed class DailyV1NpcActionCandidate
 {
     internal DailyV1ActionDefinition Action { get; }
     internal float Utility { get; set; }
+    internal DailyV1NpcActionPayloadOwner PreparedPayload { get; set; }
 
     internal DailyV1NpcActionCandidate(DailyV1ActionDefinition action, float utility)
     {
@@ -17,6 +18,102 @@ internal sealed class DailyV1NpcActionCandidate
 /// <summary>Core action eligibility, utility and deterministic selection for selected Daily-v1 definitions.</summary>
 internal static class DailyV1NpcActionDecision
 {
+    /// <summary>Prepares an admitted autonomous SellGoods candidate from the
+    /// exact graph owners, including active-plan local-buyer and market fallback
+    /// paths. Returns false only when the caller must retain another provider
+    /// path; otherwise utility and payload are authoritative, including
+    /// no-opportunity rejection.</summary>
+    internal static bool TryPrepareSelectedSellGoodsCandidate(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionCandidate candidate,
+        long currentAbsoluteDay)
+    {
+        if (graph == null || actor == null || candidate?.Action == null
+            || candidate.Action.Values.actionType?.Value
+                != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue)
+            return false;
+
+        candidate.PreparedPayload = null;
+        DailyV1MerchantLocalSalePlan plan;
+        if (actor.MerchantTradePlan?.IsActive == true)
+        {
+            if (!string.Equals(actor.MerchantTradePlan.TargetCityRuntimeId,
+                    actor.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal)
+                || !DailyV1MerchantActionPlanning.TryPlanSelectedPlannedLocalBuyer(
+                    graph, actor, candidate.Action, currentAbsoluteDay,
+                    candidate.Utility, out plan))
+            {
+                candidate.Utility = 0f;
+                return true;
+            }
+
+            if (plan == null
+                && !DailyV1MerchantActionPlanning.TryPlanSelectedPlannedMarketSale(
+                    graph, actor, candidate.Action, currentAbsoluteDay,
+                    candidate.Utility, out plan))
+            {
+                candidate.Utility = 0f;
+                return true;
+            }
+        }
+        else if (!DailyV1MerchantActionPlanning.TryPlanSelectedLocalSale(
+                     graph, actor, candidate.Action, currentAbsoluteDay,
+                     candidate.Utility, out plan))
+        {
+            candidate.Utility = 0f;
+            return true;
+        }
+
+        if (plan == null || plan.SelectedPayload == null)
+        {
+            candidate.Utility = 0f;
+            return true;
+        }
+
+        candidate.Utility = plan.Utility;
+        candidate.PreparedPayload = plan.SelectedPayload;
+        return true;
+    }
+
+    /// <summary>Prepares the selected autonomous BuyGoods candidate from exact
+    /// graph owners. The Unity provider remains responsible only for projecting
+    /// the resolved City and Item compatibility objects.</summary>
+    internal static bool TryPrepareSelectedBuyGoodsCandidate(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionCandidate candidate,
+        long currentAbsoluteDay)
+    {
+        if (graph == null || actor == null || candidate?.Action == null
+            || candidate.Action.Values.actionType?.Value
+                != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue)
+            return false;
+
+        candidate.PreparedPayload = null;
+        if (!DailyV1NpcDefinitionRules.HasJobType(
+                actor.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+            || actor.MerchantTradePlan?.IsActive == true
+            || DailyV1NpcDefinitionRules.HasMerchantBehavior(
+                actor.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.LocalMerchantBehaviorValue)
+            || !DailyV1MerchantActionPlanning.TryPlanSelectedTradeOpportunity(
+                graph, actor, candidate.Action, actor.Travel?.CurrentCityRuntimeId,
+                currentAbsoluteDay, 0f, 0,
+                out DailyV1MerchantTradePlan plan)
+            || plan == null || plan.SelectedPayload == null)
+        {
+            candidate.Utility = 0f;
+            return true;
+        }
+
+        candidate.Utility = UnityMathfCompatibility.Max(
+            candidate.Utility, 30f + plan.Score);
+        candidate.PreparedPayload = plan.SelectedPayload;
+        return true;
+    }
+
     /// <summary>Rolls the action currently committed in the exact selected
     /// owner slot. The projected Unity action/payload must not become a second
     /// source of decision identity or success multiplier.</summary>

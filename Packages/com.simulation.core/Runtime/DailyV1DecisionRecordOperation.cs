@@ -70,6 +70,29 @@ internal static class DailyV1DecisionRecordOperation
         return graph.TryCommitCurrentActionSlot(actor, action.Action, action, slotAdmission);
     }
 
+    /// <summary>Commits an already-identified selected action without allocating
+    /// a second decision identity. Used for existing Travel-plan decisions whose
+    /// OriginDecisionId is authoritative and whose legacy path deliberately
+    /// skips a new decision record.</summary>
+    internal static bool TryCommitSelectedActionSlotWithExistingIdentity(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner action,
+        Func<DailyV1NpcActionPayloadOwner, bool> prepareProjection,
+        Func<bool> slotAdmission)
+    {
+        if (graph == null || actor == null || action == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(graph.Definitions, actor.Definitions)
+            || !graph.Definitions.Actions.TryGetValue(action.Action?.DefinitionId ?? string.Empty,
+                out DailyV1ActionDefinition admittedAction)
+            || !ReferenceEquals(admittedAction, action.Action))
+            return false;
+
+        if (prepareProjection != null && !prepareProjection(action)) return false;
+        return graph.TryCommitCurrentActionSlot(actor, action.Action, action, slotAdmission);
+    }
+
     internal static NpcDecisionRecord Record(
         RuntimeIdAllocator idAllocator,
         SimulationRecordSequence recordSequence,

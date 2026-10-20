@@ -19,6 +19,80 @@ public sealed class EconomyTransactionTests
     }
 
     [Test]
+    public void PartialSelectedCrossCityBuyFaultsBoundP12RuntimeAdmission()
+    {
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(), null, Array.Empty<NpcRuntime>(), economyEnabled: false);
+        typeof(SimulationRuntime).GetField("npcRosterCensusProtocol",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(runtime, new ContinuationCensusProtocol());
+        EconomyTransactionService service = new EconomyTransactionService();
+        service.BindP12CensusRuntime(runtime);
+
+        service.FaultSelectedCrossCityBuyAdmissionIfPartial(new DailyV1SelectedCrossCityBuyResult(
+            succeeded: false,
+            failure: DailyV1SelectedCrossCityBuyFailure.PostPurchaseOwnerCommit,
+            partialCommit: true));
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
+    [TestCase("origin-city")]
+    [TestCase("origin-market")]
+    [TestCase("target-city")]
+    public void CrossCityBuyAdapterRejectsProjectionMismatchBeforeOwnerWrites(string mismatch)
+    {
+        SelectedCrossCityAdapterFixture fixture = new SelectedCrossCityAdapterFixture();
+        float balanceBefore = fixture.Merchant.Money;
+        int inventoryBefore = fixture.Merchant.Inventory.GetSelectedAmount(fixture.ItemNode);
+        long inventoryRevisionBefore = fixture.Merchant.Inventory.SelectedDailyV1Owner.Revision;
+        long accountRevisionBefore = fixture.Merchant.MoneyAccount.Revision;
+        int stockBefore = fixture.OriginOwner.Market.GetAmount(fixture.ItemNode);
+        long marketRevisionBefore = fixture.OriginOwner.Market.Revision;
+        long merchantPlanRevisionBefore = fixture.MerchantOwner.MerchantTradePlan.Revision;
+        long travelPlanRevisionBefore = fixture.MerchantOwner.TravelPlan.Revision;
+        CityRuntime targetProjection = fixture.DestinationProjection;
+        if (mismatch == "origin-city")
+        {
+            CityRuntime unboundOriginAlias = CityRuntime.CreateSelectedDailyV1(
+                fixture.OriginOwner.RuntimeId, fixture.OriginOwner.Definition,
+                fixture.Definitions, fixture.Bindings,
+                new SpatialLocationRuntime(fixture.OriginOwner.LocationRuntimeId));
+            typeof(NpcRuntime).GetField("currentCity", BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(fixture.Merchant, unboundOriginAlias);
+        }
+        else if (mismatch == "origin-market")
+        {
+            MarketRuntime unboundMarketAlias = new MarketRuntime(
+                fixture.OriginOwner.Definition, fixture.Definitions, null);
+            typeof(CityRuntime).GetField("market", BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(fixture.OriginProjection, unboundMarketAlias);
+        }
+        else
+        {
+            targetProjection = CityRuntime.CreateSelectedDailyV1(
+                fixture.DestinationOwner.RuntimeId, fixture.DestinationOwner.Definition,
+                fixture.Definitions, fixture.Bindings,
+                new SpatialLocationRuntime(fixture.DestinationOwner.LocationRuntimeId));
+        }
+
+        EconomyTransactionResult result = new EconomyTransactionService().TryExecuteSelectedCrossCityBuy(
+            fixture.Merchant, fixture.Payload, targetProjection);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.TransactionCommitFailed));
+        Assert.That(fixture.Merchant.Money, Is.EqualTo(balanceBefore));
+        Assert.That(fixture.Merchant.Inventory.GetSelectedAmount(fixture.ItemNode), Is.EqualTo(inventoryBefore));
+        Assert.That(fixture.Merchant.Inventory.SelectedDailyV1Owner.Revision, Is.EqualTo(inventoryRevisionBefore));
+        Assert.That(fixture.Merchant.MoneyAccount.Revision, Is.EqualTo(accountRevisionBefore));
+        Assert.That(fixture.OriginOwner.Market.GetAmount(fixture.ItemNode), Is.EqualTo(stockBefore));
+        Assert.That(fixture.OriginOwner.Market.Revision, Is.EqualTo(marketRevisionBefore));
+        Assert.That(fixture.MerchantOwner.MerchantTradePlan.Revision, Is.EqualTo(merchantPlanRevisionBefore));
+        Assert.That(fixture.MerchantOwner.TravelPlan.Revision, Is.EqualTo(travelPlanRevisionBefore));
+    }
+
+    [Test]
     public void MoneyAccount_CanCreditRejectsOverflowWithoutMutation()
     {
         MoneyAccountRuntime account = new MoneyAccountRuntime(float.MaxValue);
@@ -1565,5 +1639,99 @@ public sealed class EconomyTransactionTests
             new SpatialLocationRuntime("location-" + runtimeId),
             null,
             counterparty);
+    }
+
+    private sealed class SelectedCrossCityAdapterFixture
+    {
+        internal readonly DailyV1EffectiveDefinitions Definitions;
+        internal readonly DailyV1DefinitionAdapter.SelectedBindings Bindings;
+        internal readonly DailyV1SelectedRuntimeOwnerGraph Graph;
+        internal readonly DailyV1CityRuntimeOwners OriginOwner;
+        internal readonly DailyV1CityRuntimeOwners DestinationOwner;
+        internal readonly DailyV1NpcRuntimeOwners MerchantOwner;
+        internal readonly CityRuntime OriginProjection;
+        internal readonly CityRuntime DestinationProjection;
+        internal readonly NpcRuntime Merchant;
+        internal readonly DailyV1ItemDefinition ItemNode;
+        internal readonly DailyV1NpcActionPayloadOwner Payload;
+
+        internal SelectedCrossCityAdapterFixture()
+        {
+            ItemData itemAsset = SimulationTestFactory.CreateItem("adapter-cross-city-item", 10f);
+            CityData originAsset = SimulationTestFactory.CreateCityData("adapter-cross-city-origin",
+                SimulationTestFactory.CreateMarketItem(itemAsset, 8, 8));
+            CityData destinationAsset = SimulationTestFactory.CreateCityData("adapter-cross-city-destination",
+                SimulationTestFactory.CreateMarketItem(itemAsset, 8, 8));
+            originAsset.connections.Add(new CityConnection { destination = destinationAsset, travelDays = 2 });
+            NpcData merchantAsset = SimulationTestFactory.CreateNpc(
+                "adapter-cross-city-merchant", NpcJobType.Merchant, MerchantBehavior.Traveling);
+            NpcActionData buyAction = SimulationTestFactory.CreateAction(
+                "adapter-cross-city-buy", NpcActionType.BuyGoods, NpcActionCategory.Commerce);
+            merchantAsset.acoesPadrao.Add(new NPCDefaultAction { action = buyAction, baseUtility = 1f });
+            SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
+            authoring.Cities.Add(originAsset);
+            authoring.Cities.Add(destinationAsset);
+            authoring.Actions.Add(buyAction);
+            authoring.Npcs.Add(new NpcSimulationConfig
+            {
+                npc = merchantAsset,
+                startingCity = originAsset,
+                initialMoney = 100f
+            });
+            EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+                contentOverrides: authoring.CreateConfigurationOverrides());
+            CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(authoring.calendar, out _);
+            Assert.That(DailyV1DefinitionAdapter.TryCreate(authoring, effective, calendar,
+                SimulationGenesisPipeline.ResolveStageOrder(includeAuthoredGeography: true),
+                "axial-hex-v1", "q-then-r", out DailyV1EffectiveDefinitions definitions,
+                out DailyV1DefinitionAdapter.SelectedBindings bindings,
+                out string diagnostic), Is.True, diagnostic);
+            Definitions = definitions;
+            Bindings = bindings;
+            RuntimeIdAllocator runtimeIds = new RuntimeIdAllocator();
+            DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+                new DailyV1SelectedRuntimeOwnerGraphBuilder(Definitions);
+            Assert.That(builder.TryCreateConfiguredCities(runtimeIds, _ => true), Is.True);
+            Assert.That(builder.TryCreateConfiguredNpcs(runtimeIds,
+                cityId => builder.ResolveUniqueStartingCity(cityId)?.RuntimeId), Is.True);
+            Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+            Graph = graph;
+            OriginOwner = FindCity(builder, originAsset.DefinitionId);
+            DestinationOwner = FindCity(builder, destinationAsset.DefinitionId);
+            MerchantOwner = builder.Npcs[0];
+            Assert.That(Graph.SpatialNetwork.TryGetLocation(OriginOwner.LocationRuntimeId,
+                out SpatialLocationRuntime originLocation), Is.True);
+            Assert.That(Graph.SpatialNetwork.TryGetLocation(DestinationOwner.LocationRuntimeId,
+                out SpatialLocationRuntime destinationLocation), Is.True);
+            OriginProjection = CityRuntime.CreateSelectedDailyV1(
+                OriginOwner.RuntimeId, OriginOwner.Definition, Definitions, Bindings,
+                OriginOwner, originLocation);
+            DestinationProjection = CityRuntime.CreateSelectedDailyV1(
+                DestinationOwner.RuntimeId, DestinationOwner.Definition, Definitions, Bindings,
+                DestinationOwner, destinationLocation);
+            Merchant = NpcRuntime.CreateSelectedDailyV1(
+                MerchantOwner.RuntimeId, MerchantOwner.Definition, Definitions, Bindings,
+                MerchantOwner, OriginProjection);
+            Assert.That(Merchant.TryBindSelectedRuntimeOwnerGraphProvider(() => Graph), Is.True);
+            ItemNode = Definitions.Items[itemAsset.DefinitionId];
+            NpcActionRuntime action = new NpcActionRuntime(
+                buyAction, DestinationProjection, itemAsset, 1, 10f);
+            action.SetOriginDecisionId("decision/adapter-cross-city-buy");
+            Assert.That(Merchant.TryPrepareSelectedActionPayload(action,
+                out DailyV1NpcActionPayloadOwner payload), Is.True);
+            Payload = payload;
+            Assert.That(Graph.TryCommitCurrentActionSlot(MerchantOwner, Payload.Action, Payload, () => true), Is.True);
+        }
+
+        private static DailyV1CityRuntimeOwners FindCity(
+            DailyV1SelectedRuntimeOwnerGraphBuilder builder,
+            string definitionId)
+        {
+            foreach (DailyV1CityRuntimeOwners city in builder.Cities)
+                if (string.Equals(city.Definition.DefinitionId, definitionId, StringComparison.Ordinal))
+                    return city;
+            Assert.Fail("Expected selected graph City owner for " + definitionId);
+            return null;
+        }
     }
 }

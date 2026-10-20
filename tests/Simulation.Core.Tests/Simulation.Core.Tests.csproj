@@ -35,6 +35,7 @@
     <Compile Include="DailyV1SelectedOpenMarketActionExecutionTests.cs" />
     <Compile Include="DailyV1SelectedNpcTradeExecutionTests.cs" />
     <Compile Include="DailyV1SelectedOpenMarketPurchaseTests.cs" />
+    <Compile Include="DailyV1SelectedCrossCityBuyExecutionTests.cs" />
     <Compile Include="SpatialNetworkOwnerTests.cs" Link="Geography/SpatialNetworkOwnerTests.cs" />
     <Compile Include="DailyV1SelectedRuntimeOwnerGraphTests.cs" />
     <Compile Include="DailyV1DecisionRecordsTests.cs" />

@@ -150,6 +150,41 @@ public sealed class GeneralizedSpatialTravelTests
     }
 
     [Test]
+    public void SelectedTradeTravelTargetPreflightRequiresExactCityOwnerProjection()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("exact-target-item", 1f);
+        CityData cityAsset = SimulationTestFactory.CreateCityData("exact-target-city",
+            SimulationTestFactory.CreateMarketItem(item, 1, 1));
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        config.Cities.Add(cityAsset);
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: config.CreateConfigurationOverrides());
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(config.Calendar, out _);
+        DailyV1EffectiveDefinitions definitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            config, effective, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        DailyV1CityDefinition cityDefinition = definitions.Cities[cityAsset.DefinitionId];
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder = new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        DailyV1CityRuntimeOwners cityOwner = builder.Cities[0];
+        SpatialLocationRuntime exactLocation = new SpatialLocationRuntime(cityOwner.LocationRuntimeId);
+        CityRuntime exactProjection = CityRuntime.CreateSelectedDailyV1(
+            cityOwner.RuntimeId, cityDefinition, definitions, bindings, cityOwner, exactLocation);
+        CityRuntime unboundProjection = CityRuntime.CreateSelectedDailyV1(
+            cityOwner.RuntimeId, cityDefinition, definitions, bindings,
+            new SpatialLocationRuntime(cityOwner.LocationRuntimeId));
+        NpcTravelPlanRuntime plan = new NpcTravelPlanRuntime();
+        Assert.That(plan.TryBindSelectedOwner(new DailyV1NpcTravelPlanOwner()), Is.True);
+
+        Assert.That(plan.CanProjectSelectedTradePlanTarget(
+            plan.SelectedOwner, cityOwner, cityOwner.RuntimeId, cityOwner.LocationRuntimeId,
+            exactLocation, exactProjection), Is.True);
+        Assert.That(plan.CanProjectSelectedTradePlanTarget(
+            plan.SelectedOwner, cityOwner, cityOwner.RuntimeId, cityOwner.LocationRuntimeId,
+            unboundProjection.Location, unboundProjection), Is.False);
+    }
+
+    [Test]
     public void CityPresenceCensusBindsStableOrderedCityOwnersAndExactRevision()
     {
         SpatialTravelFixture fixture = new SpatialTravelFixture();

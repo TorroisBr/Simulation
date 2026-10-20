@@ -6,6 +6,38 @@ using NUnit.Framework;
 public sealed class DailyV1MerchantActionPlanningTests
 {
     [Test]
+    public void SelectedAutonomousSellCandidateUsesCorePlanAndRejectsMissingOpportunity()
+    {
+        CreateRuntimeFixture(out DailyV1EffectiveDefinitions definitions,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners npc,
+            out DailyV1CityRuntimeOwners city);
+        DailyV1ItemDefinition iron = definitions.Items["FERRO"];
+        Assert.That(npc.Inventory.TryAddItem(iron, 5, 10f), Is.True);
+        Assert.That(npc.CommercialKnowledge.RecordObservation(
+            new DailyV1CommercialMarketObservation(
+                city.LocationRuntimeId, iron, 13f, 12, 20L, 20L,
+                DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+        DailyV1NpcActionCandidate candidate = new DailyV1NpcActionCandidate(
+            definitions.Actions["VENDER_MERCADORIA"], 18f);
+
+        Assert.That(DailyV1NpcActionDecision.TryPrepareSelectedSellGoodsCandidate(
+            graph, npc, candidate, 20L), Is.True);
+        Assert.That(candidate.PreparedPayload, Is.Not.Null);
+        Assert.That(candidate.PreparedPayload.Action, Is.SameAs(candidate.Action));
+        Assert.That(candidate.PreparedPayload.TargetItem, Is.SameAs(iron));
+        Assert.That(candidate.PreparedPayload.Amount, Is.GreaterThan(0));
+        Assert.That(candidate.Utility, Is.GreaterThan(18f));
+
+        DailyV1NpcActionCandidate unavailable = new DailyV1NpcActionCandidate(
+            definitions.Actions["VENDER_MERCADORIA"], 18f);
+        Assert.That(DailyV1NpcActionDecision.TryPrepareSelectedSellGoodsCandidate(
+            graph, npc, unavailable, 1000L), Is.True);
+        Assert.That(unavailable.Utility, Is.Zero);
+        Assert.That(unavailable.PreparedPayload, Is.Null);
+    }
+
+    [Test]
     public void SelectedLocalSaleReadsExactOwnersAndReturnsExistingCommercialEvidence()
     {
         CreateRuntimeFixture(out DailyV1EffectiveDefinitions definitions,
@@ -65,11 +97,17 @@ public sealed class DailyV1MerchantActionPlanningTests
         DailyV1ActionDefinition sell = definitions.Actions["VENDER_MERCADORIA"];
         Assert.That(seller.Inventory.TryAddItem(item, 5, 10f), Is.True);
         Assert.That(graph.TryInstallMerchantTradePlan(seller, item, city.RuntimeId,
-            graph.Cities.Single(owner => !ReferenceEquals(owner, city)).RuntimeId,
-            5, 10f, "decision-plan"), Is.True);
+            city.RuntimeId, 5, 10f, "decision-plan"), Is.True);
         Assert.That(seller.CommercialKnowledge.RecordObservation(new DailyV1CommercialMarketObservation(
             city.LocationRuntimeId, item, 100f, 20, 20L, 20L,
             DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+
+        DailyV1NpcActionCandidate candidate = new DailyV1NpcActionCandidate(sell, 75f);
+        Assert.That(DailyV1NpcActionDecision.TryPrepareSelectedSellGoodsCandidate(
+            graph, seller, candidate, 20L), Is.True);
+        Assert.That(candidate.PreparedPayload, Is.Not.Null);
+        Assert.That(candidate.PreparedPayload.TargetNpcRuntimeId,
+            Is.EqualTo(graph.Npcs.Single(owner => owner.Definition.DefinitionId == "PEDRO").RuntimeId));
 
         Assert.That(DailyV1MerchantActionPlanning.TryPlanSelectedPlannedLocalBuyer(
             graph, seller, sell, 20L, 75f,
@@ -79,6 +117,7 @@ public sealed class DailyV1MerchantActionPlanningTests
         Assert.That(plan.TargetNpcRuntimeId, Is.EqualTo(graph.Npcs.Single(owner =>
             owner.Definition.DefinitionId == "PEDRO").RuntimeId));
         Assert.That(plan.Utility, Is.EqualTo(Math.Max(75f, 85f + plan.Score)));
+        Assert.That(candidate.Utility, Is.EqualTo(plan.Utility));
         Assert.That(plan.SelectedPayload.TargetCityRuntimeId, Is.Null,
             "NPC-targeted selected actions retain the existing null target-city identity.");
         Assert.That(plan.SelectedPayload.TargetNpcRuntimeId, Is.EqualTo(plan.TargetNpcRuntimeId));
@@ -117,6 +156,14 @@ public sealed class DailyV1MerchantActionPlanningTests
         Assert.That(seller.CommercialKnowledge.RecordObservation(new DailyV1CommercialMarketObservation(
             city.LocationRuntimeId, item, 20f, 20, 20L, 20L,
             DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+
+        DailyV1NpcActionCandidate candidate = new DailyV1NpcActionCandidate(sell, 75f);
+        Assert.That(DailyV1NpcActionDecision.TryPrepareSelectedSellGoodsCandidate(
+            graph, seller, candidate, 20L), Is.True);
+        Assert.That(candidate.PreparedPayload, Is.Not.Null);
+        Assert.That(candidate.PreparedPayload.TargetNpcRuntimeId, Is.Null);
+        Assert.That(candidate.PreparedPayload.TargetCityRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(candidate.Utility, Is.EqualTo(75f));
 
         Assert.That(DailyV1MerchantActionPlanning.TryPlanSelectedPlannedMarketSale(
             graph, seller, sell, 20L, 75f, out DailyV1MerchantLocalSalePlan liquidation), Is.True);
@@ -209,6 +256,15 @@ public sealed class DailyV1MerchantActionPlanningTests
         Assert.That(plan.SelectedPayload.Amount, Is.EqualTo(plan.Amount));
         Assert.That(plan.SelectedPayload.ExpectedUnitPrice, Is.EqualTo(plan.BuyPrice));
         Assert.That(plan.SelectedPayload.CommercialDecisionEvidence, Is.SameAs(plan.Evidence));
+
+        DailyV1NpcActionCandidate candidate = new DailyV1NpcActionCandidate(
+            definitions.Actions["COMPRAR_MERCADORIA"], 11f);
+        Assert.That(DailyV1NpcActionDecision.TryPrepareSelectedBuyGoodsCandidate(
+            graph, npc, candidate, 20L), Is.True);
+        Assert.That(candidate.PreparedPayload, Is.Not.Null);
+        Assert.That(candidate.PreparedPayload.TargetCityRuntimeId, Is.EqualTo(destination.RuntimeId));
+        Assert.That(candidate.PreparedPayload.TargetItem, Is.SameAs(iron));
+        Assert.That(candidate.Utility, Is.EqualTo(Math.Max(11f, 30f + plan.Score)));
     }
 
     [TestCase(20L, 20L, 1f)]

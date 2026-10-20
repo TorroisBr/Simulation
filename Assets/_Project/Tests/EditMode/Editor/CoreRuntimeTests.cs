@@ -93,6 +93,64 @@ public sealed class CoreRuntimeTests
     }
 
     [Test]
+    public void ExistingTravelDecisionIdentityDispatchesThroughRecorderWithoutAllocatingRecord()
+    {
+        CityData cityAsset = SimulationTestFactory.CreateCityData("travel-recorder-city");
+        NpcActionData travelAsset = SimulationTestFactory.CreateAction(
+            "travel-recorder-action", NpcActionType.Travel);
+        NpcData npcAsset = SimulationTestFactory.CreateNpc("travel-recorder-npc");
+        npcAsset.acoesPadrao.Add(new NPCDefaultAction { action = travelAsset, baseUtility = 1f });
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        config.Cities.Add(cityAsset);
+        config.Npcs.Add(new NpcSimulationConfig { npc = npcAsset, startingCity = cityAsset });
+        config.Actions.Add(travelAsset);
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: config.CreateConfigurationOverrides());
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(config.Calendar, out _);
+        DailyV1EffectiveDefinitions definitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            config, effective, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder = new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator runtimeIds = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(runtimeIds, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(runtimeIds,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        DailyV1NpcRuntimeOwners actorOwner = builder.Npcs[0];
+        DailyV1CityRuntimeOwners cityOwner = builder.Cities[0];
+        Assert.That(graph.SpatialNetwork.TryGetLocation(cityOwner.LocationRuntimeId,
+            out SpatialLocationRuntime location), Is.True);
+        CityRuntime cityProjection = CityRuntime.CreateSelectedDailyV1(
+            cityOwner.RuntimeId, cityOwner.Definition, definitions, bindings, cityOwner, location);
+        NpcRuntime actor = NpcRuntime.CreateSelectedDailyV1(
+            actorOwner.RuntimeId, actorOwner.Definition, definitions, bindings, actorOwner, cityProjection);
+        Assert.That(actor.TryBindSelectedRuntimeOwnerGraphProvider(() => graph), Is.True);
+        NpcActionRuntime action = new NpcActionRuntime(travelAsset);
+        const string existingDecisionId = "decision/from-travel-plan";
+        action.SetOriginDecisionId(existingDecisionId);
+        RecordFixture fixture = SimulationTestFactory.CreateRecordFixture();
+
+        Assert.That(fixture.DecisionRecorder.TryRecordAndInstallSelectedAction(
+            actor, action, NpcDecisionOrigin.Autonomous,
+            out NpcDecisionRecord decision, out bool handled), Is.True);
+
+        Assert.That(handled, Is.True);
+        Assert.That(decision, Is.Null);
+        Assert.That(action.OriginDecisionId, Is.EqualTo(existingDecisionId));
+        Assert.That(fixture.Decisions.Decisions, Is.Empty);
+        Assert.That(fixture.Sequence.CaptureSnapshot().NextSequence, Is.EqualTo(1L));
+        Assert.That(actorOwner.ActionSlot.Revision, Is.EqualTo(1L));
+        Assert.That(actorOwner.ActionSlot.CurrentAction,
+            Is.SameAs(definitions.Actions[travelAsset.DefinitionId]));
+        Assert.That(actorOwner.ActionSlot.CurrentPayload.OriginDecisionId, Is.EqualTo(existingDecisionId));
+
+        NpcDecisionRecord next = fixture.DecisionRecorder.Record(
+            actor.RuntimeId, NpcDecisionType.Action, NpcDecisionOrigin.Autonomous,
+            "next-action", null, null, null);
+        Assert.That(next.DecisionId, Is.EqualTo("decision-000001"));
+        Assert.That(next.RecordSequence, Is.EqualTo(1L));
+    }
+
+    [Test]
     public void SequenceExhaustionDoesNotAdvanceTheWitness()
     {
         SimulationRecordSequence sequence = new SimulationRecordSequence();

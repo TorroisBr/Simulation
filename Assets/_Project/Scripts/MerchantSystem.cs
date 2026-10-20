@@ -430,6 +430,39 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
         return actionType == NpcActionType.BuyGoods || actionType == NpcActionType.SellGoods;
     }
 
+    /// <summary>Projects an already-resolved exact Core City owner to the
+    /// Unity CityRuntime compatibility object. This performs no route or target
+    /// selection.</summary>
+    internal bool TryProjectSelectedCityRuntime(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string cityRuntimeId,
+        out CityRuntime cityProjection)
+    {
+        cityProjection = null;
+        if (graph == null || travelSystem == null || string.IsNullOrWhiteSpace(cityRuntimeId))
+            return false;
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            if (city == null || !graph.ContainsExactCityOwner(city)
+                || !string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal)
+                || string.IsNullOrWhiteSpace(city.LocationRuntimeId)
+                || !graph.SpatialNetwork.TryGetLocation(
+                    city.LocationRuntimeId, out SpatialLocationRuntime location))
+                continue;
+
+            CityRuntime candidate = travelSystem.GetCityRuntime(location);
+            if (candidate == null
+                || !string.Equals(candidate.RuntimeId, city.RuntimeId, StringComparison.Ordinal)
+                || candidate.Location == null
+                || !string.Equals(candidate.Location.RuntimeId,
+                    city.LocationRuntimeId, StringComparison.Ordinal))
+                return false;
+            cityProjection = candidate;
+            return true;
+        }
+        return false;
+    }
+
     public NpcActionRuntime CreateAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
     {
         if (npcRuntime == null || action == null)
@@ -647,6 +680,21 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             if (!selectedTransaction.Success || selectedTransaction.Quantity <= 0) return false;
             logger.Log(SimulationLogCategory.Trade,
                 $"{npcRuntime.NpcName} comprou {selectedTransaction.Quantity} {actionRuntime.TargetItem.itemName} em {npcRuntime.CurrentCity.CityName} por {selectedTransaction.UnitPrice:0.##} cada para estoque local");
+            return true;
+        }
+
+        if (npcRuntime.SelectedRuntimeOwners != null
+            && actionRuntime.SelectedOwner != null
+            && actionRuntime.TargetCity != npcRuntime.CurrentCity
+            && npcRuntime.HasJobType(NpcJobType.Merchant)
+            && npcRuntime.HasMerchantBehavior(MerchantBehavior.Traveling))
+        {
+            EconomyTransactionResult selectedTransaction = transactionService
+                .TryExecuteSelectedCrossCityBuy(npcRuntime, actionRuntime.SelectedOwner,
+                    actionRuntime.TargetCity);
+            if (!selectedTransaction.Success || selectedTransaction.Quantity <= 0) return false;
+            logger.Log(SimulationLogCategory.Trade,
+                $"{npcRuntime.NpcName} comprou {selectedTransaction.Quantity} {actionRuntime.TargetItem.itemName} em {npcRuntime.CurrentCity.CityName} por {selectedTransaction.UnitPrice:0.##} cada para vender em {actionRuntime.TargetCity.CityName}");
             return true;
         }
 

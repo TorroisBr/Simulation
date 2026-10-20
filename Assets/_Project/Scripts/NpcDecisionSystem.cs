@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System;
 using System.Linq;
 using UnityEngine;
 
@@ -83,6 +84,87 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
         {
             if ((NpcActionType)(candidate.Action.Values.actionType?.Value ?? int.MinValue) == NpcActionType.Normal)
                 continue;
+
+            if (candidate.Action.Values.actionType?.Value
+                    == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
+                && npcRuntime.TryGetSelectedDailyV1ActionAsset(candidate.Action,
+                    out NpcActionData selectedBuyAsset)
+                && GetProviderForAction(npcRuntime, selectedBuyAsset) is MerchantSystem selectedMerchantSystem
+                && DailyV1NpcActionDecision.TryPrepareSelectedBuyGoodsCandidate(
+                    npcRuntime.SelectedRuntimeOwnerGraph,
+                    npcRuntime.SelectedRuntimeOwners,
+                    candidate,
+                    currentAbsoluteDay))
+            {
+                DailyV1NpcActionPayloadOwner payload = candidate.PreparedPayload;
+                if (payload == null
+                    || payload.TargetItem == null
+                    || !selectedMerchantSystem.TryProjectSelectedCityRuntime(
+                        npcRuntime.SelectedRuntimeOwnerGraph,
+                        payload.TargetCityRuntimeId,
+                        out CityRuntime selectedTargetCity)
+                    || !npcRuntime.TryGetSelectedDailyV1ItemAsset(payload.TargetItem,
+                        out ItemData selectedBuyItemAsset))
+                {
+                    candidate.Utility = 0f;
+                    continue;
+                }
+
+                NpcActionRuntime selectedBuyAction = new NpcActionRuntime(
+                    selectedBuyAsset, selectedTargetCity, selectedBuyItemAsset,
+                    payload.Amount, payload.ExpectedUnitPrice);
+                if (!selectedBuyAction.TryUseSelectedPayload(
+                        payload, npcRuntime.SelectedDailyV1DefinitionGraph))
+                {
+                    candidate.Utility = 0f;
+                    continue;
+                }
+
+                providerActions.Add(candidate, selectedBuyAction);
+                continue;
+            }
+
+            if (candidate.Action.Values.actionType?.Value
+                    == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                && npcRuntime.TryGetSelectedDailyV1ActionAsset(candidate.Action,
+                    out NpcActionData selectedSaleAsset)
+                && GetProviderForAction(npcRuntime, selectedSaleAsset) is MerchantSystem
+                && DailyV1NpcActionDecision.TryPrepareSelectedSellGoodsCandidate(
+                    npcRuntime.SelectedRuntimeOwnerGraph,
+                    npcRuntime.SelectedRuntimeOwners,
+                    candidate,
+                    currentAbsoluteDay))
+            {
+                DailyV1NpcActionPayloadOwner payload = candidate.PreparedPayload;
+                NpcRuntime selectedBuyer = null;
+                if (!string.IsNullOrWhiteSpace(payload?.TargetNpcRuntimeId))
+                    selectedBuyer = npcRuntime.CurrentCity?.ImportantNpcs?.Find(candidateNpc =>
+                        candidateNpc != null && string.Equals(candidateNpc.RuntimeId,
+                            payload.TargetNpcRuntimeId, StringComparison.Ordinal));
+                if (payload == null
+                    || payload.TargetItem == null
+                    || (!string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
+                        && selectedBuyer == null)
+                    || !npcRuntime.TryGetSelectedDailyV1ItemAsset(payload.TargetItem,
+                        out ItemData selectedSaleItemAsset))
+                {
+                    candidate.Utility = 0f;
+                    continue;
+                }
+
+                NpcActionRuntime selectedSaleAction = new NpcActionRuntime(
+                    selectedSaleAsset, selectedBuyer ?? npcRuntime.CurrentCity, selectedSaleItemAsset,
+                    payload.Amount, payload.ExpectedUnitPrice);
+                if (!selectedSaleAction.TryUseSelectedPayload(
+                        payload, npcRuntime.SelectedDailyV1DefinitionGraph))
+                {
+                    candidate.Utility = 0f;
+                    continue;
+                }
+
+                providerActions.Add(candidate, selectedSaleAction);
+                continue;
+            }
 
             if (!npcRuntime.TryGetSelectedDailyV1ActionAsset(candidate.Action, out NpcActionData actionAsset))
             {
