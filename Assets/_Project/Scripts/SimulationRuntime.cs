@@ -9433,7 +9433,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     }
 
     private sealed class SelectedDailyV1ActorTurnExecutionBoundary
-        : IDailyV1ActorTurnExecutionBoundary
+        : IDailyV1ActorTurnExecutionBoundary, IDailyV1SelectedMerchantTradeStateBoundary
     {
         private readonly SimulationRuntime runtime;
         private readonly DailyV1SelectedRuntimeOwnerGraph graph;
@@ -9481,9 +9481,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
             if (runtime.merchantSystem == null) return;
+            runtime.merchantSystem.EnsureCanAdvanceSelectedTradeState();
+            void AdvanceSelectedTradeState()
+            {
+                if (!DailyV1SelectedMerchantTradeStateOperation.TryAdvance(
+                    graph, actor, runtime.simulationTime.AbsoluteDay, this))
+                    throw new InvalidOperationException(
+                        "The selected Daily-v1 Merchant owner graph could not advance its daily trade state.");
+            }
             if (runtime.runtimeAdmissionContext == null)
             {
-                runtime.merchantSystem.AdvanceNpcTradeState(exactRuntime);
+                AdvanceSelectedTradeState();
                 return;
             }
 
@@ -9493,7 +9501,72 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     "The P12 daily Merchant owner operation could not be admitted.");
 
             using (merchantOperationScope)
-                runtime.merchantSystem.AdvanceNpcTradeState(exactRuntime);
+                AdvanceSelectedTradeState();
+        }
+
+        public bool TryInstallPlanState(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ItemDefinition item,
+            string originCityRuntimeId,
+            string targetCityRuntimeId,
+            int plannedAmount,
+            int remainingAmount,
+            float purchasePricePerItem,
+            int waitDaysAtDestination,
+            int pendingTravelDays,
+            string originDecisionId)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            DailyV1NpcMerchantTradePlanOwner owner = actor.MerchantTradePlan;
+            if (owner.MatchesState(item, originCityRuntimeId, targetCityRuntimeId,
+                    plannedAmount, remainingAmount, purchasePricePerItem,
+                    waitDaysAtDestination, pendingTravelDays, originDecisionId))
+                return true;
+            if (!exactRuntime.MerchantTradePlan.CanAdmitSelectedPlanOwnerMutation()
+                || !owner.TryInstallState(item, originCityRuntimeId, targetCityRuntimeId,
+                    plannedAmount, remainingAmount, purchasePricePerItem,
+                    waitDaysAtDestination, pendingTravelDays, originDecisionId))
+                return false;
+            exactRuntime.MerchantTradePlan.PublishSelectedPlanOwnerMutation();
+            return true;
+        }
+
+        public bool TrySetTradeTravelPlan(
+            DailyV1NpcRuntimeOwners actor,
+            string targetCityRuntimeId,
+            float utility,
+            string originDecisionId)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            long priorRevision = actor.TravelPlan.Revision;
+            if (!graph.TryCommitMerchantTradeTravelPlan(actor, targetCityRuntimeId,
+                    utility, originDecisionId,
+                    exactRuntime.TravelPlan.CanAdmitSelectedTradeTravelPlanMutation,
+                    out _)) return false;
+            if (actor.TravelPlan.Revision != priorRevision)
+                exactRuntime.TravelPlan.PublishSelectedTradeTravelPlanMutation();
+            return true;
+        }
+
+        public void ClearTradeTravelPlan(DailyV1NpcRuntimeOwners actor)
+        {
+            RequireExactActor(actor).ClearTravelPlan();
+        }
+
+        public NpcDecisionRecord RecordTradeRedirect(
+            DailyV1NpcRuntimeOwners actor,
+            string targetLocationRuntimeId,
+            CommercialDecisionEvidence evidence)
+        {
+            RequireExactActor(actor);
+            return runtime.decisionRecorder?.Record(actor.RuntimeId,
+                NpcDecisionType.TradeRedirect, NpcDecisionOrigin.Autonomous,
+                null, null, targetLocationRuntimeId, evidence);
+        }
+
+        public void LogTrade(string message)
+        {
+            runtime.merchantSystem?.LogSelectedTradeState(message);
         }
 
         public void EvaluateAndExecuteAction(DailyV1NpcRuntimeOwners actor)

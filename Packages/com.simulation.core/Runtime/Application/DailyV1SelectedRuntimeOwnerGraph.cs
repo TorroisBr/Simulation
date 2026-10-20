@@ -353,9 +353,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
             || !SpatialNetwork.TryGetSingleDirectRoute(origin, destination,
                 out SpatialRouteRuntime route, out _)) return false;
 
-        float cost = Math.Max(1, route.TravelDays)
-            * (Definitions.EffectiveConfiguration?.Travel?.TravelCostPerDay ?? 1f);
-        if (float.IsNaN(cost) || float.IsInfinity(cost) || cost < 0f
+        if (!TryGetMerchantTradeTravelCost(route, out float cost)
             || !npc.TravelPlan.CanCommit(destination.RuntimeId, target.RuntimeId,
                 NpcTravelReason.Trade, utility, cost, originDecisionId)
             || (!npc.TravelPlan.Matches(destination.RuntimeId, target.RuntimeId,
@@ -364,6 +362,19 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
             || !npc.TravelPlan.TryCommit(destination.RuntimeId, target.RuntimeId,
                 NpcTravelReason.Trade, utility, cost, originDecisionId)) return false;
         expectedCost = cost;
+        return true;
+    }
+
+    internal bool TryGetMerchantTradeTravelCost(SpatialRouteRuntime route,
+        out float travelCost)
+    {
+        travelCost = -1f;
+        if (route == null) return false;
+        float candidate = Math.Max(1, route.TravelDays)
+            * (Definitions.EffectiveConfiguration?.Travel?.TravelCostPerDay ?? 1f);
+        if (float.IsNaN(candidate) || float.IsInfinity(candidate) || candidate < 0f)
+            return false;
+        travelCost = candidate;
         return true;
     }
 

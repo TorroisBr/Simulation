@@ -122,6 +122,13 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
         plan.IncrementWaitDayAtDestination();
     }
 
+    /// <summary>Publishes the existing selected Core merchant-stage log through
+    /// the same Unity logger used by the compatibility implementation.</summary>
+    internal void LogSelectedTradeState(string message)
+    {
+        logger.Log(SimulationLogCategory.Trade, message);
+    }
+
     /// <summary>Creates the frozen roster descriptor for the legacy plan-urgency pass.</summary>
     public bool TryCreatePlanUrgencyStep(
         DailyBoundaryOperation operation,
@@ -663,6 +670,11 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
         {
             throw new InvalidOperationException("A faulted SimulationRuntime cannot mutate merchant state.");
         }
+    }
+
+    internal void EnsureCanAdvanceSelectedTradeState()
+    {
+        ThrowIfFaulted();
     }
 
     private bool TryExecuteBuyGoods(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
