@@ -338,6 +338,15 @@ internal sealed class DailyV1JusticeRecordsOwner : IAuthoritativeMutationGuardBi
         return true;
     }
 
+    /// <summary>Commits removal of one exact sentence owner with its ordinary Justice revision callback.</summary>
+    internal bool TryRemoveSentence(DailyV1JusticeSentenceOwner sentence)
+    {
+        int index = IndexOfSentence(sentence);
+        if (index < 0 || !CanCommitMutation()) return false;
+        sentences.RemoveAt(index);
+        return NotifyMutationCommitted();
+    }
+
     internal int IndexOfSentence(DailyV1JusticeSentenceOwner row) => sentences.IndexOf(row);
     internal bool ContainsWantedRecord(DailyV1JusticeWantedRecordOwner row) => wantedRecords.Contains(row);
     internal bool ContainsSentence(DailyV1JusticeSentenceOwner row) => sentences.Contains(row);

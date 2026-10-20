@@ -386,6 +386,7 @@ internal interface IDailyV1SelectedNpcActionDecisionBoundary
     TravelPartyStore GetTravelPartyStore(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
     bool TryProjectTravelAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
     bool HasMerchantActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
+    bool HasEnabledCrimeActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
     bool TryProjectBuyAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
     bool TryProjectSellAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
     bool TryPrepareAutonomousProviderAction(
@@ -504,6 +505,22 @@ internal static class DailyV1SelectedNpcActionDecisionStage
             {
                 if (candidate.PreparedPayload == null
                     || !boundary.TryProjectSellAction(actor, candidate))
+                    candidate.Utility = 0f;
+                continue;
+            }
+
+            if (actionType == DailyV1NpcDefinitionRules.HideActionTypeValue
+                && boundary.HasEnabledCrimeActionProvider(actor, candidate.Action))
+            {
+                if (!DailyV1CrimeActionPlanning.TryPrepareSelectedHide(graph, actor, candidate))
+                    candidate.Utility = 0f;
+                continue;
+            }
+
+            if (actionType == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue
+                && boundary.HasEnabledCrimeActionProvider(actor, candidate.Action))
+            {
+                if (!DailyV1CrimeActionPlanning.TryPrepareSelectedEscapePrison(graph, actor, candidate))
                     candidate.Utility = 0f;
                 continue;
             }

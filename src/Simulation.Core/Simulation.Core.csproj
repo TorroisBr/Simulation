@@ -97,6 +97,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedSoloTravelExecution.cs" Link="City/DailyV1SelectedSoloTravelExecution.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedRuntimeOwnerGraph.cs" Link="Application/DailyV1SelectedRuntimeOwnerGraph.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedActionExecutionStage.cs" Link="Application/DailyV1SelectedActionExecutionStage.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedCrimeActionExecutionStage.cs" Link="Application/DailyV1SelectedCrimeActionExecutionStage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedStealActionExecutionStage.cs" Link="Application/DailyV1SelectedStealActionExecutionStage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedTravelDayStage.cs" Link="Application/DailyV1SelectedTravelDayStage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Travel/TravelPartyOwners.cs" Link="Travel/TravelPartyOwners.cs" />

@@ -186,6 +186,55 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
     }
 
+    [TestCase(NpcActionType.Hide, false)]
+    [TestCase(NpcActionType.EscapePrison, true)]
+    public void SelectedCrimeDispatchCompletesAndPreservesEscapeSummaryLog(
+        NpcActionType actionType,
+        bool expectsEscapeSummary)
+    {
+        List<string> output = new List<string>();
+        SimulationLogger selectedLogger = new SimulationLogger(
+            new SimulationLogSettings(),
+            Path.GetTempPath(),
+            (_, message) => output.Add(message));
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            null,
+            logger: selectedLogger);
+        NpcRuntime npc = new NpcRuntime(
+            "selected-crime-dispatch",
+            SimulationTestFactory.CreateNpc("selected-crime-dispatch"));
+        NpcActionData action = SimulationTestFactory.CreateAction(
+            "selected-crime-dispatch-action", actionType, NpcActionCategory.Crime);
+        DailyV1SelectedActionDispatchResult dispatch = new DailyV1SelectedActionDispatchResult(
+            DailyV1SelectedActionDispatchKind.Crime,
+            actionRollSucceeded: true,
+            succeeded: true,
+            crime: new DailyV1SelectedCrimeActionExecutionStage.Result(
+                actionRollSucceeded: true, succeeded: true));
+
+        MethodInfo complete = typeof(SimulationRuntime).GetMethod(
+            "CompleteSelectedActionDispatch", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(complete, Is.Not.Null);
+        NpcActionResult result = (NpcActionResult)complete.Invoke(runtime,
+            new object[] { npc, null, action, dispatch });
+
+        Assert.That(result.Success, Is.True);
+        if (expectsEscapeSummary)
+        {
+            Assert.That(output, Is.EqualTo(new[]
+            {
+                "selected-crime-dispatch display esta livre e nao possui mandado ativo."
+            }));
+        }
+        else
+        {
+            Assert.That(output, Is.Empty,
+                "Hide publishes its own transition output and must not receive the Escape summary.");
+        }
+    }
+
     [Test]
     public void DailyProfileScopesAdvancesAndRoutesOwnedClockThroughRuntime()
     {

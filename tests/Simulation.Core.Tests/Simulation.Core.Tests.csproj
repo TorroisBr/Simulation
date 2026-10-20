@@ -70,6 +70,7 @@
       <Compile Include="DailyV1GuardActionPlanningTests.cs" Link="Definitions/DailyV1GuardActionPlanningTests.cs" />
       <Compile Include="DailyV1CrimeActionPlanningTests.cs" Link="Definitions/DailyV1CrimeActionPlanningTests.cs" />
       <Compile Include="DailyV1SelectedStealActionExecutionTests.cs" Link="Application/DailyV1SelectedStealActionExecutionTests.cs" />
+      <Compile Include="DailyV1SelectedCrimeActionExecutionTests.cs" Link="Application/DailyV1SelectedCrimeActionExecutionTests.cs" />
       <Compile Include="DailyV1TravelActionPlanningTests.cs" Link="Definitions/DailyV1TravelActionPlanningTests.cs" />
       <Compile Include="DailyV1MerchantActionPlanningTests.cs" Link="Definitions/DailyV1MerchantActionPlanningTests.cs" />
       <Compile Include="DailyV1NpcStatusOwnerTests.cs" Link="Definitions/DailyV1NpcStatusOwnerTests.cs" />

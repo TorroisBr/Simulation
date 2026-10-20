@@ -109,6 +109,17 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
         if (boundary.TryGetProjectedAction(selected, out NpcActionRuntime selectedProviderAction))
             return selectedProviderAction;
 
+        if (selected.PreparedPayload != null
+            && npcRuntime.TryGetSelectedDailyV1ActionAsset(
+                selected.Action, out NpcActionData selectedPayloadAction))
+        {
+            NpcActionRuntime selectedPayloadProjection = new NpcActionRuntime(selectedPayloadAction);
+            return selectedPayloadProjection.TryUseSelectedPayload(
+                selected.PreparedPayload, npcRuntime.SelectedDailyV1DefinitionGraph)
+                ? selectedPayloadProjection
+                : null;
+        }
+
         return npcRuntime.TryGetSelectedDailyV1ActionAsset(selected.Action, out NpcActionData selectedAsset)
             ? new NpcActionRuntime(selectedAsset)
             : null;
@@ -186,6 +197,13 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             DailyV1ActionDefinition action) =>
             TryGetActionAsset(actor, action, out NpcActionData asset)
             && decisionSystem.GetProviderForAction(npcRuntime, asset) is MerchantSystem;
+
+        public bool HasEnabledCrimeActionProvider(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action) =>
+            TryGetActionAsset(actor, action, out NpcActionData asset)
+            && decisionSystem.GetProviderForAction(npcRuntime, asset) is CrimeSystem crimeSystem
+            && crimeSystem.AllowAutonomousAction(asset);
 
         public bool TryProjectBuyAction(
             DailyV1NpcRuntimeOwners actor,

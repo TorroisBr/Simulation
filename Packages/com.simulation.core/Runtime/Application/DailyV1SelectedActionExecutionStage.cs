@@ -1209,6 +1209,11 @@ internal interface IDailyV1SelectedActionDispatchBoundary
         DailyV1ActionDefinition action,
         out DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary boundary);
 
+    bool TryGetCrimeActionBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary);
+
     bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners actor);
     void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners actor);
     bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor);
@@ -1230,6 +1235,7 @@ internal enum DailyV1SelectedActionDispatchKind
     FleeCity,
     GuardArrest,
     Steal,
+    Crime,
     Normal
 }
 
@@ -1251,6 +1257,7 @@ internal sealed class DailyV1SelectedActionDispatchResult
     internal DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult FleeCity { get; }
     internal DailyV1SelectedActionExecutionStage.SelectedGuardArrestActionResult GuardArrest { get; }
     internal DailyV1SelectedStealActionExecutionStage.Result Steal { get; }
+    internal DailyV1SelectedCrimeActionExecutionStage.Result Crime { get; }
 
     internal DailyV1SelectedActionDispatchResult(
         DailyV1SelectedActionDispatchKind kind,
@@ -1266,6 +1273,7 @@ internal sealed class DailyV1SelectedActionDispatchResult
         DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult fleeCity = null,
         DailyV1SelectedActionExecutionStage.SelectedGuardArrestActionResult guardArrest = null,
         DailyV1SelectedStealActionExecutionStage.Result steal = null,
+        DailyV1SelectedCrimeActionExecutionStage.Result crime = null,
         string normalActionName = null,
         string normalActionLogText = null)
     {
@@ -1284,6 +1292,7 @@ internal sealed class DailyV1SelectedActionDispatchResult
         FleeCity = fleeCity;
         GuardArrest = guardArrest;
         Steal = steal;
+        Crime = crime;
     }
 }
 
@@ -1474,6 +1483,27 @@ internal static class DailyV1SelectedActionDispatchStage
                 actionRollSucceeded,
                 actionRollSucceeded && steal?.Succeeded == true,
                 steal: steal);
+            return true;
+        }
+
+        if (actionType == DailyV1NpcDefinitionRules.HideActionTypeValue
+            || actionType == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue)
+        {
+            if (payload.TargetNpcRuntimeId != null || payload.TargetItem != null
+                || payload.TargetCityRuntimeId != null || payload.Amount != 0
+                || !boundary.TryGetCrimeActionBoundary(actor, action,
+                    out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary crimeBoundary)
+                || crimeBoundary == null
+                || !DailyV1SelectedCrimeActionExecutionStage.TryExecuteSelectedActionSlot(
+                    graph, actor, action, randomSource, currentAbsoluteDay,
+                    crimeBoundary, out DailyV1SelectedCrimeActionExecutionStage.Result crime))
+                return false;
+
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.Crime,
+                crime.ActionRollSucceeded,
+                crime.Succeeded,
+                crime: crime);
             return true;
         }
 

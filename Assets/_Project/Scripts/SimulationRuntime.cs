@@ -633,16 +633,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 || !ReferenceEquals(exactTarget, actionRuntime.TargetNpc)
                 || !ReferenceEquals(exactTarget.SelectedRuntimeOwners, targetOwner)
                 || !ReferenceEquals(exactTarget.CurrentCity, exactActor.CurrentCity)
-                || !socialWorld.PersonStore.TryGetByMaterializedNpcRuntimeId(
-                    exactActor.RuntimeId, out PersonRuntime actorPerson)
-                || actorPerson == null || actorPerson.PersonId == null
-                || exactActor.PersonId == null
-                || !exactActor.PersonId.Equals(actorPerson.PersonId)
-                || !socialWorld.PersonStore.TryGetByMaterializedNpcRuntimeId(
-                    exactTarget.RuntimeId, out PersonRuntime targetPerson)
-                || targetPerson == null || targetPerson.PersonId == null
-                || exactTarget.PersonId == null
-                || !exactTarget.PersonId.Equals(targetPerson.PersonId)
                 || !TryGetExactCityProjection(graph,
                     actor.Travel?.CurrentCityRuntimeId,
                     exactActor.CurrentCity,
@@ -653,6 +643,41 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             boundary = new SelectedStealActionBoundaryAdapter(
                 this, runtime, exactActor, exactTarget, exactCity,
                 graph.JusticeRecordsOwner, socialWorld);
+            return true;
+        }
+
+        public bool TryGetCrimeActionBoundary(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action,
+            out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary)
+        {
+            boundary = null;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            if (!TryGetExactActor(actor, action, out NpcRuntime exactActor)
+                || !ReferenceEquals(exactActor, actorRuntime)
+                || graph == null || graph.JusticeRecordsOwner == null
+                || runtime.justiceSystem == null
+                || !ReferenceEquals(graph.JusticeRecordsOwner, runtime.justiceSystem.CoreOwner)
+                || runtime.crimeSystem == null
+                || !ReferenceEquals(runtime.crimeSystem.JusticeOwner, runtime.justiceSystem)
+                || (action.Values.actionType?.Value != DailyV1NpcDefinitionRules.HideActionTypeValue
+                    && action.Values.actionType?.Value != DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue)
+                || !ReferenceEquals(runtime.npcDecisionSystem?.GetProviderForAction(exactActor, actionAsset),
+                    runtime.crimeSystem))
+                return false;
+
+            DailyV1NpcActionPayloadOwner payload = actor.ActionSlot?.CurrentPayload;
+            if (payload == null || payload.TargetNpcRuntimeId != null
+                || payload.TargetCityRuntimeId != null || payload.TargetItem != null || payload.Amount != 0
+                || actionRuntime.TargetNpc != null || actionRuntime.TargetCity != null
+                || actionRuntime.TargetItem != null || actionRuntime.Amount != 0
+                || !actionRuntime.SuccessChanceMultiplier.Equals(payload.SuccessChanceMultiplier)
+                || !string.Equals(actionRuntime.OriginDecisionId, payload.OriginDecisionId,
+                    StringComparison.Ordinal))
+                return false;
+
+            boundary = new SelectedCrimeActionBoundaryAdapter(
+                this, runtime, exactActor, graph.JusticeRecordsOwner);
             return true;
         }
 
@@ -1111,6 +1136,152 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     && dispatchBoundary.TryFindExactNpcRuntime(target, out exactTarget)
                     && (ReferenceEquals(exactTarget, guardRuntime)
                         || ReferenceEquals(exactTarget, targetRuntime));
+            }
+        }
+
+        private sealed class SelectedCrimeActionBoundaryAdapter
+            : DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary
+        {
+            private readonly SelectedActionDispatchBoundaryAdapter dispatchBoundary;
+            private readonly SimulationRuntime runtime;
+            private readonly NpcRuntime actorRuntime;
+            public DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
+
+            internal SelectedCrimeActionBoundaryAdapter(
+                SelectedActionDispatchBoundaryAdapter dispatchBoundary,
+                SimulationRuntime runtime,
+                NpcRuntime actorRuntime,
+                DailyV1JusticeRecordsOwner justiceRecordsOwner)
+            {
+                this.dispatchBoundary = dispatchBoundary
+                    ?? throw new ArgumentNullException(nameof(dispatchBoundary));
+                this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+                this.actorRuntime = actorRuntime ?? throw new ArgumentNullException(nameof(actorRuntime));
+                JusticeRecordsOwner = justiceRecordsOwner
+                    ?? throw new ArgumentNullException(nameof(justiceRecordsOwner));
+            }
+
+            public bool ExecuteWithinOperation(Func<bool> operation)
+            {
+                if (operation == null) return false;
+                if (runtime.runtimeAdmissionContext == null) return operation();
+                if (!runtime.TryBeginP12CrimeJusticeActionScope(
+                        new[] { actorRuntime }, includeJustice: true,
+                        out P12CrimeJusticeMutationScope scope))
+                    throw new InvalidOperationException(
+                        "P12 Crime/Justice selected Hide or EscapePrison could not be admitted.");
+                using (scope) return operation();
+            }
+
+            public bool ApplyHideDuration(DailyV1NpcRuntimeOwners actor, int followingFullDays)
+            {
+                if (!TryGetExactActor(actor, out NpcRuntime exactActor)
+                    || followingFullDays < 1)
+                    return false;
+                exactActor.HideForDays(followingFullDays);
+                return exactActor.HiddenDaysRemaining == actor.HiddenState.RemainingDays;
+            }
+
+            public bool ClearHidden(DailyV1NpcRuntimeOwners actor)
+            {
+                if (!TryGetExactActor(actor, out NpcRuntime exactActor)) return false;
+                exactActor.ClearHidden();
+                return exactActor.HiddenDaysRemaining == 0
+                    && actor.HiddenState.RemainingDays == 0;
+            }
+
+            public bool ApplyStatusChange(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1StatusDefinition status,
+                bool add)
+            {
+                if (!TryGetExactActor(actor, out NpcRuntime exactActor)
+                    || !exactActor.TryGetSelectedDailyV1StatusAsset(status,
+                        out NpcStatusData exactStatus))
+                    return false;
+                if (add) exactActor.AddStatus(exactStatus);
+                else exactActor.RemoveStatus(exactStatus);
+                return true;
+            }
+
+            public bool TryRemoveSentence(DailyV1JusticeSentenceOwner sentence)
+            {
+                DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+                return graph != null
+                    && ReferenceEquals(graph.JusticeRecordsOwner, JusticeRecordsOwner)
+                    && runtime.justiceSystem != null
+                    && ReferenceEquals(runtime.justiceSystem.CoreOwner, JusticeRecordsOwner)
+                    && sentence != null
+                    && string.Equals(sentence.TargetRuntimeId, actorRuntime.RuntimeId,
+                        StringComparison.Ordinal)
+                    && JusticeRecordsOwner.ContainsSentence(sentence)
+                    && runtime.justiceSystem.TryRemoveSelectedSentence(sentence);
+            }
+
+            public void PublishHidden(DailyV1NpcRuntimeOwners actor)
+            {
+                if (!TryGetExactActor(actor, out NpcRuntime exactActor))
+                    throw new InvalidOperationException("Selected Hide lost its exact NPC projection.");
+                runtime.logger?.Log(SimulationLogCategory.Crime,
+                    $"{exactActor.NpcName} esta escondido.");
+            }
+
+            public void PublishFailedEscape(DailyV1NpcRuntimeOwners actor, int sentencePenalty)
+            {
+                if (!TryGetExactActor(actor, out NpcRuntime exactActor))
+                    throw new InvalidOperationException("Failed EscapePrison lost its exact NPC projection.");
+                runtime.logger?.Log(SimulationLogCategory.Crime,
+                    $"{exactActor.NpcName} tentou fugir da prisao e falhou. Pena aumentou em {sentencePenalty} dias. Vigilancia aumentou.");
+            }
+
+            public void PublishEscaped(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1CityRuntimeOwners eventCity,
+                bool hadActiveSentence,
+                float bountyAfterPenalty,
+                string originDecisionId)
+            {
+                DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+                if (!TryGetExactActor(actor, out NpcRuntime exactActor)
+                    || !string.Equals(originDecisionId,
+                        actor.ActionSlot?.CurrentPayload?.OriginDecisionId, StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        "Selected EscapePrison returned through a mismatched Unity projection.");
+                CityRuntime exactCity = ResolveCityProjection(eventCity);
+                if (eventCity == null
+                    ? (actor.Travel?.CurrentCityRuntimeId != null || exactActor.CurrentCity != null)
+                    : !dispatchBoundary.TryGetExactCityProjection(
+                        graph, eventCity.RuntimeId, exactCity, out _, out _))
+                    throw new InvalidOperationException(
+                        "Selected EscapePrison lost its exact event City projection.");
+                runtime.justiceSystem.PublishSelectedEscape(
+                    exactActor, exactCity, hadActiveSentence, bountyAfterPenalty, originDecisionId);
+            }
+
+            private CityRuntime ResolveCityProjection(DailyV1CityRuntimeOwners cityOwner)
+            {
+                if (cityOwner == null || runtime.cities == null) return null;
+                CityRuntime match = null;
+                foreach (CityRuntime candidate in runtime.cities)
+                    if (ReferenceEquals(candidate?.SelectedRuntimeOwners, cityOwner))
+                    {
+                        if (match != null) return null;
+                        match = candidate;
+                    }
+                return match;
+            }
+
+            private bool TryGetExactActor(
+                DailyV1NpcRuntimeOwners actor,
+                out NpcRuntime exactActor)
+            {
+                exactActor = null;
+                DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+                return ReferenceEquals(graph?.JusticeRecordsOwner, JusticeRecordsOwner)
+                    && graph.ContainsExactNpcOwner(actor)
+                    && ReferenceEquals(actor, actorRuntime.SelectedRuntimeOwners)
+                    && dispatchBoundary.TryFindExactNpcRuntime(actor, out exactActor)
+                    && ReferenceEquals(exactActor, actorRuntime);
             }
         }
 
@@ -12515,6 +12686,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             && actionType == NpcActionType.Arrest;
         bool selectedCrimeStealAction = npcRuntime.UsesSelectedDailyV1Definitions
             && actionType == NpcActionType.Steal;
+        bool selectedCrimeAction = npcRuntime.UsesSelectedDailyV1Definitions
+            && (actionType == NpcActionType.Hide || actionType == NpcActionType.EscapePrison);
         INpcActionProvider actionProvider = actionType == NpcActionType.Normal
             ? null
             : selectedMerchantAction
@@ -12588,8 +12761,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 }
                 return NpcActionResult.Failed();
             }
+            if (selectedCrimeAction)
+            {
+                if (runtimeAdmissionContext != null)
+                {
+                    FaultRuntimeAdmission();
+                    throw new InvalidOperationException(
+                        "The selected P12 profile cannot execute Hide or EscapePrison without its exact Core Justice and NPC owner boundary.");
+                }
+                return NpcActionResult.Failed();
+            }
         }
-        else if (selectedMerchantAction || selectedGuardArrestAction || selectedCrimeStealAction)
+        else if (selectedMerchantAction || selectedGuardArrestAction
+            || selectedCrimeStealAction || selectedCrimeAction)
         {
             // Selected Daily-v1 actions without their exact Core projection
             // must not fall through to a second Unity-owned authority.
@@ -12601,6 +12785,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                         ? "The selected P12 profile cannot execute Guard Arrest without its exact Core action projection."
                         : selectedCrimeStealAction
                             ? "The selected P12 profile cannot execute Steal without its exact Core action projection."
+                            : selectedCrimeAction
+                                ? "The selected P12 profile cannot execute Hide or EscapePrison without its exact Core action projection."
                         : "The selected P12 profile cannot execute a Merchant action without its exact Core action projection.");
             }
             return NpcActionResult.Failed();
@@ -13116,6 +13302,25 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 return dispatch.Steal?.Succeeded == true
                     ? NpcActionResult.Succeeded()
                     : NpcActionResult.Failed();
+
+            case DailyV1SelectedActionDispatchKind.Crime:
+            {
+                if (dispatch.Crime?.Succeeded != true)
+                    return NpcActionResult.Failed();
+
+                if (npcRuntime != null
+                    && action != null
+                    && npcRuntime.GetConfiguredActionType(action) == NpcActionType.EscapePrison)
+                {
+                    string wantedText = justiceSystem?.HasAnyActiveWarrant(npcRuntime) == true
+                        ? "continua procurado"
+                        : "nao possui mandado ativo";
+                    logger?.Log(SimulationLogCategory.Crime,
+                        $"{npcRuntime.NpcName} esta livre e {wantedText}.");
+                }
+
+                return NpcActionResult.Succeeded();
+            }
 
             case DailyV1SelectedActionDispatchKind.FleeCity:
             {

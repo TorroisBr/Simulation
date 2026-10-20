@@ -369,19 +369,12 @@ public sealed class DailyV1SelectedOpenMarketActionExecutionTests
     }
 
     [Test]
-    public void SelectedActionDispatchLeavesUnsupportedProviderFamiliesUnhandledBeforeRandomness()
+    public void SelectedHideActionWithoutHostBoundaryRemainsUnhandledBeforeRandomness()
     {
         CreateActionRollFixture(1f, out DailyV1EffectiveDefinitions definitions,
             out DailyV1SelectedRuntimeOwnerGraph graph,
             out DailyV1NpcRuntimeOwners actor, out _, out _, out _);
-        DailyV1ActionDefinition unsupported = definitions.Actions.Values.First(value =>
-        {
-            int actionType = value.Values.actionType?.Value ?? int.MinValue;
-            return actionType != DailyV1NpcDefinitionRules.NormalActionTypeValue
-                && actionType != DailyV1NpcDefinitionRules.TravelActionTypeValue
-                && actionType != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
-                && actionType != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue;
-        });
+        DailyV1ActionDefinition unsupported = definitions.Actions["ESCONDER_SE"];
         Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(definitions, unsupported,
             null, null, null, 0, 0f, 1f, NpcTravelReason.None, 0f,
             null, null, null, null, out DailyV1NpcActionPayloadOwner payload), Is.True);
@@ -396,7 +389,7 @@ public sealed class DailyV1SelectedOpenMarketActionExecutionTests
 
         Assert.That(result, Is.Null);
         Assert.That(random.Calls, Is.Zero);
-        Assert.That(boundary.BoundaryResolutionCalls, Is.Zero);
+        Assert.That(boundary.BoundaryResolutionCalls, Is.EqualTo(1));
         Assert.That(boundary.CrossCityCompletionCalls, Is.Zero);
     }
 
@@ -679,6 +672,15 @@ public sealed class DailyV1SelectedOpenMarketActionExecutionTests
         public bool TryGetStealActionBoundary(DailyV1NpcRuntimeOwners actor,
             DailyV1ActionDefinition action,
             out DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary boundary)
+        {
+            BoundaryResolutionCalls++;
+            boundary = null;
+            return false;
+        }
+
+        public bool TryGetCrimeActionBoundary(DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action,
+            out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary)
         {
             BoundaryResolutionCalls++;
             boundary = null;

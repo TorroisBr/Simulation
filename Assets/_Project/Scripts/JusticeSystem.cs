@@ -1902,6 +1902,23 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             && ReferenceEquals(installed, projectedSentence);
     }
 
+    /// <summary>Removes an exact Core sentence owner and retires its Unity view as one selected-owner commit.</summary>
+    internal bool TryRemoveSelectedSentence(DailyV1JusticeSentenceOwner sentenceOwner)
+    {
+        if (sentenceOwner == null
+            || !justiceRecordsOwner.ContainsSentence(sentenceOwner)
+            || !sentenceViews.TryGetValue(sentenceOwner, out PrisonSentenceRuntime view)
+            || view == null || !ReferenceEquals(view.CoreOwner, sentenceOwner)
+            || !CanCommitP12CrimeJusticeMutation())
+            return false;
+
+        if (!justiceRecordsOwner.TryRemoveSentence(sentenceOwner))
+            return false;
+        sentenceViews.Remove(sentenceOwner);
+        return !justiceRecordsOwner.ContainsSentence(sentenceOwner)
+            && !sentenceViews.ContainsKey(sentenceOwner);
+    }
+
     /// <summary>Publishes the compatibility event and log after the selected
     /// Core arrest transition has committed its owner writes.</summary>
     internal void PublishSelectedArrest(
@@ -1928,6 +1945,26 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             originDecisionId));
         logger.Log(SimulationLogCategory.Justice,
             $"{guardRuntime.NpcName} prendeu {targetRuntime.NpcName} em {city.CityName}. Pena restante: {sentence.RemainingDays} dias.");
+    }
+
+    /// <summary>Publishes the event and legacy log after a Core-owned selected Escape transition.</summary>
+    internal void PublishSelectedEscape(
+        NpcRuntime targetRuntime,
+        CityRuntime eventCity,
+        bool hadActiveSentence,
+        float bountyAfterPenalty,
+        string originDecisionId)
+    {
+        if (targetRuntime == null
+            || (eventCity != null
+                && !ReferenceEquals(eventCity.SelectedRuntimeOwners?.Definitions,
+                    targetRuntime.SelectedDailyV1DefinitionGraph)))
+            throw new InvalidOperationException("Selected EscapePrison lost its exact output projections.");
+
+        RecordNpcEscaped(targetRuntime, eventCity, originDecisionId);
+        if (hadActiveSentence)
+            logger.Log(SimulationLogCategory.Justice,
+                $"{targetRuntime.NpcName} fugiu da prisao em {eventCity.CityName}. Recompensa atual: {bountyAfterPenalty:0.##}.");
     }
 
     public void AdvanceSentences(List<NpcRuntime> npcRuntimeList)

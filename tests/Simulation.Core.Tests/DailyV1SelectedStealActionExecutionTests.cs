@@ -212,6 +212,9 @@ public sealed class DailyV1SelectedStealActionExecutionTests
         public bool TryGetStealActionBoundary(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action,
             out DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary boundary)
         { boundary = stealBoundary; return boundary != null; }
+        public bool TryGetCrimeActionBoundary(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action,
+            out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary)
+        { boundary = null; return false; }
         public bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) => true;
         public void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) { }
         public bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor) => true;
