@@ -384,7 +384,31 @@ internal sealed class DailyV1SelectedTravelTransitionPlan
 
     internal bool TryCommit()
     {
-        if (committed || !IsCurrentAndAdmissible()) return false;
+        return TryCommitAfterPreparedPresenceAdds(null, 0L);
+    }
+
+    internal bool CanCommit() => !committed && IsCurrentAndAdmissible(null, 0L);
+
+    /// <summary>
+    /// Preflights and commits a plan after earlier members in the same
+    /// serialized TravelParty arrival have added their presence rows to the
+    /// shared destination owner. The only revision difference admitted here
+    /// is the exact count of those already-preflighted additions.
+    /// </summary>
+    /// <summary>Commits a party member after earlier prepared members have
+    /// added their rows to the same serialized destination presence owner.</summary>
+    internal bool TryCommitAfterPreparedPresenceAdds(
+        DailyV1CityNpcPresenceOwner sharedPresenceOwner,
+        long earlierAdds)
+    {
+        if (committed
+            || (earlierAdds > 0L
+                && (!HasPresenceAdditionFor(sharedPresenceOwner)
+                    || !IsCurrentAndAdmissible(sharedPresenceOwner, earlierAdds)))
+            || (earlierAdds == 0L && (sharedPresenceOwner != null || !IsCurrentAndAdmissible(null, 0L)))
+            || earlierAdds < 0L)
+            return false;
+
         if (IsNoOp)
         {
             committed = true;
@@ -433,7 +457,9 @@ internal sealed class DailyV1SelectedTravelTransitionPlan
         return TryCommit();
     }
 
-    private bool IsCurrentAndAdmissible()
+    private bool IsCurrentAndAdmissible(
+        DailyV1CityNpcPresenceOwner sharedPresenceOwner,
+        long earlierAdds)
     {
         if (!IsValidNpc(npc)
             || !string.Equals(travel.CurrentLocationRuntimeId, expectedCurrentLocationId, StringComparison.Ordinal)
@@ -453,13 +479,29 @@ internal sealed class DailyV1SelectedTravelTransitionPlan
         foreach (PresenceChange change in presenceChanges)
         {
             DailyV1CityNpcPresenceOwner owner = change.City?.NpcPresence;
+            long expectedRevision = change.ExpectedRevision;
+            if (ReferenceEquals(owner, sharedPresenceOwner))
+            {
+                if (!change.Add || earlierAdds <= 0L || expectedRevision > long.MaxValue - earlierAdds)
+                    return false;
+                expectedRevision += earlierAdds;
+            }
             if (owner == null
-                || owner.Revision != change.ExpectedRevision
+                || owner.Revision != expectedRevision
                 || owner.Contains(npc.RuntimeId) == change.Add
                 || !owner.CanApplyRevisionIncrements(1L))
                 return false;
         }
         return true;
+    }
+
+    private bool HasPresenceAdditionFor(DailyV1CityNpcPresenceOwner owner)
+    {
+        if (owner == null) return false;
+        foreach (PresenceChange change in presenceChanges)
+            if (ReferenceEquals(change.City?.NpcPresence, owner) && change.Add)
+                return true;
+        return false;
     }
 
     private bool HasTravelStateDifference() =>

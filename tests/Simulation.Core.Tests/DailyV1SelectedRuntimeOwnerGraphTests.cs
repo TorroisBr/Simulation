@@ -776,6 +776,118 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
     }
 
     [Test]
+    public void SelectedTravelPartyArrivalCommitsAllMembersAcrossSharedPresenceRevisionChanges()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(
+            allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        DailyV1NpcRuntimeOwners[] members = graph.Npcs
+            .GroupBy(npc => npc.Travel.CurrentCityRuntimeId, StringComparer.Ordinal)
+            .Where(group => group.Count() >= 2)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .First()
+            .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal)
+            .Take(2)
+            .ToArray();
+        DailyV1CityRuntimeOwners origin = graph.Cities.Single(city =>
+            string.Equals(city.RuntimeId, members[0].Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        DailyV1CityRuntimeOwners destination = graph.Cities.Single(city => !ReferenceEquals(city, origin));
+        const string partyId = "party-shared-presence-arrival-1";
+        const string decisionId = "party-shared-presence-arrival-decision";
+        const string routeId = "party-shared-presence-arrival-route";
+
+        foreach (DailyV1NpcRuntimeOwners member in members)
+        {
+            Assert.That(DailyV1SelectedTravelTransitionPlan.TryStartTravel(
+                member,
+                origin,
+                origin.LocationRuntimeId,
+                destination.LocationRuntimeId,
+                destination,
+                requestedTravelDays: 1,
+                originDecisionId: decisionId,
+                routeId: routeId,
+                out DailyV1SelectedTravelTransitionPlan startPlan), Is.True);
+            Assert.That(graph.TryCommitTravelTransition(member, startPlan, null), Is.True);
+        }
+
+        TravelPartyRuntime party = new TravelPartyRuntime(
+            partyId,
+            origin.LocationRuntimeId,
+            destination.LocationRuntimeId,
+            routeId,
+            members.Select(member => member.RuntimeId).ToArray(),
+            Array.Empty<string>(),
+            1,
+            decisionId,
+            members.Select(member => new TravelPartyMemberCost(member.RuntimeId, 1f)).ToArray());
+        TravelPartyStore partyStore = new TravelPartyStore();
+        Assert.That(partyStore.Add(party), Is.True);
+        foreach (DailyV1NpcRuntimeOwners member in members)
+        {
+            Assert.That(DailyV1SelectedTravelTransitionPlan.TrySetActiveTravelParty(
+                member, partyId, out DailyV1SelectedTravelTransitionPlan setPartyPlan), Is.True);
+            Assert.That(graph.TryCommitTravelTransition(member, setPartyPlan, null), Is.True);
+        }
+
+        Assert.That(graph.TryAdvanceTravelParties(
+            partyStore,
+            (_, _, _) => true,
+            (_, _, _) => { },
+            _ =>
+            {
+                Assert.Fail("The start-day marker must be cleared before travel advances.");
+                return false;
+            },
+            out IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> startDayResults), Is.True);
+        Assert.That(startDayResults, Is.Empty);
+        Assert.That(members.Select(member => member.Travel.TravelDaysRemaining), Is.All.EqualTo(1));
+        Assert.That(members.Select(member => member.Travel.TravelStartedToday), Is.All.False);
+
+        long destinationPresenceRevision = destination.NpcPresence.Revision;
+        bool eventObservedBeforePartyCompletion = false;
+        Assert.That(graph.TryAdvanceTravelParties(
+            partyStore,
+            (_, _, _) => true,
+            (_, _, _) => { },
+            currentParty =>
+            {
+                Assert.That(currentParty, Is.SameAs(party));
+                Assert.That(partyStore.ActiveParties, Does.Contain(party));
+                Assert.That(members.Select(member => member.Travel.TravelDaysRemaining), Is.All.Zero);
+                Assert.That(members.Select(member => member.Travel.ActiveTravelPartyId),
+                    Is.All.EqualTo(partyId));
+                Assert.That(members.All(member => destination.NpcPresence.Contains(member.RuntimeId)), Is.True,
+                    "Every party member's destination presence must commit before the arrival event is published.");
+                eventObservedBeforePartyCompletion = true;
+                return true;
+            },
+            out IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> arrivals), Is.True);
+
+        Assert.That(eventObservedBeforePartyCompletion, Is.True);
+        Assert.That(arrivals, Has.Count.EqualTo(1));
+        Assert.That(arrivals[0].Party, Is.SameAs(party));
+        Assert.That(arrivals[0].Members, Is.EqualTo(members));
+        Assert.That(partyStore.ActiveParties, Is.Empty);
+        Assert.That(destination.NpcPresence.Revision, Is.EqualTo(destinationPresenceRevision + members.Length));
+        foreach (DailyV1NpcRuntimeOwners member in members)
+        {
+            Assert.That(member.Travel.CurrentCityRuntimeId, Is.EqualTo(destination.RuntimeId));
+            Assert.That(member.Travel.DestinationCityRuntimeId, Is.Null);
+            Assert.That(member.Travel.TravelDaysRemaining, Is.Zero);
+            Assert.That(member.Travel.ActiveTravelPartyId, Is.Null);
+            Assert.That(destination.NpcPresence.Contains(member.RuntimeId), Is.True);
+        }
+    }
+
+    [Test]
     public void SelectedTravelDayStageRunsPartyOperationBeforeSoloTravel()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

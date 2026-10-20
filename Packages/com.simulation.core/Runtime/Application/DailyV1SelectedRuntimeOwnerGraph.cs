@@ -620,6 +620,18 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         return plan.TryCommit(preCommitAdmission);
     }
 
+    private bool TryCommitTravelTransitionAfterPreparedPresenceAdds(
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1SelectedTravelTransitionPlan plan,
+        DailyV1CityNpcPresenceOwner sharedPresenceOwner,
+        long earlierAdds)
+    {
+        if (!ContainsExactNpcOwner(npc) || plan == null || !plan.IsPreparedFor(npc, this)) return false;
+        return earlierAdds == 0L
+            ? plan.TryCommit()
+            : plan.TryCommitAfterPreparedPresenceAdds(sharedPresenceOwner, earlierAdds);
+    }
+
     /// <summary>Resolves the admitted selected NPC's exact direct route and
     /// effective Daily-v1 travel cost without consulting Unity projections.</summary>
     internal bool TryPlanSelectedSoloTravel(
@@ -767,18 +779,37 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                     && !destinationCity.NpcPresence.CanApplyRevisionIncrements(destinationPresenceAdds)))
                     continue;
 
-                bool allMembersAdvanced = true;
+                foreach (DailyV1SelectedTravelTransitionPlan advancePlan in advancePlans)
+                {
+                    if (!ContainsExactNpcOwner(advancePlan.Npc)
+                        || !advancePlan.IsPreparedFor(advancePlan.Npc, this)
+                        || !advancePlan.CanCommit())
+                    {
+                        canAdvance = false;
+                        break;
+                    }
+                }
+                if (!canAdvance) continue;
+
+                DailyV1CityNpcPresenceOwner sharedDestinationPresence = destinationCity?.NpcPresence;
+                long committedPresenceAdds = 0L;
                 foreach (DailyV1SelectedTravelTransitionPlan advancePlan in advancePlans)
                 {
                     DailyV1NpcRuntimeOwners member = advancePlan.Npc;
-                    if (!TryCommitTravelTransition(member, advancePlan, null))
-                    {
-                        allMembersAdvanced = false;
-                        continue;
-                    }
+                    bool addsDestinationPresence = sharedDestinationPresence != null
+                        && advancePlan.TryGetPresenceChange(destinationCity, out bool adds)
+                        && adds;
+                    if (!TryCommitTravelTransitionAfterPreparedPresenceAdds(
+                            member,
+                            advancePlan,
+                            sharedDestinationPresence,
+                            addsDestinationPresence ? committedPresenceAdds : 0L))
+                        throw new InvalidOperationException(
+                            "A fully preflighted TravelParty member transition could not commit in its serialized batch.");
                     publishCommitted(member, advancePlan, willArrive);
+                    if (addsDestinationPresence) committedPresenceAdds++;
                 }
-                if (!allMembersAdvanced || !willArrive) continue;
+                if (!willArrive) continue;
 
                 foreach (DailyV1NpcRuntimeOwners member in members)
                     member.SpatialKnowledge.DiscoverLocation(party.DestinationLocationRuntimeId);
