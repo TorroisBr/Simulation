@@ -296,6 +296,52 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
         return CreateRuntimeAction(npcRuntime, action, ref ignoredUtility, false);
     }
 
+    /// <summary>Projects an already planned Core Local SellGoods payload into
+    /// the existing Unity action wrapper without replanning or copying its
+    /// authoritative payload.</summary>
+    internal bool TryProjectSelectedLocalSale(
+        NpcRuntime npcRuntime,
+        DailyV1NpcActionPayloadOwner payload,
+        out NpcActionRuntime actionRuntime)
+    {
+        actionRuntime = null;
+        if (mutationGuardBinding.CanMutate == false
+            || npcRuntime == null
+            || npcRuntime.IsAlive == false
+            || payload == null
+            || payload.TargetItem == null
+            || payload.Amount <= 0
+            || !string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
+            || npcRuntime.SelectedRuntimeOwners == null
+            || !ReferenceEquals(npcRuntime.SelectedRuntimeOwnerGraph?.Definitions,
+                npcRuntime.SelectedDailyV1DefinitionGraph)
+            || !ReferenceEquals(npcRuntime.SelectedRuntimeOwners.Definitions,
+                npcRuntime.SelectedDailyV1DefinitionGraph)
+            || payload.Action == null
+            || !npcRuntime.SelectedDailyV1DefinitionGraph.Actions.TryGetValue(
+                payload.Action.DefinitionId, out DailyV1ActionDefinition admittedAction)
+            || !ReferenceEquals(admittedAction, payload.Action)
+            || !npcRuntime.TryGetSelectedDailyV1ActionAsset(payload.Action,
+                out NpcActionData actionAsset)
+            || npcRuntime.GetConfiguredActionType(actionAsset) != NpcActionType.SellGoods
+            || npcRuntime.CurrentCity == null
+            || !string.Equals(payload.TargetCityRuntimeId,
+                npcRuntime.CurrentCity.RuntimeId, StringComparison.Ordinal)
+            || !npcRuntime.TryGetSelectedDailyV1ItemAsset(payload.TargetItem,
+                out ItemData itemAsset))
+            return false;
+
+        NpcActionRuntime projected = new NpcActionRuntime(
+            actionAsset, npcRuntime.CurrentCity, itemAsset,
+            payload.Amount, payload.ExpectedUnitPrice);
+        if (!projected.TryUseSelectedPayload(
+                payload, npcRuntime.SelectedDailyV1DefinitionGraph))
+            return false;
+
+        actionRuntime = projected;
+        return true;
+    }
+
     private Dictionary<NpcActionRuntime, float> CalculateActionUtilities(
         NpcRuntime npcRuntime,
         List<NpcActionData> validActions,

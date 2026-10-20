@@ -1082,3 +1082,131 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         return TryBindMutationGuard(guard);
     }
 }
+
+/// <summary>
+/// Host boundary for the Unity projections around a selected actor choice.
+/// Core retains choice eligibility, planning, dispatch lifecycle and terminal
+/// accounting; the host only clears/projects the existing action slot and
+/// forwards the selected action into its established operation path.
+/// </summary>
+internal interface IDailyV1ActorChoiceExecutionBoundary
+{
+    void ClearCurrentAction(DailyV1NpcRuntimeOwners actor);
+    bool IsActionEnabled(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
+    bool TryRecordAndInstallRequestedAction(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload,
+        out string decisionRecordId);
+    NpcActionResultType? ExecuteCurrentAction(DailyV1NpcRuntimeOwners actor);
+}
+
+/// <summary>
+/// Executes the one-shot, bounded Daily-v1 Local SellGoods choice during its
+/// roster turn. This is the same graph-owned plan and action payload used by
+/// autonomous execution; host code only supplies Unity action projection and
+/// the existing execution/P12 boundary.
+/// </summary>
+internal static class DailyV1ActorChoiceExecutionStage
+{
+    internal static bool TryProcessPending(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        PersonId personId,
+        ActorChoiceStore store,
+        long absoluteDay,
+        int actorTurnRosterOrdinal,
+        bool actorAtCurrentCityLocation,
+        bool merchantTradeEnabled,
+        bool decisionSystemAvailable,
+        IDailyV1ActorChoiceExecutionBoundary boundary)
+    {
+        if (graph == null || actor == null || personId == null || store == null || boundary == null)
+            throw new ArgumentNullException("Selected actor-choice execution requires its exact graph, actor, person, store and host boundary.");
+        if (!graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(graph.Definitions, actor.Definitions))
+            throw new InvalidOperationException("Actor choice referenced an NPC owner outside the selected runtime graph.");
+        if (!store.TryGetNextPendingForActor(personId, out ActorChoiceInput input))
+            return false;
+
+        // A captured choice replaces the actor's ordinary decision slot. Clear
+        // a prior action before reading current truth, including rejection paths.
+        boundary.ClearCurrentAction(actor);
+
+        if (!actorAtCurrentCityLocation)
+        {
+            Reject(store, input, absoluteDay, actorTurnRosterOrdinal, ActorChoiceFailure.ActionUnavailable);
+            return true;
+        }
+
+        if (!merchantTradeEnabled
+            || actor.MerchantTradePlan?.IsActive == true
+            || !decisionSystemAvailable)
+        {
+            Reject(store, input, absoluteDay, actorTurnRosterOrdinal, ActorChoiceFailure.ActionUnavailable);
+            return true;
+        }
+
+        if (!graph.Definitions.Actions.TryGetValue(input.ActionDefinitionId,
+                out DailyV1ActionDefinition requestedAction)
+            || requestedAction.Values.actionType?.Value != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            || !boundary.IsActionEnabled(actor, requestedAction)
+            || !DailyV1MerchantActionPlanning.TryPlanSelectedLocalSale(
+                graph, actor, requestedAction, absoluteDay, 0f,
+                out DailyV1MerchantLocalSalePlan plan)
+            || plan?.SelectedPayload == null
+            || plan.SelectedPayload.TargetItem == null
+            || plan.SelectedPayload.Amount <= 0)
+        {
+            Reject(store, input, absoluteDay, actorTurnRosterOrdinal, ActorChoiceFailure.ActionUnavailable);
+            return true;
+        }
+
+        if (!boundary.TryRecordAndInstallRequestedAction(
+                actor, plan.SelectedPayload, out string decisionRecordId))
+        {
+            Reject(store, input, absoluteDay, actorTurnRosterOrdinal, ActorChoiceFailure.ActionUnavailable);
+            return true;
+        }
+
+        if (!store.TryMarkDispatchStarted(input.InputId, absoluteDay,
+                actorTurnRosterOrdinal, decisionRecordId,
+                out ActorChoiceStoreFailureCode startFailure))
+            throw new InvalidOperationException(
+                "Actor choice could not cross its dispatch boundary: " + startFailure + ".");
+
+        try
+        {
+            NpcActionResultType? resultStatus = boundary.ExecuteCurrentAction(actor);
+            if (!store.TryRecordAttemptReturned(input.InputId, absoluteDay,
+                    actorTurnRosterOrdinal, resultStatus,
+                    out ActorChoiceStoreFailureCode returnFailure))
+                throw new InvalidOperationException(
+                    "Actor choice could not record its returned attempt: " + returnFailure + ".");
+        }
+        catch (Exception exception)
+        {
+            if (!store.TryRecordAttemptThrew(input.InputId, absoluteDay,
+                    actorTurnRosterOrdinal, out ActorChoiceStoreFailureCode throwFailure))
+                throw new InvalidOperationException(
+                    "Actor choice threw and its terminal attempt could not be recorded: "
+                    + throwFailure + ".", exception);
+
+            throw;
+        }
+
+        return true;
+    }
+
+    private static void Reject(
+        ActorChoiceStore store,
+        ActorChoiceInput input,
+        long absoluteDay,
+        int actorTurnRosterOrdinal,
+        ActorChoiceFailure reason)
+    {
+        if (!store.TryReject(input.InputId, absoluteDay, actorTurnRosterOrdinal,
+                reason, out ActorChoiceStoreFailureCode failure))
+            throw new InvalidOperationException(
+                "Actor choice could not record its required rejection: " + failure + ".");
+    }
+}

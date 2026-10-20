@@ -1,3 +1,4 @@
+using System.Linq;
 using NUnit.Framework;
 
 [TestFixture]
@@ -89,12 +90,132 @@ public sealed class DailyV1ActorChoiceStoreTests
         Assert.That(store.ValidateInvariants().IsValid, Is.True);
     }
 
-    private static ActorChoiceInput Capture(ActorChoiceStore store, string commandId, string personId)
+    [Test]
+    public void SelectedCoreTurnPlansInstallsAndClosesTheActorChoiceAgainstExactOwners()
     {
-        Assert.That(store.TryCapture(commandId, new PersonId(personId), "action.sell-goods",
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        DailyV1NpcRuntimeOwners actor = graph.Npcs.Single(owner => owner.Definition.DefinitionId == "JORGE");
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(owner =>
+            owner.RuntimeId == actor.Travel.CurrentCityRuntimeId);
+        DailyV1ItemDefinition iron = definitions.Items["FERRO"];
+        Assert.That(actor.Inventory.TryAddItem(iron, 5, 10f), Is.True);
+        float referencePrice = actor.Inventory.GetAverageUnitCost(iron);
+        Assert.That(actor.CommercialKnowledge.RecordObservation(new DailyV1CommercialMarketObservation(
+            city.LocationRuntimeId, iron, referencePrice + 3f, 12, 20L, 20L,
+            DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+
+        ActorChoiceStore store = new ActorChoiceStore(new PersonStore());
+        PersonId personId = new PersonId("person-jorge");
+        ActorChoiceInput input = Capture(store, "command-selected-sell", personId.Value,
+            "VENDER_MERCADORIA");
+        SelectedActorChoiceTestBoundary boundary = new SelectedActorChoiceTestBoundary(graph);
+
+        Assert.That(DailyV1ActorChoiceExecutionStage.TryProcessPending(
+            graph, actor, personId, store, 20L, 3, true, true, true, boundary), Is.True);
+
+        Assert.That(boundary.ClearCount, Is.EqualTo(1));
+        Assert.That(boundary.InstallCount, Is.EqualTo(1));
+        Assert.That(boundary.ExecuteCount, Is.EqualTo(1));
+        Assert.That(boundary.InstalledPayload, Is.Not.Null);
+        Assert.That(ReferenceEquals(actor.ActionSlot.CurrentPayload, boundary.InstalledPayload), Is.True);
+        Assert.That(store.TryGet(input.InputId, out ActorChoiceInput completed), Is.True);
+        Assert.That(completed.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
+        Assert.That(completed.Dispositions.Select(disposition => disposition.Kind),
+            Is.EqualTo(new[]
+            {
+                ActorChoiceDispositionKind.DispatchStarted,
+                ActorChoiceDispositionKind.AttemptReturned
+            }));
+        Assert.That(completed.Dispositions[0].DecisionRecordId, Is.EqualTo("decision-actor-choice"));
+        Assert.That(completed.Dispositions[1].AttemptOutcome, Is.EqualTo(ActorChoiceAttemptOutcome.Succeeded));
+        Assert.That(store.ValidateInvariants().IsValid, Is.True);
+    }
+
+    [Test]
+    public void SelectedCoreTurnClearsTheSlotBeforeRejectingUnavailableCurrentTruth()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        DailyV1NpcRuntimeOwners actor = graph.Npcs.Single(owner => owner.Definition.DefinitionId == "JORGE");
+        PersonId personId = new PersonId("person-jorge");
+        ActorChoiceStore store = new ActorChoiceStore(new PersonStore());
+        ActorChoiceInput input = Capture(store, "command-reject-sell", personId.Value,
+            "VENDER_MERCADORIA");
+        SelectedActorChoiceTestBoundary boundary = new SelectedActorChoiceTestBoundary(graph);
+
+        Assert.That(DailyV1ActorChoiceExecutionStage.TryProcessPending(
+            graph, actor, personId, store, 21L, 4, false, true, true, boundary), Is.True);
+
+        Assert.That(boundary.ClearCount, Is.EqualTo(1));
+        Assert.That(boundary.InstallCount, Is.Zero);
+        Assert.That(boundary.ExecuteCount, Is.Zero);
+        Assert.That(store.TryGet(input.InputId, out ActorChoiceInput rejected), Is.True);
+        Assert.That(rejected.Status, Is.EqualTo(ActorChoiceInputStatus.Rejected));
+        Assert.That(rejected.Dispositions.Single().Failure,
+            Is.EqualTo(ActorChoiceFailure.ActionUnavailable));
+    }
+
+    private static ActorChoiceInput Capture(
+        ActorChoiceStore store,
+        string commandId,
+        string personId,
+        string actionDefinitionId = "action.sell-goods")
+    {
+        Assert.That(store.TryCapture(commandId, new PersonId(personId), actionDefinitionId,
             WorldCommandOrigin.LocalPlayer, WorldCommandAuthorityMode.Request, 0L,
             out ActorChoiceInput input, out ActorChoiceStoreFailureCode failure),
             Is.True, failure.ToString());
         return input;
+    }
+
+    private sealed class SelectedActorChoiceTestBoundary : IDailyV1ActorChoiceExecutionBoundary
+    {
+        private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+
+        internal SelectedActorChoiceTestBoundary(DailyV1SelectedRuntimeOwnerGraph graph)
+        {
+            this.graph = graph;
+        }
+
+        internal int ClearCount { get; private set; }
+        internal int InstallCount { get; private set; }
+        internal int ExecuteCount { get; private set; }
+        internal DailyV1NpcActionPayloadOwner InstalledPayload { get; private set; }
+
+        public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor) => ClearCount++;
+
+        public bool IsActionEnabled(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action) =>
+            action?.Values.actionType?.Value == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue;
+
+        public bool TryRecordAndInstallRequestedAction(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload,
+            out string decisionRecordId)
+        {
+            InstallCount++;
+            InstalledPayload = payload;
+            decisionRecordId = "decision-actor-choice";
+            return graph.TryCommitCurrentActionSlot(actor, payload.Action, payload, null);
+        }
+
+        public NpcActionResultType? ExecuteCurrentAction(DailyV1NpcRuntimeOwners actor)
+        {
+            ExecuteCount++;
+            return NpcActionResultType.Success;
+        }
     }
 }

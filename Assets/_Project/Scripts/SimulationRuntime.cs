@@ -9554,10 +9554,92 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         }
     }
 
+    private sealed class SelectedActorChoiceExecutionBoundary : IDailyV1ActorChoiceExecutionBoundary
+    {
+        private readonly SimulationRuntime runtime;
+        private readonly NpcRuntime npcRuntime;
+
+        internal SelectedActorChoiceExecutionBoundary(SimulationRuntime runtime, NpcRuntime npcRuntime)
+        {
+            this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+            this.npcRuntime = npcRuntime ?? throw new ArgumentNullException(nameof(npcRuntime));
+        }
+
+        public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor)
+        {
+            RequireExactActor(actor).SetCurrentActionRuntime(null);
+        }
+
+        public bool IsActionEnabled(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            return action != null
+                && exactRuntime.TryGetSelectedDailyV1ActionAsset(action, out NpcActionData actionAsset)
+                && exactRuntime.GetConfiguredActionType(actionAsset) == NpcActionType.SellGoods
+                && runtime.IsActionEnabledForRuntime(exactRuntime, actionAsset);
+        }
+
+        public bool TryRecordAndInstallRequestedAction(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload,
+            out string decisionRecordId)
+        {
+            decisionRecordId = null;
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (runtime.npcDecisionSystem == null
+                || !runtime.npcDecisionSystem.TryProjectSelectedLocalSale(
+                    exactRuntime, payload, out NpcActionRuntime projectedAction))
+                return false;
+
+            NpcDecisionRecord decision = runtime.RecordAndInstallChosenAction(
+                exactRuntime, projectedAction, NpcDecisionOrigin.ActorChoice);
+            decisionRecordId = decision?.DecisionId;
+            return true;
+        }
+
+        public NpcActionResultType? ExecuteCurrentAction(DailyV1NpcRuntimeOwners actor)
+        {
+            NpcActionResult result = runtime.TryExecuteCurrentAction(RequireExactActor(actor));
+            return result?.ResultType;
+        }
+
+        private NpcRuntime RequireExactActor(DailyV1NpcRuntimeOwners actor)
+        {
+            if (actor == null
+                || !ReferenceEquals(npcRuntime.SelectedRuntimeOwners, actor)
+                || !runtime.SelectedRuntimeOwnerGraph.ContainsExactNpcOwner(actor))
+                throw new InvalidOperationException(
+                    "Selected actor-choice adapter did not receive the exact runtime owner instance.");
+            return npcRuntime;
+        }
+    }
+
     private bool TryProcessActorChoice(NpcRuntime npcRuntime, int actorTurnRosterOrdinal)
     {
-        if (npcRuntime?.PersonId == null
-            || !actorChoiceStore.TryGetNextPendingForActor(npcRuntime.PersonId, out ActorChoiceInput input))
+        if (npcRuntime?.PersonId == null)
+        {
+            return false;
+        }
+
+        if (npcRuntime.UsesSelectedDailyV1Definitions
+            && npcRuntime.SelectedRuntimeOwners != null
+            && SelectedRuntimeOwnerGraph != null)
+        {
+            DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
+            return DailyV1ActorChoiceExecutionStage.TryProcessPending(
+                graph,
+                npcRuntime.SelectedRuntimeOwners,
+                npcRuntime.PersonId,
+                actorChoiceStore,
+                CurrentDay,
+                actorTurnRosterOrdinal,
+                npcRuntime.CurrentCity != null && IsActorAtCurrentCityLocation(npcRuntime),
+                configuration.MerchantTrade.Enabled,
+                npcDecisionSystem != null,
+                new SelectedActorChoiceExecutionBoundary(this, npcRuntime));
+        }
+
+        if (!actorChoiceStore.TryGetNextPendingForActor(npcRuntime.PersonId, out ActorChoiceInput input))
         {
             return false;
         }
