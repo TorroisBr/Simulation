@@ -13,6 +13,11 @@ internal static class DailyV1NpcDefinitionRules
     internal const int BuyGoodsActionTypeValue = 1;
     internal const int SellGoodsActionTypeValue = 2;
     internal const int TravelActionTypeValue = 3;
+    internal const int ArrestActionTypeValue = 4;
+    internal const int StealActionTypeValue = 5;
+    internal const int HideActionTypeValue = 6;
+    internal const int FleeCityActionTypeValue = 7;
+    internal const int EscapePrisonActionTypeValue = 8;
 
     internal static bool HasConfiguredDefaultAction(
         DailyV1NpcDefinition npc,

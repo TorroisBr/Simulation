@@ -538,6 +538,31 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return true;
         }
 
+        public bool TryGetFleeCityActionBoundary(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action,
+            out DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary boundary)
+        {
+            boundary = null;
+            if (!TryGetExactActor(actor, action, out NpcRuntime exactActor)
+                || !ReferenceEquals(exactActor, actorRuntime)
+                || !(runtime.npcDecisionSystem?.GetProviderForAction(exactActor, actionAsset)
+                    is CrimeSystem)
+                || runtime.travelSystem == null
+                || !TryGetExactCityProjection(
+                    runtime.SelectedRuntimeOwnerGraph,
+                    actor.ActionSlot?.CurrentPayload?.TargetCityRuntimeId,
+                    actionRuntime.TargetCity,
+                    out CityRuntime exactTargetCity,
+                    out DailyV1CityRuntimeOwners targetCityOwner))
+                return false;
+
+            boundary = new SelectedFleeCityActionBoundaryAdapter(
+                this, runtime, exactActor, exactTargetCity, targetCityOwner,
+                runtime.travelSystem.SelectedTravelPartyStore);
+            return true;
+        }
+
         public bool TryGetMarketBoundaries(
             DailyV1NpcRuntimeOwners actor,
             out IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
@@ -766,6 +791,80 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 || !ReferenceEquals(projectedCity.Location, exactLocation))
                 return false;
             return true;
+        }
+
+        private sealed class SelectedFleeCityActionBoundaryAdapter
+            : DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary
+        {
+            private readonly SelectedActionDispatchBoundaryAdapter dispatchBoundary;
+            private readonly SimulationRuntime runtime;
+            private readonly NpcRuntime actorRuntime;
+            private readonly CityRuntime targetCityProjection;
+            private readonly DailyV1CityRuntimeOwners targetCityOwner;
+
+            public TravelPartyStore TravelPartyStore { get; }
+
+            internal SelectedFleeCityActionBoundaryAdapter(
+                SelectedActionDispatchBoundaryAdapter dispatchBoundary,
+                SimulationRuntime runtime,
+                NpcRuntime actorRuntime,
+                CityRuntime targetCityProjection,
+                DailyV1CityRuntimeOwners targetCityOwner,
+                TravelPartyStore travelPartyStore)
+            {
+                this.dispatchBoundary = dispatchBoundary
+                    ?? throw new ArgumentNullException(nameof(dispatchBoundary));
+                this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+                this.actorRuntime = actorRuntime ?? throw new ArgumentNullException(nameof(actorRuntime));
+                this.targetCityProjection = targetCityProjection
+                    ?? throw new ArgumentNullException(nameof(targetCityProjection));
+                this.targetCityOwner = targetCityOwner
+                    ?? throw new ArgumentNullException(nameof(targetCityOwner));
+                TravelPartyStore = travelPartyStore;
+            }
+
+            public bool ExecuteWithinOperation(Func<bool> operation)
+            {
+                if (operation == null) return false;
+                if (runtime.runtimeAdmissionContext == null) return operation();
+                if (!runtime.TryBeginP12CrimeJusticeActionScope(
+                        new[] { actorRuntime }, includeJustice: true,
+                        out P12CrimeJusticeMutationScope scope))
+                    throw new InvalidOperationException(
+                        "P12 Crime/Justice FleeCity action could not be admitted.");
+                using (scope) return operation();
+            }
+
+            public bool CommitTravelPlan(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1CityRuntimeOwners destination,
+                float travelCost,
+                string originDecisionId)
+            {
+                if (!ReferenceEquals(destination, targetCityOwner)
+                    || !dispatchBoundary.TryGetExactActor(
+                        actor, actor?.ActionSlot?.CurrentAction, out NpcRuntime exactActor)
+                    || !ReferenceEquals(exactActor, actorRuntime)
+                    || !dispatchBoundary.TryGetExactCityProjection(
+                        runtime.SelectedRuntimeOwnerGraph,
+                        destination.RuntimeId,
+                        targetCityProjection,
+                        out DailyV1CityRuntimeOwners exactCityOwner,
+                        out SpatialLocationRuntime exactLocation)
+                    || !ReferenceEquals(exactCityOwner, destination))
+                    return false;
+
+                NpcTravelPlanState next = new NpcTravelPlanState(
+                    exactLocation,
+                    targetCityProjection,
+                    NpcTravelReason.Flee,
+                    80f,
+                    travelCost,
+                    string.IsNullOrWhiteSpace(originDecisionId) ? null : originDecisionId);
+                return exactActor.TravelPlan.CanInstallOwnerState(next)
+                    && exactActor.TravelPlan.InstallOwnerState(next)
+                    && exactActor.TravelPlan.MatchesSelectedOwner();
+            }
         }
     }
 
@@ -12538,6 +12637,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
             case DailyV1SelectedActionDispatchKind.SoloTravel:
                 return NpcActionResult.Succeeded();
+
+            case DailyV1SelectedActionDispatchKind.FleeCity:
+            {
+                if (dispatch.FleeCity?.Succeeded != true || actionRuntime.TargetCity == null)
+                    return NpcActionResult.Failed();
+                logger?.Log(SimulationLogCategory.Crime,
+                    $"{npcRuntime.NpcName} decidiu fugir para {actionRuntime.TargetCity.CityName}. Custo de viagem: {dispatch.FleeCity.TravelCost:0.##}.");
+                return NpcActionResult.Succeeded();
+            }
 
             case DailyV1SelectedActionDispatchKind.PlannedNpcSale:
             {

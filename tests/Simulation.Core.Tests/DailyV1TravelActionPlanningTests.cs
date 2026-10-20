@@ -126,6 +126,81 @@ public sealed class DailyV1TravelActionPlanningTests
         Assert.That(candidate.PreparedPayload, Is.Null);
     }
 
+    [Test]
+    public void SelectedFleeCityRevalidatesCoreOwnersWithoutStartingTravelOrCharging()
+    {
+        (DailyV1SelectedRuntimeOwnerGraph graph, DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination, _) = CreateTravelCandidateFixture();
+        DailyV1ActionDefinition fleeAction = actor.Definitions.Actions.Values.Single(action =>
+            action.Values.actionType?.Value == DailyV1NpcDefinitionRules.FleeCityActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            actor.Definitions, fleeAction, null, destination.RuntimeId, null,
+            0, 0f, 1f, NpcTravelReason.None, 0f,
+            "decision/flee-city", null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, fleeAction, payload, null), Is.True);
+
+        string originCityId = actor.Travel.CurrentCityRuntimeId;
+        string originLocationId = actor.Travel.CurrentLocationRuntimeId;
+        float balanceBefore = actor.MoneyAccount.Balance;
+        long planRevisionBefore = actor.TravelPlan.Revision;
+        Assert.That(DailyV1SelectedActionExecutionStage.TryPrepareSelectedFleeCityPlan(
+            graph, actor, fleeAction, null,
+            out DailyV1SelectedActionExecutionStage.SelectedFleeCityPlan plan), Is.True);
+
+        Assert.That(plan.Destination, Is.SameAs(destination));
+        Assert.That(plan.Route.Origin.RuntimeId, Is.EqualTo(originLocationId));
+        Assert.That(plan.Route.Destination.RuntimeId, Is.EqualTo(destination.LocationRuntimeId));
+        Assert.That(plan.TravelCost, Is.EqualTo(Math.Max(1, plan.Route.TravelDays)
+            * (actor.Definitions.EffectiveConfiguration?.Travel?.TravelCostPerDay ?? 0f)));
+        Assert.That(actor.MoneyAccount.Balance, Is.EqualTo(balanceBefore));
+        Assert.That(actor.Travel.CurrentCityRuntimeId, Is.EqualTo(originCityId));
+        Assert.That(actor.Travel.CurrentLocationRuntimeId, Is.EqualTo(originLocationId));
+        Assert.That(actor.Travel.IsTraveling, Is.False);
+        Assert.That(actor.TravelPlan.Revision, Is.EqualTo(planRevisionBefore));
+    }
+
+    [Test]
+    public void SelectedFleeCityRejectsArrestedPartyManagedAndUnaffordableActors()
+    {
+        (DailyV1SelectedRuntimeOwnerGraph graph, DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination, _) = CreateTravelCandidateFixture();
+        DailyV1ActionDefinition fleeAction = actor.Definitions.Actions.Values.Single(action =>
+            action.Values.actionType?.Value == DailyV1NpcDefinitionRules.FleeCityActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            actor.Definitions, fleeAction, null, destination.RuntimeId, null,
+            0, 0f, 1f, NpcTravelReason.None, 0f,
+            "decision/flee-city", null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, fleeAction, payload, null), Is.True);
+
+        DailyV1EffectiveDefinitions definitions = actor.Definitions;
+        Assert.That(definitions.Statuses.TryGetValue(
+            definitions.Configuration.arrestedStatus,
+            out DailyV1StatusDefinition arrestedStatus), Is.True);
+        Assert.That(actor.Status.TryAdd(arrestedStatus), Is.True);
+        Assert.That(DailyV1SelectedActionExecutionStage.TryPrepareSelectedFleeCityPlan(
+            graph, actor, fleeAction, null, out _), Is.False);
+        Assert.That(actor.Status.TryRemove(arrestedStatus), Is.True);
+
+        Assert.That(actor.Travel.TryInstallState(
+            actor.Travel.CurrentLocationRuntimeId,
+            actor.Travel.CurrentCityRuntimeId,
+            null, null, 0, 0, null, false, null,
+            "party/active", actor.Travel.Revision + 1L), Is.True);
+        Assert.That(DailyV1SelectedActionExecutionStage.TryPrepareSelectedFleeCityPlan(
+            graph, actor, fleeAction, null, out _), Is.False);
+
+        Assert.That(actor.Travel.TryInstallState(
+            actor.Travel.CurrentLocationRuntimeId,
+            actor.Travel.CurrentCityRuntimeId,
+            null, null, 0, 0, null, false, null,
+            null, actor.Travel.Revision + 1L), Is.True);
+        Assert.That(actor.MoneyAccount.TryDebit(actor.MoneyAccount.Balance), Is.True);
+        Assert.That(DailyV1SelectedActionExecutionStage.TryPrepareSelectedFleeCityPlan(
+            graph, actor, fleeAction, null, out _), Is.False);
+    }
+
     private static (DailyV1SelectedRuntimeOwnerGraph Graph, DailyV1NpcRuntimeOwners Actor,
         DailyV1CityRuntimeOwners Destination, DailyV1ActionDefinition TravelAction)
         CreateTravelCandidateFixture()

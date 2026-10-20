@@ -43,6 +43,133 @@ internal static class DailyV1SelectedActionExecutionStage
         void ClearTravelPlan();
     }
 
+    internal interface ISelectedFleeCityActionBoundary
+    {
+        TravelPartyStore TravelPartyStore { get; }
+        bool ExecuteWithinOperation(Func<bool> operation);
+        bool CommitTravelPlan(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination,
+            float travelCost,
+            string originDecisionId);
+    }
+
+    internal sealed class SelectedFleeCityPlan
+    {
+        internal DailyV1CityRuntimeOwners Destination { get; }
+        internal SpatialRouteRuntime Route { get; }
+        internal float TravelCost { get; }
+
+        internal SelectedFleeCityPlan(
+            DailyV1CityRuntimeOwners destination,
+            SpatialRouteRuntime route,
+            float travelCost)
+        {
+            Destination = destination;
+            Route = route;
+            TravelCost = travelCost;
+        }
+    }
+
+    internal sealed class SelectedFleeCityActionResult
+    {
+        internal bool Succeeded { get; }
+        internal string DestinationCityRuntimeId { get; }
+        internal float TravelCost { get; }
+
+        internal SelectedFleeCityActionResult(
+            bool succeeded,
+            string destinationCityRuntimeId,
+            float travelCost)
+        {
+            Succeeded = succeeded;
+            DestinationCityRuntimeId = destinationCityRuntimeId;
+            TravelCost = travelCost;
+        }
+    }
+
+    /// <summary>Revalidates the exact selected FleeCity payload using Core
+    /// location, travel, status, identity, and account owners. The returned
+    /// plan is still pending travel; this operation does not charge or move the
+    /// actor.</summary>
+    internal static bool TryPrepareSelectedFleeCityPlan(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition expectedAction,
+        TravelPartyStore partyStore,
+        out SelectedFleeCityPlan plan)
+    {
+        plan = null;
+        DailyV1NpcActionSlotOwner slot = actor?.ActionSlot;
+        DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
+        if (graph == null || actor == null || expectedAction == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(graph.Definitions, actor.Definitions)
+            || !ReferenceEquals(slot?.CurrentAction, expectedAction)
+            || payload == null || !ReferenceEquals(payload.Action, expectedAction)
+            || expectedAction.Values.actionType?.Value != DailyV1NpcDefinitionRules.FleeCityActionTypeValue
+            || payload.TargetNpcRuntimeId != null || payload.TargetItem != null
+            || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                graph.Definitions, expectedAction, actor.Status?.Statuses)
+            || actor.Lifecycle?.LifeState != NpcLifeState.Alive
+            || actor.Travel == null || actor.Travel.IsTraveling
+            || string.IsNullOrWhiteSpace(actor.Travel.CurrentCityRuntimeId)
+            || string.IsNullOrWhiteSpace(actor.Travel.CurrentLocationRuntimeId)
+            || graph.IsManagedByTravelParty(actor, partyStore))
+            return false;
+
+        string arrestedStatusId = graph.Definitions.Configuration?.arrestedStatus;
+        if (string.IsNullOrWhiteSpace(arrestedStatusId)
+            || !graph.Definitions.Statuses.TryGetValue(
+                arrestedStatusId, out DailyV1StatusDefinition arrestedStatus)
+            || actor.Status == null || actor.Status.Contains(arrestedStatus))
+            return false;
+
+        DailyV1CityRuntimeOwners origin = FindExactCity(
+            graph, actor.Travel.CurrentCityRuntimeId);
+        DailyV1CityRuntimeOwners destination = FindExactCity(
+            graph, payload.TargetCityRuntimeId);
+        if (origin == null || destination == null
+            || ReferenceEquals(origin, destination)
+            || !string.Equals(origin.LocationRuntimeId,
+                actor.Travel.CurrentLocationRuntimeId, StringComparison.Ordinal)
+            || (origin.NpcPresence.Contains(actor.RuntimeId)
+                && !origin.NpcPresence.CanApplyRevisionIncrements(1L))
+            || !graph.TryPlanSelectedSoloTravel(actor,
+                actor.Travel.CurrentLocationRuntimeId,
+                destination.LocationRuntimeId,
+                destination.RuntimeId,
+                out SpatialRouteRuntime route,
+                out float travelCost)
+            || route == null || actor.MoneyAccount == null
+            || !actor.MoneyAccount.CanDebit(travelCost)
+            || actor.TravelPlan == null
+            || !actor.TravelPlan.CanCommit(
+                destination.LocationRuntimeId,
+                destination.RuntimeId,
+                NpcTravelReason.Flee,
+                80f,
+                travelCost,
+                payload.OriginDecisionId))
+            return false;
+
+        plan = new SelectedFleeCityPlan(destination, route, travelCost);
+        return true;
+    }
+
+    private static DailyV1CityRuntimeOwners FindExactCity(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string runtimeId)
+    {
+        if (graph == null || string.IsNullOrWhiteSpace(runtimeId)) return null;
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            if (city != null && graph.ContainsExactCityOwner(city)
+                && string.Equals(city.RuntimeId, runtimeId, StringComparison.Ordinal))
+                return city;
+        return null;
+    }
+
     internal sealed class SelectedSoloTravelActionResult
     {
         internal bool Succeeded { get; }
@@ -821,6 +948,11 @@ internal interface IDailyV1SelectedActionDispatchBoundary
         DailyV1NpcRuntimeOwners buyer,
         out IDailyV1SelectedNpcTradeBoundary boundary);
 
+    bool TryGetFleeCityActionBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        out DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary boundary);
+
     bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners actor);
     void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners actor);
     bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor);
@@ -839,6 +971,7 @@ internal enum DailyV1SelectedActionDispatchKind
     OpenMarket,
     CrossCityBuy,
     SoloTravel,
+    FleeCity,
     Normal
 }
 
@@ -857,6 +990,7 @@ internal sealed class DailyV1SelectedActionDispatchResult
     internal DailyV1SelectedActionExecutionStage.SelectedOpenMarketActionResult OpenMarket { get; }
     internal DailyV1SelectedActionExecutionStage.SelectedCrossCityBuyActionResult CrossCityBuy { get; }
     internal DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult SoloTravel { get; }
+    internal DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult FleeCity { get; }
 
     internal DailyV1SelectedActionDispatchResult(
         DailyV1SelectedActionDispatchKind kind,
@@ -869,6 +1003,7 @@ internal sealed class DailyV1SelectedActionDispatchResult
         DailyV1SelectedActionExecutionStage.SelectedOpenMarketActionResult openMarket = null,
         DailyV1SelectedActionExecutionStage.SelectedCrossCityBuyActionResult crossCityBuy = null,
         DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult soloTravel = null,
+        DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult fleeCity = null,
         string normalActionName = null,
         string normalActionLogText = null)
     {
@@ -884,6 +1019,7 @@ internal sealed class DailyV1SelectedActionDispatchResult
         OpenMarket = openMarket;
         CrossCityBuy = crossCityBuy;
         SoloTravel = soloTravel;
+        FleeCity = fleeCity;
     }
 }
 
@@ -948,6 +1084,52 @@ internal static class DailyV1SelectedActionDispatchStage
                 travel?.ActionRollSucceeded == true,
                 travel?.Succeeded == true,
                 soloTravel: travel);
+            return true;
+        }
+
+        if (actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue)
+        {
+            if (payload.TargetNpcRuntimeId != null || payload.TargetItem != null
+                || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+                || !boundary.TryGetFleeCityActionBoundary(actor, action,
+                    out DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary fleeBoundary)
+                || fleeBoundary == null)
+                return false;
+
+            if (!DailyV1SelectedActionExecutionStage.TryRollCurrentActionSlot(
+                    graph, actor, randomSource, currentAbsoluteDay, out bool actionRollSucceeded))
+                return false;
+            if (!actionRollSucceeded)
+            {
+                result = new DailyV1SelectedActionDispatchResult(
+                    DailyV1SelectedActionDispatchKind.FleeCity, false, false,
+                    fleeCity: new DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult(
+                        false, payload.TargetCityRuntimeId, 0f));
+                return true;
+            }
+
+            DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult fleeResult = null;
+            bool fleeSucceeded = fleeBoundary.ExecuteWithinOperation(() =>
+            {
+                if (!DailyV1SelectedActionExecutionStage.TryPrepareSelectedFleeCityPlan(
+                        graph, actor, action, fleeBoundary.TravelPartyStore,
+                        out DailyV1SelectedActionExecutionStage.SelectedFleeCityPlan plan)
+                    || plan == null
+                    || !fleeBoundary.CommitTravelPlan(actor, plan.Destination, plan.TravelCost,
+                        payload.OriginDecisionId))
+                    return false;
+
+                fleeResult = new DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult(
+                    true, plan.Destination.RuntimeId, plan.TravelCost);
+                return true;
+            });
+
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.FleeCity,
+                true,
+                fleeSucceeded,
+                fleeCity: fleeResult ?? new DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult(
+                    false, payload.TargetCityRuntimeId, 0f));
             return true;
         }
 
