@@ -138,7 +138,7 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
             || targetLocation == null
             || (targetCityProjection != null && targetCityProjection.Location != targetLocation)
             || !npcRuntime.CanStartTravelPresenceTransition(1L)
-            || IsManagedByTravelParty(npcRuntime))
+            || (!selectedOwners && IsManagedByTravelParty(npcRuntime)))
         {
             return false;
         }
@@ -160,6 +160,7 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
                 || !DailyV1SelectedActionExecutionStage.TryExecuteSoloTravelSlot(
                     selectedGraph, npcRuntime.SelectedRuntimeOwners,
                     targetCityProjection.SelectedRuntimeOwners.RuntimeId,
+                    travelPartyStore,
                     plan => npcRuntime.TryCommitPreparedSelectedTravelTransition(
                         plan, targetLocation, resolvedTargetCity),
                     out DailyV1SelectedActionExecutionStage.SoloTravelResult selectedTravel)

@@ -37,6 +37,39 @@ internal static class DailyV1DecisionRecordOperation
             action.CommercialDecisionEvidence, action.CommercialScoutingEvidence);
     }
 
+    /// <summary>Records the selected action before installing that same exact
+    /// payload into the graph-owned slot. A failed record append retains the
+    /// prior behavior of still attempting the action-slot install.</summary>
+    internal static bool TryRecordAndCommitSelectedActionSlot(
+        RuntimeIdAllocator idAllocator,
+        SimulationRecordSequence recordSequence,
+        NpcDecisionStore decisionStore,
+        long absoluteDay,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner action,
+        NpcDecisionType decisionType,
+        NpcDecisionOrigin origin,
+        Func<DailyV1NpcActionPayloadOwner, bool> prepareProjection,
+        Func<bool> slotAdmission,
+        out NpcDecisionRecord decision)
+    {
+        decision = null;
+        if (graph == null || actor == null || action == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(graph.Definitions, actor.Definitions)
+            || !graph.Definitions.Actions.TryGetValue(action.Action?.DefinitionId ?? string.Empty,
+                out DailyV1ActionDefinition admittedAction)
+            || !ReferenceEquals(admittedAction, action.Action))
+            return false;
+
+        decision = RecordSelectedAction(idAllocator, recordSequence, decisionStore,
+            absoluteDay, graph, actor, action, decisionType, origin);
+        if (decision != null) action.SetOriginDecisionId(decision.DecisionId);
+        if (prepareProjection != null && !prepareProjection(action)) return false;
+        return graph.TryCommitCurrentActionSlot(actor, action.Action, action, slotAdmission);
+    }
+
     internal static NpcDecisionRecord Record(
         RuntimeIdAllocator idAllocator,
         SimulationRecordSequence recordSequence,

@@ -1833,6 +1833,9 @@ public class NpcRuntime : ICapabilityConditionSource
         TryInstallCurrentActionRuntime(actionRuntime);
     }
 
+    internal bool TryInstallPrecommittedCurrentActionRuntime(NpcActionRuntime actionRuntime) =>
+        actionRuntime != null && TryInstallCurrentActionRuntime(actionRuntime);
+
     private bool TryInstallCurrentActionRuntime(NpcActionRuntime actionRuntime)
     {
         if (actionRuntime == currentActionRuntime
@@ -1841,26 +1844,38 @@ public class NpcRuntime : ICapabilityConditionSource
         DailyV1ActionDefinition selectedActionNode = null;
         DailyV1NpcActionPayloadOwner selectedActionPayload = null;
         if (selectedRuntimeOwners != null
-            && (!HasConsistentCurrentActionSlot
-                || selectedDefinitionBindings == null
+            && (selectedDefinitionBindings == null
                 || (actionRuntime != null
                     && !TryResolveSelectedDailyV1Action(
                         selectedDefinitionGraph, selectedDefinitionBindings,
                         actionRuntime.Action, out selectedActionNode))))
             return false;
+        if (selectedRuntimeOwners != null && actionRuntime != null
+            && !actionRuntime.TryCreateSelectedOwner(
+                selectedDefinitionGraph, selectedActionNode, out selectedActionPayload))
+            return false;
+
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph = selectedRuntimeOwners == null
+            ? null
+            : selectedRuntimeOwnerGraphProvider?.Invoke();
+        bool graphCommittedActionSlot = selectedGraph != null
+            && selectedGraph.ContainsExactNpcOwner(selectedRuntimeOwners);
+        bool actionSlotAlreadyCommitted = graphCommittedActionSlot
+            && actionRuntime != null
+            && ReferenceEquals(selectedRuntimeOwners.ActionSlot.CurrentAction, selectedActionNode)
+            && ReferenceEquals(selectedRuntimeOwners.ActionSlot.CurrentPayload, selectedActionPayload);
+        bool currentSlotProjectionConsistent = selectedRuntimeOwners == null
+            ? HasConsistentCurrentActionSlot
+            : HasConsistentCurrentActionSlot || actionSlotAlreadyCommitted;
         bool p12Bound = p12LifecycleMutationAdmission != null;
-        if ((p12Bound && !HasConsistentCurrentActionSlot)
+        if (!currentSlotProjectionConsistent
             || (actionRuntime != null
                 && (actionRuntime.Action == null
                     || (p12Bound
                         ? !actionRuntime.CanBindToP12Owner(this)
                         : actionRuntime.IsP12Bound)))
-            || (p12Bound && !CanAdvanceP12LifecycleRevisions(0, 0, 1)))
-            return false;
-
-        if (selectedRuntimeOwners != null && actionRuntime != null
-            && !actionRuntime.TryCreateSelectedOwner(
-                selectedDefinitionGraph, selectedActionNode, out selectedActionPayload))
+            || (p12Bound && !actionSlotAlreadyCommitted
+                && !CanAdvanceP12LifecycleRevisions(0, 0, 1)))
             return false;
 
         NpcActionRuntime previous = currentActionRuntime;
@@ -1873,19 +1888,15 @@ public class NpcRuntime : ICapabilityConditionSource
             actionRuntime?.UnbindSelectedOwner();
             return false;
         }
-        DailyV1SelectedRuntimeOwnerGraph selectedGraph = selectedRuntimeOwners == null
-            ? null
-            : selectedRuntimeOwnerGraphProvider?.Invoke();
-        bool graphCommittedActionSlot = selectedGraph != null
-            && selectedGraph.ContainsExactNpcOwner(selectedRuntimeOwners);
         bool actionSlotCommitted;
         if (graphCommittedActionSlot)
         {
-            actionSlotCommitted = selectedGraph.TryCommitCurrentActionSlot(
-                selectedRuntimeOwners,
-                selectedActionNode,
-                selectedActionPayload,
-                () => CanCommitP12LifecycleMutation(false, false, true, actionRuntime));
+            actionSlotCommitted = actionSlotAlreadyCommitted
+                || selectedGraph.TryCommitCurrentActionSlot(
+                    selectedRuntimeOwners,
+                    selectedActionNode,
+                    selectedActionPayload,
+                    () => CanCommitP12LifecycleMutation(false, false, true, actionRuntime));
         }
         else
         {

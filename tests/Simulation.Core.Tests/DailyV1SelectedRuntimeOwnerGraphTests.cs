@@ -112,7 +112,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(graph.TryCommitCurrentActionSlot(npc, travelAction, travelPayload, null), Is.True);
         float balanceBeforeTravel = npc.MoneyAccount.Balance;
         Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSoloTravelSlot(
-            graph, npc, destination.RuntimeId, _ => false,
+            graph, npc, destination.RuntimeId, null, _ => false,
             out DailyV1SelectedActionExecutionStage.SoloTravelResult rejectedTravel), Is.True);
         Assert.That(rejectedTravel.Succeeded, Is.False);
         Assert.That(rejectedTravel.Execution.Failure,
@@ -121,8 +121,52 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(npc.MoneyAccount.Balance, Is.EqualTo(balanceBeforeTravel).Within(0.001f));
         Assert.That(npc.Travel.IsTraveling, Is.False);
 
+        TravelPartyStore partyStore = new TravelPartyStore();
+        Assert.That(graph.IsManagedByTravelParty(npc, partyStore), Is.False,
+            "Neither owner nor store membership must leave solo travel eligible.");
+        TravelPartyRuntime party = new TravelPartyRuntime("party/travel-guard",
+            origin.LocationRuntimeId, destination.LocationRuntimeId, selectedRoute.RuntimeId,
+            new[] { npc.RuntimeId }, Array.Empty<string>(), selectedRoute.TravelDays,
+            "decision/party", new[] { new TravelPartyMemberCost(npc.RuntimeId, 0f) });
+        Assert.That(partyStore.Add(party), Is.True);
+        Assert.That(npc.Travel.ActiveTravelPartyId, Is.Null,
+            "This fixture exercises authoritative store membership without an owner ID projection.");
+        Assert.That(graph.IsManagedByTravelParty(npc, partyStore), Is.True,
+            "Store-only membership must fail closed.");
         Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSoloTravelSlot(
-            graph, npc, destination.RuntimeId, transition => transition.TryCommit(),
+            graph, npc, destination.RuntimeId, partyStore, transition => transition.TryCommit(),
+            out DailyV1SelectedActionExecutionStage.SoloTravelResult partyRejectedTravel), Is.False);
+        Assert.That(partyRejectedTravel, Is.Null);
+        Assert.That(npc.MoneyAccount.Balance, Is.EqualTo(balanceBeforeTravel).Within(0.001f));
+        Assert.That(npc.Travel.TryInstallState(
+            npc.Travel.CurrentLocationRuntimeId, npc.Travel.CurrentCityRuntimeId,
+            npc.Travel.DestinationLocationRuntimeId, npc.Travel.DestinationCityRuntimeId,
+            npc.Travel.TravelDaysRemaining, npc.Travel.TravelDaysTotal,
+            npc.Travel.TravelRouteRuntimeId, npc.Travel.TravelStartedToday,
+            npc.Travel.TravelOriginDecisionId, party.TravelPartyId,
+            npc.Travel.Revision), Is.True);
+        Assert.That(graph.IsManagedByTravelParty(npc, partyStore), Is.True,
+            "Matching owner and store membership must be excluded from solo travel.");
+        Assert.That(partyStore.Complete(party.TravelPartyId), Is.True);
+        TravelPartyRuntime mismatchedParty = new TravelPartyRuntime("party/travel-guard-mismatch",
+            origin.LocationRuntimeId, destination.LocationRuntimeId, selectedRoute.RuntimeId,
+            new[] { npc.RuntimeId }, Array.Empty<string>(), selectedRoute.TravelDays,
+            "decision/party-mismatch", new[] { new TravelPartyMemberCost(npc.RuntimeId, 0f) });
+        Assert.That(partyStore.Add(mismatchedParty), Is.True);
+        Assert.That(graph.IsManagedByTravelParty(npc, partyStore), Is.True,
+            "Different owner and store party IDs must fail closed.");
+        Assert.That(partyStore.Complete(mismatchedParty.TravelPartyId), Is.True);
+        Assert.That(graph.IsManagedByTravelParty(npc, partyStore), Is.True,
+            "Owner-only membership after store removal must fail closed.");
+        Assert.That(npc.Travel.TryInstallState(
+            npc.Travel.CurrentLocationRuntimeId, npc.Travel.CurrentCityRuntimeId,
+            npc.Travel.DestinationLocationRuntimeId, npc.Travel.DestinationCityRuntimeId,
+            npc.Travel.TravelDaysRemaining, npc.Travel.TravelDaysTotal,
+            npc.Travel.TravelRouteRuntimeId, npc.Travel.TravelStartedToday,
+            npc.Travel.TravelOriginDecisionId, null, npc.Travel.Revision), Is.True);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSoloTravelSlot(
+            graph, npc, destination.RuntimeId, null, transition => transition.TryCommit(),
             out DailyV1SelectedActionExecutionStage.SoloTravelResult stagedTravel), Is.True);
         Assert.That(stagedTravel.Succeeded, Is.True);
         Assert.That(stagedTravel.Route.RuntimeId, Is.EqualTo("route/merchant-test"));

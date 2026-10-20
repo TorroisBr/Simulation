@@ -407,6 +407,23 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         return false;
     }
 
+    /// <summary>Checks party exclusion against the same authoritative P8 store
+    /// used by the selected runtime, and fails closed if its membership does
+    /// not agree with the exact NPC owner's active-party identity.</summary>
+    internal bool IsManagedByTravelParty(
+        DailyV1NpcRuntimeOwners npc,
+        TravelPartyStore partyStore)
+    {
+        if (!ContainsExactNpcOwner(npc)) return true;
+        bool ownerHasParty = !string.IsNullOrWhiteSpace(npc.Travel?.ActiveTravelPartyId);
+        TravelPartyRuntime party = null;
+        bool storeHasParty = partyStore != null
+            && partyStore.TryGetPartyForNpc(npc.RuntimeId, out party);
+        if (ownerHasParty != storeHasParty) return true;
+        if (!ownerHasParty) return false;
+        return true;
+    }
+
     /// <summary>
     /// Creates the exact selected-owner graph for a roster that has admitted
     /// one additional NPC. The existing graph and all owner authorities stay

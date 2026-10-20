@@ -53,6 +53,7 @@ internal static class DailyV1SelectedActionExecutionStage
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
         string destinationCityRuntimeId,
+        TravelPartyStore partyStore,
         Func<DailyV1SelectedTravelTransitionPlan, bool> commitTransition,
         out SoloTravelResult result)
     {
@@ -70,7 +71,7 @@ internal static class DailyV1SelectedActionExecutionStage
             || !string.Equals(payload.TargetCityRuntimeId, destinationCityRuntimeId, StringComparison.Ordinal)
             || actor.Lifecycle?.LifeState != NpcLifeState.Alive
             || actor.Travel == null || actor.Travel.IsTraveling
-            || !string.IsNullOrWhiteSpace(actor.Travel.ActiveTravelPartyId)
+            || graph.IsManagedByTravelParty(actor, partyStore)
             || commitTransition == null)
             return false;
 

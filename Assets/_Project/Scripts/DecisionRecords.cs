@@ -18,6 +18,60 @@ public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
 
     internal SimulationRecordSequence RecordSequence => recordSequence;
 
+    internal bool TryRecordAndInstallSelectedAction(
+        NpcRuntime actor,
+        NpcActionRuntime actionRuntime,
+        NpcDecisionOrigin origin,
+        out NpcDecisionRecord decision,
+        out bool handled)
+    {
+        decision = null;
+        handled = false;
+        if (actor?.SelectedRuntimeOwners == null || actionRuntime == null
+            || actionRuntime.Action == null
+            || !actor.TryPrepareSelectedActionPayload(
+                actionRuntime, out DailyV1NpcActionPayloadOwner payload))
+            return false;
+
+        handled = true;
+        bool committed;
+        try
+        {
+            committed = DailyV1DecisionRecordOperation.TryRecordAndCommitSelectedActionSlot(
+                idAllocator, recordSequence, decisionStore, simulationTime.AbsoluteDay,
+                actor.SelectedRuntimeOwnerGraph, actor.SelectedRuntimeOwners, payload,
+                GetDecisionType(actionRuntime), origin,
+                candidate => actionRuntime.TryUseSelectedPayload(
+                    candidate, actor.SelectedDailyV1DefinitionGraph),
+                () => actor.CanCommitP12LifecycleMutation(
+                    false, false, true, actionRuntime), out decision);
+        }
+        catch (ArgumentException exception)
+        {
+            logger.LogError("Cannot create NPC decision record: " + exception.Message);
+            committed = actionRuntime.TryUseSelectedPayload(
+                    payload, actor.SelectedDailyV1DefinitionGraph)
+                && actor.SelectedRuntimeOwnerGraph.TryCommitCurrentActionSlot(
+                    actor.SelectedRuntimeOwners, payload.Action, payload,
+                    () => actor.CanCommitP12LifecycleMutation(false, false, true, actionRuntime));
+        }
+        catch (InvalidOperationException exception)
+        {
+            logger.LogError("Cannot allocate NPC decision record identity: " + exception.Message);
+            committed = actionRuntime.TryUseSelectedPayload(
+                    payload, actor.SelectedDailyV1DefinitionGraph)
+                && actor.SelectedRuntimeOwnerGraph.TryCommitCurrentActionSlot(
+                    actor.SelectedRuntimeOwners, payload.Action, payload,
+                    () => actor.CanCommitP12LifecycleMutation(false, false, true, actionRuntime));
+        }
+        if (!committed) return true;
+
+        if (!actor.TryInstallPrecommittedCurrentActionRuntime(actionRuntime))
+            throw new InvalidOperationException(
+                "A committed selected action slot could not publish its Unity action projection.");
+        return true;
+    }
+
     public NpcDecisionRecorder(
         RuntimeIdAllocator idAllocator,
         SimulationTime simulationTime,
@@ -229,7 +283,7 @@ public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
         }
     }
 
-    private static NpcDecisionType GetDecisionType(NpcActionRuntime actionRuntime)
+    internal static NpcDecisionType GetDecisionType(NpcActionRuntime actionRuntime)
     {
         switch (actionRuntime.Action.actionType)
         {

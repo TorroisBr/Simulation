@@ -9627,11 +9627,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return true;
         }
 
-        NpcDecisionRecord decision = decisionRecorder?.RecordChosenAction(
-            npcRuntime,
-            requestedAction,
-            NpcDecisionOrigin.ActorChoice);
-        npcRuntime.SetCurrentActionRuntime(requestedAction);
+        NpcDecisionRecord decision = RecordAndInstallChosenAction(
+            npcRuntime, requestedAction, NpcDecisionOrigin.ActorChoice);
 
         if (!actorChoiceStore.TryMarkDispatchStarted(
                 input.InputId,
@@ -11173,8 +11170,25 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 npcRuntime,
                 GetConfiguredActionsEnabledForRuntime(npcRuntime),
                 CurrentDay);
-        decisionRecorder?.RecordChosenAction(npcRuntime, chosenAction, NpcDecisionOrigin.Autonomous);
-        npcRuntime.SetCurrentActionRuntime(chosenAction);
+        RecordAndInstallChosenAction(npcRuntime, chosenAction, NpcDecisionOrigin.Autonomous);
+    }
+
+    private NpcDecisionRecord RecordAndInstallChosenAction(
+        NpcRuntime npcRuntime,
+        NpcActionRuntime actionRuntime,
+        NpcDecisionOrigin origin)
+    {
+        if (decisionRecorder != null
+            && decisionRecorder.TryRecordAndInstallSelectedAction(
+                npcRuntime, actionRuntime, origin,
+                out NpcDecisionRecord selectedDecision, out bool handled)
+            && handled)
+            return selectedDecision;
+
+        NpcDecisionRecord decision = decisionRecorder?.RecordChosenAction(
+            npcRuntime, actionRuntime, origin);
+        npcRuntime?.SetCurrentActionRuntime(actionRuntime);
+        return decision;
     }
 
     private NpcActionResult TryExecuteCurrentAction(NpcRuntime npcRuntime)
@@ -11251,8 +11265,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return;
         }
 
-        decisionRecorder?.RecordChosenAction(npcRuntime, requestedAction, NpcDecisionOrigin.ScheduledDirective);
-        npcRuntime.SetCurrentActionRuntime(requestedAction);
+        RecordAndInstallChosenAction(
+            npcRuntime, requestedAction, NpcDecisionOrigin.ScheduledDirective);
         NpcActionResult result = TryExecuteCurrentAction(npcRuntime);
 
         if (result != null && result.Success == true)

@@ -9,6 +9,7 @@ Status: **recovery checkpoint only**. This records a selected action execution i
 - The checkpoint adds a Core-owned, exact-slot-bound execution stage for selected open-market actions, planned NPC sales (including plan admission and revision-overflow preflight), and selected solo travel. Core resolves/validates selected payloads and owns transaction/travel effects; Unity adapters retain P12 admission/notification and event/log projection.
 - Focused Core tests cover selected owner graph integration, market actions, NPC transaction/order/compensation, planned buyer/sale completion, plan admission rejection and max-revision rejection, and solo travel route/charge/refund behavior.
 - Unity still owns the enclosing roster/directive/actor-choice ordering and the full Daily-v1 coordinator. This checkpoint does not close those boundaries.
+- This follow-up additionally moves selected travel-party admission to the exact Core owner graph/store predicate and adds Core-owned record-to-slot installation. DecisionId allocation, then RecordSequence allocation, then one record append remain ordered before slot commit. The exact selected payload receives its origin DecisionId before the Unity projection wrapper is bound; projection preparation occurs before the slot commit to prevent a durable slot with a stale wrapper. Ordinary actor choice, autonomous selection, and scheduled RequestAction use this path. P18-D resumable receipt behavior remains separate.
 - Protected ProjectSettings edits, pre-existing untracked metadata, `.codex-tmp`, and host `bin/obj` are excluded from the checkpoint.
 
 ## Validation
@@ -19,6 +20,11 @@ Status: **recovery checkpoint only**. This records a selected action execution i
 - `git diff --cached --check`: PASS for the staged CORE-F paths.
 - Scoped independent review of planned-sale preflight: PASS. In particular, the exact next-plan transition is checked for revision overflow before admission or sale effects; P12 admission rejection is mutation-free. This is a scoped code review result, not an exact-tip full-package review.
 - Unity EditMode/Smoke and full CoreValidation were not run for this checkpoint.
+- Follow-up affected Core suite:
+  `dotnet test tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj --no-restore --filter "FullyQualifiedName~DailyV1|FullyQualifiedName~EconomyTransactionTests" -v minimal`
+- Follow-up result: **188/188 passed** (SDK 9.0.315). This includes the decision record/slot ordering tests, owner graph and travel-party guard cases, selected action operations, planning, and transaction owner suites.
+- `git diff --check`: PASS. Scoped record-to-slot review: PASS, including exact OriginDecisionId synchronization and no duplicate slot mutation.
+- The additional follow-up is not Unity compile/runtime evidence, full-package review, or promotion evidence.
 
 ## Next boundary
 
