@@ -201,6 +201,75 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         wantedRecordViews[row] = view;
     }
 
+    /// <summary>
+    /// Binds the Unity compatibility view for a wanted row already committed
+    /// by Simulation.Core. This method never inserts or mutates Core owner
+    /// state; the exact row must already belong to this Justice authority.
+    /// </summary>
+    internal bool TryProjectSelectedCoreWantedRecord(
+        DailyV1JusticeWantedRecordOwner row,
+        NpcRuntime target,
+        CityRuntime city)
+    {
+        if (row == null || target == null || city == null
+            || !ReferenceEquals(justiceRecordsOwner,
+                target.SelectedRuntimeOwnerGraph?.JusticeRecordsOwner)
+            || !justiceRecordsOwner.ContainsWantedRecord(row)
+            || !string.Equals(row.TargetRuntimeId, target.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(row.CityRuntimeId, city.RuntimeId, StringComparison.Ordinal))
+            return false;
+
+        if (wantedRecordViews.TryGetValue(row, out WantedRecordRuntime existing))
+            return existing != null
+                && ReferenceEquals(existing.CoreOwner, row)
+                && ReferenceEquals(existing.Target, target)
+                && ReferenceEquals(existing.City, city);
+
+        if (!WantedRecordRuntime.TryCreateFromCoreOwner(target, city, row,
+                out WantedRecordRuntime view))
+            return false;
+        wantedRecordViews.Add(row, view);
+        return true;
+    }
+
+    /// <summary>
+    /// Prepares the Unity reference view for a new Core-owned wanted row before
+    /// its revision is published to P12. This keeps the census coherent at the
+    /// Core commit callback while the Core owner remains authoritative.
+    /// </summary>
+    internal bool TryPrepareSelectedCoreWantedRecordProjection(
+        DailyV1JusticeWantedRecordOwner row,
+        NpcRuntime target,
+        CityRuntime city)
+    {
+        if (row == null || target == null || city == null
+            || !ReferenceEquals(justiceRecordsOwner,
+                target.SelectedRuntimeOwnerGraph?.JusticeRecordsOwner)
+            || justiceRecordsOwner.ContainsWantedRecord(row)
+            || !string.Equals(row.TargetRuntimeId, target.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(row.CityRuntimeId, city.RuntimeId, StringComparison.Ordinal))
+            return false;
+
+        if (wantedRecordViews.TryGetValue(row, out WantedRecordRuntime existing))
+            return existing != null
+                && ReferenceEquals(existing.CoreOwner, row)
+                && ReferenceEquals(existing.Target, target)
+                && ReferenceEquals(existing.City, city);
+
+        if (!WantedRecordRuntime.TryCreateFromCoreOwner(target, city, row,
+                out WantedRecordRuntime view))
+            return false;
+        wantedRecordViews.Add(row, view);
+        return true;
+    }
+
+    internal void DiscardPreparedSelectedCoreWantedRecordProjection(
+        DailyV1JusticeWantedRecordOwner row)
+    {
+        if (row != null && !justiceRecordsOwner.ContainsWantedRecord(row))
+            wantedRecordViews.Remove(row);
+    }
+
     private void AddSentenceView(PrisonSentenceRuntime view)
     {
         DailyV1JusticeSentenceOwner row = view?.CoreOwner;
@@ -3073,6 +3142,21 @@ public class WantedRecordRuntime : IAuthoritativeMutationGuardBindable
             new DailyV1JusticeWantedRecordOwner(target.RuntimeId, city.RuntimeId,
                 bounty, sentenceDays, resolved));
         staged = candidate;
+        return true;
+    }
+
+    internal static bool TryCreateFromCoreOwner(
+        NpcRuntime target,
+        CityRuntime city,
+        DailyV1JusticeWantedRecordOwner coreOwner,
+        out WantedRecordRuntime view)
+    {
+        view = null;
+        if (target == null || city == null || coreOwner == null
+            || !string.Equals(target.RuntimeId, coreOwner.TargetRuntimeId, StringComparison.Ordinal)
+            || !string.Equals(city.RuntimeId, coreOwner.CityRuntimeId, StringComparison.Ordinal))
+            return false;
+        view = new WantedRecordRuntime(target, city, coreOwner);
         return true;
     }
 

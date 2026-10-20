@@ -676,6 +676,15 @@ public sealed class DailyV1SelectedOpenMarketActionExecutionTests
             return false;
         }
 
+        public bool TryGetStealActionBoundary(DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action,
+            out DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary boundary)
+        {
+            BoundaryResolutionCalls++;
+            boundary = null;
+            return false;
+        }
+
         public bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) => true;
         public void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) { }
         public bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor) => true;

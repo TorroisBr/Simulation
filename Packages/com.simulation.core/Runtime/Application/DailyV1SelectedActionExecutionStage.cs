@@ -1204,6 +1204,11 @@ internal interface IDailyV1SelectedActionDispatchBoundary
         DailyV1ActionDefinition action,
         out DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionBoundary boundary);
 
+    bool TryGetStealActionBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        out DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary boundary);
+
     bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners actor);
     void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners actor);
     bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor);
@@ -1224,6 +1229,7 @@ internal enum DailyV1SelectedActionDispatchKind
     SoloTravel,
     FleeCity,
     GuardArrest,
+    Steal,
     Normal
 }
 
@@ -1244,6 +1250,7 @@ internal sealed class DailyV1SelectedActionDispatchResult
     internal DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult SoloTravel { get; }
     internal DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult FleeCity { get; }
     internal DailyV1SelectedActionExecutionStage.SelectedGuardArrestActionResult GuardArrest { get; }
+    internal DailyV1SelectedStealActionExecutionStage.Result Steal { get; }
 
     internal DailyV1SelectedActionDispatchResult(
         DailyV1SelectedActionDispatchKind kind,
@@ -1258,6 +1265,7 @@ internal sealed class DailyV1SelectedActionDispatchResult
         DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult soloTravel = null,
         DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult fleeCity = null,
         DailyV1SelectedActionExecutionStage.SelectedGuardArrestActionResult guardArrest = null,
+        DailyV1SelectedStealActionExecutionStage.Result steal = null,
         string normalActionName = null,
         string normalActionLogText = null)
     {
@@ -1275,6 +1283,7 @@ internal sealed class DailyV1SelectedActionDispatchResult
         SoloTravel = soloTravel;
         FleeCity = fleeCity;
         GuardArrest = guardArrest;
+        Steal = steal;
     }
 }
 
@@ -1442,6 +1451,29 @@ internal static class DailyV1SelectedActionDispatchStage
                 actionRollSucceeded,
                 actionRollSucceeded && arrest?.Succeeded == true,
                 guardArrest: arrest);
+            return true;
+        }
+
+        if (actionType == DailyV1NpcDefinitionRules.StealActionTypeValue)
+        {
+            if (payload.TargetNpcRuntimeId == null || payload.TargetItem != null
+                || payload.TargetCityRuntimeId != null
+                || !boundary.TryGetStealActionBoundary(actor, action,
+                    out DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary stealBoundary)
+                || stealBoundary == null)
+                return false;
+
+            if (!DailyV1SelectedStealActionExecutionStage.TryExecuteSelectedStealActionSlot(
+                    graph, actor, action, randomSource, currentAbsoluteDay, stealBoundary,
+                    out bool actionRollSucceeded,
+                    out DailyV1SelectedStealActionExecutionStage.Result steal))
+                return false;
+
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.Steal,
+                actionRollSucceeded,
+                actionRollSucceeded && steal?.Succeeded == true,
+                steal: steal);
             return true;
         }
 
