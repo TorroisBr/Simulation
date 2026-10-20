@@ -755,7 +755,8 @@ public sealed partial class SimulationRuntime
             if (!execution.SuccessEffectsApplied)
             {
                 ApplySuccessStatusChanges(execution.Actor,
-                    execution.Action, execution.Action.Action);
+                    execution.Action, execution.Action.Action,
+                    actionSucceeded: true);
                 execution.SuccessEffectsApplied = true;
             }
         }

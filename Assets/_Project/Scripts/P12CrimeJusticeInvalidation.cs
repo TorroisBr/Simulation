@@ -392,6 +392,88 @@ public sealed partial class SimulationRuntime
         return true;
     }
 
+    private bool CanReuseP12CrimeJusticeActionScopeForForcedEscape(
+        IReadOnlyList<NpcRuntime> participants)
+    {
+        if (runtimeAdmissionContext == null) return true;
+
+        P12CrimeJusticeMutationContext context = activeP12CrimeJusticeMutationContext;
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || participants == null
+            || context == null
+            || context.Mode != P12CrimeJusticeMutationMode.ActionImmediate
+            || !context.IsOwnedByCurrentThread()
+            || justiceSystem == null
+            || !ReferenceEquals(p12CrimeJusticeBoundJusticeSystem, justiceSystem))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        HashSet<NpcRuntime> expectedNpcs = new HashSet<NpcRuntime>();
+        HashSet<string> expectedSections = new HashSet<string>(StringComparer.Ordinal);
+        foreach (NpcRuntime npc in participants)
+        {
+            if (npc == null || !expectedNpcs.Add(npc)) continue;
+            string sectionId = GetP12CrimeJusticeNpcSectionId(npc);
+            if (sectionId == null || !expectedSections.Add(sectionId))
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+        }
+
+        if (expectedNpcs.Count != 1
+            || !expectedSections.Add(P12CrimeJusticeCensusProvider.JusticeRecordsSectionId)
+            || !expectedSections.Add(P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+        if (crimeSystem != null
+            && !expectedSections.Add(P12CrimeJusticeCensusProvider.CrimeP18ReceiptsSectionId))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        if (!context.AllowedNpcs.SetEquals(expectedNpcs)
+            || !context.AllowedSectionIds.SetEquals(expectedSections))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        return true;
+    }
+
+    private DailyV1SelectedActionStatusPlanResult ApplySelectedActionStatusOperation(
+        IReadOnlyList<NpcRuntime> participants,
+        bool reuseForcedEscapeScope,
+        Func<DailyV1SelectedActionStatusPlanResult> operation)
+    {
+        if (operation == null)
+            throw new ArgumentNullException(nameof(operation));
+        if (runtimeAdmissionContext == null)
+            return operation();
+
+        if (reuseForcedEscapeScope)
+        {
+            if (!CanReuseP12CrimeJusticeActionScopeForForcedEscape(participants))
+                throw new InvalidOperationException(
+                    "P12 forced Escape status effects lost their exact admitted operation scope.");
+            return operation();
+        }
+
+        if (!TryBeginP12CrimeJusticeActionScope(
+                participants, includeJustice: false,
+                out P12CrimeJusticeMutationScope scope))
+            throw new InvalidOperationException(
+                "P12 action status effects could not be admitted.");
+        using (scope) return operation();
+    }
+
     private void ExitP12CrimeJusticeActionScope(P12CrimeJusticeMutationContext context)
     {
         if (context == null) return;

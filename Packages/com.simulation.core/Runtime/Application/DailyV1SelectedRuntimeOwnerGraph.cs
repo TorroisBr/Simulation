@@ -1593,6 +1593,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
 
 internal enum DailyV1SelectedActionStatusPlanResult
 {
+    ActionDidNotSucceed,
     Applied,
     ActorRejected,
     TargetRejected

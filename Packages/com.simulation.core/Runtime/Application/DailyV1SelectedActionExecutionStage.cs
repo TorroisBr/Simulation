@@ -6,6 +6,51 @@ using System.Collections.Generic;
 /// existing owner operations; this stage never accepts a projected payload.</summary>
 internal static class DailyV1SelectedActionExecutionStage
 {
+    internal interface ISelectedActionStatusOperationBoundary
+    {
+        DailyV1SelectedActionStatusPlanResult ExecuteWithinOperation(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcRuntimeOwners target,
+            Func<DailyV1SelectedActionStatusPlanResult> operation);
+
+        bool ApplyActorStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd);
+
+        bool ApplyTargetStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd);
+    }
+
+    internal static bool TryApplyActionStatusPlanAfterDispatch(
+        bool actionSucceeded,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        bool targetExpected,
+        DailyV1NpcRuntimeOwners target,
+        ISelectedActionStatusOperationBoundary boundary,
+        out DailyV1SelectedActionStatusPlanResult result)
+    {
+        result = DailyV1SelectedActionStatusPlanResult.ActionDidNotSucceed;
+        if (!actionSucceeded) return true;
+
+        if (boundary == null
+            || graph == null
+            || !graph.TryCreateActionStatusPlan(
+                actor, action, targetExpected, target,
+                out DailyV1SelectedActionStatusPlan plan))
+            return false;
+
+        result = boundary.ExecuteWithinOperation(actor, target,
+            () => plan.Apply(
+                boundary.ApplyActorStatusChanges,
+                boundary.ApplyTargetStatusChanges));
+        return true;
+    }
+
     internal static bool TryApplyActionStatusPlan(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,

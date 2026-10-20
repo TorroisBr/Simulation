@@ -462,6 +462,91 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         public void ClearTravelPlan() => clearTravelPlan();
     }
 
+    /// <summary>Bridges the separate selected status operation to exact Unity
+    /// owner projections and the existing P12 mutation scope.</summary>
+    private sealed class SelectedActionStatusOperationBoundaryAdapter
+        : DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary
+    {
+        private readonly SimulationRuntime runtime;
+        private readonly NpcRuntime actorRuntime;
+        private readonly NpcRuntime targetRuntime;
+        private readonly bool reuseForcedEscapeScope;
+
+        internal SelectedActionStatusOperationBoundaryAdapter(
+            SimulationRuntime runtime,
+            NpcRuntime actorRuntime,
+            NpcRuntime targetRuntime,
+            bool reuseForcedEscapeScope)
+        {
+            this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+            this.actorRuntime = actorRuntime ?? throw new ArgumentNullException(nameof(actorRuntime));
+            this.targetRuntime = targetRuntime;
+            this.reuseForcedEscapeScope = reuseForcedEscapeScope;
+        }
+
+        public DailyV1SelectedActionStatusPlanResult ExecuteWithinOperation(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcRuntimeOwners target,
+            Func<DailyV1SelectedActionStatusPlanResult> operation)
+        {
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            if (operation == null || graph == null
+                || !graph.ContainsExactNpcOwner(actor)
+                || !ReferenceEquals(actorRuntime.SelectedRuntimeOwnerGraph, graph)
+                || !ReferenceEquals(actorRuntime.SelectedRuntimeOwners, actor)
+                || !IsExactRuntimeProjection(graph, actor, actorRuntime))
+                return DailyV1SelectedActionStatusPlanResult.ActorRejected;
+
+            if (targetRuntime == null
+                ? target != null
+                : graph.ContainsExactNpcOwner(target) == false
+                    || !ReferenceEquals(targetRuntime.SelectedRuntimeOwnerGraph, graph)
+                    || !ReferenceEquals(targetRuntime.SelectedRuntimeOwners, target)
+                    || !IsExactRuntimeProjection(graph, target, targetRuntime))
+                return DailyV1SelectedActionStatusPlanResult.TargetRejected;
+
+            IReadOnlyList<NpcRuntime> participants = targetRuntime == null
+                ? new[] { actorRuntime }
+                : new[] { actorRuntime, targetRuntime };
+            return runtime.ApplySelectedActionStatusOperation(
+                participants, reuseForcedEscapeScope, operation);
+        }
+
+        public bool ApplyActorStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
+            ReferenceEquals(owner, actorRuntime.SelectedRuntimeOwners)
+            && actorRuntime.ApplySelectedDailyV1StatusChanges(statusToRemove, statusToAdd);
+
+        public bool ApplyTargetStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
+            targetRuntime != null
+            && ReferenceEquals(owner, targetRuntime.SelectedRuntimeOwners)
+            && targetRuntime.ApplySelectedDailyV1StatusChanges(statusToRemove, statusToAdd);
+
+        private bool IsExactRuntimeProjection(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners owner,
+            NpcRuntime expectedRuntime)
+        {
+            if (graph == null || owner == null || expectedRuntime == null
+                || runtime.npcRuntimes == null || !graph.ContainsExactNpcOwner(owner))
+                return false;
+
+            int matches = 0;
+            foreach (NpcRuntime candidate in runtime.npcRuntimes)
+            {
+                if (!ReferenceEquals(candidate?.SelectedRuntimeOwners, owner)) continue;
+                if (!ReferenceEquals(candidate, expectedRuntime)) return false;
+                matches++;
+            }
+            return matches == 1;
+        }
+    }
+
     /// <summary>
     /// Resolves only the exact admitted Unity projections and existing P12
     /// adapters needed by Core's selected-action dispatcher.
@@ -12538,7 +12623,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             logger?.Log(SimulationLogCategory.NpcAction, actionResult.Message);
         }
 
-        if (actionResult != null && actionResult.Success == true)
+        if (npcRuntime.UsesSelectedDailyV1Definitions)
+        {
+            ApplySuccessStatusChanges(
+                npcRuntime, actionRuntime, action,
+                actionResult?.Success == true);
+        }
+        else if (actionResult != null && actionResult.Success == true)
         {
             IReadOnlyList<NpcRuntime> participants = actionRuntime?.TargetNpc == null
                 ? new[] { npcRuntime }
@@ -12549,7 +12640,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     out P12CrimeJusticeMutationScope statusScope))
                 throw new InvalidOperationException("P12 action status effects could not be admitted.");
             using (statusScope)
-                ApplySuccessStatusChanges(npcRuntime, actionRuntime, action);
+                ApplySuccessStatusChanges(npcRuntime, actionRuntime, action, actionSucceeded: true);
         }
 
         return actionResult;
@@ -12646,7 +12737,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         {
             escaped = justiceSystem.ApplyEscapeSuccess(npcRuntime, settings.escapeBountyPenalty);
             if (escaped)
-                ApplySuccessStatusChanges(npcRuntime, npcRuntime.CurrentActionRuntime, directive.Action);
+                ApplySuccessStatusChanges(
+                    npcRuntime, npcRuntime.CurrentActionRuntime, directive.Action,
+                    actionSucceeded: true,
+                    reuseForcedEscapeScope: true);
         }
 
         if (!escaped)
@@ -13561,7 +13655,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         return randomValue <= effectiveChance;
     }
 
-    private void ApplySuccessStatusChanges(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)
+    private void ApplySuccessStatusChanges(
+        NpcRuntime npcRuntime,
+        NpcActionRuntime actionRuntime,
+        NpcActionData action,
+        bool actionSucceeded,
+        bool reuseForcedEscapeScope = false)
     {
         if (npcRuntime == null)
             throw new InvalidOperationException("The admitted action status effects could not be resolved from the selected definition graph.");
@@ -13569,24 +13668,25 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         if (npcRuntime.UsesSelectedDailyV1Definitions)
         {
             NpcRuntime targetRuntime = actionRuntime != null ? actionRuntime.TargetNpc : null;
-            if (!npcRuntime.TryGetSelectedDailyV1ActionNode(
-                    action, out DailyV1ActionDefinition selectedAction)
-                || !DailyV1SelectedActionExecutionStage.TryApplyActionStatusPlan(
+            DailyV1ActionDefinition selectedAction = null;
+            if (actionSucceeded
+                && !npcRuntime.TryGetSelectedDailyV1ActionNode(action, out selectedAction))
+                throw new InvalidOperationException("The admitted action status effects could not be resolved from the selected definition graph.");
+
+            if (!DailyV1SelectedActionExecutionStage.TryApplyActionStatusPlanAfterDispatch(
+                    actionSucceeded,
                     SelectedRuntimeOwnerGraph,
                     npcRuntime.SelectedRuntimeOwners,
                     selectedAction,
                     targetRuntime != null,
                     targetRuntime != null ? targetRuntime.SelectedRuntimeOwners : null,
-                    (owner, statusToRemove, statusToAdd) =>
-                        ReferenceEquals(owner, npcRuntime.SelectedRuntimeOwners)
-                        && npcRuntime.ApplySelectedDailyV1StatusChanges(statusToRemove, statusToAdd),
-                    (owner, statusToRemove, statusToAdd) =>
-                        targetRuntime != null
-                        && ReferenceEquals(owner, targetRuntime.SelectedRuntimeOwners)
-                        && targetRuntime.ApplySelectedDailyV1StatusChanges(statusToRemove, statusToAdd),
+                    new SelectedActionStatusOperationBoundaryAdapter(
+                        this, npcRuntime, targetRuntime, reuseForcedEscapeScope),
                     out DailyV1SelectedActionStatusPlanResult statusResult))
                 throw new InvalidOperationException("The admitted action status effects could not be resolved from the selected definition graph.");
 
+            if (statusResult == DailyV1SelectedActionStatusPlanResult.ActionDidNotSucceed)
+                return;
             if (statusResult == DailyV1SelectedActionStatusPlanResult.ActorRejected)
                 throw new InvalidOperationException("The admitted action status effects could not be resolved from the selected definition graph.");
             if (statusResult == DailyV1SelectedActionStatusPlanResult.TargetRejected)

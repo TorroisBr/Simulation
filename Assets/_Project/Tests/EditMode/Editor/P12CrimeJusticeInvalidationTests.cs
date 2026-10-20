@@ -322,6 +322,50 @@ public sealed class P12CrimeJusticeInvalidationTests
     }
 
     [Test]
+    public void P12ForcedEscapeStatusReusesOnlyItsExactActorAndJusticeScope()
+    {
+        CityRuntime city = CreateCity("p12-cj-reused-escape-city");
+        NpcRuntime actor = CreateNpc("p12-cj-reused-escape-actor");
+        NpcRuntime guard = CreateNpc("p12-cj-reused-escape-guard");
+        JusticeSystem justice = CreateJustice("p12-cj-reused-escape-justice");
+        justice.CreateOrIncreaseWarrant(actor, city, 12f, 4);
+        Assert.That(justice.Arrest(guard, actor, city), Is.True);
+        SimulationRuntime runtime = CreateP12Runtime(
+            new[] { city }, new[] { actor, guard }, justice,
+            new CrimeSystem(justice, null, null),
+            configuration: CreateP12Configuration(crimeEnabled: true));
+
+        MethodInfo begin = typeof(SimulationRuntime).GetMethod(
+            "TryBeginP12CrimeJusticeActionScope", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(begin, Is.Not.Null);
+        object[] beginArguments = { new[] { actor }, true, null };
+        Assert.That(begin.Invoke(runtime, beginArguments), Is.EqualTo(true));
+        IDisposable escapeScope = beginArguments[2] as IDisposable;
+        Assert.That(escapeScope, Is.Not.Null);
+
+        MethodInfo applyStatus = typeof(SimulationRuntime).GetMethod(
+            "ApplySelectedActionStatusOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(applyStatus, Is.Not.Null);
+        using (escapeScope)
+        {
+            Assert.That(justice.ApplyEscapeSuccess(actor, 0f), Is.True);
+            object statusResult = applyStatus.Invoke(runtime, new object[]
+            {
+                new[] { actor },
+                true,
+                new Func<DailyV1SelectedActionStatusPlanResult>(
+                    () => DailyV1SelectedActionStatusPlanResult.Applied)
+            });
+            Assert.That(statusResult,
+                Is.EqualTo(DailyV1SelectedActionStatusPlanResult.Applied));
+        }
+
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out _, out ContinuationCensusFailure censusFailure), Is.True, censusFailure.ToString());
+        AssertCensus(runtime);
+    }
+
+    [Test]
     public void DailyCrimeHiddenExpiryCommitsOneNpcSectionAndPreservesCensus()
     {
         CityRuntime city = CreateCity("p12-cj-daily-city");

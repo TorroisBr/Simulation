@@ -4869,6 +4869,106 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void SelectedDailyV1ForcedEscapeCompletesStatusAndDirectiveWithinOneP12Scope()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        NpcSimulationConfig actorConfig = config.Npcs.Single(entry =>
+            entry?.npc != null && string.Equals(entry.npc.id, "JOBSON", StringComparison.Ordinal));
+        NpcData actorDefinition = actorConfig.npc;
+        NpcActionData escape = SimulationTestFactory.CreateAction(
+            "p12-selected-forced-escape", NpcActionType.EscapePrison, NpcActionCategory.Justice);
+        escape.canFail = false;
+        escape.crimeSettings.escapeBountyPenalty = 3f;
+        escape.statusToRemove.Add(config.arrestedStatus);
+        escape.statusToAdd.Add(config.freeStatus);
+        config.Actions.Add(escape);
+        config.ScheduledDirectives.Add(new ScheduledDirectiveConfig
+        {
+            absoluteDay = 1L,
+            mode = ScheduledDirectiveMode.ForceOutcome,
+            operation = ScheduledDirectiveOperation.EscapePrison,
+            actor = actorDefinition,
+            action = escape
+        });
+
+        GameObject hostObject = new GameObject("P12 selected forced Escape scope reuse");
+        simulationObjects.Add(hostObject);
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            NpcRuntime actor = runtime.NpcRuntimes.Single(npc =>
+                npc?.NpcData != null && string.Equals(npc.NpcData.id, actorDefinition.id, StringComparison.Ordinal));
+            Assert.That(actor.CurrentCity, Is.Not.Null);
+            NpcRuntime guard = runtime.NpcRuntimes.Single(npc =>
+                npc?.NpcData?.job != null
+                && npc.NpcData.job.jobType == NpcJobType.Guard
+                && ReferenceEquals(npc.CurrentCity, actor.CurrentCity));
+
+            foreach (NpcRuntime participant in actor.CurrentCity.ImportantNpcs)
+            {
+                Assert.That(participant?.NpcData, Is.Not.Null);
+                PersonId personId = new PersonId("p12-selected-forced-escape-person-" + participant.NpcData.id);
+                Assert.That(runtime.TryRegisterPerson(
+                        new PersonRuntime(personId, runtime.CurrentDay), out PersonStoreFailure registrationFailure),
+                    Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(
+                        personId, participant.RuntimeId, out PersonMaterializationFailure bindingFailure),
+                    Is.True, bindingFailure.ToString());
+            }
+            Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            JusticeSystem justice = ReadPrivateField<JusticeSystem>(runtime, "justiceSystem");
+            Assert.That(justice, Is.Not.Null);
+            MethodInfo beginCrimeJusticeScope = typeof(SimulationRuntime).GetMethod(
+                "TryBeginP12CrimeJusticeActionScope", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginCrimeJusticeScope, Is.Not.Null);
+            object[] scopeArguments = { new[] { actor, guard }, true, null };
+            Assert.That(beginCrimeJusticeScope.Invoke(runtime, scopeArguments), Is.EqualTo(true));
+            IDisposable arrestScope = scopeArguments[2] as IDisposable;
+            Assert.That(arrestScope, Is.Not.Null);
+            using (arrestScope)
+            {
+                Assert.That(justice.CreateOrIncreaseWarrant(actor, actor.CurrentCity, 12f, 4), Is.Not.Null);
+                Assert.That(justice.Arrest(guard, actor, actor.CurrentCity), Is.True);
+            }
+
+            Assert.That(justice.IsArrested(actor), Is.True);
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long beforeEscapeEpoch, out ContinuationCensusFailure beforeEscapeFailure),
+                Is.True, beforeEscapeFailure.ToString());
+            Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+
+            ScheduledDirective directive = session.Composition.ScheduledDirectives.Directives.Single();
+            Assert.That(directive.State, Is.EqualTo(ScheduledDirectiveState.Succeeded));
+            Assert.That(directive.ProcessedDay, Is.EqualTo(1L));
+            Assert.That(justice.IsArrested(actor), Is.False);
+            Assert.That(actor.CurrentStatus.Any(status => ReferenceEquals(status, config.freeStatus)), Is.True);
+            Assert.That(actor.CurrentStatus.Any(status => ReferenceEquals(status, config.arrestedStatus)), Is.False);
+            Assert.That(actor.P12CrimeJusticeRevision, Is.GreaterThan(0L));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long afterEscapeEpoch, out ContinuationCensusFailure afterEscapeFailure),
+                Is.True, afterEscapeFailure.ToString());
+            Assert.That(afterEscapeEpoch, Is.GreaterThan(beforeEscapeEpoch));
+            Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure finalCensusFailure),
+                Is.True, finalCensusFailure.ToString());
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    [Test]
     public void DailyV1RestorePreservesSuccessfulScheduledDirectiveEffectWithActiveTravelPartyAcrossBoundaries()
     {
         SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(

@@ -121,6 +121,64 @@ public sealed class DailyV1NpcStatusOwnerTests
     }
 
     [Test]
+    public void SelectedActionCompletionRunsTheStatusPlanInsideItsSeparateOperation()
+    {
+        DailyV1EffectiveDefinitions baseline = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ActionDefinition baselineAction = baseline.Actions.Values.First();
+        DailyV1EffectiveDefinitions definitions = CreateDefinitionsWithActionStatusChanges(
+            baseline, baselineAction,
+            "status/Status-Livre", "status/Status-Preso",
+            "status/Status-Escondido", "status/Status-Procurado");
+        DailyV1ActionDefinition action = definitions.Actions[baselineAction.DefinitionId];
+        DailyV1NpcRuntimeOwners actor = CreateNpcOwner(
+            "actor", definitions, definitions.Npcs.Values.First(),
+            definitions.Statuses["status/Status-Livre"]);
+        DailyV1NpcRuntimeOwners target = CreateNpcOwner(
+            "target", definitions, definitions.Npcs.Values.Skip(1).First(),
+            definitions.Statuses["status/Status-Escondido"]);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, Array.Empty<DailyV1CityRuntimeOwners>(), new[] { actor, target },
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        List<string> events = new List<string>();
+        var boundary = new RecordingStatusOperationBoundary(events);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryApplyActionStatusPlanAfterDispatch(
+            true, graph, actor, action, true, target, boundary,
+            out DailyV1SelectedActionStatusPlanResult result), Is.True);
+
+        Assert.That(result, Is.EqualTo(DailyV1SelectedActionStatusPlanResult.Applied));
+        Assert.That(events, Is.EqualTo(new[]
+        {
+            "scope:begin",
+            "admit:actor", "commit:actor:",
+            "admit:actor", "commit:actor:status/Status-Preso",
+            "admit:target", "commit:target:",
+            "admit:target", "commit:target:status/Status-Procurado",
+            "scope:end"
+        }), "The Core completion stage keeps status effects inside their own actor-first operation.");
+    }
+
+    [Test]
+    public void SelectedActionCompletionDoesNotEnterStatusOperationAfterFailedDispatch()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcRuntimeOwners actor = CreateNpcOwner(
+            "actor", definitions, definitions.Npcs.Values.First(), Array.Empty<DailyV1StatusDefinition>());
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, Array.Empty<DailyV1CityRuntimeOwners>(), new[] { actor },
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        List<string> events = new List<string>();
+        var boundary = new RecordingStatusOperationBoundary(events);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryApplyActionStatusPlanAfterDispatch(
+            false, graph, actor, definitions.Actions.Values.First(), false, null, boundary,
+            out DailyV1SelectedActionStatusPlanResult result), Is.True);
+
+        Assert.That(result, Is.EqualTo(DailyV1SelectedActionStatusPlanResult.ActionDidNotSucceed));
+        Assert.That(events, Is.Empty, "A failed Core action dispatch must not open the separate P12 status operation.");
+    }
+
+    [Test]
     public void SelectedActionStatusPlanPreservesActorFirstPartialFailureSemantics()
     {
         DailyV1EffectiveDefinitions baseline = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -188,6 +246,40 @@ public sealed class DailyV1NpcStatusOwnerTests
             () => events.Add("admit:" + owner.RuntimeId),
             () => events.Add("commit:" + owner.RuntimeId + ":"
                 + string.Join(",", owner.Status.Statuses.Select(status => status.DefinitionId))));
+    }
+
+    private sealed class RecordingStatusOperationBoundary
+        : DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary
+    {
+        private readonly List<string> events;
+
+        internal RecordingStatusOperationBoundary(List<string> events)
+        {
+            this.events = events;
+        }
+
+        public DailyV1SelectedActionStatusPlanResult ExecuteWithinOperation(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcRuntimeOwners target,
+            Func<DailyV1SelectedActionStatusPlanResult> operation)
+        {
+            events.Add("scope:begin");
+            DailyV1SelectedActionStatusPlanResult result = operation();
+            events.Add("scope:end");
+            return result;
+        }
+
+        public bool ApplyActorStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
+            ApplyAndRecord(owner, statusToRemove, statusToAdd, events);
+
+        public bool ApplyTargetStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
+            ApplyAndRecord(owner, statusToRemove, statusToAdd, events);
     }
 
     private static DailyV1NpcRuntimeOwners CreateNpcOwner(
