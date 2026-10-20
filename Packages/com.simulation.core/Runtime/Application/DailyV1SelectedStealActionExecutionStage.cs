@@ -10,6 +10,7 @@ internal static class DailyV1SelectedStealActionExecutionStage
     internal interface ISelectedStealActionBoundary
     {
         CrimeSocialAppraisalWorldState SocialAppraisalWorldState { get; }
+        ITheftOutcomeSink TheftOutcomeSink { get; }
         DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
 
         bool ExecuteWithinOperation(Func<bool> operation);
@@ -111,12 +112,14 @@ internal static class DailyV1SelectedStealActionExecutionStage
         DailyV1EffectiveDefinitions definitions = graph.Definitions;
         DailyV1JusticeRecordsOwner justice = graph.JusticeRecordsOwner;
         CrimeSocialAppraisalWorldState socialWorld = boundary.SocialAppraisalWorldState;
+        ITheftOutcomeSink theftOutcomeSink = boundary.TheftOutcomeSink;
         if (payload == null || payload.TargetItem != null || payload.TargetCityRuntimeId != null
             || string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
             || !DailyV1NpcDefinitionRules.IsAdmittedAction(definitions, action)
             || !ReferenceEquals(justice, boundary.JusticeRecordsOwner)
             || !ReferenceEquals(justice, graph.JusticeRecordsOwner)
             || socialWorld == null
+            || theftOutcomeSink == null
             || socialWorld.SimulationTime.AbsoluteDay < 0L
             || !TryFindExactNpc(graph, payload.TargetNpcRuntimeId,
                 out DailyV1NpcRuntimeOwners victim)
@@ -147,9 +150,8 @@ internal static class DailyV1SelectedStealActionExecutionStage
 
         int amount = UnityMathfCompatibility.Min(
             payload.Amount, UnityMathfCompatibility.FloorToInt(victim.MoneyAccount.Balance));
-        CrimeSocialAppraisalIntegration integration = socialWorld.Integration;
         TheftOutcome theftOutcome = null;
-        if (integration != null)
+        if (theftOutcomeSink != null)
         {
             if (string.IsNullOrWhiteSpace(payload.StableOccurrenceKey)
                 || !socialWorld.PersonStore.TryGetByMaterializedNpcRuntimeId(
@@ -175,7 +177,7 @@ internal static class DailyV1SelectedStealActionExecutionStage
                     outcomeId, perpetratorPerson.PersonId, victimPerson.PersonId,
                     amount, absoluteDay, payload.StableOccurrenceKey,
                     payload.OriginDecisionId);
-                if (!integration.CanAcceptTheftOutcome(theftOutcome)) return false;
+                if (!theftOutcomeSink.CanAcceptTheftOutcome(theftOutcome)) return false;
             }
         }
 
@@ -186,7 +188,7 @@ internal static class DailyV1SelectedStealActionExecutionStage
         // Keep the legacy observable ordering: the theft log is emitted after
         // transfer but before social acceptance, including rejected outcomes.
         boundary.PublishTheft(perpetrator, victim, amount);
-        if (theftOutcome != null && !integration.TryAcceptTheftOutcome(theftOutcome))
+        if (theftOutcome != null && !theftOutcomeSink.TryAcceptTheftOutcome(theftOutcome))
         {
             EconomyTransactionResult rollback = boundary.TryTransferMoney(
                 perpetrator, victim, amount);

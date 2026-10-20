@@ -54,6 +54,39 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
         return configuration.Enabled && configuration.AutonomousEnabled;
     }
 
+    /// <summary>Projects an already-selected Core City owner for the existing Unity action wrapper.</summary>
+    internal bool TryProjectSelectedCityRuntime(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string cityRuntimeId,
+        out CityRuntime cityProjection)
+    {
+        cityProjection = null;
+        if (graph == null || graph.SpatialNetwork == null || travelSystem == null
+            || string.IsNullOrWhiteSpace(cityRuntimeId))
+            return false;
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            if (city == null || !graph.ContainsExactCityOwner(city)
+                || !string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal)
+                || string.IsNullOrWhiteSpace(city.LocationRuntimeId)
+                || !graph.SpatialNetwork.TryGetLocation(
+                    city.LocationRuntimeId, out SpatialLocationRuntime location))
+                continue;
+
+            CityRuntime candidate = travelSystem.GetCityRuntime(location);
+            if (candidate == null
+                || !ReferenceEquals(candidate.SelectedRuntimeOwners, city)
+                || !string.Equals(candidate.RuntimeId, city.RuntimeId, StringComparison.Ordinal)
+                || candidate.Location == null
+                || !string.Equals(candidate.Location.RuntimeId,
+                    city.LocationRuntimeId, StringComparison.Ordinal))
+                return false;
+            cityProjection = candidate;
+            return true;
+        }
+        return false;
+    }
+
     public bool TryBindTheftOutcomeSink(ITheftOutcomeSink sink)
     {
         if (sink == null || theftOutcomeSink != null)

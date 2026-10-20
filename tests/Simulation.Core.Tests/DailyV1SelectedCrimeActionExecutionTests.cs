@@ -358,6 +358,8 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
         public bool HasEnabledCrimeActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action) => true;
         public bool TryProjectBuyAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate) => false;
         public bool TryProjectSellAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate) => false;
+        public bool TryProjectStealAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate) => false;
+        public bool TryProjectFleeCityAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate) => false;
         public bool TryPrepareAutonomousProviderAction(DailyV1NpcRuntimeOwners actor,
             DailyV1NpcActionCandidate candidate, out float utility)
         { LegacyProviderPlanCalls++; utility = 0f; return false; }

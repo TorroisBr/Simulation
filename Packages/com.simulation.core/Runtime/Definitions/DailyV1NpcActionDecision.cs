@@ -387,6 +387,8 @@ internal interface IDailyV1SelectedNpcActionDecisionBoundary
     bool TryProjectTravelAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
     bool HasMerchantActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
     bool HasEnabledCrimeActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
+    bool TryProjectStealAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
+    bool TryProjectFleeCityAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
     bool TryProjectBuyAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
     bool TryProjectSellAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
     bool TryPrepareAutonomousProviderAction(
@@ -455,7 +457,8 @@ internal static class DailyV1SelectedNpcActionDecisionStage
         long currentAbsoluteDay,
         IAuthoritativeRandomSource randomSource,
         IDailyV1SelectedNpcActionDecisionBoundary boundary,
-        out DailyV1NpcActionCandidate selected)
+        out DailyV1NpcActionCandidate selected,
+        PersonStore personStore = null)
     {
         selected = null;
         if (graph == null || actor == null || availableActions == null
@@ -521,6 +524,28 @@ internal static class DailyV1SelectedNpcActionDecisionStage
                 && boundary.HasEnabledCrimeActionProvider(actor, candidate.Action))
             {
                 if (!DailyV1CrimeActionPlanning.TryPrepareSelectedEscapePrison(graph, actor, candidate))
+                    candidate.Utility = 0f;
+                continue;
+            }
+
+            if (actionType == DailyV1NpcDefinitionRules.StealActionTypeValue
+                && boundary.HasEnabledCrimeActionProvider(actor, candidate.Action))
+            {
+                if (!DailyV1CrimeActionPlanning.TryPrepareSelectedSteal(
+                        graph, actor, candidate, personStore, currentAbsoluteDay, randomSource)
+                    || candidate.PreparedPayload == null
+                    || !boundary.TryProjectStealAction(actor, candidate))
+                    candidate.Utility = 0f;
+                continue;
+            }
+
+            if (actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue
+                && boundary.HasEnabledCrimeActionProvider(actor, candidate.Action))
+            {
+                if (!DailyV1CrimeActionPlanning.TryPrepareSelectedFleeCity(
+                        graph, actor, candidate)
+                    || candidate.PreparedPayload == null
+                    || !boundary.TryProjectFleeCityAction(actor, candidate))
                     candidate.Utility = 0f;
                 continue;
             }

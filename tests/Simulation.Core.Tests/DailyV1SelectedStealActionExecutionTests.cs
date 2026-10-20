@@ -59,6 +59,22 @@ public sealed class DailyV1SelectedStealActionExecutionTests
     }
 
     [Test]
+    public void SelectedStealUsesTheBoundaryTheftSinkForPreflightAndCommit()
+    {
+        StealFixture fixture = CreateFixture();
+        RecordingStealBoundary operation = new RecordingStealBoundary(fixture.SocialWorld, fixture.Justice);
+        CountingTheftOutcomeSink sink = new CountingTheftOutcomeSink(fixture.SocialWorld.Integration);
+        operation.TheftOutcomeSink = sink;
+
+        Assert.That(Dispatch(fixture, operation, out DailyV1SelectedActionDispatchResult result), Is.True);
+
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(sink.CanAcceptCalls, Is.EqualTo(1));
+        Assert.That(sink.AcceptCalls, Is.EqualTo(1));
+        Assert.That(fixture.SocialWorld.TheftOutcomes.Count, Is.EqualTo(1));
+    }
+
+    [Test]
     public void SelectedStealCompensatesRejectedSocialCommitAndWarnsOnFailedRollback()
     {
         StealFixture fixture = CreateFixture();
@@ -189,6 +205,25 @@ public sealed class DailyV1SelectedStealActionExecutionTests
         public DeterministicRandomStream CreateStream(string streamKey) => null;
     }
 
+    private sealed class CountingTheftOutcomeSink : ITheftOutcomeSink
+    {
+        private readonly ITheftOutcomeSink inner;
+        internal int CanAcceptCalls { get; private set; }
+        internal int AcceptCalls { get; private set; }
+
+        internal CountingTheftOutcomeSink(ITheftOutcomeSink inner) => this.inner = inner;
+        public bool CanAcceptTheftOutcome(TheftOutcome outcome)
+        {
+            CanAcceptCalls++;
+            return inner.CanAcceptTheftOutcome(outcome);
+        }
+        public bool TryAcceptTheftOutcome(TheftOutcome outcome)
+        {
+            AcceptCalls++;
+            return inner.TryAcceptTheftOutcome(outcome);
+        }
+    }
+
     private sealed class DispatchBoundary : IDailyV1SelectedActionDispatchBoundary
     {
         private readonly RecordingStealBoundary stealBoundary;
@@ -235,12 +270,14 @@ public sealed class DailyV1SelectedStealActionExecutionTests
         internal DailyV1JusticeWantedRecordOwner ProjectedWantedRecord { get; private set; }
 
         public CrimeSocialAppraisalWorldState SocialAppraisalWorldState => SocialWorld;
+        public ITheftOutcomeSink TheftOutcomeSink { get; set; }
         internal RecordingStealBoundary(
             CrimeSocialAppraisalWorldState socialWorld,
             DailyV1JusticeRecordsOwner justiceRecordsOwner)
         {
             SocialWorld = socialWorld;
             JusticeRecordsOwner = justiceRecordsOwner;
+            TheftOutcomeSink = socialWorld.Integration;
         }
 
         public bool ExecuteWithinOperation(Func<bool> operation)

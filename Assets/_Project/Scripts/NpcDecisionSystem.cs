@@ -63,7 +63,8 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
     internal NpcActionRuntime ChooseSelectedDailyV1Action(
         NpcRuntime npcRuntime,
         List<DailyV1ActionDefinition> availableActions,
-        long currentAbsoluteDay)
+        long currentAbsoluteDay,
+        PersonStore personStore = null)
     {
         if (mutationGuardBinding.CanMutate == false || npcRuntime == null || npcRuntime.IsAlive == false)
             return null;
@@ -100,7 +101,7 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             || !graph.ContainsExactNpcOwner(actor)
             || !DailyV1SelectedNpcActionDecisionStage.TryChoose(
                 graph, actor, availableActions, activeStatuses, currentAbsoluteDay,
-                randomSource, boundary, out selected))
+                randomSource, boundary, out selected, personStore))
             return null;
 
         if (selected == null)
@@ -187,6 +188,77 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
                 actionAsset, targetCity, null, payload.TravelReason,
                 candidate.ExpectedTravelCost, payload.ExpectedNetValue);
             if (!projected.TryUseSelectedPayload(payload, npcRuntime.SelectedDailyV1DefinitionGraph))
+                return false;
+            projectedActions[candidate] = projected;
+            return true;
+        }
+
+        public bool TryProjectStealAction(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate)
+        {
+            DailyV1NpcActionPayloadOwner payload = candidate?.PreparedPayload;
+            DailyV1SelectedRuntimeOwnerGraph graph = npcRuntime.SelectedRuntimeOwnerGraph;
+            if (!IsExactActor(actor)
+                || payload == null
+                || string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
+                || !TryGetActionAsset(actor, candidate.Action, out NpcActionData actionAsset)
+                || decisionSystem.GetProviderForAction(npcRuntime, actionAsset)
+                    is not CrimeSystem crimeSystem
+                || !crimeSystem.AllowAutonomousAction(actionAsset)
+                || !graph.TryGetNpcOwner(payload.TargetNpcRuntimeId,
+                    out DailyV1NpcRuntimeOwners targetOwner)
+                || !graph.ContainsExactNpcOwner(targetOwner)
+                || !ReferenceEquals(targetOwner.Definitions, graph.Definitions)
+                || !string.Equals(targetOwner.RuntimeId, payload.TargetNpcRuntimeId,
+                    StringComparison.Ordinal))
+                return false;
+
+            CityRuntime currentCity = npcRuntime.CurrentCity;
+            DailyV1CityRuntimeOwners actorCityOwner = graph.Cities.FirstOrDefault(value =>
+                value != null && string.Equals(value.RuntimeId,
+                    actor.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal));
+            if (currentCity == null || actorCityOwner == null
+                || !ReferenceEquals(currentCity.SelectedRuntimeOwners, actorCityOwner))
+                return false;
+            NpcRuntime targetNpc = currentCity?.ImportantNpcs?.FirstOrDefault(value =>
+                value != null && string.Equals(value.RuntimeId,
+                    payload.TargetNpcRuntimeId, StringComparison.Ordinal));
+            if (targetNpc == null
+                || !ReferenceEquals(targetNpc.SelectedRuntimeOwners, targetOwner)
+                || !ReferenceEquals(targetNpc.CurrentCity, currentCity))
+                return false;
+
+            NpcActionRuntime projected = new NpcActionRuntime(
+                actionAsset, targetNpc, null, payload.Amount, 0f);
+            if (!projected.TryUseSelectedPayload(payload,
+                    npcRuntime.SelectedDailyV1DefinitionGraph))
+                return false;
+            projectedActions[candidate] = projected;
+            return true;
+        }
+
+        public bool TryProjectFleeCityAction(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate)
+        {
+            DailyV1NpcActionPayloadOwner payload = candidate?.PreparedPayload;
+            DailyV1SelectedRuntimeOwnerGraph graph = npcRuntime.SelectedRuntimeOwnerGraph;
+            if (!IsExactActor(actor)
+                || payload == null
+                || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+                || !TryGetActionAsset(actor, candidate.Action, out NpcActionData actionAsset)
+                || decisionSystem.GetProviderForAction(npcRuntime, actionAsset)
+                    is not CrimeSystem crimeSystem
+                || !crimeSystem.AllowAutonomousAction(actionAsset)
+                || !crimeSystem.TryProjectSelectedCityRuntime(
+                    graph, payload.TargetCityRuntimeId, out CityRuntime destinationCity))
+                return false;
+
+            NpcActionRuntime projected = new NpcActionRuntime(
+                actionAsset, destinationCity, null, 0, payload.ExpectedUnitPrice);
+            if (!projected.TryUseSelectedPayload(payload,
+                    npcRuntime.SelectedDailyV1DefinitionGraph))
                 return false;
             projectedActions[candidate] = projected;
             return true;

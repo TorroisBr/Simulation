@@ -1380,6 +1380,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             private readonly DailyV1CityRuntimeOwners cityOwner;
 
             public CrimeSocialAppraisalWorldState SocialAppraisalWorldState { get; }
+            public ITheftOutcomeSink TheftOutcomeSink => runtime.crimeSystem?.TheftOutcomeSink;
             public DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
 
             internal SelectedStealActionBoundaryAdapter(
@@ -12579,7 +12580,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             ? npcDecisionSystem.ChooseSelectedDailyV1Action(
                 npcRuntime,
                 GetSelectedConfiguredActionsEnabledForRuntime(npcRuntime),
-                CurrentDay)
+                CurrentDay,
+                personStore)
             : npcDecisionSystem.ChooseAction(
                 npcRuntime,
                 GetConfiguredActionsEnabledForRuntime(npcRuntime),
