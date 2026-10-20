@@ -132,7 +132,7 @@ public sealed class SimulationRuntimeSpatialInvariantReport
     }
 }
 
-public sealed partial class SimulationRuntime : IFactualReadRuntimeState
+public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDailyV1RuntimeAdvanceBoundary
 {
     [ThreadStatic]
     private static DailyGameplayExecutionProbeForTest activeDailyGameplayExecutionProbeForTest;
@@ -9031,113 +9031,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
     public bool TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure)
     {
-        failure = SimulationRuntimeAdvanceFailure.None;
-        if (runtimeAdmissionContext != null && !IsRuntimeAdmissionOwnerThreadCurrent())
-        {
-            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
-            return false;
-        }
-
-        if (IsDailyCaptureProfile)
-        {
-            if (!mutationGuard.CanMutate)
-            {
-                failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
-                return false;
-            }
-            if (!TryPreflightDailyCoreSequenceCapacity(1L, out failure)) return false;
-            if (!SimulationTimeOwnerBridge.TryValidateAdvance(
-                    simulationTime, out SimulationTimeAdvanceFailure timeFailure))
-            {
-                failure = timeFailure == SimulationTimeAdvanceFailure.AbsoluteDayOverflow
-                    ? SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
-                    : SimulationRuntimeAdvanceFailure.RuntimeFaulted;
-                return false;
-            }
-        }
-
-        if (dailyExecutionBoundary.TryBeginAdvance(
-                runtimeAdmissionContext != null,
-                out DailyV1AdvanceLease lease) == false)
-        {
-            failure = SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress;
-            return false;
-        }
-
-        using (lease)
-        {
-            if (runtimeAdmissionContext != null)
-            {
-                if (mutationGuard.CanMutate == false)
-                {
-                    failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
-                    return false;
-                }
-
-                if (!IsDailyCaptureProfile
-                    && !SimulationTimeOwnerBridge.TryValidateAdvance(
-                        simulationTime, out SimulationTimeAdvanceFailure timeFailure))
-                {
-                    failure = timeFailure == SimulationTimeAdvanceFailure.AbsoluteDayOverflow
-                        ? SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
-                        : SimulationRuntimeAdvanceFailure.RuntimeFaulted;
-                    return false;
-                }
-
-                if (!TryEnterRuntimeAdmissionOperation(
-                        DailyAdvanceCensusOperationId,
-                        out SimulationOperationScope operationScope))
-                {
-                    failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
-                    return false;
-                }
-
-                bool advanced;
-                try
-                {
-                    using (operationScope)
-                    {
-                        advanced = TryAdvanceDayCore(out failure);
-                        if (advanced && !TryRecordCompletedDailyCore(out failure))
-                            advanced = false;
-                    }
-                }
-                catch
-                {
-                    dailyExecutionBoundary.InvalidateCurrentCaptureToken();
-                    FaultRuntimeAdmission();
-                    throw;
-                }
-
-                if (!advanced) return false;
-                if (IsDailyCaptureProfile
-                    && !TryPublishCompletedDailyCaptureToken(out _))
-                {
-                    failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
-                    return false;
-                }
-
-                return true;
-            }
-
-            if (p18dTimeline != null)
-            {
-                LogicalTick target;
-                try
-                {
-                    target = p18dTimeline.CurrentInstant.NextDayBoundary;
-                }
-                catch (OverflowException)
-                {
-                    failure = SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow;
-                    return false;
-                }
-
-                return TryAdvanceP18DIntradayToCore(target, out failure);
-            }
-
-            return TryAdvanceDayCore(out failure);
-        }
+        bool advanced = DailyV1RuntimeAdvanceStage.TryAdvanceDay(
+            dailyExecutionBoundary, this, out DailyV1RuntimeAdvanceFailureCode coreFailure);
+        failure = (SimulationRuntimeAdvanceFailure)(byte)coreFailure;
+        return advanced;
     }
 
     private bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
@@ -9168,6 +9065,89 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         AdvanceDayAfterClockAdvance();
         return true;
     }
+
+    bool IDailyV1RuntimeAdvanceBoundary.HasRuntimeAdmission => runtimeAdmissionContext != null;
+    bool IDailyV1RuntimeAdvanceBoundary.IsAdmissionOwnerThreadCurrent =>
+        IsRuntimeAdmissionOwnerThreadCurrent();
+    bool IDailyV1RuntimeAdvanceBoundary.IsDailyCaptureProfile => IsDailyCaptureProfile;
+    bool IDailyV1RuntimeAdvanceBoundary.CanMutate => mutationGuard.CanMutate;
+    bool IDailyV1RuntimeAdvanceBoundary.HasIntradayTimeline => p18dTimeline != null;
+
+    bool IDailyV1RuntimeAdvanceBoundary.TryPreflightDailyCoreSequenceCapacity(
+        long requestedBoundaries,
+        out DailyV1RuntimeAdvanceFailureCode failure)
+    {
+        bool ready = TryPreflightDailyCoreSequenceCapacity(
+            requestedBoundaries, out SimulationRuntimeAdvanceFailure hostFailure);
+        failure = (DailyV1RuntimeAdvanceFailureCode)(byte)hostFailure;
+        return ready;
+    }
+
+    bool IDailyV1RuntimeAdvanceBoundary.TryValidateClockAdvance(
+        out DailyV1RuntimeAdvanceFailureCode failure)
+    {
+        bool valid = SimulationTimeOwnerBridge.TryValidateAdvance(
+            simulationTime, out SimulationTimeAdvanceFailure timeFailure);
+        failure = valid ? DailyV1RuntimeAdvanceFailureCode.None
+            : timeFailure == SimulationTimeAdvanceFailure.AbsoluteDayOverflow
+                ? DailyV1RuntimeAdvanceFailureCode.AbsoluteDayOverflow
+                : DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted;
+        return valid;
+    }
+
+    bool IDailyV1RuntimeAdvanceBoundary.TryEnterDailyAdvanceOperation(
+        out IDisposable operationScope)
+    {
+        operationScope = null;
+        if (!TryEnterRuntimeAdmissionOperation(
+                DailyAdvanceCensusOperationId,
+                out SimulationOperationScope hostScope))
+            return false;
+        operationScope = hostScope;
+        return true;
+    }
+
+    bool IDailyV1RuntimeAdvanceBoundary.TryAdvanceDayCore(
+        out DailyV1RuntimeAdvanceFailureCode failure)
+    {
+        bool advanced = TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure hostFailure);
+        failure = (DailyV1RuntimeAdvanceFailureCode)(byte)hostFailure;
+        return advanced;
+    }
+
+    bool IDailyV1RuntimeAdvanceBoundary.TryAdvanceIntradayToNextDayBoundary(
+        out DailyV1RuntimeAdvanceFailureCode failure)
+    {
+        LogicalTick target;
+        try
+        {
+            target = p18dTimeline.CurrentInstant.NextDayBoundary;
+        }
+        catch (OverflowException)
+        {
+            failure = DailyV1RuntimeAdvanceFailureCode.AbsoluteDayOverflow;
+            return false;
+        }
+
+        bool advanced = TryAdvanceP18DIntradayToCore(
+            target, out SimulationRuntimeAdvanceFailure hostFailure);
+        failure = (DailyV1RuntimeAdvanceFailureCode)(byte)hostFailure;
+        return advanced;
+    }
+
+    bool IDailyV1RuntimeAdvanceBoundary.TryRecordCompletedDailyCore(
+        out DailyV1RuntimeAdvanceFailureCode failure)
+    {
+        bool recorded = TryRecordCompletedDailyCore(
+            out SimulationRuntimeAdvanceFailure hostFailure);
+        failure = (DailyV1RuntimeAdvanceFailureCode)(byte)hostFailure;
+        return recorded;
+    }
+
+    bool IDailyV1RuntimeAdvanceBoundary.TryPublishCompletedDailyCaptureToken() =>
+        TryPublishCompletedDailyCaptureToken(out _);
+
+    void IDailyV1RuntimeAdvanceBoundary.FaultRuntimeAdmission() => FaultRuntimeAdmission();
 
     /// <summary>
     /// Acquires this runtime's single-writer advance lease for a larger composed
@@ -11127,135 +11107,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         out int daysAdvanced,
         out SimulationRuntimeAdvanceFailure failure)
     {
-        daysAdvanced = 0;
-        failure = SimulationRuntimeAdvanceFailure.None;
-        if (dayCount < 0)
-        {
-            failure = SimulationRuntimeAdvanceFailure.InvalidDayCount;
-            return false;
-        }
-
-        if (dayCount == 0)
-        {
-            return true;
-        }
-
-        if (runtimeAdmissionContext != null && !IsRuntimeAdmissionOwnerThreadCurrent())
-        {
-            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
-            return false;
-        }
-
-        if (IsDailyCaptureProfile)
-        {
-            if (!mutationGuard.CanMutate)
-            {
-                failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
-                return false;
-            }
-            if (!TryPreflightDailyCoreSequenceCapacity(dayCount, out failure)) return false;
-            if (!SimulationTimeOwnerBridge.TryValidateAdvance(
-                    simulationTime, out SimulationTimeAdvanceFailure initialTimeFailure))
-            {
-                failure = initialTimeFailure == SimulationTimeAdvanceFailure.AbsoluteDayOverflow
-                    ? SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
-                    : SimulationRuntimeAdvanceFailure.RuntimeFaulted;
-                return false;
-            }
-        }
-
-        if (dailyExecutionBoundary.TryBeginAdvance(
-                runtimeAdmissionContext != null,
-                out DailyV1AdvanceLease lease) == false)
-        {
-            failure = SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress;
-            return false;
-        }
-
-        using (lease)
-        {
-            if (mutationGuard.CanMutate == false)
-            {
-                failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
-                return false;
-            }
-
-            if (runtimeAdmissionContext != null
-                && !IsDailyCaptureProfile
-                && !SimulationTimeOwnerBridge.TryValidateAdvance(
-                    simulationTime, out SimulationTimeAdvanceFailure initialTimeFailure))
-            {
-                failure = initialTimeFailure == SimulationTimeAdvanceFailure.AbsoluteDayOverflow
-                    ? SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
-                    : SimulationRuntimeAdvanceFailure.RuntimeFaulted;
-                return false;
-            }
-
-            SimulationOperationScope operationScope = null;
-            if (runtimeAdmissionContext != null
-                && !TryEnterRuntimeAdmissionOperation(
-                    DailyAdvanceCensusOperationId,
-                    out operationScope))
-            {
-                failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
-                return false;
-            }
-
-            using (operationScope)
-            {
-                try
-                {
-                    for (int i = 0; i < dayCount; i++)
-                    {
-                        bool advanced;
-                        if (p18dTimeline != null)
-                        {
-                            LogicalTick target;
-                            try
-                            {
-                                target = p18dTimeline.CurrentInstant.NextDayBoundary;
-                            }
-                            catch (OverflowException)
-                            {
-                                failure = SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow;
-                                return false;
-                            }
-
-                            advanced = TryAdvanceP18DIntradayToCore(target, out failure);
-                        }
-                        else
-                        {
-                            advanced = TryAdvanceDayCore(out failure);
-                        }
-
-                        if (advanced == false)
-                        {
-                            return false;
-                        }
-
-                        if (!TryRecordCompletedDailyCore(out failure))
-                            return false;
-
-                        daysAdvanced++;
-                    }
-                }
-                catch
-                {
-                    if (runtimeAdmissionContext != null)
-                        FaultRuntimeAdmission();
-                    throw;
-                }
-            }
-
-            if (IsDailyCaptureProfile
-                && !TryPublishCompletedDailyCaptureToken(out _))
-            {
-                failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
-                return false;
-            }
-        }
-
-        return true;
+        bool advanced = DailyV1RuntimeAdvanceStage.TryAdvanceDays(
+            dailyExecutionBoundary, this, dayCount, out daysAdvanced,
+            out DailyV1RuntimeAdvanceFailureCode coreFailure);
+        failure = (SimulationRuntimeAdvanceFailure)(byte)coreFailure;
+        return advanced;
     }
 
     private void BeginSimulationDay()

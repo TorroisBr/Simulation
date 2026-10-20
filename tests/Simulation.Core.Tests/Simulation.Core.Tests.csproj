@@ -43,6 +43,7 @@
     <Compile Include="DailyV1ActorTurnExecutionStageTests.cs" />
     <Compile Include="DailyV1SelectedMerchantTradeStateOperationTests.cs" />
     <Compile Include="DailyV1CommercialKnowledgeSharingStageTests.cs" />
+    <Compile Include="DailyV1RuntimeAdvanceStageTests.cs" />
     <Compile Include="DailyV1InventoryMarketOwnerTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/DeterministicRandomCoreTests.cs" Link="Determinism/DeterministicRandomCoreTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/DeterministicDemographyPolicyTests.cs" Link="Population/DeterministicDemographyPolicyTests.cs" />
