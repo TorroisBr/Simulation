@@ -11148,6 +11148,41 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return;
         }
 
+        DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
+        if (graph != null)
+        {
+            List<DailyV1NpcRuntimeOwners> owners = new List<DailyV1NpcRuntimeOwners>();
+            Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime> runtimeByOwner =
+                new Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime>();
+            foreach (NpcRuntime runtime in npcRuntimes)
+            {
+                if (runtime == null) continue;
+                DailyV1NpcRuntimeOwners owner = runtime.SelectedRuntimeOwners;
+                if (!runtime.UsesSelectedDailyV1Definitions
+                    || owner == null
+                    || !ReferenceEquals(runtime.SelectedRuntimeOwnerGraph, graph)
+                    || !graph.ContainsExactNpcOwner(owner)
+                    || !ReferenceEquals(owner.Definitions, graph.Definitions)
+                    || !string.Equals(runtime.RuntimeId, owner.RuntimeId, StringComparison.Ordinal)
+                    || !runtimeByOwner.TryAdd(owner, runtime))
+                    throw new InvalidOperationException(
+                        "Selected Merchant plan urgency requires exact Core NPC owners.");
+                owners.Add(owner);
+            }
+
+            if (!graph.MatchesExactOwnerInstances(graph.Cities, owners))
+                throw new InvalidOperationException(
+                    "Selected Merchant plan urgency received an incomplete NPC owner roster.");
+
+            SelectedDailyV1ActorTurnExecutionBoundary boundary =
+                new SelectedDailyV1ActorTurnExecutionBoundary(this, graph, runtimeByOwner);
+            if (!DailyV1SelectedMerchantTradeStateOperation.TryAdvancePendingTravelDays(
+                    graph, owners, boundary))
+                throw new InvalidOperationException(
+                    "The selected Core Merchant plan urgency stage could not use its exact owner graph.");
+            return;
+        }
+
         foreach (NpcRuntime npcRuntime in npcRuntimes)
         {
             if (npcRuntime == null

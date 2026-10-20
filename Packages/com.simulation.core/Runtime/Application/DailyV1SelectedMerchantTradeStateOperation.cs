@@ -171,6 +171,48 @@ internal static class DailyV1SelectedMerchantTradeStateOperation
         return true;
     }
 
+    /// <summary>
+    /// Advances pending-travel days for selected active plans before the daily
+    /// actor pass. The compatibility adapter remains responsible for the
+    /// existing P12 plan-owner admission and publication callback.
+    /// </summary>
+    internal static bool TryAdvancePendingTravelDays(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> exactNpcOwners,
+        IDailyV1SelectedMerchantTradeStateBoundary boundary)
+    {
+        if (graph == null || exactNpcOwners == null || boundary == null
+            || !graph.MatchesExactOwnerInstances(graph.Cities, exactNpcOwners))
+            return false;
+
+        foreach (DailyV1NpcRuntimeOwners actor in exactNpcOwners)
+        {
+            if (actor?.Lifecycle?.LifeState != NpcLifeState.Alive
+                || actor.Travel == null || actor.Travel.IsTraveling
+                || !TryGetCity(graph, actor.Travel.CurrentCityRuntimeId,
+                    out DailyV1CityRuntimeOwners currentCity))
+                continue;
+
+            DailyV1NpcMerchantTradePlanOwner plan = actor.MerchantTradePlan;
+            if (plan == null || !plan.IsActive
+                || plan.PendingTravelDays == int.MaxValue
+                || !TryGetCity(graph, plan.TargetCityRuntimeId,
+                    out DailyV1CityRuntimeOwners targetCity)
+                || ReferenceEquals(targetCity, currentCity))
+                continue;
+
+            // The Unity adapter intentionally treats a rejected projection/P12
+            // mutation as a no-op for this legacy void maintenance operation.
+            boundary.TryInstallPlanState(actor, plan.ItemDefinition,
+                plan.OriginCityRuntimeId, plan.TargetCityRuntimeId,
+                plan.PlannedAmount, plan.RemainingAmount,
+                plan.PurchasePricePerItem, plan.WaitDaysAtDestination,
+                plan.PendingTravelDays + 1, plan.OriginDecisionId);
+        }
+
+        return true;
+    }
+
     internal static void ObserveCurrentMarket(
         DailyV1NpcRuntimeOwners actor,
         DailyV1CityRuntimeOwners city,

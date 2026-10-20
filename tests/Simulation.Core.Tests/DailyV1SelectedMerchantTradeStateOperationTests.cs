@@ -182,6 +182,56 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
             "travel feasibility uses the same one-unit-per-day fallback as the owner commit");
     }
 
+    [Test]
+    public void PendingTravelDayMaintenanceUsesExactPlanOwnerAndSkipsTravelingOrSaturatedPlans()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out _);
+        DailyV1NpcRuntimeOwners merchant = graph.Npcs.First(owner =>
+            owner.Lifecycle.LifeState == NpcLifeState.Alive
+            && !owner.Travel.IsTraveling
+            && DailyV1NpcDefinitionRules.HasJobType(owner.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+            && graph.Cities.Any(city => string.Equals(city.RuntimeId,
+                owner.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)));
+        DailyV1CityRuntimeOwners currentCity = graph.Cities.Single(city =>
+            string.Equals(city.RuntimeId, merchant.Travel.CurrentCityRuntimeId,
+                StringComparison.Ordinal));
+        DailyV1CityRuntimeOwners targetCity = graph.Cities.First(city =>
+            !ReferenceEquals(city, currentCity));
+        DailyV1ItemDefinition item = graph.Definitions.Items.Values.First();
+        Assert.That(merchant.MerchantTradePlan.TryInstallState(item,
+            currentCity.RuntimeId, targetCity.RuntimeId, 4, 3, 6f, 2, 7,
+            "decision/pending-day"), Is.True);
+        long beforeRevision = merchant.MerchantTradePlan.Revision;
+        FakeBoundary boundary = new FakeBoundary();
+
+        Assert.That(DailyV1SelectedMerchantTradeStateOperation.TryAdvancePendingTravelDays(
+            graph, graph.Npcs, boundary), Is.True);
+
+        Assert.That(boundary.PendingTravelDayActorIds.Count(id => id == merchant.RuntimeId), Is.EqualTo(1));
+        Assert.That(merchant.MerchantTradePlan.PendingTravelDays, Is.EqualTo(8));
+        Assert.That(merchant.MerchantTradePlan.WaitDaysAtDestination, Is.EqualTo(2));
+        Assert.That(merchant.MerchantTradePlan.RemainingAmount, Is.EqualTo(3));
+        Assert.That(merchant.MerchantTradePlan.Revision, Is.EqualTo(beforeRevision + 1));
+
+        Assert.That(merchant.Travel.TryCommitState(currentCity.LocationRuntimeId,
+            currentCity.RuntimeId, targetCity.LocationRuntimeId, targetCity.RuntimeId,
+            2, 2, null, true, null, null, true), Is.True);
+        Assert.That(DailyV1SelectedMerchantTradeStateOperation.TryAdvancePendingTravelDays(
+            graph, graph.Npcs, boundary), Is.True);
+        Assert.That(boundary.PendingTravelDayActorIds.Count(id => id == merchant.RuntimeId), Is.EqualTo(1));
+
+        Assert.That(merchant.Travel.TryCommitState(currentCity.LocationRuntimeId,
+            currentCity.RuntimeId, null, null, 0, 0, null, false, null, null, true), Is.True);
+        Assert.That(merchant.MerchantTradePlan.TryInstallState(item,
+            currentCity.RuntimeId, targetCity.RuntimeId, 4, 3, 6f, 2, int.MaxValue,
+            "decision/pending-day"), Is.True);
+        Assert.That(DailyV1SelectedMerchantTradeStateOperation.TryAdvancePendingTravelDays(
+            graph, graph.Npcs, boundary), Is.True);
+        Assert.That(boundary.PendingTravelDayActorIds.Count(id => id == merchant.RuntimeId), Is.EqualTo(1));
+        Assert.That(merchant.MerchantTradePlan.PendingTravelDays, Is.EqualTo(int.MaxValue));
+    }
+
     private static DailyV1SelectedRuntimeOwnerGraph CreateGraph(out SpatialNetworkOwner spatial,
         bool missingTravelConfiguration = false)
     {
@@ -226,16 +276,20 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
         internal string RecordedRedirectLocationRuntimeId;
         internal CommercialDecisionEvidence RedirectEvidence;
         internal int TradeTravelPlanAttempts;
+        internal readonly List<string> PendingTravelDayActorIds = new List<string>();
 
         public bool TryInstallPlanState(DailyV1NpcRuntimeOwners actor,
             DailyV1ItemDefinition item, string originCityRuntimeId,
             string targetCityRuntimeId, int plannedAmount, int remainingAmount,
             float purchasePricePerItem, int waitDaysAtDestination,
-            int pendingTravelDays, string originDecisionId) =>
-            actor.MerchantTradePlan.TryInstallState(item, originCityRuntimeId,
+            int pendingTravelDays, string originDecisionId)
+        {
+            PendingTravelDayActorIds.Add(actor.RuntimeId);
+            return actor.MerchantTradePlan.TryInstallState(item, originCityRuntimeId,
                 targetCityRuntimeId, plannedAmount, remainingAmount,
                 purchasePricePerItem, waitDaysAtDestination, pendingTravelDays,
                 originDecisionId);
+        }
 
         public bool TrySetTradeTravelPlan(DailyV1NpcRuntimeOwners actor,
             string targetCityRuntimeId, float utility, string originDecisionId)
