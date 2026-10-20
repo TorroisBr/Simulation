@@ -1039,8 +1039,7 @@ internal static class DailyV1SelectedActionDispatchStage
         out DailyV1SelectedActionDispatchResult result)
     {
         result = null;
-        if (graph == null || actor == null || randomSource == null || boundary == null
-            || currentAbsoluteDay < 0L
+        if (graph == null || actor == null || currentAbsoluteDay < 0L
             || !graph.ContainsExactNpcOwner(actor)
             || !ReferenceEquals(graph.Definitions, actor.Definitions))
             return false;
@@ -1049,8 +1048,38 @@ internal static class DailyV1SelectedActionDispatchStage
         DailyV1ActionDefinition action = slot?.CurrentAction;
         DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
         int actionType = action?.Values.actionType?.Value ?? int.MinValue;
-        if (action == null || payload == null || !ReferenceEquals(payload.Action, action))
+        if (action == null)
             return false;
+
+        if (payload == null || !ReferenceEquals(payload.Action, action))
+        {
+            if (actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue)
+            {
+                result = RejectedSelectedFleeCity(payload?.TargetCityRuntimeId);
+                return true;
+            }
+            if (IsSelectedMerchantAction(actionType))
+            {
+                result = RejectedSelectedMerchantAction(actor, actionType, payload);
+                return true;
+            }
+            return false;
+        }
+
+        if (randomSource == null || boundary == null)
+        {
+            if (actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue)
+            {
+                result = RejectedSelectedFleeCity(payload.TargetCityRuntimeId);
+                return true;
+            }
+            if (IsSelectedMerchantAction(actionType))
+            {
+                result = RejectedSelectedMerchantAction(actor, actionType, payload);
+                return true;
+            }
+            return false;
+        }
 
         if (actionType == DailyV1NpcDefinitionRules.NormalActionTypeValue)
         {
@@ -1139,15 +1168,17 @@ internal static class DailyV1SelectedActionDispatchStage
             return true;
         }
 
-        if (actionType != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
-            && actionType != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue)
+        if (!IsSelectedMerchantAction(actionType))
             return false;
 
         if (payload.TargetItem == null || payload.Amount <= 0
             || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
             || actor.Travel == null || actor.Travel.IsTraveling
             || string.IsNullOrWhiteSpace(actor.Travel.CurrentCityRuntimeId))
-            return false;
+        {
+            result = RejectedSelectedMerchantAction(actor, actionType, payload);
+            return true;
+        }
 
         bool activeMerchantPlan = actor.MerchantTradePlan?.IsActive == true;
         if (actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
@@ -1159,7 +1190,10 @@ internal static class DailyV1SelectedActionDispatchStage
                     out IDailyV1SelectedNpcTradeBoundary tradeBoundary)
                 || !boundary.TryGetMarketBoundaries(actor,
                     out IDailyV1SelectedOpenMarketSaleBoundary marketBoundary, out _))
-                return false;
+            {
+                result = RejectedSelectedMerchantAction(actor, actionType, payload);
+                return true;
+            }
 
             float referencePrice = actor.MerchantTradePlan.PurchasePricePerItem;
             if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedPlannedNpcSaleActionSlot(
@@ -1168,7 +1202,10 @@ internal static class DailyV1SelectedActionDispatchStage
                     () => boundary.CanAdmitMerchantPlanMutation(actor),
                     () => boundary.PublishMerchantPlanMutation(actor),
                     out DailyV1SelectedActionExecutionStage.SelectedPlannedNpcSaleActionResult sale))
-                return false;
+            {
+                result = RejectedSelectedMerchantAction(actor, actionType, payload);
+                return true;
+            }
 
             result = new DailyV1SelectedActionDispatchResult(
                 DailyV1SelectedActionDispatchKind.PlannedNpcSale,
@@ -1187,7 +1224,10 @@ internal static class DailyV1SelectedActionDispatchStage
                     actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
                 || !boundary.TryGetMarketBoundaries(actor,
                     out IDailyV1SelectedOpenMarketSaleBoundary marketBoundary, out _))
-                return false;
+            {
+                result = RejectedSelectedMerchantAction(actor, actionType, payload);
+                return true;
+            }
 
             float referencePrice = actor.MerchantTradePlan.PurchasePricePerItem;
             if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedPlannedMarketSaleActionSlot(
@@ -1196,7 +1236,10 @@ internal static class DailyV1SelectedActionDispatchStage
                     () => boundary.CanAdmitMerchantPlanMutation(actor),
                     () => boundary.PublishMerchantPlanMutation(actor),
                     out DailyV1SelectedActionExecutionStage.SelectedPlannedMarketSaleActionResult sale))
-                return false;
+            {
+                result = RejectedSelectedMerchantAction(actor, actionType, payload);
+                return true;
+            }
 
             result = new DailyV1SelectedActionDispatchResult(
                 DailyV1SelectedActionDispatchKind.PlannedMarketSale,
@@ -1207,11 +1250,18 @@ internal static class DailyV1SelectedActionDispatchStage
             return true;
         }
 
-        if (payload.TargetNpcRuntimeId != null) return false;
+        if (payload.TargetNpcRuntimeId != null)
+        {
+            result = RejectedSelectedMerchantAction(actor, actionType, payload);
+            return true;
+        }
         if (!boundary.TryGetMarketBoundaries(actor,
             out IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
             out IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary))
-            return false;
+        {
+            result = RejectedSelectedMerchantAction(actor, actionType, payload);
+            return true;
+        }
 
         if (string.Equals(payload.TargetCityRuntimeId,
                 actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal))
@@ -1223,7 +1273,10 @@ internal static class DailyV1SelectedActionDispatchStage
                     graph, actor, action, randomSource, currentAbsoluteDay,
                     saleBoundary, purchaseBoundary,
                     out DailyV1SelectedActionExecutionStage.SelectedOpenMarketActionResult market))
-                return false;
+            {
+                result = RejectedSelectedMerchantAction(actor, actionType, payload);
+                return true;
+            }
 
             result = new DailyV1SelectedActionDispatchResult(
                 DailyV1SelectedActionDispatchKind.OpenMarket,
@@ -1235,7 +1288,10 @@ internal static class DailyV1SelectedActionDispatchStage
         }
 
         if (actionType != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue)
-            return false;
+        {
+            result = RejectedSelectedMerchantAction(actor, actionType, payload);
+            return true;
+        }
 
         if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedCrossCityBuyActionSlot(
                 graph, actor, action, randomSource, currentAbsoluteDay,
@@ -1245,7 +1301,10 @@ internal static class DailyV1SelectedActionDispatchStage
                 () => boundary.CanAdmitTradeTravelPlanMutation(actor),
                 () => boundary.PublishTradeTravelPlanMutation(actor),
                 out DailyV1SelectedActionExecutionStage.SelectedCrossCityBuyActionResult crossCityBuy))
-            return false;
+        {
+            result = RejectedSelectedMerchantAction(actor, actionType, payload);
+            return true;
+        }
 
         result = new DailyV1SelectedActionDispatchResult(
             DailyV1SelectedActionDispatchKind.CrossCityBuy,
@@ -1263,6 +1322,34 @@ internal static class DailyV1SelectedActionDispatchStage
             false,
             fleeCity: new DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult(
                 false, destinationCityRuntimeId, 0f));
+
+    private static bool IsSelectedMerchantAction(int actionType) =>
+        actionType == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
+        || actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue;
+
+    private static DailyV1SelectedActionDispatchResult RejectedSelectedMerchantAction(
+        DailyV1NpcRuntimeOwners actor,
+        int actionType,
+        DailyV1NpcActionPayloadOwner payload)
+    {
+        DailyV1SelectedActionDispatchKind kind = DailyV1SelectedActionDispatchKind.OpenMarket;
+        if (actionType == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
+            && !string.IsNullOrWhiteSpace(payload?.TargetCityRuntimeId)
+            && !string.Equals(payload.TargetCityRuntimeId,
+                actor?.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal))
+        {
+            kind = DailyV1SelectedActionDispatchKind.CrossCityBuy;
+        }
+        else if (actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            && actor?.MerchantTradePlan?.IsActive == true)
+        {
+            kind = payload?.TargetNpcRuntimeId != null
+                ? DailyV1SelectedActionDispatchKind.PlannedNpcSale
+                : DailyV1SelectedActionDispatchKind.PlannedMarketSale;
+        }
+
+        return new DailyV1SelectedActionDispatchResult(kind, false, false);
+    }
 
     private static DailyV1NpcRuntimeOwners FindExactNpc(
         DailyV1SelectedRuntimeOwnerGraph graph,

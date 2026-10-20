@@ -236,6 +236,78 @@ public sealed class DailyV1SelectedOpenMarketActionExecutionTests
     }
 
     [Test]
+    public void SelectedMerchantDispatchHandlesUnavailableMarketBoundaryWithoutProviderFallback()
+    {
+        CreateActionRollFixture(1f, out _,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor, out DailyV1CityRuntimeOwners city,
+            out _, out DailyV1ItemDefinition item);
+        int inventoryBefore = actor.Inventory.GetAmount(item);
+        int marketBefore = city.Market.GetAmount(item);
+        float balanceBefore = actor.MoneyAccount.Balance;
+        long inventoryRevisionBefore = actor.Inventory.Revision;
+        long marketRevisionBefore = city.Market.Revision;
+        List<string> order = new List<string>();
+        FixedActionRandom random = new FixedActionRandom(order, 0.25f);
+        RecordingSaleBoundary saleBoundary = new RecordingSaleBoundary(order);
+        RecordingActionDispatchBoundary boundary =
+            new RecordingActionDispatchBoundary(saleBoundary, null)
+            { AllowMarketBoundaries = false };
+
+        Assert.That(DailyV1SelectedActionDispatchStage.TryDispatch(
+            graph, actor, random, 47L, boundary,
+            out DailyV1SelectedActionDispatchResult result), Is.True);
+
+        Assert.That(result.Kind, Is.EqualTo(DailyV1SelectedActionDispatchKind.OpenMarket));
+        Assert.That(result.ActionRollSucceeded, Is.False);
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(random.Calls, Is.Zero);
+        Assert.That(boundary.BoundaryResolutionCalls, Is.EqualTo(1));
+        Assert.That(saleBoundary.BeginCalls, Is.Zero);
+        Assert.That(saleBoundary.CompleteCalls, Is.Zero);
+        Assert.That(saleBoundary.DisposeCalls, Is.Zero);
+        Assert.That(actor.Inventory.GetAmount(item), Is.EqualTo(inventoryBefore));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(marketBefore));
+        Assert.That(actor.MoneyAccount.Balance, Is.EqualTo(balanceBefore));
+        Assert.That(actor.Inventory.Revision, Is.EqualTo(inventoryRevisionBefore));
+        Assert.That(city.Market.Revision, Is.EqualTo(marketRevisionBefore));
+    }
+
+    [Test]
+    public void SelectedRemoteSellIsHandledFailureInsteadOfUnityProviderFallback()
+    {
+        CreateActionRollFixture(1f, out DailyV1EffectiveDefinitions definitions,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor, out DailyV1CityRuntimeOwners city,
+            out DailyV1ActionDefinition sell, out DailyV1ItemDefinition item);
+        DailyV1CityRuntimeOwners otherCity = graph.Cities.First(value => !ReferenceEquals(value, city));
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(definitions, sell, null,
+            otherCity.RuntimeId, item, 1, 1f, 1f, NpcTravelReason.None, 0f,
+            "decision/remote-sell", null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, sell, payload, null), Is.True);
+        int inventoryBefore = actor.Inventory.GetAmount(item);
+        int marketBefore = otherCity.Market.GetAmount(item);
+        List<string> order = new List<string>();
+        FixedActionRandom random = new FixedActionRandom(order, 0.25f);
+        RecordingSaleBoundary saleBoundary = new RecordingSaleBoundary(order);
+        RecordingActionDispatchBoundary boundary =
+            new RecordingActionDispatchBoundary(saleBoundary, null);
+
+        Assert.That(DailyV1SelectedActionDispatchStage.TryDispatch(
+            graph, actor, random, 48L, boundary,
+            out DailyV1SelectedActionDispatchResult result), Is.True);
+
+        Assert.That(result.Kind, Is.EqualTo(DailyV1SelectedActionDispatchKind.OpenMarket));
+        Assert.That(result.ActionRollSucceeded, Is.False);
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(random.Calls, Is.Zero);
+        Assert.That(saleBoundary.BeginCalls, Is.Zero);
+        Assert.That(actor.Inventory.GetAmount(item), Is.EqualTo(inventoryBefore));
+        Assert.That(otherCity.Market.GetAmount(item), Is.EqualTo(marketBefore));
+    }
+
+    [Test]
     public void SelectedActionDispatchExecutesNormalActionFromTheExactCoreSlot()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -524,6 +596,7 @@ public sealed class DailyV1SelectedOpenMarketActionExecutionTests
         private readonly IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary;
         internal int BoundaryResolutionCalls { get; private set; }
         internal int CrossCityCompletionCalls { get; private set; }
+        internal bool AllowMarketBoundaries { get; set; } = true;
 
         internal RecordingActionDispatchBoundary(
             IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
@@ -550,7 +623,7 @@ public sealed class DailyV1SelectedOpenMarketActionExecutionTests
             BoundaryResolutionCalls++;
             sale = saleBoundary;
             purchase = purchaseBoundary;
-            return true;
+            return AllowMarketBoundaries;
         }
 
         public bool TryGetNpcTradeBoundary(DailyV1NpcRuntimeOwners seller,
