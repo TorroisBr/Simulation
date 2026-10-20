@@ -337,6 +337,10 @@ public sealed class DailyV1TravelActionPlanningTests
             boundary = fleeBoundary;
             return fleeBoundary != null;
         }
+        public bool TryGetGuardArrestActionBoundary(DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action,
+            out DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionBoundary boundary)
+        { boundary = null; return false; }
         public bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) => true;
         public void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) { }
         public bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor) => true;

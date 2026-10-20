@@ -563,6 +563,39 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return true;
         }
 
+        public bool TryGetGuardArrestActionBoundary(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action,
+            out DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionBoundary boundary)
+        {
+            boundary = null;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            if (!TryGetExactActor(actor, action, out NpcRuntime exactGuard)
+                || !ReferenceEquals(exactGuard, actorRuntime)
+                || graph == null || graph.JusticeRecordsOwner == null
+                || runtime.justiceSystem == null
+                || !ReferenceEquals(graph.JusticeRecordsOwner, runtime.justiceSystem.CoreOwner)
+                || action.Values.actionType?.Value != DailyV1NpcDefinitionRules.ArrestActionTypeValue
+                || !(runtime.npcDecisionSystem?.GetProviderForAction(exactGuard, actionAsset)
+                    is GuardSystem))
+                return false;
+
+            NpcRuntime exactTarget = null;
+            string targetRuntimeId = actor.ActionSlot?.CurrentPayload?.TargetNpcRuntimeId;
+            if (targetRuntimeId == null)
+            {
+                if (actionRuntime.TargetNpc != null) return false;
+            }
+            else if (!graph.TryGetNpcOwner(targetRuntimeId, out DailyV1NpcRuntimeOwners targetOwner)
+                || !TryFindExactNpcRuntime(targetOwner, out exactTarget)
+                || !ReferenceEquals(exactTarget, actionRuntime.TargetNpc))
+                return false;
+
+            boundary = new SelectedGuardArrestActionBoundaryAdapter(
+                this, runtime, exactGuard, exactTarget, graph.JusticeRecordsOwner);
+            return true;
+        }
+
         public bool TryGetMarketBoundaries(
             DailyV1NpcRuntimeOwners actor,
             out IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
@@ -880,6 +913,144 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 return exactActor.TravelPlan.CanInstallOwnerState(next)
                     && exactActor.TravelPlan.InstallOwnerState(next)
                     && exactActor.TravelPlan.MatchesSelectedOwner();
+            }
+        }
+
+        private sealed class SelectedGuardArrestActionBoundaryAdapter
+            : DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionBoundary
+        {
+            private readonly SelectedActionDispatchBoundaryAdapter dispatchBoundary;
+            private readonly SimulationRuntime runtime;
+            private readonly NpcRuntime guardRuntime;
+            private readonly NpcRuntime targetRuntime;
+
+            public DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
+
+            internal SelectedGuardArrestActionBoundaryAdapter(
+                SelectedActionDispatchBoundaryAdapter dispatchBoundary,
+                SimulationRuntime runtime,
+                NpcRuntime guardRuntime,
+                NpcRuntime targetRuntime,
+                DailyV1JusticeRecordsOwner justiceRecordsOwner)
+            {
+                this.dispatchBoundary = dispatchBoundary
+                    ?? throw new ArgumentNullException(nameof(dispatchBoundary));
+                this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+                this.guardRuntime = guardRuntime ?? throw new ArgumentNullException(nameof(guardRuntime));
+                this.targetRuntime = targetRuntime;
+                JusticeRecordsOwner = justiceRecordsOwner
+                    ?? throw new ArgumentNullException(nameof(justiceRecordsOwner));
+            }
+
+            public bool ExecuteWithinOperation(Func<bool> operation)
+            {
+                if (operation == null) return false;
+                if (runtime.runtimeAdmissionContext == null) return operation();
+                IReadOnlyList<NpcRuntime> participants = targetRuntime == null
+                    ? new[] { guardRuntime }
+                    : new[] { guardRuntime, targetRuntime };
+                if (!runtime.TryBeginP12CrimeJusticeActionScope(
+                        participants, includeJustice: true,
+                        out P12CrimeJusticeMutationScope scope))
+                    throw new InvalidOperationException(
+                        "P12 Crime/Justice Guard Arrest could not be admitted.");
+                using (scope) return operation();
+            }
+
+            public bool TryAddSentence(
+                DailyV1NpcRuntimeOwners target,
+                DailyV1CityRuntimeOwners city,
+                DailyV1JusticeWantedRecordOwner warrant,
+                DailyV1JusticeSentenceOwner sentence)
+            {
+                DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+                if (!ReferenceEquals(graph?.JusticeRecordsOwner, JusticeRecordsOwner)
+                    || runtime.justiceSystem == null
+                    || !ReferenceEquals(runtime.justiceSystem.CoreOwner, JusticeRecordsOwner)
+                    || targetRuntime == null || city == null || warrant == null || sentence == null
+                    || !dispatchBoundary.TryGetExactActor(
+                        guardRuntime.SelectedRuntimeOwners,
+                        guardRuntime.SelectedRuntimeOwners?.ActionSlot?.CurrentAction,
+                        out NpcRuntime exactGuard)
+                    || !ReferenceEquals(exactGuard, guardRuntime)
+                    || !dispatchBoundary.TryFindExactNpcRuntime(target, out NpcRuntime exactTarget)
+                    || !ReferenceEquals(exactTarget, targetRuntime)
+                    || !ReferenceEquals(exactTarget.SelectedRuntimeOwners, target)
+                    || !graph.TryGetNpcOwner(target.RuntimeId, out DailyV1NpcRuntimeOwners exactTargetOwner)
+                    || !ReferenceEquals(exactTargetOwner, target)
+                    || !dispatchBoundary.TryGetExactCityProjection(
+                        graph, city.RuntimeId, guardRuntime.CurrentCity,
+                        out DailyV1CityRuntimeOwners exactCity, out _)
+                    || !ReferenceEquals(exactCity, city)
+                    || !graph.JusticeRecordsOwner.ContainsWantedRecord(warrant)
+                    || !ReferenceEquals(sentence.Warrant, warrant))
+                    return false;
+
+                WantedRecordRuntime exactWarrant = runtime.justiceSystem.GetActiveWarrant(
+                    exactTarget, guardRuntime.CurrentCity);
+                return exactWarrant != null && ReferenceEquals(exactWarrant.CoreOwner, warrant)
+                    && runtime.justiceSystem.TryAddSelectedArrestSentence(
+                        exactTarget, guardRuntime.CurrentCity, exactWarrant, sentence);
+            }
+
+            public bool ClearHidden(DailyV1NpcRuntimeOwners target)
+            {
+                if (!TryGetExactTarget(target, out NpcRuntime exactTarget)) return false;
+                exactTarget.ClearHidden();
+                return exactTarget.HiddenDaysRemaining == 0;
+            }
+
+            public bool ApplyStatusChange(
+                DailyV1NpcRuntimeOwners target,
+                DailyV1StatusDefinition status,
+                bool add)
+            {
+                if (!TryGetExactTarget(target, out NpcRuntime exactTarget)
+                    || !exactTarget.TryGetSelectedDailyV1StatusAsset(status, out NpcStatusData exactStatus))
+                    return false;
+                if (add) exactTarget.AddStatus(exactStatus);
+                else exactTarget.RemoveStatus(exactStatus);
+                return true;
+            }
+
+            public void PublishArrest(
+                DailyV1NpcRuntimeOwners guard,
+                DailyV1NpcRuntimeOwners target,
+                DailyV1CityRuntimeOwners city,
+                string originDecisionId)
+            {
+                DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+                if (!TryGetExactTarget(guard, out NpcRuntime exactGuard)
+                    || !ReferenceEquals(exactGuard, guardRuntime)
+                    || !TryGetExactTarget(target, out NpcRuntime exactTarget)
+                    || !ReferenceEquals(exactTarget, targetRuntime)
+                    || graph == null || !ReferenceEquals(graph.JusticeRecordsOwner, JusticeRecordsOwner)
+                    || !dispatchBoundary.TryGetExactCityProjection(
+                        graph, city?.RuntimeId, exactGuard.CurrentCity,
+                        out DailyV1CityRuntimeOwners exactCity, out _)
+                    || !ReferenceEquals(exactCity, city)
+                    || !ReferenceEquals(exactTarget.CurrentCity, exactGuard.CurrentCity)
+                    || !string.Equals(originDecisionId,
+                        guard.ActionSlot?.CurrentPayload?.OriginDecisionId, StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        "The selected Guard Arrest returned through a mismatched Unity projection.");
+
+                runtime.justiceSystem.PublishSelectedArrest(
+                    exactGuard, exactTarget, exactGuard.CurrentCity, originDecisionId);
+            }
+
+            private bool TryGetExactTarget(
+                DailyV1NpcRuntimeOwners target,
+                out NpcRuntime exactTarget)
+            {
+                exactTarget = null;
+                DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+                return target != null
+                    && ReferenceEquals(graph?.JusticeRecordsOwner, JusticeRecordsOwner)
+                    && graph.ContainsExactNpcOwner(target)
+                    && dispatchBoundary.TryFindExactNpcRuntime(target, out exactTarget)
+                    && (ReferenceEquals(exactTarget, guardRuntime)
+                        || ReferenceEquals(exactTarget, targetRuntime));
             }
         }
     }
@@ -1872,7 +2043,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             left?.RuntimeId ?? string.Empty,
             right?.RuntimeId ?? string.Empty));
         DailyV1SelectedRuntimeOwnerGraph selectedOwnerGraph =
-            TryCreateSelectedRuntimeOwnerGraph(this.cities, this.npcRuntimes, spatialNetworkRuntime?.SelectedOwner);
+            TryCreateSelectedRuntimeOwnerGraph(
+                this.cities, this.npcRuntimes, spatialNetworkRuntime?.SelectedOwner,
+                this.justiceSystem?.CoreOwner);
         if (!dailyExecutionBoundary.TryBindSelectedRuntimeOwnerGraph(selectedOwnerGraph))
             throw new InvalidOperationException("The selected owner graph could not be bound to this runtime boundary.");
         selectedRuntimeOwnerGraphProvider = () => dailyExecutionBoundary.SelectedRuntimeOwnerGraph;
@@ -8980,12 +9153,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     internal bool TryAdoptInitialSelectedRuntimeOwnerGraph(DailyV1SelectedRuntimeOwnerGraph graph)
     {
         DailyV1SelectedRuntimeOwnerGraph current = dailyExecutionBoundary.SelectedRuntimeOwnerGraph;
+        DailyV1JusticeRecordsOwner exactJusticeOwner = justiceSystem?.CoreOwner;
         if (graph == null || current == null
             || runtimeAdmissionContext?.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || dailyExecutionBoundary.CompletedCoreSequence != 0L
             || dailyExecutionBoundary.AdvanceLeaseHeld
             || !ReferenceEquals(current.Definitions, graph.Definitions)
             || !ReferenceEquals(current.SpatialNetwork, graph.SpatialNetwork)
+            || !ReferenceEquals(graph.JusticeRecordsOwner, exactJusticeOwner)
             || !graph.MatchesExactOwnerInstances(
                 cities.Select(city => city?.SelectedRuntimeOwners),
                 npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners).Where(owner => owner != null)))
@@ -8997,7 +9172,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     private static DailyV1SelectedRuntimeOwnerGraph TryCreateSelectedRuntimeOwnerGraph(
         IReadOnlyList<CityRuntime> cityRuntimes,
         IReadOnlyList<NpcRuntime> npcRuntimes,
-        SpatialNetworkOwner spatialNetwork)
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1JusticeRecordsOwner justiceRecordsOwner)
     {
         if (cityRuntimes == null || npcRuntimes == null) return null;
         if (spatialNetwork != null)
@@ -9018,6 +9194,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             cityRuntimes.Select(city => city?.SelectedRuntimeOwners),
             npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners).Where(owner => owner != null),
             spatialNetwork,
+            justiceRecordsOwner,
             out DailyV1SelectedRuntimeOwnerGraph graph) ? graph : null;
     }
 
@@ -12102,6 +12279,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return NpcActionResult.Failed();
         bool selectedMerchantAction = npcRuntime.UsesSelectedDailyV1Definitions
             && (actionType == NpcActionType.BuyGoods || actionType == NpcActionType.SellGoods);
+        bool selectedGuardArrestAction = npcRuntime.UsesSelectedDailyV1Definitions
+            && actionType == NpcActionType.Arrest;
         INpcActionProvider actionProvider = actionType == NpcActionType.Normal
             ? null
             : selectedMerchantAction
@@ -12155,18 +12334,28 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     out DailyV1SelectedActionDispatchResult selectedDispatch))
                 return CompleteSelectedActionDispatch(
                     npcRuntime, actionRuntime, action, selectedDispatch);
+            if (selectedGuardArrestAction)
+            {
+                if (runtimeAdmissionContext != null)
+                {
+                    FaultRuntimeAdmission();
+                    throw new InvalidOperationException(
+                        "The selected P12 profile cannot execute Guard Arrest without its exact Core Justice and NPC owner boundary.");
+                }
+                return NpcActionResult.Failed();
+            }
         }
-        else if (selectedMerchantAction)
+        else if (selectedMerchantAction || selectedGuardArrestAction)
         {
-            // A selected Daily-v1 merchant operation has no supported Unity
-            // fallback. A broken projection is a failed selected operation,
-            // not permission to execute the legacy provider against a second
-            // authority.
+            // Selected Daily-v1 actions without their exact Core projection
+            // must not fall through to a second Unity-owned authority.
             if (runtimeAdmissionContext != null)
             {
                 FaultRuntimeAdmission();
                 throw new InvalidOperationException(
-                    "The selected P12 profile cannot execute a Merchant action without its exact Core action projection.");
+                    selectedGuardArrestAction
+                        ? "The selected P12 profile cannot execute Guard Arrest without its exact Core action projection."
+                        : "The selected P12 profile cannot execute a Merchant action without its exact Core action projection.");
             }
             return NpcActionResult.Failed();
         }
@@ -12671,6 +12860,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
             case DailyV1SelectedActionDispatchKind.SoloTravel:
                 return NpcActionResult.Succeeded();
+
+            case DailyV1SelectedActionDispatchKind.GuardArrest:
+                return dispatch.GuardArrest?.Succeeded == true
+                    ? NpcActionResult.Succeeded()
+                    : NpcActionResult.Failed();
 
             case DailyV1SelectedActionDispatchKind.FleeCity:
             {

@@ -638,6 +638,11 @@ public class TesteSimulacao : MonoBehaviour
                         BootstrapInitialExplorableSiteKnowledge();
                         BootstrapInitialCommercialKnowledge();
                         InitializeJusticeState();
+                        if (selectedRuntimeOwnerGraphBuilder != null
+                            && !selectedRuntimeOwnerGraphBuilder.TryBuild(
+                                justiceSystem?.CoreOwner, out selectedInitialRuntimeOwnerGraph))
+                            throw new System.InvalidOperationException(
+                                "The selected Core City/NPC/Justice owner graph does not exactly match the admitted Daily-v1 genesis composition.");
                         simulationRuntime = new SimulationRuntime(
                             simulationTime: simulationTime, cities: CityRuntimeList, npcRuntimes: NpcRuntimeList,
                             configuredActions: ConfiguredActions, scheduledDirectiveSystem: scheduledDirectiveSystem,
@@ -2726,10 +2731,6 @@ public class TesteSimulacao : MonoBehaviour
                 AddNpcRuntimeByDefinition(p12IdentityBridge, selectedNpc);
             }
 
-            if (selectedRuntimeOwnerGraphBuilder == null
-                || !selectedRuntimeOwnerGraphBuilder.TryBuild(out selectedInitialRuntimeOwnerGraph))
-                throw new System.InvalidOperationException(
-                    "The selected Core City/NPC owner graph does not exactly match the admitted Daily-v1 genesis composition.");
             return;
         }
 

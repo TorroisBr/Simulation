@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 /// <summary>Core-owned dispatch for selected actions already admitted to the
 /// exact graph-owned current-action slot. P12 scopes are supplied only to the
@@ -52,6 +53,242 @@ internal static class DailyV1SelectedActionExecutionStage
             DailyV1CityRuntimeOwners destination,
             float travelCost,
             string originDecisionId);
+    }
+
+    internal interface ISelectedGuardArrestActionBoundary
+    {
+        DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
+        bool ExecuteWithinOperation(Func<bool> operation);
+        bool TryAddSentence(
+            DailyV1NpcRuntimeOwners target,
+            DailyV1CityRuntimeOwners city,
+            DailyV1JusticeWantedRecordOwner warrant,
+            DailyV1JusticeSentenceOwner sentence);
+        bool ClearHidden(DailyV1NpcRuntimeOwners target);
+        bool ApplyStatusChange(
+            DailyV1NpcRuntimeOwners target,
+            DailyV1StatusDefinition status,
+            bool add);
+        void PublishArrest(
+            DailyV1NpcRuntimeOwners guard,
+            DailyV1NpcRuntimeOwners target,
+            DailyV1CityRuntimeOwners city,
+            string originDecisionId);
+    }
+
+    internal sealed class SelectedGuardArrestActionResult
+    {
+        internal bool Succeeded { get; }
+        internal string TargetRuntimeId { get; }
+        internal string CityRuntimeId { get; }
+        internal string OriginDecisionId { get; }
+
+        internal SelectedGuardArrestActionResult(
+            bool succeeded,
+            string targetRuntimeId,
+            string cityRuntimeId,
+            string originDecisionId)
+        {
+            Succeeded = succeeded;
+            TargetRuntimeId = targetRuntimeId;
+            CityRuntimeId = cityRuntimeId;
+            OriginDecisionId = originDecisionId;
+        }
+    }
+
+    /// <summary>
+    /// Applies the selected arrest transition to the existing Core Justice
+    /// owner and exact NPC owners. The host boundary supplies only the P12
+    /// scope and the compatibility projections for status/hidden writes and
+    /// post-commit event/log publication.
+    /// </summary>
+    internal static bool TryExecuteSelectedGuardArrestActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners guard,
+        DailyV1ActionDefinition action,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        ISelectedGuardArrestActionBoundary boundary,
+        out bool actionRollSucceeded,
+        out SelectedGuardArrestActionResult result)
+    {
+        actionRollSucceeded = false;
+        result = null;
+        if (graph == null || guard == null || action == null
+            || randomSource == null || boundary == null
+            || currentAbsoluteDay < 0L
+            || !graph.ContainsExactNpcOwner(guard)
+            || !ReferenceEquals(graph.Definitions, guard.Definitions)
+            || !ReferenceEquals(guard.ActionSlot?.CurrentAction, action)
+            || !ReferenceEquals(guard.ActionSlot?.CurrentPayload?.Action, action)
+            || action.Values.actionType?.Value != DailyV1NpcDefinitionRules.ArrestActionTypeValue)
+            return false;
+
+        if (!TryRollCurrentActionSlot(
+                graph, guard, randomSource, currentAbsoluteDay, out actionRollSucceeded))
+            return false;
+        if (!actionRollSucceeded)
+        {
+            // The pre-migration provider path entered the P12 Crime/Justice
+            // action boundary even when the ordinary action roll failed. Keep
+            // that validation boundary while committing no world state.
+            boundary.ExecuteWithinOperation(() => false);
+            result = new SelectedGuardArrestActionResult(false,
+                guard.ActionSlot.CurrentPayload.TargetNpcRuntimeId,
+                guard.Travel?.CurrentCityRuntimeId,
+                guard.ActionSlot.CurrentPayload.OriginDecisionId);
+            return true;
+        }
+
+        DailyV1NpcActionPayloadOwner payload = guard.ActionSlot.CurrentPayload;
+        if (string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
+            || payload.TargetItem != null
+            || !TryFindExactNpc(graph, payload.TargetNpcRuntimeId,
+                out DailyV1NpcRuntimeOwners target)
+            || !TryFindExactCity(graph, guard.Travel?.CurrentCityRuntimeId,
+                out DailyV1CityRuntimeOwners city))
+        {
+            boundary.ExecuteWithinOperation(() => false);
+            result = new SelectedGuardArrestActionResult(false,
+                payload.TargetNpcRuntimeId,
+                guard.Travel?.CurrentCityRuntimeId,
+                payload.OriginDecisionId);
+            return true;
+        }
+
+        bool succeeded = boundary.ExecuteWithinOperation(() =>
+            TryApplySelectedGuardArrest(
+                graph, guard, target, city, action, payload, boundary));
+        result = new SelectedGuardArrestActionResult(succeeded,
+            target.RuntimeId, city.RuntimeId, payload.OriginDecisionId);
+        return true;
+    }
+
+    private static bool TryApplySelectedGuardArrest(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners guard,
+        DailyV1NpcRuntimeOwners target,
+        DailyV1CityRuntimeOwners city,
+        DailyV1ActionDefinition action,
+        DailyV1NpcActionPayloadOwner payload,
+        ISelectedGuardArrestActionBoundary boundary)
+    {
+        DailyV1JusticeRecordsOwner justice = graph.JusticeRecordsOwner;
+        DailyV1EffectiveDefinitions definitions = graph.Definitions;
+        string hiddenStatusId = definitions.Configuration?.hiddenStatus;
+        string arrestedStatusId = definitions.Configuration?.arrestedStatus;
+        DailyV1StatusDefinition hiddenStatus = ResolveOptionalStatus(definitions, hiddenStatusId);
+        if (justice == null
+            || !ReferenceEquals(justice, boundary.JusticeRecordsOwner)
+            || !ReferenceEquals(city.Definitions, definitions)
+            || !ReferenceEquals(target.Definitions, definitions)
+            || !DailyV1NpcDefinitionRules.IsAdmittedAction(definitions, action)
+            || !DailyV1NpcDefinitionRules.HasJobType(
+                guard.Definition, definitions, DailyV1NpcDefinitionRules.GuardJobTypeValue)
+            || guard.Lifecycle?.LifeState != NpcLifeState.Alive
+            || guard.Status == null
+            || target.Lifecycle?.LifeState != NpcLifeState.Alive
+            || ReferenceEquals(guard, target)
+            || guard.Travel == null || target.Travel == null
+            || !string.Equals(guard.Travel.CurrentCityRuntimeId, city.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(target.Travel.CurrentCityRuntimeId, city.RuntimeId, StringComparison.Ordinal)
+            || target.Travel.IsTraveling
+            || target.HiddenState == null
+            || target.HiddenState.RemainingDays > 0
+            || (hiddenStatus != null && guard.Status.Contains(hiddenStatus))
+            || (hiddenStatus != null && target.Status?.Contains(hiddenStatus) == true)
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                definitions, action, guard.Status.Statuses)
+            || string.IsNullOrWhiteSpace(arrestedStatusId)
+            || !definitions.Statuses.TryGetValue(arrestedStatusId, out DailyV1StatusDefinition arrestedStatus)
+            || target.Status == null
+            || target.Status.Contains(arrestedStatus)
+            || !city.NpcPresence.Contains(guard.RuntimeId)
+            || !city.NpcPresence.Contains(target.RuntimeId))
+            return false;
+
+        string freeStatusId = definitions.Configuration?.freeStatus;
+        string wantedStatusId = definitions.Configuration?.wantedStatus;
+        DailyV1StatusDefinition freeStatus = ResolveOptionalStatus(definitions, freeStatusId);
+        DailyV1StatusDefinition wantedStatus = ResolveOptionalStatus(definitions, wantedStatusId);
+        if ((!string.IsNullOrWhiteSpace(hiddenStatusId) && hiddenStatus == null)
+            || (!string.IsNullOrWhiteSpace(freeStatusId) && freeStatus == null)
+            || (!string.IsNullOrWhiteSpace(wantedStatusId) && wantedStatus == null))
+            return false;
+
+        DailyV1JusticeWantedRecordOwner warrant = justice.FindActiveWantedRecord(
+            target.RuntimeId, city.RuntimeId);
+        if (warrant == null || justice.FindActiveSentence(target.RuntimeId) != null)
+            return false;
+
+        DailyV1JusticeSentenceOwner sentence = new DailyV1JusticeSentenceOwner(
+            target.RuntimeId, city.RuntimeId, warrant, warrant.SentenceDays);
+        if (!boundary.TryAddSentence(target, city, warrant, sentence)
+            || !justice.NotifyMutationCommitted())
+            return false;
+
+        if (target.HiddenState.RemainingDays > 0 && !boundary.ClearHidden(target))
+            return false;
+        if (hiddenStatus != null && !boundary.ApplyStatusChange(target, hiddenStatus, add: false))
+            return false;
+        if (freeStatus != null && !boundary.ApplyStatusChange(target, freeStatus, add: false))
+            return false;
+        if (!boundary.ApplyStatusChange(target, arrestedStatus, add: true))
+            return false;
+
+        bool hasAnyActiveWarrant = justice.FindActiveWantedRecords(target.RuntimeId).Count > 0;
+        if (wantedStatus != null
+            && !boundary.ApplyStatusChange(target, wantedStatus, add: hasAnyActiveWarrant))
+            return false;
+
+        boundary.PublishArrest(guard, target, city, payload.OriginDecisionId);
+        return true;
+    }
+
+    private static DailyV1StatusDefinition ResolveOptionalStatus(
+        DailyV1EffectiveDefinitions definitions,
+        string statusId)
+    {
+        if (string.IsNullOrWhiteSpace(statusId)) return null;
+        return definitions.Statuses.TryGetValue(statusId, out DailyV1StatusDefinition status)
+            ? status
+            : null;
+    }
+
+    private static bool TryFindExactNpc(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string runtimeId,
+        out DailyV1NpcRuntimeOwners owner)
+    {
+        owner = null;
+        if (graph == null || string.IsNullOrWhiteSpace(runtimeId)) return false;
+        foreach (DailyV1NpcRuntimeOwners candidate in graph.Npcs)
+            if (candidate != null
+                && string.Equals(candidate.RuntimeId, runtimeId, StringComparison.Ordinal)
+                && graph.ContainsExactNpcOwner(candidate))
+            {
+                owner = candidate;
+                return true;
+            }
+        return false;
+    }
+
+    private static bool TryFindExactCity(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string runtimeId,
+        out DailyV1CityRuntimeOwners owner)
+    {
+        owner = null;
+        if (graph == null || string.IsNullOrWhiteSpace(runtimeId)) return false;
+        foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+            if (candidate != null
+                && string.Equals(candidate.RuntimeId, runtimeId, StringComparison.Ordinal)
+                && graph.ContainsExactCityOwner(candidate))
+            {
+                owner = candidate;
+                return true;
+            }
+        return false;
     }
 
     internal sealed class SelectedFleeCityPlan
@@ -963,6 +1200,11 @@ internal interface IDailyV1SelectedActionDispatchBoundary
         DailyV1ActionDefinition action,
         out DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary boundary);
 
+    bool TryGetGuardArrestActionBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        out DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionBoundary boundary);
+
     bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners actor);
     void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners actor);
     bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor);
@@ -982,6 +1224,7 @@ internal enum DailyV1SelectedActionDispatchKind
     CrossCityBuy,
     SoloTravel,
     FleeCity,
+    GuardArrest,
     Normal
 }
 
@@ -1001,6 +1244,7 @@ internal sealed class DailyV1SelectedActionDispatchResult
     internal DailyV1SelectedActionExecutionStage.SelectedCrossCityBuyActionResult CrossCityBuy { get; }
     internal DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult SoloTravel { get; }
     internal DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult FleeCity { get; }
+    internal DailyV1SelectedActionExecutionStage.SelectedGuardArrestActionResult GuardArrest { get; }
 
     internal DailyV1SelectedActionDispatchResult(
         DailyV1SelectedActionDispatchKind kind,
@@ -1014,6 +1258,7 @@ internal sealed class DailyV1SelectedActionDispatchResult
         DailyV1SelectedActionExecutionStage.SelectedCrossCityBuyActionResult crossCityBuy = null,
         DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult soloTravel = null,
         DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult fleeCity = null,
+        DailyV1SelectedActionExecutionStage.SelectedGuardArrestActionResult guardArrest = null,
         string normalActionName = null,
         string normalActionLogText = null)
     {
@@ -1030,6 +1275,7 @@ internal sealed class DailyV1SelectedActionDispatchResult
         CrossCityBuy = crossCityBuy;
         SoloTravel = soloTravel;
         FleeCity = fleeCity;
+        GuardArrest = guardArrest;
     }
 }
 
@@ -1175,6 +1421,28 @@ internal static class DailyV1SelectedActionDispatchStage
                 fleeSucceeded,
                 fleeCity: fleeResult ?? new DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult(
                     false, payload.TargetCityRuntimeId, 0f));
+            return true;
+        }
+
+        if (actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue)
+        {
+            if (payload.TargetItem != null || payload.TargetCityRuntimeId != null
+                || !boundary.TryGetGuardArrestActionBoundary(actor, action,
+                    out DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionBoundary arrestBoundary)
+                || arrestBoundary == null)
+                return false;
+
+            if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedGuardArrestActionSlot(
+                    graph, actor, action, randomSource, currentAbsoluteDay, arrestBoundary,
+                    out bool actionRollSucceeded,
+                    out DailyV1SelectedActionExecutionStage.SelectedGuardArrestActionResult arrest))
+                return false;
+
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.GuardArrest,
+                actionRollSucceeded,
+                actionRollSucceeded && arrest?.Succeeded == true,
+                guardArrest: arrest);
             return true;
         }
 

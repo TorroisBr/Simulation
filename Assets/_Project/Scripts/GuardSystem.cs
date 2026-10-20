@@ -82,37 +82,52 @@ public class GuardSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
     {
         targetRuntime = null;
         resultingUtility = 0f;
-        if (guardRuntime == null
-            || guardRuntime.SelectedDailyV1DefinitionGraph == null
-            || !guardRuntime.TryGetSelectedDailyV1ActionNode(actionAsset, out DailyV1ActionDefinition actionNode))
-            return false;
-
-        List<DailyV1GuardArrestCandidate> candidates = new List<DailyV1GuardArrestCandidate>();
-        List<NpcRuntime> targetRuntimes = new List<NpcRuntime>();
-        foreach (NpcRuntime candidate in guardRuntime.CurrentCity.ImportantNpcs)
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph = guardRuntime?.SelectedRuntimeOwnerGraph;
+        DailyV1NpcRuntimeOwners guardOwner = guardRuntime?.SelectedRuntimeOwners;
+        if (guardRuntime == null || ownerGraph == null || guardOwner == null
+            || !guardRuntime.TryGetSelectedDailyV1ActionNode(actionAsset, out DailyV1ActionDefinition actionNode)
+            || !DailyV1GuardActionPlanning.TryPlanArrest(
+                ownerGraph, guardOwner, actionNode, currentUtility,
+                out DailyV1NpcRuntimeOwners targetOwner, out resultingUtility)
+            || targetOwner == null || guardRuntime.CurrentCity == null)
         {
-            if (!IsValidArrestTarget(guardRuntime, candidate))
-                continue;
-
-            candidates.Add(new DailyV1GuardArrestCandidate(
-                candidate.RuntimeId,
-                justiceSystem.GetBounty(candidate, guardRuntime.CurrentCity)));
-            targetRuntimes.Add(candidate);
+            resultingUtility = 0f;
+            return false;
         }
 
-        if (!DailyV1GuardActionPlanning.TryPlanArrest(
-                guardRuntime.SelectedDailyV1DefinitionGraph,
-                guardRuntime.SelectedDailyV1Definition,
-                actionNode,
-                candidates,
-                currentUtility,
-                out int selectedIndex,
-                out resultingUtility)
-            || selectedIndex < 0
-            || selectedIndex >= targetRuntimes.Count)
+        DailyV1CityRuntimeOwners exactCity = null;
+        foreach (DailyV1CityRuntimeOwners city in ownerGraph.Cities)
+            if (city != null && string.Equals(city.RuntimeId,
+                    guardRuntime.CurrentCity.RuntimeId, System.StringComparison.Ordinal))
+            {
+                if (exactCity != null)
+                {
+                    resultingUtility = 0f;
+                    return false;
+                }
+                exactCity = city;
+            }
+        if (!ReferenceEquals(guardRuntime.CurrentCity.SelectedRuntimeOwners, exactCity))
+        {
+            resultingUtility = 0f;
             return false;
+        }
 
-        targetRuntime = targetRuntimes[selectedIndex];
+        // The Core graph made the choice. Unity is used only to recover the
+        // exact object projection required by the existing action API.
+        foreach (NpcRuntime candidate in guardRuntime.CurrentCity.ImportantNpcs)
+        {
+            if (!ReferenceEquals(candidate?.SelectedRuntimeOwners, targetOwner)) continue;
+            if (targetRuntime != null)
+            {
+                resultingUtility = 0f;
+                return false;
+            }
+            targetRuntime = candidate;
+        }
+
+        if (targetRuntime == null)
+            resultingUtility = 0f;
         return targetRuntime != null;
     }
 

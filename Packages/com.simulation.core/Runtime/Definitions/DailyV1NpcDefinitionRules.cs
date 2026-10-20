@@ -7,6 +7,7 @@ internal static class DailyV1NpcDefinitionRules
     // Serialized enum ordinals from the admitted Unity enums. Keep these named
     // values aligned with NpcJobType.Merchant and NpcActionType.SellGoods.
     internal const int MerchantJobTypeValue = 1;
+    internal const int GuardJobTypeValue = 2;
     internal const int TravelingMerchantBehaviorValue = 0;
     internal const int LocalMerchantBehaviorValue = 1;
     internal const int NormalActionTypeValue = 0;

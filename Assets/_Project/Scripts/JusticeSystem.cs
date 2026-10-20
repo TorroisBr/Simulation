@@ -49,6 +49,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     private readonly SimulationLogger logger;
 
     internal long P12CrimeJusticeRevision => justiceRecordsOwner.Revision;
+    internal DailyV1JusticeRecordsOwner CoreOwner => justiceRecordsOwner;
     internal int P12WantedRecordCount => wantedRecords?.Count ?? -1;
     internal int P12PrisonSentenceCount => prisonSentences?.Count ?? -1;
     internal long P12P18ReceiptCensusRevision
@@ -1805,6 +1806,61 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    /// <summary>Attaches the exact Core sentence row to the existing Unity
+    /// compatibility projection after Core has prepared the selected arrest.</summary>
+    internal bool TryAddSelectedArrestSentence(
+        NpcRuntime targetRuntime,
+        CityRuntime city,
+        WantedRecordRuntime warrant,
+        DailyV1JusticeSentenceOwner sentenceOwner)
+    {
+        if (targetRuntime == null || city == null || warrant == null || sentenceOwner == null
+            || !ReferenceEquals(sentenceOwner.Warrant, warrant.CoreOwner)
+            || !string.Equals(sentenceOwner.TargetRuntimeId, targetRuntime.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(sentenceOwner.CityRuntimeId, city.RuntimeId, StringComparison.Ordinal)
+            || !wantedRecordViews.TryGetValue(warrant.CoreOwner, out WantedRecordRuntime exactWarrant)
+            || !ReferenceEquals(exactWarrant, warrant)
+            || !ReferenceEquals(warrant.Target, targetRuntime)
+            || !ReferenceEquals(warrant.City, city)
+            || !PrisonSentenceRuntime.TryCreateSelectedProjection(
+                targetRuntime, city, warrant, sentenceOwner,
+                out PrisonSentenceRuntime projectedSentence))
+            return false;
+
+        EnsureP12CrimeJusticeMutationAllowed();
+        prisonSentences.Add(projectedSentence);
+        return sentenceViews.TryGetValue(sentenceOwner, out PrisonSentenceRuntime installed)
+            && ReferenceEquals(installed, projectedSentence);
+    }
+
+    /// <summary>Publishes the compatibility event and log after the selected
+    /// Core arrest transition has committed its owner writes.</summary>
+    internal void PublishSelectedArrest(
+        NpcRuntime guardRuntime,
+        NpcRuntime targetRuntime,
+        CityRuntime city,
+        string originDecisionId)
+    {
+        if (guardRuntime == null || targetRuntime == null || city == null)
+            throw new InvalidOperationException("A selected arrest lost its exact Unity projections before publication.");
+        PrisonSentenceRuntime sentence = GetActiveSentence(targetRuntime);
+        if (sentence == null || sentence.Warrant == null
+            || !ReferenceEquals(sentence.Target, targetRuntime)
+            || !ReferenceEquals(sentence.City, city))
+            throw new InvalidOperationException("A selected arrest has no exact Justice sentence projection.");
+
+        domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcArrestedEvent(
+            eventId,
+            absoluteDay,
+            recordSequence,
+            guardRuntime.RuntimeId,
+            targetRuntime.RuntimeId,
+            city.Location?.RuntimeId,
+            originDecisionId));
+        logger.Log(SimulationLogCategory.Justice,
+            $"{guardRuntime.NpcName} prendeu {targetRuntime.NpcName} em {city.CityName}. Pena restante: {sentence.RemainingDays} dias.");
+    }
+
     public void AdvanceSentences(List<NpcRuntime> npcRuntimeList)
     {
         ThrowIfFaulted();
@@ -3099,6 +3155,24 @@ public class PrisonSentenceRuntime : IAuthoritativeMutationGuardBindable
             new DailyV1JusticeSentenceOwner(target.RuntimeId, city.RuntimeId,
                 warrant.CoreOwner, remainingDays, failedEscapeAttempts, wasArrestedToday));
         staged = candidate;
+        return true;
+    }
+
+    internal static bool TryCreateSelectedProjection(
+        NpcRuntime target,
+        CityRuntime city,
+        WantedRecordRuntime warrant,
+        DailyV1JusticeSentenceOwner coreOwner,
+        out PrisonSentenceRuntime projected)
+    {
+        projected = null;
+        if (target == null || city == null || warrant == null || coreOwner == null
+            || !ReferenceEquals(warrant.Target, target) || !ReferenceEquals(warrant.City, city)
+            || !ReferenceEquals(coreOwner.Warrant, warrant.CoreOwner)
+            || !string.Equals(coreOwner.TargetRuntimeId, target.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(coreOwner.CityRuntimeId, city.RuntimeId, StringComparison.Ordinal))
+            return false;
+        projected = new PrisonSentenceRuntime(target, city, warrant, coreOwner);
         return true;
     }
 

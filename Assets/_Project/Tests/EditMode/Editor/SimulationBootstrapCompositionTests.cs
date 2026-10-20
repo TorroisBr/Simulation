@@ -164,6 +164,9 @@ public sealed class SimulationBootstrapCompositionTests
             "Core genesis must construct the selected City/NPC authorities before SimulationRuntime composition.");
         Assert.That(simulation.Runtime.SelectedRuntimeOwnerGraph, Is.SameAs(initialOwnerGraph),
             "SimulationRuntime must bind the same Core-composed graph rather than rebuild another authority join.");
+        Assert.That(initialOwnerGraph.JusticeRecordsOwner,
+            Is.SameAs(simulation.Runtime.JusticeSystemForWorldBoundary.CoreOwner),
+            "The Core-composed graph must bind the exact Justice owner used by the selected runtime.");
         Assert.That(initialOwnerGraph.MatchesExactOwnerInstances(
             simulation.Runtime.Cities.Select(city => city?.SelectedRuntimeOwners),
             simulation.Runtime.NpcRuntimes.Select(npc => npc?.SelectedRuntimeOwners)), Is.True);
