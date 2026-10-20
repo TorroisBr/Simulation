@@ -66,6 +66,34 @@ internal static class DailyV1SelectedActionExecutionStage
         }
     }
 
+    internal sealed class SelectedPlannedNpcSaleActionResult
+    {
+        internal bool Succeeded { get; }
+        internal bool ActionRollSucceeded { get; }
+        internal PlannedNpcSaleResult Sale { get; }
+
+        internal SelectedPlannedNpcSaleActionResult(bool succeeded,
+            bool actionRollSucceeded, PlannedNpcSaleResult sale)
+        {
+            Succeeded = succeeded;
+            ActionRollSucceeded = actionRollSucceeded;
+            Sale = sale;
+        }
+    }
+
+    internal sealed class SelectedCrossCityBuyActionResult
+    {
+        internal bool ActionRollSucceeded { get; }
+        internal DailyV1SelectedCrossCityBuyResult Purchase { get; }
+
+        internal SelectedCrossCityBuyActionResult(bool actionRollSucceeded,
+            DailyV1SelectedCrossCityBuyResult purchase)
+        {
+            ActionRollSucceeded = actionRollSucceeded;
+            Purchase = purchase;
+        }
+    }
+
     internal sealed class PlannedNpcSaleResult
     {
         internal bool Succeeded { get; }
@@ -525,6 +553,143 @@ internal static class DailyV1SelectedActionExecutionStage
         result = new PlannedNpcSaleResult(true, false, market.Plan.Quantity,
             market.Plan.UnitPrice, marketTransitioned && marketCompleted,
             marketTransitioned, trade, market);
+        return true;
+    }
+
+    internal static bool TryExecuteSelectedPlannedNpcSaleActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners seller,
+        DailyV1NpcRuntimeOwners buyer,
+        DailyV1ActionDefinition expectedAction,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        IDailyV1SelectedNpcTradeBoundary tradeBoundary,
+        IDailyV1SelectedOpenMarketSaleBoundary marketBoundary,
+        Func<bool> planAdmission,
+        Action planCommitted,
+        out SelectedPlannedNpcSaleActionResult result)
+    {
+        result = null;
+        DailyV1NpcActionSlotOwner slot = seller?.ActionSlot;
+        DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
+        DailyV1NpcMerchantTradePlanOwner plan = seller?.MerchantTradePlan;
+        DailyV1CityRuntimeOwners city = null;
+        if (graph != null && !string.IsNullOrWhiteSpace(seller?.Travel?.CurrentCityRuntimeId))
+            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+                if (string.Equals(candidate.RuntimeId, seller.Travel.CurrentCityRuntimeId,
+                    StringComparison.Ordinal))
+                { city = candidate; break; }
+
+        if (graph == null || seller == null || buyer == null || expectedAction == null
+            || !graph.ContainsExactNpcOwner(seller) || !graph.ContainsExactNpcOwner(buyer)
+            || !ReferenceEquals(seller.Definitions, graph.Definitions)
+            || !ReferenceEquals(buyer.Definitions, graph.Definitions)
+            || !graph.Definitions.Actions.TryGetValue(expectedAction.DefinitionId,
+                out DailyV1ActionDefinition admittedAction)
+            || !ReferenceEquals(admittedAction, expectedAction)
+            || !ReferenceEquals(slot?.CurrentAction, expectedAction)
+            || payload == null || !ReferenceEquals(payload.Action, expectedAction)
+            || expectedAction.Values.actionType?.Value
+                != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            || !string.Equals(payload.TargetNpcRuntimeId, buyer.RuntimeId, StringComparison.Ordinal)
+            || payload.TargetItem == null || payload.Amount <= 0
+            || !graph.Definitions.Items.TryGetValue(payload.TargetItem.DefinitionId,
+                out DailyV1ItemDefinition admittedItem)
+            || !ReferenceEquals(admittedItem, payload.TargetItem)
+            || plan == null || !plan.IsActive
+            || !ReferenceEquals(payload.TargetItem, plan.ItemDefinition)
+            || (payload.TargetCityRuntimeId != null
+                && !string.Equals(payload.TargetCityRuntimeId,
+                    seller.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal))
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                graph.Definitions, expectedAction, seller.Status?.Statuses)
+            || seller.Lifecycle?.LifeState != NpcLifeState.Alive
+            || buyer.Lifecycle?.LifeState != NpcLifeState.Alive
+            || seller.Travel == null || buyer.Travel == null
+            || seller.Travel.IsTraveling || buyer.Travel.IsTraveling
+            || string.IsNullOrWhiteSpace(seller.Travel.CurrentCityRuntimeId)
+            || !string.Equals(seller.Travel.CurrentCityRuntimeId,
+                buyer.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
+            || city == null || !graph.ContainsExactCityOwner(city)
+            || !DailyV1NpcDefinitionRules.HasJobType(buyer.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+            || !DailyV1NpcDefinitionRules.HasMerchantBehavior(buyer.Definition,
+                graph.Definitions, DailyV1NpcDefinitionRules.LocalMerchantBehaviorValue))
+            return false;
+
+        if (!TryRollCurrentActionSlot(graph, seller, randomSource, currentAbsoluteDay,
+            out bool actionRollSucceeded))
+        {
+            result = new SelectedPlannedNpcSaleActionResult(false, false, null);
+            return true;
+        }
+
+        if (!actionRollSucceeded)
+        {
+            result = new SelectedPlannedNpcSaleActionResult(false, false, null);
+            return true;
+        }
+
+        bool executed = TryExecutePlannedNpcSaleSlot(graph, seller, buyer,
+            tradeBoundary, marketBoundary, planAdmission, planCommitted,
+            out PlannedNpcSaleResult sale);
+        result = new SelectedPlannedNpcSaleActionResult(
+            executed && sale?.Succeeded == true, true, sale);
+        return true;
+    }
+
+    /// <summary>Rolls and executes an exact selected cross-city BuyGoods slot in
+    /// Core. The existing purchase boundary and owner admission callbacks retain
+    /// their established P12 and publication order.</summary>
+    internal static bool TryExecuteSelectedCrossCityBuyActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition expectedAction,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary,
+        Func<bool> merchantPlanAdmission,
+        Action merchantPlanCommitted,
+        Func<bool> travelPlanAdmission,
+        Action travelPlanCommitted,
+        out SelectedCrossCityBuyActionResult result)
+    {
+        result = null;
+        DailyV1NpcActionSlotOwner slot = actor?.ActionSlot;
+        DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
+        if (graph == null || actor == null || expectedAction == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(actor.Definitions, graph.Definitions)
+            || !graph.Definitions.Actions.TryGetValue(expectedAction.DefinitionId,
+                out DailyV1ActionDefinition admittedAction)
+            || !ReferenceEquals(admittedAction, expectedAction)
+            || !ReferenceEquals(slot?.CurrentAction, expectedAction)
+            || payload == null || !ReferenceEquals(payload.Action, expectedAction)
+            || expectedAction.Values.actionType?.Value
+                != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
+            || payload.TargetItem == null
+            || !graph.Definitions.Items.TryGetValue(payload.TargetItem.DefinitionId,
+                out DailyV1ItemDefinition admittedItem)
+            || !ReferenceEquals(admittedItem, payload.TargetItem)
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                graph.Definitions, expectedAction, actor.Status?.Statuses)
+            || !DailyV1SelectedCrossCityBuyExecution.IsValidSelectedBuy(
+                graph, actor, payload, out _, out _, out _))
+            return false;
+
+        if (!TryRollCurrentActionSlot(graph, actor, randomSource, currentAbsoluteDay,
+            out bool actionRollSucceeded))
+            return false;
+        if (!actionRollSucceeded)
+        {
+            result = new SelectedCrossCityBuyActionResult(false, null);
+            return true;
+        }
+
+        DailyV1SelectedCrossCityBuyResult purchase = DailyV1SelectedCrossCityBuyExecution.TryExecute(
+            graph, actor, payload, purchaseBoundary, merchantPlanAdmission,
+            merchantPlanCommitted, travelPlanAdmission, travelPlanCommitted);
+        result = new SelectedCrossCityBuyActionResult(true, purchase);
         return true;
     }
 

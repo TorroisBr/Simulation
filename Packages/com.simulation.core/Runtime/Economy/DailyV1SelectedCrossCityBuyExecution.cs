@@ -145,7 +145,7 @@ internal static class DailyV1SelectedCrossCityBuyExecution
             originDecisionId, travelCost);
     }
 
-    private static bool IsValidSelectedBuy(
+    internal static bool IsValidSelectedBuy(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionPayloadOwner payload,

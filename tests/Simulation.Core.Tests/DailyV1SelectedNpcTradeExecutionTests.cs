@@ -194,6 +194,101 @@ public sealed class DailyV1SelectedNpcTradeExecutionTests
     }
 
     [Test]
+    public void SelectedPlannedNpcSaleDispatcherRollsBeforePlanAdmissionAndTradeWrites()
+    {
+        CreateActionRollFixture(1f, out DailyV1EffectiveDefinitions definitions,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners buyer, out DailyV1NpcRuntimeOwners seller,
+            out DailyV1ActionDefinition sell, out DailyV1ItemDefinition item);
+        PreparePlannedBuyerSale(graph, buyer, seller, sell, item, "decision/dispatch-npc-sale");
+
+        List<string> order = new List<string>();
+        FixedActionRandom random = new FixedActionRandom(order, 0.25f);
+        OrderedTradeBoundary boundary = new OrderedTradeBoundary(order, true);
+        float buyerBalance = buyer.MoneyAccount.Balance;
+        float sellerBalance = seller.MoneyAccount.Balance;
+        int sellerInventory = seller.Inventory.GetAmount(item);
+        int buyerInventory = buyer.Inventory.GetAmount(item);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedPlannedNpcSaleActionSlot(
+            graph, seller, buyer, sell, random, 21L, boundary, null,
+            () => { order.Add("plan-admit"); return true; },
+            () => order.Add("plan-commit"), out var result), Is.True);
+
+        Assert.That(result.ActionRollSucceeded, Is.True);
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.Sale.SoldToNpc, Is.True);
+        Assert.That(result.Sale.PlanCompleted, Is.True);
+        Assert.That(order, Is.EqualTo(new[]
+        {
+            "roll", "plan-admit", "p12-begin", "buyer-account", "seller-account",
+            "seller-inventory", "buyer-inventory", "p12-dispose", "plan-commit"
+        }));
+        Assert.That(buyer.MoneyAccount.Balance, Is.LessThan(buyerBalance));
+        Assert.That(seller.MoneyAccount.Balance, Is.GreaterThan(sellerBalance));
+        Assert.That(seller.Inventory.GetAmount(item), Is.LessThan(sellerInventory));
+        Assert.That(buyer.Inventory.GetAmount(item), Is.GreaterThan(buyerInventory));
+        Assert.That(seller.MerchantTradePlan.IsActive, Is.False);
+    }
+
+    [Test]
+    public void SelectedPlannedNpcSaleFailedRollStopsBeforePlanAdmissionAndTradeWrites()
+    {
+        CreateActionRollFixture(0.5f, out _, out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners buyer, out DailyV1NpcRuntimeOwners seller,
+            out DailyV1ActionDefinition sell, out DailyV1ItemDefinition item);
+        PreparePlannedBuyerSale(graph, buyer, seller, sell, item, "decision/failed-npc-sale");
+
+        List<string> order = new List<string>();
+        FixedActionRandom random = new FixedActionRandom(order, 0.99f);
+        OrderedTradeBoundary boundary = new OrderedTradeBoundary(order, true);
+        float buyerBalance = buyer.MoneyAccount.Balance;
+        float sellerBalance = seller.MoneyAccount.Balance;
+        int sellerInventory = seller.Inventory.GetAmount(item);
+        int buyerInventory = buyer.Inventory.GetAmount(item);
+        long planRevision = seller.MerchantTradePlan.Revision;
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedPlannedNpcSaleActionSlot(
+            graph, seller, buyer, sell, random, 22L, boundary, null,
+            () => { order.Add("plan-admit"); return true; },
+            () => order.Add("plan-commit"), out var result), Is.True);
+
+        Assert.That(result.ActionRollSucceeded, Is.False);
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(result.Sale, Is.Null);
+        Assert.That(order, Is.EqualTo(new[] { "roll" }));
+        Assert.That(buyer.MoneyAccount.Balance, Is.EqualTo(buyerBalance));
+        Assert.That(seller.MoneyAccount.Balance, Is.EqualTo(sellerBalance));
+        Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(sellerInventory));
+        Assert.That(buyer.Inventory.GetAmount(item), Is.EqualTo(buyerInventory));
+        Assert.That(seller.MerchantTradePlan.Revision, Is.EqualTo(planRevision));
+        Assert.That(seller.MerchantTradePlan.IsActive, Is.True);
+    }
+
+    [Test]
+    public void SelectedPlannedNpcSaleDispatcherRejectsMismatchedActionBeforeRandomness()
+    {
+        CreateActionRollFixture(1f, out DailyV1EffectiveDefinitions definitions,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners buyer, out DailyV1NpcRuntimeOwners seller,
+            out DailyV1ActionDefinition sell, out DailyV1ItemDefinition item);
+        PreparePlannedBuyerSale(graph, buyer, seller, sell, item, "decision/mismatched-npc-sale");
+        DailyV1ActionDefinition wrongAction = definitions.Actions.Values.First(value =>
+            value.Values.actionType?.Value == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue);
+        List<string> order = new List<string>();
+        FixedActionRandom random = new FixedActionRandom(order, 0.25f);
+        OrderedTradeBoundary boundary = new OrderedTradeBoundary(order, true);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedPlannedNpcSaleActionSlot(
+            graph, seller, buyer, wrongAction, random, 23L, boundary, null,
+            () => { order.Add("plan-admit"); return true; },
+            () => order.Add("plan-commit"), out _), Is.False);
+
+        Assert.That(random.Calls, Is.Zero);
+        Assert.That(order, Is.Empty);
+    }
+
+    [Test]
     public void PlannedSalePlanAdmissionRejectsBeforeAnyTradeOwnerMutation()
     {
         CreateFixture(out DailyV1SelectedRuntimeOwnerGraph graph,
@@ -466,6 +561,71 @@ public sealed class DailyV1SelectedNpcTradeExecutionTests
         Assert.That(seller.Inventory.TryAddItem(item, 4, 12f), Is.True);
     }
 
+    private static void PreparePlannedBuyerSale(DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners buyer, DailyV1NpcRuntimeOwners seller,
+        DailyV1ActionDefinition sell, DailyV1ItemDefinition item, string decisionId)
+    {
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(value =>
+            string.Equals(value.RuntimeId, seller.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        DailyV1CityRuntimeOwners target = graph.Cities.First(value => !ReferenceEquals(value, city));
+        Assert.That(graph.TryInstallMerchantTradePlan(seller, item, city.RuntimeId,
+            target.RuntimeId, 2, 10f, decisionId), Is.True);
+        float currentMarketPrice = city.Market.GetPrice(item);
+        Assert.That(seller.CommercialKnowledge.RecordObservation(new DailyV1CommercialMarketObservation(
+            city.LocationRuntimeId, item, currentMarketPrice, 20, 20L, 20L,
+            DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+        Assert.That(DailyV1MerchantActionPlanning.TryPlanSelectedPlannedLocalBuyer(
+            graph, seller, sell, 20L, 75f, out DailyV1MerchantLocalSalePlan plan), Is.True);
+        Assert.That(plan, Is.Not.Null);
+        Assert.That(plan.SelectedPayload.TargetNpcRuntimeId, Is.EqualTo(buyer.RuntimeId));
+        plan.SelectedPayload.SetOriginDecisionId(decisionId);
+        Assert.That(graph.TryCommitCurrentActionSlot(seller, sell, plan.SelectedPayload, null), Is.True);
+    }
+
+    private static void CreateActionRollFixture(float successChance,
+        out DailyV1EffectiveDefinitions definitions,
+        out DailyV1SelectedRuntimeOwnerGraph graph,
+        out DailyV1NpcRuntimeOwners buyer,
+        out DailyV1NpcRuntimeOwners seller,
+        out DailyV1ActionDefinition sell,
+        out DailyV1ItemDefinition item)
+    {
+        DailyV1EffectiveDefinitions source = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        IEnumerable<DailyV1NpcActionData> actions = source.Actions.Values.Select(action =>
+        {
+            DailyV1NpcActionData values = action.Values;
+            if (values.actionType?.Value != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue)
+                return values;
+            return new DailyV1NpcActionData(values.id, values.statusNecessariosParaFazerAcao,
+                values.actionName, values.normalActionLogText, values.actionCategory, values.actionType,
+                values.baseUtility, values.statusModifiers, true, successChance,
+                values.statusToAdd, values.statusToRemove, values.targetStatusToAdd,
+                values.targetStatusToRemove, values.crimeSettings);
+        });
+        definitions = DailyV1EffectiveDefinitions.CreateSelectedSchema(
+            source.Configuration, source.EffectiveConfiguration, source.Calendar,
+            source.Cities.Values.Select(value => value.Values),
+            source.Items.Values.Select(value => value.Values),
+            source.Npcs.Values.Select(value => value.Values),
+            source.Jobs.Values.Select(value => value.Values), actions,
+            source.Statuses.Values.Select(value => value.Values), source.StageOrder,
+            source.ProfileContractIdentity, source.GeographyProfileContractIdentity,
+            source.GeographyStageIdentity, source.HexCoordinateConvention,
+            source.HexCoordinateCanonicalOrder);
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            id => builder.ResolveUniqueStartingCity(id)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out graph), Is.True);
+        buyer = graph.Npcs.Single(value => value.Definition.DefinitionId == "PEDRO");
+        seller = graph.Npcs.Single(value => value.Definition.DefinitionId == "JORGE");
+        item = definitions.Items["FERRO"];
+        Assert.That(seller.Inventory.TryAddItem(item, 4, 12f), Is.True);
+        sell = definitions.Actions["VENDER_MERCADORIA"];
+    }
+
     private sealed class RecordingBoundary : IDailyV1SelectedNpcTradeBoundary
     {
         private readonly bool admit;
@@ -491,5 +651,36 @@ public sealed class DailyV1SelectedNpcTradeExecutionTests
         public bool TryBegin() { Events.Add("begin"); return admit; }
         public void Complete(DailyV1SelectedOpenMarketSaleCommitResult result) => Events.Add("complete");
         public void Dispose() => Events.Add("dispose");
+    }
+
+    private sealed class FixedActionRandom : IAuthoritativeRandomSource
+    {
+        private readonly IList<string> events;
+        private readonly float value;
+        internal int Calls { get; private set; }
+        internal FixedActionRandom(IList<string> events, float value)
+        { this.events = events; this.value = value; }
+        public float NextUnit(string streamKey, long drawIndex = 0L)
+        { Calls++; events.Add("roll"); return value; }
+        public DeterministicRandomStream CreateStream(string streamKey) => null;
+    }
+
+    private sealed class OrderedTradeBoundary : IDailyV1SelectedNpcTradeBoundary
+    {
+        private readonly IList<string> events;
+        private readonly bool admit;
+        internal OrderedTradeBoundary(IList<string> events, bool admit)
+        { this.events = events; this.admit = admit; }
+        public bool TryBegin() { events.Add("p12-begin"); return admit; }
+        public void NotifyMutation(DailyV1SelectedNpcTradeMutation mutation)
+            => events.Add(mutation switch
+            {
+                DailyV1SelectedNpcTradeMutation.BuyerAccount => "buyer-account",
+                DailyV1SelectedNpcTradeMutation.SellerAccount => "seller-account",
+                DailyV1SelectedNpcTradeMutation.SellerInventory => "seller-inventory",
+                DailyV1SelectedNpcTradeMutation.BuyerInventory => "buyer-inventory",
+                _ => "unknown"
+            });
+        public void Dispose() => events.Add("p12-dispose");
     }
 }

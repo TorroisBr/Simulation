@@ -1029,6 +1029,65 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             out result);
     }
 
+    /// <summary>Rolls and executes an exact selected planned NPC sale through
+    /// Core while retaining this service's existing P12 transaction adapters.</summary>
+    internal bool TryExecuteSelectedPlannedNpcSaleActionSlot(
+        NpcRuntime seller,
+        NpcRuntime buyer,
+        DailyV1ActionDefinition expectedAction,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        out bool actionRollSucceeded,
+        out DailyV1SelectedActionExecutionStage.PlannedNpcSaleResult result)
+    {
+        actionRollSucceeded = false;
+        result = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = seller?.SelectedRuntimeOwnerGraph;
+        DailyV1NpcRuntimeOwners actor = seller?.SelectedRuntimeOwners;
+        DailyV1NpcRuntimeOwners target = buyer?.SelectedRuntimeOwners;
+        DailyV1CityRuntimeOwners cityOwner = null;
+        if (graph != null && !string.IsNullOrWhiteSpace(actor?.Travel?.CurrentCityRuntimeId))
+            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+                if (string.Equals(candidate.RuntimeId, actor.Travel.CurrentCityRuntimeId,
+                    StringComparison.Ordinal))
+                { cityOwner = candidate; break; }
+
+        bool trackTrade = p12CensusRuntime != null
+            && p12CensusRuntime.HasNpcTradeCensusAdapter;
+        bool trackMarket = p12CensusRuntime != null
+            && p12CensusRuntime.HasP12MarketOperationAdapter;
+        if (seller == null || buyer == null || expectedAction == null || graph == null
+            || seller.MerchantTradePlan == null
+            || !ReferenceEquals(graph, buyer.SelectedRuntimeOwnerGraph)
+            || actor == null || target == null || cityOwner == null
+            || !graph.ContainsExactNpcOwner(actor) || !graph.ContainsExactNpcOwner(target)
+            || !graph.ContainsExactCityOwner(cityOwner)
+            || (trackTrade
+                && !ReferenceEquals(seller.MerchantTradePlan?.SelectedOwner, actor.MerchantTradePlan))
+            || !ReferenceEquals(seller.CurrentCity?.SelectedRuntimeOwners, cityOwner)
+            || !ReferenceEquals(buyer.CurrentCity, seller.CurrentCity)
+            || !ReferenceEquals(seller.CurrentCity?.Market?.SelectedDailyV1Owner, cityOwner.Market))
+            return false;
+
+        IDailyV1SelectedNpcTradeBoundary tradeBoundary = trackTrade
+            ? new DailyV1SelectedNpcTradeBoundary(this, buyer, seller)
+            : null;
+        IDailyV1SelectedOpenMarketSaleBoundary marketBoundary = trackMarket
+            ? new DailyV1SelectedOpenMarketSaleBoundary(this, seller, seller.CurrentCity.Market)
+            : null;
+        if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedPlannedNpcSaleActionSlot(
+            graph, actor, target, expectedAction, randomSource, currentAbsoluteDay,
+            tradeBoundary, marketBoundary,
+            seller.MerchantTradePlan.CanAdmitSelectedPlanOwnerMutation,
+            seller.MerchantTradePlan.PublishSelectedPlanOwnerMutation,
+            out DailyV1SelectedActionExecutionStage.SelectedPlannedNpcSaleActionResult execution))
+            return false;
+
+        actionRollSucceeded = execution.ActionRollSucceeded;
+        result = execution.Sale;
+        return true;
+    }
+
     internal bool TryExecuteSelectedPlannedMarketSale(
         NpcRuntime seller,
         out DailyV1SelectedActionExecutionStage.PlannedMarketSaleResult result)
@@ -1280,69 +1339,160 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         DailyV1NpcActionPayloadOwner payload,
         CityRuntime targetCityProjection)
     {
-        DailyV1SelectedRuntimeOwnerGraph graph = npc?.SelectedRuntimeOwnerGraph;
-        DailyV1NpcRuntimeOwners actor = npc?.SelectedRuntimeOwners;
-        DailyV1CityRuntimeOwners originOwner = null;
-        DailyV1CityRuntimeOwners targetOwner = null;
-        if (graph != null && targetCityProjection != null)
-            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
-            {
-                if (string.Equals(candidate.RuntimeId, actor?.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal))
-                    originOwner = candidate;
-                if (string.Equals(candidate.RuntimeId, targetCityProjection.RuntimeId, StringComparison.Ordinal))
-                    targetOwner = candidate;
-            }
-        SpatialLocationRuntime targetLocationProjection = null;
-        if (graph?.SpatialNetwork != null && targetOwner != null)
-            graph.SpatialNetwork.TryGetLocation(targetOwner.LocationRuntimeId,
-                out targetLocationProjection);
-        if (npc == null || actor == null || graph == null || payload == null
-            || npc.CurrentCity?.Market == null
-            || originOwner == null || targetOwner == null
-            || !ReferenceEquals(npc.CurrentCity.SelectedRuntimeOwners, originOwner)
-            || !ReferenceEquals(npc.CurrentCity.Market.SelectedDailyV1Owner, originOwner.Market)
-            || !ReferenceEquals(actor.ActionSlot?.CurrentPayload, payload)
-            || npc.TravelPlan?.SelectedOwner != actor.TravelPlan
-            || !npc.TravelPlan.CanProjectSelectedTradePlanTarget(actor.TravelPlan,
-                targetOwner,
-                targetOwner.RuntimeId, targetOwner.LocationRuntimeId,
-                targetLocationProjection, targetCityProjection))
+        if (!TryResolveSelectedCrossCityBuy(npc, payload, targetCityProjection,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor,
+            out SpatialLocationRuntime targetLocationProjection))
             return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketPurchase,
                 MoneyEffect.ExplicitSink, EconomyTransactionFailureReason.TransactionCommitFailed,
                 actorRuntimeId: npc?.RuntimeId);
 
-        bool p12Tracking = p12CensusRuntime != null
+        DailyV1SelectedCrossCityBuyResult execution = ExecuteSelectedCrossCityBuyCore(
+            npc, actor, graph, payload);
+        return CompleteSelectedCrossCityBuy(npc, actor, payload,
+            targetCityProjection, targetLocationProjection, execution);
+    }
+
+    internal bool TryExecuteSelectedCrossCityBuyActionSlot(
+        NpcRuntime npc,
+        DailyV1ActionDefinition expectedAction,
+        DailyV1NpcActionPayloadOwner payload,
+        CityRuntime targetCityProjection,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        out bool actionRollSucceeded,
+        out EconomyTransactionResult result)
+    {
+        actionRollSucceeded = false;
+        result = null;
+        if (!TryResolveSelectedCrossCityBuy(npc, payload, targetCityProjection,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor,
+            out SpatialLocationRuntime targetLocationProjection))
+            return false;
+
+        bool trackMarket = p12CensusRuntime != null
             && p12CensusRuntime.HasP12MarketOperationAdapter;
-        DailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary = p12Tracking
+        DailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary = trackMarket
             ? new DailyV1SelectedOpenMarketPurchaseBoundary(this, npc, npc.CurrentCity.Market)
             : null;
-        DailyV1SelectedCrossCityBuyResult result = DailyV1SelectedCrossCityBuyExecution.TryExecute(
+        if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedCrossCityBuyActionSlot(
+            graph, actor, expectedAction, randomSource, currentAbsoluteDay, purchaseBoundary,
+            npc.MerchantTradePlan.CanAdmitSelectedPlanOwnerMutation,
+            npc.MerchantTradePlan.PublishSelectedPlanOwnerMutation,
+            npc.TravelPlan.CanAdmitSelectedTradeTravelPlanMutation,
+            npc.TravelPlan.PublishSelectedTradeTravelPlanMutation,
+            out DailyV1SelectedActionExecutionStage.SelectedCrossCityBuyActionResult execution))
+            return false;
+
+        actionRollSucceeded = execution.ActionRollSucceeded;
+        if (!actionRollSucceeded)
+        {
+            MarketLiquidityMode liquidity = npc.CurrentCity.Market.Counterparty.LiquidityMode;
+            MoneyEffect effect = liquidity == MarketLiquidityMode.AccountBacked
+                ? MoneyEffect.Transfer : MoneyEffect.ExplicitSink;
+            result = EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketPurchase,
+                effect, EconomyTransactionFailureReason.TransactionCommitFailed,
+                actorRuntimeId: npc.RuntimeId);
+            return true;
+        }
+
+        result = CompleteSelectedCrossCityBuy(npc, actor, payload,
+            targetCityProjection, targetLocationProjection, execution.Purchase);
+        return true;
+    }
+
+    private bool TryResolveSelectedCrossCityBuy(
+        NpcRuntime npc,
+        DailyV1NpcActionPayloadOwner payload,
+        CityRuntime targetCityProjection,
+        out DailyV1SelectedRuntimeOwnerGraph graph,
+        out DailyV1NpcRuntimeOwners actor,
+        out SpatialLocationRuntime targetLocationProjection)
+    {
+        graph = npc?.SelectedRuntimeOwnerGraph;
+        actor = npc?.SelectedRuntimeOwners;
+        DailyV1CityRuntimeOwners originOwner = null;
+        DailyV1CityRuntimeOwners targetOwner = null;
+        targetLocationProjection = null;
+        if (graph != null && targetCityProjection != null)
+            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+            {
+                if (string.Equals(candidate.RuntimeId, actor?.Travel?.CurrentCityRuntimeId,
+                    StringComparison.Ordinal))
+                    originOwner = candidate;
+                if (string.Equals(candidate.RuntimeId, targetCityProjection.RuntimeId,
+                    StringComparison.Ordinal))
+                    targetOwner = candidate;
+            }
+        if (graph?.SpatialNetwork != null && targetOwner != null)
+            graph.SpatialNetwork.TryGetLocation(targetOwner.LocationRuntimeId,
+                out targetLocationProjection);
+        return npc != null && actor != null && graph != null && payload != null
+            && npc.CurrentCity?.Market != null
+            && npc.MerchantTradePlan != null && npc.TravelPlan != null
+            && originOwner != null && targetOwner != null
+            && graph.ContainsExactNpcOwner(actor)
+            && graph.ContainsExactCityOwner(originOwner)
+            && graph.ContainsExactCityOwner(targetOwner)
+            && ReferenceEquals(npc.CurrentCity.SelectedRuntimeOwners, originOwner)
+            && ReferenceEquals(npc.CurrentCity.Market.SelectedDailyV1Owner, originOwner.Market)
+            && ReferenceEquals(actor.ActionSlot?.CurrentPayload, payload)
+            && ReferenceEquals(npc.MerchantTradePlan.SelectedOwner, actor.MerchantTradePlan)
+            && ReferenceEquals(npc.TravelPlan.SelectedOwner, actor.TravelPlan)
+            && npc.TravelPlan.CanProjectSelectedTradePlanTarget(actor.TravelPlan,
+                targetOwner, targetOwner.RuntimeId, targetOwner.LocationRuntimeId,
+                targetLocationProjection, targetCityProjection);
+    }
+
+    private DailyV1SelectedCrossCityBuyResult ExecuteSelectedCrossCityBuyCore(
+        NpcRuntime npc,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcActionPayloadOwner payload)
+    {
+        bool trackMarket = p12CensusRuntime != null
+            && p12CensusRuntime.HasP12MarketOperationAdapter;
+        DailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary = trackMarket
+            ? new DailyV1SelectedOpenMarketPurchaseBoundary(this, npc, npc.CurrentCity.Market)
+            : null;
+        return DailyV1SelectedCrossCityBuyExecution.TryExecute(
             graph, actor, payload, purchaseBoundary,
             npc.MerchantTradePlan.CanAdmitSelectedPlanOwnerMutation,
             npc.MerchantTradePlan.PublishSelectedPlanOwnerMutation,
             npc.TravelPlan.CanAdmitSelectedTradeTravelPlanMutation,
             npc.TravelPlan.PublishSelectedTradeTravelPlanMutation);
-        MarketLiquidityMode liquidityMode = npc.CurrentCity.Market.Counterparty.LiquidityMode;
-        MoneyEffect moneyEffect = liquidityMode == MarketLiquidityMode.AccountBacked
+    }
+
+    private EconomyTransactionResult CompleteSelectedCrossCityBuy(
+        NpcRuntime npc,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload,
+        CityRuntime targetCityProjection,
+        SpatialLocationRuntime targetLocationProjection,
+        DailyV1SelectedCrossCityBuyResult execution)
+    {
+        MarketLiquidityMode liquidity = npc.CurrentCity.Market.Counterparty.LiquidityMode;
+        MoneyEffect effect = liquidity == MarketLiquidityMode.AccountBacked
             ? MoneyEffect.Transfer : MoneyEffect.ExplicitSink;
-        if (!result.Succeeded)
+        if (!execution.Succeeded)
         {
-            FaultSelectedCrossCityBuyAdmissionIfPartial(result);
+            FaultSelectedCrossCityBuyAdmissionIfPartial(execution);
+            EconomyTransactionFailureReason reason = execution.Failure
+                == DailyV1SelectedCrossCityBuyFailure.PurchasePreparation
+                ? MapSelectedPurchaseFailure(execution.PurchaseCommit?.Failure
+                    ?? DailyV1SelectedOpenMarketPurchaseFailure.TransactionCommitFailed)
+                : EconomyTransactionFailureReason.TransactionCommitFailed;
             return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketPurchase,
-                moneyEffect,
-                result.Failure == DailyV1SelectedCrossCityBuyFailure.PurchasePreparation
-                    ? MapSelectedPurchaseFailure(result.PurchaseCommit?.Failure
-                        ?? DailyV1SelectedOpenMarketPurchaseFailure.TransactionCommitFailed)
-                    : EconomyTransactionFailureReason.TransactionCommitFailed,
-                actorRuntimeId: npc.RuntimeId);
+                effect, reason, actorRuntimeId: npc.RuntimeId);
         }
 
         npc.TravelPlan.ProjectSelectedTradePlan(actor.TravelPlan,
             targetLocationProjection, targetCityProjection);
-        DailyV1SelectedOpenMarketPurchasePlan plan = result.PurchasePlan;
+        DailyV1SelectedOpenMarketPurchasePlan plan = execution.PurchasePlan;
         return EconomyTransactionResult.CreateSuccess(EconomyTransactionType.OpenMarketPurchase,
-            moneyEffect, plan.TotalPrice, plan.ItemDefinitionId,
-            payload.Amount, result.Quantity, result.UnitPrice, plan.TotalPrice,
+            effect, plan.TotalPrice, plan.ItemDefinitionId,
+            payload.Amount, execution.Quantity, execution.UnitPrice, plan.TotalPrice,
             sourceRuntimeId: plan.MarketRuntimeId, destinationRuntimeId: npc.RuntimeId,
             buyerRuntimeId: npc.RuntimeId, sellerRuntimeId: plan.MarketRuntimeId,
             actorRuntimeId: npc.RuntimeId, itemSourceRuntimeId: plan.MarketRuntimeId,

@@ -11768,6 +11768,73 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         if (selectedMerchantAction
             && actionType == NpcActionType.SellGoods
             && actionRuntime?.SelectedOwner != null
+            && actionRuntime.TargetNpc != null
+            && actionRuntime.TargetCity == null
+            && actionRuntime.TargetItem != null
+            && ReferenceEquals(actionRuntime.Action, action)
+            && npcRuntime.TryGetSelectedDailyV1ActionNode(
+                action, out DailyV1ActionDefinition selectedPlannedNpcAction)
+            && npcRuntime.TryGetSelectedDailyV1Item(
+                actionRuntime.TargetItem, out DailyV1ItemDefinition selectedPlannedNpcItem)
+            && npcRuntime.SelectedRuntimeOwners != null
+            && actionRuntime.TargetNpc.SelectedRuntimeOwners != null
+            && SelectedRuntimeOwnerGraph != null
+            && SelectedRuntimeOwnerGraph.ContainsExactNpcOwner(npcRuntime.SelectedRuntimeOwners)
+            && SelectedRuntimeOwnerGraph.ContainsExactNpcOwner(
+                actionRuntime.TargetNpc.SelectedRuntimeOwners)
+            && ReferenceEquals(actionRuntime.TargetNpc.SelectedRuntimeOwnerGraph,
+                SelectedRuntimeOwnerGraph)
+            && ReferenceEquals(actionRuntime.TargetNpc.CurrentCity, npcRuntime.CurrentCity)
+            && ReferenceEquals(npcRuntime.SelectedRuntimeOwners.ActionSlot?.CurrentAction,
+                selectedPlannedNpcAction)
+            && ReferenceEquals(npcRuntime.SelectedRuntimeOwners.ActionSlot?.CurrentPayload,
+                actionRuntime.SelectedOwner)
+            && ReferenceEquals(actionRuntime.SelectedOwner.Action, selectedPlannedNpcAction)
+            && ReferenceEquals(actionRuntime.SelectedOwner.TargetItem, selectedPlannedNpcItem)
+            && string.Equals(actionRuntime.SelectedOwner.TargetNpcRuntimeId,
+                actionRuntime.TargetNpc.RuntimeId, StringComparison.Ordinal)
+            && actionRuntime.SelectedOwner.TargetCityRuntimeId == null
+            && actionRuntime.SelectedOwner.Amount == actionRuntime.Amount
+            && actionRuntime.SelectedOwner.SuccessChanceMultiplier.Equals(
+                actionRuntime.SuccessChanceMultiplier)
+            && string.Equals(actionRuntime.SelectedOwner.OriginDecisionId,
+                actionRuntime.OriginDecisionId, StringComparison.Ordinal)
+            && npcRuntime.SelectedRuntimeOwners.MerchantTradePlan?.IsActive == true)
+        {
+            float referencePrice = npcRuntime.MerchantTradePlan.PurchasePricePerItem;
+            if (economyTransactionService.TryExecuteSelectedPlannedNpcSaleActionSlot(
+                    npcRuntime, actionRuntime.TargetNpc, selectedPlannedNpcAction,
+                    randomSource, CurrentDay, out bool actionRollSucceeded,
+                    out DailyV1SelectedActionExecutionStage.PlannedNpcSaleResult sale))
+            {
+                if (!actionRollSucceeded)
+                    return NpcActionResult.Failed(CreateFailureMessage(npcRuntime, actionRuntime, action));
+                if (sale == null || !sale.Succeeded)
+                    return NpcActionResult.Failed();
+
+                float profit = (sale.UnitPrice - referencePrice) * sale.Quantity;
+                if (sale.SoldToNpc)
+                {
+                    logger?.Log(SimulationLogCategory.Trade,
+                        $"{npcRuntime.NpcName} vendeu {sale.Quantity} {actionRuntime.TargetItem.itemName} para {actionRuntime.TargetNpc.NpcName} em {npcRuntime.CurrentCity.CityName} por {sale.UnitPrice:0.##} cada");
+                    logger?.Log(SimulationLogCategory.Trade, $"Lucro aproximado: {profit:0.##}");
+                }
+                else
+                {
+                    logger?.Log(SimulationLogCategory.Trade,
+                        $"{npcRuntime.NpcName} vendeu {sale.Quantity} {actionRuntime.TargetItem.itemName} ao mercado de {npcRuntime.CurrentCity.CityName} por {sale.UnitPrice:0.##} cada");
+                    logger?.Log(SimulationLogCategory.Trade, $"Lucro aproximado: {profit:0.##}");
+                }
+                if (sale.PlanCompleted)
+                    logger?.Log(SimulationLogCategory.Trade,
+                        $"{npcRuntime.NpcName} concluiu o plano comercial.");
+                return NpcActionResult.Succeeded();
+            }
+        }
+
+        if (selectedMerchantAction
+            && actionType == NpcActionType.SellGoods
+            && actionRuntime?.SelectedOwner != null
             && actionRuntime.TargetNpc == null
             && actionRuntime.TargetCity != null
             && ReferenceEquals(actionRuntime.TargetCity, npcRuntime.CurrentCity)
@@ -11875,6 +11942,52 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     logger?.Log(SimulationLogCategory.Trade,
                         $"Lucro aproximado: {approximateProfit:0.##}");
                 }
+                return NpcActionResult.Succeeded();
+            }
+        }
+
+        if (selectedMerchantAction
+            && actionType == NpcActionType.BuyGoods
+            && actionRuntime?.SelectedOwner != null
+            && actionRuntime.TargetNpc == null
+            && actionRuntime.TargetCity != null
+            && !ReferenceEquals(actionRuntime.TargetCity, npcRuntime.CurrentCity)
+            && actionRuntime.TargetItem != null
+            && ReferenceEquals(actionRuntime.Action, action)
+            && npcRuntime.TryGetSelectedDailyV1ActionNode(
+                action, out DailyV1ActionDefinition selectedCrossCityBuyAction)
+            && npcRuntime.TryGetSelectedDailyV1Item(
+                actionRuntime.TargetItem, out DailyV1ItemDefinition selectedCrossCityBuyItem)
+            && npcRuntime.SelectedRuntimeOwners != null
+            && SelectedRuntimeOwnerGraph != null
+            && SelectedRuntimeOwnerGraph.ContainsExactNpcOwner(npcRuntime.SelectedRuntimeOwners)
+            && ReferenceEquals(npcRuntime.SelectedRuntimeOwners.ActionSlot?.CurrentAction,
+                selectedCrossCityBuyAction)
+            && ReferenceEquals(npcRuntime.SelectedRuntimeOwners.ActionSlot?.CurrentPayload,
+                actionRuntime.SelectedOwner)
+            && ReferenceEquals(actionRuntime.SelectedOwner.Action, selectedCrossCityBuyAction)
+            && ReferenceEquals(actionRuntime.SelectedOwner.TargetItem, selectedCrossCityBuyItem)
+            && actionRuntime.SelectedOwner.TargetNpcRuntimeId == null
+            && actionRuntime.SelectedOwner.Amount == actionRuntime.Amount
+            && actionRuntime.SelectedOwner.SuccessChanceMultiplier.Equals(
+                actionRuntime.SuccessChanceMultiplier)
+            && string.Equals(actionRuntime.SelectedOwner.TargetCityRuntimeId,
+                actionRuntime.TargetCity.RuntimeId, StringComparison.Ordinal)
+            && string.Equals(actionRuntime.SelectedOwner.OriginDecisionId,
+                actionRuntime.OriginDecisionId, StringComparison.Ordinal))
+        {
+            if (economyTransactionService.TryExecuteSelectedCrossCityBuyActionSlot(
+                    npcRuntime, selectedCrossCityBuyAction, actionRuntime.SelectedOwner,
+                    actionRuntime.TargetCity, randomSource, CurrentDay,
+                    out bool actionRollSucceeded, out EconomyTransactionResult purchase))
+            {
+                if (!actionRollSucceeded)
+                    return NpcActionResult.Failed(CreateFailureMessage(npcRuntime, actionRuntime, action));
+                if (!purchase.Success || purchase.Quantity <= 0)
+                    return NpcActionResult.Failed();
+
+                logger?.Log(SimulationLogCategory.Trade,
+                    $"{npcRuntime.NpcName} comprou {purchase.Quantity} {actionRuntime.TargetItem.itemName} em {npcRuntime.CurrentCity.CityName} por {purchase.UnitPrice:0.##} cada para vender em {actionRuntime.TargetCity.CityName}");
                 return NpcActionResult.Succeeded();
             }
         }
