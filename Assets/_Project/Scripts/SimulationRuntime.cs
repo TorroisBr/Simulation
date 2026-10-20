@@ -9194,6 +9194,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         if (!TryAdvanceSelectedDailyV1ActorTurns())
         {
+            if (SelectedRuntimeOwnerGraph != null && runtimeAdmissionContext != null)
+                throw new InvalidOperationException(
+                    "The admitted Daily-v1 actor turn could not bind its exact Core owner graph.");
+
             for (int actorTurnRosterOrdinal = 0; actorTurnRosterOrdinal < npcRuntimes.Count; actorTurnRosterOrdinal++)
             {
                 NpcRuntime npcRuntime = npcRuntimes[actorTurnRosterOrdinal];
