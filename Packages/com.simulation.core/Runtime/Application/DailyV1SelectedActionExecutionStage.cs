@@ -195,7 +195,6 @@ internal static class DailyV1SelectedActionExecutionStage
             || target.Travel.IsTraveling
             || target.HiddenState == null
             || target.HiddenState.RemainingDays > 0
-            || (hiddenStatus != null && guard.Status.Contains(hiddenStatus))
             || (hiddenStatus != null && target.Status?.Contains(hiddenStatus) == true)
             || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
                 definitions, action, guard.Status.Statuses)

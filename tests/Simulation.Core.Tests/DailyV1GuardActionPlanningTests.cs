@@ -101,6 +101,39 @@ public sealed class DailyV1GuardActionPlanningTests
     }
 
     [Test]
+    public void SelectedArrestDoesNotRecheckGuardVisibilityAfterPlanning()
+    {
+        ArrestFixture fixture = CreateArrestFixture("npc/guard", "npc/target");
+        DailyV1NpcRuntimeOwners target = fixture.Npcs["npc/target"];
+        fixture.AddWanted(target.RuntimeId, 80f);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            fixture.Definitions, fixture.ArrestAction, target.RuntimeId, null, null,
+            0, 0f, 1f, NpcTravelReason.None, 0f, "decision/arrest", null,
+            null, null, out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(fixture.Graph.TryCommitCurrentActionSlot(
+            fixture.Guard, fixture.ArrestAction, payload, null), Is.True);
+        Assert.That(fixture.Definitions.Statuses.TryGetValue(
+            fixture.Definitions.Configuration.hiddenStatus,
+            out DailyV1StatusDefinition hiddenStatus), Is.True);
+        Assert.That(fixture.Guard.Status.TryAdd(hiddenStatus), Is.True,
+            "The guard becomes hidden after its action was selected.");
+        RecordingGuardBoundary boundary = new RecordingGuardBoundary(fixture.JusticeRecords);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedGuardArrestActionSlot(
+            fixture.Graph, fixture.Guard, fixture.ArrestAction,
+            new FixedActionRandom(0f), 12L, boundary,
+            out bool actionRollSucceeded,
+            out DailyV1SelectedActionExecutionStage.SelectedGuardArrestActionResult result), Is.True);
+
+        Assert.That(actionRollSucceeded, Is.True);
+        Assert.That(result.Succeeded, Is.True,
+            "Legacy execution validates guard role and arrest target but does not recheck guard visibility.");
+        Assert.That(boundary.OperationCalls, Is.EqualTo(1));
+        Assert.That(boundary.AddSentenceCalls, Is.EqualTo(1));
+        Assert.That(boundary.PublishCalls, Is.EqualTo(1));
+    }
+
+    [Test]
     public void SelectedArrestGraphPlanningRejectsNonExactGuardAndActionOwners()
     {
         ArrestFixture fixture = CreateArrestFixture("npc/guard", "npc/target");
