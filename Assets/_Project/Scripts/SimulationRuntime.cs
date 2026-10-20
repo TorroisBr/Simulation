@@ -11411,9 +11411,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             && actionType == NpcActionType.SellGoods
             && actionRuntime?.SelectedOwner != null
             && actionRuntime.TargetNpc != null
-            && npcRuntime.MerchantTradePlan.IsActive)
+            && npcRuntime.SelectedRuntimeOwners?.MerchantTradePlan?.IsActive == true)
         {
-            if (transactionService.TryExecuteSelectedPlannedNpcSale(
+            if (economyTransactionService.TryExecuteSelectedPlannedNpcSale(
                     npcRuntime, actionRuntime.TargetNpc,
                     out DailyV1SelectedActionExecutionStage.PlannedNpcSaleResult sale))
             {
@@ -11437,6 +11437,32 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     logger?.Log(SimulationLogCategory.Trade, $"{npcRuntime.NpcName} concluiu o plano comercial.");
                 return NpcActionResult.Succeeded();
             }
+        }
+
+        if (selectedMerchantAction
+            && actionType == NpcActionType.SellGoods
+            && actionRuntime?.SelectedOwner != null
+            && actionRuntime.TargetNpc == null
+            && npcRuntime.SelectedRuntimeOwners?.MerchantTradePlan?.IsActive == true
+            && actionRuntime.TargetCity == npcRuntime.CurrentCity)
+        {
+            if (actionRuntime.TargetItem == null || npcRuntime.CurrentCity == null)
+                return NpcActionResult.Failed();
+
+            float planPurchasePrice = npcRuntime.MerchantTradePlan.PurchasePricePerItem;
+            if (!economyTransactionService.TryExecuteSelectedPlannedMarketSale(
+                    npcRuntime,
+                    out DailyV1SelectedActionExecutionStage.PlannedMarketSaleResult sale)
+                || sale == null || !sale.Succeeded)
+                return NpcActionResult.Failed();
+
+            float approximateProfit = (sale.UnitPrice - planPurchasePrice) * sale.Quantity;
+            logger?.Log(SimulationLogCategory.Trade,
+                $"{npcRuntime.NpcName} vendeu {sale.Quantity} {actionRuntime.TargetItem.itemName} ao mercado de {npcRuntime.CurrentCity.CityName} por {sale.UnitPrice:0.##} cada");
+            logger?.Log(SimulationLogCategory.Trade, $"Lucro aproximado: {approximateProfit:0.##}");
+            if (sale.PlanCompleted)
+                logger?.Log(SimulationLogCategory.Trade, $"{npcRuntime.NpcName} concluiu o plano comercial.");
+            return NpcActionResult.Succeeded();
         }
 
         if (actionType == NpcActionType.Normal)
@@ -11480,7 +11506,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             && npcRuntime.CurrentCity != null
             && npcRuntime.SelectedRuntimeOwnerGraph != null
             && npcRuntime.SelectedRuntimeOwnerGraph.ContainsExactNpcOwner(npcRuntime.SelectedRuntimeOwners)
-            && (actionType != NpcActionType.SellGoods || !npcRuntime.MerchantTradePlan.IsActive)
+            && (actionType != NpcActionType.SellGoods
+                || npcRuntime.SelectedRuntimeOwners?.MerchantTradePlan?.IsActive != true)
             && actionRuntime.TargetCity == npcRuntime.CurrentCity)
         {
             float preSaleAverageUnitCost = 0f;
@@ -11496,7 +11523,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 preSaleAverageUnitCost = npcRuntime.SelectedRuntimeOwners.Inventory.GetAverageUnitCost(
                     actionRuntime.SelectedOwner.TargetItem);
 
-            EconomyTransactionResult selectedPurchase = transactionService.TryExecuteSelectedOpenMarketAction(
+            EconomyTransactionResult selectedPurchase = economyTransactionService.TryExecuteSelectedOpenMarketAction(
                 npcRuntime, actionRuntime.SelectedOwner);
             if (!selectedPurchase.Success || selectedPurchase.Quantity <= 0)
                 return NpcActionResult.Failed();

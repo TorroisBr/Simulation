@@ -590,7 +590,7 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
 
         return DailyV1SelectedActionExecutionStage.TryRollCurrentActionSlot(
-            selectedDefinitionGraph, selectedRuntimeOwners, randomSource,
+            selectedRuntimeOwnerGraphProvider?.Invoke(), selectedRuntimeOwners, randomSource,
             currentAbsoluteDay, out succeeded);
     }
 

@@ -297,6 +297,158 @@ public sealed class DailyV1SelectedNpcTradeExecutionTests
         Assert.That(seller.MerchantTradePlan.IsActive, Is.True);
     }
 
+    [Test]
+    public void SelectedPlannedMarketSaleCommitsMarketAndPlanOwnersFromExactSlot()
+    {
+        CreateFixture(out DailyV1SelectedRuntimeOwnerGraph graph,
+            out _, out DailyV1NpcRuntimeOwners seller, out DailyV1ItemDefinition item);
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(value =>
+            string.Equals(value.RuntimeId, seller.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        DailyV1ActionDefinition sell = graph.Definitions.Actions["VENDER_MERCADORIA"];
+        Assert.That(seller.Inventory.TryAddItem(item, 1, 10f), Is.True);
+        int waitThreshold = graph.Definitions.EffectiveConfiguration.MerchantTrade.MaxUnprofitablePlanWaitDays;
+        Assert.That(seller.MerchantTradePlan.TryInstallState(item, city.RuntimeId,
+            city.RuntimeId, 5, 5, 100f, waitThreshold, 0,
+            "decision/market-liquidation"), Is.True);
+        float observedPrice = city.Market.GetPrice(item);
+        Assert.That(seller.CommercialKnowledge.RecordObservation(
+            new DailyV1CommercialMarketObservation(city.LocationRuntimeId, item,
+                observedPrice, 20, 20L, 20L,
+                DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+        DailyV1NpcActionCandidate candidate = new DailyV1NpcActionCandidate(sell, 75f);
+        Assert.That(DailyV1NpcActionDecision.TryPrepareSelectedSellGoodsCandidate(
+            graph, seller, candidate, 20L), Is.True);
+        DailyV1NpcActionPayloadOwner payload = candidate.PreparedPayload;
+        Assert.That(payload, Is.Not.Null);
+        Assert.That(payload.TargetNpcRuntimeId, Is.Null);
+        Assert.That(payload.TargetCityRuntimeId, Is.EqualTo(city.RuntimeId));
+        payload.SetOriginDecisionId("decision/market-liquidation");
+        Assert.That(graph.TryCommitCurrentActionSlot(seller, sell, payload, null), Is.True);
+
+        float balanceBefore = seller.MoneyAccount.Balance;
+        int inventoryBefore = seller.Inventory.GetAmount(item);
+        int marketBefore = city.Market.GetAmount(item);
+        long accountRevisionBefore = seller.MoneyAccount.Revision;
+        long inventoryRevisionBefore = seller.Inventory.Revision;
+        long marketRevisionBefore = city.Market.Revision;
+        long planRevisionBefore = seller.MerchantTradePlan.Revision;
+        RecordingSaleBoundary boundary = new RecordingSaleBoundary(true);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecutePlannedMarketSaleSlot(
+            graph, seller, boundary, () => true, () => { }, out var result), Is.True);
+
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.PartialCommit, Is.False);
+        Assert.That(result.Quantity, Is.EqualTo(payload.Amount));
+        Assert.That(result.UnitPrice, Is.EqualTo(city.Market.GetPrice(item)));
+        Assert.That(result.PlanCompleted, Is.True);
+        Assert.That(result.PlanTransitioned, Is.True);
+        Assert.That(result.MarketSale.Commit.Succeeded, Is.True);
+        Assert.That(boundary.Events, Is.EqualTo(new[] { "begin", "complete", "dispose" }));
+        Assert.That(seller.MoneyAccount.Balance,
+            Is.EqualTo(balanceBefore + result.UnitPrice * result.Quantity).Within(0.001f));
+        Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(inventoryBefore - result.Quantity));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(marketBefore + result.Quantity));
+        Assert.That(seller.MoneyAccount.Revision, Is.EqualTo(accountRevisionBefore + 1));
+        Assert.That(seller.Inventory.Revision, Is.EqualTo(inventoryRevisionBefore + 1));
+        Assert.That(city.Market.Revision, Is.EqualTo(marketRevisionBefore + 1));
+        Assert.That(seller.MerchantTradePlan.Revision, Is.EqualTo(planRevisionBefore + 1));
+        Assert.That(seller.MerchantTradePlan.IsActive, Is.False);
+        Assert.That(seller.ActionSlot.CurrentPayload.OriginDecisionId,
+            Is.EqualTo("decision/market-liquidation"));
+    }
+
+    [Test]
+    public void SelectedPlannedMarketSaleRejectsPlanAdmissionBeforeMarketBoundaryOrWrites()
+    {
+        CreateFixture(out DailyV1SelectedRuntimeOwnerGraph graph,
+            out _, out DailyV1NpcRuntimeOwners seller, out DailyV1ItemDefinition item);
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(value =>
+            string.Equals(value.RuntimeId, seller.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        DailyV1ActionDefinition sell = graph.Definitions.Actions["VENDER_MERCADORIA"];
+        Assert.That(seller.Inventory.TryAddItem(item, 1, 10f), Is.True);
+        int waitThreshold = graph.Definitions.EffectiveConfiguration.MerchantTrade.MaxUnprofitablePlanWaitDays;
+        Assert.That(seller.MerchantTradePlan.TryInstallState(item, city.RuntimeId,
+            city.RuntimeId, 5, 5, 100f, waitThreshold, 0,
+            "decision/market-liquidation-rejected"), Is.True);
+        float observedPrice = city.Market.GetPrice(item);
+        Assert.That(seller.CommercialKnowledge.RecordObservation(
+            new DailyV1CommercialMarketObservation(city.LocationRuntimeId, item,
+                observedPrice, 20, 20L, 20L,
+                DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+        DailyV1NpcActionCandidate candidate = new DailyV1NpcActionCandidate(sell, 75f);
+        Assert.That(DailyV1NpcActionDecision.TryPrepareSelectedSellGoodsCandidate(
+            graph, seller, candidate, 20L), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(
+            seller, sell, candidate.PreparedPayload, null), Is.True);
+
+        float balanceBefore = seller.MoneyAccount.Balance;
+        int inventoryBefore = seller.Inventory.GetAmount(item);
+        int marketBefore = city.Market.GetAmount(item);
+        long accountRevisionBefore = seller.MoneyAccount.Revision;
+        long inventoryRevisionBefore = seller.Inventory.Revision;
+        long marketRevisionBefore = city.Market.Revision;
+        long planRevisionBefore = seller.MerchantTradePlan.Revision;
+        RecordingSaleBoundary boundary = new RecordingSaleBoundary(true);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecutePlannedMarketSaleSlot(
+            graph, seller, boundary, () => false, () => { }, out var result), Is.True);
+
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(result.PartialCommit, Is.False);
+        Assert.That(result.MarketSale, Is.Null);
+        Assert.That(boundary.Events, Is.Empty);
+        Assert.That(seller.MoneyAccount.Balance, Is.EqualTo(balanceBefore).Within(0.001f));
+        Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(inventoryBefore));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(marketBefore));
+        Assert.That(seller.MoneyAccount.Revision, Is.EqualTo(accountRevisionBefore));
+        Assert.That(seller.Inventory.Revision, Is.EqualTo(inventoryRevisionBefore));
+        Assert.That(city.Market.Revision, Is.EqualTo(marketRevisionBefore));
+        Assert.That(seller.MerchantTradePlan.Revision, Is.EqualTo(planRevisionBefore));
+        Assert.That(seller.MerchantTradePlan.IsActive, Is.True);
+    }
+
+    [Test]
+    public void SelectedPlannedMarketSaleMarksUnexpectedPostSalePlanRejectionAsPartialCommit()
+    {
+        CreateFixture(out DailyV1SelectedRuntimeOwnerGraph graph,
+            out _, out DailyV1NpcRuntimeOwners seller, out DailyV1ItemDefinition item);
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(value =>
+            string.Equals(value.RuntimeId, seller.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        DailyV1ActionDefinition sell = graph.Definitions.Actions["VENDER_MERCADORIA"];
+        Assert.That(seller.Inventory.TryAddItem(item, 1, 10f), Is.True);
+        int waitThreshold = graph.Definitions.EffectiveConfiguration.MerchantTrade.MaxUnprofitablePlanWaitDays;
+        Assert.That(seller.MerchantTradePlan.TryInstallState(item, city.RuntimeId,
+            city.RuntimeId, 5, 5, 100f, waitThreshold, 0,
+            "decision/market-liquidation-partial"), Is.True);
+        float observedPrice = city.Market.GetPrice(item);
+        Assert.That(seller.CommercialKnowledge.RecordObservation(
+            new DailyV1CommercialMarketObservation(city.LocationRuntimeId, item,
+                observedPrice, 20, 20L, 20L,
+                DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+        DailyV1NpcActionCandidate candidate = new DailyV1NpcActionCandidate(sell, 75f);
+        Assert.That(DailyV1NpcActionDecision.TryPrepareSelectedSellGoodsCandidate(
+            graph, seller, candidate, 20L), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(
+            seller, sell, candidate.PreparedPayload, null), Is.True);
+
+        int admissionCalls = 0;
+        RecordingSaleBoundary boundary = new RecordingSaleBoundary(true);
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecutePlannedMarketSaleSlot(
+            graph, seller, boundary,
+            () => ++admissionCalls == 1,
+            () => { }, out var result), Is.True);
+
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(result.PartialCommit, Is.True);
+        Assert.That(result.MarketSale.Commit.Succeeded, Is.True);
+        Assert.That(result.PlanTransitioned, Is.False);
+        Assert.That(seller.MerchantTradePlan.IsActive, Is.True);
+        Assert.That(seller.Inventory.GetAmount(item), Is.LessThan(4));
+        Assert.That(admissionCalls, Is.EqualTo(2));
+        Assert.That(boundary.Events, Is.EqualTo(new[] { "begin", "complete", "dispose" }));
+    }
+
     private static void CreateFixture(out DailyV1SelectedRuntimeOwnerGraph graph,
         out DailyV1NpcRuntimeOwners buyer, out DailyV1NpcRuntimeOwners seller,
         out DailyV1ItemDefinition item)
@@ -328,6 +480,16 @@ public sealed class DailyV1SelectedNpcTradeExecutionTests
             DailyV1SelectedNpcTradeMutation.SellerInventory => "seller-inventory",
             _ => "unknown"
         });
+        public void Dispose() => Events.Add("dispose");
+    }
+
+    private sealed class RecordingSaleBoundary : IDailyV1SelectedOpenMarketSaleBoundary
+    {
+        private readonly bool admit;
+        internal List<string> Events { get; } = new List<string>();
+        internal RecordingSaleBoundary(bool admit) => this.admit = admit;
+        public bool TryBegin() { Events.Add("begin"); return admit; }
+        public void Complete(DailyV1SelectedOpenMarketSaleCommitResult result) => Events.Add("complete");
         public void Dispose() => Events.Add("dispose");
     }
 }

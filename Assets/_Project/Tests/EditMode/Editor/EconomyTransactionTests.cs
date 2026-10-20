@@ -923,11 +923,6 @@ public sealed class EconomyTransactionTests
             city.Location.RuntimeId, item.DefinitionId,
             out DailyV1CommercialMarketObservation observedMarket), Is.True);
         Assert.That(observedMarket.ObservedPrice, Is.GreaterThan(merchant.Inventory.GetSelectedAverageUnitCost(item)));
-        float plannedUtility = 0f;
-        NpcActionRuntime plannedSale = merchantSystem.CreateAction(merchant, sellAction, ref plannedUtility);
-        Assert.That(plannedSale, Is.Not.Null,
-            $"The selected local market facts must make SellGoods available; price={observedMarket.ObservedPrice}, utility={plannedUtility}.");
-        Assert.That(plannedSale.TargetItem, Is.SameAs(itemAsset));
         SimulationRuntime runtime = new SimulationRuntime(
             time,
             new[] { city },
@@ -935,7 +930,13 @@ public sealed class EconomyTransactionTests
             configuredActions: new[] { sellAction },
             npcDecisionSystem: new NpcDecisionSystem(new List<INpcActionProvider> { merchantSystem }),
             merchantSystem: merchantSystem,
+            economyTransactionService: transactionService,
             configuration: effective);
+        float plannedUtility = 0f;
+        NpcActionRuntime plannedSale = merchantSystem.CreateAction(merchant, sellAction, ref plannedUtility);
+        Assert.That(plannedSale, Is.Not.Null,
+            $"The selected local market facts must make SellGoods available; price={observedMarket.ObservedPrice}, utility={plannedUtility}.");
+        Assert.That(plannedSale.TargetItem, Is.SameAs(itemAsset));
 
         int inventoryBefore = merchant.Inventory.SelectedDailyV1Owner.GetAmount(item);
         int marketBefore = city.Market.SelectedDailyV1Owner.GetAmount(item);
@@ -959,6 +960,101 @@ public sealed class EconomyTransactionTests
         OwnerSectionCensusWitness receipts = transactionService.GetKeyedSaleReceiptCensus();
         Assert.That(receipts.Cardinality, Is.Zero,
             "The ordinary Daily-v1 sale must not create a P18-D keyed receipt.");
+        Assert.That(receipts.Revision, Is.Zero);
+    }
+
+    [Test]
+    public void DailySelectedPlannedMarketLiquidationExecutesThroughCoreAndCompletesExactPlanOwner()
+    {
+        ItemData itemAsset = SimulationTestFactory.CreateItem("daily-selected-plan-sale-item", 10f);
+        CityData cityAsset = SimulationTestFactory.CreateCityData("daily-selected-plan-sale-city",
+            SimulationTestFactory.CreateMarketItem(itemAsset, 0, 8));
+        NpcData npcAsset = SimulationTestFactory.CreateNpc(
+            "daily-selected-plan-sale-merchant", NpcJobType.Merchant, MerchantBehavior.Traveling);
+        NpcActionData sellAction = SimulationTestFactory.CreateAction(
+            "daily-selected-plan-sale-action", NpcActionType.SellGoods, NpcActionCategory.Commerce);
+        npcAsset.acoesPadrao.Add(new NPCDefaultAction { action = sellAction, baseUtility = 10f });
+        NpcSimulationConfig npcConfig = new NpcSimulationConfig
+        {
+            npc = npcAsset,
+            startingCity = cityAsset,
+            initialMoney = 20f
+        };
+        SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
+        authoring.enabledModules.Add(SimulationModule.Merchant);
+        authoring.Cities.Add(cityAsset);
+        authoring.Npcs.Add(npcConfig);
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: authoring.CreateConfigurationOverrides());
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(authoring.Calendar, out _);
+        DailyV1EffectiveDefinitions definitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            authoring, effective, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        DailyV1ItemDefinition item = definitions.Items[itemAsset.DefinitionId];
+        CityRuntime city = CityRuntime.CreateSelectedDailyV1(
+            "daily-selected-plan-sale-city-runtime", definitions.Cities[cityAsset.DefinitionId], definitions,
+            bindings, new SpatialLocationRuntime("daily-selected-plan-sale-location"));
+        NpcRuntime merchant = NpcRuntime.CreateSelectedDailyV1(
+            "daily-selected-plan-sale-merchant-runtime", definitions.Npcs[npcAsset.DefinitionId],
+            definitions, bindings, city, 20f);
+        Assert.That(merchant.Inventory.TryAddSelectedItem(item, 2, 1f), Is.True);
+        Assert.That(merchant.SelectedRuntimeOwners.MerchantTradePlan.TryInstallState(
+            item, city.RuntimeId, city.RuntimeId, 2, 2, 1f, 0, 0,
+            "daily-selected-plan-sale-origin"), Is.True);
+
+        SimulationTime time = new SimulationTime();
+        EconomyTransactionService transactionService = new EconomyTransactionService();
+        MerchantSystem merchantSystem = new MerchantSystem(
+            effective.MerchantTrade,
+            effective.CommercialKnowledge,
+            travelSystem: null,
+            simulationTime: time,
+            decisionRecorder: null,
+            transactionService: transactionService);
+        merchantSystem.ObserveCurrentMarket(merchant);
+        Assert.That(merchant.Inventory.SelectedDailyV1Owner.GetAmount(item), Is.EqualTo(2));
+        Assert.That(city.Market.SelectedDailyV1Owner.GetAmount(item), Is.Zero);
+        Assert.That(merchant.CommercialKnowledge.SelectedOwner.Observations.Count, Is.EqualTo(1));
+
+        SimulationRuntime runtime = new SimulationRuntime(
+            time,
+            new[] { city },
+            new[] { merchant },
+            configuredActions: new[] { sellAction },
+            npcDecisionSystem: new NpcDecisionSystem(new List<INpcActionProvider> { merchantSystem }),
+            merchantSystem: merchantSystem,
+            economyTransactionService: transactionService,
+            configuration: effective);
+
+        float moneyBefore = merchant.MoneyAccount.Balance;
+        long accountRevisionBefore = merchant.MoneyAccount.Revision;
+        long inventoryRevisionBefore = merchant.Inventory.Revision;
+        long marketRevisionBefore = city.Market.Revision;
+        long planRevisionBefore = merchant.SelectedRuntimeOwners.MerchantTradePlan.Revision;
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure), Is.True, failure.ToString());
+
+        Assert.That(merchant.CurrentAction, Is.SameAs(sellAction));
+        Assert.That(merchant.CurrentActionRuntime, Is.Not.Null);
+        Assert.That(merchant.CurrentActionRuntime.TargetCity, Is.SameAs(city));
+        Assert.That(merchant.CurrentActionRuntime.TargetNpc, Is.Null);
+        Assert.That(merchant.CurrentActionRuntime.SelectedOwner, Is.Not.Null,
+            "The selected runtime action must retain its exact Core payload owner.");
+        Assert.That(merchant.CurrentActionRuntime.Amount, Is.EqualTo(2));
+        Assert.That(merchant.Inventory.SelectedDailyV1Owner.GetAmount(item), Is.Zero);
+        Assert.That(city.Market.SelectedDailyV1Owner.GetAmount(item), Is.EqualTo(2));
+        Assert.That(merchant.MoneyAccount.Balance, Is.GreaterThan(moneyBefore));
+        Assert.That(merchant.MoneyAccount.Revision, Is.EqualTo(accountRevisionBefore + 1));
+        Assert.That(merchant.Inventory.Revision, Is.EqualTo(inventoryRevisionBefore + 1));
+        Assert.That(city.Market.Revision, Is.EqualTo(marketRevisionBefore + 1));
+        Assert.That(merchant.SelectedRuntimeOwners.MerchantTradePlan.Revision,
+            Is.EqualTo(planRevisionBefore + 1),
+            $"Expected one plan transition from revision {planRevisionBefore}; current revision is "
+            + $"{merchant.SelectedRuntimeOwners.MerchantTradePlan.Revision}, remaining amount "
+            + $"{merchant.SelectedRuntimeOwners.MerchantTradePlan.RemainingAmount}, active "
+            + $"{merchant.SelectedRuntimeOwners.MerchantTradePlan.IsActive}.");
+        Assert.That(merchant.MerchantTradePlan.IsActive, Is.False);
+        OwnerSectionCensusWitness receipts = transactionService.GetKeyedSaleReceiptCensus();
+        Assert.That(receipts.Cardinality, Is.Zero,
+            "The ordinary planned sale must not create a P18-D keyed receipt.");
         Assert.That(receipts.Revision, Is.Zero);
     }
 
@@ -1061,6 +1157,7 @@ public sealed class EconomyTransactionTests
         };
 
         SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
+        authoring.travelCostPerDay = 1f;
         authoring.Cities.Add(originAsset);
         authoring.Cities.Add(destinationAsset);
         authoring.Npcs.Add(npcConfig);
@@ -1114,6 +1211,16 @@ public sealed class EconomyTransactionTests
         merchantAsset.job.PreferredTradeItems[0].utilityMultiplier = 1000f;
         SimulationTime time = new SimulationTime();
         MerchantSystem system = SimulationTestFactory.CreateMerchantSystem(travel, time);
+        SimulationRuntime runtime = new SimulationRuntime(
+            time,
+            new[] { origin, destination },
+            new[] { merchant },
+            configuredActions: new[] { buyAction },
+            npcDecisionSystem: new NpcDecisionSystem(new List<INpcActionProvider> { system }),
+            travelSystem: travel,
+            merchantSystem: system,
+            configuration: effective,
+            spatialNetworkRuntime: network);
         float utility = 10f;
         NpcActionRuntime action = system.CreateAction(merchant, buyAction, ref utility);
 
@@ -1173,6 +1280,9 @@ public sealed class EconomyTransactionTests
         NpcRuntime merchant = NpcRuntime.CreateSelectedDailyV1(
             "selected-merchant-typed-npc-runtime", npcDefinition, definitions, bindings, city, 20f);
         Assert.That(merchant.Inventory.TryAddSelectedItem(item, 2, 0f), Is.True);
+        Assert.That(merchant.TryBindSelectedDailyV1Definition(
+            npcDefinition, definitions, bindings,
+            runtimeId => string.Equals(runtimeId, city.RuntimeId, StringComparison.Ordinal) ? city : null), Is.True);
 
         // Remove only the legacy projections. The Merchant action still receives the
         // authored ItemData at its Unity edge, while the selected owner transaction
@@ -1182,7 +1292,8 @@ public sealed class EconomyTransactionTests
         typeof(InventoryRuntime).GetField("selectedBindings", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(merchant.Inventory, null);
 
-        MerchantSystem merchantSystem = SimulationTestFactory.CreateMerchantSystem(null, new SimulationTime());
+        SimulationTime time = new SimulationTime();
+        MerchantSystem merchantSystem = SimulationTestFactory.CreateMerchantSystem(null, time);
         Assert.That(merchant.CommercialKnowledge.RecordObservation(new CommercialMarketObservation(
             city.Location.RuntimeId,
             itemAsset,
@@ -1191,6 +1302,14 @@ public sealed class EconomyTransactionTests
             0L,
             0L,
             CommercialKnowledgeSource.DirectObservation)), Is.True);
+        SimulationRuntime runtime = new SimulationRuntime(
+            time,
+            new[] { city },
+            new[] { merchant },
+            configuredActions: new[] { sellAction, buyAction },
+            npcDecisionSystem: new NpcDecisionSystem(new List<INpcActionProvider> { merchantSystem }),
+            merchantSystem: merchantSystem,
+            configuration: effective);
         float selectedSaleUtility = 0f;
         NpcActionRuntime plannedSelectedSale = merchantSystem.CreateAction(
             merchant, sellAction, ref selectedSaleUtility);
@@ -1242,7 +1361,8 @@ public sealed class EconomyTransactionTests
         Assert.That(merchant.Inventory.SelectedDailyV1Owner.GetAmount(item), Is.EqualTo(inventoryAfterKeyedSale));
         Assert.That(city.Market.SelectedDailyV1Owner.GetAmount(item), Is.EqualTo(stockAfterKeyedSale));
 
-        merchant.SetMerchantTradePlan(itemAsset, city, city, 4, 10f);
+        Assert.That(merchant.TrySetSelectedMerchantTradePlan(
+            itemAsset, city, city, 4, 10f, "selected-merchant-typed-plan"), Is.True);
         float plannedSaleUtility = 0f;
         NpcActionRuntime plannedSale = merchantSystem.CreateAction(merchant, sellAction, ref plannedSaleUtility);
         Assert.That(plannedSale, Is.Not.Null,

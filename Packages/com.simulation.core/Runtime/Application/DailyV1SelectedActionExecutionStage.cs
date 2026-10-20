@@ -24,6 +24,30 @@ internal static class DailyV1SelectedActionExecutionStage
           NpcTrade = npcTrade; MarketSale = marketSale; }
     }
 
+    internal sealed class PlannedMarketSaleResult
+    {
+        internal bool Succeeded { get; }
+        internal bool PartialCommit { get; }
+        internal int Quantity { get; }
+        internal float UnitPrice { get; }
+        internal bool PlanCompleted { get; }
+        internal bool PlanTransitioned { get; }
+        internal DailyV1SelectedOpenMarketSaleExecution MarketSale { get; }
+
+        internal PlannedMarketSaleResult(bool succeeded, bool partialCommit, int quantity,
+            float unitPrice, bool planCompleted, bool planTransitioned,
+            DailyV1SelectedOpenMarketSaleExecution marketSale)
+        {
+            Succeeded = succeeded;
+            PartialCommit = partialCommit;
+            Quantity = quantity;
+            UnitPrice = unitPrice;
+            PlanCompleted = planCompleted;
+            PlanTransitioned = planTransitioned;
+            MarketSale = marketSale;
+        }
+    }
+
     internal sealed class SoloTravelResult
     {
         internal DailyV1SelectedTravelTransitionPlan Transition { get; }
@@ -243,6 +267,89 @@ internal static class DailyV1SelectedActionExecutionStage
         result = new PlannedNpcSaleResult(true, false, market.Plan.Quantity,
             market.Plan.UnitPrice, marketTransitioned && marketCompleted,
             marketTransitioned, trade, market);
+        return true;
+    }
+
+    /// <summary>Executes an active selected merchant plan's market liquidation
+    /// from its exact action slot. Plan revision/admission is checked before the
+    /// sale; a post-sale plan rejection is reported as a partial commit for the
+    /// host admission adapter to fault.</summary>
+    internal static bool TryExecutePlannedMarketSaleSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners seller,
+        IDailyV1SelectedOpenMarketSaleBoundary marketBoundary,
+        Func<bool> planAdmission,
+        Action planCommitted,
+        out PlannedMarketSaleResult result)
+    {
+        result = null;
+        DailyV1NpcActionSlotOwner slot = seller?.ActionSlot;
+        DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
+        DailyV1NpcMerchantTradePlanOwner plan = seller?.MerchantTradePlan;
+        DailyV1CityRuntimeOwners city = null;
+        if (graph != null && !string.IsNullOrWhiteSpace(seller?.Travel?.CurrentCityRuntimeId))
+            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+                if (string.Equals(candidate.RuntimeId, seller.Travel.CurrentCityRuntimeId,
+                    StringComparison.Ordinal))
+                { city = candidate; break; }
+
+        if (graph == null || seller == null || !graph.ContainsExactNpcOwner(seller)
+            || !ReferenceEquals(seller.Definitions, graph.Definitions)
+            || slot?.CurrentAction == null || payload == null
+            || !ReferenceEquals(payload.Action, slot.CurrentAction)
+            || slot.CurrentAction.Values.actionType?.Value
+                != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                graph.Definitions, slot.CurrentAction, seller.Status?.Statuses)
+            || payload.TargetNpcRuntimeId != null
+            || payload.TargetItem == null
+            || payload.Amount <= 0
+            || plan == null || !plan.IsActive
+            || !ReferenceEquals(payload.TargetItem, plan.ItemDefinition)
+            || payload.Amount > plan.RemainingAmount
+            || seller.Lifecycle?.LifeState != NpcLifeState.Alive
+            || seller.Travel == null || seller.Travel.IsTraveling
+            || city == null || !graph.ContainsExactCityOwner(city)
+            || !string.Equals(payload.TargetCityRuntimeId, city.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(plan.TargetCityRuntimeId, city.RuntimeId, StringComparison.Ordinal))
+            return false;
+
+        if (!plan.CanRegisterSale(payload.Amount))
+        {
+            result = new PlannedMarketSaleResult(false, false, 0, 0f,
+                false, false, null);
+            return true;
+        }
+
+        bool admitted;
+        try { admitted = planAdmission == null || planAdmission(); }
+        catch { admitted = false; }
+        if (!admitted)
+        {
+            result = new PlannedMarketSaleResult(false, false, 0, 0f,
+                false, false, null);
+            return true;
+        }
+
+        DailyV1SelectedOpenMarketSaleExecution marketSale =
+            DailyV1SelectedOpenMarketSaleExecution.TryExecute(
+                graph, seller, city.Market, payload.TargetItem, payload.Amount,
+                marketBoundary);
+        if (!marketSale.Prepared || marketSale.Commit?.Succeeded != true
+            || marketSale.Plan.Quantity <= 0)
+        {
+            result = new PlannedMarketSaleResult(false,
+                marketSale.Commit?.PartialCommit == true, 0, 0f,
+                false, false, marketSale);
+            return true;
+        }
+
+        bool transitioned = plan.TryRegisterSale(
+            marketSale.Plan.Quantity, planAdmission, planCommitted,
+            out bool completed);
+        result = new PlannedMarketSaleResult(transitioned, !transitioned,
+            marketSale.Plan.Quantity, marketSale.Plan.UnitPrice,
+            transitioned && completed, transitioned, marketSale);
         return true;
     }
 }

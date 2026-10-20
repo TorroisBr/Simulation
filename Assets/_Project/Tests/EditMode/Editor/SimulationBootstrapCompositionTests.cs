@@ -411,7 +411,7 @@ public sealed class SimulationBootstrapCompositionTests
             out FactReadResult<string> unsupportedCapability), Is.True);
         Assert.That(unsupportedCapability.Status, Is.EqualTo(FactReadStatus.Unsupported));
 
-        Assert.That(simulation.Runtime.TryAcquireAdvanceLease(out SimulationRuntime.AdvanceLease lease), Is.True);
+        Assert.That(simulation.Runtime.TryAcquireAdvanceLease(out var lease), Is.True);
         using (lease)
         {
             Assert.That(simulation.Bootstrap.FactualReads.TryCaptureCoherent(

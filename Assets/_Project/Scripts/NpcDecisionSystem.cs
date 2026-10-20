@@ -185,7 +185,7 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
                 DailyV1NpcActionPayloadOwner payload = candidate.PreparedPayload;
                 NpcRuntime selectedBuyer = null;
                 if (!string.IsNullOrWhiteSpace(payload?.TargetNpcRuntimeId))
-                    selectedBuyer = npcRuntime.CurrentCity?.ImportantNpcs?.Find(candidateNpc =>
+                    selectedBuyer = npcRuntime.CurrentCity?.ImportantNpcs?.FirstOrDefault(candidateNpc =>
                         candidateNpc != null && string.Equals(candidateNpc.RuntimeId,
                             payload.TargetNpcRuntimeId, StringComparison.Ordinal));
                 if (payload == null
@@ -199,9 +199,11 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
                     continue;
                 }
 
-                NpcActionRuntime selectedSaleAction = new NpcActionRuntime(
-                    selectedSaleAsset, selectedBuyer ?? npcRuntime.CurrentCity, selectedSaleItemAsset,
-                    payload.Amount, payload.ExpectedUnitPrice);
+                NpcActionRuntime selectedSaleAction = selectedBuyer != null
+                    ? new NpcActionRuntime(selectedSaleAsset, selectedBuyer, selectedSaleItemAsset,
+                        payload.Amount, payload.ExpectedUnitPrice)
+                    : new NpcActionRuntime(selectedSaleAsset, npcRuntime.CurrentCity, selectedSaleItemAsset,
+                        payload.Amount, payload.ExpectedUnitPrice);
                 if (!selectedSaleAction.TryUseSelectedPayload(
                         payload, npcRuntime.SelectedDailyV1DefinitionGraph))
                 {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using UnityEngine;
 
 public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvider, IAuthoritativeMutationGuardBindable
@@ -1047,7 +1048,7 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
             }
             if (selectedBuyerPlan?.SelectedPayload != null)
             {
-                NpcRuntime selectedBuyer = npcRuntime.CurrentCity.ImportantNpcs?.Find(candidate =>
+                NpcRuntime selectedBuyer = npcRuntime.CurrentCity.ImportantNpcs?.FirstOrDefault(candidate =>
                     candidate != null && string.Equals(candidate.RuntimeId,
                         selectedBuyerPlan.TargetNpcRuntimeId, StringComparison.Ordinal));
                 if (selectedBuyer == null)
@@ -1616,7 +1617,24 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
 
         if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
         {
-            return FindBestSelectedLocalSale(npcRuntime);
+            List<NpcActionData> selectedActions = new List<NpcActionData>();
+            if (!npcRuntime.TryGetSelectedDailyV1Actions(selectedActions))
+                return null;
+
+            MerchantTradeOpportunity bestSelectedSale = null;
+            foreach (NpcActionData selectedAction in selectedActions)
+            {
+                if (npcRuntime.GetConfiguredActionType(selectedAction) != NpcActionType.SellGoods)
+                    continue;
+
+                MerchantTradeOpportunity selectedSale = FindBestSelectedLocalSale(
+                    npcRuntime, selectedAction, 0f, out _);
+                if (selectedSale != null
+                    && (bestSelectedSale == null || selectedSale.Score > bestSelectedSale.Score))
+                    bestSelectedSale = selectedSale;
+            }
+
+            return bestSelectedSale;
         }
 
         MerchantTradeOpportunity bestSale = null;

@@ -1029,6 +1029,45 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             out result);
     }
 
+    internal bool TryExecuteSelectedPlannedMarketSale(
+        NpcRuntime seller,
+        out DailyV1SelectedActionExecutionStage.PlannedMarketSaleResult result)
+    {
+        result = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = seller?.SelectedRuntimeOwnerGraph;
+        DailyV1NpcRuntimeOwners actor = seller?.SelectedRuntimeOwners;
+        DailyV1CityRuntimeOwners cityOwner = null;
+        if (graph != null && !string.IsNullOrWhiteSpace(actor?.Travel?.CurrentCityRuntimeId))
+            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+                if (string.Equals(candidate.RuntimeId, actor.Travel.CurrentCityRuntimeId,
+                    StringComparison.Ordinal))
+                { cityOwner = candidate; break; }
+
+        bool trackMarket = p12CensusRuntime != null
+            && p12CensusRuntime.HasP12MarketOperationAdapter;
+
+        if (seller == null || graph == null || actor == null || cityOwner == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !graph.ContainsExactCityOwner(cityOwner)
+            || (trackMarket
+                && !ReferenceEquals(seller.MerchantTradePlan.SelectedOwner, actor.MerchantTradePlan))
+            || !ReferenceEquals(seller.CurrentCity?.SelectedRuntimeOwners, cityOwner)
+            || !ReferenceEquals(seller.CurrentCity?.Market?.SelectedDailyV1Owner, cityOwner.Market))
+            return false;
+
+        IDailyV1SelectedOpenMarketSaleBoundary marketBoundary = trackMarket
+            ? new DailyV1SelectedOpenMarketSaleBoundary(this, seller, seller.CurrentCity.Market)
+            : null;
+        bool executed = DailyV1SelectedActionExecutionStage.TryExecutePlannedMarketSaleSlot(
+            graph, actor, marketBoundary,
+            seller.MerchantTradePlan.CanAdmitSelectedPlanOwnerMutation,
+            seller.MerchantTradePlan.PublishSelectedPlanOwnerMutation,
+            out result);
+        if (result?.PartialCommit == true)
+            p12CensusRuntime?.FaultRuntimeAdmission();
+        return executed;
+    }
+
     /// <summary>Executes a selected local market action from its exact Core payload.</summary>
     internal EconomyTransactionResult TryExecuteSelectedOpenMarketAction(
         NpcRuntime npc,
