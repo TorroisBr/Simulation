@@ -177,6 +177,316 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
     }
 
     [Test]
+    public void SelectedSoloTravelDispatcherPreservesRepositionAndTravelCallbackOrder()
+    {
+        CreateSelectedTravelFixture(NpcTravelReason.TradeReposition,
+            out DailyV1EffectiveDefinitions definitions,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor,
+            out DailyV1CityRuntimeOwners destination,
+            out DailyV1ActionDefinition action,
+            out TravelPartyStore partyStore);
+        List<string> order = new List<string>();
+        RecordingSelectedTravelActionBoundary boundary = new RecordingSelectedTravelActionBoundary(
+            order, graph, actor, NpcTravelReason.TradeReposition);
+        FixedTravelActionRandomSource random = new FixedTravelActionRandomSource();
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
+            graph, actor, action, partyStore, random, 27L, boundary,
+            out DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult result), Is.True);
+
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.ActionRollSucceeded, Is.True);
+        Assert.That(result.Travel.Succeeded, Is.True);
+        Assert.That(order, Is.EqualTo(new[]
+        {
+            "operation-enter", "reposition-preflight", "reposition-log",
+            "transition-preflight", "transition-commit", "travel-publication",
+            "plan-clear", "operation-exit"
+        }));
+        Assert.That(actor.Travel.IsTraveling, Is.True);
+        Assert.That(actor.SpatialKnowledge.KnowsLocation(result.Travel.Route.Origin.RuntimeId), Is.True);
+        Assert.That(actor.SpatialKnowledge.KnowsRoute(result.Travel.Route.RuntimeId), Is.True);
+        Assert.That(actor.TravelPlan.TargetCityRuntimeId, Is.Null);
+        Assert.That(actor.TravelPlan.Reason, Is.EqualTo(NpcTravelReason.None));
+    }
+
+    [Test]
+    public void SelectedSoloTravelDispatcherPublishesCommercialScoutBeforeClearingCorePlan()
+    {
+        CreateSelectedTravelFixture(NpcTravelReason.CommercialScout,
+            out _, out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor,
+            out _, out DailyV1ActionDefinition action,
+            out TravelPartyStore partyStore);
+        List<string> order = new List<string>();
+        RecordingSelectedTravelActionBoundary boundary = new RecordingSelectedTravelActionBoundary(
+            order, graph, actor, NpcTravelReason.CommercialScout);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
+            graph, actor, action, partyStore, new FixedTravelActionRandomSource(), 28L, boundary,
+            out DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult result), Is.True);
+
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(order, Is.EqualTo(new[]
+        {
+            "operation-enter", "transition-preflight", "transition-commit",
+            "travel-publication", "commercial-scout", "plan-clear", "operation-exit"
+        }));
+        Assert.That(actor.TravelPlan.TargetLocationRuntimeId, Is.Null);
+        Assert.That(actor.TravelPlan.TargetCityRuntimeId, Is.Null);
+        Assert.That(actor.TravelPlan.Reason, Is.EqualTo(NpcTravelReason.None));
+    }
+
+    [Test]
+    public void SelectedSoloTravelDispatcherRefusesMismatchedSlotBeforeRandomnessAndLetsCoreRejectMissingDestination()
+    {
+        CreateSelectedTravelFixture(NpcTravelReason.Trade,
+            out DailyV1EffectiveDefinitions definitions,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor,
+            out DailyV1CityRuntimeOwners destination,
+            out DailyV1ActionDefinition action,
+            out TravelPartyStore partyStore);
+        List<string> order = new List<string>();
+        RecordingSelectedTravelActionBoundary boundary = new RecordingSelectedTravelActionBoundary(
+            order, graph, actor, NpcTravelReason.Trade);
+        FixedTravelActionRandomSource random = new FixedTravelActionRandomSource();
+        float balanceBefore = actor.MoneyAccount.Balance;
+        long travelRevisionBefore = actor.Travel.Revision;
+        long travelPlanRevisionBefore = actor.TravelPlan.Revision;
+
+        DailyV1ActionDefinition mismatchedAction = definitions.Actions.Values.First(candidate =>
+            candidate.Values.actionType?.Value != DailyV1NpcDefinitionRules.TravelActionTypeValue);
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
+            graph, actor, mismatchedAction, partyStore, random, 29L, boundary, out _), Is.False);
+        Assert.That(random.Calls, Is.Zero);
+        Assert.That(order, Is.Empty);
+
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(definitions, action,
+            null, null, null, 0, 0f, 1f, NpcTravelReason.Trade,
+            0f, "decision/selected-travel", null, null, null,
+            out DailyV1NpcActionPayloadOwner unsupportedPayload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, action, unsupportedPayload, null), Is.True);
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
+            graph, actor, action, partyStore, random, 29L, boundary, out _), Is.False,
+            "An unbound target is not dispatched by the Core Travel operation.");
+        Assert.That(random.Calls, Is.Zero);
+        Assert.That(order, Is.Empty);
+
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(definitions, action,
+            null, "missing-city", null, 0, 0f, 1f, NpcTravelReason.Trade,
+            0f, "decision/selected-travel", null, null, null,
+            out DailyV1NpcActionPayloadOwner missingDestinationPayload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, action, missingDestinationPayload, null), Is.True);
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
+            graph, actor, action, partyStore, random, 29L, boundary,
+            out DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult missingDestination), Is.True);
+        Assert.That(missingDestination.Succeeded, Is.False);
+        Assert.That(missingDestination.ActionRollSucceeded, Is.True,
+            "An exact supported Travel slot consumes its action roll and enters the P12 wrapper before route resolution.");
+        Assert.That(random.Calls, Is.Zero, "This authored Travel action is non-failing and therefore has no roll draw.");
+        Assert.That(order, Is.EqualTo(new[] { "operation-enter", "operation-exit" }));
+        Assert.That(actor.MoneyAccount.Balance, Is.EqualTo(balanceBefore));
+        Assert.That(actor.Travel.Revision, Is.EqualTo(travelRevisionBefore));
+        Assert.That(actor.TravelPlan.Revision, Is.EqualTo(travelPlanRevisionBefore));
+        Assert.That(actor.Travel.IsTraveling, Is.False);
+        Assert.That(destination.RuntimeId, Is.Not.Empty);
+    }
+
+    [Test]
+    public void SelectedSoloTravelDispatcherStopsAfterFailedActionRoll()
+    {
+        CreateSelectedTravelFixture(NpcTravelReason.Trade, out _, out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor, out _, out DailyV1ActionDefinition action,
+            out TravelPartyStore partyStore, canFailTravel: true, travelSuccessChance: 0f);
+        List<string> order = new List<string>();
+        RecordingSelectedTravelActionBoundary boundary = new RecordingSelectedTravelActionBoundary(
+            order, graph, actor, NpcTravelReason.Trade);
+        FixedTravelActionRandomSource random = new FixedTravelActionRandomSource(0.5f);
+        float balanceBefore = actor.MoneyAccount.Balance;
+        long travelRevisionBefore = actor.Travel.Revision;
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
+            graph, actor, action, partyStore, random, 30L, boundary,
+            out DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult result), Is.True);
+
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(result.ActionRollSucceeded, Is.False);
+        Assert.That(random.Calls, Is.EqualTo(1));
+        Assert.That(order, Is.Empty, "P12 admission and all travel callbacks follow a successful roll.");
+        Assert.That(actor.MoneyAccount.Balance, Is.EqualTo(balanceBefore));
+        Assert.That(actor.Travel.Revision, Is.EqualTo(travelRevisionBefore));
+        Assert.That(actor.Travel.IsTraveling, Is.False);
+    }
+
+    [Test]
+    public void SelectedSoloTravelDispatcherP12RefusalPrecedesDebitAndTransition()
+    {
+        CreateSelectedTravelFixture(NpcTravelReason.Trade, out _, out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor, out _, out DailyV1ActionDefinition action,
+            out TravelPartyStore partyStore);
+        List<string> order = new List<string>();
+        RecordingSelectedTravelActionBoundary boundary = new RecordingSelectedTravelActionBoundary(
+            order, graph, actor, NpcTravelReason.Trade) { RefuseOperation = true };
+        float balanceBefore = actor.MoneyAccount.Balance;
+        long travelRevisionBefore = actor.Travel.Revision;
+        long planRevisionBefore = actor.TravelPlan.Revision;
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
+            graph, actor, action, partyStore, new FixedTravelActionRandomSource(), 31L, boundary,
+            out DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult result), Is.True);
+
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(order, Is.EqualTo(new[] { "operation-enter", "operation-refused" }));
+        Assert.That(actor.MoneyAccount.Balance, Is.EqualTo(balanceBefore));
+        Assert.That(actor.Travel.Revision, Is.EqualTo(travelRevisionBefore));
+        Assert.That(actor.TravelPlan.Revision, Is.EqualTo(planRevisionBefore));
+        Assert.That(actor.Travel.IsTraveling, Is.False);
+    }
+
+    private static void CreateSelectedTravelFixture(
+        NpcTravelReason reason,
+        out DailyV1EffectiveDefinitions definitions,
+        out DailyV1SelectedRuntimeOwnerGraph graph,
+        out DailyV1NpcRuntimeOwners actor,
+        out DailyV1CityRuntimeOwners destination,
+        out DailyV1ActionDefinition action,
+        out TravelPartyStore partyStore,
+        bool canFailTravel = false,
+        float travelSuccessChance = 1f)
+    {
+        definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        if (canFailTravel)
+            definitions = CreateTravelRollDefinitions(definitions, travelSuccessChance);
+        SpatialNetworkOwner spatial = new SpatialNetworkOwner();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions, spatial);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        DailyV1CityRuntimeOwners origin = builder.Cities.Single(owner =>
+            string.Equals(owner.Definition.DefinitionId, "CAMPO_VERDE", StringComparison.Ordinal));
+        destination = builder.Cities.Single(owner =>
+            string.Equals(owner.Definition.DefinitionId, "SERRA_DE_FERRO", StringComparison.Ordinal));
+        Assert.That(spatial.TryGetLocation(origin.LocationRuntimeId,
+            out SpatialLocationRuntime originLocation), Is.True);
+        Assert.That(spatial.TryGetLocation(destination.LocationRuntimeId,
+            out SpatialLocationRuntime destinationLocation), Is.True);
+        Assert.That(spatial.TryRegisterRoute(new SpatialRouteRuntime("route/selected-dispatch",
+            originLocation, destinationLocation, 3), () => true), Is.True);
+        Assert.That(spatial.TryRegisterRoute(new SpatialRouteRuntime("route/selected-dispatch-return",
+            destinationLocation, originLocation, 3), () => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out graph), Is.True);
+        actor = graph.Npcs.Single(owner =>
+            string.Equals(owner.Definition.DefinitionId, "JORGE", StringComparison.Ordinal));
+        string destinationRuntimeId = destination.RuntimeId;
+        destination = graph.Cities.Single(owner =>
+            string.Equals(owner.RuntimeId, destinationRuntimeId, StringComparison.Ordinal));
+        action = definitions.Actions.Values.Single(candidate =>
+            candidate.Values.actionType?.Value == DailyV1NpcDefinitionRules.TravelActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(definitions, action,
+            null, destination.RuntimeId, null, 0, 0f, 1f, reason,
+            0f, "decision/selected-travel", null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, action, payload, null), Is.True);
+        Assert.That(actor.TravelPlan.TryInstallExact(destination.LocationRuntimeId,
+            destination.RuntimeId, reason, 60f, 30f, "decision/selected-travel", 1L), Is.True);
+        partyStore = new TravelPartyStore();
+    }
+
+    private static DailyV1EffectiveDefinitions CreateTravelRollDefinitions(
+        DailyV1EffectiveDefinitions source, float travelSuccessChance)
+    {
+        IEnumerable<DailyV1NpcActionData> actions = source.Actions.Values.Select(action =>
+        {
+            DailyV1NpcActionData values = action.Values;
+            if (values.actionType?.Value != DailyV1NpcDefinitionRules.TravelActionTypeValue)
+                return values;
+            return new DailyV1NpcActionData(values.id, values.statusNecessariosParaFazerAcao,
+                values.actionName, values.normalActionLogText, values.actionCategory, values.actionType,
+                values.baseUtility, values.statusModifiers, true, travelSuccessChance,
+                values.statusToAdd, values.statusToRemove, values.targetStatusToAdd,
+                values.targetStatusToRemove, values.crimeSettings);
+        });
+        return DailyV1EffectiveDefinitions.CreateSelectedSchema(
+            source.Configuration, source.EffectiveConfiguration, source.Calendar,
+            source.Cities.Values.Select(value => value.Values),
+            source.Items.Values.Select(value => value.Values),
+            source.Npcs.Values.Select(value => value.Values),
+            source.Jobs.Values.Select(value => value.Values), actions,
+            source.Statuses.Values.Select(value => value.Values), source.StageOrder,
+            source.ProfileContractIdentity, source.GeographyProfileContractIdentity,
+            source.GeographyStageIdentity, source.HexCoordinateConvention,
+            source.HexCoordinateCanonicalOrder);
+    }
+
+    private sealed class FixedTravelActionRandomSource : IAuthoritativeRandomSource
+    {
+        private readonly float value;
+        public int Calls { get; private set; }
+        internal FixedTravelActionRandomSource(float value = 0f) => this.value = value;
+        public float NextUnit(string streamKey, long drawIndex = 0L) { Calls++; return value; }
+        public DeterministicRandomStream CreateStream(string streamKey) => null;
+    }
+
+    private sealed class RecordingSelectedTravelActionBoundary
+        : DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary
+    {
+        private readonly List<string> order;
+        private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+        private readonly DailyV1NpcRuntimeOwners actor;
+        private readonly NpcTravelReason reason;
+        internal bool RefuseOperation { get; set; }
+
+        internal RecordingSelectedTravelActionBoundary(List<string> order,
+            DailyV1SelectedRuntimeOwnerGraph graph, DailyV1NpcRuntimeOwners actor,
+            NpcTravelReason reason)
+        { this.order = order; this.graph = graph; this.actor = actor; this.reason = reason; }
+
+        public bool ExecuteWithinOperation(Func<bool> operation)
+        {
+            order.Add("operation-enter");
+            if (RefuseOperation)
+            {
+                order.Add("operation-refused");
+                return false;
+            }
+            bool succeeded = operation();
+            order.Add("operation-exit");
+            return succeeded;
+        }
+
+        public bool CanStartTradeReposition()
+        { order.Add("reposition-preflight"); return true; }
+
+        public void LogTradeReposition() => order.Add("reposition-log");
+
+        public bool CanCommitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan,
+            SpatialRouteRuntime route, float travelCost)
+        { order.Add("transition-preflight"); return true; }
+
+        public bool CommitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan)
+        {
+            order.Add("transition-commit");
+            return graph.TryCommitTravelTransition(actor, plan, null);
+        }
+
+        public void PublishTravelStarted(DailyV1SelectedActionExecutionStage.SoloTravelResult result) =>
+            order.Add("travel-publication");
+
+        public void LogCommercialScouting() => order.Add("commercial-scout");
+
+        public void ClearTravelPlan()
+        {
+            order.Add("plan-clear");
+            Assert.That(actor.TravelPlan.TryInstallExact(null, null, NpcTravelReason.None,
+                0f, 0f, null, actor.TravelPlan.Revision + 1L), Is.True);
+        }
+    }
+
+    [Test]
     public void GraphRejectsRuntimeIdentityCollisionsAcrossSelectedOwnerAndSpatialFamilies()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

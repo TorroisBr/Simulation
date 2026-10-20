@@ -406,6 +406,62 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         }
     }
 
+    private sealed class SelectedSoloTravelActionBoundaryAdapter
+        : DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary
+    {
+        private readonly Func<Func<bool>, bool> executeWithinOperation;
+        private readonly Func<bool> canStartTradeReposition;
+        private readonly Action logTradeReposition;
+        private readonly Func<DailyV1SelectedTravelTransitionPlan, SpatialRouteRuntime, float, bool>
+            canCommitPreparedTransition;
+        private readonly Func<DailyV1SelectedTravelTransitionPlan, bool> commitPreparedTransition;
+        private readonly Action<DailyV1SelectedActionExecutionStage.SoloTravelResult> publishTravelStarted;
+        private readonly Action logCommercialScouting;
+        private readonly Action clearTravelPlan;
+
+        internal SelectedSoloTravelActionBoundaryAdapter(
+            Func<Func<bool>, bool> executeWithinOperation,
+            Func<bool> canStartTradeReposition,
+            Action logTradeReposition,
+            Func<DailyV1SelectedTravelTransitionPlan, SpatialRouteRuntime, float, bool>
+                canCommitPreparedTransition,
+            Func<DailyV1SelectedTravelTransitionPlan, bool> commitPreparedTransition,
+            Action<DailyV1SelectedActionExecutionStage.SoloTravelResult> publishTravelStarted,
+            Action logCommercialScouting,
+            Action clearTravelPlan)
+        {
+            this.executeWithinOperation = executeWithinOperation
+                ?? throw new ArgumentNullException(nameof(executeWithinOperation));
+            this.canStartTradeReposition = canStartTradeReposition
+                ?? throw new ArgumentNullException(nameof(canStartTradeReposition));
+            this.logTradeReposition = logTradeReposition
+                ?? throw new ArgumentNullException(nameof(logTradeReposition));
+            this.canCommitPreparedTransition = canCommitPreparedTransition
+                ?? throw new ArgumentNullException(nameof(canCommitPreparedTransition));
+            this.commitPreparedTransition = commitPreparedTransition
+                ?? throw new ArgumentNullException(nameof(commitPreparedTransition));
+            this.publishTravelStarted = publishTravelStarted
+                ?? throw new ArgumentNullException(nameof(publishTravelStarted));
+            this.logCommercialScouting = logCommercialScouting
+                ?? throw new ArgumentNullException(nameof(logCommercialScouting));
+            this.clearTravelPlan = clearTravelPlan
+                ?? throw new ArgumentNullException(nameof(clearTravelPlan));
+        }
+
+        public bool ExecuteWithinOperation(Func<bool> operation) => executeWithinOperation(operation);
+        public bool CanStartTradeReposition() => canStartTradeReposition();
+        public void LogTradeReposition() => logTradeReposition();
+        public bool CanCommitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan,
+            SpatialRouteRuntime route, float travelCost) =>
+            canCommitPreparedTransition(plan, route, travelCost);
+        public bool CommitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan) =>
+            commitPreparedTransition(plan);
+        public void PublishTravelStarted(DailyV1SelectedActionExecutionStage.SoloTravelResult result) =>
+            publishTravelStarted(result);
+        public void LogCommercialScouting() => logCommercialScouting();
+        public void ClearTravelPlan() => clearTravelPlan();
+    }
+
     private sealed class P12MerchantOperationScope : IDisposable
     {
         private readonly SimulationRuntime owner;
@@ -11643,6 +11699,70 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             FaultRuntimeAdmission();
             throw new InvalidOperationException(
                 "The selected P12 profile cannot admit a Travel action through an unbound provider.");
+        }
+
+        if (npcRuntime.UsesSelectedDailyV1Definitions
+            && actionType == NpcActionType.Travel
+            && actionProvider is TravelActionProvider selectedTravelProvider
+            && npcRuntime.SelectedRuntimeOwners != null
+            && SelectedRuntimeOwnerGraph != null
+            && SelectedRuntimeOwnerGraph.ContainsExactNpcOwner(npcRuntime.SelectedRuntimeOwners)
+            && npcRuntime.TryGetSelectedDailyV1ActionNode(action,
+                out DailyV1ActionDefinition selectedTravelAction)
+            && actionRuntime != null
+            && ReferenceEquals(actionRuntime.Action, action)
+            && ReferenceEquals(npcRuntime.SelectedRuntimeOwners.ActionSlot?.CurrentAction,
+                selectedTravelAction)
+            && ReferenceEquals(npcRuntime.SelectedRuntimeOwners.ActionSlot?.CurrentPayload?.Action,
+                selectedTravelAction)
+            && string.Equals(npcRuntime.SelectedRuntimeOwners.ActionSlot.CurrentPayload.TargetCityRuntimeId,
+                actionRuntime.TargetCity?.RuntimeId, StringComparison.Ordinal)
+            && npcRuntime.SelectedRuntimeOwners.ActionSlot.CurrentPayload.TravelReason == actionRuntime.TravelReason
+            && string.Equals(npcRuntime.SelectedRuntimeOwners.ActionSlot.CurrentPayload.OriginDecisionId,
+                actionRuntime.OriginDecisionId, StringComparison.Ordinal))
+        {
+            SelectedSoloTravelActionBoundaryAdapter boundary = new SelectedSoloTravelActionBoundaryAdapter(
+                operation =>
+                {
+                    if (runtimeAdmissionContext == null) return operation();
+                    if (!TryBeginP12SoloTravelStartOperation(
+                            npcRuntime, selectedTravelProvider,
+                            out P12SoloTravelStartOperationScope travelStartScope))
+                        throw new InvalidOperationException(
+                            "The P12 solo travel-start owner operation could not be admitted.");
+                    using (travelStartScope) return operation();
+                },
+                () => travelSystem != null
+                    && travelSystem.CanStartTravel(npcRuntime, actionRuntime.TargetCity, out _, out _),
+                () => merchantSystem?.LogTradeRepositionDecision(
+                    npcRuntime, npcRuntime.CurrentCity, actionRuntime),
+                (plan, route, travelCost) => travelSystem != null
+                    && travelSystem.CanCommitSelectedSoloTravelTransition(
+                        npcRuntime, plan, route, travelCost, actionRuntime.TargetCity),
+                plan => actionRuntime.TargetCity != null
+                    && npcRuntime.TryCommitPreparedSelectedTravelTransition(
+                        plan, actionRuntime.TargetCity.Location, actionRuntime.TargetCity),
+                travel => travelSystem?.PublishSelectedSoloTravelStarted(
+                    npcRuntime, actionRuntime.TargetCity, travel),
+                () => merchantSystem?.LogCommercialScoutingDecision(npcRuntime, actionRuntime),
+                () => npcRuntime.ClearTravelPlan());
+
+            if (DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
+                    SelectedRuntimeOwnerGraph,
+                    npcRuntime.SelectedRuntimeOwners,
+                    selectedTravelAction,
+                    selectedTravelProvider.SelectedTravelPartyStore,
+                    randomSource,
+                    CurrentDay,
+                    boundary,
+                    out DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult selectedTravelResult))
+            {
+                if (selectedTravelResult?.Succeeded == true)
+                    return NpcActionResult.Succeeded();
+                return selectedTravelResult?.ActionRollSucceeded == true
+                    ? NpcActionResult.Failed()
+                    : NpcActionResult.Failed(CreateFailureMessage(npcRuntime, actionRuntime, action));
+            }
         }
 
         if (RollActionSuccess(npcRuntime, action, actionRuntime) == false)

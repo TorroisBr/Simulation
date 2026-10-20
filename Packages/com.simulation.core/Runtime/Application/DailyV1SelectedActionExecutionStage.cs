@@ -5,6 +5,34 @@ using System;
 /// existing owner operations; this stage never accepts a projected payload.</summary>
 internal static class DailyV1SelectedActionExecutionStage
 {
+    internal interface ISelectedSoloTravelActionBoundary
+    {
+        /// <summary>Runs the complete travel operation inside the existing host P12 scope.</summary>
+        bool ExecuteWithinOperation(Func<bool> operation);
+        bool CanStartTradeReposition();
+        void LogTradeReposition();
+        /// <summary>Preserves host guards/projection checks before Core charges the owner.</summary>
+        bool CanCommitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan,
+            SpatialRouteRuntime route, float travelCost);
+        bool CommitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan);
+        /// <summary>Publishes the event and travel/cost logs after Core discoveries.</summary>
+        void PublishTravelStarted(SoloTravelResult result);
+        void LogCommercialScouting();
+        /// <summary>The existing Unity owner bridge commits/reflects the exact Core plan clear.</summary>
+        void ClearTravelPlan();
+    }
+
+    internal sealed class SelectedSoloTravelActionResult
+    {
+        internal bool Succeeded { get; }
+        internal bool ActionRollSucceeded { get; }
+        internal SoloTravelResult Travel { get; }
+
+        internal SelectedSoloTravelActionResult(bool succeeded, bool actionRollSucceeded,
+            SoloTravelResult travel)
+        { Succeeded = succeeded; ActionRollSucceeded = actionRollSucceeded; Travel = travel; }
+    }
+
     internal sealed class PlannedNpcSaleResult
     {
         internal bool Succeeded { get; }
@@ -80,6 +108,17 @@ internal static class DailyV1SelectedActionExecutionStage
         TravelPartyStore partyStore,
         Func<DailyV1SelectedTravelTransitionPlan, bool> commitTransition,
         out SoloTravelResult result)
+        => TryExecuteSoloTravelSlot(graph, actor, destinationCityRuntimeId, partyStore,
+            null, commitTransition, out result);
+
+    private static bool TryExecuteSoloTravelSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        string destinationCityRuntimeId,
+        TravelPartyStore partyStore,
+        Func<DailyV1SelectedTravelTransitionPlan, SpatialRouteRuntime, float, bool> validatePreparedTransition,
+        Func<DailyV1SelectedTravelTransitionPlan, bool> commitTransition,
+        out SoloTravelResult result)
     {
         result = null;
         DailyV1NpcActionSlotOwner slot = actor?.ActionSlot;
@@ -122,9 +161,97 @@ internal static class DailyV1SelectedActionExecutionStage
                 out DailyV1SelectedTravelTransitionPlan transition))
             return false;
 
+        if (validatePreparedTransition != null
+            && !validatePreparedTransition(transition, route, travelCost))
+            return false;
+
         DailyV1SelectedSoloTravelResult execution = DailyV1SelectedSoloTravelExecution.TryExecute(
             actor, transition, travelCost, () => commitTransition(transition));
         result = new SoloTravelResult(transition, route, travelCost, execution);
+        return true;
+    }
+
+    /// <summary>
+    /// Dispatches the exact selected Travel action slot through Core travel owners.
+    /// The host supplies only the existing P12 operation wrapper and projection,
+    /// event, and notification callbacks.
+    /// </summary>
+    internal static bool TryExecuteSelectedSoloTravelActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition expectedAction,
+        TravelPartyStore partyStore,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        ISelectedSoloTravelActionBoundary boundary,
+        out SelectedSoloTravelActionResult result)
+    {
+        result = null;
+        DailyV1NpcActionSlotOwner slot = actor?.ActionSlot;
+        if (graph == null || actor == null || expectedAction == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(slot?.CurrentAction, expectedAction)
+            || expectedAction.Values.actionType?.Value != DailyV1NpcDefinitionRules.TravelActionTypeValue)
+            return false;
+
+        DailyV1NpcActionPayloadOwner payload = slot.CurrentPayload;
+        if (payload == null || !ReferenceEquals(payload.Action, expectedAction)
+            || payload.TargetNpcRuntimeId != null
+            || payload.TargetItem != null
+            || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+            || !Enum.IsDefined(typeof(NpcTravelReason), payload.TravelReason)
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                graph.Definitions, expectedAction, actor.Status?.Statuses)
+            || boundary == null)
+            return false;
+
+        // From this point the action is an exact supported selected slot. Its
+        // existing deterministic roll must precede the host P12 wrapper and all
+        // travel callbacks, just as it did before selected Travel dispatch.
+        if (!TryRollCurrentActionSlot(graph, actor, randomSource, currentAbsoluteDay,
+                out bool actionSucceeded))
+        {
+            result = new SelectedSoloTravelActionResult(false, false, null);
+            return true;
+        }
+        if (!actionSucceeded)
+        {
+            result = new SelectedSoloTravelActionResult(false, false, null);
+            return true;
+        }
+
+        SoloTravelResult completedTravel = null;
+        bool succeeded = boundary.ExecuteWithinOperation(() =>
+        {
+            if (payload.TravelReason == NpcTravelReason.TradeReposition)
+            {
+                if (!boundary.CanStartTradeReposition()) return false;
+                boundary.LogTradeReposition();
+            }
+
+            string destinationCityRuntimeId = payload.TargetCityRuntimeId;
+            if (string.IsNullOrWhiteSpace(destinationCityRuntimeId)
+                || !TryExecuteSoloTravelSlot(graph, actor, destinationCityRuntimeId,
+                    partyStore,
+                    (plan, route, cost) => boundary.CanCommitPreparedTransition(plan, route, cost),
+                    boundary.CommitPreparedTransition,
+                    out SoloTravelResult travel)
+                || travel == null || !travel.Succeeded)
+                return false;
+
+            // Discoveries are authoritative Core owner mutations and retain
+            // their existing P12-bound owner callbacks.
+            actor.SpatialKnowledge?.DiscoverLocation(travel.Route.Origin.RuntimeId);
+            actor.SpatialKnowledge?.DiscoverRoute(travel.Route.RuntimeId);
+            boundary.PublishTravelStarted(travel);
+            if (payload.TravelReason == NpcTravelReason.CommercialScout)
+                boundary.LogCommercialScouting();
+            boundary.ClearTravelPlan();
+            completedTravel = travel;
+            return true;
+        });
+
+        result = new SelectedSoloTravelActionResult(succeeded, true, completedTravel);
         return true;
     }
 

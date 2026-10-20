@@ -211,6 +211,60 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    internal bool CanCommitSelectedSoloTravelTransition(
+        NpcRuntime npcRuntime,
+        DailyV1SelectedTravelTransitionPlan plan,
+        SpatialRouteRuntime route,
+        float travelCost,
+        CityRuntime destinationCityProjection)
+    {
+        return mutationGuardBinding.CanMutate
+            && npcRuntime != null
+            && npcRuntime.IsAlive
+            && npcRuntime.CanStartTravelPresenceTransition(1L)
+            && plan != null
+            && route != null
+            && travelCost >= 0f
+            && !float.IsNaN(travelCost)
+            && !float.IsInfinity(travelCost)
+            && destinationCityProjection?.SelectedRuntimeOwners != null
+            && destinationCityProjection.Location != null
+            && string.Equals(plan.DestinationCityRuntimeId,
+                destinationCityProjection.SelectedRuntimeOwners.RuntimeId, StringComparison.Ordinal)
+            && string.Equals(plan.DestinationLocationRuntimeId,
+                destinationCityProjection.Location.RuntimeId, StringComparison.Ordinal)
+            && string.Equals(plan.RouteRuntimeId, route.RuntimeId, StringComparison.Ordinal)
+            && string.Equals(route.Destination.RuntimeId,
+                destinationCityProjection.Location.RuntimeId, StringComparison.Ordinal);
+    }
+
+    internal void PublishSelectedSoloTravelStarted(
+        NpcRuntime npcRuntime,
+        CityRuntime destinationCityProjection,
+        DailyV1SelectedActionExecutionStage.SoloTravelResult travel)
+    {
+        if (npcRuntime == null || travel?.Route == null || travel.Transition == null) return;
+        SpatialLocationRuntime originLocation = travel.Route.Origin;
+        SpatialLocationRuntime targetLocation = travel.Route.Destination;
+        domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcTravelStartedEvent(
+            eventId,
+            absoluteDay,
+            recordSequence,
+            npcRuntime.RuntimeId,
+            originLocation.RuntimeId,
+            targetLocation.RuntimeId,
+            travel.Route.RuntimeId,
+            travel.Transition.OriginDecisionId));
+        string originName = GetCityRuntime(originLocation)?.CityName ?? originLocation.RuntimeId;
+        string destinationName = destinationCityProjection != null
+            ? destinationCityProjection.CityName
+            : targetLocation.RuntimeId;
+        logger.Log(SimulationLogCategory.Travel,
+            $"{npcRuntime.NpcName} iniciou viagem de {originName} para {destinationName}");
+        if (travel.TravelCost > 0f)
+            logger.Log(SimulationLogCategory.Travel, $"Custo de viagem: {travel.TravelCost:0.##}");
+    }
+
     public bool TryStartTravel(
         NpcRuntime npcRuntime,
         SpatialLocationRuntime targetLocation,
