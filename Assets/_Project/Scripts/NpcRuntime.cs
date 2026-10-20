@@ -423,28 +423,6 @@ public class NpcRuntime : ICapabilityConditionSource
                 out statusToRemove, out statusToAdd, out targetStatusToRemove, out targetStatusToAdd);
     }
 
-    internal bool TryCreateConfiguredActionStatusPlan(
-        NpcActionData action,
-        DailyV1SelectedRuntimeOwnerGraph ownerGraph,
-        bool targetExpected,
-        DailyV1NpcRuntimeOwners targetOwner,
-        out DailyV1SelectedActionStatusPlan plan)
-    {
-        plan = null;
-        return selectedDailyV1Definition != null
-            && selectedDailyV1StatusOwner != null
-            && selectedRuntimeOwners != null
-            && ownerGraph != null
-            && ReferenceEquals(ownerGraph.Definitions, selectedDefinitionGraph)
-            && TryGetSelectedDailyV1Action(action, out DailyV1ActionDefinition actionNode)
-            && ownerGraph.TryCreateActionStatusPlan(
-                selectedRuntimeOwners,
-                actionNode,
-                targetExpected,
-                targetOwner,
-                out plan);
-    }
-
     internal bool ApplySelectedDailyV1StatusChanges(
         IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
         IReadOnlyList<DailyV1StatusDefinition> statusToAdd)

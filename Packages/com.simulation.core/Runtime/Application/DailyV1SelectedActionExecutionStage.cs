@@ -5,6 +5,27 @@ using System;
 /// existing owner operations; this stage never accepts a projected payload.</summary>
 internal static class DailyV1SelectedActionExecutionStage
 {
+    internal static bool TryApplyActionStatusPlan(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        bool targetExpected,
+        DailyV1NpcRuntimeOwners target,
+        DailyV1SelectedActionStatusPlan.ApplyOwnerStatusChanges applyActor,
+        DailyV1SelectedActionStatusPlan.ApplyOwnerStatusChanges applyTarget,
+        out DailyV1SelectedActionStatusPlanResult result)
+    {
+        result = DailyV1SelectedActionStatusPlanResult.ActorRejected;
+        if (graph == null
+            || !graph.TryCreateActionStatusPlan(
+                actor, action, targetExpected, target,
+                out DailyV1SelectedActionStatusPlan plan))
+            return false;
+
+        result = plan.Apply(applyActor, applyTarget);
+        return true;
+    }
+
     internal interface ISelectedSoloTravelActionBoundary
     {
         /// <summary>Runs the complete travel operation inside the existing host P12 scope.</summary>

@@ -99,13 +99,12 @@ public sealed class DailyV1NpcStatusOwnerTests
         Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
             definitions, Array.Empty<DailyV1CityRuntimeOwners>(), new[] { actor, target },
             out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
-        Assert.That(graph.TryCreateActionStatusPlan(
-            actor, action, true, target, out DailyV1SelectedActionStatusPlan plan), Is.True);
-
         List<string> events = new List<string>();
-        DailyV1SelectedActionStatusPlanResult result = plan.Apply(
+        Assert.That(DailyV1SelectedActionExecutionStage.TryApplyActionStatusPlan(
+            graph, actor, action, true, target,
             (owner, remove, add) => ApplyAndRecord(owner, remove, add, events),
-            (owner, remove, add) => ApplyAndRecord(owner, remove, add, events));
+            (owner, remove, add) => ApplyAndRecord(owner, remove, add, events),
+            out DailyV1SelectedActionStatusPlanResult result), Is.True);
 
         Assert.That(result, Is.EqualTo(DailyV1SelectedActionStatusPlanResult.Applied));
         Assert.That(events, Is.EqualTo(new[]
@@ -136,21 +135,23 @@ public sealed class DailyV1NpcStatusOwnerTests
         Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
             definitions, Array.Empty<DailyV1CityRuntimeOwners>(), new[] { actor, target },
             out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
-        Assert.That(graph.TryCreateActionStatusPlan(
-            actor, definitions.Actions.Values.First(), true, target,
-            out DailyV1SelectedActionStatusPlan plan), Is.True);
-
         bool targetCalled = false;
-        Assert.That(plan.Apply(
+        Assert.That(DailyV1SelectedActionExecutionStage.TryApplyActionStatusPlan(
+            graph, actor, definitions.Actions.Values.First(), true, target,
             (_, __, ___) => false,
-            (_, __, ___) => { targetCalled = true; return true; }),
+            (_, __, ___) => { targetCalled = true; return true; },
+            out DailyV1SelectedActionStatusPlanResult result), Is.True);
+        Assert.That(result,
             Is.EqualTo(DailyV1SelectedActionStatusPlanResult.ActorRejected));
         Assert.That(targetCalled, Is.False);
         Assert.That(actor.Status.Statuses, Is.EqualTo(new[] { definitions.Statuses["status/Status-Livre"] }));
 
-        Assert.That(plan.Apply(
+        Assert.That(DailyV1SelectedActionExecutionStage.TryApplyActionStatusPlan(
+            graph, actor, definitions.Actions.Values.First(), true, target,
             (owner, remove, add) => owner.Status.TryApplyOrderedChanges(remove, add, () => { }, () => { }),
-            (_, __, ___) => false), Is.EqualTo(DailyV1SelectedActionStatusPlanResult.TargetRejected));
+            (_, __, ___) => false,
+            out result), Is.True);
+        Assert.That(result, Is.EqualTo(DailyV1SelectedActionStatusPlanResult.TargetRejected));
         Assert.That(actor.Status.Statuses, Is.EqualTo(new[] { definitions.Statuses["status/Status-Preso"] }),
             "The existing actuation order keeps completed actor mutations when target application fails.");
         Assert.That(target.Status.Statuses, Is.EqualTo(new[] { definitions.Statuses["status/Status-Escondido"] }));

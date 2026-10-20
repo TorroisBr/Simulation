@@ -12318,22 +12318,23 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         if (npcRuntime.UsesSelectedDailyV1Definitions)
         {
             NpcRuntime targetRuntime = actionRuntime != null ? actionRuntime.TargetNpc : null;
-            if (!npcRuntime.TryCreateConfiguredActionStatusPlan(
-                    action,
+            if (!npcRuntime.TryGetSelectedDailyV1ActionNode(
+                    action, out DailyV1ActionDefinition selectedAction)
+                || !DailyV1SelectedActionExecutionStage.TryApplyActionStatusPlan(
                     SelectedRuntimeOwnerGraph,
+                    npcRuntime.SelectedRuntimeOwners,
+                    selectedAction,
                     targetRuntime != null,
                     targetRuntime != null ? targetRuntime.SelectedRuntimeOwners : null,
-                    out DailyV1SelectedActionStatusPlan statusPlan))
+                    (owner, statusToRemove, statusToAdd) =>
+                        ReferenceEquals(owner, npcRuntime.SelectedRuntimeOwners)
+                        && npcRuntime.ApplySelectedDailyV1StatusChanges(statusToRemove, statusToAdd),
+                    (owner, statusToRemove, statusToAdd) =>
+                        targetRuntime != null
+                        && ReferenceEquals(owner, targetRuntime.SelectedRuntimeOwners)
+                        && targetRuntime.ApplySelectedDailyV1StatusChanges(statusToRemove, statusToAdd),
+                    out DailyV1SelectedActionStatusPlanResult statusResult))
                 throw new InvalidOperationException("The admitted action status effects could not be resolved from the selected definition graph.");
-
-            DailyV1SelectedActionStatusPlanResult statusResult = statusPlan.Apply(
-                (owner, statusToRemove, statusToAdd) =>
-                    ReferenceEquals(owner, npcRuntime.SelectedRuntimeOwners)
-                    && npcRuntime.ApplySelectedDailyV1StatusChanges(statusToRemove, statusToAdd),
-                (owner, statusToRemove, statusToAdd) =>
-                    targetRuntime != null
-                    && ReferenceEquals(owner, targetRuntime.SelectedRuntimeOwners)
-                    && targetRuntime.ApplySelectedDailyV1StatusChanges(statusToRemove, statusToAdd));
 
             if (statusResult == DailyV1SelectedActionStatusPlanResult.ActorRejected)
                 throw new InvalidOperationException("The admitted action status effects could not be resolved from the selected definition graph.");
