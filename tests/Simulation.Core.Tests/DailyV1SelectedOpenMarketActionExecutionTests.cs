@@ -274,6 +274,31 @@ public sealed class DailyV1SelectedOpenMarketActionExecutionTests
     }
 
     [Test]
+    public void SelectedMerchantDispatchHandlesMissingBoundaryWithoutProviderFallback()
+    {
+        CreateActionRollFixture(1f, out _,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor, out DailyV1CityRuntimeOwners city,
+            out _, out DailyV1ItemDefinition item);
+        int inventoryBefore = actor.Inventory.GetAmount(item);
+        int marketBefore = city.Market.GetAmount(item);
+        long accountRevisionBefore = actor.MoneyAccount.Revision;
+        FixedActionRandom random = new FixedActionRandom(new List<string>(), 0.25f);
+
+        Assert.That(DailyV1SelectedActionDispatchStage.TryDispatch(
+            graph, actor, random, 49L, null,
+            out DailyV1SelectedActionDispatchResult result), Is.True);
+
+        Assert.That(result.Kind, Is.EqualTo(DailyV1SelectedActionDispatchKind.OpenMarket));
+        Assert.That(result.ActionRollSucceeded, Is.False);
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(random.Calls, Is.Zero);
+        Assert.That(actor.Inventory.GetAmount(item), Is.EqualTo(inventoryBefore));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(marketBefore));
+        Assert.That(actor.MoneyAccount.Revision, Is.EqualTo(accountRevisionBefore));
+    }
+
+    [Test]
     public void SelectedRemoteSellIsHandledFailureInsteadOfUnityProviderFallback()
     {
         CreateActionRollFixture(1f, out DailyV1EffectiveDefinitions definitions,
