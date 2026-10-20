@@ -1023,7 +1023,13 @@ public sealed class EconomyTransactionTests
             npcDecisionSystem: new NpcDecisionSystem(new List<INpcActionProvider> { merchantSystem }),
             merchantSystem: merchantSystem,
             economyTransactionService: transactionService,
-            configuration: effective);
+            configuration: effective,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        BindP12CensusRuntime(transactionService, runtime);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialAssessment),
+            Is.True, initialAssessment.ToString());
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long beforeAdvance,
+            out ContinuationCensusFailure beforeAdvanceFailure), Is.True, beforeAdvanceFailure.ToString());
 
         float moneyBefore = merchant.MoneyAccount.Balance;
         long accountRevisionBefore = merchant.MoneyAccount.Revision;
@@ -1052,6 +1058,12 @@ public sealed class EconomyTransactionTests
             + $"{merchant.SelectedRuntimeOwners.MerchantTradePlan.RemainingAmount}, active "
             + $"{merchant.SelectedRuntimeOwners.MerchantTradePlan.IsActive}.");
         Assert.That(merchant.MerchantTradePlan.IsActive, Is.False);
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long afterAdvance,
+            out ContinuationCensusFailure afterAdvanceFailure), Is.True, afterAdvanceFailure.ToString());
+        Assert.That(afterAdvance, Is.GreaterThan(beforeAdvance),
+            "The selected planned sale and its bound owner commits must advance the admitted P12 census epoch.");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure finalAssessment),
+            Is.True, finalAssessment.ToString());
         OwnerSectionCensusWitness receipts = transactionService.GetKeyedSaleReceiptCensus();
         Assert.That(receipts.Cardinality, Is.Zero,
             "The ordinary planned sale must not create a P18-D keyed receipt.");
