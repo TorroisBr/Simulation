@@ -86,6 +86,53 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
                 continue;
 
             if (candidate.Action.Values.actionType?.Value
+                    == DailyV1NpcDefinitionRules.TravelActionTypeValue
+                && npcRuntime.TryGetSelectedDailyV1ActionAsset(candidate.Action,
+                    out NpcActionData selectedTravelAsset)
+                && GetProviderForAction(npcRuntime, selectedTravelAsset) is TravelActionProvider travelProvider
+                && DailyV1NpcActionDecision.TryPrepareSelectedExistingTravelCandidate(
+                    npcRuntime.SelectedRuntimeOwnerGraph,
+                    npcRuntime.SelectedRuntimeOwners,
+                    candidate,
+                    travelProvider.SelectedTravelPartyStore))
+            {
+                DailyV1NpcActionPayloadOwner payload = candidate.PreparedPayload;
+                CityRuntime selectedTargetCity = npcRuntime.TravelPlan?.TargetCity;
+                DailyV1CityRuntimeOwners targetOwner = null;
+                foreach (DailyV1CityRuntimeOwners cityOwner in
+                    npcRuntime.SelectedRuntimeOwnerGraph?.Cities
+                    ?? Array.Empty<DailyV1CityRuntimeOwners>())
+                    if (payload != null
+                        && string.Equals(cityOwner.RuntimeId, payload.TargetCityRuntimeId,
+                            StringComparison.Ordinal))
+                    {
+                        targetOwner = cityOwner;
+                        break;
+                    }
+                if (payload == null || selectedTargetCity == null || targetOwner == null
+                    || !ReferenceEquals(selectedTargetCity.SelectedRuntimeOwners, targetOwner)
+                    || !string.Equals(selectedTargetCity.RuntimeId, targetOwner.RuntimeId,
+                        StringComparison.Ordinal))
+                {
+                    candidate.Utility = 0f;
+                    continue;
+                }
+
+                NpcActionRuntime selectedTravelAction = new NpcActionRuntime(
+                    selectedTravelAsset, selectedTargetCity, null, payload.TravelReason,
+                    candidate.ExpectedTravelCost, payload.ExpectedNetValue);
+                if (!selectedTravelAction.TryUseSelectedPayload(
+                        payload, npcRuntime.SelectedDailyV1DefinitionGraph))
+                {
+                    candidate.Utility = 0f;
+                    continue;
+                }
+
+                providerActions.Add(candidate, selectedTravelAction);
+                continue;
+            }
+
+            if (candidate.Action.Values.actionType?.Value
                     == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
                 && npcRuntime.TryGetSelectedDailyV1ActionAsset(candidate.Action,
                     out NpcActionData selectedBuyAsset)

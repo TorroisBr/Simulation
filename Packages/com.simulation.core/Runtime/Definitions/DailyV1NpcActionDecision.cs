@@ -7,6 +7,7 @@ internal sealed class DailyV1NpcActionCandidate
     internal DailyV1ActionDefinition Action { get; }
     internal float Utility { get; set; }
     internal DailyV1NpcActionPayloadOwner PreparedPayload { get; set; }
+    internal float ExpectedTravelCost { get; set; }
 
     internal DailyV1NpcActionCandidate(DailyV1ActionDefinition action, float utility)
     {
@@ -18,6 +19,78 @@ internal sealed class DailyV1NpcActionCandidate
 /// <summary>Core action eligibility, utility and deterministic selection for selected Daily-v1 definitions.</summary>
 internal static class DailyV1NpcActionDecision
 {
+    /// <summary>Prepares an existing selected TravelPlan as the current action
+    /// from exact graph owners, the shared P8 party store, and Core route/cost
+    /// values. Returns false when no active plan exists so another provider can
+    /// prepare a new Merchant reposition plan.</summary>
+    internal static bool TryPrepareSelectedExistingTravelCandidate(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionCandidate candidate,
+        TravelPartyStore partyStore)
+    {
+        if (graph == null || actor == null || candidate?.Action == null
+            || candidate.Action.Values.actionType?.Value
+                != DailyV1NpcDefinitionRules.TravelActionTypeValue)
+            return false;
+
+        candidate.PreparedPayload = null;
+        candidate.ExpectedTravelCost = 0f;
+        DailyV1NpcTravelPlanOwner plan = actor.TravelPlan;
+        if (plan == null || string.IsNullOrWhiteSpace(plan.TargetLocationRuntimeId))
+            return false;
+
+        if (!graph.ContainsExactNpcOwner(actor)
+            || graph.IsManagedByTravelParty(actor, partyStore)
+            || actor.Lifecycle?.LifeState != NpcLifeState.Alive
+            || actor.Travel == null || actor.Travel.IsTraveling
+            || !graph.TryGetCityLocationRuntimeId(plan.TargetCityRuntimeId,
+                out string targetLocationRuntimeId)
+            || !string.Equals(targetLocationRuntimeId, plan.TargetLocationRuntimeId,
+                StringComparison.Ordinal)
+            || !graph.TryPlanSelectedSoloTravel(actor, actor.Travel.CurrentLocationRuntimeId,
+                targetLocationRuntimeId, plan.TargetCityRuntimeId,
+                out SpatialRouteRuntime route, out float travelCost)
+            || actor.MoneyAccount == null || actor.MoneyAccount.Balance < travelCost
+            || !TryGetExactCity(graph, actor.Travel.CurrentCityRuntimeId,
+                out DailyV1CityRuntimeOwners currentCity)
+            || !TryGetExactCity(graph, plan.TargetCityRuntimeId,
+                out DailyV1CityRuntimeOwners destinationCity)
+            || !DailyV1SelectedTravelTransitionPlan.TryStartTravel(
+                actor, currentCity, actor.Travel.CurrentLocationRuntimeId,
+                targetLocationRuntimeId, destinationCity, route.TravelDays,
+                plan.OriginDecisionId, route.RuntimeId, out _))
+        {
+            candidate.Utility = 0f;
+            return true;
+        }
+
+        bool matchingMerchantPlan = plan.Reason == NpcTravelReason.Trade
+            && actor.MerchantTradePlan?.IsActive == true
+            && string.Equals(actor.MerchantTradePlan.TargetCityRuntimeId,
+                plan.TargetCityRuntimeId, StringComparison.Ordinal);
+        if (!DailyV1TravelActionPlanning.TryApplyExistingTravelPlanUtility(
+                graph.Definitions, actor.Definition, candidate.Action,
+                plan.Utility, plan.Reason == NpcTravelReason.Trade,
+                matchingMerchantPlan, matchingMerchantPlan
+                    ? actor.MerchantTradePlan.PendingTravelDays : 0,
+                candidate.Utility, out float utility)
+            || !DailyV1NpcActionPayloadOwner.TryCreate(
+                graph.Definitions, candidate.Action, null,
+                plan.TargetCityRuntimeId, null, 0, travelCost, 1f,
+                plan.Reason, 0f, plan.OriginDecisionId, null, null, null,
+                out DailyV1NpcActionPayloadOwner payload))
+        {
+            candidate.Utility = 0f;
+            return true;
+        }
+
+        candidate.Utility = utility;
+        candidate.ExpectedTravelCost = travelCost;
+        candidate.PreparedPayload = payload;
+        return true;
+    }
+
     /// <summary>Prepares an admitted autonomous SellGoods candidate from the
     /// exact graph owners, including active-plan local-buyer and market fallback
     /// paths. Returns false only when the caller must retain another provider
@@ -283,4 +356,20 @@ internal static class DailyV1NpcActionDecision
         definitions != null && action != null
         && definitions.Actions.TryGetValue(action.DefinitionId, out DailyV1ActionDefinition admitted)
         && ReferenceEquals(admitted, action);
+
+    private static bool TryGetExactCity(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string runtimeId,
+        out DailyV1CityRuntimeOwners city)
+    {
+        city = null;
+        if (graph == null || string.IsNullOrWhiteSpace(runtimeId)) return false;
+        foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+            if (string.Equals(candidate.RuntimeId, runtimeId, StringComparison.Ordinal))
+            {
+                city = candidate;
+                return graph.ContainsExactCityOwner(city);
+            }
+        return false;
+    }
 }

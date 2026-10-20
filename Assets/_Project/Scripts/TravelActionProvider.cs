@@ -5,6 +5,8 @@ public class TravelActionProvider : INpcActionProvider, ISelectedDefinitionNpcAc
     private readonly TravelSystem travelSystem;
     private readonly MerchantSystem merchantSystem;
 
+    internal TravelPartyStore SelectedTravelPartyStore => travelSystem?.SelectedTravelPartyStore;
+
     public TravelActionProvider(TravelSystem travelSystem, MerchantSystem merchantSystem = null)
     {
         this.travelSystem = travelSystem;

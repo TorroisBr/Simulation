@@ -13,6 +13,8 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
     private TravelPartyStore travelPartyStore;
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
 
+    internal TravelPartyStore SelectedTravelPartyStore => travelPartyStore;
+
     public TravelSystem(
         SpatialNetworkRuntime spatialNetwork,
         Func<SpatialLocationRuntime, CityRuntime> getCityRuntimeByLocation,
