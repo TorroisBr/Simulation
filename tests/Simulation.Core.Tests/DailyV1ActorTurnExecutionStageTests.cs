@@ -8,8 +8,8 @@ public sealed class DailyV1ActorTurnExecutionStageTests
     [Test]
     public void SelectedRosterPreservesNullHoleOrdinalAndCoreOwnsTurnPrecedence()
     {
-        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners first);
-        DailyV1NpcRuntimeOwners second = graph.Npcs.First(owner => !ReferenceEquals(owner, first));
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            out DailyV1NpcRuntimeOwners first, out DailyV1NpcRuntimeOwners second);
         PersonStore people = new PersonStore();
         PersonId secondPersonId = RegisterMaterializedPerson(people, second, "person-second");
         ActorChoiceStore choices = new ActorChoiceStore(people);
@@ -78,7 +78,37 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         Assert.That(deferred.Dispositions.Single().ActorTurnRosterOrdinal, Is.Zero);
     }
 
+    [Test]
+    public void IncompleteSelectedRosterIsRejectedBeforeAnyActorTurnCallback()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            out DailyV1NpcRuntimeOwners first, out _);
+        PersonStore people = new PersonStore();
+        ActorChoiceStore choices = new ActorChoiceStore(people);
+        RecordingBoundary boundary = new RecordingBoundary();
+        IReadOnlyList<DailyV1ActorTurnRosterEntry> incompleteRoster = new[]
+        {
+            new DailyV1ActorTurnRosterEntry(0, null, first)
+        };
+
+        Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
+            graph, incompleteRoster, people, choices, 5L, true, boundary), Is.False);
+        Assert.That(boundary.Events, Is.Empty);
+    }
+
     private static DailyV1SelectedRuntimeOwnerGraph CreateGraph(out DailyV1NpcRuntimeOwners actor)
+    {
+        return CreateGraph(out actor, out _, false);
+    }
+
+    private static DailyV1SelectedRuntimeOwnerGraph CreateGraph(
+        out DailyV1NpcRuntimeOwners first,
+        out DailyV1NpcRuntimeOwners second) => CreateGraph(out first, out second, true);
+
+    private static DailyV1SelectedRuntimeOwnerGraph CreateGraph(
+        out DailyV1NpcRuntimeOwners first,
+        out DailyV1NpcRuntimeOwners second,
+        bool includeSecond)
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1SelectedRuntimeOwnerGraphBuilder builder =
@@ -87,9 +117,20 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
         Assert.That(builder.TryCreateConfiguredNpcs(allocator,
             cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
-        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
-        actor = graph.Npcs.Single(owner => owner.Definition.DefinitionId == "JORGE");
-        return graph;
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph completeGraph), Is.True);
+        DailyV1NpcRuntimeOwners firstOwner =
+            completeGraph.Npcs.Single(owner => owner.Definition.DefinitionId == "JORGE");
+        first = firstOwner;
+        second = includeSecond
+            ? completeGraph.Npcs.First(owner => !ReferenceEquals(owner, firstOwner))
+            : null;
+        DailyV1NpcRuntimeOwners[] selectedOwners = includeSecond
+            ? new[] { first, second }
+            : new[] { first };
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+            completeGraph.Cities, selectedOwners, completeGraph.SpatialNetwork,
+            out DailyV1SelectedRuntimeOwnerGraph selectedGraph), Is.True);
+        return selectedGraph;
     }
 
     private static PersonId RegisterMaterializedPerson(

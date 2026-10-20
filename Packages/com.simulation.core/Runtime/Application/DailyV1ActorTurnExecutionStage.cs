@@ -64,6 +64,7 @@ internal static class DailyV1ActorTurnExecutionStage
             throw new InvalidOperationException("Selected actor turns must use the PersonStore owned by their actor-choice store.");
         if (absoluteDay < 0L) throw new ArgumentOutOfRangeException(nameof(absoluteDay));
 
+        List<DailyV1NpcRuntimeOwners> rosterOwners = new List<DailyV1NpcRuntimeOwners>();
         for (int ordinal = 0; ordinal < roster.Count; ordinal++)
         {
             DailyV1ActorTurnRosterEntry entry = roster[ordinal];
@@ -76,7 +77,14 @@ internal static class DailyV1ActorTurnExecutionStage
                     || actor.Lifecycle == null
                     || actor.Travel == null))
                 return false;
+            if (actor != null) rosterOwners.Add(actor);
         }
+
+        // The runtime roster is the actor-turn authority for this boundary.
+        // Checking only that each roster actor belongs to the graph would allow
+        // a graph-owned actor omitted from the host roster to miss its turn.
+        if (!graph.MatchesExactOwnerInstances(graph.Cities, rosterOwners))
+            return false;
 
         foreach (DailyV1ActorTurnRosterEntry entry in roster)
         {
