@@ -13,6 +13,28 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
     public void TearDown() => SimulationTestFactory.CleanupDefinitions();
 
     [Test]
+    public void P12BoundJusticeAcceptsNewWantedAndSentenceRowsThroughOwnerInsertion()
+    {
+        JusticeSystem justice = CreateJusticeConfiguration("p12e-justice-bound-insert").CreateOwner();
+        int committedCalls = 0;
+        Assert.That(justice.TryBindP12CrimeJusticeMutationBoundary(_ => true, _ => committedCalls++), Is.True);
+        CityRuntime city = CreateCity("p12e-justice-bound-insert-city");
+        NpcRuntime target = CreateNpc("p12e-justice-bound-insert-target");
+        NpcRuntime guard = CreateNpc("p12e-justice-bound-insert-guard");
+
+        WantedRecordRuntime warrant = justice.CreateOrIncreaseWarrant(target, city, 12f, 4);
+
+        Assert.That(warrant, Is.Not.Null);
+        Assert.That(justice.WantedRecords, Has.Count.EqualTo(1));
+        Assert.That(justice.P12CrimeJusticeRevision, Is.EqualTo(1));
+        Assert.That(committedCalls, Is.EqualTo(1));
+        Assert.That(justice.Arrest(guard, target, city), Is.True);
+        Assert.That(justice.PrisonSentences, Has.Count.EqualTo(1));
+        Assert.That(justice.P12CrimeJusticeRevision, Is.EqualTo(2));
+        Assert.That(committedCalls, Is.EqualTo(2));
+    }
+
+    [Test]
     public void CaptureAndStagePreserveOrderedHistorySentenceLinksAndBothTargetIdentityForms()
     {
         CityRuntime firstCity = CreateCity("p12e-justice-city-a");
@@ -95,8 +117,8 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
             out JusticeSystem staged, out P12EJusticeSnapshotFailure stageFailure),
             Is.True, stageFailure?.Message);
 
-        List<WantedRecordRuntime> stagedWanted = ReadOwnerRows<WantedRecordRuntime>(staged, "wantedRecords");
-        List<PrisonSentenceRuntime> stagedSentences = ReadOwnerRows<PrisonSentenceRuntime>(staged, "prisonSentences");
+        IList<WantedRecordRuntime> stagedWanted = ReadOwnerRows<WantedRecordRuntime>(staged, "wantedRecords");
+        IList<PrisonSentenceRuntime> stagedSentences = ReadOwnerRows<PrisonSentenceRuntime>(staged, "prisonSentences");
         Assert.That(staged.P12WantedRecordCount, Is.EqualTo(3));
         Assert.That(staged.P12PrisonSentenceCount, Is.EqualTo(2));
         Assert.That(staged.P12CrimeJusticeRevision, Is.EqualTo(snapshot.Records.Revision));
@@ -446,19 +468,19 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
     }
 
     [Test]
-    public void CaptureAndStageRejectDuplicateOwnerObjectsAndMissingOrAmbiguousRoots()
+    public void OwnerProjectionRejectsDuplicateRowsAndStageRejectsMissingOrAmbiguousRoots()
     {
         CityRuntime city = CreateCity("p12e-justice-duplicate-city");
         NpcRuntime target = CreateNpc("p12e-justice-duplicate-target");
         JusticeConfiguration configuration = CreateJusticeConfiguration("p12e-justice-duplicate");
         JusticeSystem justice = configuration.CreateOwner();
         WantedRecordRuntime warrant = justice.CreateOrIncreaseWarrant(target, city, 2f, 2);
-        List<WantedRecordRuntime> wantedRows = ReadOwnerRows<WantedRecordRuntime>(justice, "wantedRecords");
-        wantedRows.Add(warrant);
+        IList<WantedRecordRuntime> wantedRows = ReadOwnerRows<WantedRecordRuntime>(justice, "wantedRecords");
+        Assert.Throws<InvalidOperationException>(() => wantedRows.Add(warrant));
         Assert.That(justice.TryCaptureP12EOwnerSnapshotRows(out IReadOnlyList<P12EJusticeWantedSnapshotRow> copiedWanted,
-            out IReadOnlyList<P12EJusticeSentenceSnapshotRow> copiedSentences), Is.False);
-        Assert.That(copiedWanted, Is.Null);
-        Assert.That(copiedSentences, Is.Null);
+            out IReadOnlyList<P12EJusticeSentenceSnapshotRow> copiedSentences), Is.True);
+        Assert.That(copiedWanted, Has.Count.EqualTo(1));
+        Assert.That(copiedSentences, Is.Empty);
 
         CityRuntime sentenceCity = CreateCity("p12e-justice-duplicate-sentence-city");
         NpcRuntime sentenceTarget = CreateNpc("p12e-justice-duplicate-sentence-target");
@@ -467,14 +489,14 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         Assert.That(duplicateSentenceJustice.CreateOrIncreaseWarrant(
             sentenceTarget, sentenceCity, 1f, 1), Is.Not.Null);
         Assert.That(duplicateSentenceJustice.Arrest(sentenceGuard, sentenceTarget, sentenceCity), Is.True);
-        List<PrisonSentenceRuntime> sentenceRows =
+        IList<PrisonSentenceRuntime> sentenceRows =
             ReadOwnerRows<PrisonSentenceRuntime>(duplicateSentenceJustice, "prisonSentences");
         Assert.That(sentenceRows, Has.Count.EqualTo(1));
-        sentenceRows.Add(sentenceRows[0]);
+        Assert.Throws<InvalidOperationException>(() => sentenceRows.Add(sentenceRows[0]));
         Assert.That(duplicateSentenceJustice.TryCaptureP12EOwnerSnapshotRows(
-            out copiedWanted, out copiedSentences), Is.False);
-        Assert.That(copiedWanted, Is.Null);
-        Assert.That(copiedSentences, Is.Null);
+            out copiedWanted, out copiedSentences), Is.True);
+        Assert.That(copiedWanted, Has.Count.EqualTo(1));
+        Assert.That(copiedSentences, Has.Count.EqualTo(1));
 
         P12EJusticeRecordsOwnerSnapshot missingNpc = Snapshot(
             new[] { Wanted(0, target.RuntimeId, null, city.RuntimeId, 2f, 2, false) },
@@ -522,8 +544,8 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
             null, UnitySimulationLoggerAdapter.Create(null), out JusticeSystem staged,
             out P12EJusticeSnapshotFailure failure), Is.True, failure?.Message);
 
-        List<WantedRecordRuntime> wanted = ReadOwnerRows<WantedRecordRuntime>(staged, "wantedRecords");
-        List<PrisonSentenceRuntime> sentences = ReadOwnerRows<PrisonSentenceRuntime>(staged, "prisonSentences");
+        IList<WantedRecordRuntime> wanted = ReadOwnerRows<WantedRecordRuntime>(staged, "wantedRecords");
+        IList<PrisonSentenceRuntime> sentences = ReadOwnerRows<PrisonSentenceRuntime>(staged, "prisonSentences");
         Assert.That(staged.P12CrimeJusticeRevision, Is.EqualTo(long.MaxValue));
         Assert.That(staged.P12WantedRecordCount + staged.P12PrisonSentenceCount, Is.EqualTo(2));
         Assert.That(wanted[0].IsActive, Is.False);
@@ -533,6 +555,28 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         Assert.That(sentences[0].FailedEscapeAttempts, Is.EqualTo(3));
         Assert.That(sentences[0].WasArrestedToday, Is.True);
         Assert.That(sentences[0].Warrant, Is.SameAs(wanted[0]));
+    }
+
+    [Test]
+    public void ExpiredSentenceRemovalReleasesItsUnityProjection()
+    {
+        CityRuntime city = CreateCity("p12e-justice-projection-release-city");
+        NpcRuntime target = CreateNpc("p12e-justice-projection-release-target");
+        NpcRuntime guard = CreateNpc("p12e-justice-projection-release-guard");
+        JusticeSystem justice = CreateJusticeConfiguration("p12e-justice-projection-release").CreateOwner();
+        Assert.That(justice.CreateOrIncreaseWarrant(target, city, 2f, 1), Is.Not.Null);
+        Assert.That(justice.Arrest(guard, target, city), Is.True);
+
+        FieldInfo viewsField = typeof(JusticeSystem).GetField(
+            "sentenceViews", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(viewsField, Is.Not.Null);
+        IDictionary sentenceViews = (IDictionary)viewsField.GetValue(justice);
+        Assert.That(sentenceViews.Count, Is.EqualTo(1));
+
+        justice.AdvanceSentences(new List<NpcRuntime> { target });
+
+        Assert.That(justice.P12PrisonSentenceCount, Is.Zero);
+        Assert.That(sentenceViews.Count, Is.Zero);
     }
 
     private static SimulationRuntime CreateRuntime(
@@ -733,11 +777,11 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
-    private static List<T> ReadOwnerRows<T>(JusticeSystem owner, string fieldName)
+    private static IList<T> ReadOwnerRows<T>(JusticeSystem owner, string fieldName)
     {
         FieldInfo field = typeof(JusticeSystem).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(field, Is.Not.Null, fieldName);
-        return (List<T>)field.GetValue(owner);
+        return (IList<T>)field.GetValue(owner);
     }
 
     private static OwnerSectionCensusSnapshot FindWitness(

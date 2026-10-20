@@ -236,6 +236,42 @@ public sealed class DailyV1SelectedOpenMarketActionExecutionTests
     }
 
     [Test]
+    public void SelectedActionDispatchExecutesNormalActionFromTheExactCoreSlot()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder = new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            id => builder.ResolveUniqueStartingCity(id)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        DailyV1NpcRuntimeOwners actor = graph.Npcs.Single(value => value.Definition.DefinitionId == "PEDRO");
+        DailyV1ActionDefinition rest = definitions.Actions["DESCANSAR"];
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(definitions, rest,
+            null, null, null, 0, 0f, 1f, NpcTravelReason.None, 0f,
+            "decision/rest", null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, rest, payload, null), Is.True);
+
+        List<string> order = new List<string>();
+        FixedActionRandom random = new FixedActionRandom(order, 0.25f);
+        RecordingActionDispatchBoundary boundary =
+            new RecordingActionDispatchBoundary(null, null);
+
+        Assert.That(DailyV1SelectedActionDispatchStage.TryDispatch(
+            graph, actor, random, 44L, boundary,
+            out DailyV1SelectedActionDispatchResult result), Is.True);
+
+        Assert.That(result.Kind, Is.EqualTo(DailyV1SelectedActionDispatchKind.Normal));
+        Assert.That(result.ActionRollSucceeded, Is.True);
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.NormalActionName, Is.EqualTo("DESCANSAR"));
+        Assert.That(result.NormalActionLogText, Is.EqualTo("descansou."));
+        Assert.That(random.Calls, Is.Zero);
+        Assert.That(boundary.BoundaryResolutionCalls, Is.Zero);
+    }
+
+    [Test]
     public void SelectedActionDispatchLeavesUnsupportedProviderFamiliesUnhandledBeforeRandomness()
     {
         CreateActionRollFixture(1f, out DailyV1EffectiveDefinitions definitions,
@@ -244,7 +280,8 @@ public sealed class DailyV1SelectedOpenMarketActionExecutionTests
         DailyV1ActionDefinition unsupported = definitions.Actions.Values.First(value =>
         {
             int actionType = value.Values.actionType?.Value ?? int.MinValue;
-            return actionType != DailyV1NpcDefinitionRules.TravelActionTypeValue
+            return actionType != DailyV1NpcDefinitionRules.NormalActionTypeValue
+                && actionType != DailyV1NpcDefinitionRules.TravelActionTypeValue
                 && actionType != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
                 && actionType != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue;
         });

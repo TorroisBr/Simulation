@@ -838,7 +838,8 @@ internal enum DailyV1SelectedActionDispatchKind
     PlannedMarketSale,
     OpenMarket,
     CrossCityBuy,
-    SoloTravel
+    SoloTravel,
+    Normal
 }
 
 /// <summary>Result of routing one exact selected owner action slot.</summary>
@@ -849,6 +850,8 @@ internal sealed class DailyV1SelectedActionDispatchResult
     internal bool Succeeded { get; }
     internal float ReferencePrice { get; }
     internal float ReferenceUnitCost { get; }
+    internal string NormalActionName { get; }
+    internal string NormalActionLogText { get; }
     internal DailyV1SelectedActionExecutionStage.SelectedPlannedNpcSaleActionResult PlannedNpcSale { get; }
     internal DailyV1SelectedActionExecutionStage.SelectedPlannedMarketSaleActionResult PlannedMarketSale { get; }
     internal DailyV1SelectedActionExecutionStage.SelectedOpenMarketActionResult OpenMarket { get; }
@@ -865,13 +868,17 @@ internal sealed class DailyV1SelectedActionDispatchResult
         DailyV1SelectedActionExecutionStage.SelectedPlannedMarketSaleActionResult plannedMarketSale = null,
         DailyV1SelectedActionExecutionStage.SelectedOpenMarketActionResult openMarket = null,
         DailyV1SelectedActionExecutionStage.SelectedCrossCityBuyActionResult crossCityBuy = null,
-        DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult soloTravel = null)
+        DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult soloTravel = null,
+        string normalActionName = null,
+        string normalActionLogText = null)
     {
         Kind = kind;
         ActionRollSucceeded = actionRollSucceeded;
         Succeeded = succeeded;
         ReferencePrice = referencePrice;
         ReferenceUnitCost = referenceUnitCost;
+        NormalActionName = normalActionName;
+        NormalActionLogText = normalActionLogText;
         PlannedNpcSale = plannedNpcSale;
         PlannedMarketSale = plannedMarketSale;
         OpenMarket = openMarket;
@@ -881,9 +888,9 @@ internal sealed class DailyV1SelectedActionDispatchResult
 }
 
 /// <summary>
-/// Owns dispatch for the selected Daily-v1 Travel and Merchant action slots
-/// already supported by Core. Unmigrated provider families remain explicitly
-/// unhandled for the existing host-provider path.
+/// Owns dispatch for selected Daily-v1 Normal, Travel and Merchant action
+/// slots already supported by Core. Unmigrated provider families remain
+/// explicitly unhandled for the existing host-provider path.
 /// </summary>
 internal static class DailyV1SelectedActionDispatchStage
 {
@@ -908,6 +915,17 @@ internal static class DailyV1SelectedActionDispatchStage
         int actionType = action?.Values.actionType?.Value ?? int.MinValue;
         if (action == null || payload == null || !ReferenceEquals(payload.Action, action))
             return false;
+
+        if (actionType == DailyV1NpcDefinitionRules.NormalActionTypeValue)
+        {
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.Normal,
+                true,
+                true,
+                normalActionName: DailyV1NpcDefinitionRules.GetActionName(graph.Definitions, action),
+                normalActionLogText: DailyV1NpcDefinitionRules.GetNormalActionLogText(graph.Definitions, action));
+            return true;
+        }
 
         if (actionType == DailyV1NpcDefinitionRules.TravelActionTypeValue)
         {

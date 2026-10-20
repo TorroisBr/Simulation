@@ -12527,6 +12527,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         switch (dispatch.Kind)
         {
+            case DailyV1SelectedActionDispatchKind.Normal:
+            {
+                string actorName = npcRuntime != null ? npcRuntime.NpcName : "NPC desconhecido";
+                if (!string.IsNullOrEmpty(dispatch.NormalActionLogText))
+                    return NpcActionResult.Succeeded($"{actorName} {dispatch.NormalActionLogText}");
+                return NpcActionResult.Succeeded(
+                    $"{actorName} realizou {dispatch.NormalActionName ?? string.Empty}.");
+            }
+
             case DailyV1SelectedActionDispatchKind.SoloTravel:
                 return NpcActionResult.Succeeded();
 

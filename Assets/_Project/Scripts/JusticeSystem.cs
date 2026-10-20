@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -22,13 +23,15 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     private const string SyncWantedStatusesOperationVersion = "1";
     private const string SyncWantedStatusesSnapshotVersion = "justice-sync-wanted-statuses-owner-v1";
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
-    private Func<JusticeSystem, bool> p12CrimeJusticeMutationAdmission;
-    private Action<JusticeSystem> p12CrimeJusticeMutationCommitted;
-    private long p12CrimeJusticeRevision;
     private bool p12DailyProfileReceiptBoundaryBound;
     private bool p12AReceiptStateInstalled;
-    private readonly List<WantedRecordRuntime> wantedRecords = new List<WantedRecordRuntime>();
-    private readonly List<PrisonSentenceRuntime> prisonSentences = new List<PrisonSentenceRuntime>();
+    private readonly DailyV1JusticeRecordsOwner justiceRecordsOwner = new DailyV1JusticeRecordsOwner();
+    private readonly Dictionary<DailyV1JusticeWantedRecordOwner, WantedRecordRuntime> wantedRecordViews =
+        new Dictionary<DailyV1JusticeWantedRecordOwner, WantedRecordRuntime>();
+    private readonly Dictionary<DailyV1JusticeSentenceOwner, PrisonSentenceRuntime> sentenceViews =
+        new Dictionary<DailyV1JusticeSentenceOwner, PrisonSentenceRuntime>();
+    private readonly IList<WantedRecordRuntime> wantedRecords;
+    private readonly IList<PrisonSentenceRuntime> prisonSentences;
     private Dictionary<string, JusticeBeginDayReceipt> beginDayStepReceipts =
         new Dictionary<string, JusticeBeginDayReceipt>(StringComparer.Ordinal);
     private long beginDayStepRevision;
@@ -45,7 +48,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     private readonly DomainEventRecorder domainEventRecorder;
     private readonly SimulationLogger logger;
 
-    internal long P12CrimeJusticeRevision => p12CrimeJusticeRevision;
+    internal long P12CrimeJusticeRevision => justiceRecordsOwner.Revision;
     internal int P12WantedRecordCount => wantedRecords?.Count ?? -1;
     internal int P12PrisonSentenceCount => prisonSentences?.Count ?? -1;
     internal long P12P18ReceiptCensusRevision
@@ -153,6 +156,58 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         this.hiddenStatus = hiddenStatus;
         this.domainEventRecorder = domainEventRecorder;
         this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
+        wantedRecords = new JusticeOwnerProjectionList<DailyV1JusticeWantedRecordOwner, WantedRecordRuntime>(
+            () => justiceRecordsOwner.WantedRecords,
+            ProjectWantedRecord,
+            view => view?.CoreOwner,
+            AddWantedRecordView,
+            null);
+        prisonSentences = new JusticeOwnerProjectionList<DailyV1JusticeSentenceOwner, PrisonSentenceRuntime>(
+            () => justiceRecordsOwner.Sentences,
+            ProjectSentence,
+            view => view?.CoreOwner,
+            AddSentenceView,
+            index =>
+            {
+                DailyV1JusticeSentenceOwner row = justiceRecordsOwner.Sentences[index];
+                if (!justiceRecordsOwner.TryRemoveSentenceAt(index))
+                    throw new InvalidOperationException("The selected Justice sentence row could not be removed.");
+                sentenceViews.Remove(row);
+            });
+    }
+
+    private WantedRecordRuntime ProjectWantedRecord(DailyV1JusticeWantedRecordOwner row)
+    {
+        if (row == null || !wantedRecordViews.TryGetValue(row, out WantedRecordRuntime view))
+            throw new InvalidOperationException("A Core Justice wanted row has no exact Unity reference projection.");
+        return view;
+    }
+
+    private PrisonSentenceRuntime ProjectSentence(DailyV1JusticeSentenceOwner row)
+    {
+        if (row == null || !sentenceViews.TryGetValue(row, out PrisonSentenceRuntime view))
+            throw new InvalidOperationException("A Core Justice sentence row has no exact Unity reference projection.");
+        return view;
+    }
+
+    private void AddWantedRecordView(WantedRecordRuntime view)
+    {
+        DailyV1JusticeWantedRecordOwner row = view?.CoreOwner;
+        if (row == null || (wantedRecordViews.TryGetValue(row, out WantedRecordRuntime existing)
+                && !ReferenceEquals(existing, view))
+            || !justiceRecordsOwner.TryAddWantedRecord(row))
+            throw new InvalidOperationException("The Core Justice wanted-record owner rejected its exact row projection.");
+        wantedRecordViews[row] = view;
+    }
+
+    private void AddSentenceView(PrisonSentenceRuntime view)
+    {
+        DailyV1JusticeSentenceOwner row = view?.CoreOwner;
+        if (row == null || (sentenceViews.TryGetValue(row, out PrisonSentenceRuntime existing)
+                && !ReferenceEquals(existing, view))
+            || !justiceRecordsOwner.TryAddSentence(row))
+            throw new InvalidOperationException("The Core Justice sentence owner rejected its exact row projection.");
+        sentenceViews[row] = view;
     }
 
     public void BeginDay()
@@ -1684,8 +1739,6 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             {
                 return null;
             }
-            if (p12CrimeJusticeMutationAdmission != null && !BindP12WantedRecord(record))
-                return null;
             EnsureP12CrimeJusticeMutationAllowed();
             wantedRecords.Add(record);
             NotifyP12CrimeJusticeMutationCommitted();
@@ -1732,8 +1785,6 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         {
             return false;
         }
-        if (p12CrimeJusticeMutationAdmission != null && !BindP12PrisonSentence(sentence))
-            return false;
         EnsureP12CrimeJusticeMutationAllowed();
         prisonSentences.Add(sentence);
         NotifyP12CrimeJusticeMutationCommitted();
@@ -1942,14 +1993,21 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
 
     public bool HasAnyActiveWarrant(NpcRuntime targetRuntime)
     {
-        foreach (WantedRecordRuntime record in wantedRecords)
+        if (targetRuntime == null) return false;
+        if (string.IsNullOrWhiteSpace(targetRuntime.RuntimeId))
         {
-            if (record != null && record.IsActive == true && record.Target == targetRuntime)
+            foreach (WantedRecordRuntime record in wantedRecords)
             {
-                return true;
+                if (record != null && record.IsActive == true && record.Target == targetRuntime)
+                    return true;
             }
+            return false;
         }
 
+        foreach (DailyV1JusticeWantedRecordOwner row in justiceRecordsOwner.FindActiveWantedRecords(targetRuntime.RuntimeId))
+            if (wantedRecordViews.TryGetValue(row, out WantedRecordRuntime record)
+                && record.IsActive && ReferenceEquals(record.Target, targetRuntime))
+                return true;
         return false;
     }
 
@@ -2007,14 +2065,23 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             return null;
         }
 
-        foreach (WantedRecordRuntime record in wantedRecords)
+        if (string.IsNullOrWhiteSpace(targetRuntime.RuntimeId)
+            || string.IsNullOrWhiteSpace(cityRuntime.RuntimeId))
         {
-            if (record != null && record.IsActive == true && record.Target == targetRuntime && record.City == cityRuntime)
-            {
-                return record;
-            }
+            foreach (WantedRecordRuntime record in wantedRecords)
+                if (record != null && record.IsActive
+                    && ReferenceEquals(record.Target, targetRuntime)
+                    && ReferenceEquals(record.City, cityRuntime))
+                    return record;
+            return null;
         }
 
+        foreach (DailyV1JusticeWantedRecordOwner row in
+            justiceRecordsOwner.FindActiveWantedRecords(targetRuntime.RuntimeId, cityRuntime.RuntimeId))
+            if (wantedRecordViews.TryGetValue(row, out WantedRecordRuntime projectedRecord)
+                && projectedRecord.IsActive && ReferenceEquals(projectedRecord.Target, targetRuntime)
+                && ReferenceEquals(projectedRecord.City, cityRuntime))
+                return projectedRecord;
         return null;
     }
 
@@ -2027,13 +2094,18 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             return records;
         }
 
-        foreach (WantedRecordRuntime record in wantedRecords)
+        if (string.IsNullOrWhiteSpace(targetRuntime.RuntimeId))
         {
-            if (record != null && record.IsActive == true && record.Target == targetRuntime)
-            {
-                records.Add(record);
-            }
+            foreach (WantedRecordRuntime record in wantedRecords)
+                if (record != null && record.IsActive && ReferenceEquals(record.Target, targetRuntime))
+                    records.Add(record);
+            return records;
         }
+
+        foreach (DailyV1JusticeWantedRecordOwner row in justiceRecordsOwner.FindActiveWantedRecords(targetRuntime.RuntimeId))
+            if (wantedRecordViews.TryGetValue(row, out WantedRecordRuntime projectedRecord)
+                && projectedRecord.IsActive && ReferenceEquals(projectedRecord.Target, targetRuntime))
+                records.Add(projectedRecord);
 
         return records;
     }
@@ -2047,7 +2119,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     {
         wantedCount = 0;
         sentenceCount = 0;
-        revision = p12CrimeJusticeRevision;
+        revision = justiceRecordsOwner.Revision;
         if (isNpcInstalled == null || isCityInstalled == null
             || wantedRecords == null || prisonSentences == null
             || revision < 0L)
@@ -2084,7 +2156,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     {
         wantedRows = null;
         sentenceRows = null;
-        if (wantedRecords == null || prisonSentences == null || p12CrimeJusticeRevision < 0L)
+        if (wantedRecords == null || prisonSentences == null || justiceRecordsOwner.Revision < 0L)
             return false;
 
         List<P12EJusticeWantedSnapshotRow> wanted = new List<P12EJusticeWantedSnapshotRow>(wantedRecords.Count);
@@ -2171,9 +2243,9 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         {
             JusticeSystem candidate = new JusticeSystem(
                 freeStatus, wantedStatus, arrestedStatus, hiddenStatus, domainEventRecorder, logger);
-            candidate.wantedRecords.AddRange(wantedRows);
-            candidate.prisonSentences.AddRange(sentenceRows);
-            candidate.p12CrimeJusticeRevision = revision;
+            foreach (WantedRecordRuntime row in wantedRows) candidate.wantedRecords.Add(row);
+            foreach (PrisonSentenceRuntime row in sentenceRows) candidate.prisonSentences.Add(row);
+            if (!candidate.justiceRecordsOwner.TryInstallExactRevision(revision)) return false;
             if (receiptSnapshot != null)
             {
                 if (!candidate.TryInstallP12AReceiptOwnerSnapshot(receiptSnapshot)) return false;
@@ -2195,17 +2267,10 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         Action<JusticeSystem> committed)
     {
         if (admission == null || committed == null) return false;
-        if (p12CrimeJusticeMutationAdmission != null || p12CrimeJusticeMutationCommitted != null)
-            return false;
         if (!p12AReceiptStateInstalled && P12P18ReceiptCensusRevision != 0L) return false;
-
-        p12CrimeJusticeMutationAdmission = admission;
-        p12CrimeJusticeMutationCommitted = committed;
-        foreach (WantedRecordRuntime record in wantedRecords)
-            if (record == null || !BindP12WantedRecord(record)) return false;
-        foreach (PrisonSentenceRuntime sentence in prisonSentences)
-            if (sentence == null || !BindP12PrisonSentence(sentence)) return false;
-        return true;
+        return justiceRecordsOwner.TryBindP12MutationBoundary(
+            () => admission(this),
+            () => committed(this));
     }
 
     internal bool TryBindP12DailyProfileReceiptBoundary()
@@ -2236,15 +2301,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     }
 
     private bool CanCommitP12CrimeJusticeMutation()
-    {
-        if (p12CrimeJusticeMutationAdmission == null
-            && p12CrimeJusticeMutationCommitted == null) return true;
-        if (p12CrimeJusticeMutationAdmission == null
-            || p12CrimeJusticeMutationCommitted == null
-            || p12CrimeJusticeRevision == long.MaxValue) return false;
-        try { return p12CrimeJusticeMutationAdmission(this); }
-        catch { return false; }
-    }
+        => justiceRecordsOwner.CanCommitMutation();
 
     private void EnsureP12CrimeJusticeMutationAllowed()
     {
@@ -2253,28 +2310,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     }
 
     private void NotifyP12CrimeJusticeMutationCommitted()
-    {
-        if (p12CrimeJusticeMutationAdmission == null) return;
-        p12CrimeJusticeRevision++;
-        try { p12CrimeJusticeMutationCommitted?.Invoke(this); }
-        catch { }
-    }
-
-    private bool BindP12WantedRecord(WantedRecordRuntime record)
-    {
-        return record != null
-            && record.TryBindP12MutationBoundary(
-                () => wantedRecords.Contains(record) && CanCommitP12CrimeJusticeMutation(),
-                () => NotifyP12CrimeJusticeMutationCommitted());
-    }
-
-    private bool BindP12PrisonSentence(PrisonSentenceRuntime sentence)
-    {
-        return sentence != null
-            && sentence.TryBindP12MutationBoundary(
-                () => prisonSentences.Contains(sentence) && CanCommitP12CrimeJusticeMutation(),
-                () => NotifyP12CrimeJusticeMutationCommitted());
-    }
+        => justiceRecordsOwner.NotifyMutationCommitted();
 
     private bool RemoveP12PrisonSentenceAt(int index)
     {
@@ -2293,7 +2329,8 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
 
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
     {
-        if (mutationGuardBinding.CanBindTo(guard) == false)
+        if (mutationGuardBinding.CanBindTo(guard) == false
+            || justiceRecordsOwner.CanBindMutationGuard(guard) == false)
         {
             return false;
         }
@@ -2319,7 +2356,9 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
 
     internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
     {
-        if (CanBindMutationGuard(guard) == false || mutationGuardBinding.TryBindTo(guard) == false)
+        if (CanBindMutationGuard(guard) == false
+            || mutationGuardBinding.TryBindTo(guard) == false
+            || justiceRecordsOwner.TryBindMutationGuard(guard) == false)
         {
             return false;
         }
@@ -2368,14 +2407,18 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             return null;
         }
 
-        foreach (PrisonSentenceRuntime sentence in prisonSentences)
+        if (string.IsNullOrWhiteSpace(targetRuntime.RuntimeId))
         {
-            if (sentence != null && sentence.IsActive == true && sentence.Target == targetRuntime)
-            {
-                return sentence;
-            }
+            foreach (PrisonSentenceRuntime sentence in prisonSentences)
+                if (sentence != null && sentence.IsActive && ReferenceEquals(sentence.Target, targetRuntime))
+                    return sentence;
+            return null;
         }
 
+        foreach (DailyV1JusticeSentenceOwner row in justiceRecordsOwner.FindActiveSentences(targetRuntime.RuntimeId))
+            if (sentenceViews.TryGetValue(row, out PrisonSentenceRuntime projectedSentence)
+                && projectedSentence.IsActive && ReferenceEquals(projectedSentence.Target, targetRuntime))
+                return projectedSentence;
         return null;
     }
 
@@ -2928,28 +2971,34 @@ internal sealed class JusticeAdvanceSentencesCommit : IBoundaryContinuationStepC
 [Serializable]
 public class WantedRecordRuntime : IAuthoritativeMutationGuardBindable
 {
-    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
-    [NonSerialized] private Func<bool> p12MutationAdmission;
-    [NonSerialized] private Action p12MutationCommitted;
     [NonSerialized] private NpcRuntime target;
     [NonSerialized] private CityRuntime city;
-    [SerializeField] private float bounty;
-    [SerializeField] private int sentenceDays;
-    [SerializeField] private bool resolved;
+    [NonSerialized] private DailyV1JusticeWantedRecordOwner coreOwner;
 
     public NpcRuntime Target => target;
     public CityRuntime City => city;
-    public float Bounty => bounty;
-    public int SentenceDays => sentenceDays;
-    public bool IsActive => resolved == false && target != null && city != null;
-    internal bool P12Resolved => resolved;
+    public float Bounty => coreOwner?.Bounty ?? 0f;
+    public int SentenceDays => coreOwner?.SentenceDays ?? 0;
+    public bool IsActive => coreOwner != null && !coreOwner.IsResolved && target != null && city != null;
+    internal bool P12Resolved => coreOwner?.IsResolved ?? false;
+    internal DailyV1JusticeWantedRecordOwner CoreOwner => coreOwner;
 
     public WantedRecordRuntime(NpcRuntime target, CityRuntime city, float bounty, int sentenceDays)
     {
         this.target = target;
         this.city = city;
-        this.bounty = UnityMathfCompatibility.Max(0f, bounty);
-        this.sentenceDays = UnityMathfCompatibility.Max(1, sentenceDays);
+        coreOwner = new DailyV1JusticeWantedRecordOwner(
+            target?.RuntimeId, city?.RuntimeId, bounty, sentenceDays);
+    }
+
+    private WantedRecordRuntime(
+        NpcRuntime target,
+        CityRuntime city,
+        DailyV1JusticeWantedRecordOwner coreOwner)
+    {
+        this.target = target;
+        this.city = city;
+        this.coreOwner = coreOwner ?? throw new ArgumentNullException(nameof(coreOwner));
     }
 
     internal static bool TryCreateFromP12EOwnerSnapshot(
@@ -2964,104 +3013,72 @@ public class WantedRecordRuntime : IAuthoritativeMutationGuardBindable
         if (target == null || city == null || float.IsNaN(bounty) || float.IsInfinity(bounty)
             || bounty < 0f || sentenceDays < 1)
             return false;
-        WantedRecordRuntime candidate = new WantedRecordRuntime(target, city, bounty, sentenceDays);
-        candidate.bounty = bounty;
-        candidate.sentenceDays = sentenceDays;
-        candidate.resolved = resolved;
+        WantedRecordRuntime candidate = new WantedRecordRuntime(target, city,
+            new DailyV1JusticeWantedRecordOwner(target.RuntimeId, city.RuntimeId,
+                bounty, sentenceDays, resolved));
         staged = candidate;
         return true;
     }
 
     public void AddPenalty(float additionalBounty, int additionalSentenceDays)
     {
-        ThrowIfFaulted();
-        float nextBounty = bounty + UnityMathfCompatibility.Max(0f, additionalBounty);
-        int nextSentenceDays = UnityMathfCompatibility.Max(1, sentenceDays + UnityMathfCompatibility.Max(0, additionalSentenceDays));
-        if (nextBounty == bounty && nextSentenceDays == sentenceDays) return;
-        EnsureP12MutationAllowed();
-        bounty = nextBounty;
-        sentenceDays = nextSentenceDays;
-        NotifyP12MutationCommitted();
+        if (coreOwner == null || !coreOwner.TryAddPenalty(additionalBounty, additionalSentenceDays))
+            throw new InvalidOperationException("Wanted record is outside an admitted P12 Justice boundary.");
     }
 
     public void Resolve()
     {
-        ThrowIfFaulted();
-
-        if (resolved) return;
-        EnsureP12MutationAllowed();
-        resolved = true;
-        NotifyP12MutationCommitted();
+        if (coreOwner == null || !coreOwner.TryResolve())
+            throw new InvalidOperationException("Wanted record is outside an admitted P12 Justice boundary.");
     }
 
     internal bool TryBindP12MutationBoundary(Func<bool> admission, Action committed)
-    {
-        if (admission == null || committed == null
-            || p12MutationAdmission != null || p12MutationCommitted != null)
-            return false;
-        p12MutationAdmission = admission;
-        p12MutationCommitted = committed;
-        return true;
-    }
+        => coreOwner != null && coreOwner.TryBindP12MutationBoundary(admission, committed);
 
-    private void EnsureP12MutationAllowed()
-    {
-        if (p12MutationAdmission == null && p12MutationCommitted == null) return;
-        bool allowed = false;
-        try { allowed = p12MutationAdmission != null && p12MutationCommitted != null && p12MutationAdmission(); }
-        catch { }
-        if (!allowed) throw new InvalidOperationException("Wanted record is outside an admitted P12 Justice boundary.");
-    }
-
-    private void NotifyP12MutationCommitted()
-    {
-        try { p12MutationCommitted?.Invoke(); }
-        catch { }
-    }
-
-    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
-    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => coreOwner != null && coreOwner.CanBindMutationGuard(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => coreOwner != null && coreOwner.TryBindMutationGuard(guard);
 
     bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
     bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
-
-    private void ThrowIfFaulted()
-    {
-        if (mutationGuardBinding.CanMutate == false)
-        {
-            throw new InvalidOperationException("Runtime mutation is faulted.");
-        }
-    }
 }
 
 [Serializable]
 public class PrisonSentenceRuntime : IAuthoritativeMutationGuardBindable
 {
-    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
-    [NonSerialized] private Func<bool> p12MutationAdmission;
-    [NonSerialized] private Action p12MutationCommitted;
     [NonSerialized] private NpcRuntime target;
     [NonSerialized] private CityRuntime city;
     [NonSerialized] private WantedRecordRuntime warrant;
-    [SerializeField] private int remainingDays;
-    [SerializeField] private int failedEscapeAttempts;
-    [SerializeField] private bool wasArrestedToday;
+    [NonSerialized] private DailyV1JusticeSentenceOwner coreOwner;
 
     public NpcRuntime Target => target;
     public CityRuntime City => city;
     public WantedRecordRuntime Warrant => warrant;
-    public int RemainingDays => remainingDays;
-    public int FailedEscapeAttempts => failedEscapeAttempts;
-    public bool WasArrestedToday => wasArrestedToday;
-    public bool IsActive => target != null && city != null && remainingDays > 0;
+    public int RemainingDays => coreOwner?.RemainingDays ?? 0;
+    public int FailedEscapeAttempts => coreOwner?.FailedEscapeAttempts ?? 0;
+    public bool WasArrestedToday => coreOwner?.WasArrestedToday ?? false;
+    public bool IsActive => target != null && city != null && coreOwner?.IsActive == true;
+    internal DailyV1JusticeSentenceOwner CoreOwner => coreOwner;
 
     public PrisonSentenceRuntime(NpcRuntime target, CityRuntime city, WantedRecordRuntime warrant, int sentenceDays)
     {
         this.target = target;
         this.city = city;
         this.warrant = warrant;
-        remainingDays = UnityMathfCompatibility.Max(1, sentenceDays);
-        wasArrestedToday = true;
+        coreOwner = new DailyV1JusticeSentenceOwner(
+            target?.RuntimeId, city?.RuntimeId, warrant?.CoreOwner,
+            UnityMathfCompatibility.Max(1, sentenceDays));
+    }
+
+    private PrisonSentenceRuntime(
+        NpcRuntime target,
+        CityRuntime city,
+        WantedRecordRuntime warrant,
+        DailyV1JusticeSentenceOwner coreOwner)
+    {
+        this.target = target;
+        this.city = city;
+        this.warrant = warrant;
+        this.coreOwner = coreOwner ?? throw new ArgumentNullException(nameof(coreOwner));
     }
 
     internal static bool TryCreateFromP12EOwnerSnapshot(
@@ -3078,81 +3095,121 @@ public class PrisonSentenceRuntime : IAuthoritativeMutationGuardBindable
             || failedEscapeAttempts < 0 || !ReferenceEquals(target, warrant.Target)
             || !ReferenceEquals(city, warrant.City))
             return false;
-        PrisonSentenceRuntime candidate = new PrisonSentenceRuntime(
-            target, city, warrant, Math.Max(1, remainingDays));
-        candidate.remainingDays = remainingDays;
-        candidate.failedEscapeAttempts = failedEscapeAttempts;
-        candidate.wasArrestedToday = wasArrestedToday;
+        PrisonSentenceRuntime candidate = new PrisonSentenceRuntime(target, city, warrant,
+            new DailyV1JusticeSentenceOwner(target.RuntimeId, city.RuntimeId,
+                warrant.CoreOwner, remainingDays, failedEscapeAttempts, wasArrestedToday));
         staged = candidate;
         return true;
     }
 
     public void AdvanceDay()
     {
-        ThrowIfFaulted();
-        int next = UnityMathfCompatibility.Max(0, remainingDays - 1);
-        if (next == remainingDays) return;
-        EnsureP12MutationAllowed();
-        remainingDays = next;
-        NotifyP12MutationCommitted();
+        if (coreOwner == null || !coreOwner.TryAdvanceDay())
+            throw new InvalidOperationException("Prison sentence is outside an admitted P12 Justice boundary.");
     }
 
     public void RegisterFailedEscape(int additionalSentenceDays)
     {
-        ThrowIfFaulted();
-
-        EnsureP12MutationAllowed();
-        failedEscapeAttempts++;
-        remainingDays += UnityMathfCompatibility.Max(0, additionalSentenceDays);
-        NotifyP12MutationCommitted();
+        if (coreOwner == null || !coreOwner.TryRegisterFailedEscape(additionalSentenceDays))
+            throw new InvalidOperationException("Prison sentence is outside an admitted P12 Justice boundary.");
     }
 
     public void ClearArrestedToday()
     {
-        ThrowIfFaulted();
-
-        if (!wasArrestedToday) return;
-        EnsureP12MutationAllowed();
-        wasArrestedToday = false;
-        NotifyP12MutationCommitted();
+        if (coreOwner == null || !coreOwner.TryClearArrestedToday())
+            throw new InvalidOperationException("Prison sentence is outside an admitted P12 Justice boundary.");
     }
 
     internal bool TryBindP12MutationBoundary(Func<bool> admission, Action committed)
-    {
-        if (admission == null || committed == null
-            || p12MutationAdmission != null || p12MutationCommitted != null)
-            return false;
-        p12MutationAdmission = admission;
-        p12MutationCommitted = committed;
-        return true;
-    }
+        => coreOwner != null && coreOwner.TryBindP12MutationBoundary(admission, committed);
 
-    private void EnsureP12MutationAllowed()
-    {
-        if (p12MutationAdmission == null && p12MutationCommitted == null) return;
-        bool allowed = false;
-        try { allowed = p12MutationAdmission != null && p12MutationCommitted != null && p12MutationAdmission(); }
-        catch { }
-        if (!allowed) throw new InvalidOperationException("Prison sentence is outside an admitted P12 Justice boundary.");
-    }
-
-    private void NotifyP12MutationCommitted()
-    {
-        try { p12MutationCommitted?.Invoke(); }
-        catch { }
-    }
-
-    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
-    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => coreOwner != null && coreOwner.CanBindMutationGuard(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => coreOwner != null && coreOwner.TryBindMutationGuard(guard);
 
     bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
     bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
+}
 
-    private void ThrowIfFaulted()
+/// <summary>
+/// Compatibility projection over the Core-owned ordered Justice rows. The
+/// adapter retains Unity references and object-facing APIs, while list order
+/// and row values remain in the shared owner.
+/// </summary>
+internal sealed class JusticeOwnerProjectionList<TCore, TView> : IList<TView>
+    where TCore : class
+    where TView : class
+{
+    private readonly Func<IReadOnlyList<TCore>> getRows;
+    private readonly Func<TCore, TView> project;
+    private readonly Func<TView, TCore> getOwner;
+    private readonly Action<TView> add;
+    private readonly Action<int> removeAt;
+
+    internal JusticeOwnerProjectionList(
+        Func<IReadOnlyList<TCore>> getRows,
+        Func<TCore, TView> project,
+        Func<TView, TCore> getOwner,
+        Action<TView> add,
+        Action<int> removeAt)
     {
-        if (mutationGuardBinding.CanMutate == false)
-        {
-            throw new InvalidOperationException("Runtime mutation is faulted.");
-        }
+        this.getRows = getRows ?? throw new ArgumentNullException(nameof(getRows));
+        this.project = project ?? throw new ArgumentNullException(nameof(project));
+        this.getOwner = getOwner ?? throw new ArgumentNullException(nameof(getOwner));
+        this.add = add ?? throw new ArgumentNullException(nameof(add));
+        this.removeAt = removeAt;
     }
+
+    public TView this[int index]
+    {
+        get => project(getRows()[index]);
+        set => throw new NotSupportedException("Justice row replacement must use an owner operation.");
+    }
+
+    public int Count => getRows().Count;
+    public bool IsReadOnly => false;
+    public void Add(TView item) => add(item);
+    public void Clear() => throw new NotSupportedException("Justice owner rows cannot be cleared through a projection.");
+    public bool Contains(TView item) => IndexOf(item) >= 0;
+
+    public void CopyTo(TView[] array, int arrayIndex)
+    {
+        if (array == null) throw new ArgumentNullException(nameof(array));
+        if (arrayIndex < 0 || arrayIndex > array.Length) throw new ArgumentOutOfRangeException(nameof(arrayIndex));
+        if (array.Length - arrayIndex < Count) throw new ArgumentException("The destination array is too small.");
+        for (int i = 0; i < Count; i++) array[arrayIndex + i] = this[i];
+    }
+
+    public IEnumerator<TView> GetEnumerator()
+    {
+        for (int i = 0; i < Count; i++) yield return this[i];
+    }
+
+    public int IndexOf(TView item)
+    {
+        TCore owner = item == null ? null : getOwner(item);
+        if (owner == null) return -1;
+        IReadOnlyList<TCore> rows = getRows();
+        for (int i = 0; i < rows.Count; i++)
+            if (ReferenceEquals(rows[i], owner)) return i;
+        return -1;
+    }
+
+    public void Insert(int index, TView item) =>
+        throw new NotSupportedException("Justice row order is owned by Core operations.");
+
+    public bool Remove(TView item)
+    {
+        int index = IndexOf(item);
+        if (index < 0) return false;
+        RemoveAt(index);
+        return true;
+    }
+
+    public void RemoveAt(int index)
+    {
+        if (removeAt == null) throw new NotSupportedException("Justice row removal is not supported through this projection.");
+        removeAt(index);
+    }
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

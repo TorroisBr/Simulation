@@ -74,6 +74,7 @@
       <Compile Include="DailyV1NpcActionSlotOwnerTests.cs" Link="Person/DailyV1NpcActionSlotOwnerTests.cs" />
       <Compile Include="DailyV1NpcMerchantTradePlanOwnerTests.cs" Link="Person/DailyV1NpcMerchantTradePlanOwnerTests.cs" />
       <Compile Include="DailyV1CommercialKnowledgeOwnerTests.cs" Link="Knowledge/DailyV1CommercialKnowledgeOwnerTests.cs" />
+      <Compile Include="DailyV1JusticeRecordsOwnerTests.cs" Link="Person/DailyV1JusticeRecordsOwnerTests.cs" />
     <Compile Include="SpatialKnowledgeRuntimeCoreTests.cs" Link="Knowledge/SpatialKnowledgeRuntimeCoreTests.cs" />
     <Compile Include="ActionExecutionTests.cs" Link="Application/ActionExecutionTests.cs" />
       <Compile Include="DailyV1ApplicationHostTests.cs" Link="Application/DailyV1ApplicationHostTests.cs" />

@@ -591,7 +591,7 @@ public sealed class JusticeAdvanceSentencesBoundaryOwnerTests
         Assert.That(justice.TryPrepareAdvanceSentencesStep(
             manifest, step, roster, out IBoundaryContinuationStepCommit prepared, out _), Is.True);
 
-        List<PrisonSentenceRuntime> sentences = (List<PrisonSentenceRuntime>)typeof(JusticeSystem)
+        IList<PrisonSentenceRuntime> sentences = (IList<PrisonSentenceRuntime>)typeof(JusticeSystem)
             .GetField("prisonSentences", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(justice);
         sentences[0].RegisterFailedEscape(1);
@@ -611,7 +611,7 @@ public sealed class JusticeAdvanceSentencesBoundaryOwnerTests
         WantedRecordRuntime warrant = justice.CreateOrIncreaseWarrant(target, city, 12f, 1);
         Assert.That(justice.Arrest(guard, target, city), Is.True);
 
-        List<PrisonSentenceRuntime> sentences = (List<PrisonSentenceRuntime>)typeof(JusticeSystem)
+        IList<PrisonSentenceRuntime> sentences = (IList<PrisonSentenceRuntime>)typeof(JusticeSystem)
             .GetField("prisonSentences", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(justice);
         Assert.That(sentences, Has.Count.EqualTo(1));
