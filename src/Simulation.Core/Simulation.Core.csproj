@@ -53,6 +53,8 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/ActorChoiceStore.cs" Link="Application/ActorChoiceStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ActorTurnExecutionStage.cs" Link="Application/DailyV1ActorTurnExecutionStage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedMerchantTradeStateOperation.cs" Link="Application/DailyV1SelectedMerchantTradeStateOperation.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1CommercialKnowledgeSharingStage.cs" Link="Application/DailyV1CommercialKnowledgeSharingStage.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedLocalKnowledgeRefreshStage.cs" Link="Application/DailyV1SelectedLocalKnowledgeRefreshStage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyCaptureEligibilityToken.cs" Link="Application/DailyCaptureEligibilityToken.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ExecutionBoundaryState.cs" Link="Application/DailyV1ExecutionBoundaryState.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/SimulationRuntimeAdmissionContext.cs" Link="Application/SimulationRuntimeAdmissionContext.cs" />

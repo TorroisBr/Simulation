@@ -24,13 +24,26 @@ public sealed class CommercialKnowledgeSharingSystem : IAuthoritativeMutationGua
 
     public void ShareAmongPresentMerchants(IReadOnlyList<NpcRuntime> npcRuntimes)
     {
-        if (!mutationGuardBinding.CanMutate)
-        {
-            throw new InvalidOperationException("A faulted SimulationRuntime cannot share commercial knowledge.");
-        }
+        EnsureCanShare();
 
         if (npcRuntimes == null)
         {
+            return;
+        }
+
+        if (TryGetExactSelectedGraph(npcRuntimes,
+                out DailyV1SelectedRuntimeOwnerGraph selectedGraph))
+        {
+            EffectiveCommercialKnowledgeConfiguration selectedConfiguration =
+                new EffectiveCommercialKnowledgeConfiguration(
+                    knowledgePolicy.FreshForDays,
+                    knowledgePolicy.MaxUsefulAgeDays,
+                    maxSharedObservationsPerInteraction);
+            if (!DailyV1CommercialKnowledgeSharingStage.TryShareAmongPresentMerchants(
+                    selectedGraph, simulationTime.AbsoluteDay, selectedConfiguration,
+                    maxSharedObservationsPerInteraction))
+                throw new InvalidOperationException(
+                    "The selected Daily-v1 commercial knowledge stage could not use the exact runtime owner graph.");
             return;
         }
 
@@ -75,6 +88,12 @@ public sealed class CommercialKnowledgeSharingSystem : IAuthoritativeMutationGua
 
             groupStart = groupEnd;
         }
+    }
+
+    internal void EnsureCanShare()
+    {
+        if (!mutationGuardBinding.CanMutate)
+            throw new InvalidOperationException("A faulted SimulationRuntime cannot share commercial knowledge.");
     }
 
     internal bool TryPreparePhaseSnapshot(BoundaryContinuationManifest manifest,
@@ -177,6 +196,12 @@ public sealed class CommercialKnowledgeSharingSystem : IAuthoritativeMutationGua
     }
 
     internal int MaxSuccessfulUpdates => maxSharedObservationsPerInteraction;
+
+    internal EffectiveCommercialKnowledgeConfiguration SelectedKnowledgeConfiguration =>
+        new EffectiveCommercialKnowledgeConfiguration(
+            knowledgePolicy.FreshForDays,
+            knowledgePolicy.MaxUsefulAgeDays,
+            maxSharedObservationsPerInteraction);
 
     private List<CommercialKnowledgeShareValue> CaptureShareValues(CommercialKnowledgeRuntime knowledge,
         long absoluteDay)
@@ -377,6 +402,45 @@ public sealed class CommercialKnowledgeSharingSystem : IAuthoritativeMutationGua
             && npcRuntime.IsTraveling == false
             && npcRuntime.CurrentCity != null
             && npcRuntime.HasJobType(NpcJobType.Merchant);
+    }
+
+    private static bool TryGetExactSelectedGraph(
+        IReadOnlyList<NpcRuntime> npcRuntimes,
+        out DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        graph = null;
+        if (npcRuntimes == null) return false;
+
+        List<DailyV1NpcRuntimeOwners> owners = new List<DailyV1NpcRuntimeOwners>();
+        bool hasSelectedRuntime = false;
+        bool hasUnselectedRuntime = false;
+        foreach (NpcRuntime runtime in npcRuntimes)
+        {
+            if (runtime == null) continue;
+            DailyV1NpcRuntimeOwners owner = runtime.SelectedRuntimeOwners;
+            DailyV1SelectedRuntimeOwnerGraph runtimeGraph = runtime.SelectedRuntimeOwnerGraph;
+            if (owner == null && runtimeGraph == null)
+            {
+                hasUnselectedRuntime = true;
+                continue;
+            }
+
+            hasSelectedRuntime = true;
+            if (owner == null || runtimeGraph == null
+                || (graph != null && !ReferenceEquals(graph, runtimeGraph)))
+                throw new InvalidOperationException(
+                    "Selected commercial knowledge sharing requires one exact Core owner graph.");
+            graph = runtimeGraph;
+            owners.Add(owner);
+        }
+
+        if (!hasSelectedRuntime) return false;
+        if (hasUnselectedRuntime || graph == null
+            || !graph.MatchesExactOwnerInstances(graph.Cities, owners))
+            throw new InvalidOperationException(
+                "Selected commercial knowledge sharing received an incomplete actor roster.");
+
+        return true;
     }
 
     private sealed class ShareableObservation

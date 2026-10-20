@@ -171,7 +171,7 @@ internal static class DailyV1SelectedMerchantTradeStateOperation
         return true;
     }
 
-    private static void ObserveCurrentMarket(
+    internal static void ObserveCurrentMarket(
         DailyV1NpcRuntimeOwners actor,
         DailyV1CityRuntimeOwners city,
         long absoluteDay)

@@ -11385,6 +11385,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
     private void RefreshLocalKnowledgeAndShare()
     {
+        if (TryRefreshSelectedLocalKnowledgeAndShare()) return;
+
         foreach (NpcRuntime npcRuntime in npcRuntimes)
         {
             if (npcRuntime == null || npcRuntime.IsAlive == false || npcRuntime.CurrentLocation == null || npcRuntime.IsTraveling == true)
@@ -11407,6 +11409,51 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         {
             commercialKnowledgeSharingSystem?.ShareAmongPresentMerchants(npcRuntimes);
         }
+    }
+
+    private bool TryRefreshSelectedLocalKnowledgeAndShare()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
+        if (graph == null) return false;
+
+        List<DailyV1NpcRuntimeOwners> owners = new List<DailyV1NpcRuntimeOwners>();
+        foreach (NpcRuntime runtime in npcRuntimes)
+        {
+            if (runtime == null) continue;
+            DailyV1NpcRuntimeOwners owner = runtime.SelectedRuntimeOwners;
+            if (!runtime.UsesSelectedDailyV1Definitions
+                || owner == null
+                || !ReferenceEquals(runtime.SelectedRuntimeOwnerGraph, graph)
+                || !graph.ContainsExactNpcOwner(owner)
+                || !string.Equals(runtime.RuntimeId, owner.RuntimeId, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "The selected local-knowledge stage requires the exact runtime NPC owner roster.");
+            owners.Add(owner);
+        }
+
+        if (!graph.MatchesExactOwnerInstances(graph.Cities, owners))
+            throw new InvalidOperationException(
+                "The selected local-knowledge stage received an incomplete runtime NPC owner roster.");
+
+        bool merchantTradeEnabled = configuration.MerchantTrade.Enabled;
+        bool merchantObservationEnabled = merchantTradeEnabled && merchantSystem != null;
+        bool sharingEnabled = merchantTradeEnabled && commercialKnowledgeSharingSystem != null;
+        if (merchantObservationEnabled)
+            merchantSystem.EnsureCanAdvanceSelectedTradeState();
+        if (sharingEnabled)
+            commercialKnowledgeSharingSystem.EnsureCanShare();
+
+        EffectiveCommercialKnowledgeConfiguration knowledgeConfiguration = sharingEnabled
+            ? commercialKnowledgeSharingSystem.SelectedKnowledgeConfiguration
+            : graph.Definitions.EffectiveConfiguration?.CommercialKnowledge
+                ?? configuration.CommercialKnowledge;
+        if (!DailyV1SelectedLocalKnowledgeRefreshStage.TryRun(
+                graph, CurrentDay, merchantObservationEnabled, sharingEnabled,
+                knowledgeConfiguration))
+            throw new InvalidOperationException(
+                "The selected Core local-knowledge stage could not complete against its exact runtime owner graph.");
+
+        return true;
     }
 
     private bool IsDeadNpc(string runtimeId)
