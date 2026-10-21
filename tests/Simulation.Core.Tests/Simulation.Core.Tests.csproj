@@ -44,6 +44,7 @@
     <Compile Include="ScheduledDirectiveStoreTests.cs" />
     <Compile Include="DailyV1ActorTurnExecutionStageTests.cs" />
     <Compile Include="DailyV1SelectedDailyExecutionStageTests.cs" />
+    <Compile Include="DailyV1SelectedCrimeJusticeDailyStageTests.cs" />
     <Compile Include="DailyV1SelectedDemographyStageTests.cs" />
     <Compile Include="DailyV1SelectedMerchantTradeStateOperationTests.cs" />
     <Compile Include="DailyV1CommercialKnowledgeSharingStageTests.cs" />

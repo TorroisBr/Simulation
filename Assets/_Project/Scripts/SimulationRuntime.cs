@@ -10797,7 +10797,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     private sealed class SelectedDailyV1ActorTurnExecutionBoundary
         : IDailyV1ActorTurnExecutionBoundary,
             IDailyV1SelectedMerchantTradeStateBoundary,
-            IDailyV1SelectedActorActionExecutionBoundary
+            IDailyV1SelectedActorActionExecutionBoundary,
+            IDailyV1SelectedCrimeJusticeDailyBoundary
     {
         private readonly SimulationRuntime runtime;
         private readonly DailyV1SelectedRuntimeOwnerGraph graph;
@@ -10837,6 +10838,71 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         }
 
         public void EvaluateStatus(DailyV1NpcRuntimeOwners actor) => runtime.EvaluateStatus(RequireExactActor(actor));
+
+        public void ExecuteWithinDailyMutation(
+            DailyV1SelectedCrimeJusticeDailyPhase phase,
+            Action mutation)
+        {
+            if (mutation == null) throw new ArgumentNullException(nameof(mutation));
+            runtime.RunP12CrimeJusticeDailyMutation(mutation);
+        }
+
+        public bool CanProjectStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd)
+        {
+            return TryGetExactActor(owner, out NpcRuntime exactRuntime)
+                && exactRuntime.CanProjectCoreSelectedDailyV1StatusChanges(owner, statusToAdd);
+        }
+
+        public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner)
+        {
+            if (!TryGetExactActor(owner, out NpcRuntime exactRuntime))
+                throw new InvalidOperationException(
+                    "The selected Crime/Justice stage lost its exact NPC runtime projection.");
+            exactRuntime.EnsureCoreSelectedDailyV1OwnerMutationAllowed(owner);
+        }
+
+        public void NotifyStatusMutationCommitted(
+            DailyV1NpcRuntimeOwners owner,
+            DailyV1StatusDefinition status,
+            bool added)
+        {
+            if (!TryGetExactActor(owner, out NpcRuntime exactRuntime))
+                throw new InvalidOperationException(
+                    "The selected Crime/Justice status owner lost its exact runtime projection after mutation.");
+            exactRuntime.NotifyCoreSelectedDailyV1StatusMutationCommitted(owner);
+        }
+
+        public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner)
+        {
+            if (!TryGetExactActor(owner, out NpcRuntime exactRuntime))
+                throw new InvalidOperationException(
+                    "The selected Crime/Justice hidden-state owner lost its exact runtime projection after mutation.");
+            exactRuntime.NotifyCoreSelectedDailyV1HiddenMutationCommitted(owner);
+        }
+
+        public bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence)
+        {
+            return graph.JusticeRecordsOwner != null
+                && ReferenceEquals(runtime.justiceSystem?.CoreOwner, graph.JusticeRecordsOwner)
+                && sentence != null && graph.JusticeRecordsOwner.ContainsSentence(sentence)
+                && runtime.justiceSystem.CanRemoveSelectedSentenceProjection(sentence);
+        }
+
+        public void CommitSentenceProjectionRemoval(DailyV1JusticeSentenceOwner sentence)
+        {
+            if (graph.JusticeRecordsOwner == null
+                || !ReferenceEquals(runtime.justiceSystem?.CoreOwner, graph.JusticeRecordsOwner))
+                throw new InvalidOperationException(
+                    "The selected Justice sentence lost its exact host owner after Core removal.");
+            runtime.justiceSystem.CommitSelectedSentenceProjectionRemoval(sentence);
+        }
+
+        public void Log(SimulationLogCategory category, string message) =>
+            runtime.logger?.Log(category, message);
+
+        public void LogWarning(string message) => runtime.logger?.LogWarning(message);
 
         public void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive) =>
             runtime.ProcessScheduledDirective(RequireExactActor(actor), directive);
@@ -11242,6 +11308,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 throw new InvalidOperationException(
                     "Selected actor-turn adapter did not receive the exact runtime owner instance.");
             return exactRuntime;
+        }
+
+        private bool TryGetExactActor(
+            DailyV1NpcRuntimeOwners actor,
+            out NpcRuntime exactRuntime)
+        {
+            exactRuntime = null;
+            if (actor == null || !runtimeByOwner.TryGetValue(actor, out NpcRuntime candidate)
+                || candidate == null || !ReferenceEquals(candidate.SelectedRuntimeOwners, actor)
+                || !ReferenceEquals(runtime.SelectedRuntimeOwnerGraph, graph)
+                || !graph.ContainsExactNpcOwner(actor)) return false;
+            exactRuntime = candidate;
+            return true;
         }
     }
 
@@ -12871,6 +12950,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
     private void BeginSimulationDay()
     {
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph = SelectedRuntimeOwnerGraph;
+        if (selectedGraph != null && TryAdvanceSelectedCrimeJusticeDailyStage(selectedGraph))
+        {
+            AdvanceMerchantPlanUrgency();
+            return;
+        }
+
         if (justiceSystem != null)
         {
             RunP12CrimeJusticeDailyMutation(justiceSystem.BeginDay);
@@ -12894,6 +12980,57 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         }
 
         AdvanceMerchantPlanUrgency();
+    }
+
+    private bool TryAdvanceSelectedCrimeJusticeDailyStage(
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph == null) return false;
+        if (justiceSystem != null
+            && !ReferenceEquals(graph.JusticeRecordsOwner, justiceSystem.CoreOwner))
+            throw new InvalidOperationException(
+                "Selected Crime/Justice daily execution requires the exact Justice owner composed by the runtime.");
+        List<DailyV1ActorTurnRosterEntry> roster = new List<DailyV1ActorTurnRosterEntry>(npcRuntimes.Count);
+        Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime> runtimeByOwner =
+            new Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime>();
+        List<DailyV1NpcRuntimeOwners> owners = new List<DailyV1NpcRuntimeOwners>();
+        for (int rosterOrdinal = 0; rosterOrdinal < npcRuntimes.Count; rosterOrdinal++)
+        {
+            NpcRuntime runtime = npcRuntimes[rosterOrdinal];
+            if (runtime == null)
+            {
+                roster.Add(new DailyV1ActorTurnRosterEntry(rosterOrdinal, null, null));
+                continue;
+            }
+
+            // Until the P12 dynamic/unbound owner closure is part of the shared
+            // runtime composition, any unselected member keeps the complete
+            // roster on its existing Unity lifecycle. Core owns this stage only
+            // when every non-null runtime has an exact selected graph owner.
+            if (!runtime.UsesSelectedDailyV1Definitions) return false;
+
+            DailyV1NpcRuntimeOwners owner = runtime.SelectedRuntimeOwners;
+            if (owner == null || !graph.ContainsExactNpcOwner(owner)
+                || !ReferenceEquals(graph.Definitions, owner.Definitions)
+                || !string.Equals(runtime.RuntimeId, owner.RuntimeId, StringComparison.Ordinal)
+                || !runtimeByOwner.TryAdd(owner, runtime))
+                throw new InvalidOperationException(
+                    "Selected Crime/Justice daily execution requires each exact Core NPC owner instance.");
+
+            owners.Add(owner);
+            roster.Add(new DailyV1ActorTurnRosterEntry(rosterOrdinal, runtime.PersonId, owner));
+        }
+
+        if (!graph.MatchesExactOwnerInstances(graph.Cities, owners))
+            throw new InvalidOperationException(
+                "Selected Crime/Justice daily execution received an incomplete Core owner roster.");
+        SelectedDailyV1ActorTurnExecutionBoundary boundary =
+            new SelectedDailyV1ActorTurnExecutionBoundary(this, graph, runtimeByOwner);
+        if (!DailyV1SelectedCrimeJusticeDailyStage.TryRun(
+                graph, roster, crimeSystem != null, justiceSystem != null, boundary))
+            throw new InvalidOperationException(
+                "Selected Crime/Justice daily execution rejected its exact Core owner graph or admitted Justice links.");
+        return true;
     }
 
     private void AdvanceMerchantPlanUrgency()
