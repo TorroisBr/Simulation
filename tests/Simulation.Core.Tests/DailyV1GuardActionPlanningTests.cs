@@ -4,14 +4,13 @@ using NUnit.Framework;
 public sealed class DailyV1GuardActionPlanningTests
 {
     [Test]
-    public void SelectedArrestDecisionStagePlansExactCoreTargetWithoutProviderPlanning()
+    public void SelectedArrestDecisionStagePlansExactCoreTargetWithoutHostProjection()
     {
         ArrestFixture fixture = CreateArrestFixture(
             "npc/guard", "npc/target-z", "npc/target-high", "npc/target-a");
         fixture.AddWanted("npc/target-z", 80f);
         fixture.AddWanted("npc/target-high", 100f);
         fixture.AddWanted("npc/target-a", 80f);
-        RecordingSelectedDecisionBoundary boundary = new RecordingSelectedDecisionBoundary();
         FixedActionRandom random = new FixedActionRandom(0f);
 
         Assert.That(DailyV1SelectedNpcActionDecisionStage.TryChoose(
@@ -21,7 +20,6 @@ public sealed class DailyV1GuardActionPlanningTests
             fixture.Guard.Status.Statuses,
             12L,
             random,
-            boundary,
             out DailyV1NpcActionCandidate selected), Is.True);
 
         Assert.That(selected, Is.Not.Null);
@@ -32,9 +30,7 @@ public sealed class DailyV1GuardActionPlanningTests
         Assert.That(selected.PreparedPayload.TargetItem, Is.Null);
         Assert.That(selected.PreparedPayload.Amount, Is.Zero);
         Assert.That(selected.Utility, Is.EqualTo(80f));
-        Assert.That(boundary.ArrestProjectionCalls, Is.EqualTo(1));
-        Assert.That(boundary.ProjectedPayload, Is.SameAs(selected.PreparedPayload));
-        Assert.That(boundary.LegacyProviderPlanCalls, Is.Zero);
+        Assert.That(selected.PreparedPayload.Action, Is.SameAs(fixture.ArrestAction));
         Assert.That(random.Calls, Is.EqualTo(1));
         Assert.That(random.LastStreamKey, Is.EqualTo("npc-decision|npc/guard|12"));
     }
@@ -43,7 +39,6 @@ public sealed class DailyV1GuardActionPlanningTests
     public void SelectedArrestDecisionStageDoesNotDrawWhenNoCoreTargetExists()
     {
         ArrestFixture fixture = CreateArrestFixture("npc/guard", "npc/target");
-        RecordingSelectedDecisionBoundary boundary = new RecordingSelectedDecisionBoundary();
         FixedActionRandom random = new FixedActionRandom(0f);
 
         Assert.That(DailyV1SelectedNpcActionDecisionStage.TryChoose(
@@ -53,12 +48,9 @@ public sealed class DailyV1GuardActionPlanningTests
             fixture.Guard.Status.Statuses,
             12L,
             random,
-            boundary,
             out DailyV1NpcActionCandidate selected), Is.True);
 
         Assert.That(selected, Is.Null);
-        Assert.That(boundary.ArrestProjectionCalls, Is.Zero);
-        Assert.That(boundary.LegacyProviderPlanCalls, Is.Zero);
         Assert.That(random.Calls, Is.Zero);
     }
 
@@ -68,7 +60,6 @@ public sealed class DailyV1GuardActionPlanningTests
         ArrestFixture fixture = CreateArrestFixture("npc/guard", "npc/target");
         DailyV1ActionDefinition travel = ActionOfType(
             fixture.Definitions, DailyV1NpcDefinitionRules.TravelActionTypeValue);
-        RecordingSelectedDecisionBoundary boundary = new RecordingSelectedDecisionBoundary();
         FixedActionRandom random = new FixedActionRandom(0f);
 
         Assert.That(DailyV1SelectedNpcActionDecisionStage.TryChoose(
@@ -78,13 +69,10 @@ public sealed class DailyV1GuardActionPlanningTests
             fixture.Guard.Status.Statuses,
             12L,
             random,
-            boundary,
             out DailyV1NpcActionCandidate selected), Is.True);
 
         Assert.That(selected, Is.Null,
             "A selected graph action with no Core-supported host projection must remain unavailable.");
-        Assert.That(boundary.LegacyProviderPlanCalls, Is.Zero,
-            "Graph-backed choice must never delegate action planning to a Unity provider.");
         Assert.That(random.Calls, Is.Zero,
             "An unavailable candidate must not perturb the deterministic decision stream.");
     }
@@ -511,48 +499,6 @@ public sealed class DailyV1GuardActionPlanningTests
         public DeterministicRandomStream CreateStream(string streamKey) => null;
     }
 
-    private sealed class RecordingSelectedDecisionBoundary
-        : IDailyV1SelectedNpcActionDecisionBoundary,
-            IDailyV1SelectedGuardActionProjectionBoundary
-    {
-        internal int ArrestProjectionCalls { get; private set; }
-        internal int LegacyProviderPlanCalls { get; private set; }
-        internal DailyV1NpcActionPayloadOwner ProjectedPayload { get; private set; }
-
-        public bool HasTravelActionProvider(DailyV1NpcRuntimeOwners actor,
-            DailyV1ActionDefinition action) => false;
-        public TravelPartyStore GetTravelPartyStore(DailyV1NpcRuntimeOwners actor,
-            DailyV1ActionDefinition action) => null;
-        public bool TryProjectTravelAction(DailyV1NpcRuntimeOwners actor,
-            DailyV1NpcActionCandidate candidate) => false;
-        public bool HasMerchantActionProvider(DailyV1NpcRuntimeOwners actor,
-            DailyV1ActionDefinition action) => false;
-        public bool HasEnabledCrimeActionProvider(DailyV1NpcRuntimeOwners actor,
-            DailyV1ActionDefinition action) => false;
-        public bool TryProjectStealAction(DailyV1NpcRuntimeOwners actor,
-            DailyV1NpcActionCandidate candidate) => false;
-        public bool TryProjectFleeCityAction(DailyV1NpcRuntimeOwners actor,
-            DailyV1NpcActionCandidate candidate) => false;
-        public bool TryProjectBuyAction(DailyV1NpcRuntimeOwners actor,
-            DailyV1NpcActionCandidate candidate) => false;
-        public bool TryProjectSellAction(DailyV1NpcRuntimeOwners actor,
-            DailyV1NpcActionCandidate candidate) => false;
-        public bool TryPrepareAutonomousProviderAction(DailyV1NpcRuntimeOwners actor,
-            DailyV1NpcActionCandidate candidate, out float utility)
-        {
-            LegacyProviderPlanCalls++;
-            utility = 0f;
-            return false;
-        }
-        public bool TryProjectSelectedGuardArrestAction(DailyV1NpcRuntimeOwners actor,
-            DailyV1NpcActionCandidate candidate)
-        {
-            ArrestProjectionCalls++;
-            ProjectedPayload = candidate?.PreparedPayload;
-            return ProjectedPayload != null;
-        }
-    }
-
     private sealed class RecordingGuardBoundary
         : DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionBoundary
     {
@@ -571,13 +517,28 @@ public sealed class DailyV1GuardActionPlanningTests
             return operation();
         }
 
-        public bool TryAddSentence(DailyV1NpcRuntimeOwners target,
+        public bool TryPrepareSentenceProjection(DailyV1NpcRuntimeOwners target,
             DailyV1CityRuntimeOwners city, DailyV1JusticeWantedRecordOwner warrant,
             DailyV1JusticeSentenceOwner sentence)
         {
             AddSentenceCalls++;
-            return JusticeRecordsOwner.TryAddSentence(sentence);
+            return sentence != null && JusticeRecordsOwner.ContainsWantedRecord(warrant);
         }
+
+        public void DiscardPreparedSentenceProjection(DailyV1JusticeSentenceOwner sentence) { }
+
+        public bool CommitPreparedSentenceProjection(DailyV1JusticeSentenceOwner sentence) =>
+            JusticeRecordsOwner.ContainsSentence(sentence);
+
+        public bool CanProjectStatusChanges(DailyV1NpcRuntimeOwners target,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) => target?.Status != null;
+
+        public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners target) { }
+
+        public void NotifyStatusMutationCommitted(DailyV1NpcRuntimeOwners target,
+            DailyV1StatusDefinition status, bool added) => StatusChangeCalls++;
+
+        public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners target) { }
 
         public bool ClearHidden(DailyV1NpcRuntimeOwners target) => true;
 

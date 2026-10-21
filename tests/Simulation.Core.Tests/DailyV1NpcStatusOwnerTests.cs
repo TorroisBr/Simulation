@@ -269,17 +269,20 @@ public sealed class DailyV1NpcStatusOwnerTests
             return result;
         }
 
-        public bool ApplyActorStatusChanges(
+        public bool CanProjectStatusChanges(
             DailyV1NpcRuntimeOwners owner,
-            IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
-            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
-            ApplyAndRecord(owner, statusToRemove, statusToAdd, events);
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) => owner?.Status != null;
 
-        public bool ApplyTargetStatusChanges(
+        public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner) =>
+            events.Add("admit:" + owner.RuntimeId);
+
+        public void NotifyStatusMutationCommitted(
             DailyV1NpcRuntimeOwners owner,
-            IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
-            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
-            ApplyAndRecord(owner, statusToRemove, statusToAdd, events);
+            DailyV1StatusDefinition status,
+            bool added) => events.Add("commit:" + owner.RuntimeId + ":"
+                + string.Join(",", owner.Status.Statuses.Select(value => value.DefinitionId)));
+
+        public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner) { }
     }
 
     private static DailyV1NpcRuntimeOwners CreateNpcOwner(

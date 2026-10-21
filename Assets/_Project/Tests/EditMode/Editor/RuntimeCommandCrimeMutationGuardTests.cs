@@ -633,9 +633,7 @@ public sealed class JusticeAdvanceSentencesBoundaryOwnerTests
         Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
         Assert.That(warrant.IsActive, Is.True);
         Assert.That(justice.IsArrested(target), Is.True);
-        Assert.That((int)typeof(PrisonSentenceRuntime)
-            .GetField("remainingDays", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(sentences[0]), Is.EqualTo(1));
+        Assert.That(sentences[0].RemainingDays, Is.EqualTo(1));
         Assert.That(justice.TryResolveAdvanceSentencesReceipt(manifest, step, out _, out _), Is.False);
     }
 

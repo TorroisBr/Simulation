@@ -6,22 +6,82 @@ using System.Collections.Generic;
 /// existing owner operations; this stage never accepts a projected payload.</summary>
 internal static class DailyV1SelectedActionExecutionStage
 {
-    internal interface ISelectedActionStatusOperationBoundary
+    /// <summary>
+    /// Existing host obligations around a Core-owned selected NPC owner write.
+    /// The host admits the P12 write and keeps Unity projections coherent; the
+    /// Core stage performs the authoritative owner mutation itself.
+    /// </summary>
+    internal interface ISelectedNpcOwnerMutationBoundary
+    {
+        bool CanProjectStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd);
+
+        void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner);
+        void NotifyStatusMutationCommitted(
+            DailyV1NpcRuntimeOwners owner,
+            DailyV1StatusDefinition status,
+            bool added);
+        void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner);
+    }
+
+    internal interface ISelectedActionStatusOperationBoundary : ISelectedNpcOwnerMutationBoundary
     {
         DailyV1SelectedActionStatusPlanResult ExecuteWithinOperation(
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcRuntimeOwners target,
             Func<DailyV1SelectedActionStatusPlanResult> operation);
+    }
 
-        bool ApplyActorStatusChanges(
-            DailyV1NpcRuntimeOwners owner,
-            IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
-            IReadOnlyList<DailyV1StatusDefinition> statusToAdd);
+    internal static bool TryApplySelectedStatusChanges(
+        DailyV1NpcRuntimeOwners owner,
+        IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
+        IReadOnlyList<DailyV1StatusDefinition> statusToAdd,
+        ISelectedNpcOwnerMutationBoundary boundary)
+    {
+        if (owner?.Status == null || boundary == null
+            || !boundary.CanProjectStatusChanges(owner, statusToAdd))
+            return false;
 
-        bool ApplyTargetStatusChanges(
-            DailyV1NpcRuntimeOwners owner,
-            IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
-            IReadOnlyList<DailyV1StatusDefinition> statusToAdd);
+        return owner.Status.TryApplyOrderedChanges(
+            statusToRemove,
+            statusToAdd,
+            () => boundary.EnsureMutationAllowed(owner),
+            (status, added) => boundary.NotifyStatusMutationCommitted(owner, status, added));
+    }
+
+    internal static bool TryHideSelectedNpcForDays(
+        DailyV1NpcRuntimeOwners owner,
+        int days,
+        ISelectedNpcOwnerMutationBoundary boundary)
+    {
+        if (owner?.HiddenState == null || boundary == null) return false;
+
+        int followingFullDays = UnityMathfCompatibility.Max(1, days);
+        int durationIncludingCurrentDay = followingFullDays + 1;
+        int current = owner.HiddenState.RemainingDays;
+        int next = UnityMathfCompatibility.Max(current, durationIncludingCurrentDay);
+        if (next == current) return true;
+
+        boundary.EnsureMutationAllowed(owner);
+        if (!owner.HiddenState.TrySetRemainingDays(next))
+            throw new InvalidOperationException("The selected NPC hidden-day owner rejected a valid hidden duration.");
+        boundary.NotifyHiddenMutationCommitted(owner);
+        return true;
+    }
+
+    internal static bool TryClearSelectedNpcHiddenState(
+        DailyV1NpcRuntimeOwners owner,
+        ISelectedNpcOwnerMutationBoundary boundary)
+    {
+        if (owner?.HiddenState == null || boundary == null) return false;
+        if (owner.HiddenState.RemainingDays == 0) return true;
+
+        boundary.EnsureMutationAllowed(owner);
+        if (!owner.HiddenState.TrySetRemainingDays(0))
+            throw new InvalidOperationException("The selected NPC hidden-day owner rejected clearing hidden state.");
+        boundary.NotifyHiddenMutationCommitted(owner);
+        return true;
     }
 
     internal static bool TryApplyActionStatusPlanAfterDispatch(
@@ -46,8 +106,8 @@ internal static class DailyV1SelectedActionExecutionStage
 
         result = boundary.ExecuteWithinOperation(actor, target,
             () => plan.Apply(
-                boundary.ApplyActorStatusChanges,
-                boundary.ApplyTargetStatusChanges));
+                (owner, remove, add) => TryApplySelectedStatusChanges(owner, remove, add, boundary),
+                (owner, remove, add) => TryApplySelectedStatusChanges(owner, remove, add, boundary)));
         return true;
     }
 
@@ -99,20 +159,17 @@ internal static class DailyV1SelectedActionExecutionStage
             string originDecisionId);
     }
 
-    internal interface ISelectedGuardArrestActionBoundary
+    internal interface ISelectedGuardArrestActionBoundary : ISelectedNpcOwnerMutationBoundary
     {
         DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
         bool ExecuteWithinOperation(Func<bool> operation);
-        bool TryAddSentence(
+        bool TryPrepareSentenceProjection(
             DailyV1NpcRuntimeOwners target,
             DailyV1CityRuntimeOwners city,
             DailyV1JusticeWantedRecordOwner warrant,
             DailyV1JusticeSentenceOwner sentence);
-        bool ClearHidden(DailyV1NpcRuntimeOwners target);
-        bool ApplyStatusChange(
-            DailyV1NpcRuntimeOwners target,
-            DailyV1StatusDefinition status,
-            bool add);
+        void DiscardPreparedSentenceProjection(DailyV1JusticeSentenceOwner sentence);
+        bool CommitPreparedSentenceProjection(DailyV1JusticeSentenceOwner sentence);
         void PublishArrest(
             DailyV1NpcRuntimeOwners guard,
             DailyV1NpcRuntimeOwners target,
@@ -266,22 +323,50 @@ internal static class DailyV1SelectedActionExecutionStage
 
         DailyV1JusticeSentenceOwner sentence = new DailyV1JusticeSentenceOwner(
             target.RuntimeId, city.RuntimeId, warrant, warrant.SentenceDays);
-        if (!boundary.TryAddSentence(target, city, warrant, sentence)
-            || !justice.NotifyMutationCommitted())
+        if (!boundary.TryPrepareSentenceProjection(target, city, warrant, sentence))
             return false;
 
-        if (target.HiddenState.RemainingDays > 0 && !boundary.ClearHidden(target))
+        if (!justice.CanCommitMutation())
+        {
+            boundary.DiscardPreparedSentenceProjection(sentence);
+            throw new InvalidOperationException(
+                "Justice records are outside an admitted P12 Crime/Justice boundary.");
+        }
+        if (!justice.TryAddSentence(sentence))
+        {
+            boundary.DiscardPreparedSentenceProjection(sentence);
             return false;
-        if (hiddenStatus != null && !boundary.ApplyStatusChange(target, hiddenStatus, add: false))
+        }
+        if (!boundary.CommitPreparedSentenceProjection(sentence))
+        {
+            boundary.DiscardPreparedSentenceProjection(sentence);
+            throw new InvalidOperationException(
+                "The selected Guard Arrest could not attach its prepared Unity sentence view after the Core owner commit.");
+        }
+        if (!justice.NotifyMutationCommitted())
+            throw new InvalidOperationException(
+                "The selected Justice owner rejected its committed Arrest sentence.");
+
+        if (target.HiddenState.RemainingDays > 0
+            && !TryClearSelectedNpcHiddenState(target, boundary))
             return false;
-        if (freeStatus != null && !boundary.ApplyStatusChange(target, freeStatus, add: false))
+        if (hiddenStatus != null && !TryApplySelectedStatusChanges(
+                target, new[] { hiddenStatus }, Array.Empty<DailyV1StatusDefinition>(), boundary))
             return false;
-        if (!boundary.ApplyStatusChange(target, arrestedStatus, add: true))
+        if (freeStatus != null && !TryApplySelectedStatusChanges(
+                target, new[] { freeStatus }, Array.Empty<DailyV1StatusDefinition>(), boundary))
+            return false;
+        if (!TryApplySelectedStatusChanges(
+                target, Array.Empty<DailyV1StatusDefinition>(), new[] { arrestedStatus }, boundary))
             return false;
 
         bool hasAnyActiveWarrant = justice.FindActiveWantedRecords(target.RuntimeId).Count > 0;
         if (wantedStatus != null
-            && !boundary.ApplyStatusChange(target, wantedStatus, add: hasAnyActiveWarrant))
+            && !TryApplySelectedStatusChanges(
+                target,
+                hasAnyActiveWarrant ? Array.Empty<DailyV1StatusDefinition>() : new[] { wantedStatus },
+                hasAnyActiveWarrant ? new[] { wantedStatus } : Array.Empty<DailyV1StatusDefinition>(),
+                boundary))
             return false;
 
         boundary.PublishArrest(guard, target, city, payload.OriginDecisionId);

@@ -116,12 +116,16 @@ public sealed class DailyV1ActorChoiceStoreTests
         PersonId personId = new PersonId("person-jorge");
         ActorChoiceInput input = Capture(store, "command-selected-sell", personId.Value,
             "VENDER_MERCADORIA");
-        SelectedActorChoiceTestBoundary boundary = new SelectedActorChoiceTestBoundary(graph);
+        NpcDecisionStore decisions = new NpcDecisionStore();
+        SelectedActorChoiceTestBoundary boundary = new SelectedActorChoiceTestBoundary(
+            graph, allocator, new SimulationRecordSequence(), decisions);
 
         Assert.That(DailyV1ActorChoiceExecutionStage.TryProcessPending(
             graph, actor, personId, store, 20L, 3, true, true, true, boundary), Is.True);
 
         Assert.That(boundary.ClearCount, Is.EqualTo(1));
+        Assert.That(boundary.AdmissionCount, Is.EqualTo(1));
+        Assert.That(boundary.RefreshCount, Is.EqualTo(1));
         Assert.That(boundary.InstallCount, Is.EqualTo(1));
         Assert.That(boundary.ExecuteCount, Is.EqualTo(1));
         Assert.That(boundary.InstalledPayload, Is.Not.Null);
@@ -134,9 +138,63 @@ public sealed class DailyV1ActorChoiceStoreTests
                 ActorChoiceDispositionKind.DispatchStarted,
                 ActorChoiceDispositionKind.AttemptReturned
             }));
-        Assert.That(completed.Dispositions[0].DecisionRecordId, Is.EqualTo("decision-actor-choice"));
+        Assert.That(decisions.Decisions, Has.Count.EqualTo(1));
+        Assert.That(completed.Dispositions[0].DecisionRecordId,
+            Is.EqualTo(decisions.Decisions.Single().DecisionId));
+        Assert.That(decisions.Decisions.Single().Origin, Is.EqualTo(NpcDecisionOrigin.ActorChoice));
+        Assert.That(boundary.InstalledPayload.OriginDecisionId,
+            Is.EqualTo(decisions.Decisions.Single().DecisionId));
         Assert.That(completed.Dispositions[1].AttemptOutcome, Is.EqualTo(ActorChoiceAttemptOutcome.Succeeded));
         Assert.That(store.ValidateInvariants().IsValid, Is.True);
+    }
+
+    [Test]
+    public void SelectedCoreTurnKeepsTheAttemptRecordWhenP12DeclinesTheSlotCommit()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        DailyV1NpcRuntimeOwners actor = graph.Npcs.Single(owner => owner.Definition.DefinitionId == "JORGE");
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(owner =>
+            owner.RuntimeId == actor.Travel.CurrentCityRuntimeId);
+        DailyV1ItemDefinition iron = definitions.Items["FERRO"];
+        Assert.That(actor.Inventory.TryAddItem(iron, 5, 10f), Is.True);
+        float referencePrice = actor.Inventory.GetAverageUnitCost(iron);
+        Assert.That(actor.CommercialKnowledge.RecordObservation(new DailyV1CommercialMarketObservation(
+            city.LocationRuntimeId, iron, referencePrice + 3f, 12, 20L, 20L,
+            DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+
+        ActorChoiceStore store = new ActorChoiceStore(new PersonStore());
+        PersonId personId = new PersonId("person-jorge");
+        ActorChoiceInput input = Capture(store, "command-p12-declines-sell", personId.Value,
+            "VENDER_MERCADORIA");
+        NpcDecisionStore decisions = new NpcDecisionStore();
+        SelectedActorChoiceTestBoundary boundary = new SelectedActorChoiceTestBoundary(
+            graph, allocator, new SimulationRecordSequence(), decisions)
+        {
+            AllowSlotCommit = false
+        };
+
+        Assert.That(DailyV1ActorChoiceExecutionStage.TryProcessPending(
+            graph, actor, personId, store, 22L, 5, true, true, true, boundary), Is.True);
+
+        Assert.That(boundary.AdmissionCount, Is.EqualTo(1));
+        Assert.That(boundary.RefreshCount, Is.EqualTo(1));
+        Assert.That(boundary.InstallCount, Is.Zero);
+        Assert.That(boundary.ExecuteCount, Is.Zero);
+        Assert.That(actor.ActionSlot.CurrentPayload, Is.Null);
+        Assert.That(decisions.Decisions, Has.Count.EqualTo(1));
+        Assert.That(store.TryGet(input.InputId, out ActorChoiceInput completed), Is.True);
+        Assert.That(completed.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
+        Assert.That(completed.Dispositions[0].DecisionRecordId,
+            Is.EqualTo(decisions.Decisions.Single().DecisionId));
+        Assert.That(completed.Dispositions[1].AttemptOutcome,
+            Is.EqualTo(ActorChoiceAttemptOutcome.ReturnedNoResult));
     }
 
     [Test]
@@ -155,7 +213,8 @@ public sealed class DailyV1ActorChoiceStoreTests
         ActorChoiceStore store = new ActorChoiceStore(new PersonStore());
         ActorChoiceInput input = Capture(store, "command-reject-sell", personId.Value,
             "VENDER_MERCADORIA");
-        SelectedActorChoiceTestBoundary boundary = new SelectedActorChoiceTestBoundary(graph);
+        SelectedActorChoiceTestBoundary boundary = new SelectedActorChoiceTestBoundary(
+            graph, allocator, new SimulationRecordSequence(), new NpcDecisionStore());
 
         Assert.That(DailyV1ActorChoiceExecutionStage.TryProcessPending(
             graph, actor, personId, store, 21L, 4, false, true, true, boundary), Is.True);
@@ -185,37 +244,103 @@ public sealed class DailyV1ActorChoiceStoreTests
     private sealed class SelectedActorChoiceTestBoundary : IDailyV1ActorChoiceExecutionBoundary
     {
         private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+        private readonly RuntimeIdAllocator idAllocator;
+        private readonly SimulationRecordSequence recordSequence;
+        private readonly NpcDecisionStore decisionStore;
+        private DailyV1NpcActionPayloadOwner preparedPayload;
 
-        internal SelectedActorChoiceTestBoundary(DailyV1SelectedRuntimeOwnerGraph graph)
+        internal SelectedActorChoiceTestBoundary(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            RuntimeIdAllocator idAllocator,
+            SimulationRecordSequence recordSequence,
+            NpcDecisionStore decisionStore)
         {
             this.graph = graph;
+            this.idAllocator = idAllocator;
+            this.recordSequence = recordSequence;
+            this.decisionStore = decisionStore;
         }
 
         internal int ClearCount { get; private set; }
+        internal int AdmissionCount { get; private set; }
+        internal int RefreshCount { get; private set; }
         internal int InstallCount { get; private set; }
         internal int ExecuteCount { get; private set; }
         internal DailyV1NpcActionPayloadOwner InstalledPayload { get; private set; }
+        internal bool AllowSlotCommit { get; set; } = true;
 
         public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor) => ClearCount++;
 
         public bool IsActionEnabled(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action) =>
             action?.Values.actionType?.Value == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue;
 
-        public bool TryRecordAndInstallRequestedAction(
+        public bool TryGetDecisionRecordOwners(
             DailyV1NpcRuntimeOwners actor,
-            DailyV1NpcActionPayloadOwner payload,
-            out string decisionRecordId)
+            out RuntimeIdAllocator selectedIdAllocator,
+            out SimulationRecordSequence selectedRecordSequence,
+            out NpcDecisionStore selectedDecisionStore)
         {
+            selectedIdAllocator = idAllocator;
+            selectedRecordSequence = recordSequence;
+            selectedDecisionStore = decisionStore;
+            return true;
+        }
+
+        public bool TryPrepareRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            preparedPayload = payload;
+            return true;
+        }
+
+        public bool TryRefreshRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            RefreshCount++;
+            return ReferenceEquals(preparedPayload, payload);
+        }
+
+        public bool CanCommitRequestedActionSlot(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) =>
+            CanCommitSlot(actor, payload);
+
+        private bool CanCommitSlot(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            AdmissionCount++;
+            return AllowSlotCommit && ReferenceEquals(preparedPayload, payload);
+        }
+
+        public bool TryPublishRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            if (!ReferenceEquals(preparedPayload, payload)) return false;
             InstallCount++;
             InstalledPayload = payload;
-            decisionRecordId = "decision-actor-choice";
-            return graph.TryCommitCurrentActionSlot(actor, payload.Action, payload, null);
+            preparedPayload = null;
+            return true;
         }
+
+        public void CancelPreparedRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            if (ReferenceEquals(preparedPayload, payload)) preparedPayload = null;
+        }
+
+        public void LogRequestedActionDecisionFailure(string message) { }
 
         public NpcActionResultType? ExecuteCurrentAction(DailyV1NpcRuntimeOwners actor)
         {
             ExecuteCount++;
-            return NpcActionResultType.Success;
+            return actor.ActionSlot.CurrentPayload == null
+                ? (NpcActionResultType?)null
+                : NpcActionResultType.Success;
         }
     }
 }

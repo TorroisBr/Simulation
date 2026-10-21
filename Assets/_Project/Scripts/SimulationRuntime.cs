@@ -512,20 +512,58 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 participants, reuseForcedEscapeScope, operation);
         }
 
-        public bool ApplyActorStatusChanges(
+        public bool CanProjectStatusChanges(
             DailyV1NpcRuntimeOwners owner,
-            IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
             IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
-            ReferenceEquals(owner, actorRuntime.SelectedRuntimeOwners)
-            && actorRuntime.ApplySelectedDailyV1StatusChanges(statusToRemove, statusToAdd);
+            TryGetExactParticipant(owner, out NpcRuntime exactRuntime)
+            && exactRuntime.CanProjectCoreSelectedDailyV1StatusChanges(owner, statusToAdd);
 
-        public bool ApplyTargetStatusChanges(
+        public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner)
+        {
+            if (!TryGetExactParticipant(owner, out NpcRuntime exactRuntime))
+                throw new InvalidOperationException("The selected status owner lost its exact runtime projection.");
+            exactRuntime.EnsureCoreSelectedDailyV1OwnerMutationAllowed(owner);
+        }
+
+        public void NotifyStatusMutationCommitted(
             DailyV1NpcRuntimeOwners owner,
-            IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
-            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
-            targetRuntime != null
-            && ReferenceEquals(owner, targetRuntime.SelectedRuntimeOwners)
-            && targetRuntime.ApplySelectedDailyV1StatusChanges(statusToRemove, statusToAdd);
+            DailyV1StatusDefinition status,
+            bool added)
+        {
+            if (!TryGetExactParticipant(owner, out NpcRuntime exactRuntime))
+                throw new InvalidOperationException("The selected status owner lost its exact runtime projection after mutation.");
+            exactRuntime.NotifyCoreSelectedDailyV1StatusMutationCommitted(owner);
+        }
+
+        public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner)
+        {
+            if (!TryGetExactParticipant(owner, out NpcRuntime exactRuntime))
+                throw new InvalidOperationException("The selected hidden-state owner lost its exact runtime projection after mutation.");
+            exactRuntime.NotifyCoreSelectedDailyV1HiddenMutationCommitted(owner);
+        }
+
+        private bool TryGetExactParticipant(
+            DailyV1NpcRuntimeOwners owner,
+            out NpcRuntime exactRuntime)
+        {
+            exactRuntime = null;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            if (owner == null || graph == null || !graph.ContainsExactNpcOwner(owner)) return false;
+            if (ReferenceEquals(owner, actorRuntime.SelectedRuntimeOwners))
+            {
+                if (!IsExactRuntimeProjection(graph, owner, actorRuntime)) return false;
+                exactRuntime = actorRuntime;
+                return true;
+            }
+            if (targetRuntime != null
+                && ReferenceEquals(owner, targetRuntime.SelectedRuntimeOwners)
+                && IsExactRuntimeProjection(graph, owner, targetRuntime))
+            {
+                exactRuntime = targetRuntime;
+                return true;
+            }
+            return false;
+        }
 
         private bool IsExactRuntimeProjection(
             DailyV1SelectedRuntimeOwnerGraph graph,
@@ -822,20 +860,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     return false;
             }
             else if (actionRuntime.TargetCity != null
-                && !TryGetExactCityProjection(graph, payload.TargetCityRuntimeId,
-                    actionRuntime.TargetCity, out _, out _))
-            {
+                && !TryGetExactActionCityProjection(graph, payload.TargetCityRuntimeId,
+                    actionRuntime.TargetCity, exactActor, actor.ActionSlot.CurrentAction))
                 return false;
-            }
             else if (actionRuntime.TargetCity == null
                 && payload.TargetCityRuntimeId != null)
-            {
                 return false;
-            }
 
-            return runtime.economyTransactionService != null
-                && runtime.economyTransactionService.TryCreateSelectedActionMarketBoundaries(
-                    exactActor, out saleBoundary, out purchaseBoundary);
+            return runtime.economyTransactionService.TryCreateSelectedActionMarketBoundaries(
+                exactActor, out saleBoundary, out purchaseBoundary);
         }
 
         public bool TryGetNpcTradeBoundary(
@@ -943,8 +976,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             {
                 if (actionRuntime.TargetCity != null) return false;
             }
-            else if (!TryGetExactCityProjection(graph, payload.TargetCityRuntimeId,
-                    actionRuntime.TargetCity, out _, out _))
+            else if (!TryGetExactActionCityProjection(graph, payload.TargetCityRuntimeId,
+                    actionRuntime.TargetCity, actorRuntime, expectedAction))
                 return false;
 
             if (payload.TargetItem == null)
@@ -957,6 +990,57 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 return false;
 
             return true;
+        }
+
+        private bool TryGetExactActionCityProjection(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            string runtimeId,
+            CityRuntime projectedCity,
+            NpcRuntime exactActor,
+            DailyV1ActionDefinition action)
+        {
+            int? actionType = action?.Values.actionType?.Value;
+            bool isLocalMarketAction = (actionType == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
+                    || actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue)
+                && exactActor != null && projectedCity != null
+                && ReferenceEquals(projectedCity, exactActor.CurrentCity);
+            if (isLocalMarketAction
+                && !TryGetExactLocalMarketActionCityProjection(
+                    graph, runtimeId, projectedCity, exactActor))
+                return false;
+
+            if (TryGetExactCityProjection(graph, runtimeId, projectedCity, out _, out _))
+                return true;
+            return isLocalMarketAction;
+        }
+
+        private bool TryGetExactLocalMarketActionCityProjection(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            string runtimeId,
+            CityRuntime projectedCity,
+            NpcRuntime exactActor)
+        {
+            if (graph == null || exactActor == null || projectedCity == null
+                || !ReferenceEquals(projectedCity, exactActor.CurrentCity)
+                || !ReferenceEquals(exactActor.CurrentLocation, projectedCity.Location)
+                || exactActor.SelectedRuntimeOwners?.Travel == null
+                || !string.Equals(runtimeId,
+                    exactActor.SelectedRuntimeOwners.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(exactActor.SelectedRuntimeOwners.Travel.CurrentLocationRuntimeId,
+                    projectedCity.Location?.RuntimeId, StringComparison.Ordinal)
+                || !string.Equals(projectedCity.RuntimeId, runtimeId, StringComparison.Ordinal)
+                || !IsExactCityProjection(projectedCity.SelectedRuntimeOwners, projectedCity))
+                return false;
+
+            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+                if (candidate != null
+                    && string.Equals(candidate.RuntimeId, runtimeId, StringComparison.Ordinal))
+                    return graph.ContainsExactCityOwner(candidate)
+                        && ReferenceEquals(candidate, projectedCity.SelectedRuntimeOwners)
+                        && string.Equals(candidate.LocationRuntimeId,
+                            exactActor.SelectedRuntimeOwners.Travel.CurrentLocationRuntimeId,
+                            StringComparison.Ordinal);
+            return false;
         }
 
         private bool TryFindExactNpcRuntime(
@@ -1150,7 +1234,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 using (scope) return operation();
             }
 
-            public bool TryAddSentence(
+            public bool TryPrepareSentenceProjection(
                 DailyV1NpcRuntimeOwners target,
                 DailyV1CityRuntimeOwners city,
                 DailyV1JusticeWantedRecordOwner warrant,
@@ -1182,28 +1266,48 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 WantedRecordRuntime exactWarrant = runtime.justiceSystem.GetActiveWarrant(
                     exactTarget, guardRuntime.CurrentCity);
                 return exactWarrant != null && ReferenceEquals(exactWarrant.CoreOwner, warrant)
-                    && runtime.justiceSystem.TryAddSelectedArrestSentence(
+                    && runtime.justiceSystem.TryPrepareSelectedArrestSentenceProjection(
                         exactTarget, guardRuntime.CurrentCity, exactWarrant, sentence);
             }
 
-            public bool ClearHidden(DailyV1NpcRuntimeOwners target)
+            public void DiscardPreparedSentenceProjection(DailyV1JusticeSentenceOwner sentence) =>
+                runtime.justiceSystem?.DiscardPreparedSelectedArrestSentenceProjection(sentence);
+
+            public bool CommitPreparedSentenceProjection(DailyV1JusticeSentenceOwner sentence) =>
+                runtime.justiceSystem != null
+                && ReferenceEquals(runtime.justiceSystem.CoreOwner, JusticeRecordsOwner)
+                && runtime.justiceSystem.CommitPreparedSelectedArrestSentenceProjection(sentence);
+
+            public bool CanProjectStatusChanges(
+                DailyV1NpcRuntimeOwners target,
+                IReadOnlyList<DailyV1StatusDefinition> statusToAdd)
             {
-                if (!TryGetExactTarget(target, out NpcRuntime exactTarget)) return false;
-                exactTarget.ClearHidden();
-                return exactTarget.HiddenDaysRemaining == 0;
+                return TryGetExactTarget(target, out NpcRuntime exactTarget)
+                    && exactTarget.CanProjectCoreSelectedDailyV1StatusChanges(target, statusToAdd);
             }
 
-            public bool ApplyStatusChange(
+            public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners target)
+            {
+                if (!TryGetExactTarget(target, out NpcRuntime exactTarget))
+                    throw new InvalidOperationException("The selected Guard owner lost its exact runtime projection.");
+                exactTarget.EnsureCoreSelectedDailyV1OwnerMutationAllowed(target);
+            }
+
+            public void NotifyStatusMutationCommitted(
                 DailyV1NpcRuntimeOwners target,
                 DailyV1StatusDefinition status,
-                bool add)
+                bool added)
             {
-                if (!TryGetExactTarget(target, out NpcRuntime exactTarget)
-                    || !exactTarget.TryGetSelectedDailyV1StatusAsset(status, out NpcStatusData exactStatus))
-                    return false;
-                if (add) exactTarget.AddStatus(exactStatus);
-                else exactTarget.RemoveStatus(exactStatus);
-                return true;
+                if (!TryGetExactTarget(target, out NpcRuntime exactTarget))
+                    throw new InvalidOperationException("The selected Guard status owner lost its exact runtime projection after mutation.");
+                exactTarget.NotifyCoreSelectedDailyV1StatusMutationCommitted(target);
+            }
+
+            public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners target)
+            {
+                if (!TryGetExactTarget(target, out NpcRuntime exactTarget))
+                    throw new InvalidOperationException("The selected Guard hidden-state owner lost its exact runtime projection after mutation.");
+                exactTarget.NotifyCoreSelectedDailyV1HiddenMutationCommitted(target);
             }
 
             public void PublishArrest(
@@ -1281,38 +1385,39 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 using (scope) return operation();
             }
 
-            public bool ApplyHideDuration(DailyV1NpcRuntimeOwners actor, int followingFullDays)
+            public bool CanProjectStatusChanges(
+                DailyV1NpcRuntimeOwners actor,
+                IReadOnlyList<DailyV1StatusDefinition> statusToAdd)
             {
-                if (!TryGetExactActor(actor, out NpcRuntime exactActor)
-                    || followingFullDays < 1)
-                    return false;
-                exactActor.HideForDays(followingFullDays);
-                return exactActor.HiddenDaysRemaining == actor.HiddenState.RemainingDays;
+                return TryGetExactActor(actor, out NpcRuntime exactActor)
+                    && exactActor.CanProjectCoreSelectedDailyV1StatusChanges(actor, statusToAdd);
             }
 
-            public bool ClearHidden(DailyV1NpcRuntimeOwners actor)
+            public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners actor)
             {
-                if (!TryGetExactActor(actor, out NpcRuntime exactActor)) return false;
-                exactActor.ClearHidden();
-                return exactActor.HiddenDaysRemaining == 0
-                    && actor.HiddenState.RemainingDays == 0;
+                if (!TryGetExactActor(actor, out NpcRuntime exactActor))
+                    throw new InvalidOperationException("The selected Crime owner lost its exact runtime projection.");
+                exactActor.EnsureCoreSelectedDailyV1OwnerMutationAllowed(actor);
             }
 
-            public bool ApplyStatusChange(
+            public void NotifyStatusMutationCommitted(
                 DailyV1NpcRuntimeOwners actor,
                 DailyV1StatusDefinition status,
-                bool add)
+                bool added)
             {
-                if (!TryGetExactActor(actor, out NpcRuntime exactActor)
-                    || !exactActor.TryGetSelectedDailyV1StatusAsset(status,
-                        out NpcStatusData exactStatus))
-                    return false;
-                if (add) exactActor.AddStatus(exactStatus);
-                else exactActor.RemoveStatus(exactStatus);
-                return true;
+                if (!TryGetExactActor(actor, out NpcRuntime exactActor))
+                    throw new InvalidOperationException("The selected Crime status owner lost its exact runtime projection after mutation.");
+                exactActor.NotifyCoreSelectedDailyV1StatusMutationCommitted(actor);
             }
 
-            public bool TryRemoveSentence(DailyV1JusticeSentenceOwner sentence)
+            public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners actor)
+            {
+                if (!TryGetExactActor(actor, out NpcRuntime exactActor))
+                    throw new InvalidOperationException("The selected Crime hidden-state owner lost its exact runtime projection after mutation.");
+                exactActor.NotifyCoreSelectedDailyV1HiddenMutationCommitted(actor);
+            }
+
+            public bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence)
             {
                 DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
                 return graph != null
@@ -1323,7 +1428,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     && string.Equals(sentence.TargetRuntimeId, actorRuntime.RuntimeId,
                         StringComparison.Ordinal)
                     && JusticeRecordsOwner.ContainsSentence(sentence)
-                    && runtime.justiceSystem.TryRemoveSelectedSentence(sentence);
+                    && runtime.justiceSystem.CanRemoveSelectedSentenceProjection(sentence);
+            }
+
+            public void CommitSentenceProjectionRemoval(DailyV1JusticeSentenceOwner sentence)
+            {
+                if (runtime.justiceSystem == null
+                    || !ReferenceEquals(runtime.justiceSystem.CoreOwner, JusticeRecordsOwner))
+                    throw new InvalidOperationException(
+                        "The selected Crime sentence lost its exact Justice projection owner after Core removal.");
+                runtime.justiceSystem.CommitSelectedSentenceProjectionRemoval(sentence);
             }
 
             public void PublishHidden(DailyV1NpcRuntimeOwners actor)
@@ -1502,19 +1616,43 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 DailyV1JusticeWantedRecordOwner record) =>
                 runtime.justiceSystem?.DiscardPreparedSelectedCoreWantedRecordProjection(record);
 
-            public bool ApplyStatusChange(
+            public bool CanProjectStatusChanges(
                 DailyV1NpcRuntimeOwners target,
-                DailyV1StatusDefinition status,
-                bool add)
+                IReadOnlyList<DailyV1StatusDefinition> statusToAdd)
             {
                 if (!TryResolveParticipant(target, out NpcRuntime exactTarget)
                     || !ReferenceEquals(exactTarget, perpetratorRuntime)
-                    || !exactTarget.TryGetSelectedDailyV1StatusAsset(
-                        status, out NpcStatusData exactStatus))
+                    || !exactTarget.CanProjectCoreSelectedDailyV1StatusChanges(
+                        target, statusToAdd))
                     return false;
-                if (add) exactTarget.AddStatus(exactStatus);
-                else exactTarget.RemoveStatus(exactStatus);
                 return true;
+            }
+
+            public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners target)
+            {
+                if (!TryResolveParticipant(target, out NpcRuntime exactTarget)
+                    || !ReferenceEquals(exactTarget, perpetratorRuntime))
+                    throw new InvalidOperationException("The selected Steal owner lost its exact runtime projection.");
+                exactTarget.EnsureCoreSelectedDailyV1OwnerMutationAllowed(target);
+            }
+
+            public void NotifyStatusMutationCommitted(
+                DailyV1NpcRuntimeOwners target,
+                DailyV1StatusDefinition status,
+                bool added)
+            {
+                if (!TryResolveParticipant(target, out NpcRuntime exactTarget)
+                    || !ReferenceEquals(exactTarget, perpetratorRuntime))
+                    throw new InvalidOperationException("The selected Steal status owner lost its exact runtime projection after mutation.");
+                exactTarget.NotifyCoreSelectedDailyV1StatusMutationCommitted(target);
+            }
+
+            public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners target)
+            {
+                if (!TryResolveParticipant(target, out NpcRuntime exactTarget)
+                    || !ReferenceEquals(exactTarget, perpetratorRuntime))
+                    throw new InvalidOperationException("The selected Steal hidden-state owner lost its exact runtime projection after mutation.");
+                exactTarget.NotifyCoreSelectedDailyV1HiddenMutationCommitted(target);
             }
 
             public void PublishTheft(
@@ -10638,6 +10776,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         private readonly SimulationRuntime runtime;
         private readonly DailyV1SelectedRuntimeOwnerGraph graph;
         private readonly Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime> runtimeByOwner;
+        private NpcActionRuntime preparedActionRuntime;
+        private DailyV1NpcActionPayloadOwner preparedActionPayload;
+        private DailyV1NpcRuntimeOwners preparedActionActor;
 
         internal SelectedDailyV1ActorTurnExecutionBoundary(
             SimulationRuntime runtime,
@@ -10796,6 +10937,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     exactRuntime, out decisionBoundary);
         }
 
+        public bool TryGetDecisionRecordOwners(
+            DailyV1NpcRuntimeOwners actor,
+            out RuntimeIdAllocator idAllocator,
+            out SimulationRecordSequence recordSequence,
+            out NpcDecisionStore decisionStore)
+        {
+            RequireExactActor(actor);
+            idAllocator = runtime.decisionRecorder?.DecisionIdAllocator;
+            recordSequence = runtime.decisionRecorder?.RecordSequence;
+            decisionStore = runtime.decisionRecorder?.DecisionStore;
+            return idAllocator != null && recordSequence != null && decisionStore != null;
+        }
+
         public bool TryGetConfiguredActionIds(
             DailyV1NpcRuntimeOwners actor,
             out IReadOnlyList<string> actionIds)
@@ -10818,38 +10972,94 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return true;
         }
 
-        public bool HasRequestedActionProvider(
-            DailyV1NpcRuntimeOwners actor,
-            DailyV1ActionDefinition action)
-        {
-            NpcRuntime exactRuntime = RequireExactActor(actor);
-            // Selected Escape is a Core-owned owner transition. Provider presence is
-            // not a gameplay prerequisite once the exact admitted action definition
-            // and effective Crime configuration have been validated by Core.
-            return action != null
-                && action.Values.actionType?.Value
-                    == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue
-                && DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
-                    exactRuntime.SelectedDailyV1DefinitionGraph, action);
-        }
-
-        public bool TryRecordAndInstallSelectedAction(
+        public bool TryPrepareSelectedActionProjection(
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcActionCandidate selected,
             IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
-            NpcDecisionOrigin origin)
+            DailyV1NpcActionPayloadOwner payload)
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (preparedActionRuntime != null || preparedActionPayload != null
+                || selected?.PreparedPayload == null
+                || !ReferenceEquals(selected.PreparedPayload, payload))
+                return false;
+
             if (!runtime.npcDecisionSystem.TryProjectSelectedDailyV1ActionCandidate(
                     exactRuntime, selected, decisionBoundary,
-                    out NpcActionRuntime actionRuntime))
+                    out NpcActionRuntime actionRuntime)
+                || actionRuntime == null
+                || !ReferenceEquals(actionRuntime.SelectedOwner, payload)
+                || !actionRuntime.MatchesSelectedOwner())
             {
                 return false;
             }
 
-            runtime.RecordAndInstallChosenAction(
-                exactRuntime, actionRuntime, origin);
+            preparedActionRuntime = actionRuntime;
+            preparedActionPayload = payload;
+            preparedActionActor = actor;
             return true;
+        }
+
+        public bool CanCommitSelectedActionSlot(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            return ReferenceEquals(preparedActionPayload, payload)
+                && preparedActionRuntime != null
+                && exactRuntime.CanCommitP12LifecycleMutation(
+                    false, false, true, preparedActionRuntime);
+        }
+
+        public bool TryPublishSelectedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (!ReferenceEquals(preparedActionPayload, payload)
+                || !ReferenceEquals(preparedActionActor, actor)
+                || preparedActionRuntime == null
+                || !ReferenceEquals(actor.ActionSlot?.CurrentAction, payload.Action)
+                || !ReferenceEquals(actor.ActionSlot?.CurrentPayload, payload)
+                || !preparedActionRuntime.MatchesSelectedOwner())
+                return false;
+
+            try
+            {
+                if (!exactRuntime.TryInstallPrecommittedCurrentActionRuntime(preparedActionRuntime))
+                    throw new InvalidOperationException(
+                        "A committed selected action slot could not publish its Unity action projection.");
+                return true;
+            }
+            finally
+            {
+                ClearPreparedActionProjection();
+            }
+        }
+
+        public void CancelPreparedSelectedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            RequireExactActor(actor);
+            if (ReferenceEquals(preparedActionActor, actor)
+                && ReferenceEquals(preparedActionPayload, payload))
+                ClearPreparedActionProjection();
+        }
+
+        private void ClearPreparedActionProjection()
+        {
+            preparedActionRuntime = null;
+            preparedActionPayload = null;
+            preparedActionActor = null;
+        }
+
+        public void LogSelectedActionDecisionFailure(
+            DailyV1NpcRuntimeOwners actor,
+            string message)
+        {
+            RequireExactActor(actor);
+            runtime.logger?.LogError(message);
         }
 
         public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor) =>
@@ -11179,6 +11389,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     {
         private readonly SimulationRuntime runtime;
         private readonly NpcRuntime npcRuntime;
+        private DailyV1NpcActionPayloadOwner preparedPayload;
+        private NpcActionRuntime preparedAction;
 
         internal SelectedActorChoiceExecutionBoundary(SimulationRuntime runtime, NpcRuntime npcRuntime)
         {
@@ -11201,22 +11413,88 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     exactRuntime.SelectedDailyV1DefinitionGraph, action);
         }
 
-        public bool TryRecordAndInstallRequestedAction(
+        public bool TryGetDecisionRecordOwners(
             DailyV1NpcRuntimeOwners actor,
-            DailyV1NpcActionPayloadOwner payload,
-            out string decisionRecordId)
+            out RuntimeIdAllocator idAllocator,
+            out SimulationRecordSequence recordSequence,
+            out NpcDecisionStore decisionStore)
         {
-            decisionRecordId = null;
+            RequireExactActor(actor);
+            NpcDecisionRecorder recorder = runtime.decisionRecorder;
+            idAllocator = recorder?.DecisionIdAllocator;
+            recordSequence = recorder?.RecordSequence;
+            decisionStore = recorder?.DecisionStore;
+            return idAllocator != null && recordSequence != null && decisionStore != null;
+        }
+
+        public bool TryPrepareRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
             NpcRuntime exactRuntime = RequireExactActor(actor);
+            preparedPayload = null;
+            preparedAction = null;
             if (runtime.npcDecisionSystem == null
                 || !runtime.npcDecisionSystem.TryProjectSelectedLocalSale(
                     exactRuntime, payload, out NpcActionRuntime projectedAction))
                 return false;
 
-            NpcDecisionRecord decision = runtime.RecordAndInstallChosenAction(
-                exactRuntime, projectedAction, NpcDecisionOrigin.ActorChoice);
-            decisionRecordId = decision?.DecisionId;
+            preparedPayload = payload;
+            preparedAction = projectedAction;
             return true;
+        }
+
+        public bool TryRefreshRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            return ReferenceEquals(preparedPayload, payload)
+                && preparedAction != null
+                && preparedAction.TryUseSelectedPayload(
+                    payload, exactRuntime.SelectedDailyV1DefinitionGraph);
+        }
+
+        public bool CanCommitRequestedActionSlot(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            return ReferenceEquals(preparedPayload, payload)
+                && preparedAction != null
+                && exactRuntime.CanCommitP12LifecycleMutation(
+                    false, false, true, preparedAction);
+        }
+
+        public bool TryPublishRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (!ReferenceEquals(preparedPayload, payload) || preparedAction == null
+                || !exactRuntime.TryInstallPrecommittedCurrentActionRuntime(preparedAction))
+                return false;
+
+            preparedPayload = null;
+            preparedAction = null;
+            return true;
+        }
+
+        public void CancelPreparedRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            RequireExactActor(actor);
+            if (ReferenceEquals(preparedPayload, payload))
+            {
+                preparedPayload = null;
+                preparedAction = null;
+            }
+        }
+
+        public void LogRequestedActionDecisionFailure(string message)
+        {
+            runtime.logger?.LogError(message);
         }
 
         public NpcActionResultType? ExecuteCurrentAction(DailyV1NpcRuntimeOwners actor)

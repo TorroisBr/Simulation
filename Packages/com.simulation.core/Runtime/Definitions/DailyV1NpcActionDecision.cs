@@ -375,21 +375,19 @@ internal static class DailyV1NpcActionDecision
 }
 
 /// <summary>
-/// Host projection and provider boundary for one selected Daily-v1 actor turn.
-/// Core retains the candidate order, supported owner planning and deterministic
-/// weighted choice; a host may resolve its existing provider-backed actions
-/// without supplying a second decision engine.
+/// Legacy provider planner retained only for the graphless compatibility path.
+/// An admitted owner graph never calls this boundary: Core determines supported
+/// action rules and payloads from its own canonical definitions and owners. The
+/// graph-backed path asks the host only to prepare an exact action projection
+/// before the RNG draw, preserving fail-closed adapter compatibility without
+/// delegating action planning to a provider.
 /// </summary>
 internal interface IDailyV1SelectedNpcActionDecisionBoundary
 {
-    bool HasTravelActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
-    bool TryProjectTravelAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
-    bool HasMerchantActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
-    bool HasEnabledCrimeActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
-    bool TryProjectStealAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
-    bool TryProjectFleeCityAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
-    bool TryProjectBuyAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
-    bool TryProjectSellAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
+    bool TryProjectSelectedCandidate(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionCandidate candidate);
+
     bool TryPrepareAutonomousProviderAction(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionCandidate candidate,
@@ -397,15 +395,15 @@ internal interface IDailyV1SelectedNpcActionDecisionBoundary
 }
 
 /// <summary>
-/// Optional Unity object projection for a Core-planned selected Guard Arrest.
-/// Target identity and utility are already fixed in the candidate payload;
-/// implementations may only resolve that exact owner into the host object.
+/// Optional exact Unity compatibility preflight for Core-selected Steal
+/// targets. It runs before the legacy auxiliary target RNG draw.
 /// </summary>
-internal interface IDailyV1SelectedGuardActionProjectionBoundary
+internal interface IDailyV1SelectedStealTargetProjectionBoundary
 {
-    bool TryProjectSelectedGuardArrestAction(
+    bool CanProjectSelectedStealTarget(
         DailyV1NpcRuntimeOwners actor,
-        DailyV1NpcActionCandidate candidate);
+        DailyV1ActionDefinition action,
+        DailyV1NpcRuntimeOwners target);
 }
 
 /// <summary>Core-owned selection half of one admitted Daily-v1 actor turn.</summary>
@@ -538,13 +536,13 @@ internal static class DailyV1SelectedNpcActionDecisionStage
         IReadOnlyList<DailyV1StatusDefinition> activeStatuses,
         long currentAbsoluteDay,
         IAuthoritativeRandomSource randomSource,
-        IDailyV1SelectedNpcActionDecisionBoundary boundary,
         out DailyV1NpcActionCandidate selected,
-        PersonStore personStore = null)
+        PersonStore personStore = null,
+        IDailyV1SelectedNpcActionDecisionBoundary projectionBoundary = null)
     {
         selected = null;
         if (graph == null || actor == null || availableActions == null
-            || randomSource == null || boundary == null
+            || randomSource == null
             || !graph.ContainsExactNpcOwner(actor)
             || !ReferenceEquals(graph.Definitions, actor.Definitions)
             || actor.Lifecycle?.LifeState != NpcLifeState.Alive
@@ -564,76 +562,76 @@ internal static class DailyV1SelectedNpcActionDecisionStage
 
             int? actionType = candidate.Action.Values.actionType?.Value;
             if (actionType == DailyV1NpcDefinitionRules.NormalActionTypeValue)
+            {
+                ProjectCandidateOrDisable(actor, candidate, projectionBoundary);
                 continue;
+            }
 
             if (actionType == DailyV1NpcDefinitionRules.TravelActionTypeValue
-                && boundary.HasTravelActionProvider(actor, candidate.Action)
                 && DailyV1NpcActionDecision.TryPrepareSelectedExistingTravelCandidate(
                     graph, actor, candidate))
             {
-                if (candidate.PreparedPayload == null
-                    || !boundary.TryProjectTravelAction(actor, candidate))
-                    candidate.Utility = 0f;
+                ProjectCandidateOrDisable(actor, candidate, projectionBoundary);
                 continue;
             }
 
             if (actionType == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
-                && boundary.HasMerchantActionProvider(actor, candidate.Action)
                 && DailyV1NpcActionDecision.TryPrepareSelectedBuyGoodsCandidate(
                     graph, actor, candidate, currentAbsoluteDay))
             {
-                if (candidate.PreparedPayload == null
-                    || !boundary.TryProjectBuyAction(actor, candidate))
-                    candidate.Utility = 0f;
+                ProjectCandidateOrDisable(actor, candidate, projectionBoundary);
                 continue;
             }
 
             if (actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
-                && boundary.HasMerchantActionProvider(actor, candidate.Action)
                 && DailyV1NpcActionDecision.TryPrepareSelectedSellGoodsCandidate(
                     graph, actor, candidate, currentAbsoluteDay))
             {
-                if (candidate.PreparedPayload == null
-                    || !boundary.TryProjectSellAction(actor, candidate))
-                    candidate.Utility = 0f;
+                ProjectCandidateOrDisable(actor, candidate, projectionBoundary);
                 continue;
             }
 
-            if (actionType == DailyV1NpcDefinitionRules.HideActionTypeValue
-                && boundary.HasEnabledCrimeActionProvider(actor, candidate.Action))
+            if (actionType == DailyV1NpcDefinitionRules.HideActionTypeValue)
             {
                 if (!DailyV1CrimeActionPlanning.TryPrepareSelectedHide(graph, actor, candidate))
                     candidate.Utility = 0f;
+                else
+                    ProjectCandidateOrDisable(actor, candidate, projectionBoundary);
                 continue;
             }
 
-            if (actionType == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue
-                && boundary.HasEnabledCrimeActionProvider(actor, candidate.Action))
+            if (actionType == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue)
             {
                 if (!DailyV1CrimeActionPlanning.TryPrepareSelectedEscapePrison(graph, actor, candidate))
                     candidate.Utility = 0f;
+                else
+                    ProjectCandidateOrDisable(actor, candidate, projectionBoundary);
                 continue;
             }
 
-            if (actionType == DailyV1NpcDefinitionRules.StealActionTypeValue
-                && boundary.HasEnabledCrimeActionProvider(actor, candidate.Action))
+            if (actionType == DailyV1NpcDefinitionRules.StealActionTypeValue)
             {
+                Func<DailyV1NpcRuntimeOwners, bool> canProjectStealTarget =
+                    projectionBoundary is IDailyV1SelectedStealTargetProjectionBoundary stealProjection
+                        ? target => stealProjection.CanProjectSelectedStealTarget(
+                            actor, candidate.Action, target)
+                        : null;
                 if (!DailyV1CrimeActionPlanning.TryPrepareSelectedSteal(
-                        graph, actor, candidate, personStore, currentAbsoluteDay, randomSource)
-                    || candidate.PreparedPayload == null
-                    || !boundary.TryProjectStealAction(actor, candidate))
+                        graph, actor, candidate, personStore, currentAbsoluteDay,
+                        randomSource, canProjectStealTarget))
                     candidate.Utility = 0f;
+                else
+                    ProjectCandidateOrDisable(actor, candidate, projectionBoundary);
                 continue;
             }
 
-            if (actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue
-                && boundary.HasEnabledCrimeActionProvider(actor, candidate.Action))
+            if (actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue)
             {
                 if (!DailyV1CrimeActionPlanning.TryPrepareSelectedFleeCity(
-                        graph, actor, candidate)
-                    || candidate.PreparedPayload == null
-                    || !boundary.TryProjectFleeCityAction(actor, candidate))
+                        graph, actor, candidate))
                     candidate.Utility = 0f;
+                else
+                    ProjectCandidateOrDisable(actor, candidate, projectionBoundary);
                 continue;
             }
 
@@ -666,9 +664,7 @@ internal static class DailyV1SelectedNpcActionDecisionStage
 
                 candidate.Utility = arrestUtility;
                 candidate.PreparedPayload = arrestPayload;
-                if (!(boundary is IDailyV1SelectedGuardActionProjectionBoundary projectionBoundary)
-                    || !projectionBoundary.TryProjectSelectedGuardArrestAction(actor, candidate))
-                    candidate.Utility = 0f;
+                ProjectCandidateOrDisable(actor, candidate, projectionBoundary);
                 continue;
             }
 
@@ -684,5 +680,35 @@ internal static class DailyV1SelectedNpcActionDecisionStage
             candidates, randomSource,
             "npc-decision|" + actor.RuntimeId + "|" + currentAbsoluteDay);
         return true;
+    }
+
+    private static void ProjectCandidateOrDisable(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionCandidate candidate,
+        IDailyV1SelectedNpcActionDecisionBoundary projectionBoundary)
+    {
+        if (actor == null || candidate?.Action == null || candidate.Utility <= 0f)
+            return;
+
+        if (candidate.PreparedPayload == null)
+        {
+            if (!DailyV1NpcActionPayloadOwner.TryCreate(
+                    actor.Definitions, candidate.Action, null, null, null, 0,
+                    0f, 1f, NpcTravelReason.None, 0f, null, null, null, null,
+                    out DailyV1NpcActionPayloadOwner payload))
+            {
+                candidate.Utility = 0f;
+                return;
+            }
+            candidate.PreparedPayload = payload;
+        }
+
+        // Projection is an adapter-compatibility preflight only. Core has
+        // already resolved eligibility and payload; a candidate the host
+        // cannot install must be removed before the weighted RNG draw, as in
+        // the previous Unity-owned selection path.
+        if (projectionBoundary != null
+            && !projectionBoundary.TryProjectSelectedCandidate(actor, candidate))
+            candidate.Utility = 0f;
     }
 }

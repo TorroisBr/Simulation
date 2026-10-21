@@ -34,6 +34,33 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
     }
 
     [Test]
+    public void CoreHiddenOwnerWritesKeepNoOpsOutsideP12AdmissionAndCommitEachLeafOnce()
+    {
+        CrimeFixture fixture = CreateFixture();
+        RecordingCrimeBoundary boundary = new RecordingCrimeBoundary(fixture);
+        Assert.That(fixture.Actor.HiddenState.TrySetRemainingDays(2), Is.True);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryHideSelectedNpcForDays(
+            fixture.Actor, 1, boundary), Is.True);
+        Assert.That(fixture.Actor.HiddenState.RemainingDays, Is.EqualTo(2));
+        Assert.That(boundary.MutationAdmissions, Is.Zero,
+            "A duration request that does not change the Core owner is a no-op.");
+        Assert.That(boundary.ActorMutationNotifications, Is.Zero);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryClearSelectedNpcHiddenState(
+            fixture.Actor, boundary), Is.True);
+        Assert.That(fixture.Actor.HiddenState.RemainingDays, Is.Zero);
+        Assert.That(boundary.MutationAdmissions, Is.EqualTo(1));
+        Assert.That(boundary.ActorMutationNotifications, Is.EqualTo(1));
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryClearSelectedNpcHiddenState(
+            fixture.Actor, boundary), Is.True);
+        Assert.That(boundary.MutationAdmissions, Is.EqualTo(1),
+            "Clearing an already-clear owner is a no-op and opens no extra P12 leaf admission.");
+        Assert.That(boundary.ActorMutationNotifications, Is.EqualTo(1));
+    }
+
+    [Test]
     public void FailedSelectedEscapeRegistersSentencePenaltyOnCoreJusticeOwner()
     {
         CrimeFixture fixture = CreateFixture();
@@ -88,8 +115,8 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
             "warrant penalty and sentence removal each publish an immediate Justice owner change");
         Assert.That(boundary.ActorMutationNotifications, Is.EqualTo(1));
         Assert.That(boundary.Order, Is.EqualTo(new[] {
-            "p12-begin", "sentence-remove", "status-remove", "status-add",
-            "status-add", "escape-event", "p12-end" }));
+            "p12-begin", "sentence-remove", "status-remove", "escape-event", "p12-end" }),
+            "Configured no-op status writes must not produce admission, revision, or notification events.");
     }
 
     [Test]
@@ -170,8 +197,9 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
         Assert.That(fixture.Actor.Status.Contains(free), Is.True);
         Assert.That(fixture.Actor.HiddenState.RemainingDays, Is.Zero);
         Assert.That(boundary.Order, Is.EqualTo(new[] {
-            "p12-begin", "status-remove", "status-add", "hidden-clear",
-            "status-remove", "status-remove", "escape-event", "p12-end" }));
+            "p12-begin", "status-remove", "hidden-clear",
+            "status-remove", "escape-event", "p12-end" }),
+            "Only committed status and hidden-state leaves publish immediate events.");
     }
 
     [Test]
@@ -183,18 +211,15 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
         fixture.AddArrestedStatus();
         DailyV1JusticeWantedRecordOwner warrant = fixture.AddWarrant(12f, sentenceDays: 8);
         fixture.AddSentence(warrant, 8, failedAttempts: 2);
-        RecordingDecisionBoundary boundary = new RecordingDecisionBoundary();
-
         Assert.That(DailyV1SelectedNpcActionDecisionStage.TryChoose(
             fixture.Graph, fixture.Actor, new[] { escape }, fixture.Actor.Status.Statuses,
-            12L, new FixedActionRandom(0f), boundary, out DailyV1NpcActionCandidate selected), Is.True);
+            12L, new FixedActionRandom(0f), out DailyV1NpcActionCandidate selected), Is.True);
 
         Assert.That(selected, Is.Not.Null);
         Assert.That(selected.Action, Is.SameAs(escape));
         Assert.That(selected.Utility, Is.EqualTo(30f));
         Assert.That(selected.PreparedPayload.SuccessChanceMultiplier,
             Is.EqualTo(0.64f).Within(0.000001f));
-        Assert.That(boundary.LegacyProviderPlanCalls, Is.Zero);
     }
 
     private static bool Dispatch(
@@ -349,6 +374,7 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
         private readonly CrimeFixture fixture;
         internal List<string> Order { get; } = new List<string>();
         internal int ActorMutationNotifications { get; private set; }
+        internal int MutationAdmissions { get; private set; }
         public DailyV1JusticeRecordsOwner JusticeRecordsOwner => fixture.Justice;
 
         internal RecordingCrimeBoundary(CrimeFixture fixture) => this.fixture = fixture;
@@ -358,6 +384,27 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
             Order.Add("p12-begin");
             try { return operation != null && operation(); }
             finally { Order.Add("p12-end"); }
+        }
+
+        public bool CanProjectStatusChanges(
+            DailyV1NpcRuntimeOwners actor,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) => actor?.Status != null;
+
+        public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners actor) => MutationAdmissions++;
+
+        public void NotifyStatusMutationCommitted(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1StatusDefinition status,
+            bool added)
+        {
+            ActorMutationNotifications++;
+            Order.Add(added ? "status-add" : "status-remove");
+        }
+
+        public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners actor)
+        {
+            ActorMutationNotifications++;
+            Order.Add(actor.HiddenState.RemainingDays > 0 ? "hidden-duration" : "hidden-clear");
         }
 
         public bool ApplyHideDuration(DailyV1NpcRuntimeOwners actor, int followingFullDays)
@@ -417,11 +464,12 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
             IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
             IReadOnlyList<DailyV1StatusDefinition> statusToAdd) => false;
 
-        public bool TryRemoveSentence(DailyV1JusticeSentenceOwner sentence)
+        public bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence) =>
+            fixture.Justice.ContainsSentence(sentence);
+
+        public void CommitSentenceProjectionRemoval(DailyV1JusticeSentenceOwner sentence)
         {
-            bool removed = fixture.Justice.TryRemoveSentence(sentence);
-            if (removed) Order.Add("sentence-remove");
-            return removed;
+            Order.Add("sentence-remove");
         }
 
         public void PublishHidden(DailyV1NpcRuntimeOwners actor) => Order.Add("hidden-log");
@@ -435,6 +483,9 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
     private sealed class RecordingDecisionBoundary : IDailyV1SelectedNpcActionDecisionBoundary
     {
         internal int LegacyProviderPlanCalls { get; private set; }
+        public bool TryProjectSelectedCandidate(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate) => candidate?.Action != null;
         public bool HasTravelActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action) => false;
         public TravelPartyStore GetTravelPartyStore(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action) => null;
         public bool TryProjectTravelAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate) => false;

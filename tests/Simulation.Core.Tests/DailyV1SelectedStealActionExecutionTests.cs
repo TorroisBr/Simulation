@@ -334,6 +334,16 @@ public sealed class DailyV1SelectedStealActionExecutionTests
 
         public void DiscardPreparedWantedRecordProjection(DailyV1JusticeWantedRecordOwner record) { }
 
+        public bool CanProjectStatusChanges(DailyV1NpcRuntimeOwners target,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) => target?.Status != null;
+
+        public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners target) { }
+
+        public void NotifyStatusMutationCommitted(DailyV1NpcRuntimeOwners target,
+            DailyV1StatusDefinition status, bool added) => order.Add("wanted-status");
+
+        public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners target) { }
+
         public bool ApplyStatusChange(DailyV1NpcRuntimeOwners target,
             DailyV1StatusDefinition status, bool add)
         {

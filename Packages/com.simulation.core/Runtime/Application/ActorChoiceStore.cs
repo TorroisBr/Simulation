@@ -1086,17 +1086,34 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
 /// <summary>
 /// Host boundary for the Unity projections around a selected actor choice.
 /// Core retains choice eligibility, planning, dispatch lifecycle and terminal
-/// accounting; the host only clears/projects the existing action slot and
-/// forwards the selected action into its established operation path.
+/// accounting and commits the selected owner slot; the host supplies only the
+/// exact Unity projection and P12 admission/publication boundary.
 /// </summary>
 internal interface IDailyV1ActorChoiceExecutionBoundary
 {
     void ClearCurrentAction(DailyV1NpcRuntimeOwners actor);
     bool IsActionEnabled(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
-    bool TryRecordAndInstallRequestedAction(
+    bool TryGetDecisionRecordOwners(
         DailyV1NpcRuntimeOwners actor,
-        DailyV1NpcActionPayloadOwner payload,
-        out string decisionRecordId);
+        out RuntimeIdAllocator idAllocator,
+        out SimulationRecordSequence recordSequence,
+        out NpcDecisionStore decisionStore);
+    bool TryPrepareRequestedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload);
+    bool TryRefreshRequestedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload);
+    bool CanCommitRequestedActionSlot(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload);
+    bool TryPublishRequestedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload);
+    void CancelPreparedRequestedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload);
+    void LogRequestedActionDecisionFailure(string message);
     NpcActionResultType? ExecuteCurrentAction(DailyV1NpcRuntimeOwners actor);
 }
 
@@ -1161,12 +1178,76 @@ internal static class DailyV1ActorChoiceExecutionStage
             return true;
         }
 
-        if (!boundary.TryRecordAndInstallRequestedAction(
-                actor, plan.SelectedPayload, out string decisionRecordId))
+        DailyV1NpcActionPayloadOwner selectedPayload = plan.SelectedPayload;
+        if (!boundary.TryPrepareRequestedActionProjection(actor, selectedPayload))
         {
             Reject(store, input, absoluteDay, actorTurnRosterOrdinal, ActorChoiceFailure.ActionUnavailable);
             return true;
         }
+
+        Func<DailyV1NpcActionPayloadOwner, bool> projectionPrepared = candidate =>
+            ReferenceEquals(candidate, selectedPayload)
+            && boundary.TryRefreshRequestedActionProjection(actor, candidate);
+        Func<bool> slotAdmission = () =>
+            boundary.CanCommitRequestedActionSlot(actor, selectedPayload);
+        bool hasDecisionOwners = boundary.TryGetDecisionRecordOwners(
+            actor, out RuntimeIdAllocator idAllocator,
+            out SimulationRecordSequence recordSequence,
+            out NpcDecisionStore decisionStore);
+        NpcDecisionRecord decision = null;
+        bool committed;
+        if (!hasDecisionOwners)
+        {
+            committed = DailyV1DecisionRecordOperation.TryCommitSelectedActionSlotWithExistingIdentity(
+                graph, actor, selectedPayload, projectionPrepared, slotAdmission);
+        }
+        else
+        {
+            try
+            {
+                committed = DailyV1DecisionRecordOperation.TryRecordAndCommitSelectedActionSlot(
+                    idAllocator, recordSequence, decisionStore, absoluteDay,
+                    graph, actor, selectedPayload,
+                    DailyV1DecisionRecordOperation.GetDecisionType(
+                        requestedAction, selectedPayload),
+                    NpcDecisionOrigin.ActorChoice,
+                    projectionPrepared, slotAdmission, out decision);
+            }
+            catch (ArgumentException exception)
+            {
+                boundary.LogRequestedActionDecisionFailure(
+                    "Cannot create NPC decision record: " + exception.Message);
+                committed = DailyV1DecisionRecordOperation.TryCommitSelectedActionSlotWithExistingIdentity(
+                    graph, actor, selectedPayload, projectionPrepared, slotAdmission);
+            }
+            catch (InvalidOperationException exception)
+            {
+                boundary.LogRequestedActionDecisionFailure(
+                    "Cannot allocate NPC decision record identity: " + exception.Message);
+                committed = DailyV1DecisionRecordOperation.TryCommitSelectedActionSlotWithExistingIdentity(
+                    graph, actor, selectedPayload, projectionPrepared, slotAdmission);
+            }
+        }
+
+        if (committed)
+        {
+            if (!boundary.TryPublishRequestedActionProjection(actor, selectedPayload))
+            {
+                boundary.CancelPreparedRequestedActionProjection(actor, selectedPayload);
+                throw new InvalidOperationException(
+                    "The actor-choice action slot committed but its exact Unity projection could not be published.");
+            }
+        }
+        else
+        {
+            boundary.CancelPreparedRequestedActionProjection(actor, selectedPayload);
+        }
+
+        // Preserve the existing actor-choice dispatch contract: after a valid
+        // Unity projection was prepared, dispatch accounting proceeds even if
+        // the P12 slot admission declines the install. A recorded decision ID,
+        // when available, remains the one attached to this attempt.
+        string decisionRecordId = decision?.DecisionId;
 
         if (!store.TryMarkDispatchStarted(input.InputId, absoluteDay,
                 actorTurnRosterOrdinal, decisionRecordId,
@@ -1176,7 +1257,9 @@ internal static class DailyV1ActorChoiceExecutionStage
 
         try
         {
-            NpcActionResultType? resultStatus = boundary.ExecuteCurrentAction(actor);
+            NpcActionResultType? resultStatus = committed
+                ? boundary.ExecuteCurrentAction(actor)
+                : (NpcActionResultType?)null;
             if (!store.TryRecordAttemptReturned(input.InputId, absoluteDay,
                     actorTurnRosterOrdinal, resultStatus,
                     out ActorChoiceStoreFailureCode returnFailure))

@@ -3435,6 +3435,21 @@ public sealed class SimulationRuntimeAdmissionTests
                     npc => npc != null && npc.PersonId == expectedTerminalChoice.PersonId);
                 Assert.That(sourceMerchant.NpcData?.DefinitionId, Is.EqualTo("PEDRO"),
                     "The success path must use the authored Daily-v1 merchant rather than introducing a new NPC.");
+                string selectedDecisionId = expectedTerminalChoice.Dispositions[0].DecisionRecordId;
+                Assert.That(selectedDecisionId, Is.Not.Null.And.Not.Empty,
+                    "A successful actor choice must retain its Core decision identity at dispatch.");
+                Assert.That(sourceMerchant.CurrentActionRuntime, Is.Not.Null,
+                    "The selected Unity action projection remains installed after its successful attempt.");
+                Assert.That(sourceMerchant.CurrentActionRuntime.OriginDecisionId,
+                    Is.EqualTo(selectedDecisionId),
+                    "The Unity projection must be refreshed with the exact Core-allocated decision identity before slot admission.");
+                Assert.That(sourceMerchant.CurrentActionRuntime.MatchesSelectedOwner(), Is.True,
+                    "The installed Unity action projection must still match the exact selected Core payload.");
+                NpcDecisionRecord selectedDecision = sourceSession.Composition.Decisions.Decisions.Single(
+                    decision => decision != null && decision.DecisionId == selectedDecisionId);
+                Assert.That(selectedDecision.Origin, Is.EqualTo(NpcDecisionOrigin.ActorChoice));
+                Assert.That(selectedDecision.ActionDefinitionId,
+                    Is.EqualTo(expectedTerminalChoice.ActionDefinitionId));
             }
             else
             {

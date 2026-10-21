@@ -99,11 +99,14 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
         CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary();
         boundary.BindGraph(graph);
+        long actionSlotRevision = actor.ActionSlot.Revision;
 
         Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteAutonomousAction(
             graph, actor, new PersonStore(), boundary.RandomSource, 12L, boundary), Is.True);
 
         Assert.That(actor.ActionSlot.CurrentAction, Is.Not.Null);
+        Assert.That(actor.ActionSlot.Revision, Is.EqualTo(actionSlotRevision + 1L),
+            "One selected action commits exactly one action-slot revision.");
         Assert.That(boundary.Decisions.Decisions, Has.Count.EqualTo(1));
         Assert.That(actor.ActionSlot.CurrentPayload.OriginDecisionId,
             Is.EqualTo(boundary.Decisions.Decisions[0].DecisionId));
@@ -117,6 +120,94 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         Assert.That(boundary.Random.Calls, Is.EqualTo(1));
         Assert.That(boundary.Random.LastStreamKey,
             Is.EqualTo("npc-decision|" + actor.RuntimeId + "|12"));
+    }
+
+    [Test]
+    public void ProjectionRejectionLeavesDecisionOwnersAndActionSlotUnchanged()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
+        CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary
+        {
+            CanProjectSelectedAction = false
+        };
+        boundary.BindGraph(graph);
+        long nextDecisionId = boundary.NextDecisionIdSequence;
+        long nextRecordSequence = boundary.NextRecordSequence;
+        long actionSlotRevision = actor.ActionSlot.Revision;
+
+        Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteAutonomousAction(
+            graph, actor, new PersonStore(), boundary.RandomSource, 12L, boundary), Is.True);
+
+        Assert.That(boundary.Decisions.Decisions, Is.Empty);
+        Assert.That(boundary.NextDecisionIdSequence, Is.EqualTo(nextDecisionId));
+        Assert.That(boundary.NextRecordSequence, Is.EqualTo(nextRecordSequence));
+        Assert.That(actor.ActionSlot.CurrentAction, Is.Null);
+        Assert.That(actor.ActionSlot.CurrentPayload, Is.Null);
+        Assert.That(actor.ActionSlot.Revision, Is.EqualTo(actionSlotRevision));
+        Assert.That(boundary.Random.Calls, Is.Zero,
+            "Adapter projection eligibility is settled before the Core weighted choice draw.");
+    }
+
+    [Test]
+    public void RejectedScheduledActionReleasesProjectionForNextActor()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator ids = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(ids, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(ids,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph completeGraph), Is.True);
+        DailyV1NpcRuntimeOwners first = completeGraph.Npcs.Single(
+            owner => owner.Definition.DefinitionId == "JORGE");
+        DailyV1NpcRuntimeOwners second = completeGraph.Npcs.First(
+            owner => !ReferenceEquals(owner, first));
+        DailyV1CityRuntimeOwners city = completeGraph.Cities.Single(
+            owner => owner.RuntimeId == first.Travel.CurrentCityRuntimeId);
+        DailyV1JusticeRecordsOwner justice = new DailyV1JusticeRecordsOwner();
+        DailyV1StatusDefinition arrested = definitions.Statuses[
+            definitions.Configuration.arrestedStatus];
+        Assert.That(first.Status.TryAdd(arrested), Is.True);
+        DailyV1JusticeWantedRecordOwner warrant = new DailyV1JusticeWantedRecordOwner(
+            first.RuntimeId, city.RuntimeId, 12f, 4);
+        Assert.That(justice.TryAddWantedRecord(warrant), Is.True);
+        Assert.That(justice.NotifyMutationCommitted(), Is.True);
+        DailyV1JusticeSentenceOwner sentence = new DailyV1JusticeSentenceOwner(
+            first.RuntimeId, city.RuntimeId, warrant, 4, 0, wasArrestedToday: false);
+        Assert.That(justice.TryAddSentence(sentence), Is.True);
+        Assert.That(justice.NotifyMutationCommitted(), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+            completeGraph.Cities, new[] { first, second }, completeGraph.SpatialNetwork,
+            justice, out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        DailyV1ActionDefinition escape = definitions.Actions.Values.Single(
+            value => value.Values.actionType?.Value
+                == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue);
+        ScheduledDirectiveStore directives = new ScheduledDirectiveStore(new SimulationTime(12L));
+        ScheduledDirective directive = new ScheduledDirective(
+            "directive-rejected-projection-cleanup", 12L,
+            ScheduledDirectiveMode.RequestAction,
+            ScheduledDirectiveOperation.EscapePrison,
+            first.RuntimeId, escape.DefinitionId,
+            DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue);
+        Assert.That(directives.Add(directive), Is.True);
+        directives.PrepareDay(12L, runtimeId => runtimeId == first.RuntimeId);
+
+        CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary();
+        boundary.BindGraph(graph);
+        boundary.RejectNextActionSlotAdmission = true;
+        DailyV1SelectedActorActionExecutionStage.ProcessScheduledRequestAction(
+            graph, first, directive, boundary.RandomSource, 12L, boundary);
+
+        Assert.That(directive.State, Is.EqualTo(ScheduledDirectiveState.Skipped));
+        Assert.That(first.ActionSlot.CurrentAction, Is.Null,
+            "A rejected slot admission must not publish the requested action.");
+        Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteAutonomousAction(
+            graph, second, new PersonStore(), boundary.RandomSource, 12L, boundary), Is.True,
+            "A rejected projection must not remain cached on the roster-scoped host boundary.");
+        Assert.That(second.ActionSlot.CurrentAction, Is.Not.Null);
+        Assert.That(boundary.Events, Does.Contain("record-install"));
     }
 
     [Test]
@@ -270,7 +361,6 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         IDailyV1ActorTurnExecutionBoundary,
         IDailyV1SelectedActorActionExecutionBoundary,
         IDailyV1SelectedNpcActionDecisionBoundary,
-        IDailyV1SelectedGuardActionProjectionBoundary,
         IDailyV1SelectedActionDispatchBoundary,
         DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary,
         DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary
@@ -280,6 +370,13 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         internal readonly FixedRandom Random = new FixedRandom(0f);
         private readonly RuntimeIdAllocator allocator = new RuntimeIdAllocator();
         private readonly SimulationRecordSequence sequence = new SimulationRecordSequence();
+        private DailyV1NpcRuntimeOwners preparedProjectionActor;
+        private DailyV1NpcActionPayloadOwner preparedProjectionPayload;
+        internal bool RejectNextActionSlotAdmission;
+        internal bool CanProjectSelectedAction = true;
+        internal long NextDecisionIdSequence => allocator.CaptureSnapshot().Counters
+            .Single(counter => counter.FamilyId == "decision").NextSequence;
+        internal long NextRecordSequence => sequence.CaptureSnapshot().NextSequence;
 
         public IAuthoritativeRandomSource RandomSource => Random;
         public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor) => true;
@@ -301,6 +398,83 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             actionIds = actor.Definitions.Configuration.actions;
             return true;
         }
+
+        public bool TryGetDecisionRecordOwners(
+            DailyV1NpcRuntimeOwners actor,
+            out RuntimeIdAllocator idAllocator,
+            out SimulationRecordSequence recordSequence,
+            out NpcDecisionStore decisionStore)
+        {
+            idAllocator = allocator;
+            recordSequence = sequence;
+            decisionStore = Decisions;
+            return true;
+        }
+
+        public bool TryPrepareSelectedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate selected,
+            IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            if (preparedProjectionPayload != null
+                || !ReferenceEquals(selected?.PreparedPayload, payload)
+                || !decisionBoundary.TryProjectSelectedCandidate(actor, selected))
+                return false;
+            preparedProjectionActor = actor;
+            preparedProjectionPayload = payload;
+            return true;
+        }
+
+        public bool CanCommitSelectedActionSlot(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            if (!ReferenceEquals(preparedProjectionActor, actor)
+                || !ReferenceEquals(preparedProjectionPayload, payload))
+                return false;
+            if (!RejectNextActionSlotAdmission) return true;
+            RejectNextActionSlotAdmission = false;
+            return false;
+        }
+
+        public bool TryPublishSelectedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            if (!ReferenceEquals(preparedProjectionActor, actor)
+                || !ReferenceEquals(preparedProjectionPayload, payload)
+                || !ReferenceEquals(actor?.ActionSlot?.CurrentPayload, payload)) return false;
+            ClearPreparedProjection();
+            Events.Add("record-install");
+            return true;
+        }
+
+        public void CancelPreparedSelectedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            if (ReferenceEquals(preparedProjectionActor, actor)
+                && ReferenceEquals(preparedProjectionPayload, payload))
+                ClearPreparedProjection();
+        }
+
+        private void ClearPreparedProjection()
+        {
+            preparedProjectionActor = null;
+            preparedProjectionPayload = null;
+        }
+
+        public void LogSelectedActionDecisionFailure(
+            DailyV1NpcRuntimeOwners actor,
+            string message) => Events.Add("decision-failure:" + message);
+
+        public bool TryProjectSelectedCandidate(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate) =>
+            CurrentGraph?.ContainsExactNpcOwner(actor) == true
+            && CanProjectSelectedAction
+            && candidate?.Action != null;
 
         public bool HasRequestedActionProvider(
             DailyV1NpcRuntimeOwners actor,
@@ -334,6 +508,9 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 
         public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor)
         {
+            if (actor?.ActionSlot?.CurrentAction == null
+                && actor?.ActionSlot?.CurrentPayload == null)
+                return;
             CurrentGraph.TryCommitCurrentActionSlot(actor, null, null, () => true);
         }
 
@@ -414,6 +591,12 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             try { return operation?.Invoke() == true; }
             finally { Events.Add("p12-end"); }
         }
+        public bool CanProjectStatusChanges(DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) => owner?.Status != null;
+        public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner) { }
+        public void NotifyStatusMutationCommitted(DailyV1NpcRuntimeOwners owner,
+            DailyV1StatusDefinition status, bool added) { }
+        public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner) { }
         public bool ApplyHideDuration(DailyV1NpcRuntimeOwners actor, int followingFullDays) => false;
         public bool ClearHidden(DailyV1NpcRuntimeOwners actor) => actor.HiddenState.TrySetRemainingDays(0);
         public bool ApplyStatusChange(DailyV1NpcRuntimeOwners actor, DailyV1StatusDefinition status, bool add)
@@ -422,8 +605,9 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             if (add) return actor.Status.Contains(status) || actor.Status.TryAdd(status);
             return !actor.Status.Contains(status) || actor.Status.TryRemove(status);
         }
-        public bool TryRemoveSentence(DailyV1JusticeSentenceOwner sentence) =>
-            CurrentGraph.JusticeRecordsOwner.TryRemoveSentence(sentence);
+        public bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence) =>
+            CurrentGraph.JusticeRecordsOwner.ContainsSentence(sentence);
+        public void CommitSentenceProjectionRemoval(DailyV1JusticeSentenceOwner sentence) { }
         public void PublishHidden(DailyV1NpcRuntimeOwners actor) { }
         public void PublishFailedEscape(DailyV1NpcRuntimeOwners actor, int sentencePenalty) { }
         public void PublishEscaped(DailyV1NpcRuntimeOwners actor, DailyV1CityRuntimeOwners eventCity,
@@ -444,7 +628,6 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             utility = 0f;
             return false;
         }
-        public bool TryProjectSelectedGuardArrestAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate) => false;
 
         public bool TryGetSoloTravelBoundary(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action, out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary)
         {

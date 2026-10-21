@@ -114,6 +114,25 @@ public sealed class DailyV1CrimeActionPlanningTests
     }
 
     [Test]
+    public void SelectedStealProjectionFailureIsDetectedBeforeAuxiliaryTargetDraw()
+    {
+        CrimePlanningFixture fixture = CreateCrimePlanningFixture();
+        DailyV1ActionDefinition steal = ActionOfType(fixture.Graph.Definitions,
+            DailyV1NpcDefinitionRules.StealActionTypeValue);
+        DailyV1NpcActionCandidate candidate = new DailyV1NpcActionCandidate(steal, 10f);
+        FixedPlanningRandom random = new FixedPlanningRandom(0f);
+
+        Assert.That(DailyV1CrimeActionPlanning.TryPrepareSelectedSteal(
+            fixture.Graph, fixture.Actor, candidate, fixture.PersonStore, 41L,
+            random, _ => false), Is.True);
+
+        Assert.That(candidate.Utility, Is.Zero);
+        Assert.That(candidate.PreparedPayload, Is.Null);
+        Assert.That(random.StreamKeys, Is.Empty,
+            "The previous provider eligibility check happened before Steal's auxiliary target draw.");
+    }
+
+    [Test]
     public void SelectedStealExcludesHiddenHighBalanceTargetBeforeWeightedDraw()
     {
         CrimePlanningFixture fixture = CreateCrimePlanningFixture();
@@ -421,30 +440,27 @@ public sealed class DailyV1CrimeActionPlanningTests
     }
 
     [Test]
-    public void SelectedDecisionStageProjectsCoreStealAndNeverCallsProviderPlanner()
+    public void SelectedDecisionStagePreparesCoreStealWithoutUnityProjection()
     {
         CrimePlanningFixture fixture = CreateCrimePlanningFixture();
         DailyV1ActionDefinition steal = ActionOfType(fixture.Graph.Definitions,
             DailyV1NpcDefinitionRules.StealActionTypeValue);
-        RecordingPlanningBoundary boundary = new RecordingPlanningBoundary();
         FixedPlanningRandom random = new FixedPlanningRandom(0f);
 
         Assert.That(DailyV1SelectedNpcActionDecisionStage.TryChoose(
             fixture.Graph, fixture.Actor, new[] { steal }, fixture.Actor.Status.Statuses,
-            12L, random, boundary, out DailyV1NpcActionCandidate selected,
+            12L, random, out DailyV1NpcActionCandidate selected,
             fixture.PersonStore), Is.True);
 
         Assert.That(selected, Is.Not.Null);
         Assert.That(selected.PreparedPayload, Is.Not.Null);
-        Assert.That(boundary.StealProjectionCalls, Is.EqualTo(1));
-        Assert.That(boundary.LegacyProviderPlanCalls, Is.Zero);
         Assert.That(random.StreamKeys, Is.EqualTo(new[] {
             "crime-steal|" + fixture.Actor.RuntimeId + "|12",
             "npc-decision|" + fixture.Actor.RuntimeId + "|12" }));
     }
 
     [Test]
-    public void SelectedDecisionStageProjectsCoreFleeAndNeverCallsProviderPlanner()
+    public void SelectedDecisionStagePreparesCoreFleeWithoutUnityProjection()
     {
         CrimePlanningFixture fixture = CreateCrimePlanningFixture();
         Assert.That(fixture.Justice.TryAddWantedRecord(new DailyV1JusticeWantedRecordOwner(
@@ -455,41 +471,33 @@ public sealed class DailyV1CrimeActionPlanningTests
             fixture.Actor.SpatialKnowledge.DiscoverRoute(route.RuntimeId);
         DailyV1ActionDefinition flee = ActionOfType(fixture.Graph.Definitions,
             DailyV1NpcDefinitionRules.FleeCityActionTypeValue);
-        RecordingPlanningBoundary boundary = new RecordingPlanningBoundary();
         FixedPlanningRandom random = new FixedPlanningRandom(0f);
 
         Assert.That(DailyV1SelectedNpcActionDecisionStage.TryChoose(
             fixture.Graph, fixture.Actor, new[] { flee }, fixture.Actor.Status.Statuses,
-            18L, random, boundary, out DailyV1NpcActionCandidate selected), Is.True);
+            18L, random, out DailyV1NpcActionCandidate selected), Is.True);
 
         Assert.That(selected, Is.Not.Null);
         Assert.That(selected.PreparedPayload, Is.Not.Null);
-        Assert.That(boundary.FleeProjectionCalls, Is.EqualTo(1));
-        Assert.That(boundary.LegacyProviderPlanCalls, Is.Zero);
         Assert.That(random.StreamKeys, Is.EqualTo(new[] {
             "npc-decision|" + fixture.Actor.RuntimeId + "|18" }));
     }
 
     [Test]
-    public void SelectedDecisionDoesNotPrepareCrimeActionsWhenProviderIsDisabled()
+    public void SelectedDecisionEligibilityUsesTheCoreGraphAndNotUnityProviderAvailability()
     {
         CrimePlanningFixture fixture = CreateCrimePlanningFixture();
         DailyV1ActionDefinition steal = ActionOfType(fixture.Graph.Definitions,
             DailyV1NpcDefinitionRules.StealActionTypeValue);
-        RecordingPlanningBoundary boundary = new RecordingPlanningBoundary
-        {
-            CrimeProviderEnabled = false
-        };
+        FixedPlanningRandom random = new FixedPlanningRandom(0f);
         Assert.That(DailyV1SelectedNpcActionDecisionStage.TryChoose(
             fixture.Graph, fixture.Actor, new[] { steal }, fixture.Actor.Status.Statuses,
-            12L, new FixedPlanningRandom(0f), boundary,
-            out DailyV1NpcActionCandidate selected, fixture.PersonStore), Is.True);
+            12L, random, out DailyV1NpcActionCandidate selected, fixture.PersonStore), Is.True);
 
-        Assert.That(selected, Is.Null,
-            "A disabled provider contributes no positive autonomous candidate.");
-        Assert.That(boundary.StealProjectionCalls, Is.Zero);
-        Assert.That(boundary.LegacyProviderPlanCalls, Is.Zero,
-            "A selected graph must not call the Unity provider planner for a disabled action.");
+        Assert.That(selected, Is.Not.Null,
+            "A provider adapter cannot suppress an action that Core admits from its exact definitions and owners.");
+        Assert.That(selected.PreparedPayload, Is.Not.Null);
+        Assert.That(random.StreamKeys, Does.Contain("npc-decision|" + fixture.Actor.RuntimeId + "|12"));
     }
 
     [Test]
@@ -677,26 +685,4 @@ public sealed class DailyV1CrimeActionPlanningTests
         public DeterministicRandomStream CreateStream(string streamKey) => null;
     }
 
-    private sealed class RecordingPlanningBoundary : IDailyV1SelectedNpcActionDecisionBoundary
-    {
-        internal int StealProjectionCalls { get; private set; }
-        internal int FleeProjectionCalls { get; private set; }
-        internal int LegacyProviderPlanCalls { get; private set; }
-        internal bool CrimeProviderEnabled { get; set; } = true;
-
-        public bool HasTravelActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action) => false;
-        public TravelPartyStore GetTravelPartyStore(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action) => null;
-        public bool TryProjectTravelAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate) => false;
-        public bool HasMerchantActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action) => false;
-        public bool HasEnabledCrimeActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action) => CrimeProviderEnabled;
-        public bool TryProjectStealAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate)
-        { StealProjectionCalls++; return candidate?.PreparedPayload != null; }
-        public bool TryProjectFleeCityAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate)
-        { FleeProjectionCalls++; return candidate?.PreparedPayload != null; }
-        public bool TryProjectBuyAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate) => false;
-        public bool TryProjectSellAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate) => false;
-        public bool TryPrepareAutonomousProviderAction(DailyV1NpcRuntimeOwners actor,
-            DailyV1NpcActionCandidate candidate, out float utility)
-        { LegacyProviderPlanCalls++; utility = 0f; return false; }
-    }
 }

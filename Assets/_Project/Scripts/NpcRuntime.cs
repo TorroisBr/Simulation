@@ -440,6 +440,49 @@ public class NpcRuntime : ICapabilityConditionSource
                 });
     }
 
+    /// <summary>
+    /// Preflights Unity's compatibility view for a Core-owned selected action
+    /// status mutation. The Core action stage performs the actual owner write.
+    /// </summary>
+    internal bool CanProjectCoreSelectedDailyV1StatusChanges(
+        DailyV1NpcRuntimeOwners owner,
+        IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
+        ReferenceEquals(selectedRuntimeOwners, owner)
+        && ReferenceEquals(selectedDefinitionGraph, owner?.Definitions)
+        && ReferenceEquals(selectedDailyV1StatusOwner, owner?.Status)
+        && CanProjectSelectedStatusChanges(statusToAdd);
+
+    /// <summary>Applies the existing P12 admission guard to one Core owner leaf.</summary>
+    internal void EnsureCoreSelectedDailyV1OwnerMutationAllowed(DailyV1NpcRuntimeOwners owner)
+    {
+        if (!ReferenceEquals(selectedRuntimeOwners, owner))
+            throw new InvalidOperationException("The selected Core owner has no exact Unity runtime projection.");
+        EnsureP12CrimeJusticeMutationAllowed();
+    }
+
+    /// <summary>
+    /// Refreshes the existing status list in place and immediately publishes
+    /// the P12 owner revision/epoch for this single committed status leaf.
+    /// </summary>
+    internal void NotifyCoreSelectedDailyV1StatusMutationCommitted(DailyV1NpcRuntimeOwners owner)
+    {
+        if (!ReferenceEquals(selectedRuntimeOwners, owner)
+            || !ReferenceEquals(selectedDailyV1StatusOwner, owner?.Status))
+            throw new InvalidOperationException("The selected Core status owner changed during its admitted write.");
+        RefreshSelectedStatusProjection();
+        NotifyP12CrimeJusticeMutationCommitted();
+    }
+
+    /// <summary>Synchronizes the legacy hidden-day mirror and publishes one P12 leaf commit.</summary>
+    internal void NotifyCoreSelectedDailyV1HiddenMutationCommitted(DailyV1NpcRuntimeOwners owner)
+    {
+        if (!ReferenceEquals(selectedRuntimeOwners, owner)
+            || !ReferenceEquals(owner?.HiddenState, selectedRuntimeOwners?.HiddenState))
+            throw new InvalidOperationException("The selected Core hidden-state owner changed during its admitted write.");
+        hiddenDaysRemaining = owner.HiddenState.RemainingDays;
+        NotifyP12CrimeJusticeMutationCommitted();
+    }
+
     private bool CanProjectSelectedStatusChanges(IReadOnlyList<DailyV1StatusDefinition> statusToAdd)
     {
         if (selectedDailyV1StatusOwner == null || selectedDefinitionBindings == null)

@@ -30,6 +30,8 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         new Dictionary<DailyV1JusticeWantedRecordOwner, WantedRecordRuntime>();
     private readonly Dictionary<DailyV1JusticeSentenceOwner, PrisonSentenceRuntime> sentenceViews =
         new Dictionary<DailyV1JusticeSentenceOwner, PrisonSentenceRuntime>();
+    private readonly Dictionary<DailyV1JusticeSentenceOwner, PrisonSentenceRuntime> preparedSelectedSentenceViews =
+        new Dictionary<DailyV1JusticeSentenceOwner, PrisonSentenceRuntime>();
     private readonly IList<WantedRecordRuntime> wantedRecords;
     private readonly IList<PrisonSentenceRuntime> prisonSentences;
     private Dictionary<string, JusticeBeginDayReceipt> beginDayStepReceipts =
@@ -1875,15 +1877,17 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         return true;
     }
 
-    /// <summary>Attaches the exact Core sentence row to the existing Unity
-    /// compatibility projection after Core has prepared the selected arrest.</summary>
-    internal bool TryAddSelectedArrestSentence(
+    /// <summary>Prepares, but does not publish, the Unity view for a Core-owned selected Arrest row.</summary>
+    internal bool TryPrepareSelectedArrestSentenceProjection(
         NpcRuntime targetRuntime,
         CityRuntime city,
         WantedRecordRuntime warrant,
         DailyV1JusticeSentenceOwner sentenceOwner)
     {
         if (targetRuntime == null || city == null || warrant == null || sentenceOwner == null
+            || justiceRecordsOwner.ContainsSentence(sentenceOwner)
+            || sentenceViews.ContainsKey(sentenceOwner)
+            || preparedSelectedSentenceViews.ContainsKey(sentenceOwner)
             || !ReferenceEquals(sentenceOwner.Warrant, warrant.CoreOwner)
             || !string.Equals(sentenceOwner.TargetRuntimeId, targetRuntime.RuntimeId, StringComparison.Ordinal)
             || !string.Equals(sentenceOwner.CityRuntimeId, city.RuntimeId, StringComparison.Ordinal)
@@ -1896,10 +1900,52 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
                 out PrisonSentenceRuntime projectedSentence))
             return false;
 
-        EnsureP12CrimeJusticeMutationAllowed();
-        prisonSentences.Add(projectedSentence);
-        return sentenceViews.TryGetValue(sentenceOwner, out PrisonSentenceRuntime installed)
-            && ReferenceEquals(installed, projectedSentence);
+        preparedSelectedSentenceViews.Add(sentenceOwner, projectedSentence);
+        return true;
+    }
+
+    internal void DiscardPreparedSelectedArrestSentenceProjection(
+        DailyV1JusticeSentenceOwner sentenceOwner)
+    {
+        if (sentenceOwner != null && !sentenceViews.ContainsKey(sentenceOwner))
+            preparedSelectedSentenceViews.Remove(sentenceOwner);
+    }
+
+    /// <summary>Publishes the prepared Unity sentence view after Core owns the row.</summary>
+    internal bool CommitPreparedSelectedArrestSentenceProjection(
+        DailyV1JusticeSentenceOwner sentenceOwner)
+    {
+        if (sentenceOwner == null
+            || !justiceRecordsOwner.ContainsSentence(sentenceOwner)
+            || sentenceViews.ContainsKey(sentenceOwner)
+            || !preparedSelectedSentenceViews.TryGetValue(
+                sentenceOwner, out PrisonSentenceRuntime prepared)
+            || prepared == null || !ReferenceEquals(prepared.CoreOwner, sentenceOwner))
+            return false;
+
+        sentenceViews.Add(sentenceOwner, prepared);
+        preparedSelectedSentenceViews.Remove(sentenceOwner);
+        return true;
+    }
+
+    internal bool CanRemoveSelectedSentenceProjection(
+        DailyV1JusticeSentenceOwner sentenceOwner) =>
+        sentenceOwner != null
+        && justiceRecordsOwner.ContainsSentence(sentenceOwner)
+        && sentenceViews.TryGetValue(sentenceOwner, out PrisonSentenceRuntime view)
+        && view != null && ReferenceEquals(view.CoreOwner, sentenceOwner)
+        && CanCommitP12CrimeJusticeMutation();
+
+    /// <summary>Removes only the Unity view after the Core sentence owner committed removal.</summary>
+    internal void CommitSelectedSentenceProjectionRemoval(
+        DailyV1JusticeSentenceOwner sentenceOwner)
+    {
+        if (sentenceOwner == null || justiceRecordsOwner.ContainsSentence(sentenceOwner)
+            || !sentenceViews.TryGetValue(sentenceOwner, out PrisonSentenceRuntime view)
+            || view == null || !ReferenceEquals(view.CoreOwner, sentenceOwner)
+            || !sentenceViews.Remove(sentenceOwner))
+            throw new InvalidOperationException(
+                "The selected Core Justice sentence was removed without its exact Unity view.");
     }
 
     /// <summary>Removes an exact Core sentence owner and retires its Unity view as one selected-owner commit.</summary>

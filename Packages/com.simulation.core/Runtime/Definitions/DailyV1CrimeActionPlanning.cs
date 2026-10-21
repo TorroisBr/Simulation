@@ -19,7 +19,19 @@ internal static class DailyV1CrimeActionPlanning
         DailyV1NpcActionCandidate candidate,
         PersonStore personStore,
         long currentAbsoluteDay,
-        IAuthoritativeRandomSource randomSource)
+        IAuthoritativeRandomSource randomSource) =>
+        TryPrepareSelectedSteal(
+            graph, actor, candidate, personStore, currentAbsoluteDay,
+            randomSource, null);
+
+    internal static bool TryPrepareSelectedSteal(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionCandidate candidate,
+        PersonStore personStore,
+        long currentAbsoluteDay,
+        IAuthoritativeRandomSource randomSource,
+        Func<DailyV1NpcRuntimeOwners, bool> canProjectTarget)
     {
         if (graph == null || actor == null || candidate?.Action == null
             || candidate.Action.Values.actionType?.Value != DailyV1NpcDefinitionRules.StealActionTypeValue
@@ -49,6 +61,15 @@ internal static class DailyV1CrimeActionPlanning
                 || !graph.ContainsExactNpcOwner(target))
                 return false;
             if (!IsValidStealTarget(graph, actor, city, target)) continue;
+            // In the selected Unity composition, target projection is a
+            // compatibility preflight over the complete eligible set. A
+            // missing exact target projection must disable Steal before its
+            // legacy auxiliary RNG draw, matching provider-before-plan order.
+            if (canProjectTarget != null && !canProjectTarget(target))
+            {
+                candidate.Utility = 0f;
+                return true;
+            }
             totalWeight += UnityMathfCompatibility.Max(1f, target.MoneyAccount.Balance);
             targets.Add(target);
         }

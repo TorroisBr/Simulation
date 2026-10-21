@@ -16,7 +16,9 @@ public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
         new Dictionary<string, NpcDecisionOccurrenceReceipt>(StringComparer.Ordinal);
     private long occurrenceReceiptsRevision;
 
+    internal RuntimeIdAllocator DecisionIdAllocator => idAllocator;
     internal SimulationRecordSequence RecordSequence => recordSequence;
+    internal NpcDecisionStore DecisionStore => decisionStore;
 
     internal bool TryRecordAndInstallSelectedAction(
         NpcRuntime actor,
@@ -297,6 +299,10 @@ public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
 
     internal static NpcDecisionType GetDecisionType(NpcActionRuntime actionRuntime)
     {
+        if (actionRuntime?.SelectedOwner is DailyV1NpcActionPayloadOwner selectedPayload)
+            return DailyV1DecisionRecordOperation.GetDecisionType(
+                selectedPayload.Action, selectedPayload);
+
         switch (actionRuntime.Action.actionType)
         {
             case NpcActionType.BuyGoods:

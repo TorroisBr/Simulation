@@ -63,7 +63,18 @@ internal sealed class DailyV1NpcStatusOwner
         IEnumerable<DailyV1StatusDefinition> statusToRemove,
         IEnumerable<DailyV1StatusDefinition> statusToAdd,
         Action mutationAdmission,
-        Action mutationCommitted)
+        Action mutationCommitted) =>
+        mutationCommitted != null && TryApplyOrderedChanges(
+            statusToRemove,
+            statusToAdd,
+            mutationAdmission,
+            (status, _) => mutationCommitted());
+
+    internal bool TryApplyOrderedChanges(
+        IEnumerable<DailyV1StatusDefinition> statusToRemove,
+        IEnumerable<DailyV1StatusDefinition> statusToAdd,
+        Action mutationAdmission,
+        Action<DailyV1StatusDefinition, bool> mutationCommitted)
     {
         if (mutationAdmission == null || mutationCommitted == null) return false;
 
@@ -71,14 +82,14 @@ internal sealed class DailyV1NpcStatusOwner
         {
             if (!Contains(status)) continue;
             mutationAdmission();
-            if (TryRemove(status)) mutationCommitted();
+            if (TryRemove(status)) mutationCommitted(status, false);
         }
 
         foreach (DailyV1StatusDefinition status in statusToAdd ?? Array.Empty<DailyV1StatusDefinition>())
         {
             if (Contains(status)) continue;
             mutationAdmission();
-            if (TryAdd(status)) mutationCommitted();
+            if (TryAdd(status)) mutationCommitted(status, true);
         }
 
         return true;

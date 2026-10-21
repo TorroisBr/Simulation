@@ -4,6 +4,33 @@ using System.Collections.Generic;
 /// <summary>Allocates and appends one decision through the shared Core owners.</summary>
 internal static class DailyV1DecisionRecordOperation
 {
+    internal static NpcDecisionType GetDecisionType(
+        DailyV1ActionDefinition action,
+        DailyV1NpcActionPayloadOwner payload)
+    {
+        switch (action?.Values.actionType?.Value ?? int.MinValue)
+        {
+            case DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue:
+                return NpcDecisionType.TradePurchase;
+            case DailyV1NpcDefinitionRules.SellGoodsActionTypeValue:
+                return NpcDecisionType.TradeSale;
+            case DailyV1NpcDefinitionRules.TravelActionTypeValue:
+                if (payload?.TravelReason == NpcTravelReason.TradeReposition)
+                    return NpcDecisionType.TradeReposition;
+                return payload?.TravelReason == NpcTravelReason.CommercialScout
+                    ? NpcDecisionType.CommercialScout
+                    : NpcDecisionType.Travel;
+            case DailyV1NpcDefinitionRules.FleeCityActionTypeValue:
+                return NpcDecisionType.Travel;
+            case DailyV1NpcDefinitionRules.ArrestActionTypeValue:
+                return NpcDecisionType.Arrest;
+            case DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue:
+                return NpcDecisionType.Escape;
+            default:
+                return NpcDecisionType.Action;
+        }
+    }
+
     internal static NpcDecisionRecord RecordSelectedAction(
         RuntimeIdAllocator idAllocator,
         SimulationRecordSequence recordSequence,

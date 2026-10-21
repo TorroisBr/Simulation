@@ -55,19 +55,35 @@ internal interface IDailyV1SelectedActorActionExecutionBoundary
         DailyV1NpcRuntimeOwners actor,
         out IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary);
 
+    bool TryGetDecisionRecordOwners(
+        DailyV1NpcRuntimeOwners actor,
+        out RuntimeIdAllocator idAllocator,
+        out SimulationRecordSequence recordSequence,
+        out NpcDecisionStore decisionStore);
+
     bool TryGetConfiguredActionIds(
         DailyV1NpcRuntimeOwners actor,
         out IReadOnlyList<string> actionIds);
 
-    bool HasRequestedActionProvider(
-        DailyV1NpcRuntimeOwners actor,
-        DailyV1ActionDefinition action);
-
-    bool TryRecordAndInstallSelectedAction(
+    bool TryPrepareSelectedActionProjection(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionCandidate selected,
         IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
-        NpcDecisionOrigin origin);
+        DailyV1NpcActionPayloadOwner payload);
+
+    bool CanCommitSelectedActionSlot(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload);
+
+    bool TryPublishSelectedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload);
+
+    void CancelPreparedSelectedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload);
+
+    void LogSelectedActionDecisionFailure(DailyV1NpcRuntimeOwners actor, string message);
 
     void ClearCurrentAction(DailyV1NpcRuntimeOwners actor);
     bool IsActorAtCurrentCityLocation(DailyV1NpcRuntimeOwners actor);

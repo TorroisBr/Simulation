@@ -8,13 +8,12 @@ using System;
 internal static class DailyV1SelectedCrimeActionExecutionStage
 {
     internal interface ISelectedCrimeActionBoundary
+        : DailyV1SelectedActionExecutionStage.ISelectedNpcOwnerMutationBoundary
     {
         DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
         bool ExecuteWithinOperation(Func<bool> operation);
-        bool ApplyHideDuration(DailyV1NpcRuntimeOwners actor, int followingFullDays);
-        bool ClearHidden(DailyV1NpcRuntimeOwners actor);
-        bool ApplyStatusChange(DailyV1NpcRuntimeOwners actor, DailyV1StatusDefinition status, bool add);
-        bool TryRemoveSentence(DailyV1JusticeSentenceOwner sentence);
+        bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence);
+        void CommitSentenceProjectionRemoval(DailyV1JusticeSentenceOwner sentence);
         void PublishHidden(DailyV1NpcRuntimeOwners actor);
         void PublishFailedEscape(DailyV1NpcRuntimeOwners actor, int sentencePenalty);
         void PublishEscaped(
@@ -148,12 +147,15 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
         DailyV1CrimeActionSettings settings = DailyV1NpcDefinitionRules.GetCrimeActionSettings(
             graph.Definitions, action);
         int hiddenDays = UnityMathfCompatibility.Max(1, settings?.hiddenDays ?? 1);
-        if (!boundary.ApplyHideDuration(actor, hiddenDays)) return false;
+        if (!DailyV1SelectedActionExecutionStage.TryHideSelectedNpcForDays(
+                actor, hiddenDays, boundary)) return false;
 
         if (!TryResolveOptionalStatus(graph.Definitions,
                 graph.Definitions.Configuration?.hiddenStatus,
                 out DailyV1StatusDefinition hiddenStatus)
-            || (hiddenStatus != null && !boundary.ApplyStatusChange(actor, hiddenStatus, add: true)))
+            || (hiddenStatus != null && !DailyV1SelectedActionExecutionStage
+                .TryApplySelectedStatusChanges(actor,
+                    Array.Empty<DailyV1StatusDefinition>(), new[] { hiddenStatus }, boundary)))
             return false;
 
         boundary.PublishHidden(actor);
@@ -218,7 +220,9 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
             if (penalty > 0f && !warrant.TryAddPenalty(penalty, 0))
                 return false;
             bountyAfterPenalty = warrant.Bounty;
-            if (!boundary.TryRemoveSentence(sentence)) return false;
+            if (!boundary.CanRemoveSentenceProjection(sentence)) return false;
+            if (!justice.TryRemoveSentence(sentence)) return false;
+            boundary.CommitSentenceProjectionRemoval(sentence);
         }
 
         if (!ApplyReleaseStatuses(graph, actor, arrestedStatus, boundary,
@@ -248,18 +252,25 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
                 out DailyV1StatusDefinition wantedStatus))
             return false;
 
-        if (!boundary.ApplyStatusChange(actor, arrestedStatus, add: false)) return false;
-        if (freeStatus != null && !boundary.ApplyStatusChange(actor, freeStatus, add: true)) return false;
+        if (!DailyV1SelectedActionExecutionStage.TryApplySelectedStatusChanges(
+                actor, new[] { arrestedStatus }, Array.Empty<DailyV1StatusDefinition>(), boundary)) return false;
+        if (freeStatus != null && !DailyV1SelectedActionExecutionStage.TryApplySelectedStatusChanges(
+                actor, Array.Empty<DailyV1StatusDefinition>(), new[] { freeStatus }, boundary)) return false;
         if (clearHidden)
         {
-            if (!boundary.ClearHidden(actor)) return false;
-            if (hiddenStatus != null && !boundary.ApplyStatusChange(actor, hiddenStatus, add: false))
+            if (!DailyV1SelectedActionExecutionStage.TryClearSelectedNpcHiddenState(actor, boundary)) return false;
+            if (hiddenStatus != null && !DailyV1SelectedActionExecutionStage.TryApplySelectedStatusChanges(
+                    actor, new[] { hiddenStatus }, Array.Empty<DailyV1StatusDefinition>(), boundary))
                 return false;
         }
 
         bool hasActiveWarrant = graph.JusticeRecordsOwner.FindActiveWantedRecords(actor.RuntimeId).Count > 0;
         if (wantedStatus != null
-            && !boundary.ApplyStatusChange(actor, wantedStatus, add: hasActiveWarrant))
+            && !DailyV1SelectedActionExecutionStage.TryApplySelectedStatusChanges(
+                actor,
+                hasActiveWarrant ? Array.Empty<DailyV1StatusDefinition>() : new[] { wantedStatus },
+                hasActiveWarrant ? new[] { wantedStatus } : Array.Empty<DailyV1StatusDefinition>(),
+                boundary))
             return false;
         return true;
     }

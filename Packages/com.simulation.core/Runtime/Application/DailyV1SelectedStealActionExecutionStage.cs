@@ -8,6 +8,7 @@ using System;
 internal static class DailyV1SelectedStealActionExecutionStage
 {
     internal interface ISelectedStealActionBoundary
+        : DailyV1SelectedActionExecutionStage.ISelectedNpcOwnerMutationBoundary
     {
         CrimeSocialAppraisalWorldState SocialAppraisalWorldState { get; }
         ITheftOutcomeSink TheftOutcomeSink { get; }
@@ -27,10 +28,6 @@ internal static class DailyV1SelectedStealActionExecutionStage
             DailyV1CityRuntimeOwners city,
             DailyV1JusticeWantedRecordOwner record);
         void DiscardPreparedWantedRecordProjection(DailyV1JusticeWantedRecordOwner record);
-        bool ApplyStatusChange(
-            DailyV1NpcRuntimeOwners target,
-            DailyV1StatusDefinition status,
-            bool add);
         void PublishTheft(
             DailyV1NpcRuntimeOwners perpetrator,
             DailyV1NpcRuntimeOwners victim,
@@ -234,7 +231,11 @@ internal static class DailyV1SelectedStealActionExecutionStage
         {
             if (!definitions.Statuses.TryGetValue(wantedStatusId,
                     out DailyV1StatusDefinition wantedStatus)
-                || !boundary.ApplyStatusChange(perpetrator, wantedStatus, add: true))
+                || !DailyV1SelectedActionExecutionStage.TryApplySelectedStatusChanges(
+                    perpetrator,
+                    Array.Empty<DailyV1StatusDefinition>(),
+                    new[] { wantedStatus },
+                    boundary))
                 throw new InvalidOperationException(
                     "The selected Steal wanted-status projection could not be applied.");
         }
