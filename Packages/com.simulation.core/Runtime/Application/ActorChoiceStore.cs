@@ -1092,7 +1092,6 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
 internal interface IDailyV1ActorChoiceExecutionBoundary
 {
     void ClearCurrentAction(DailyV1NpcRuntimeOwners actor);
-    bool IsActionEnabled(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
     bool TryGetDecisionRecordOwners(
         DailyV1NpcRuntimeOwners actor,
         out RuntimeIdAllocator idAllocator,
@@ -1166,7 +1165,8 @@ internal static class DailyV1ActorChoiceExecutionStage
         if (!graph.Definitions.Actions.TryGetValue(input.ActionDefinitionId,
                 out DailyV1ActionDefinition requestedAction)
             || requestedAction.Values.actionType?.Value != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
-            || !boundary.IsActionEnabled(actor, requestedAction)
+            || !DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
+                graph.Definitions, requestedAction)
             || !DailyV1MerchantActionPlanning.TryPlanSelectedLocalSale(
                 graph, actor, requestedAction, absoluteDay, 0f,
                 out DailyV1MerchantLocalSalePlan plan)

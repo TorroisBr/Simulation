@@ -30,9 +30,8 @@ internal static class DailyV1SelectedActorActionExecutionStage
             || decisionBoundary == null)
             return true; // No configured decision service preserves the old no-op turn.
 
-        if (!boundary.TryGetConfiguredActionIds(actor, out IReadOnlyList<string> actionIds)
-            || !DailyV1SelectedNpcActionDecisionStage.TryResolveConfiguredActions(
-                graph.Definitions, actionIds, out IReadOnlyList<DailyV1ActionDefinition> availableActions)
+        if (!DailyV1SelectedNpcActionDecisionStage.TryResolveConfiguredActions(
+                graph.Definitions, out IReadOnlyList<DailyV1ActionDefinition> availableActions)
             || availableActions == null)
             return false;
 

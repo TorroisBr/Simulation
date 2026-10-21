@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 
@@ -228,6 +229,121 @@ public sealed class DailyV1ActorChoiceStoreTests
             Is.EqualTo(ActorChoiceFailure.ActionUnavailable));
     }
 
+    [Test]
+    public void SelectedCoreTurnRejectsDisabledMerchantProfileWithoutAskingHostToClassifyAction()
+    {
+        DailyV1EffectiveDefinitions definitions = CreateDefinitionsWithMerchantTradeDisabled();
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(definitions,
+            out DailyV1NpcRuntimeOwners actor, out RuntimeIdAllocator allocator);
+        ActorChoiceStore store = new ActorChoiceStore(new PersonStore());
+        ActorChoiceInput input = Capture(store, "command-disabled-sell", "person-jorge",
+            "VENDER_MERCADORIA");
+        SelectedActorChoiceTestBoundary boundary = new SelectedActorChoiceTestBoundary(
+            graph, allocator, new SimulationRecordSequence(), new NpcDecisionStore());
+
+        Assert.That(DailyV1ActorChoiceExecutionStage.TryProcessPending(
+            graph, actor, input.PersonId, store, 23L, 6,
+            actorAtCurrentCityLocation: true,
+            merchantTradeEnabled: true,
+            decisionSystemAvailable: true,
+            boundary: boundary), Is.True);
+
+        Assert.That(boundary.ClearCount, Is.EqualTo(1));
+        Assert.That(boundary.InstallCount, Is.Zero);
+        Assert.That(boundary.ExecuteCount, Is.Zero);
+        Assert.That(store.TryGet(input.InputId, out ActorChoiceInput rejected), Is.True);
+        Assert.That(rejected.Dispositions.Single().Failure,
+            Is.EqualTo(ActorChoiceFailure.ActionUnavailable));
+    }
+
+    [Test]
+    public void SelectedCoreTurnRejectsUnresolvedActionIdentityWithoutHostClassification()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(definitions,
+            out DailyV1NpcRuntimeOwners actor, out RuntimeIdAllocator allocator);
+        ActorChoiceStore store = new ActorChoiceStore(new PersonStore());
+        ActorChoiceInput input = Capture(store, "command-unresolved-action", "person-jorge",
+            "action/not-in-admitted-graph");
+        SelectedActorChoiceTestBoundary boundary = new SelectedActorChoiceTestBoundary(
+            graph, allocator, new SimulationRecordSequence(), new NpcDecisionStore());
+
+        Assert.That(DailyV1ActorChoiceExecutionStage.TryProcessPending(
+            graph, actor, input.PersonId, store, 24L, 7,
+            actorAtCurrentCityLocation: true,
+            merchantTradeEnabled: true,
+            decisionSystemAvailable: true,
+            boundary: boundary), Is.True);
+
+        Assert.That(boundary.ClearCount, Is.EqualTo(1));
+        Assert.That(boundary.InstallCount, Is.Zero);
+        Assert.That(boundary.ExecuteCount, Is.Zero);
+        Assert.That(store.TryGet(input.InputId, out ActorChoiceInput rejected), Is.True);
+        Assert.That(rejected.Dispositions.Single().Failure,
+            Is.EqualTo(ActorChoiceFailure.ActionUnavailable));
+    }
+
+    private static DailyV1SelectedRuntimeOwnerGraph CreateGraph(
+        DailyV1EffectiveDefinitions definitions,
+        out DailyV1NpcRuntimeOwners actor,
+        out RuntimeIdAllocator allocator)
+    {
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        actor = graph.Npcs.Single(owner => owner.Definition.DefinitionId == "JORGE");
+        return graph;
+    }
+
+    private static DailyV1EffectiveDefinitions CreateDefinitionsWithMerchantTradeDisabled()
+    {
+        DailyV1EffectiveDefinitions baseline = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        EffectiveSimulationConfiguration effective = baseline.EffectiveConfiguration;
+        EffectiveMerchantTradeConfiguration trade = effective.MerchantTrade;
+        EffectiveSimulationConfiguration disabled = new EffectiveSimulationConfiguration(
+            effective.Population,
+            effective.Economy,
+            effective.Travel,
+            effective.Crime,
+            effective.GuardCrime,
+            effective.NaturalMortality,
+            effective.AggregateDemography,
+            new EffectiveMerchantTradeConfiguration(
+                false,
+                trade.AllowAutonomousTradeRepositioning,
+                trade.MaxTradeAmount,
+                trade.LocalWholesalePriceMultiplier,
+                trade.LocalReserveRatio,
+                trade.MaxUnprofitablePlanWaitDays),
+            effective.CommercialKnowledge);
+
+        return DailyV1EffectiveDefinitions.CreateSelectedSchema(
+            baseline.Configuration,
+            disabled,
+            baseline.Calendar,
+            baseline.Cities.Values.Select(value => value.Values),
+            baseline.Items.Values.Select(value => value.Values),
+            baseline.Npcs.Values.Select(value => value.Values),
+            baseline.Jobs.Values.Select(value => value.Values),
+            baseline.Actions.Values.Select(value => value.Values),
+            baseline.Statuses.Values.Select(value => value.Values),
+            baseline.StageOrder,
+            baseline.ProfileContractIdentity,
+            baseline.GeographyProfileContractIdentity,
+            baseline.GeographyStageIdentity,
+            baseline.HexCoordinateConvention,
+            baseline.HexCoordinateCanonicalOrder,
+            baseline.Traits.Values.Select(value =>
+                new KeyValuePair<string, string>(value.DefinitionId, value.DisplayName)),
+            baseline.CapabilityAttributes.Values.Select(value =>
+                new KeyValuePair<string, string>(value.DefinitionId, value.DisplayName)),
+            baseline.ExplorableSites.Values.Select(value => value.Values));
+    }
+
     private static ActorChoiceInput Capture(
         ActorChoiceStore store,
         string commandId,
@@ -270,9 +386,6 @@ public sealed class DailyV1ActorChoiceStoreTests
         internal bool AllowSlotCommit { get; set; } = true;
 
         public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor) => ClearCount++;
-
-        public bool IsActionEnabled(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action) =>
-            action?.Values.actionType?.Value == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue;
 
         public bool TryGetDecisionRecordOwners(
             DailyV1NpcRuntimeOwners actor,

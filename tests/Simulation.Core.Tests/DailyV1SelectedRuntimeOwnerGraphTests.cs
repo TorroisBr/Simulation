@@ -249,6 +249,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         RecordingSelectedTravelActionBoundary boundary = new RecordingSelectedTravelActionBoundary(
             order, graph, actor, NpcTravelReason.TradeReposition);
         FixedTravelActionRandomSource random = new FixedTravelActionRandomSource();
+        long travelPlanRevisionBefore = actor.TravelPlan.Revision;
 
         Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
             graph, actor, action, random, 27L, boundary,
@@ -260,14 +261,18 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(order, Is.EqualTo(new[]
         {
             "operation-enter", "reposition-preflight", "reposition-log",
-            "transition-preflight", "transition-commit", "travel-publication",
-            "plan-clear", "operation-exit"
+            "transition-preflight", "transition-projection-preflight", "transition-admission",
+            "transition-commit", "travel-publication", "plan-clear-preflight",
+            "plan-clear-admission", "plan-clear-published", "operation-exit"
         }));
+        Assert.That(boundary.TransitionAdmissionCalls, Is.EqualTo(1));
+        Assert.That(boundary.TravelPlanClearAdmissionCalls, Is.EqualTo(1));
         Assert.That(actor.Travel.IsTraveling, Is.True);
         Assert.That(actor.SpatialKnowledge.KnowsLocation(result.Travel.Route.Origin.RuntimeId), Is.True);
         Assert.That(actor.SpatialKnowledge.KnowsRoute(result.Travel.Route.RuntimeId), Is.True);
         Assert.That(actor.TravelPlan.TargetCityRuntimeId, Is.Null);
         Assert.That(actor.TravelPlan.Reason, Is.EqualTo(NpcTravelReason.None));
+        Assert.That(actor.TravelPlan.Revision, Is.EqualTo(travelPlanRevisionBefore + 1L));
         Assert.That(graph.TryCreateWithoutNpc(actor,
             out DailyV1SelectedRuntimeOwnerGraph rosterAfterRemoval), Is.True);
         Assert.That(rosterAfterRemoval.TravelParties, Is.SameAs(partyStore));
@@ -292,6 +297,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         List<string> order = new List<string>();
         RecordingSelectedTravelActionBoundary boundary = new RecordingSelectedTravelActionBoundary(
             order, graph, actor, NpcTravelReason.CommercialScout);
+        long travelPlanRevisionBefore = actor.TravelPlan.Revision;
 
         Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
             graph, actor, action, new FixedTravelActionRandomSource(), 28L, boundary,
@@ -300,9 +306,13 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(result.Succeeded, Is.True);
         Assert.That(order, Is.EqualTo(new[]
         {
-            "operation-enter", "transition-preflight", "transition-commit",
-            "travel-publication", "commercial-scout", "plan-clear", "operation-exit"
+            "operation-enter", "transition-preflight", "transition-projection-preflight",
+            "transition-admission", "transition-commit", "travel-publication",
+            "commercial-scout", "plan-clear-preflight", "plan-clear-admission",
+            "plan-clear-published", "operation-exit"
         }));
+        Assert.That(boundary.TravelPlanClearAdmissionCalls, Is.EqualTo(1));
+        Assert.That(actor.TravelPlan.Revision, Is.EqualTo(travelPlanRevisionBefore + 1L));
         Assert.That(actor.TravelPlan.TargetLocationRuntimeId, Is.Null);
         Assert.That(actor.TravelPlan.TargetCityRuntimeId, Is.Null);
         Assert.That(actor.TravelPlan.Reason, Is.EqualTo(NpcTravelReason.None));
@@ -424,6 +434,110 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(actor.Travel.IsTraveling, Is.False);
     }
 
+    [Test]
+    public void SelectedSoloTravelDispatcherRejectsImmediateP12AdmissionAndRefundsBeforePublishing()
+    {
+        CreateSelectedTravelFixture(NpcTravelReason.Trade, out _, out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor, out _, out DailyV1ActionDefinition action,
+            out _, canFailTravel: false);
+        List<string> order = new List<string>();
+        RecordingSelectedTravelActionBoundary boundary = new RecordingSelectedTravelActionBoundary(
+            order, graph, actor, NpcTravelReason.Trade) { RefuseTransitionAdmission = true };
+        float balanceBefore = actor.MoneyAccount.Balance;
+        long travelRevisionBefore = actor.Travel.Revision;
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
+            graph, actor, action, new FixedTravelActionRandomSource(), 32L, boundary,
+            out DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult result), Is.True);
+
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(result.ActionRollSucceeded, Is.True);
+        Assert.That(result.Travel, Is.Null);
+        Assert.That(order, Is.EqualTo(new[]
+        {
+            "operation-enter", "transition-preflight", "transition-projection-preflight",
+            "transition-admission", "operation-exit"
+        }));
+        Assert.That(boundary.TransitionAdmissionCalls, Is.EqualTo(1));
+        Assert.That(boundary.SawTravelChargeDuringProjectionPreflight, Is.True,
+            "The existing Unity projection preflight remains after the charge and is compensated if P12 refuses.");
+        Assert.That(actor.MoneyAccount.Balance, Is.EqualTo(balanceBefore));
+        Assert.That(actor.Travel.Revision, Is.EqualTo(travelRevisionBefore));
+        Assert.That(actor.Travel.IsTraveling, Is.False);
+    }
+
+    [Test]
+    public void SelectedSoloTravelDispatcherClearsChangedCorePlanAfterTravelPublication()
+    {
+        CreateSelectedTravelFixture(NpcTravelReason.Trade, out _, out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor, out DailyV1CityRuntimeOwners destination,
+            out DailyV1ActionDefinition action, out _);
+        Assert.That(actor.TravelPlan.TryCommit(destination.LocationRuntimeId,
+            destination.RuntimeId, NpcTravelReason.Trade, 6f, 2f,
+            "decision/prior-travel-plan"), Is.True);
+        long travelPlanRevisionBefore = actor.TravelPlan.Revision;
+        List<string> order = new List<string>();
+        RecordingSelectedTravelActionBoundary boundary = new RecordingSelectedTravelActionBoundary(
+            order, graph, actor, NpcTravelReason.Trade);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
+            graph, actor, action, new FixedTravelActionRandomSource(), 33L, boundary,
+            out DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult result), Is.True);
+
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(order, Is.EqualTo(new[]
+        {
+            "operation-enter", "transition-preflight", "transition-projection-preflight",
+            "transition-admission", "transition-commit", "travel-publication",
+            "plan-clear-preflight", "plan-clear-admission", "plan-clear-published", "operation-exit"
+        }));
+        Assert.That(boundary.TravelPlanClearAdmissionCalls, Is.EqualTo(1));
+        Assert.That(actor.TravelPlan.Revision, Is.EqualTo(travelPlanRevisionBefore + 1L));
+        Assert.That(actor.TravelPlan.TargetLocationRuntimeId, Is.Null);
+        Assert.That(actor.TravelPlan.TargetCityRuntimeId, Is.Null);
+        Assert.That(actor.TravelPlan.Reason, Is.EqualTo(NpcTravelReason.None));
+    }
+
+    [Test]
+    public void SelectedTravelPlanClearRejectsForeignOwnerAndRevisionExhaustionWithoutAdmission()
+    {
+        CreateSelectedTravelFixture(NpcTravelReason.Trade, out _, out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor, out DailyV1CityRuntimeOwners destination,
+            out _, out _);
+        int admissions = 0;
+        int publications = 0;
+        Assert.That(graph.TryCreateWithoutNpc(actor,
+            out DailyV1SelectedRuntimeOwnerGraph graphWithoutActor), Is.True);
+        Assert.That(graphWithoutActor.TryClearSelectedTravelPlan(actor,
+            () => { admissions++; return true; }, () => publications++, out bool foreignChanged), Is.False);
+        Assert.That(foreignChanged, Is.False);
+        Assert.That(admissions, Is.Zero);
+        Assert.That(publications, Is.Zero);
+
+        Assert.That(graph.TryClearSelectedTravelPlan(actor,
+            () => { admissions++; return true; }, () => publications++, out bool cleared), Is.True);
+        Assert.That(cleared, Is.True);
+        Assert.That(admissions, Is.EqualTo(1));
+        Assert.That(publications, Is.EqualTo(1));
+        Assert.That(graph.TryClearSelectedTravelPlan(actor,
+            () => { admissions++; return true; }, () => publications++, out bool noOp), Is.True);
+        Assert.That(noOp, Is.False);
+        Assert.That(admissions, Is.EqualTo(1), "A no-op clear does not request P12 admission.");
+        Assert.That(publications, Is.EqualTo(1), "A no-op clear does not publish another mutation.");
+
+        Assert.That(actor.TravelPlan.TryInstallExact(destination.LocationRuntimeId,
+            destination.RuntimeId, NpcTravelReason.Trade, 1f, 1f,
+            "decision/exhausted-travel-plan", long.MaxValue), Is.True);
+        Assert.That(graph.TryClearSelectedTravelPlan(actor,
+            () => { admissions++; return true; }, () => publications++, out bool exhaustedChanged), Is.False);
+        Assert.That(exhaustedChanged, Is.False);
+        Assert.That(admissions, Is.EqualTo(1));
+        Assert.That(publications, Is.EqualTo(1));
+        Assert.That(actor.TravelPlan.Matches(destination.LocationRuntimeId,
+            destination.RuntimeId, NpcTravelReason.Trade, 1f, 1f,
+            "decision/exhausted-travel-plan"), Is.True);
+    }
+
     private static void CreateSelectedTravelFixture(
         NpcTravelReason reason,
         out DailyV1EffectiveDefinitions definitions,
@@ -515,15 +629,22 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         : DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary
     {
         private readonly List<string> order;
-        private readonly DailyV1SelectedRuntimeOwnerGraph graph;
         private readonly DailyV1NpcRuntimeOwners actor;
-        private readonly NpcTravelReason reason;
+        private readonly float initialBalance;
         internal bool RefuseOperation { get; set; }
+        internal bool RefuseTransitionAdmission { get; set; }
+        internal int TransitionAdmissionCalls { get; private set; }
+        internal int TravelPlanClearAdmissionCalls { get; private set; }
+        internal bool SawTravelChargeDuringProjectionPreflight { get; private set; }
 
         internal RecordingSelectedTravelActionBoundary(List<string> order,
             DailyV1SelectedRuntimeOwnerGraph graph, DailyV1NpcRuntimeOwners actor,
             NpcTravelReason reason)
-        { this.order = order; this.graph = graph; this.actor = actor; this.reason = reason; }
+        {
+            this.order = order;
+            this.actor = actor;
+            initialBalance = actor.MoneyAccount.Balance;
+        }
 
         public bool ExecuteWithinOperation(Func<bool> operation)
         {
@@ -547,10 +668,24 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             SpatialRouteRuntime route, float travelCost)
         { order.Add("transition-preflight"); return true; }
 
-        public bool CommitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan)
+        public bool TryPrepareTransitionProjection(DailyV1SelectedTravelTransitionPlan plan)
         {
+            order.Add("transition-projection-preflight");
+            SawTravelChargeDuringProjectionPreflight = actor.MoneyAccount.Balance < initialBalance;
+            return true;
+        }
+
+        public bool CanAdmitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan)
+        {
+            TransitionAdmissionCalls++;
+            order.Add("transition-admission");
+            return !RefuseTransitionAdmission;
+        }
+
+        public void PublishCommittedTransition(DailyV1SelectedTravelTransitionPlan plan)
+        {
+            Assert.That(plan.IsCommitted, Is.True);
             order.Add("transition-commit");
-            return graph.TryCommitTravelTransition(actor, plan, null);
         }
 
         public void PublishTravelStarted(DailyV1SelectedActionExecutionStage.SoloTravelResult result) =>
@@ -558,11 +693,24 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
 
         public void LogCommercialScouting() => order.Add("commercial-scout");
 
-        public void ClearTravelPlan()
+        public bool CanProjectTravelPlanClear(DailyV1NpcRuntimeOwners candidate)
         {
-            order.Add("plan-clear");
-            Assert.That(actor.TravelPlan.TryInstallExact(null, null, NpcTravelReason.None,
-                0f, 0f, null, actor.TravelPlan.Revision + 1L), Is.True);
+            order.Add("plan-clear-preflight");
+            return ReferenceEquals(candidate, actor);
+        }
+
+        public bool CanAdmitTravelPlanClear(DailyV1NpcRuntimeOwners candidate)
+        {
+            TravelPlanClearAdmissionCalls++;
+            order.Add("plan-clear-admission");
+            return ReferenceEquals(candidate, actor);
+        }
+
+        public void PublishCommittedTravelPlanClear(DailyV1NpcRuntimeOwners candidate)
+        {
+            Assert.That(candidate.TravelPlan.Matches(null, null, NpcTravelReason.None,
+                0f, 0f, null), Is.True);
+            order.Add("plan-clear-published");
         }
     }
 

@@ -141,18 +141,36 @@ internal static class DailyV1SelectedActionExecutionStage
         /// <summary>Preserves host guards/projection checks before Core charges the owner.</summary>
         bool CanCommitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan,
             SpatialRouteRuntime route, float travelCost);
-        bool CommitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan);
+        /// <summary>Runs the existing exact Unity projection preflight after Core's charge, as before.</summary>
+        bool TryPrepareTransitionProjection(DailyV1SelectedTravelTransitionPlan plan);
+        /// <summary>Supplies the existing immediate P12 admission before Core writes transition owners.</summary>
+        bool CanAdmitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan);
+        /// <summary>Mirrors the already-committed Core transition, then publishes its P12 notification.</summary>
+        void PublishCommittedTransition(DailyV1SelectedTravelTransitionPlan plan);
         /// <summary>Publishes the event and travel/cost logs after Core discoveries.</summary>
         void PublishTravelStarted(SoloTravelResult result);
         void LogCommercialScouting();
-        /// <summary>The existing Unity owner bridge commits/reflects the exact Core plan clear.</summary>
-        void ClearTravelPlan();
+        /// <summary>Preflights the existing Unity projection for Core's later exact TravelPlan clear.</summary>
+        bool CanProjectTravelPlanClear(DailyV1NpcRuntimeOwners actor);
+        /// <summary>Supplies the existing immediate P12 admission for a changed TravelPlan leaf.</summary>
+        bool CanAdmitTravelPlanClear(DailyV1NpcRuntimeOwners actor);
+        /// <summary>Projects Core's committed clear and then publishes exactly one P12 notification.</summary>
+        void PublishCommittedTravelPlanClear(DailyV1NpcRuntimeOwners actor);
     }
 
     internal interface ISelectedFleeCityActionBoundary
     {
         bool ExecuteWithinOperation(Func<bool> operation);
-        bool CommitTravelPlan(
+        /// <summary>Preflights exact Unity projections without admitting or mutating Core owners.</summary>
+        bool CanPrepareTravelPlanProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination,
+            float travelCost,
+            string originDecisionId);
+        /// <summary>Preserves the selected TravelPlan owner's immediate P12 leaf admission.</summary>
+        bool CanAdmitTravelPlanMutation();
+        /// <summary>Refreshes the Unity projection, then publishes the exact owner's P12 leaf notification.</summary>
+        void PublishCommittedTravelPlan(
             DailyV1NpcRuntimeOwners actor,
             DailyV1CityRuntimeOwners destination,
             float travelCost,
@@ -810,7 +828,15 @@ internal static class DailyV1SelectedActionExecutionStage
                 || !TryExecuteSoloTravelSlot(graph, actor, destinationCityRuntimeId,
                     graph.TravelParties,
                     (plan, route, cost) => boundary.CanCommitPreparedTransition(plan, route, cost),
-                    boundary.CommitPreparedTransition,
+                    plan =>
+                    {
+                        if (!boundary.TryPrepareTransitionProjection(plan)) return false;
+                        if (!graph.TryCommitTravelTransition(actor, plan,
+                                () => boundary.CanAdmitPreparedTransition(plan)))
+                            return false;
+                        boundary.PublishCommittedTransition(plan);
+                        return true;
+                    },
                     out SoloTravelResult travel)
                 || travel == null || !travel.Succeeded)
                 return false;
@@ -822,7 +848,11 @@ internal static class DailyV1SelectedActionExecutionStage
             boundary.PublishTravelStarted(travel);
             if (payload.TravelReason == NpcTravelReason.CommercialScout)
                 boundary.LogCommercialScouting();
-            boundary.ClearTravelPlan();
+            if (boundary.CanProjectTravelPlanClear(actor))
+                graph.TryClearSelectedTravelPlan(actor,
+                    () => boundary.CanAdmitTravelPlanClear(actor),
+                    () => boundary.PublishCommittedTravelPlanClear(actor),
+                    out _);
             completedTravel = travel;
             return true;
         });
@@ -1553,12 +1583,19 @@ internal static class DailyV1SelectedActionDispatchStage
             DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult fleeResult = null;
             bool fleeSucceeded = fleeBoundary.ExecuteWithinOperation(() =>
             {
+                bool travelPlanChanged;
                 if (!DailyV1SelectedActionExecutionStage.TryPrepareSelectedFleeCityPlan(
                         graph, actor, action,
                         out DailyV1SelectedActionExecutionStage.SelectedFleeCityPlan plan)
                     || plan == null
-                    || !fleeBoundary.CommitTravelPlan(actor, plan.Destination, plan.TravelCost,
-                        payload.OriginDecisionId))
+                    || !fleeBoundary.CanPrepareTravelPlanProjection(
+                        actor, plan.Destination, plan.TravelCost, payload.OriginDecisionId)
+                    || !graph.TryCommitSelectedFleeCityTravelPlan(
+                        actor, plan.Destination, plan.TravelCost, payload.OriginDecisionId,
+                        fleeBoundary.CanAdmitTravelPlanMutation,
+                        () => fleeBoundary.PublishCommittedTravelPlan(
+                            actor, plan.Destination, plan.TravelCost, payload.OriginDecisionId),
+                        out _))
                     return false;
 
                 fleeResult = new DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult(

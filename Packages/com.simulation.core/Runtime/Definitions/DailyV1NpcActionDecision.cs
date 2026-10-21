@@ -410,17 +410,17 @@ internal interface IDailyV1SelectedStealTargetProjectionBoundary
 internal static class DailyV1SelectedNpcActionDecisionStage
 {
     /// <summary>
-    /// Resolves the host's configured action identity sequence through the
-    /// admitted definition graph. The host supplies only the active configured
-    /// identities; Core retains canonical definitions and action semantics.
+    /// Resolves the immutable graph's configured action identity sequence
+    /// through its canonical action definitions. Blank IDs retain the legacy
+    /// filtering behavior and duplicate entries retain their choice weight.
     /// </summary>
     internal static bool TryResolveConfiguredActions(
         DailyV1EffectiveDefinitions definitions,
-        IReadOnlyList<string> actionIds,
         out IReadOnlyList<DailyV1ActionDefinition> configuredActions)
     {
         configuredActions = null;
-        if (definitions?.Configuration == null || actionIds == null) return false;
+        IReadOnlyList<string> actionIds = definitions?.Configuration?.actions;
+        if (actionIds == null) return false;
 
         List<DailyV1ActionDefinition> resolved = new List<DailyV1ActionDefinition>();
         foreach (string actionId in actionIds)

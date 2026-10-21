@@ -19,7 +19,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
     internal TravelPartyStore TravelParties { get; }
     internal DailyV1RuntimeIdentityIndex RuntimeIdentityIndex { get; }
-    internal PersonStore PersonStore { get; }
+    internal PersonStore PersonStore { get; private set; }
 
     private DailyV1SelectedRuntimeOwnerGraph(
         DailyV1EffectiveDefinitions definitions,
@@ -39,6 +39,21 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         TravelParties = travelParties;
         RuntimeIdentityIndex = runtimeIdentityIndex;
         PersonStore = personStore;
+    }
+
+    /// <summary>
+    /// Completes the unpublished genesis graph with the exact selected
+    /// PersonStore authority after the runtime constructor has bound NPC
+    /// memberships. The binding is one-time; a published graph never changes
+    /// owner identity.
+    /// </summary>
+    internal bool TryBindPersonStore(PersonStore personStore)
+    {
+        if (personStore == null) return false;
+        if (PersonStore != null) return ReferenceEquals(PersonStore, personStore);
+        if (!MatchesPersonStore(personStore, npcs)) return false;
+        PersonStore = personStore;
+        return true;
     }
 
     internal static bool TryCreate(
@@ -629,6 +644,99 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
             || !npc.TravelPlan.TryCommit(destination.RuntimeId, target.RuntimeId,
                 NpcTravelReason.Trade, utility, cost, originDecisionId)) return false;
         expectedCost = cost;
+        return true;
+    }
+
+    /// <summary>
+    /// Commits the selected FleeCity action's pending travel plan against the
+    /// exact selected NPC and destination owners. The Unity host may preflight
+    /// and later refresh its City/Location projections, but it does not own the
+    /// TravelPlan mutation. P12 admission and publication run only for a real
+    /// owner transition and remain adjacent to that leaf write.
+    /// </summary>
+    internal bool TryCommitSelectedFleeCityTravelPlan(
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1CityRuntimeOwners destination,
+        float expectedCost,
+        string originDecisionId,
+        Func<bool> admitMutation,
+        Action mutationCommitted,
+        out bool changed)
+    {
+        changed = false;
+        if (npc == null || !ContainsExactNpc(npc)
+            || destination == null || !ContainsExactCityOwner(destination)
+            || !ReferenceEquals(npc.Definitions, destination.Definitions)
+            || npc.Lifecycle?.LifeState != NpcLifeState.Alive
+            || npc.Travel == null || npc.Travel.IsTraveling
+            || npc.TravelPlan == null
+            || SpatialNetwork == null
+            || !SpatialNetwork.TryGetLocation(destination.LocationRuntimeId,
+                out SpatialLocationRuntime destinationLocation)
+            || !ContainsCityRuntimeLocation(destination.RuntimeId, destinationLocation.RuntimeId))
+            return false;
+
+        string normalizedDecisionId = string.IsNullOrWhiteSpace(originDecisionId)
+            ? null
+            : originDecisionId;
+        DailyV1NpcTravelPlanOwner travelPlan = npc.TravelPlan;
+        if (!travelPlan.CanCommit(destinationLocation.RuntimeId, destination.RuntimeId,
+                NpcTravelReason.Flee, 80f, expectedCost, normalizedDecisionId))
+            return false;
+
+        changed = !travelPlan.Matches(destinationLocation.RuntimeId, destination.RuntimeId,
+            NpcTravelReason.Flee, 80f, expectedCost, normalizedDecisionId);
+        if (changed
+            && (admitMutation == null || mutationCommitted == null || !admitMutation()))
+        {
+            changed = false;
+            return false;
+        }
+
+        if (!travelPlan.TryCommit(destinationLocation.RuntimeId, destination.RuntimeId,
+                NpcTravelReason.Flee, 80f, expectedCost, normalizedDecisionId))
+        {
+            changed = false;
+            return false;
+        }
+
+        if (changed) mutationCommitted();
+        return true;
+    }
+
+    /// <summary>
+    /// Clears the exact selected NPC TravelPlan owner after a successful Core
+    /// travel action. Admission and publication are required only for a real
+    /// owner transition, preserving the Unity owner's prior no-op semantics.
+    /// </summary>
+    internal bool TryClearSelectedTravelPlan(
+        DailyV1NpcRuntimeOwners npc,
+        Func<bool> admitMutation,
+        Action mutationCommitted,
+        out bool changed)
+    {
+        changed = false;
+        if (npc == null || !ContainsExactNpcOwner(npc) || npc.TravelPlan == null)
+            return false;
+
+        DailyV1NpcTravelPlanOwner travelPlan = npc.TravelPlan;
+        if (!travelPlan.CanCommit(null, null, NpcTravelReason.None, 0f, 0f, null))
+            return false;
+
+        changed = !travelPlan.Matches(null, null, NpcTravelReason.None, 0f, 0f, null);
+        if (changed && (admitMutation == null || mutationCommitted == null || !admitMutation()))
+        {
+            changed = false;
+            return false;
+        }
+
+        if (!travelPlan.TryCommit(null, null, NpcTravelReason.None, 0f, 0f, null))
+        {
+            changed = false;
+            return false;
+        }
+
+        if (changed) mutationCommitted();
         return true;
     }
 

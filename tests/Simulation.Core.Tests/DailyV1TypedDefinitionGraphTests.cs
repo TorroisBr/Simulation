@@ -11,11 +11,12 @@ public sealed class DailyV1TypedDefinitionGraphTests
         DailyV1NpcActionData firstValues = CreateAction("action/first", 0, 1f);
         DailyV1NpcActionData disabledValues = CreateAction("action/disabled-crime", 5, 2f);
         DailyV1NpcActionData secondValues = CreateAction("action/second", 0, 3f);
+        string[] configuredActionIds =
+        {
+            firstValues.id, " ", disabledValues.id, secondValues.id, firstValues.id
+        };
         DailyV1EffectiveDefinitions definitions = DailyV1EffectiveDefinitions.CreateSelectedSchema(
-            CreateConfiguration(1f, Array.Empty<string>(), actions: new[]
-            {
-                firstValues.id, " ", disabledValues.id, secondValues.id, firstValues.id
-            }),
+            CreateConfiguration(1f, Array.Empty<string>(), actions: configuredActionIds),
             SimulationConfigurationDefaults.Create(),
             new DailyV1CalendarDefinition(1, 1, 1, null),
             Array.Empty<DailyV1CityData>(), Array.Empty<DailyV1ItemData>(),
@@ -24,8 +25,9 @@ public sealed class DailyV1TypedDefinitionGraphTests
             Array.Empty<DailyV1NpcStatusData>(), Array.Empty<string>(),
             "test.daily-v1", "test.geography-v1", "test.geography-stage/v1", "hex-v1", "q-r-s");
 
+        configuredActionIds[0] = "action/outside-immutable-graph";
         Assert.That(DailyV1SelectedNpcActionDecisionStage.TryResolveConfiguredActions(
-            definitions, definitions.Configuration.actions,
+            definitions,
             out IReadOnlyList<DailyV1ActionDefinition> configured), Is.True);
         Assert.That(configured.Select(action => action.DefinitionId),
             Is.EqualTo(new[] { firstValues.id, disabledValues.id, secondValues.id, firstValues.id }));
@@ -48,7 +50,7 @@ public sealed class DailyV1TypedDefinitionGraphTests
             "test.daily-v1", "test.geography-v1", "test.geography-stage/v1", "hex-v1", "q-r-s");
 
         Assert.That(DailyV1SelectedNpcActionDecisionStage.TryResolveConfiguredActions(
-            definitions, definitions.Configuration.actions,
+            definitions,
             out IReadOnlyList<DailyV1ActionDefinition> configured), Is.False);
         Assert.That(configured, Is.Null);
     }

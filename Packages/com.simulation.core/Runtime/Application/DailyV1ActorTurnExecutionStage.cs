@@ -61,10 +61,6 @@ internal interface IDailyV1SelectedActorActionExecutionBoundary
         out SimulationRecordSequence recordSequence,
         out NpcDecisionStore decisionStore);
 
-    bool TryGetConfiguredActionIds(
-        DailyV1NpcRuntimeOwners actor,
-        out IReadOnlyList<string> actionIds);
-
     bool TryPrepareSelectedActionProjection(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionCandidate selected,

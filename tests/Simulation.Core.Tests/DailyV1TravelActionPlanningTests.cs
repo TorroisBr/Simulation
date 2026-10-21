@@ -299,12 +299,179 @@ public sealed class DailyV1TravelActionPlanningTests
         Assert.That(result.FleeCity.DestinationCityRuntimeId, Is.EqualTo(destination.RuntimeId));
         Assert.That(result.FleeCity.TravelCost, Is.GreaterThan(0f));
         Assert.That(fleeBoundary.OperationCalls, Is.EqualTo(1));
-        Assert.That(fleeBoundary.CommitCalls, Is.EqualTo(1));
+        Assert.That(fleeBoundary.ProjectionPreflightCalls, Is.EqualTo(1));
+        Assert.That(fleeBoundary.AdmissionCalls, Is.EqualTo(1));
+        Assert.That(fleeBoundary.NotificationCalls, Is.EqualTo(1));
+        Assert.That(fleeBoundary.ProjectionCalls, Is.EqualTo(1));
+        Assert.That(fleeBoundary.PublicationOrder,
+            Is.EqualTo(new[] { "projection", "notification" }));
         Assert.That(fleeBoundary.Actor, Is.SameAs(actor));
         Assert.That(fleeBoundary.Destination, Is.SameAs(destination));
         Assert.That(fleeBoundary.OriginDecisionId, Is.EqualTo("decision/flee-city"));
         Assert.That(actor.MoneyAccount.Balance, Is.EqualTo(balanceBefore));
-        Assert.That(actor.TravelPlan.Revision, Is.EqualTo(planRevisionBefore));
+        Assert.That(actor.TravelPlan.Revision, Is.EqualTo(planRevisionBefore + 1L));
+        Assert.That(actor.TravelPlan.Matches(
+            destination.LocationRuntimeId, destination.RuntimeId,
+            NpcTravelReason.Flee, 80f, result.FleeCity.TravelCost,
+            "decision/flee-city"), Is.True);
+    }
+
+    [Test]
+    public void SelectedFleeOwnerCommitRejectsNonMemberActorOrDestinationBeforeAdmission()
+    {
+        (DailyV1SelectedRuntimeOwnerGraph graph, DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination, _) = CreateTravelCandidateFixture();
+        (DailyV1SelectedRuntimeOwnerGraph _, DailyV1NpcRuntimeOwners foreignActor,
+            DailyV1CityRuntimeOwners foreignDestination, _) = CreateTravelCandidateFixture();
+        long revisionBefore = actor.TravelPlan.Revision;
+        int admissions = 0;
+        int notifications = 0;
+
+        Assert.That(graph.TryCommitSelectedFleeCityTravelPlan(
+            foreignActor, destination, 12f, "decision/foreign-actor",
+            () => { admissions++; return true; },
+            () => notifications++, out bool actorChanged), Is.False);
+        Assert.That(actorChanged, Is.False);
+        Assert.That(graph.TryCommitSelectedFleeCityTravelPlan(
+            actor, foreignDestination, 12f, "decision/foreign-city",
+            () => { admissions++; return true; },
+            () => notifications++, out bool cityChanged), Is.False);
+        Assert.That(cityChanged, Is.False);
+        Assert.That(admissions, Is.Zero);
+        Assert.That(notifications, Is.Zero);
+        Assert.That(actor.TravelPlan.Revision, Is.EqualTo(revisionBefore));
+    }
+
+    [Test]
+    public void SelectedFleeOwnerCommitRejectsP12AdmissionWithoutChangingOwner()
+    {
+        (DailyV1SelectedRuntimeOwnerGraph graph, DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination, _) = CreateTravelCandidateFixture();
+        long revisionBefore = actor.TravelPlan.Revision;
+        NpcTravelPlanOwnerSnapshot stateBefore = CaptureTravelPlan(actor.TravelPlan);
+        int admissions = 0;
+        int notifications = 0;
+
+        Assert.That(graph.TryCommitSelectedFleeCityTravelPlan(
+            actor, destination, 12f, "decision/admission-rejected",
+            () => { admissions++; return false; },
+            () => notifications++, out bool changed), Is.False);
+
+        Assert.That(changed, Is.False);
+        Assert.That(admissions, Is.EqualTo(1));
+        Assert.That(notifications, Is.Zero);
+        Assert.That(actor.TravelPlan.Revision, Is.EqualTo(revisionBefore));
+        Assert.That(CaptureTravelPlan(actor.TravelPlan), Is.EqualTo(stateBefore));
+    }
+
+    [Test]
+    public void SelectedFleeOwnerCommitTreatsExactExistingPlanAsNoOpWithoutP12Callbacks()
+    {
+        (DailyV1SelectedRuntimeOwnerGraph graph, DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination, _) = CreateTravelCandidateFixture();
+        Assert.That(actor.TravelPlan.TryInstallExact(
+            destination.LocationRuntimeId, destination.RuntimeId,
+            NpcTravelReason.Flee, 80f, 12f, "decision/already-fleeing", 4L), Is.True);
+        int admissions = 0;
+        int notifications = 0;
+
+        Assert.That(graph.TryCommitSelectedFleeCityTravelPlan(
+            actor, destination, 12f, "decision/already-fleeing",
+            () => { admissions++; return true; },
+            () => notifications++, out bool changed), Is.True);
+
+        Assert.That(changed, Is.False);
+        Assert.That(admissions, Is.Zero);
+        Assert.That(notifications, Is.Zero);
+        Assert.That(actor.TravelPlan.Revision, Is.EqualTo(4L));
+        Assert.That(actor.TravelPlan.Matches(
+            destination.LocationRuntimeId, destination.RuntimeId,
+            NpcTravelReason.Flee, 80f, 12f, "decision/already-fleeing"), Is.True);
+    }
+
+    [Test]
+    public void SelectedFleeOwnerCommitNormalizesBlankOriginDecisionId()
+    {
+        (DailyV1SelectedRuntimeOwnerGraph graph, DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination, _) = CreateTravelCandidateFixture();
+        int admissions = 0;
+        int notifications = 0;
+
+        Assert.That(graph.TryCommitSelectedFleeCityTravelPlan(
+            actor, destination, 12f, "  ",
+            () => { admissions++; return true; },
+            () => notifications++, out bool changed), Is.True);
+
+        Assert.That(changed, Is.True);
+        Assert.That(admissions, Is.EqualTo(1));
+        Assert.That(notifications, Is.EqualTo(1));
+        Assert.That(actor.TravelPlan.Matches(
+            destination.LocationRuntimeId, destination.RuntimeId,
+            NpcTravelReason.Flee, 80f, 12f, null), Is.True);
+    }
+
+    [Test]
+    public void SelectedFleeOwnerCommitRejectsRevisionExhaustionBeforeP12Admission()
+    {
+        (DailyV1SelectedRuntimeOwnerGraph graph, DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination, _) = CreateTravelCandidateFixture();
+        Assert.That(actor.TravelPlan.TryInstallExact(
+            destination.LocationRuntimeId, destination.RuntimeId,
+            NpcTravelReason.Trade, 80f, 1f, "decision/previous-plan", long.MaxValue), Is.True);
+        NpcTravelPlanOwnerSnapshot stateBefore = CaptureTravelPlan(actor.TravelPlan);
+        int admissions = 0;
+        int notifications = 0;
+
+        Assert.That(graph.TryCommitSelectedFleeCityTravelPlan(
+            actor, destination, 12f, "decision/exhausted",
+            () => { admissions++; return true; },
+            () => notifications++, out bool changed), Is.False);
+
+        Assert.That(changed, Is.False);
+        Assert.That(admissions, Is.Zero);
+        Assert.That(notifications, Is.Zero);
+        Assert.That(CaptureTravelPlan(actor.TravelPlan), Is.EqualTo(stateBefore));
+    }
+
+    private static NpcTravelPlanOwnerSnapshot CaptureTravelPlan(DailyV1NpcTravelPlanOwner owner) =>
+        new NpcTravelPlanOwnerSnapshot(owner.TargetLocationRuntimeId,
+            owner.TargetCityRuntimeId, owner.Reason, owner.Utility,
+            owner.ExpectedCost, owner.OriginDecisionId, owner.Revision);
+
+    private sealed class NpcTravelPlanOwnerSnapshot : IEquatable<NpcTravelPlanOwnerSnapshot>
+    {
+        private readonly string locationId;
+        private readonly string cityId;
+        private readonly NpcTravelReason reason;
+        private readonly float utility;
+        private readonly float cost;
+        private readonly string decisionId;
+        private readonly long revision;
+
+        internal NpcTravelPlanOwnerSnapshot(string locationId, string cityId,
+            NpcTravelReason reason, float utility, float cost, string decisionId, long revision)
+        {
+            this.locationId = locationId;
+            this.cityId = cityId;
+            this.reason = reason;
+            this.utility = utility;
+            this.cost = cost;
+            this.decisionId = decisionId;
+            this.revision = revision;
+        }
+
+        public bool Equals(NpcTravelPlanOwnerSnapshot other) => other != null
+            && string.Equals(locationId, other.locationId, StringComparison.Ordinal)
+            && string.Equals(cityId, other.cityId, StringComparison.Ordinal)
+            && reason == other.reason
+            && utility.Equals(other.utility)
+            && cost.Equals(other.cost)
+            && string.Equals(decisionId, other.decisionId, StringComparison.Ordinal)
+            && revision == other.revision;
+
+        public override bool Equals(object obj) => Equals(obj as NpcTravelPlanOwnerSnapshot);
+        public override int GetHashCode() => HashCode.Combine(locationId, cityId,
+            reason, utility, cost, decisionId, revision);
     }
 
     private static DailyV1ActionDefinition FindFleeCityAction(DailyV1EffectiveDefinitions definitions) =>
@@ -390,21 +557,35 @@ public sealed class DailyV1TravelActionPlanningTests
         : DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary
     {
         internal int OperationCalls { get; private set; }
-        internal int CommitCalls { get; private set; }
+        internal int ProjectionPreflightCalls { get; private set; }
+        internal int AdmissionCalls { get; private set; }
+        internal int NotificationCalls { get; private set; }
+        internal int ProjectionCalls { get; private set; }
+        internal List<string> PublicationOrder { get; } = new List<string>();
         internal DailyV1NpcRuntimeOwners Actor { get; private set; }
         internal DailyV1CityRuntimeOwners Destination { get; private set; }
         internal string OriginDecisionId { get; private set; }
         public TravelPartyStore TravelPartyStore => null;
         public bool ExecuteWithinOperation(Func<bool> operation)
         { OperationCalls++; return operation != null && operation(); }
-        public bool CommitTravelPlan(DailyV1NpcRuntimeOwners actor,
+        public bool CanPrepareTravelPlanProjection(DailyV1NpcRuntimeOwners actor,
             DailyV1CityRuntimeOwners destination, float travelCost, string originDecisionId)
         {
-            CommitCalls++;
+            ProjectionPreflightCalls++;
             Actor = actor;
             Destination = destination;
             OriginDecisionId = originDecisionId;
             return travelCost > 0f;
+        }
+        public bool CanAdmitTravelPlanMutation()
+        { AdmissionCalls++; return true; }
+        public void PublishCommittedTravelPlan(DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination, float travelCost, string originDecisionId)
+        {
+            ProjectionCalls++;
+            PublicationOrder.Add("projection");
+            NotificationCalls++;
+            PublicationOrder.Add("notification");
         }
     }
 
