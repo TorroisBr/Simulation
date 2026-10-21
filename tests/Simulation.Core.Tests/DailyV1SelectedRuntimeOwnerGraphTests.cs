@@ -7,6 +7,21 @@ using NUnit.Framework;
 public sealed class DailyV1SelectedRuntimeOwnerGraphTests
 {
     [Test]
+    public void ConfiguredSelectedOwnersCanBeConstructedWithoutUnityProjectionCallbacks()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+
+        Assert.That(DailyV1SelectedRuntimeOwnerGraphBuilder.TryBuildConfigured(
+            definitions, allocator, out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        Assert.That(graph.Definitions, Is.SameAs(definitions));
+        Assert.That(graph.Cities, Is.Not.Empty);
+        Assert.That(graph.Npcs, Is.Not.Empty);
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            Assert.That(graph.SpatialNetwork.ContainsLocationId(city.LocationRuntimeId), Is.True);
+    }
+
+    [Test]
     public void MerchantTradePlanTransitionRequiresExactGraphMembersAndPreservesDecisionIdentity()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

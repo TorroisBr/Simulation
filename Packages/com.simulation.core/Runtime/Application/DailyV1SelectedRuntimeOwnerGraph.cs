@@ -1275,6 +1275,27 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
     internal SpatialNetworkOwner SpatialNetwork => spatialNetwork;
 
     /// <summary>
+    /// Builds the configured selected owner graph using only Core-owned
+    /// identity allocation and spatial membership. A failed build is a
+    /// discarded genesis candidate; callers must not publish its allocator
+    /// or any partial owner projection.
+    /// </summary>
+    internal static bool TryBuildConfigured(
+        DailyV1EffectiveDefinitions definitions,
+        RuntimeIdAllocator runtimeIds,
+        out DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        graph = null;
+        if (definitions == null || runtimeIds == null) return false;
+
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        return builder.TryCreateConfiguredCities(runtimeIds)
+            && builder.TryCreateConfiguredNpcs(runtimeIds, null)
+            && builder.TryBuild(out graph);
+    }
+
+    /// <summary>
     /// Performs the selected City's identity allocation and authoritative
     /// owner construction in Core. The callback only admits the corresponding
     /// host location projection; it receives the already allocated identity
@@ -1285,8 +1306,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
         Func<SpatialLocationRuntime, bool> tryRegisterLocationIdentity,
         Action<SpatialLocationRuntime> rollbackLocationIdentity = null)
     {
-        if (built || runtimeIds == null || tryRegisterLocationIdentity == null
-            || definitions.Configuration == null)
+        if (built || runtimeIds == null || definitions.Configuration == null)
             return false;
 
         List<string> selectedCityIds = new List<string>(
@@ -1304,7 +1324,9 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
             SpatialLocationRuntime location = new SpatialLocationRuntime(locationRuntimeId);
             if (!spatialNetwork.TryRegisterLocation(
                     location,
-                    () => tryRegisterLocationIdentity(location),
+                    tryRegisterLocationIdentity == null
+                        ? (Func<bool>)(() => true)
+                        : () => tryRegisterLocationIdentity(location),
                     () => rollbackLocationIdentity?.Invoke(location),
                     null))
                 continue;
@@ -1324,6 +1346,15 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
 
         return true;
     }
+
+    /// <summary>
+    /// Constructs selected Cities and their location identities entirely in
+    /// Core. The Unity adapter uses the overload above when it must also
+    /// project the same allocated location into its read-only compatibility
+    /// view; a detached host has no such projection to register.
+    /// </summary>
+    internal bool TryCreateConfiguredCities(RuntimeIdAllocator runtimeIds) =>
+        TryCreateConfiguredCities(runtimeIds, null, null);
 
     /// <summary>
     /// Allocates selected NPC identities and builds their exact definition,
