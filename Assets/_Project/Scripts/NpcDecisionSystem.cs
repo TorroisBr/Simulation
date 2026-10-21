@@ -127,7 +127,8 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
     }
 
     private sealed class SelectedNpcActionDecisionBoundary
-        : IDailyV1SelectedNpcActionDecisionBoundary
+        : IDailyV1SelectedNpcActionDecisionBoundary,
+            IDailyV1SelectedGuardActionProjectionBoundary
     {
         private readonly NpcDecisionSystem decisionSystem;
         private readonly NpcRuntime npcRuntime;
@@ -257,6 +258,56 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
 
             NpcActionRuntime projected = new NpcActionRuntime(
                 actionAsset, destinationCity, null, 0, payload.ExpectedUnitPrice);
+            if (!projected.TryUseSelectedPayload(payload,
+                    npcRuntime.SelectedDailyV1DefinitionGraph))
+                return false;
+            projectedActions[candidate] = projected;
+            return true;
+        }
+
+        public bool TryProjectSelectedGuardArrestAction(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate)
+        {
+            DailyV1NpcActionPayloadOwner payload = candidate?.PreparedPayload;
+            DailyV1SelectedRuntimeOwnerGraph graph = npcRuntime.SelectedRuntimeOwnerGraph;
+            if (!IsExactActor(actor)
+                || payload == null
+                || string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
+                || payload.TargetCityRuntimeId != null
+                || payload.TargetItem != null
+                || payload.Amount != 0
+                || !TryGetActionAsset(actor, candidate.Action, out NpcActionData actionAsset)
+                || decisionSystem.GetProviderForAction(npcRuntime, actionAsset) is not GuardSystem
+                || !graph.TryGetNpcOwner(payload.TargetNpcRuntimeId,
+                    out DailyV1NpcRuntimeOwners targetOwner)
+                || !graph.ContainsExactNpcOwner(targetOwner)
+                || !ReferenceEquals(targetOwner.Definitions, graph.Definitions)
+                || !string.Equals(targetOwner.RuntimeId, payload.TargetNpcRuntimeId,
+                    StringComparison.Ordinal))
+                return false;
+
+            CityRuntime currentCity = npcRuntime.CurrentCity;
+            DailyV1CityRuntimeOwners actorCityOwner = graph.Cities.FirstOrDefault(value =>
+                value != null && string.Equals(value.RuntimeId,
+                    actor.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal));
+            if (currentCity == null
+                || actorCityOwner == null
+                || !ReferenceEquals(currentCity.SelectedRuntimeOwners, actorCityOwner)
+                || !string.Equals(currentCity.RuntimeId, actorCityOwner.RuntimeId,
+                    StringComparison.Ordinal))
+                return false;
+
+            NpcRuntime targetRuntime = currentCity.ImportantNpcs?.FirstOrDefault(value =>
+                value != null
+                && string.Equals(value.RuntimeId, payload.TargetNpcRuntimeId,
+                    StringComparison.Ordinal)
+                && ReferenceEquals(value.SelectedRuntimeOwners, targetOwner)
+                && ReferenceEquals(value.CurrentCity, currentCity));
+            if (targetRuntime == null)
+                return false;
+
+            NpcActionRuntime projected = new NpcActionRuntime(actionAsset, targetRuntime);
             if (!projected.TryUseSelectedPayload(payload,
                     npcRuntime.SelectedDailyV1DefinitionGraph))
                 return false;

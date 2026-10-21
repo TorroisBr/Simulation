@@ -12836,13 +12836,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             && actionType == NpcActionType.Steal;
         bool selectedCrimeAction = npcRuntime.UsesSelectedDailyV1Definitions
             && (actionType == NpcActionType.Hide || actionType == NpcActionType.EscapePrison);
+        bool exactSelectedGraphActor = npcRuntime.UsesSelectedDailyV1Definitions
+            && npcRuntime.SelectedRuntimeOwners != null
+            && SelectedRuntimeOwnerGraph != null
+            && ReferenceEquals(npcRuntime.SelectedRuntimeOwnerGraph, SelectedRuntimeOwnerGraph)
+            && SelectedRuntimeOwnerGraph.ContainsExactNpcOwner(npcRuntime.SelectedRuntimeOwners);
         INpcActionProvider actionProvider = actionType == NpcActionType.Normal
             ? null
             : selectedMerchantAction
                 ? merchantSystem
                 : npcDecisionSystem?.GetProviderForAction(npcRuntime, action);
 
-        if (actionType != NpcActionType.Normal && actionProvider == null)
+        if (actionType != NpcActionType.Normal && actionProvider == null
+            && !exactSelectedGraphActor)
         {
             return NpcActionResult.Failed();
         }
@@ -13231,6 +13237,23 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             }
         }
 
+        // Once an actor belongs to the selected authoritative owner graph,
+        // action execution must stay on the graph-backed Core route above.
+        // Reaching the provider calls below means Core could not admit or
+        // execute the exact current slot; falling through would let a Unity
+        // provider become a second action authority for the same actor.
+        if (exactSelectedGraphActor)
+        {
+            if (runtimeAdmissionContext != null)
+            {
+                FaultRuntimeAdmission();
+                throw new InvalidOperationException(
+                    "The selected P12 profile cannot execute an action outside its exact Core owner-slot dispatch.");
+            }
+
+            return NpcActionResult.Failed();
+        }
+
         if (RollActionSuccess(npcRuntime, action, actionRuntime) == false)
         {
             if (actionProvider is INpcActionFailureHandler failureHandler)
@@ -13612,32 +13635,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             if (!npcRuntime.TryGetSelectedDailyV1ActionNode(
                     configuredAction, out DailyV1ActionDefinition action))
                 continue;
-            if (IsSelectedActionEnabledForRuntime(action))
-                enabledActions.Add(action);
+            enabledActions.Add(action);
         }
         return enabledActions;
-    }
-
-    private bool IsSelectedActionEnabledForRuntime(DailyV1ActionDefinition action)
-    {
-        if (action == null)
-            return false;
-
-        switch ((NpcActionType)(action.Values.actionType?.Value ?? int.MinValue))
-        {
-            case NpcActionType.BuyGoods:
-            case NpcActionType.SellGoods:
-                return configuration.MerchantTrade.Enabled;
-            case NpcActionType.Steal:
-            case NpcActionType.Hide:
-            case NpcActionType.FleeCity:
-            case NpcActionType.EscapePrison:
-                return configuration.Crime.Enabled;
-            case NpcActionType.Arrest:
-                return configuration.GuardCrime.Enabled;
-            default:
-                return true;
-        }
     }
 
     private bool IsActionEnabledForRuntime(NpcRuntime npcRuntime, NpcActionData action)
@@ -13645,6 +13645,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         if (action == null)
         {
             return false;
+        }
+
+        if (npcRuntime?.UsesSelectedDailyV1Definitions == true)
+        {
+            return npcRuntime.TryGetSelectedDailyV1ActionNode(
+                    action, out DailyV1ActionDefinition selectedAction)
+                && DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
+                    npcRuntime.SelectedDailyV1DefinitionGraph, selectedAction);
         }
 
         switch (npcRuntime != null ? npcRuntime.GetConfiguredActionType(action) : action.actionType)

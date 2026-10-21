@@ -4,6 +4,100 @@ using NUnit.Framework;
 public sealed class DailyV1GuardActionPlanningTests
 {
     [Test]
+    public void SelectedArrestDecisionStagePlansExactCoreTargetWithoutProviderPlanning()
+    {
+        ArrestFixture fixture = CreateArrestFixture(
+            "npc/guard", "npc/target-z", "npc/target-high", "npc/target-a");
+        fixture.AddWanted("npc/target-z", 80f);
+        fixture.AddWanted("npc/target-high", 100f);
+        fixture.AddWanted("npc/target-a", 80f);
+        RecordingSelectedDecisionBoundary boundary = new RecordingSelectedDecisionBoundary();
+        FixedActionRandom random = new FixedActionRandom(0f);
+
+        Assert.That(DailyV1SelectedNpcActionDecisionStage.TryChoose(
+            fixture.Graph,
+            fixture.Guard,
+            new[] { fixture.ArrestAction },
+            fixture.Guard.Status.Statuses,
+            12L,
+            random,
+            boundary,
+            out DailyV1NpcActionCandidate selected), Is.True);
+
+        Assert.That(selected, Is.Not.Null);
+        Assert.That(selected.Action, Is.SameAs(fixture.ArrestAction));
+        Assert.That(selected.PreparedPayload, Is.Not.Null);
+        Assert.That(selected.PreparedPayload.TargetNpcRuntimeId, Is.EqualTo("npc/target-high"));
+        Assert.That(selected.PreparedPayload.TargetCityRuntimeId, Is.Null);
+        Assert.That(selected.PreparedPayload.TargetItem, Is.Null);
+        Assert.That(selected.PreparedPayload.Amount, Is.Zero);
+        Assert.That(selected.Utility, Is.EqualTo(80f));
+        Assert.That(boundary.ArrestProjectionCalls, Is.EqualTo(1));
+        Assert.That(boundary.ProjectedPayload, Is.SameAs(selected.PreparedPayload));
+        Assert.That(boundary.LegacyProviderPlanCalls, Is.Zero);
+        Assert.That(random.Calls, Is.EqualTo(1));
+        Assert.That(random.LastStreamKey, Is.EqualTo("npc-decision|npc/guard|12"));
+    }
+
+    [Test]
+    public void SelectedArrestDecisionStageDoesNotDrawWhenNoCoreTargetExists()
+    {
+        ArrestFixture fixture = CreateArrestFixture("npc/guard", "npc/target");
+        RecordingSelectedDecisionBoundary boundary = new RecordingSelectedDecisionBoundary();
+        FixedActionRandom random = new FixedActionRandom(0f);
+
+        Assert.That(DailyV1SelectedNpcActionDecisionStage.TryChoose(
+            fixture.Graph,
+            fixture.Guard,
+            new[] { fixture.ArrestAction },
+            fixture.Guard.Status.Statuses,
+            12L,
+            random,
+            boundary,
+            out DailyV1NpcActionCandidate selected), Is.True);
+
+        Assert.That(selected, Is.Null);
+        Assert.That(boundary.ArrestProjectionCalls, Is.Zero);
+        Assert.That(boundary.LegacyProviderPlanCalls, Is.Zero);
+        Assert.That(random.Calls, Is.Zero);
+    }
+
+    [Test]
+    public void SelectedActionEligibilityUsesTheAdmittedEffectiveConfiguration()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        EffectiveSimulationConfiguration current = definitions.EffectiveConfiguration;
+        DailyV1EffectiveDefinitions disabled = CopyWithConfiguration(definitions,
+            new EffectiveSimulationConfiguration(
+                current.Population,
+                current.Economy,
+                current.Travel,
+                new EffectiveCrimeConfiguration(enabled: true, autonomousEnabled: false),
+                new EffectiveGuardCrimeConfiguration(enabled: false),
+                current.NaturalMortality,
+                current.AggregateDemography,
+                new EffectiveMerchantTradeConfiguration(),
+                current.CommercialKnowledge));
+        DailyV1EffectiveDefinitions foreign =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+
+        Assert.That(DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+            disabled, disabled.Actions["PRENDER"]), Is.False);
+        Assert.That(DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+            disabled, disabled.Actions["ROUBAR"]), Is.False);
+        Assert.That(DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
+            disabled, disabled.Actions["ROUBAR"]), Is.True,
+            "The autonomous-only flag does not reject a supported direct action at execution time.");
+        Assert.That(DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+            disabled, disabled.Actions["VENDER_MERCADORIA"]), Is.False);
+        Assert.That(DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+            disabled, disabled.Actions["DESCANSAR"]), Is.True);
+        Assert.That(DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+            disabled, foreign.Actions["DESCANSAR"]), Is.False,
+            "An action node from a different definition graph is never admitted.");
+    }
+
+    [Test]
     public void SelectedArrestGraphPlanningChoosesHighestBountyThenOrdinalRuntimeId()
     {
         ArrestFixture fixture = CreateArrestFixture(
@@ -276,6 +370,34 @@ public sealed class DailyV1GuardActionPlanningTests
             npcsByRuntimeId["npc/guard"], ArrestAction(definitions), npcsByRuntimeId);
     }
 
+    private static DailyV1EffectiveDefinitions CopyWithConfiguration(
+        DailyV1EffectiveDefinitions definitions,
+        EffectiveSimulationConfiguration effectiveConfiguration)
+    {
+        return new DailyV1EffectiveDefinitions(
+            definitions.Configuration,
+            effectiveConfiguration,
+            definitions.Calendar,
+            definitions.ContentFingerprint,
+            definitions.Cities.Values,
+            definitions.Items.Values,
+            definitions.Npcs.Values,
+            definitions.Jobs.Values,
+            definitions.Actions.Values,
+            definitions.Statuses.Values,
+            definitions.ContentRecords,
+            definitions.StageOrder,
+            definitions.ProfileContractIdentity,
+            definitions.GeographyProfileContractIdentity,
+            definitions.GeographyStageIdentity,
+            definitions.HexCoordinateConvention,
+            definitions.HexCoordinateCanonicalOrder,
+            definitions.ContentProjection,
+            definitions.Traits.Values,
+            definitions.CapabilityAttributes.Values,
+            definitions.ExplorableSites.Values);
+    }
+
     private static DailyV1CityDefinition FirstCity(DailyV1EffectiveDefinitions definitions)
     {
         foreach (DailyV1CityDefinition city in definitions.Cities.Values)
@@ -339,9 +461,58 @@ public sealed class DailyV1GuardActionPlanningTests
     private sealed class FixedActionRandom : IAuthoritativeRandomSource
     {
         private readonly float value;
+        internal int Calls { get; private set; }
+        internal string LastStreamKey { get; private set; }
         internal FixedActionRandom(float value) => this.value = value;
-        public float NextUnit(string streamKey, long drawIndex = 0L) => value;
+        public float NextUnit(string streamKey, long drawIndex = 0L)
+        {
+            Calls++;
+            LastStreamKey = streamKey;
+            return value;
+        }
         public DeterministicRandomStream CreateStream(string streamKey) => null;
+    }
+
+    private sealed class RecordingSelectedDecisionBoundary
+        : IDailyV1SelectedNpcActionDecisionBoundary,
+            IDailyV1SelectedGuardActionProjectionBoundary
+    {
+        internal int ArrestProjectionCalls { get; private set; }
+        internal int LegacyProviderPlanCalls { get; private set; }
+        internal DailyV1NpcActionPayloadOwner ProjectedPayload { get; private set; }
+
+        public bool HasTravelActionProvider(DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action) => false;
+        public TravelPartyStore GetTravelPartyStore(DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action) => null;
+        public bool TryProjectTravelAction(DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate) => false;
+        public bool HasMerchantActionProvider(DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action) => false;
+        public bool HasEnabledCrimeActionProvider(DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action) => false;
+        public bool TryProjectStealAction(DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate) => false;
+        public bool TryProjectFleeCityAction(DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate) => false;
+        public bool TryProjectBuyAction(DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate) => false;
+        public bool TryProjectSellAction(DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate) => false;
+        public bool TryPrepareAutonomousProviderAction(DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate, out float utility)
+        {
+            LegacyProviderPlanCalls++;
+            utility = 0f;
+            return false;
+        }
+        public bool TryProjectSelectedGuardArrestAction(DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate candidate)
+        {
+            ArrestProjectionCalls++;
+            ProjectedPayload = candidate?.PreparedPayload;
+            return ProjectedPayload != null;
+        }
     }
 
     private sealed class RecordingGuardBoundary

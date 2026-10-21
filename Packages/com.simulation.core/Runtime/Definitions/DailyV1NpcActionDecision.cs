@@ -397,9 +397,62 @@ internal interface IDailyV1SelectedNpcActionDecisionBoundary
         out float utility);
 }
 
+/// <summary>
+/// Optional Unity object projection for a Core-planned selected Guard Arrest.
+/// Target identity and utility are already fixed in the candidate payload;
+/// implementations may only resolve that exact owner into the host object.
+/// </summary>
+internal interface IDailyV1SelectedGuardActionProjectionBoundary
+{
+    bool TryProjectSelectedGuardArrestAction(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionCandidate candidate);
+}
+
 /// <summary>Core-owned selection half of one admitted Daily-v1 actor turn.</summary>
 internal static class DailyV1SelectedNpcActionDecisionStage
 {
+    internal static bool IsEnabledForRuntime(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ActionDefinition action)
+    {
+        if (definitions == null || action == null
+            || !definitions.Actions.TryGetValue(action.DefinitionId,
+                out DailyV1ActionDefinition admittedAction)
+            || !ReferenceEquals(admittedAction, action))
+            return false;
+
+        EffectiveSimulationConfiguration configuration = definitions.EffectiveConfiguration;
+        switch (action.Values.actionType?.Value ?? int.MinValue)
+        {
+            case DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue:
+            case DailyV1NpcDefinitionRules.SellGoodsActionTypeValue:
+                return configuration?.MerchantTrade?.Enabled == true;
+            case DailyV1NpcDefinitionRules.StealActionTypeValue:
+            case DailyV1NpcDefinitionRules.HideActionTypeValue:
+            case DailyV1NpcDefinitionRules.FleeCityActionTypeValue:
+            case DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue:
+                return configuration?.Crime?.Enabled == true;
+            case DailyV1NpcDefinitionRules.ArrestActionTypeValue:
+                return configuration?.GuardCrime?.Enabled == true;
+            default:
+                return true;
+        }
+    }
+
+    internal static bool IsEnabledForAutonomousSelection(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ActionDefinition action)
+    {
+        if (!IsEnabledForRuntime(definitions, action)) return false;
+        int actionType = action.Values.actionType?.Value ?? int.MinValue;
+        return actionType != DailyV1NpcDefinitionRules.StealActionTypeValue
+            && actionType != DailyV1NpcDefinitionRules.HideActionTypeValue
+            && actionType != DailyV1NpcDefinitionRules.FleeCityActionTypeValue
+            && actionType != DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue
+            || definitions.EffectiveConfiguration?.Crime?.AutonomousEnabled == true;
+    }
+
     /// <summary>
     /// Retains selected-definition action choice for admitted Unity runtimes
     /// that predate selected-owner graph composition. Owner-backed planning is
@@ -474,6 +527,12 @@ internal static class DailyV1SelectedNpcActionDecisionStage
 
         foreach (DailyV1NpcActionCandidate candidate in candidates)
         {
+            if (!IsEnabledForAutonomousSelection(graph.Definitions, candidate.Action))
+            {
+                candidate.Utility = 0f;
+                continue;
+            }
+
             int? actionType = candidate.Action.Values.actionType?.Value;
             if (actionType == DailyV1NpcDefinitionRules.NormalActionTypeValue)
                 continue;
@@ -546,6 +605,41 @@ internal static class DailyV1SelectedNpcActionDecisionStage
                         graph, actor, candidate)
                     || candidate.PreparedPayload == null
                     || !boundary.TryProjectFleeCityAction(actor, candidate))
+                    candidate.Utility = 0f;
+                continue;
+            }
+
+            if (actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue)
+            {
+                if (!DailyV1GuardActionPlanning.TryPlanArrest(
+                        graph, actor, candidate.Action, candidate.Utility,
+                        out DailyV1NpcRuntimeOwners targetOwner, out float arrestUtility)
+                    || targetOwner == null
+                    || !DailyV1NpcActionPayloadOwner.TryCreate(
+                        graph.Definitions,
+                        candidate.Action,
+                        targetOwner.RuntimeId,
+                        null,
+                        null,
+                        0,
+                        0f,
+                        1f,
+                        NpcTravelReason.None,
+                        0f,
+                        null,
+                        null,
+                        null,
+                        null,
+                        out DailyV1NpcActionPayloadOwner arrestPayload))
+                {
+                    candidate.Utility = 0f;
+                    continue;
+                }
+
+                candidate.Utility = arrestUtility;
+                candidate.PreparedPayload = arrestPayload;
+                if (!(boundary is IDailyV1SelectedGuardActionProjectionBoundary projectionBoundary)
+                    || !projectionBoundary.TryProjectSelectedGuardArrestAction(actor, candidate))
                     candidate.Utility = 0f;
                 continue;
             }
