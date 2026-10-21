@@ -640,7 +640,8 @@ public class TesteSimulacao : MonoBehaviour
                         InitializeJusticeState();
                         if (selectedRuntimeOwnerGraphBuilder != null
                             && !selectedRuntimeOwnerGraphBuilder.TryBuild(
-                                justiceSystem?.CoreOwner, out selectedInitialRuntimeOwnerGraph))
+                                justiceSystem?.CoreOwner, travelPartyStore,
+                                out selectedInitialRuntimeOwnerGraph))
                             throw new System.InvalidOperationException(
                                 "The selected Core City/NPC/Justice owner graph does not exactly match the admitted Daily-v1 genesis composition.");
                         simulationRuntime = new SimulationRuntime(

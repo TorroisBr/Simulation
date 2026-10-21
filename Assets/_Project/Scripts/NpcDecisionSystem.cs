@@ -200,15 +200,6 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             TryGetActionAsset(actor, action, out NpcActionData asset)
             && decisionSystem.GetProviderForAction(npcRuntime, asset) is TravelActionProvider;
 
-        public TravelPartyStore GetTravelPartyStore(
-            DailyV1NpcRuntimeOwners actor,
-            DailyV1ActionDefinition action)
-        {
-            if (!TryGetActionAsset(actor, action, out NpcActionData asset)) return null;
-            return decisionSystem.GetProviderForAction(npcRuntime, asset)
-                is TravelActionProvider provider ? provider.SelectedTravelPartyStore : null;
-        }
-
         public bool TryProjectTravelAction(
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcActionCandidate candidate)

@@ -91,7 +91,6 @@ internal static class DailyV1SelectedActionExecutionStage
 
     internal interface ISelectedFleeCityActionBoundary
     {
-        TravelPartyStore TravelPartyStore { get; }
         bool ExecuteWithinOperation(Func<bool> operation);
         bool CommitTravelPlan(
             DailyV1NpcRuntimeOwners actor,
@@ -377,13 +376,13 @@ internal static class DailyV1SelectedActionExecutionStage
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
         DailyV1ActionDefinition expectedAction,
-        TravelPartyStore partyStore,
         out SelectedFleeCityPlan plan)
     {
         plan = null;
         DailyV1NpcActionSlotOwner slot = actor?.ActionSlot;
         DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
-        if (graph == null || actor == null || expectedAction == null
+        if (graph == null || graph.TravelParties == null
+            || actor == null || expectedAction == null
             || !graph.ContainsExactNpcOwner(actor)
             || !ReferenceEquals(graph.Definitions, actor.Definitions)
             || !ReferenceEquals(slot?.CurrentAction, expectedAction)
@@ -397,7 +396,7 @@ internal static class DailyV1SelectedActionExecutionStage
             || actor.Travel == null || actor.Travel.IsTraveling
             || string.IsNullOrWhiteSpace(actor.Travel.CurrentCityRuntimeId)
             || string.IsNullOrWhiteSpace(actor.Travel.CurrentLocationRuntimeId)
-            || graph.IsManagedByTravelParty(actor, partyStore))
+            || graph.IsManagedByTravelParty(actor, graph.TravelParties))
             return false;
 
         string arrestedStatusId = graph.Definitions.Configuration?.arrestedStatus;
@@ -613,7 +612,9 @@ internal static class DailyV1SelectedActionExecutionStage
         result = null;
         DailyV1NpcActionSlotOwner slot = actor?.ActionSlot;
         DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
-        if (graph == null || actor == null || !graph.ContainsExactNpcOwner(actor)
+        if (graph == null || graph.TravelParties == null
+            || !ReferenceEquals(graph.TravelParties, partyStore)
+            || actor == null || !graph.ContainsExactNpcOwner(actor)
             || slot?.CurrentAction == null || payload == null
             || !ReferenceEquals(payload.Action, slot.CurrentAction)
             || slot.CurrentAction.Values.actionType?.Value
@@ -670,7 +671,6 @@ internal static class DailyV1SelectedActionExecutionStage
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
         DailyV1ActionDefinition expectedAction,
-        TravelPartyStore partyStore,
         IAuthoritativeRandomSource randomSource,
         long currentAbsoluteDay,
         ISelectedSoloTravelActionBoundary boundary,
@@ -678,7 +678,8 @@ internal static class DailyV1SelectedActionExecutionStage
     {
         result = null;
         DailyV1NpcActionSlotOwner slot = actor?.ActionSlot;
-        if (graph == null || actor == null || expectedAction == null
+        if (graph == null || graph.TravelParties == null
+            || actor == null || expectedAction == null
             || !graph.ContainsExactNpcOwner(actor)
             || !ReferenceEquals(slot?.CurrentAction, expectedAction)
             || expectedAction.Values.actionType?.Value != DailyV1NpcDefinitionRules.TravelActionTypeValue)
@@ -722,7 +723,7 @@ internal static class DailyV1SelectedActionExecutionStage
             string destinationCityRuntimeId = payload.TargetCityRuntimeId;
             if (string.IsNullOrWhiteSpace(destinationCityRuntimeId)
                 || !TryExecuteSoloTravelSlot(graph, actor, destinationCityRuntimeId,
-                    partyStore,
+                    graph.TravelParties,
                     (plan, route, cost) => boundary.CanCommitPreparedTransition(plan, route, cost),
                     boundary.CommitPreparedTransition,
                     out SoloTravelResult travel)
@@ -1226,7 +1227,6 @@ internal interface IDailyV1SelectedActionDispatchBoundary
     bool TryGetSoloTravelBoundary(
         DailyV1NpcRuntimeOwners actor,
         DailyV1ActionDefinition action,
-        out TravelPartyStore partyStore,
         out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary);
 
     bool TryGetMarketBoundaries(
@@ -1420,13 +1420,12 @@ internal static class DailyV1SelectedActionDispatchStage
             if (payload.TargetNpcRuntimeId != null || payload.TargetItem != null
                 || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
                 || !boundary.TryGetSoloTravelBoundary(actor, action,
-                    out TravelPartyStore partyStore,
                     out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary travelBoundary)
                 || travelBoundary == null)
                 return false;
 
             if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
-                    graph, actor, action, partyStore, randomSource, currentAbsoluteDay,
+                    graph, actor, action, randomSource, currentAbsoluteDay,
                     travelBoundary,
                     out DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult travel))
                 return false;
@@ -1470,7 +1469,7 @@ internal static class DailyV1SelectedActionDispatchStage
             bool fleeSucceeded = fleeBoundary.ExecuteWithinOperation(() =>
             {
                 if (!DailyV1SelectedActionExecutionStage.TryPrepareSelectedFleeCityPlan(
-                        graph, actor, action, fleeBoundary.TravelPartyStore,
+                        graph, actor, action,
                         out DailyV1SelectedActionExecutionStage.SelectedFleeCityPlan plan)
                     || plan == null
                     || !fleeBoundary.CommitTravelPlan(actor, plan.Destination, plan.TravelCost,

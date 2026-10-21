@@ -625,11 +625,10 @@ public sealed class DailyV1SelectedOpenMarketActionExecutionTests
         }
 
         public bool TryGetSoloTravelBoundary(DailyV1NpcRuntimeOwners actor,
-            DailyV1ActionDefinition action, out TravelPartyStore partyStore,
+            DailyV1ActionDefinition action,
             out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary)
         {
             BoundaryResolutionCalls++;
-            partyStore = null;
             boundary = null;
             return false;
         }

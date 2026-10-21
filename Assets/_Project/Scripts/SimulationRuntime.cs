@@ -575,24 +575,23 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         public bool TryGetSoloTravelBoundary(
             DailyV1NpcRuntimeOwners actor,
             DailyV1ActionDefinition action,
-            out TravelPartyStore partyStore,
             out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary)
         {
-            partyStore = null;
             boundary = null;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
             if (!TryGetExactActor(actor, action, out NpcRuntime exactActor)
                 || !ReferenceEquals(exactActor, actorRuntime)
+                || graph?.TravelParties == null
                 || !TryGetExactCityProjection(
-                    runtime.SelectedRuntimeOwnerGraph,
+                    graph,
                     actor.ActionSlot?.CurrentPayload?.TargetCityRuntimeId,
                     actionRuntime.TargetCity,
                     out _, out _)
                 || runtime.npcDecisionSystem?.GetProviderForAction(exactActor, actionAsset)
                     is not TravelActionProvider travelProvider
-                || travelProvider.SelectedTravelPartyStore == null)
+                || !ReferenceEquals(graph.TravelParties, travelProvider.SelectedTravelPartyStore))
                 return false;
 
-            partyStore = travelProvider.SelectedTravelPartyStore;
             boundary = new SelectedSoloTravelActionBoundaryAdapter(
                 operation =>
                 {
@@ -629,13 +628,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             out DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary boundary)
         {
             boundary = null;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
             if (!TryGetExactActor(actor, action, out NpcRuntime exactActor)
                 || !ReferenceEquals(exactActor, actorRuntime)
                 || !(runtime.npcDecisionSystem?.GetProviderForAction(exactActor, actionAsset)
                     is CrimeSystem)
+                || graph?.TravelParties == null
                 || runtime.travelSystem == null
+                || !ReferenceEquals(graph.TravelParties, runtime.travelSystem.SelectedTravelPartyStore)
                 || !TryGetExactCityProjection(
-                    runtime.SelectedRuntimeOwnerGraph,
+                    graph,
                     actor.ActionSlot?.CurrentPayload?.TargetCityRuntimeId,
                     actionRuntime.TargetCity,
                     out DailyV1CityRuntimeOwners targetCityOwner,
@@ -643,8 +645,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 return false;
 
             boundary = new SelectedFleeCityActionBoundaryAdapter(
-                this, runtime, exactActor, actionRuntime.TargetCity, targetCityOwner,
-                runtime.travelSystem.SelectedTravelPartyStore);
+                this, runtime, exactActor, actionRuntime.TargetCity, targetCityOwner);
             return true;
         }
 
@@ -1047,15 +1048,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             private readonly CityRuntime targetCityProjection;
             private readonly DailyV1CityRuntimeOwners targetCityOwner;
 
-            public TravelPartyStore TravelPartyStore { get; }
-
             internal SelectedFleeCityActionBoundaryAdapter(
                 SelectedActionDispatchBoundaryAdapter dispatchBoundary,
                 SimulationRuntime runtime,
                 NpcRuntime actorRuntime,
                 CityRuntime targetCityProjection,
-                DailyV1CityRuntimeOwners targetCityOwner,
-                TravelPartyStore travelPartyStore)
+                DailyV1CityRuntimeOwners targetCityOwner)
             {
                 this.dispatchBoundary = dispatchBoundary
                     ?? throw new ArgumentNullException(nameof(dispatchBoundary));
@@ -1065,7 +1063,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     ?? throw new ArgumentNullException(nameof(targetCityProjection));
                 this.targetCityOwner = targetCityOwner
                     ?? throw new ArgumentNullException(nameof(targetCityOwner));
-                TravelPartyStore = travelPartyStore;
             }
 
             public bool ExecuteWithinOperation(Func<bool> operation)
@@ -2560,7 +2557,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         DailyV1SelectedRuntimeOwnerGraph selectedOwnerGraph =
             TryCreateSelectedRuntimeOwnerGraph(
                 this.cities, this.npcRuntimes, spatialNetworkRuntime?.SelectedOwner,
-                this.justiceSystem?.CoreOwner);
+                this.justiceSystem?.CoreOwner,
+                this.travelPartySystem?.Store ?? travelSystem?.SelectedTravelPartyStore);
         if (!dailyExecutionBoundary.TryBindSelectedRuntimeOwnerGraph(selectedOwnerGraph))
             throw new InvalidOperationException("The selected owner graph could not be bound to this runtime boundary.");
         selectedRuntimeOwnerGraphProvider = () => dailyExecutionBoundary.SelectedRuntimeOwnerGraph;
@@ -9676,6 +9674,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             || !ReferenceEquals(current.Definitions, graph.Definitions)
             || !ReferenceEquals(current.SpatialNetwork, graph.SpatialNetwork)
             || !ReferenceEquals(graph.JusticeRecordsOwner, exactJusticeOwner)
+            || !ReferenceEquals(graph.TravelParties,
+                travelPartySystem?.Store ?? travelSystem?.SelectedTravelPartyStore)
             || !graph.MatchesExactOwnerInstances(
                 cities.Select(city => city?.SelectedRuntimeOwners),
                 npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners).Where(owner => owner != null)))
@@ -9688,7 +9688,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         IReadOnlyList<CityRuntime> cityRuntimes,
         IReadOnlyList<NpcRuntime> npcRuntimes,
         SpatialNetworkOwner spatialNetwork,
-        DailyV1JusticeRecordsOwner justiceRecordsOwner)
+        DailyV1JusticeRecordsOwner justiceRecordsOwner,
+        TravelPartyStore travelParties)
     {
         if (cityRuntimes == null || npcRuntimes == null) return null;
         if (spatialNetwork != null)
@@ -9710,6 +9711,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners).Where(owner => owner != null),
             spatialNetwork,
             justiceRecordsOwner,
+            travelParties,
             out DailyV1SelectedRuntimeOwnerGraph graph) ? graph : null;
     }
 
@@ -13306,7 +13308,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     SelectedRuntimeOwnerGraph,
                     npcRuntime.SelectedRuntimeOwners,
                     selectedTravelAction,
-                    selectedTravelProvider.SelectedTravelPartyStore,
                     randomSource,
                     CurrentDay,
                     boundary,

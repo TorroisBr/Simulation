@@ -62,7 +62,9 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             destinationLocation, originLocation, 3), () => true), Is.True);
         Assert.That(builder.TryCreateConfiguredNpcs(allocator,
             cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
-        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        TravelPartyStore partyStore = new TravelPartyStore();
+        Assert.That(builder.TryBuild(null, partyStore,
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
         DailyV1NpcRuntimeOwners npc = graph.Npcs.Single(owner =>
             string.Equals(owner.Definition.DefinitionId, "JORGE", StringComparison.Ordinal));
         DailyV1CityRuntimeOwners origin = graph.Cities.Single(owner =>
@@ -111,8 +113,16 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             out DailyV1NpcActionPayloadOwner travelPayload), Is.True);
         Assert.That(graph.TryCommitCurrentActionSlot(npc, travelAction, travelPayload, null), Is.True);
         float balanceBeforeTravel = npc.MoneyAccount.Balance;
+        long travelRevisionBefore = npc.Travel.Revision;
+        TravelPartyStore mismatchedStore = new TravelPartyStore();
         Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSoloTravelSlot(
-            graph, npc, destination.RuntimeId, null, _ => false,
+            graph, npc, destination.RuntimeId, mismatchedStore, _ => true,
+            out DailyV1SelectedActionExecutionStage.SoloTravelResult mismatchedStoreResult), Is.False);
+        Assert.That(mismatchedStoreResult, Is.Null);
+        Assert.That(npc.MoneyAccount.Balance, Is.EqualTo(balanceBeforeTravel).Within(0.001f));
+        Assert.That(npc.Travel.Revision, Is.EqualTo(travelRevisionBefore));
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSoloTravelSlot(
+            graph, npc, destination.RuntimeId, partyStore, _ => false,
             out DailyV1SelectedActionExecutionStage.SoloTravelResult rejectedTravel), Is.True);
         Assert.That(rejectedTravel.Succeeded, Is.False);
         Assert.That(rejectedTravel.Execution.Failure,
@@ -121,7 +131,6 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(npc.MoneyAccount.Balance, Is.EqualTo(balanceBeforeTravel).Within(0.001f));
         Assert.That(npc.Travel.IsTraveling, Is.False);
 
-        TravelPartyStore partyStore = new TravelPartyStore();
         Assert.That(graph.IsManagedByTravelParty(npc, partyStore), Is.False,
             "Neither owner nor store membership must leave solo travel eligible.");
         TravelPartyRuntime party = new TravelPartyRuntime("party/travel-guard",
@@ -166,7 +175,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             npc.Travel.TravelOriginDecisionId, null, npc.Travel.Revision), Is.True);
 
         Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSoloTravelSlot(
-            graph, npc, destination.RuntimeId, null, transition => transition.TryCommit(),
+            graph, npc, destination.RuntimeId, partyStore, transition => transition.TryCommit(),
             out DailyV1SelectedActionExecutionStage.SoloTravelResult stagedTravel), Is.True);
         Assert.That(stagedTravel.Succeeded, Is.True);
         Assert.That(stagedTravel.Route.RuntimeId, Is.EqualTo("route/merchant-test"));
@@ -192,7 +201,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         FixedTravelActionRandomSource random = new FixedTravelActionRandomSource();
 
         Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
-            graph, actor, action, partyStore, random, 27L, boundary,
+            graph, actor, action, random, 27L, boundary,
             out DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult result), Is.True);
 
         Assert.That(result.Succeeded, Is.True);
@@ -209,6 +218,17 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(actor.SpatialKnowledge.KnowsRoute(result.Travel.Route.RuntimeId), Is.True);
         Assert.That(actor.TravelPlan.TargetCityRuntimeId, Is.Null);
         Assert.That(actor.TravelPlan.Reason, Is.EqualTo(NpcTravelReason.None));
+        Assert.That(graph.TryCreateWithoutNpc(actor,
+            out DailyV1SelectedRuntimeOwnerGraph rosterAfterRemoval), Is.True);
+        Assert.That(rosterAfterRemoval.TravelParties, Is.SameAs(partyStore));
+
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
+            "npc/added-travel-party-preservation", graph.Definitions,
+            actor.Definition, 0f,
+            out DailyV1NpcRuntimeOwners addedNpc), Is.True);
+        Assert.That(graph.TryCreateWithAddedNpc(addedNpc,
+            out DailyV1SelectedRuntimeOwnerGraph rosterAfterAddition), Is.True);
+        Assert.That(rosterAfterAddition.TravelParties, Is.SameAs(partyStore));
     }
 
     [Test]
@@ -224,7 +244,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             order, graph, actor, NpcTravelReason.CommercialScout);
 
         Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
-            graph, actor, action, partyStore, new FixedTravelActionRandomSource(), 28L, boundary,
+            graph, actor, action, new FixedTravelActionRandomSource(), 28L, boundary,
             out DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult result), Is.True);
 
         Assert.That(result.Succeeded, Is.True);
@@ -256,10 +276,19 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         long travelRevisionBefore = actor.Travel.Revision;
         long travelPlanRevisionBefore = actor.TravelPlan.Revision;
 
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+            graph.Cities, graph.Npcs, graph.SpatialNetwork, graph.JusticeRecordsOwner,
+            null, out DailyV1SelectedRuntimeOwnerGraph graphWithoutTravelPartyOwner), Is.True);
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
+            graphWithoutTravelPartyOwner, actor, action, random, 29L, boundary, out _), Is.False,
+            "Core selected Travel requires the graph-bound P8 TravelParty owner.");
+        Assert.That(random.Calls, Is.Zero);
+        Assert.That(order, Is.Empty);
+
         DailyV1ActionDefinition mismatchedAction = definitions.Actions.Values.First(candidate =>
             candidate.Values.actionType?.Value != DailyV1NpcDefinitionRules.TravelActionTypeValue);
         Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
-            graph, actor, mismatchedAction, partyStore, random, 29L, boundary, out _), Is.False);
+            graph, actor, mismatchedAction, random, 29L, boundary, out _), Is.False);
         Assert.That(random.Calls, Is.Zero);
         Assert.That(order, Is.Empty);
 
@@ -269,7 +298,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             out DailyV1NpcActionPayloadOwner unsupportedPayload), Is.True);
         Assert.That(graph.TryCommitCurrentActionSlot(actor, action, unsupportedPayload, null), Is.True);
         Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
-            graph, actor, action, partyStore, random, 29L, boundary, out _), Is.False,
+            graph, actor, action, random, 29L, boundary, out _), Is.False,
             "An unbound target is not dispatched by the Core Travel operation.");
         Assert.That(random.Calls, Is.Zero);
         Assert.That(order, Is.Empty);
@@ -280,7 +309,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             out DailyV1NpcActionPayloadOwner missingDestinationPayload), Is.True);
         Assert.That(graph.TryCommitCurrentActionSlot(actor, action, missingDestinationPayload, null), Is.True);
         Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
-            graph, actor, action, partyStore, random, 29L, boundary,
+            graph, actor, action, random, 29L, boundary,
             out DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult missingDestination), Is.True);
         Assert.That(missingDestination.Succeeded, Is.False);
         Assert.That(missingDestination.ActionRollSucceeded, Is.True,
@@ -308,7 +337,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         long travelRevisionBefore = actor.Travel.Revision;
 
         Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
-            graph, actor, action, partyStore, random, 30L, boundary,
+            graph, actor, action, random, 30L, boundary,
             out DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult result), Is.True);
 
         Assert.That(result.Succeeded, Is.False);
@@ -334,7 +363,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         long planRevisionBefore = actor.TravelPlan.Revision;
 
         Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
-            graph, actor, action, partyStore, new FixedTravelActionRandomSource(), 31L, boundary,
+            graph, actor, action, new FixedTravelActionRandomSource(), 31L, boundary,
             out DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult result), Is.True);
 
         Assert.That(result.Succeeded, Is.False);
@@ -378,7 +407,9 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             destinationLocation, originLocation, 3), () => true), Is.True);
         Assert.That(builder.TryCreateConfiguredNpcs(allocator,
             cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
-        Assert.That(builder.TryBuild(out graph), Is.True);
+        partyStore = new TravelPartyStore();
+        Assert.That(builder.TryBuild(null, partyStore, out graph), Is.True);
+        Assert.That(graph.TravelParties, Is.SameAs(partyStore));
         actor = graph.Npcs.Single(owner =>
             string.Equals(owner.Definition.DefinitionId, "JORGE", StringComparison.Ordinal));
         string destinationRuntimeId = destination.RuntimeId;
@@ -393,7 +424,6 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(graph.TryCommitCurrentActionSlot(actor, action, payload, null), Is.True);
         Assert.That(actor.TravelPlan.TryInstallExact(destination.LocationRuntimeId,
             destination.RuntimeId, reason, 60f, 30f, "decision/selected-travel", 1L), Is.True);
-        partyStore = new TravelPartyStore();
     }
 
     private static DailyV1EffectiveDefinitions CreateTravelRollDefinitions(

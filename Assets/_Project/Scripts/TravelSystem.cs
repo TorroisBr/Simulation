@@ -145,6 +145,13 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (selectedOwners
+            && (selectedGraph.TravelParties == null
+                || !ReferenceEquals(selectedGraph.TravelParties, travelPartyStore)))
+        {
+            return false;
+        }
+
         if (!selectedOwners
             && (travelCost < 0f || transactionService.CanChargeTravel(npcRuntime, travelCost) == false))
         {

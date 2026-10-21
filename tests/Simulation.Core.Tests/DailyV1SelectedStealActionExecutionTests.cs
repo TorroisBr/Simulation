@@ -229,8 +229,8 @@ public sealed class DailyV1SelectedStealActionExecutionTests
         private readonly RecordingStealBoundary stealBoundary;
         internal DispatchBoundary(RecordingStealBoundary stealBoundary) => this.stealBoundary = stealBoundary;
         public bool TryGetSoloTravelBoundary(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action,
-            out TravelPartyStore partyStore, out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary)
-        { partyStore = null; boundary = null; return false; }
+            out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary)
+        { boundary = null; return false; }
         public bool TryGetMarketBoundaries(DailyV1NpcRuntimeOwners actor,
             out IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
             out IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary)

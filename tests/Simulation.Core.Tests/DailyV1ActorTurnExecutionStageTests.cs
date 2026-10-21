@@ -448,9 +448,8 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         }
         public bool TryProjectSelectedGuardArrestAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate) => false;
 
-        public bool TryGetSoloTravelBoundary(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action, out TravelPartyStore partyStore, out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary)
+        public bool TryGetSoloTravelBoundary(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action, out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary)
         {
-            partyStore = null;
             boundary = null;
             return false;
         }

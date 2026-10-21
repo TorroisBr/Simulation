@@ -70,7 +70,7 @@ public sealed class DailyV1TravelActionPlanningTests
         DailyV1NpcActionCandidate candidate = new DailyV1NpcActionCandidate(travelAction, 5f);
 
         Assert.That(DailyV1NpcActionDecision.TryPrepareSelectedExistingTravelCandidate(
-            graph, actor, candidate, partyStore: null), Is.True);
+            graph, actor, candidate), Is.True);
 
         Assert.That(candidate.Utility, Is.EqualTo(40f));
         Assert.That(candidate.ExpectedTravelCost, Is.EqualTo(30f));
@@ -97,7 +97,7 @@ public sealed class DailyV1TravelActionPlanningTests
         DailyV1NpcActionCandidate unaffordable = new DailyV1NpcActionCandidate(travelAction, 5f);
 
         Assert.That(DailyV1NpcActionDecision.TryPrepareSelectedExistingTravelCandidate(
-            graph, actor, unaffordable, partyStore: null), Is.True);
+            graph, actor, unaffordable), Is.True);
         Assert.That(unaffordable.Utility, Is.Zero);
         Assert.That(unaffordable.PreparedPayload, Is.Null);
 
@@ -106,7 +106,7 @@ public sealed class DailyV1TravelActionPlanningTests
             null, null, 0, 0, null, false, null, "party-active", actor.Travel.Revision + 1L), Is.True);
         DailyV1NpcActionCandidate partyManaged = new DailyV1NpcActionCandidate(travelAction, 5f);
         Assert.That(DailyV1NpcActionDecision.TryPrepareSelectedExistingTravelCandidate(
-            graph, actor, partyManaged, partyStore: null), Is.True);
+            graph, actor, partyManaged), Is.True);
         Assert.That(partyManaged.Utility, Is.Zero);
         Assert.That(partyManaged.PreparedPayload, Is.Null);
     }
@@ -120,7 +120,7 @@ public sealed class DailyV1TravelActionPlanningTests
         DailyV1NpcActionCandidate candidate = new DailyV1NpcActionCandidate(travelAction, 5f);
 
         Assert.That(DailyV1NpcActionDecision.TryPrepareSelectedExistingTravelCandidate(
-            graph, actor, candidate, partyStore: null), Is.False);
+            graph, actor, candidate), Is.False);
 
         Assert.That(candidate.Utility, Is.EqualTo(5f));
         Assert.That(candidate.ExpectedTravelCost, Is.Zero);
@@ -146,7 +146,7 @@ public sealed class DailyV1TravelActionPlanningTests
         float balanceBefore = actor.MoneyAccount.Balance;
         long planRevisionBefore = actor.TravelPlan.Revision;
         Assert.That(DailyV1SelectedActionExecutionStage.TryPrepareSelectedFleeCityPlan(
-            graph, actor, fleeAction, null,
+            graph, actor, fleeAction,
             out DailyV1SelectedActionExecutionStage.SelectedFleeCityPlan plan), Is.True);
 
         Assert.That(plan.Destination, Is.SameAs(destination));
@@ -159,6 +159,31 @@ public sealed class DailyV1TravelActionPlanningTests
         Assert.That(actor.Travel.CurrentLocationRuntimeId, Is.EqualTo(originLocationId));
         Assert.That(actor.Travel.IsTraveling, Is.False);
         Assert.That(actor.TravelPlan.Revision, Is.EqualTo(planRevisionBefore));
+    }
+
+    [Test]
+    public void SelectedFleeCityFailsClosedWhenExactOwnerGraphHasNoTravelPartyStore()
+    {
+        (DailyV1SelectedRuntimeOwnerGraph graph, DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination, _) = CreateTravelCandidateFixture();
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+            graph.Cities, graph.Npcs, graph.SpatialNetwork, graph.JusticeRecordsOwner,
+            null, out DailyV1SelectedRuntimeOwnerGraph graphWithoutTravelParties), Is.True);
+        DailyV1ActionDefinition fleeAction = actor.Definitions.Actions.Values.Single(action =>
+            action.Values.actionType?.Value == DailyV1NpcDefinitionRules.FleeCityActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            actor.Definitions, fleeAction, null, destination.RuntimeId, null,
+            0, 0f, 1f, NpcTravelReason.None, 0f,
+            "decision/flee-city-no-party-store", null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, fleeAction, payload, null), Is.True);
+
+        float balanceBefore = actor.MoneyAccount.Balance;
+        long travelRevisionBefore = actor.Travel.Revision;
+        Assert.That(DailyV1SelectedActionExecutionStage.TryPrepareSelectedFleeCityPlan(
+            graphWithoutTravelParties, actor, fleeAction, out _), Is.False);
+        Assert.That(actor.MoneyAccount.Balance, Is.EqualTo(balanceBefore));
+        Assert.That(actor.Travel.Revision, Is.EqualTo(travelRevisionBefore));
     }
 
     [Test]
@@ -181,7 +206,7 @@ public sealed class DailyV1TravelActionPlanningTests
             out DailyV1StatusDefinition arrestedStatus), Is.True);
         Assert.That(actor.Status.TryAdd(arrestedStatus), Is.True);
         Assert.That(DailyV1SelectedActionExecutionStage.TryPrepareSelectedFleeCityPlan(
-            graph, actor, fleeAction, null, out _), Is.False);
+            graph, actor, fleeAction, out _), Is.False);
         Assert.That(actor.Status.TryRemove(arrestedStatus), Is.True);
 
         Assert.That(actor.Travel.TryInstallState(
@@ -190,7 +215,7 @@ public sealed class DailyV1TravelActionPlanningTests
             null, null, 0, 0, null, false, null,
             "party/active", actor.Travel.Revision + 1L), Is.True);
         Assert.That(DailyV1SelectedActionExecutionStage.TryPrepareSelectedFleeCityPlan(
-            graph, actor, fleeAction, null, out _), Is.False);
+            graph, actor, fleeAction, out _), Is.False);
 
         Assert.That(actor.Travel.TryInstallState(
             actor.Travel.CurrentLocationRuntimeId,
@@ -199,7 +224,7 @@ public sealed class DailyV1TravelActionPlanningTests
             null, actor.Travel.Revision + 1L), Is.True);
         Assert.That(actor.MoneyAccount.TryDebit(actor.MoneyAccount.Balance), Is.True);
         Assert.That(DailyV1SelectedActionExecutionStage.TryPrepareSelectedFleeCityPlan(
-            graph, actor, fleeAction, null, out _), Is.False);
+            graph, actor, fleeAction, out _), Is.False);
     }
 
     [Test]
@@ -319,9 +344,9 @@ public sealed class DailyV1TravelActionPlanningTests
             this.fleeBoundary = fleeBoundary;
 
         public bool TryGetSoloTravelBoundary(DailyV1NpcRuntimeOwners actor,
-            DailyV1ActionDefinition action, out TravelPartyStore partyStore,
+            DailyV1ActionDefinition action,
             out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary)
-        { partyStore = null; boundary = null; return false; }
+        { boundary = null; return false; }
         public bool TryGetMarketBoundaries(DailyV1NpcRuntimeOwners actor,
             out IDailyV1SelectedOpenMarketSaleBoundary sale,
             out IDailyV1SelectedOpenMarketPurchaseBoundary purchase)
@@ -411,7 +436,10 @@ public sealed class DailyV1TravelActionPlanningTests
         }
         Assert.That(builder.TryCreateConfiguredNpcs(allocator,
             cityId => builder.ResolveUniqueStartingCity(cityId)?.RuntimeId), Is.True);
-        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        TravelPartyStore travelParties = new TravelPartyStore();
+        Assert.That(builder.TryBuild(null, travelParties,
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        Assert.That(graph.TravelParties, Is.SameAs(travelParties));
         DailyV1NpcRuntimeOwners actor = graph.Npcs.Single(npc => npc.Definition.DefinitionId == "JORGE");
         DailyV1CityRuntimeOwners destination = graph.Cities.Single(city =>
             city.RuntimeId != actor.Travel.CurrentCityRuntimeId);

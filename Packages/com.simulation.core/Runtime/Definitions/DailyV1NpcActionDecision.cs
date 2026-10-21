@@ -26,10 +26,10 @@ internal static class DailyV1NpcActionDecision
     internal static bool TryPrepareSelectedExistingTravelCandidate(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
-        DailyV1NpcActionCandidate candidate,
-        TravelPartyStore partyStore)
+        DailyV1NpcActionCandidate candidate)
     {
-        if (graph == null || actor == null || candidate?.Action == null
+        if (graph == null || graph.TravelParties == null
+            || actor == null || candidate?.Action == null
             || candidate.Action.Values.actionType?.Value
                 != DailyV1NpcDefinitionRules.TravelActionTypeValue)
             return false;
@@ -41,7 +41,7 @@ internal static class DailyV1NpcActionDecision
             return false;
 
         if (!graph.ContainsExactNpcOwner(actor)
-            || graph.IsManagedByTravelParty(actor, partyStore)
+            || graph.IsManagedByTravelParty(actor, graph.TravelParties)
             || actor.Lifecycle?.LifeState != NpcLifeState.Alive
             || actor.Travel == null || actor.Travel.IsTraveling
             || !graph.TryGetCityLocationRuntimeId(plan.TargetCityRuntimeId,
@@ -383,7 +383,6 @@ internal static class DailyV1NpcActionDecision
 internal interface IDailyV1SelectedNpcActionDecisionBoundary
 {
     bool HasTravelActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
-    TravelPartyStore GetTravelPartyStore(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
     bool TryProjectTravelAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate);
     bool HasMerchantActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
     bool HasEnabledCrimeActionProvider(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action);
@@ -540,8 +539,7 @@ internal static class DailyV1SelectedNpcActionDecisionStage
             if (actionType == DailyV1NpcDefinitionRules.TravelActionTypeValue
                 && boundary.HasTravelActionProvider(actor, candidate.Action)
                 && DailyV1NpcActionDecision.TryPrepareSelectedExistingTravelCandidate(
-                    graph, actor, candidate,
-                    boundary.GetTravelPartyStore(actor, candidate.Action)))
+                    graph, actor, candidate))
             {
                 if (candidate.PreparedPayload == null
                     || !boundary.TryProjectTravelAction(actor, candidate))
