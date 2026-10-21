@@ -687,6 +687,14 @@ public sealed class DailyV1SelectedOpenMarketActionExecutionTests
             return false;
         }
 
+        public bool TryGetForcedEscapeBoundary(DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action,
+            out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary)
+        {
+            boundary = null;
+            return false;
+        }
+
         public bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) => true;
         public void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) { }
         public bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor) => true;

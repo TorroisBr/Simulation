@@ -41,6 +41,62 @@ internal interface IDailyV1ActorTurnExecutionBoundary
 }
 
 /// <summary>
+/// Optional selected-profile ports for Core to own the complete autonomous
+/// action sequence. The host supplies only Unity projections, existing P12
+/// admission/effect adapters, and presentation publication.
+/// </summary>
+internal interface IDailyV1SelectedActorActionExecutionBoundary
+{
+    IAuthoritativeRandomSource RandomSource { get; }
+    bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor);
+    void LogSkippedDirective(ScheduledDirective directive, string reason);
+
+    bool TryCreateDecisionBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        out IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary);
+
+    bool HasRequestedActionProvider(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action);
+
+    bool TryGetConfiguredActions(
+        DailyV1NpcRuntimeOwners actor,
+        out IReadOnlyList<DailyV1ActionDefinition> configuredActions);
+
+    bool TryRecordAndInstallSelectedAction(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionCandidate selected,
+        IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
+        NpcDecisionOrigin origin);
+
+    void ClearCurrentAction(DailyV1NpcRuntimeOwners actor);
+    bool IsActorAtCurrentCityLocation(DailyV1NpcRuntimeOwners actor);
+    void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor);
+    bool HasExactCurrentActionProjection(DailyV1NpcRuntimeOwners actor);
+    bool TryGetDispatchBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        out IDailyV1SelectedActionDispatchBoundary dispatchBoundary);
+    bool TryCompleteDispatch(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1SelectedActionDispatchResult dispatch,
+        out bool actionSucceeded,
+        out NpcActionResultType? resultType,
+        out string resultMessage);
+    bool TryGetActionStatusBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcRuntimeOwners target,
+        bool reuseExistingOperation,
+        out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary boundary);
+    bool TryInstallForcedOutcomeAction(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action);
+    bool TryGetForcedEscapeBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary);
+}
+
+/// <summary>
 /// Core-owned ordered selected Daily-v1 actor loop. Unity supplies only
 /// current spatial/expedition facts and forwards the existing host operations;
 /// the selected owner graph and choice store remain the authorities for actor
@@ -111,7 +167,7 @@ internal static class DailyV1ActorTurnExecutionStage
 
             if (hasPendingChoice && boundary.IsInSpatialTransit(actor, personId))
             {
-                TryProcessScheduledDirective(actor, scheduledDirectiveStore, boundary);
+                TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary);
                 DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,
                     rosterOrdinal, ActorChoiceDeferralReason.Traveling);
                 continue;
@@ -119,7 +175,7 @@ internal static class DailyV1ActorTurnExecutionStage
 
             if (actor.Travel.IsTraveling)
             {
-                TryProcessScheduledDirective(actor, scheduledDirectiveStore, boundary);
+                TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary);
                 DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,
                     rosterOrdinal, ActorChoiceDeferralReason.Traveling);
                 continue;
@@ -127,7 +183,7 @@ internal static class DailyV1ActorTurnExecutionStage
 
             if (boundary.IsOnActiveExpedition(actor))
             {
-                TryProcessScheduledDirective(actor, scheduledDirectiveStore, boundary);
+                TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary);
                 DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,
                     rosterOrdinal, ActorChoiceDeferralReason.ExpeditionParticipant);
                 continue;
@@ -144,7 +200,7 @@ internal static class DailyV1ActorTurnExecutionStage
 
             if (actorChoiceStore.TryGetNextPendingForActor(personId, out _))
             {
-                if (TryProcessScheduledDirective(actor, scheduledDirectiveStore, boundary))
+                if (TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary))
                 {
                     DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,
                         rosterOrdinal, ActorChoiceDeferralReason.ScheduledDirective);
@@ -158,7 +214,7 @@ internal static class DailyV1ActorTurnExecutionStage
             if (merchantTradeEnabled)
                 boundary.AdvanceMerchantTradeState(actor);
 
-            if (TryProcessScheduledDirective(actor, scheduledDirectiveStore, boundary))
+            if (TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary))
             {
                 DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,
                     rosterOrdinal, ActorChoiceDeferralReason.ScheduledDirective);
@@ -168,7 +224,19 @@ internal static class DailyV1ActorTurnExecutionStage
             if (boundary.TryProcessActorChoice(actor, rosterOrdinal))
                 continue;
 
-            boundary.EvaluateAndExecuteAction(actor);
+            if (boundary is IDailyV1SelectedActorActionExecutionBoundary selectedActionBoundary
+                && selectedActionBoundary.UsesSelectedDailyV1ActionExecution(actor))
+            {
+                if (!DailyV1SelectedActorActionExecutionStage.TryExecuteAutonomousAction(
+                        graph, actor, personStore, selectedActionBoundary.RandomSource,
+                        absoluteDay, selectedActionBoundary))
+                    throw new InvalidOperationException(
+                        "The exact selected Daily-v1 actor could not complete its Core-owned action turn.");
+            }
+            else
+            {
+                boundary.EvaluateAndExecuteAction(actor);
+            }
         }
 
         RejectActorChoicesWithoutMaterializedTurn(actorChoiceStore, roster, absoluteDay);
@@ -176,15 +244,35 @@ internal static class DailyV1ActorTurnExecutionStage
     }
 
     private static bool TryProcessScheduledDirective(
+        DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
         ScheduledDirectiveStore directiveStore,
+        long absoluteDay,
         IDailyV1ActorTurnExecutionBoundary boundary)
     {
         if (directiveStore == null
             || !directiveStore.TryTakeDirective(actor.RuntimeId, out ScheduledDirective directive))
             return false;
 
-        boundary.ProcessScheduledDirective(actor, directive);
+        if (boundary is IDailyV1SelectedActorActionExecutionBoundary selectedActionBoundary
+            && selectedActionBoundary.UsesSelectedDailyV1ActionExecution(actor)
+            && directive.Mode == ScheduledDirectiveMode.RequestAction)
+        {
+            DailyV1SelectedActorActionExecutionStage.ProcessScheduledRequestAction(
+                graph, actor, directive, selectedActionBoundary.RandomSource,
+                absoluteDay, selectedActionBoundary);
+        }
+        else if (boundary is IDailyV1SelectedActorActionExecutionBoundary selectedForceBoundary
+            && selectedForceBoundary.UsesSelectedDailyV1ActionExecution(actor)
+            && directive.Mode == ScheduledDirectiveMode.ForceOutcome)
+        {
+            DailyV1SelectedActorActionExecutionStage.ProcessScheduledForceOutcome(
+                graph, actor, directive, absoluteDay, selectedForceBoundary);
+        }
+        else
+        {
+            boundary.ProcessScheduledDirective(actor, directive);
+        }
         return true;
     }
 

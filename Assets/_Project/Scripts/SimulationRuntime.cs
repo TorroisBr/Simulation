@@ -661,8 +661,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 || runtime.justiceSystem == null
                 || !ReferenceEquals(graph.JusticeRecordsOwner, runtime.justiceSystem.CoreOwner)
                 || action.Values.actionType?.Value != DailyV1NpcDefinitionRules.ArrestActionTypeValue
-                || !(runtime.npcDecisionSystem?.GetProviderForAction(exactGuard, actionAsset)
-                    is GuardSystem))
+                || !DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
+                    graph.Definitions, action))
                 return false;
 
             NpcRuntime exactTarget = null;
@@ -743,12 +743,38 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 || graph == null || graph.JusticeRecordsOwner == null
                 || runtime.justiceSystem == null
                 || !ReferenceEquals(graph.JusticeRecordsOwner, runtime.justiceSystem.CoreOwner)
-                || runtime.crimeSystem == null
-                || !ReferenceEquals(runtime.crimeSystem.JusticeOwner, runtime.justiceSystem)
                 || (action.Values.actionType?.Value != DailyV1NpcDefinitionRules.HideActionTypeValue
-                    && action.Values.actionType?.Value != DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue)
-                || !ReferenceEquals(runtime.npcDecisionSystem?.GetProviderForAction(exactActor, actionAsset),
-                    runtime.crimeSystem))
+                    && action.Values.actionType?.Value != DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue))
+                return false;
+
+            DailyV1NpcActionPayloadOwner payload = actor.ActionSlot?.CurrentPayload;
+            if (payload == null || payload.TargetNpcRuntimeId != null
+                || payload.TargetCityRuntimeId != null || payload.TargetItem != null || payload.Amount != 0
+                || actionRuntime.TargetNpc != null || actionRuntime.TargetCity != null
+                || actionRuntime.TargetItem != null || actionRuntime.Amount != 0
+                || !actionRuntime.SuccessChanceMultiplier.Equals(payload.SuccessChanceMultiplier)
+                || !string.Equals(actionRuntime.OriginDecisionId, payload.OriginDecisionId,
+                    StringComparison.Ordinal))
+                return false;
+
+            boundary = new SelectedCrimeActionBoundaryAdapter(
+                this, runtime, exactActor, graph.JusticeRecordsOwner);
+            return true;
+        }
+
+        public bool TryGetForcedEscapeBoundary(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action,
+            out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary)
+        {
+            boundary = null;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            if (!TryGetExactActor(actor, action, out NpcRuntime exactActor)
+                || !ReferenceEquals(exactActor, actorRuntime)
+                || graph == null || graph.JusticeRecordsOwner == null
+                || runtime.justiceSystem == null
+                || !ReferenceEquals(graph.JusticeRecordsOwner, runtime.justiceSystem.CoreOwner)
+                || action.Values.actionType?.Value != DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue)
                 return false;
 
             DailyV1NpcActionPayloadOwner payload = actor.ActionSlot?.CurrentPayload;
@@ -10603,7 +10629,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     }
 
     private sealed class SelectedDailyV1ActorTurnExecutionBoundary
-        : IDailyV1ActorTurnExecutionBoundary, IDailyV1SelectedMerchantTradeStateBoundary
+        : IDailyV1ActorTurnExecutionBoundary,
+            IDailyV1SelectedMerchantTradeStateBoundary,
+            IDailyV1SelectedActorActionExecutionBoundary
     {
         private readonly SimulationRuntime runtime;
         private readonly DailyV1SelectedRuntimeOwnerGraph graph;
@@ -10751,6 +10779,209 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 return;
             }
             runtime.TryExecuteCurrentAction(exactRuntime);
+        }
+
+        public IAuthoritativeRandomSource RandomSource => runtime.randomSource;
+
+        public bool TryCreateDecisionBoundary(
+            DailyV1NpcRuntimeOwners actor,
+            out IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary)
+        {
+            decisionBoundary = null;
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            return runtime.npcDecisionSystem != null
+                && runtime.npcDecisionSystem.TryCreateSelectedDailyV1ActionDecisionBoundary(
+                    exactRuntime, out decisionBoundary);
+        }
+
+        public bool HasRequestedActionProvider(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            // Selected Escape is a Core-owned owner transition. Provider presence is
+            // not a gameplay prerequisite once the exact admitted action definition
+            // and effective Crime configuration have been validated by Core.
+            return action != null
+                && action.Values.actionType?.Value
+                    == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue
+                && DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
+                    exactRuntime.SelectedDailyV1DefinitionGraph, action);
+        }
+
+        public bool TryGetConfiguredActions(
+            DailyV1NpcRuntimeOwners actor,
+            out IReadOnlyList<DailyV1ActionDefinition> configuredActions)
+        {
+            configuredActions = null;
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (!ReferenceEquals(exactRuntime.SelectedRuntimeOwnerGraph, graph))
+                return false;
+            configuredActions = runtime.GetSelectedConfiguredActionsEnabledForRuntime(exactRuntime);
+            return configuredActions != null;
+        }
+
+        public bool TryRecordAndInstallSelectedAction(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate selected,
+            IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
+            NpcDecisionOrigin origin)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (!runtime.npcDecisionSystem.TryProjectSelectedDailyV1ActionCandidate(
+                    exactRuntime, selected, decisionBoundary,
+                    out NpcActionRuntime actionRuntime))
+            {
+                return false;
+            }
+
+            runtime.RecordAndInstallChosenAction(
+                exactRuntime, actionRuntime, origin);
+            return true;
+        }
+
+        public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor) =>
+            RequireExactActor(actor).SetCurrentActionRuntime(null);
+
+        public bool IsActorAtCurrentCityLocation(DailyV1NpcRuntimeOwners actor)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            return exactRuntime.CurrentCity != null
+                && runtime.IsActorAtCurrentCityLocation(exactRuntime);
+        }
+
+        public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            runtime.LogChosenTargetAction(
+                exactRuntime, exactRuntime.CurrentActionRuntime);
+        }
+
+        public bool HasExactCurrentActionProjection(DailyV1NpcRuntimeOwners actor)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            NpcActionRuntime actionRuntime = exactRuntime.CurrentActionRuntime;
+            return actionRuntime != null
+                && ReferenceEquals(actionRuntime.Action, exactRuntime.CurrentAction)
+                && actionRuntime.MatchesSelectedOwner()
+                && ReferenceEquals(exactRuntime.SelectedRuntimeOwnerGraph, graph)
+                && graph.ContainsExactNpcOwner(actor)
+                && exactRuntime.TryGetSelectedDailyV1ActionNode(
+                    actionRuntime.Action, out DailyV1ActionDefinition actionNode)
+                && ReferenceEquals(actor.ActionSlot?.CurrentAction, actionNode)
+                && ReferenceEquals(actor.ActionSlot?.CurrentPayload,
+                    actionRuntime.SelectedOwner);
+        }
+
+        public bool TryGetDispatchBoundary(
+            DailyV1NpcRuntimeOwners actor,
+            out IDailyV1SelectedActionDispatchBoundary dispatchBoundary)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            dispatchBoundary = null;
+            NpcActionRuntime actionRuntime = exactRuntime.CurrentActionRuntime;
+            NpcActionData action = exactRuntime.CurrentAction;
+            if (actionRuntime == null || action == null) return false;
+            dispatchBoundary = new SelectedActionDispatchBoundaryAdapter(
+                runtime, exactRuntime, actionRuntime, action);
+            return true;
+        }
+
+        public bool TryCompleteDispatch(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1SelectedActionDispatchResult dispatch,
+            out bool actionSucceeded,
+            out NpcActionResultType? resultType,
+            out string resultMessage)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            NpcActionRuntime actionRuntime = exactRuntime.CurrentActionRuntime;
+            NpcActionData action = exactRuntime.CurrentAction;
+            NpcActionResult actionResult = runtime.CompleteSelectedActionDispatch(
+                exactRuntime, actionRuntime, action, dispatch);
+            if (actionResult != null && !string.IsNullOrEmpty(actionResult.Message))
+                runtime.logger?.Log(SimulationLogCategory.NpcAction,
+                    actionResult.Message);
+            actionSucceeded = actionResult?.Success == true;
+            resultType = actionResult?.ResultType;
+            resultMessage = actionResult?.Message;
+            return actionRuntime != null && action != null;
+        }
+
+        public bool TryGetActionStatusBoundary(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcRuntimeOwners target,
+            bool reuseExistingOperation,
+            out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary boundary)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            boundary = null;
+            NpcRuntime targetRuntime = null;
+            if (target != null
+                && (!runtimeByOwner.TryGetValue(target, out targetRuntime)
+                    || !ReferenceEquals(targetRuntime.SelectedRuntimeOwners, target)))
+                return false;
+
+            NpcActionRuntime actionRuntime = exactRuntime.CurrentActionRuntime;
+            if (actionRuntime == null
+                || !ReferenceEquals(actionRuntime.TargetNpc, targetRuntime))
+                return false;
+
+            boundary = new SelectedActionStatusOperationBoundaryAdapter(
+                runtime, exactRuntime, targetRuntime,
+                reuseForcedEscapeScope: reuseExistingOperation);
+            return true;
+        }
+
+        public bool TryInstallForcedOutcomeAction(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (action == null
+                || !graph.Definitions.Actions.TryGetValue(
+                    action.DefinitionId, out DailyV1ActionDefinition admittedAction)
+                || !ReferenceEquals(action, admittedAction)
+                || action.Values.actionType?.Value != DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue
+                || !exactRuntime.TryGetSelectedDailyV1ActionAsset(action, out NpcActionData actionAsset))
+                return false;
+
+            exactRuntime.SetCurrentActionRuntime(new NpcActionRuntime(actionAsset));
+            DailyV1NpcActionPayloadOwner payload = actor.ActionSlot?.CurrentPayload;
+            return ReferenceEquals(actor.ActionSlot?.CurrentAction, action)
+                && payload != null
+                && payload.TargetNpcRuntimeId == null
+                && payload.TargetCityRuntimeId == null
+                && payload.TargetItem == null
+                && payload.Amount == 0
+                && HasExactCurrentActionProjection(actor);
+        }
+
+        public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            return exactRuntime.UsesSelectedDailyV1Definitions
+                && ReferenceEquals(exactRuntime.SelectedRuntimeOwnerGraph, graph)
+                && ReferenceEquals(graph.Definitions, actor.Definitions);
+        }
+
+        public void LogSkippedDirective(ScheduledDirective directive, string reason)
+        {
+            runtime.logger?.LogWarning(
+                $"Scheduled directive '{directive?.DirectiveId}' was skipped: {reason}");
+        }
+
+        public bool TryGetForcedEscapeBoundary(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action,
+            out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary)
+        {
+            boundary = null;
+            if (!TryGetDispatchBoundary(actor,
+                    out IDailyV1SelectedActionDispatchBoundary dispatchBoundary)
+                || dispatchBoundary == null)
+                return false;
+            return dispatchBoundary.TryGetForcedEscapeBoundary(actor, action, out boundary);
         }
 
         private NpcRuntime RequireExactActor(DailyV1NpcRuntimeOwners actor)
@@ -10954,7 +11185,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return action != null
                 && exactRuntime.TryGetSelectedDailyV1ActionAsset(action, out NpcActionData actionAsset)
                 && exactRuntime.GetConfiguredActionType(actionAsset) == NpcActionType.SellGoods
-                && runtime.IsActionEnabledForRuntime(exactRuntime, actionAsset);
+                && DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
+                    exactRuntime.SelectedDailyV1DefinitionGraph, action);
         }
 
         public bool TryRecordAndInstallRequestedAction(
@@ -10977,8 +11209,25 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         public NpcActionResultType? ExecuteCurrentAction(DailyV1NpcRuntimeOwners actor)
         {
-            NpcActionResult result = runtime.TryExecuteCurrentAction(RequireExactActor(actor));
-            return result?.ResultType;
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime> runtimeByOwner =
+                new Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime>();
+            foreach (NpcRuntime candidate in runtime.npcRuntimes)
+            {
+                DailyV1NpcRuntimeOwners candidateOwner = candidate?.SelectedRuntimeOwners;
+                if (candidateOwner != null && graph.ContainsExactNpcOwner(candidateOwner))
+                    runtimeByOwner.Add(candidateOwner, candidate);
+            }
+
+            SelectedDailyV1ActorTurnExecutionBoundary boundary =
+                new SelectedDailyV1ActorTurnExecutionBoundary(runtime, graph, runtimeByOwner);
+            if (!DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                    graph, actor, runtime.randomSource, runtime.CurrentDay, boundary,
+                    out _, out NpcActionResultType? resultType, out _))
+                throw new InvalidOperationException(
+                    "The selected actor-choice action could not execute through its exact Core owner graph.");
+            return resultType;
         }
 
         private NpcRuntime RequireExactActor(DailyV1NpcRuntimeOwners actor)
@@ -11012,7 +11261,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 CurrentDay,
                 actorTurnRosterOrdinal,
                 npcRuntime.CurrentCity != null && IsActorAtCurrentCityLocation(npcRuntime),
-                configuration.MerchantTrade.Enabled,
+                graph.Definitions.EffectiveConfiguration?.MerchantTrade?.Enabled == true,
                 npcDecisionSystem != null,
                 new SelectedActorChoiceExecutionBoundary(this, npcRuntime));
         }
@@ -12618,6 +12867,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return null;
         }
 
+        if (npcRuntime.UsesSelectedDailyV1Definitions
+            && npcRuntime.SelectedRuntimeOwners != null)
+            return TryExecuteSelectedCurrentAction(npcRuntime);
+
         LogChosenTargetAction(npcRuntime, actionRuntime);
         NpcActionResult actionResult = TryExecuteAction(npcRuntime, actionRuntime, action);
 
@@ -12647,6 +12900,63 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         }
 
         return actionResult;
+    }
+
+    private NpcActionResult TryExecuteSelectedCurrentAction(NpcRuntime npcRuntime)
+    {
+        if (npcRuntime == null
+            || !npcRuntime.UsesSelectedDailyV1Definitions
+            || npcRuntime.SelectedRuntimeOwners == null
+            || !TryCreateSelectedActorActionExecutionBoundary(
+                npcRuntime, out DailyV1SelectedRuntimeOwnerGraph graph,
+                out SelectedDailyV1ActorTurnExecutionBoundary boundary))
+            throw new InvalidOperationException(
+                "The selected Daily-v1 action has no exact Core runtime owner boundary.");
+
+        if (!DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                graph, npcRuntime.SelectedRuntimeOwners, randomSource, CurrentDay,
+                boundary, out _, out NpcActionResultType? resultType, out _))
+            throw new InvalidOperationException(
+                "The selected Daily-v1 action could not execute through its exact Core owner graph.");
+
+        if (!resultType.HasValue) return null;
+        return resultType.Value == NpcActionResultType.Success
+            ? NpcActionResult.Succeeded()
+            : NpcActionResult.Failed();
+    }
+
+    private bool TryCreateSelectedActorActionExecutionBoundary(
+        NpcRuntime actorRuntime,
+        out DailyV1SelectedRuntimeOwnerGraph graph,
+        out SelectedDailyV1ActorTurnExecutionBoundary boundary)
+    {
+        graph = SelectedRuntimeOwnerGraph;
+        boundary = null;
+        if (graph == null || actorRuntime?.SelectedRuntimeOwners == null
+            || !ReferenceEquals(actorRuntime.SelectedRuntimeOwnerGraph, graph)
+            || !graph.ContainsExactNpcOwner(actorRuntime.SelectedRuntimeOwners))
+            return false;
+
+        Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime> runtimeByOwner =
+            new Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime>();
+        foreach (NpcRuntime runtime in npcRuntimes)
+        {
+            DailyV1NpcRuntimeOwners owner = runtime?.SelectedRuntimeOwners;
+            if (owner == null) continue;
+            if (!graph.ContainsExactNpcOwner(owner)
+                || !ReferenceEquals(runtime.SelectedRuntimeOwnerGraph, graph)
+                || !runtimeByOwner.TryAdd(owner, runtime))
+                return false;
+        }
+
+        if (!runtimeByOwner.TryGetValue(actorRuntime.SelectedRuntimeOwners,
+                out NpcRuntime exactActorRuntime)
+            || !ReferenceEquals(exactActorRuntime, actorRuntime))
+            return false;
+
+        boundary = new SelectedDailyV1ActorTurnExecutionBoundary(
+            this, graph, runtimeByOwner);
+        return true;
     }
 
     private bool TryProcessScheduledDirective(NpcRuntime npcRuntime)

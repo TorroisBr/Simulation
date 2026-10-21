@@ -77,8 +77,58 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
         bool succeeded = boundary.ExecuteWithinOperation(() =>
             action.Values.actionType.Value == DailyV1NpcDefinitionRules.HideActionTypeValue
                 ? TryApplyHide(graph, actor, action, boundary)
-                : TryApplyEscape(graph, actor, action, boundary));
+                : TryApplyEscape(graph, actor, action, boundary, allowSameDayArrest: false));
         result = new Result(true, succeeded);
+        return true;
+    }
+
+    /// <summary>
+    /// Applies an already admitted forced Escape outcome. Unlike the ordinary
+    /// action path this operation performs no roll and retains the legacy
+    /// ForceOutcome rule that permits an escape on the day of arrest.
+    /// </summary>
+    internal static bool TryExecuteForcedEscapeOutcome(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        ISelectedCrimeActionBoundary crimeBoundary,
+        DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary statusBoundary,
+        out bool escaped)
+    {
+        escaped = false;
+        if (graph == null || actor == null || action == null
+            || crimeBoundary == null || statusBoundary == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(graph.Definitions, actor.Definitions)
+            || !ReferenceEquals(action, actor.ActionSlot?.CurrentAction)
+            || !ReferenceEquals(action, actor.ActionSlot?.CurrentPayload?.Action)
+            || !ReferenceEquals(graph.JusticeRecordsOwner, crimeBoundary.JusticeRecordsOwner)
+            || action.Values.actionType?.Value != DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue
+            || !HasEmptyTargets(actor.ActionSlot.CurrentPayload)
+            || !TryResolveRequiredStatus(graph.Definitions,
+                graph.Definitions.Configuration?.arrestedStatus,
+                out DailyV1StatusDefinition arrestedStatus)
+            || actor.Status == null || !actor.Status.Contains(arrestedStatus)
+            || !graph.TryCreateActionStatusPlan(actor, action, false, null, out _))
+            return false;
+
+        bool operationSucceeded = crimeBoundary.ExecuteWithinOperation(() =>
+        {
+            if (!TryApplyEscape(graph, actor, action, crimeBoundary,
+                    allowSameDayArrest: true))
+                return false;
+
+            if (!DailyV1SelectedActionExecutionStage.TryApplyActionStatusPlanAfterDispatch(
+                    true, graph, actor, action, false, null, statusBoundary,
+                    out DailyV1SelectedActionStatusPlanResult statusResult)
+                || statusResult == DailyV1SelectedActionStatusPlanResult.ActorRejected
+                || statusResult == DailyV1SelectedActionStatusPlanResult.TargetRejected)
+                throw new InvalidOperationException(
+                    "The forced selected Daily-v1 Escape status plan could not commit inside its admitted Crime/Justice operation.");
+            return true;
+        });
+
+        escaped = operationSucceeded;
         return true;
     }
 
@@ -132,7 +182,8 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
         DailyV1ActionDefinition action,
-        ISelectedCrimeActionBoundary boundary)
+        ISelectedCrimeActionBoundary boundary,
+        bool allowSameDayArrest)
     {
         if (!TryResolveRequiredStatus(graph.Definitions,
                 graph.Definitions.Configuration?.arrestedStatus,
@@ -143,7 +194,7 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
 
         DailyV1JusticeRecordsOwner justice = graph.JusticeRecordsOwner;
         DailyV1JusticeSentenceOwner sentence = justice.FindActiveSentence(actor.RuntimeId);
-        if (sentence?.WasArrestedToday == true) return false;
+        if (!allowSameDayArrest && sentence?.WasArrestedToday == true) return false;
 
         DailyV1JusticeWantedRecordOwner warrant = sentence?.Warrant;
         bool hasActiveSentence = sentence != null && warrant != null && !warrant.IsResolved;

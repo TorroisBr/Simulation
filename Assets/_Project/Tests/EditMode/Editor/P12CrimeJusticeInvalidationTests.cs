@@ -308,13 +308,14 @@ public sealed class P12CrimeJusticeInvalidationTests
             justice,
             crime,
             configuration: CreateP12Configuration(crimeEnabled: true),
+            configuredActions: new[] { action },
             scheduledDirectiveSystem: directives,
             simulationTime: time);
 
         Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
             Is.True, advanceFailure.ToString());
 
-        Assert.That(directive.State, Is.EqualTo(ScheduledDirectiveState.Succeeded));
+        Assert.That(directive.State, Is.EqualTo(ScheduledDirectiveState.Succeeded), directive.ResultReason);
         Assert.That(justice.IsArrested(actor), Is.False);
         Assert.That(actor.CurrentStatus, Does.Contain(ReadStatus("freeStatus", justice)));
         Assert.That(actor.P12CrimeJusticeRevision, Is.GreaterThan(0));
@@ -515,12 +516,14 @@ public sealed class P12CrimeJusticeInvalidationTests
         EffectiveSimulationConfiguration configuration = null,
         IAuthoritativeRandomSource randomSource = null,
         ScheduledDirectiveSystem scheduledDirectiveSystem = null,
-        SimulationTime simulationTime = null)
+        SimulationTime simulationTime = null,
+        IReadOnlyList<NpcActionData> configuredActions = null)
     {
         SimulationRuntime runtime = new SimulationRuntime(
             simulationTime ?? new SimulationTime(),
             cities,
             npcs,
+            configuredActions: configuredActions,
             scheduledDirectiveSystem: scheduledDirectiveSystem,
             justiceSystem: justice,
             crimeSystem: crime,

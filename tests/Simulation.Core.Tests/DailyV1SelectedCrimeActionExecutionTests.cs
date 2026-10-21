@@ -93,6 +93,60 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
     }
 
     [Test]
+    public void ForcedEscapeUsesCoreOwnersWithoutRollAndAllowsSameDayArrestInsideOneOperation()
+    {
+        CrimeFixture fixture = CreateFixture();
+        DailyV1ActionDefinition action = ActionOfType(fixture.Definitions,
+            DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue);
+        DailyV1StatusDefinition arrested = fixture.AddArrestedStatus();
+        DailyV1JusticeWantedRecordOwner warrant = fixture.AddWarrant(12f, sentenceDays: 4);
+        DailyV1JusticeSentenceOwner sentence = fixture.AddSentence(
+            warrant, 4, failedAttempts: 0, wasArrestedToday: true);
+        CommitAction(fixture, action, 1f);
+        RecordingCrimeBoundary boundary = new RecordingCrimeBoundary(fixture);
+
+        Assert.That(DailyV1SelectedCrimeActionExecutionStage.TryExecuteForcedEscapeOutcome(
+            fixture.Graph, fixture.Actor, action, boundary, boundary,
+            out bool escaped), Is.True);
+
+        Assert.That(escaped, Is.True,
+            "ForceOutcome retains the legacy same-day escape semantics rather than taking an ordinary action roll.");
+        Assert.That(fixture.Justice.ContainsSentence(sentence), Is.False);
+        Assert.That(fixture.Actor.Status.Contains(arrested), Is.False);
+        Assert.That(boundary.Order.Count(value => value == "p12-begin"), Is.EqualTo(1));
+        Assert.That(boundary.Order.Count(value => value == "p12-end"), Is.EqualTo(1));
+        Assert.That(boundary.Order, Does.Contain("escape-event"));
+        Assert.That(boundary.Order, Does.Contain("status-plan"));
+        Assert.That(boundary.Order.IndexOf("status-plan"), Is.LessThan(boundary.Order.IndexOf("p12-end")),
+            "configured action status effects remain inside the existing Crime/Justice scope.");
+    }
+
+    [Test]
+    public void OrdinaryEscapeStillRejectsSameDayArrest()
+    {
+        CrimeFixture fixture = CreateFixture();
+        DailyV1ActionDefinition action = ActionOfType(fixture.Definitions,
+            DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue);
+        DailyV1StatusDefinition arrested = fixture.AddArrestedStatus();
+        DailyV1JusticeWantedRecordOwner warrant = fixture.AddWarrant(12f, sentenceDays: 4);
+        DailyV1JusticeSentenceOwner sentence = fixture.AddSentence(
+            warrant, 4, failedAttempts: 0, wasArrestedToday: true);
+        long justiceRevisionBefore = fixture.Justice.Revision;
+        CommitAction(fixture, action, 1f);
+        RecordingCrimeBoundary boundary = new RecordingCrimeBoundary(fixture);
+
+        Assert.That(Dispatch(fixture, boundary, new FixedActionRandom(0f), out var result), Is.True);
+
+        Assert.That(result.ActionRollSucceeded, Is.True);
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(fixture.Justice.ContainsSentence(sentence), Is.True);
+        Assert.That(warrant.Bounty, Is.EqualTo(12f));
+        Assert.That(fixture.Actor.Status.Contains(arrested), Is.True);
+        Assert.That(fixture.Justice.Revision, Is.EqualTo(justiceRevisionBefore));
+        Assert.That(boundary.Order, Is.EqualTo(new[] { "p12-begin", "p12-end" }));
+    }
+
+    [Test]
     public void SelectedEscapeWithoutLiveSentenceReleasesAndClearsHiddenState()
     {
         CrimeFixture fixture = CreateFixture();
@@ -224,11 +278,12 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
         }
 
         internal DailyV1JusticeSentenceOwner AddSentence(
-            DailyV1JusticeWantedRecordOwner warrant, int remainingDays, int failedAttempts)
+            DailyV1JusticeWantedRecordOwner warrant, int remainingDays, int failedAttempts,
+            bool wasArrestedToday = false)
         {
             DailyV1JusticeSentenceOwner sentence = new DailyV1JusticeSentenceOwner(
                 Actor.RuntimeId, City.RuntimeId, warrant, remainingDays,
-                failedAttempts, wasArrestedToday: false);
+                failedAttempts, wasArrestedToday);
             Assert.That(Justice.TryAddSentence(sentence), Is.True);
             Assert.That(Justice.NotifyMutationCommitted(), Is.True);
             return sentence;
@@ -277,6 +332,9 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
         public bool TryGetCrimeActionBoundary(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action,
             out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary)
         { boundary = crime; return boundary != null; }
+        public bool TryGetForcedEscapeBoundary(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action,
+            out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary)
+        { boundary = null; return false; }
         public bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) => true;
         public void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) { }
         public bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor) => true;
@@ -285,7 +343,8 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
     }
 
     private sealed class RecordingCrimeBoundary
-        : DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary
+        : DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary,
+            DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary
     {
         private readonly CrimeFixture fixture;
         internal List<string> Order { get; } = new List<string>();
@@ -332,6 +391,31 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
             Order.Add(add ? "status-add" : "status-remove");
             return true;
         }
+
+        public DailyV1SelectedActionStatusPlanResult ExecuteWithinOperation(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcRuntimeOwners target,
+            Func<DailyV1SelectedActionStatusPlanResult> operation)
+        {
+            Order.Add("status-plan");
+            return operation?.Invoke() ?? DailyV1SelectedActionStatusPlanResult.ActorRejected;
+        }
+
+        public bool ApplyActorStatusChanges(DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd)
+        {
+            if (!ReferenceEquals(owner, fixture.Actor)) return false;
+            foreach (DailyV1StatusDefinition status in statusToRemove ?? Array.Empty<DailyV1StatusDefinition>())
+                ApplyStatusChange(owner, status, add: false);
+            foreach (DailyV1StatusDefinition status in statusToAdd ?? Array.Empty<DailyV1StatusDefinition>())
+                ApplyStatusChange(owner, status, add: true);
+            return true;
+        }
+
+        public bool ApplyTargetStatusChanges(DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) => false;
 
         public bool TryRemoveSentence(DailyV1JusticeSentenceOwner sentence)
         {

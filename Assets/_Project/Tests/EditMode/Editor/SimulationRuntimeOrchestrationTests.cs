@@ -101,7 +101,7 @@ public sealed class SimulationRuntimeOrchestrationTests
             records.Time,
             new[] { city },
             new[] { actor },
-            configuredActions: new[] { autonomousFallback },
+            configuredActions: new[] { autonomousFallback, escape },
             scheduledDirectiveSystem: directiveSystem,
             justiceSystem: justice,
             crimeSystem: crime,

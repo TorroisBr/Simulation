@@ -53,6 +53,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/ActorChoiceStore.cs" Link="Application/ActorChoiceStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/ScheduledDirectiveStore.cs" Link="Application/ScheduledDirectiveStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ActorTurnExecutionStage.cs" Link="Application/DailyV1ActorTurnExecutionStage.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedActorActionExecutionStage.cs" Link="Application/DailyV1SelectedActorActionExecutionStage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedDailyExecutionStage.cs" Link="Application/DailyV1SelectedDailyExecutionStage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedDemographyStage.cs" Link="Application/DailyV1SelectedDemographyStage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedMerchantTradeStateOperation.cs" Link="Application/DailyV1SelectedMerchantTradeStateOperation.cs" />

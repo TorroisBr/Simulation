@@ -4754,6 +4754,12 @@ public sealed class SimulationRuntimeAdmissionTests
 
             SelectOnly(uninterruptedSession.Runtime, arrest);
             SelectOnly(sourceSession.Runtime, arrest);
+            // Guard target selection and arrest mutation are owned by the
+            // selected Core graph. The Unity provider remains available to
+            // compatibility runtimes, but must not be required to execute this
+            // admitted Daily-v1 action.
+            WritePrivateField(sourceSession.Runtime, "npcDecisionSystem",
+                new NpcDecisionSystem(new List<INpcActionProvider>()));
             Assert.That(controlJustice.HasActiveWarrantInCity(controlActor, controlActor.CurrentCity), Is.True);
             Assert.That(sourceJustice.HasActiveWarrantInCity(sourceActor, sourceActor.CurrentCity), Is.True);
             Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlArrestFailure),
@@ -4868,8 +4874,10 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
 
-    [Test]
-    public void SelectedDailyV1ForcedEscapeCompletesStatusAndDirectiveWithinOneP12Scope()
+    [TestCase(ScheduledDirectiveMode.ForceOutcome)]
+    [TestCase(ScheduledDirectiveMode.RequestAction)]
+    public void SelectedDailyV1EscapeCompletesStatusAndDirectiveWithoutCrimeProvider(
+        ScheduledDirectiveMode mode)
     {
         SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
@@ -4888,7 +4896,7 @@ public sealed class SimulationRuntimeAdmissionTests
         config.ScheduledDirectives.Add(new ScheduledDirectiveConfig
         {
             absoluteDay = 1L,
-            mode = ScheduledDirectiveMode.ForceOutcome,
+            mode = mode,
             operation = ScheduledDirectiveOperation.EscapePrison,
             actor = actorDefinition,
             action = escape
@@ -4904,6 +4912,8 @@ public sealed class SimulationRuntimeAdmissionTests
             SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
             Assert.That(session, Is.Not.Null);
             SimulationRuntime runtime = session.Runtime;
+            WritePrivateField(runtime, "npcDecisionSystem",
+                new NpcDecisionSystem(new List<INpcActionProvider>()));
             NpcRuntime actor = runtime.NpcRuntimes.Single(npc =>
                 npc?.NpcData != null && string.Equals(npc.NpcData.id, actorDefinition.id, StringComparison.Ordinal));
             Assert.That(actor.CurrentCity, Is.Not.Null);
@@ -4940,6 +4950,15 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(justice.CreateOrIncreaseWarrant(actor, actor.CurrentCity, 12f, 4), Is.Not.Null);
                 Assert.That(justice.Arrest(guard, actor, actor.CurrentCity), Is.True);
             }
+
+            // Keep this providerless Escape test scoped to the action under
+            // test. Core can also execute Guard Arrest without GuardSystem;
+            // unrelated autonomous actions must not change the Escape result.
+            List<NpcActionData> configuredActions = ReadPrivateField<List<NpcActionData>>(
+                runtime, "configuredActions");
+            Assert.That(configuredActions, Is.Not.Null);
+            configuredActions.Clear();
+            configuredActions.Add(escape);
 
             Assert.That(justice.IsArrested(actor), Is.True);
             Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(

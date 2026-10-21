@@ -126,6 +126,57 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             : null;
     }
 
+    internal bool TryCreateSelectedDailyV1ActionDecisionBoundary(
+        NpcRuntime npcRuntime,
+        out IDailyV1SelectedNpcActionDecisionBoundary boundary)
+    {
+        boundary = null;
+        if (npcRuntime == null || !npcRuntime.UsesSelectedDailyV1Definitions
+            || npcRuntime.SelectedRuntimeOwners == null
+            || npcRuntime.SelectedRuntimeOwnerGraph == null
+            || !npcRuntime.SelectedRuntimeOwnerGraph.ContainsExactNpcOwner(
+                npcRuntime.SelectedRuntimeOwners)
+            || !ReferenceEquals(npcRuntime.SelectedRuntimeOwnerGraph.Definitions,
+                npcRuntime.SelectedDailyV1DefinitionGraph))
+            return false;
+
+        boundary = new SelectedNpcActionDecisionBoundary(this, npcRuntime);
+        return true;
+    }
+
+    internal bool TryProjectSelectedDailyV1ActionCandidate(
+        NpcRuntime npcRuntime,
+        DailyV1NpcActionCandidate candidate,
+        IDailyV1SelectedNpcActionDecisionBoundary boundary,
+        out NpcActionRuntime actionRuntime)
+    {
+        actionRuntime = null;
+        if (npcRuntime == null || candidate?.Action == null
+            || !npcRuntime.UsesSelectedDailyV1Definitions
+            || !ReferenceEquals(npcRuntime.SelectedRuntimeOwners?.Definitions,
+                npcRuntime.SelectedDailyV1DefinitionGraph)
+            || !npcRuntime.TryGetSelectedDailyV1ActionAsset(
+                candidate.Action, out NpcActionData actionAsset))
+            return false;
+
+        if (boundary is SelectedNpcActionDecisionBoundary selectedBoundary
+            && selectedBoundary.TryGetProjectedAction(candidate,
+                out NpcActionRuntime projectedAction))
+        {
+            actionRuntime = projectedAction;
+            return true;
+        }
+
+        NpcActionRuntime projection = new NpcActionRuntime(actionAsset);
+        if (candidate.PreparedPayload != null
+            && !projection.TryUseSelectedPayload(
+                candidate.PreparedPayload, npcRuntime.SelectedDailyV1DefinitionGraph))
+            return false;
+
+        actionRuntime = projection;
+        return true;
+    }
+
     private sealed class SelectedNpcActionDecisionBoundary
         : IDailyV1SelectedNpcActionDecisionBoundary,
             IDailyV1SelectedGuardActionProjectionBoundary
@@ -278,7 +329,6 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
                 || payload.TargetItem != null
                 || payload.Amount != 0
                 || !TryGetActionAsset(actor, candidate.Action, out NpcActionData actionAsset)
-                || decisionSystem.GetProviderForAction(npcRuntime, actionAsset) is not GuardSystem
                 || !graph.TryGetNpcOwner(payload.TargetNpcRuntimeId,
                     out DailyV1NpcRuntimeOwners targetOwner)
                 || !graph.ContainsExactNpcOwner(targetOwner)
@@ -323,10 +373,20 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
 
         public bool HasEnabledCrimeActionProvider(
             DailyV1NpcRuntimeOwners actor,
-            DailyV1ActionDefinition action) =>
-            TryGetActionAsset(actor, action, out NpcActionData asset)
-            && decisionSystem.GetProviderForAction(npcRuntime, asset) is CrimeSystem crimeSystem
-            && crimeSystem.AllowAutonomousAction(asset);
+            DailyV1ActionDefinition action)
+        {
+            if (!IsExactActor(actor) || action == null) return false;
+
+            int? actionType = action.Values.actionType?.Value;
+            if (actionType == DailyV1NpcDefinitionRules.HideActionTypeValue
+                || actionType == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue)
+                return DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+                    npcRuntime.SelectedDailyV1DefinitionGraph, action);
+
+            return TryGetActionAsset(actor, action, out NpcActionData asset)
+                && decisionSystem.GetProviderForAction(npcRuntime, asset) is CrimeSystem crimeSystem
+                && crimeSystem.AllowAutonomousAction(asset);
+        }
 
         public bool TryProjectBuyAction(
             DailyV1NpcRuntimeOwners actor,

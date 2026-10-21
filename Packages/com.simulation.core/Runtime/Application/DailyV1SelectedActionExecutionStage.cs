@@ -1259,6 +1259,11 @@ internal interface IDailyV1SelectedActionDispatchBoundary
         DailyV1ActionDefinition action,
         out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary);
 
+    bool TryGetForcedEscapeBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary);
+
     bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners actor);
     void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners actor);
     bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor);
