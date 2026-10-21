@@ -10796,6 +10796,28 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     exactRuntime, out decisionBoundary);
         }
 
+        public bool TryGetConfiguredActionIds(
+            DailyV1NpcRuntimeOwners actor,
+            out IReadOnlyList<string> actionIds)
+        {
+            actionIds = null;
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (!ReferenceEquals(exactRuntime.SelectedRuntimeOwnerGraph, graph))
+                return false;
+
+            List<DailyV1ActionDefinition> configuredActions =
+                runtime.GetSelectedConfiguredActionsEnabledForRuntime(exactRuntime);
+            if (configuredActions == null) return false;
+            List<string> resolvedIds = new List<string>(configuredActions.Count);
+            foreach (DailyV1ActionDefinition action in configuredActions)
+            {
+                if (action == null) return false;
+                resolvedIds.Add(action.DefinitionId);
+            }
+            actionIds = resolvedIds.AsReadOnly();
+            return true;
+        }
+
         public bool HasRequestedActionProvider(
             DailyV1NpcRuntimeOwners actor,
             DailyV1ActionDefinition action)
@@ -10809,18 +10831,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue
                 && DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
                     exactRuntime.SelectedDailyV1DefinitionGraph, action);
-        }
-
-        public bool TryGetConfiguredActions(
-            DailyV1NpcRuntimeOwners actor,
-            out IReadOnlyList<DailyV1ActionDefinition> configuredActions)
-        {
-            configuredActions = null;
-            NpcRuntime exactRuntime = RequireExactActor(actor);
-            if (!ReferenceEquals(exactRuntime.SelectedRuntimeOwnerGraph, graph))
-                return false;
-            configuredActions = runtime.GetSelectedConfiguredActionsEnabledForRuntime(exactRuntime);
-            return configuredActions != null;
         }
 
         public bool TryRecordAndInstallSelectedAction(

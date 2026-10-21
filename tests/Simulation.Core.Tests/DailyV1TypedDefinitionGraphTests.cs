@@ -1,9 +1,58 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 
 public sealed class DailyV1TypedDefinitionGraphTests
 {
+    [Test]
+    public void SelectedConfiguredActionsComeFromCanonicalGraphInConfigurationOrder()
+    {
+        DailyV1NpcActionData firstValues = CreateAction("action/first", 0, 1f);
+        DailyV1NpcActionData disabledValues = CreateAction("action/disabled-crime", 5, 2f);
+        DailyV1NpcActionData secondValues = CreateAction("action/second", 0, 3f);
+        DailyV1EffectiveDefinitions definitions = DailyV1EffectiveDefinitions.CreateSelectedSchema(
+            CreateConfiguration(1f, Array.Empty<string>(), actions: new[]
+            {
+                firstValues.id, " ", disabledValues.id, secondValues.id, firstValues.id
+            }),
+            SimulationConfigurationDefaults.Create(),
+            new DailyV1CalendarDefinition(1, 1, 1, null),
+            Array.Empty<DailyV1CityData>(), Array.Empty<DailyV1ItemData>(),
+            Array.Empty<DailyV1NpcData>(), Array.Empty<DailyV1NpcJobData>(),
+            new[] { firstValues, disabledValues, secondValues },
+            Array.Empty<DailyV1NpcStatusData>(), Array.Empty<string>(),
+            "test.daily-v1", "test.geography-v1", "test.geography-stage/v1", "hex-v1", "q-r-s");
+
+        Assert.That(DailyV1SelectedNpcActionDecisionStage.TryResolveConfiguredActions(
+            definitions, definitions.Configuration.actions,
+            out IReadOnlyList<DailyV1ActionDefinition> configured), Is.True);
+        Assert.That(configured.Select(action => action.DefinitionId),
+            Is.EqualTo(new[] { firstValues.id, disabledValues.id, secondValues.id, firstValues.id }));
+        Assert.That(configured[0], Is.SameAs(definitions.Actions[firstValues.id]));
+        Assert.That(configured[3], Is.SameAs(configured[0]),
+            "Duplicate configured entries retain their original weighted-choice cardinality.");
+    }
+
+    [Test]
+    public void SelectedConfiguredActionsRejectAnUnresolvedIdentity()
+    {
+        DailyV1NpcActionData admitted = CreateAction("action/admitted", 0, 1f);
+        DailyV1EffectiveDefinitions definitions = DailyV1EffectiveDefinitions.CreateSelectedSchema(
+            CreateConfiguration(1f, Array.Empty<string>(), actions: new[] { admitted.id, "action/missing" }),
+            SimulationConfigurationDefaults.Create(),
+            new DailyV1CalendarDefinition(1, 1, 1, null),
+            Array.Empty<DailyV1CityData>(), Array.Empty<DailyV1ItemData>(),
+            Array.Empty<DailyV1NpcData>(), Array.Empty<DailyV1NpcJobData>(),
+            new[] { admitted }, Array.Empty<DailyV1NpcStatusData>(), Array.Empty<string>(),
+            "test.daily-v1", "test.geography-v1", "test.geography-stage/v1", "hex-v1", "q-r-s");
+
+        Assert.That(DailyV1SelectedNpcActionDecisionStage.TryResolveConfiguredActions(
+            definitions, definitions.Configuration.actions,
+            out IReadOnlyList<DailyV1ActionDefinition> configured), Is.False);
+        Assert.That(configured, Is.Null);
+    }
+
     [Test]
     public void TypedGraphCopiesSelectedValuesAndP9BuilderUsesThem()
     {
@@ -171,11 +220,11 @@ public sealed class DailyV1TypedDefinitionGraphTests
     }
 
     internal static DailyV1SimulationConfigData CreateConfiguration(float travelCost, string[] cities,
-        DailyV1ExplorableSiteConfig[] explorableSites = null)
+        DailyV1ExplorableSiteConfig[] explorableSites = null, string[] actions = null)
     {
         return new DailyV1SimulationConfigData(
             "Typed", new DailyV1CalendarDefinition(1, 1, 1, null), new[] { new DailyV1EnumValue(0, "Economy") },
-            cities, explorableSites, null, null, null, null, null, null,
+            cities, explorableSites, null, actions, null, null, null, null,
             false, null, 0, 0,
             null, null, null, null, null, null, null, null, null,
             "test.daily-v1", null,
@@ -184,6 +233,11 @@ public sealed class DailyV1TypedDefinitionGraphTests
             false, 0d, false, 0d, 0d,
             null, null, null, null);
     }
+
+    private static DailyV1NpcActionData CreateAction(string id, int actionType, float baseUtility) =>
+        new DailyV1NpcActionData(id, null, id, id,
+            new DailyV1EnumValue(0, "Action"), new DailyV1EnumValue(actionType, "Type"),
+            baseUtility, null, false, 0f, null, null, null, null, null);
 
     private static DailyV1EffectiveDefinitions CreateDefinitions(
         IEnumerable<KeyValuePair<string, string>> traits,

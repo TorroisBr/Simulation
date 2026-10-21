@@ -294,19 +294,17 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             return true;
         }
 
+        public bool TryGetConfiguredActionIds(
+            DailyV1NpcRuntimeOwners actor,
+            out IReadOnlyList<string> actionIds)
+        {
+            actionIds = actor.Definitions.Configuration.actions;
+            return true;
+        }
+
         public bool HasRequestedActionProvider(
             DailyV1NpcRuntimeOwners actor,
             DailyV1ActionDefinition action) => false;
-
-        public bool TryGetConfiguredActions(
-            DailyV1NpcRuntimeOwners actor,
-            out IReadOnlyList<DailyV1ActionDefinition> configuredActions)
-        {
-            configuredActions = CurrentGraph.Definitions.Configuration.actions
-                .Select(id => CurrentGraph.Definitions.Actions[id])
-                .ToArray();
-            return true;
-        }
 
         public bool TryRecordAndInstallSelectedAction(
             DailyV1NpcRuntimeOwners actor,

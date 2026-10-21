@@ -55,13 +55,13 @@ internal interface IDailyV1SelectedActorActionExecutionBoundary
         DailyV1NpcRuntimeOwners actor,
         out IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary);
 
+    bool TryGetConfiguredActionIds(
+        DailyV1NpcRuntimeOwners actor,
+        out IReadOnlyList<string> actionIds);
+
     bool HasRequestedActionProvider(
         DailyV1NpcRuntimeOwners actor,
         DailyV1ActionDefinition action);
-
-    bool TryGetConfiguredActions(
-        DailyV1NpcRuntimeOwners actor,
-        out IReadOnlyList<DailyV1ActionDefinition> configuredActions);
 
     bool TryRecordAndInstallSelectedAction(
         DailyV1NpcRuntimeOwners actor,

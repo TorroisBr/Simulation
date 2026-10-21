@@ -411,6 +411,36 @@ internal interface IDailyV1SelectedGuardActionProjectionBoundary
 /// <summary>Core-owned selection half of one admitted Daily-v1 actor turn.</summary>
 internal static class DailyV1SelectedNpcActionDecisionStage
 {
+    /// <summary>
+    /// Resolves the host's configured action identity sequence through the
+    /// admitted definition graph. The host supplies only the active configured
+    /// identities; Core retains canonical definitions and action semantics.
+    /// </summary>
+    internal static bool TryResolveConfiguredActions(
+        DailyV1EffectiveDefinitions definitions,
+        IReadOnlyList<string> actionIds,
+        out IReadOnlyList<DailyV1ActionDefinition> configuredActions)
+    {
+        configuredActions = null;
+        if (definitions?.Configuration == null || actionIds == null) return false;
+
+        List<DailyV1ActionDefinition> resolved = new List<DailyV1ActionDefinition>();
+        foreach (string actionId in actionIds)
+        {
+            // The Unity configuration projection historically retained blank
+            // IDs as null list entries; the selected runtime filtered those
+            // entries before candidate creation.
+            if (string.IsNullOrWhiteSpace(actionId)) continue;
+            if (!definitions.Actions.TryGetValue(actionId, out DailyV1ActionDefinition action)
+                || action == null)
+                return false;
+            resolved.Add(action);
+        }
+
+        configuredActions = resolved.AsReadOnly();
+        return true;
+    }
+
     internal static bool IsEnabledForRuntime(
         DailyV1EffectiveDefinitions definitions,
         DailyV1ActionDefinition action)
