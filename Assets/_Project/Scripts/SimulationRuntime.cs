@@ -2712,7 +2712,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             TryCreateSelectedRuntimeOwnerGraph(
                 this.cities, this.npcRuntimes, spatialNetworkRuntime?.SelectedOwner,
                 this.justiceSystem?.CoreOwner,
-                this.travelPartySystem?.Store ?? travelSystem?.SelectedTravelPartyStore);
+                this.travelPartySystem?.Store ?? travelSystem?.SelectedTravelPartyStore,
+                this.personStore);
         if (!dailyExecutionBoundary.TryBindSelectedRuntimeOwnerGraph(selectedOwnerGraph))
             throw new InvalidOperationException("The selected owner graph could not be bound to this runtime boundary.");
         selectedRuntimeOwnerGraphProvider = () => dailyExecutionBoundary.SelectedRuntimeOwnerGraph;
@@ -9830,12 +9831,22 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             || !ReferenceEquals(graph.JusticeRecordsOwner, exactJusticeOwner)
             || !ReferenceEquals(graph.TravelParties,
                 travelPartySystem?.Store ?? travelSystem?.SelectedTravelPartyStore)
+            || !ReferenceEquals(current.RuntimeIdentityIndex,
+                p12RuntimeIdentityRegistry?.CoreIdentityIndex)
+            || !ReferenceEquals(graph.RuntimeIdentityIndex, current.RuntimeIdentityIndex)
+            || !ReferenceEquals(current.PersonStore, personStore)
             || !graph.MatchesExactOwnerInstances(
                 cities.Select(city => city?.SelectedRuntimeOwners),
                 npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners).Where(owner => owner != null)))
             return false;
 
-        return dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(current, graph);
+        if (!DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+                graph.Cities, graph.Npcs, graph.SpatialNetwork, exactJusticeOwner,
+                graph.TravelParties, current.RuntimeIdentityIndex, personStore,
+                out DailyV1SelectedRuntimeOwnerGraph runtimeGraph))
+            return false;
+
+        return dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(current, runtimeGraph);
     }
 
     private DailyV1SelectedRuntimeOwnerGraph TryCreateSelectedRuntimeOwnerGraph(
@@ -9843,7 +9854,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         IReadOnlyList<NpcRuntime> npcRuntimes,
         SpatialNetworkOwner spatialNetwork,
         DailyV1JusticeRecordsOwner justiceRecordsOwner,
-        TravelPartyStore travelParties)
+        TravelPartyStore travelParties,
+        PersonStore personStore)
     {
         if (cityRuntimes == null || npcRuntimes == null) return null;
         if (spatialNetwork != null)
@@ -9867,6 +9879,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             justiceRecordsOwner,
             travelParties,
             p12RuntimeIdentityRegistry?.CoreIdentityIndex,
+            personStore,
             out DailyV1SelectedRuntimeOwnerGraph graph) ? graph : null;
     }
 

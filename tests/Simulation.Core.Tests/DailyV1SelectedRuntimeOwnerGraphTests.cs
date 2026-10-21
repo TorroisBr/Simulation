@@ -22,6 +22,41 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
     }
 
     [Test]
+    public void ExactGraphCarriesSamePersonStoreAndRejectsMaterializedNpcOutsideRoster()
+    {
+        Assert.That(DailyV1SelectedRuntimeOwnerGraphBuilder.TryBuildConfigured(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(), new RuntimeIdAllocator(),
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        PersonStore personStore = new PersonStore();
+        PersonRuntime person = new PersonRuntime(new PersonId("person/graph-binding"), 12L);
+        Assert.That(personStore.TryRegister(person, out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(personStore.TryBindMaterializedNpc(person.PersonId,
+            graph.Npcs[0].RuntimeId, out PersonStoreFailure bindFailure),
+            Is.True, bindFailure.ToString());
+
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+            graph.Cities, graph.Npcs, graph.SpatialNetwork, graph.JusticeRecordsOwner,
+            graph.TravelParties, graph.RuntimeIdentityIndex, personStore,
+            out DailyV1SelectedRuntimeOwnerGraph boundGraph), Is.True);
+        Assert.That(boundGraph.PersonStore, Is.SameAs(personStore));
+        Assert.That(boundGraph.RuntimeIdentityIndex, Is.SameAs(graph.RuntimeIdentityIndex));
+        Assert.That(boundGraph.Npcs.Count, Is.EqualTo(graph.Npcs.Count));
+        for (int index = 0; index < graph.Npcs.Count; index++)
+            Assert.That(boundGraph.Npcs[index], Is.SameAs(graph.Npcs[index]));
+
+        PersonStore mismatchedPersonStore = new PersonStore();
+        PersonRuntime mismatchedPerson = new PersonRuntime(new PersonId("person/outside-graph"), 12L);
+        Assert.That(mismatchedPersonStore.TryRegister(mismatchedPerson, out _), Is.True);
+        Assert.That(mismatchedPersonStore.TryBindMaterializedNpc(mismatchedPerson.PersonId,
+            "npc/not-in-selected-graph", out _), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+            graph.Cities, graph.Npcs, graph.SpatialNetwork, graph.JusticeRecordsOwner,
+            graph.TravelParties, graph.RuntimeIdentityIndex, mismatchedPersonStore, out _), Is.False);
+    }
+
+    [Test]
     public void MerchantTradePlanTransitionRequiresExactGraphMembersAndPreservesDecisionIdentity()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

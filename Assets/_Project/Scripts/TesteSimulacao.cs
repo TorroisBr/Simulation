@@ -2298,13 +2298,10 @@ public class TesteSimulacao : MonoBehaviour
                 new Dictionary<string, SpatialLocationRuntime>(System.StringComparer.Ordinal);
             if (!selectedRuntimeOwnerGraphBuilder.TryCreateConfiguredCities(
                     runtimeIdAllocator,
-                    selectedLocation =>
-                    {
-                        if (!runtimeIdentityRegistry.BindSelectedLocationProjection(selectedLocation)) return false;
-                        selectedLocationsByRuntimeId.Add(selectedLocation.RuntimeId, selectedLocation);
-                        return true;
-                    },
-                    selectedLocation => runtimeIdentityRegistry.RollbackSelectedLocationProjection(selectedLocation)))
+                    selectedLocation => runtimeIdentityRegistry.TryBindSelectedLocationProjection(
+                        selectedLocation, selectedLocationsByRuntimeId),
+                    selectedLocation => runtimeIdentityRegistry.RollbackSelectedLocationProjection(
+                        selectedLocation, selectedLocationsByRuntimeId)))
                 throw new System.InvalidOperationException(
                     "The selected City owner graph could not construct the exact admitted Daily-v1 owner set.");
 

@@ -19,6 +19,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
     internal TravelPartyStore TravelParties { get; }
     internal DailyV1RuntimeIdentityIndex RuntimeIdentityIndex { get; }
+    internal PersonStore PersonStore { get; }
 
     private DailyV1SelectedRuntimeOwnerGraph(
         DailyV1EffectiveDefinitions definitions,
@@ -27,7 +28,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         SpatialNetworkOwner spatialNetwork,
         DailyV1JusticeRecordsOwner justiceRecordsOwner,
         TravelPartyStore travelParties,
-        DailyV1RuntimeIdentityIndex runtimeIdentityIndex)
+        DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
+        PersonStore personStore)
     {
         Definitions = definitions;
         this.cities = cities.AsReadOnly();
@@ -36,6 +38,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         JusticeRecordsOwner = justiceRecordsOwner;
         TravelParties = travelParties;
         RuntimeIdentityIndex = runtimeIdentityIndex;
+        PersonStore = personStore;
     }
 
     internal static bool TryCreate(
@@ -93,7 +96,22 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         out DailyV1SelectedRuntimeOwnerGraph graph)
     {
         return TryCreateCore(definitions, cityOwners, npcOwners, spatialNetwork,
-            justiceRecordsOwner, travelParties, runtimeIdentityIndex, null, 0, out graph);
+            justiceRecordsOwner, travelParties, runtimeIdentityIndex, null, null, 0, out graph);
+    }
+
+    internal static bool TryCreate(
+        DailyV1EffectiveDefinitions definitions,
+        IEnumerable<DailyV1CityRuntimeOwners> cityOwners,
+        IEnumerable<DailyV1NpcRuntimeOwners> npcOwners,
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1JusticeRecordsOwner justiceRecordsOwner,
+        TravelPartyStore travelParties,
+        DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
+        PersonStore personStore,
+        out DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        return TryCreateCore(definitions, cityOwners, npcOwners, spatialNetwork,
+            justiceRecordsOwner, travelParties, runtimeIdentityIndex, personStore, null, 0, out graph);
     }
 
     private static bool TryCreateCore(
@@ -104,6 +122,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         DailyV1JusticeRecordsOwner justiceRecordsOwner,
         TravelPartyStore travelParties,
         DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
+        PersonStore personStore,
         string pendingNpcIdentityId,
         int pendingNpcMembershipDelta,
         out DailyV1SelectedRuntimeOwnerGraph graph)
@@ -159,14 +178,39 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         if (justiceRecordsOwner != null
             && !MatchesJusticeRecords(cities, npcs, justiceRecordsOwner)) return false;
 
+        if (personStore != null && !MatchesPersonStore(personStore, npcs)) return false;
+
         if (runtimeIdentityIndex != null
             && !MatchesRuntimeIdentityIndex(runtimeIdentityIndex, cities, npcs, spatialNetwork,
                 pendingNpcIdentityId, pendingNpcMembershipDelta)) return false;
 
         graph = new DailyV1SelectedRuntimeOwnerGraph(
             definitions, cities, npcs, spatialNetwork, justiceRecordsOwner,
-            travelParties, runtimeIdentityIndex);
+            travelParties, runtimeIdentityIndex, personStore);
         return true;
+    }
+
+    private static bool MatchesPersonStore(
+        PersonStore personStore,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> npcs)
+    {
+        HashSet<string> boundNpcRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+        int bindingCount = 0;
+        foreach (PersonRuntime person in personStore.Persons)
+        {
+            if (person == null || person.PersonId == null) return false;
+            string npcRuntimeId = person.MaterializedNpcRuntimeId;
+            if (npcRuntimeId == null) continue;
+            if (string.IsNullOrWhiteSpace(npcRuntimeId)
+                || !boundNpcRuntimeIds.Add(npcRuntimeId)
+                || !ContainsNpcRuntimeId(npcs, npcRuntimeId)
+                || !personStore.TryGetByMaterializedNpcRuntimeId(
+                    npcRuntimeId, out PersonRuntime indexedPerson)
+                || !ReferenceEquals(person, indexedPerson)) return false;
+            bindingCount++;
+        }
+
+        return bindingCount == personStore.MaterializedBindingCount;
     }
 
     private static bool MatchesRuntimeIdentityIndex(
@@ -325,6 +369,20 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
         out DailyV1SelectedRuntimeOwnerGraph graph)
     {
+        return TryCreateFromExactOwners(cityOwners, npcOwners, spatialNetwork,
+            justiceRecordsOwner, travelParties, runtimeIdentityIndex, null, out graph);
+    }
+
+    internal static bool TryCreateFromExactOwners(
+        IEnumerable<DailyV1CityRuntimeOwners> cityOwners,
+        IEnumerable<DailyV1NpcRuntimeOwners> npcOwners,
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1JusticeRecordsOwner justiceRecordsOwner,
+        TravelPartyStore travelParties,
+        DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
+        PersonStore personStore,
+        out DailyV1SelectedRuntimeOwnerGraph graph)
+    {
         graph = null;
         if (cityOwners == null || npcOwners == null) return false;
 
@@ -348,7 +406,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
 
         return definitions != null
             && TryCreate(definitions, cities, npcs, spatialNetwork,
-                justiceRecordsOwner, travelParties, runtimeIdentityIndex, out graph);
+                justiceRecordsOwner, travelParties, runtimeIdentityIndex, personStore, out graph);
     }
 
     internal static bool TryCreateInitialCityOwner(
@@ -662,7 +720,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
             owner
         };
         return TryCreateCore(Definitions, cities, updatedNpcs, SpatialNetwork,
-            JusticeRecordsOwner, TravelParties, RuntimeIdentityIndex, owner.RuntimeId, 1, out graph);
+            JusticeRecordsOwner, TravelParties, RuntimeIdentityIndex, PersonStore,
+            owner.RuntimeId, 1, out graph);
     }
 
     /// <summary>
@@ -690,7 +749,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         }
 
         return removed && TryCreateCore(Definitions, cities, updatedNpcs, SpatialNetwork,
-            JusticeRecordsOwner, TravelParties, RuntimeIdentityIndex,
+            JusticeRecordsOwner, TravelParties, RuntimeIdentityIndex, PersonStore,
             owner.RuntimeId, -1, out graph);
     }
 

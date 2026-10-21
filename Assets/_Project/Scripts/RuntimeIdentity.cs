@@ -45,12 +45,57 @@ public sealed class RuntimeIdentityRegistry
         location != null && TryBindProjection(location.RuntimeId,
             DailyV1RuntimeIdentityKind.Location, locationsByRuntimeId, location);
 
+    internal bool TryBindSelectedLocationProjection(
+        SpatialLocationRuntime location,
+        IDictionary<string, SpatialLocationRuntime> selectedLocationsByRuntimeId)
+    {
+        if (location == null || selectedLocationsByRuntimeId == null
+            || !BindSelectedLocationProjection(location)) return false;
+
+        bool selectedLookupAdded = false;
+        try
+        {
+            selectedLocationsByRuntimeId.Add(location.RuntimeId, location);
+            selectedLookupAdded = true;
+            return true;
+        }
+        catch
+        {
+            if (selectedLookupAdded)
+            {
+                if (!selectedLocationsByRuntimeId.TryGetValue(location.RuntimeId,
+                        out SpatialLocationRuntime current)
+                    || !ReferenceEquals(current, location)
+                    || !selectedLocationsByRuntimeId.Remove(location.RuntimeId))
+                    throw new InvalidOperationException(
+                        "A failed selected Location projection could not roll back its staged runtime lookup.");
+            }
+            RollbackSelectedLocationProjection(location);
+            throw;
+        }
+    }
+
     internal void RollbackSelectedLocationProjection(SpatialLocationRuntime location)
     {
         if (location == null || !locationsByRuntimeId.TryGetValue(location.RuntimeId, out SpatialLocationRuntime current)
             || !ReferenceEquals(location, current))
             throw new InvalidOperationException("Cannot roll back a selected Location projection that does not match its Core identity.");
         locationsByRuntimeId.Remove(location.RuntimeId);
+    }
+
+    internal void RollbackSelectedLocationProjection(
+        SpatialLocationRuntime location,
+        IDictionary<string, SpatialLocationRuntime> selectedLocationsByRuntimeId)
+    {
+        if (location == null || selectedLocationsByRuntimeId == null
+            || !selectedLocationsByRuntimeId.TryGetValue(location.RuntimeId,
+                out SpatialLocationRuntime current)
+            || !ReferenceEquals(location, current)
+            || !selectedLocationsByRuntimeId.Remove(location.RuntimeId))
+            throw new InvalidOperationException(
+                "Cannot roll back a selected Location lookup that does not match its Core identity.");
+
+        RollbackSelectedLocationProjection(location);
     }
 
     private bool TryBindProjection<TValue>(

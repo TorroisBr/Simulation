@@ -197,6 +197,33 @@ public sealed class CoreRuntimeTests
     }
 
     [Test]
+    public void SelectedLocationProjectionCollisionRollsBackRegistryProjectionBeforeRethrow()
+    {
+        const string runtimeId = "location/selected-projection-collision";
+        DailyV1RuntimeIdentityIndex identityIndex = new DailyV1RuntimeIdentityIndex();
+        Assert.That(identityIndex.TryStageRegister(runtimeId, DailyV1RuntimeIdentityKind.Location), Is.True);
+        RuntimeIdentityRegistry registry = new RuntimeIdentityRegistry(null, identityIndex);
+        SpatialLocationRuntime location = new SpatialLocationRuntime(runtimeId);
+        SpatialLocationRuntime preexistingLookup = new SpatialLocationRuntime(runtimeId);
+        System.Collections.Generic.Dictionary<string, SpatialLocationRuntime> selectedLocations =
+            new System.Collections.Generic.Dictionary<string, SpatialLocationRuntime>
+            {
+                [runtimeId] = preexistingLookup
+            };
+
+        Assert.Throws<System.ArgumentException>(() =>
+            registry.TryBindSelectedLocationProjection(location, selectedLocations));
+        Assert.That(selectedLocations[runtimeId], Is.SameAs(preexistingLookup));
+        LogAssert.Expect(LogType.Warning,
+            "Location runtime resolution failed: RuntimeId 'location/selected-projection-collision' is registered as Location, not Location.");
+        Assert.That(registry.TryGetLocation(runtimeId, out _), Is.False,
+            "The registry projection must be rolled back before the callback exception escapes.");
+
+        Assert.That(identityIndex.TryRemoveStaged(runtimeId, DailyV1RuntimeIdentityKind.Location), Is.True,
+            "The caller that staged the shared Core identity retains rollback ownership.");
+    }
+
+    [Test]
     public void SimulationTime_AdvanceDayIncrementsAbsoluteDay()
     {
         SimulationTime time = new SimulationTime();
