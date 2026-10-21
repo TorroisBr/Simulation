@@ -40,16 +40,17 @@ public interface IOwnerSectionCensusProvider
 internal sealed class ContinuationMutationEpochReservation
 {
     internal readonly ContinuationCensusProtocol Owner;
-    internal readonly object Token;
+    internal readonly DailyV1MutationEpochReservation EpochReservation;
+    internal object Token => EpochReservation.Token;
     internal readonly Thread OwnerThread;
 
     internal ContinuationMutationEpochReservation(
         ContinuationCensusProtocol owner,
-        object token,
+        DailyV1MutationEpochReservation epochReservation,
         Thread ownerThread)
     {
         Owner = owner;
-        Token = token;
+        EpochReservation = epochReservation ?? throw new ArgumentNullException(nameof(epochReservation));
         OwnerThread = ownerThread;
     }
 }
@@ -228,8 +229,9 @@ public sealed class ContinuationCensusProtocol
     private bool operationsSealed;
     private OwnerThreadBinding ownerThreadBinding;
     private int activeOperationCount;
-    private long mutationEpoch;
-    private object activeMutationEpochReservation;
+    private readonly DailyV1MutationEpochState mutationEpochState = new DailyV1MutationEpochState();
+    private DailyV1MutationEpochReservation activeMutationEpochReservation =>
+        mutationEpochState.ActiveReservation;
     private int protocolFaulted;
 
     /// <summary>
@@ -1260,10 +1262,11 @@ public sealed class ContinuationCensusProtocol
 
     private bool NotifyCommittedMutationsCore(
         IEnumerable<string> sectionIds,
-        out ContinuationCensusFailure failure)
+        out ContinuationCensusFailure failure,
+        bool advanceEpoch = true)
     {
         if (!TryRequireOwnerThread(out failure)) return false;
-        if (mutationEpoch == long.MaxValue)
+        if (!mutationEpochState.CanAdvance)
         {
             Fault();
             failure = ContinuationCensusFailure.ProtocolFaulted;
@@ -1334,7 +1337,12 @@ public sealed class ContinuationCensusProtocol
         foreach (PendingSectionBaseline observed in observedSections)
             SetBaseline(observed.Section, observed.Witness);
 
-        mutationEpoch++;
+        if (advanceEpoch && !mutationEpochState.TryAdvanceCommittedMutation())
+        {
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
         failure = ContinuationCensusFailure.None;
         return true;
     }
@@ -1376,12 +1384,17 @@ public sealed class ContinuationCensusProtocol
         }
         if (epochReservation != null
             && (!ReferenceEquals(epochReservation.Owner, this)
-                || !ReferenceEquals(epochReservation.Token, activeMutationEpochReservation)
+                || !ReferenceEquals(epochReservation.EpochReservation, activeMutationEpochReservation)
                 || !ReferenceEquals(epochReservation.OwnerThread, Thread.CurrentThread)
                 || epochReservation.OwnerThread.ManagedThreadId != Thread.CurrentThread.ManagedThreadId))
         {
             Fault();
             failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+        if (epochReservation == null && activeMutationEpochReservation != null)
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
             return false;
         }
 
@@ -1974,7 +1987,7 @@ public sealed class ContinuationCensusProtocol
             || inventoryChanged || moneyAccountChanged || knowledgeChanged || plansChanged
             || npcReceiptOwnersChanged || lifecycleChanged;
         if (anySectionChanged
-            && mutationEpoch == long.MaxValue)
+            && !mutationEpochState.CanAdvance)
         {
             Fault();
             failure = ContinuationCensusFailure.ProtocolFaulted;
@@ -2017,9 +2030,11 @@ public sealed class ContinuationCensusProtocol
             if (!TryCompleteMutationEpochReservation(epochReservation, anySectionChanged, out failure))
                 return false;
         }
-        else if (anySectionChanged)
+        else if (anySectionChanged && !mutationEpochState.TryAdvanceCommittedMutation())
         {
-            mutationEpoch++;
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
         }
         failure = ContinuationCensusFailure.None;
         return true;
@@ -2029,7 +2044,7 @@ public sealed class ContinuationCensusProtocol
     {
         epoch = 0L;
         if (!TryRequireOwnerThread(out failure)) return false;
-        epoch = mutationEpoch;
+        epoch = mutationEpochState.CurrentEpoch;
         return true;
     }
 
@@ -2041,7 +2056,7 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.OperationInProgress;
             return false;
         }
-        if (mutationEpoch == long.MaxValue)
+        if (!mutationEpochState.CanAdvance)
         {
             Fault();
             failure = ContinuationCensusFailure.ProtocolFaulted;
@@ -2063,17 +2078,20 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.OperationInProgress;
             return false;
         }
-        if (mutationEpoch == long.MaxValue)
+        if (!mutationEpochState.CanAdvance)
         {
             Fault();
             failure = ContinuationCensusFailure.ProtocolFaulted;
             return false;
         }
 
-        object token = new object();
-        activeMutationEpochReservation = token;
+        if (!mutationEpochState.TryReserve(out DailyV1MutationEpochReservation epochReservation))
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
         OwnerThreadBinding binding = Volatile.Read(ref ownerThreadBinding);
-        reservation = new ContinuationMutationEpochReservation(this, token, binding.Thread);
+        reservation = new ContinuationMutationEpochReservation(this, epochReservation, binding.Thread);
         failure = ContinuationCensusFailure.None;
         return true;
     }
@@ -2085,7 +2103,7 @@ public sealed class ContinuationCensusProtocol
     {
         if (reservation == null
             || !ReferenceEquals(reservation.Owner, this)
-            || !ReferenceEquals(reservation.Token, activeMutationEpochReservation)
+            || !ReferenceEquals(reservation.EpochReservation, activeMutationEpochReservation)
             || !ReferenceEquals(reservation.OwnerThread, Thread.CurrentThread)
             || reservation.OwnerThread.ManagedThreadId != Thread.CurrentThread.ManagedThreadId)
         {
@@ -2094,8 +2112,13 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        bool notified = NotifyCommittedMutationsCore(sectionIds, out failure);
-        activeMutationEpochReservation = null;
+        bool notified = NotifyCommittedMutationsCore(sectionIds, out failure, advanceEpoch: false);
+        if (!mutationEpochState.TryComplete(reservation.EpochReservation, notified))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
         return notified;
     }
 
@@ -2111,12 +2134,12 @@ public sealed class ContinuationCensusProtocol
         }
         if (activeMutationEpochReservation == null)
             return;
-        if (!ReferenceEquals(reservation.Token, activeMutationEpochReservation))
+        if (!ReferenceEquals(reservation.EpochReservation, activeMutationEpochReservation)
+            || !mutationEpochState.TryRelease(reservation.EpochReservation))
         {
             Fault();
             return;
         }
-        activeMutationEpochReservation = null;
     }
 
     internal bool TryCompleteMutationEpochReservation(
@@ -2126,7 +2149,7 @@ public sealed class ContinuationCensusProtocol
     {
         if (reservation == null
             || !ReferenceEquals(reservation.Owner, this)
-            || !ReferenceEquals(reservation.Token, activeMutationEpochReservation)
+            || !ReferenceEquals(reservation.EpochReservation, activeMutationEpochReservation)
             || !ReferenceEquals(reservation.OwnerThread, Thread.CurrentThread)
             || reservation.OwnerThread.ManagedThreadId != Thread.CurrentThread.ManagedThreadId)
         {
@@ -2134,18 +2157,12 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.ProtocolFaulted;
             return false;
         }
-        if (committedMutation)
+        if (!mutationEpochState.TryComplete(reservation.EpochReservation, committedMutation))
         {
-            if (mutationEpoch == long.MaxValue)
-            {
-                Fault();
-                activeMutationEpochReservation = null;
-                failure = ContinuationCensusFailure.ProtocolFaulted;
-                return false;
-            }
-            mutationEpoch++;
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
         }
-        activeMutationEpochReservation = null;
         failure = ContinuationCensusFailure.None;
         return true;
     }
@@ -2280,7 +2297,7 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        long startingEpoch = mutationEpoch;
+        long startingEpoch = mutationEpochState.CurrentEpoch;
         List<OwnerSectionContract> orderedContracts = new List<OwnerSectionContract>(expectedSections.Values);
         orderedContracts.Sort((left, right) => StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
         List<OwnerSectionCensusSnapshot> observed =
@@ -2318,7 +2335,7 @@ public sealed class ContinuationCensusProtocol
         if (!TryRequireOwnerThread(out failure)) return false;
         if (activeOperationCount != 0
             || activeMutationEpochReservation != null
-            || mutationEpoch != startingEpoch)
+            || mutationEpochState.CurrentEpoch != startingEpoch)
         {
             failure = ContinuationCensusFailure.OperationInProgress;
             return false;
