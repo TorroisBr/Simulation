@@ -22,6 +22,16 @@ public sealed class PersonRuntime
     public string ResidenceSettlementRuntimeId => residenceSettlementRuntimeId;
     internal long LifeResidenceRevision => lifeResidenceRevision;
 
+    internal OwnerSectionCensusWitness GetLifeResidenceCensusWitness()
+    {
+        return new OwnerSectionCensusWitness(
+            DailyV1PersonCensusIdentity.SectionIdFor(PersonId),
+            1,
+            this,
+            1,
+            lifeResidenceRevision);
+    }
+
     internal void BindP12LifecycleMutationBoundary(
         Func<PersonRuntime, bool> admission,
         Action<PersonRuntime> committed)
@@ -200,5 +210,17 @@ public sealed class PersonRuntime
         residenceSettlementRuntimeId = normalized;
         NotifyP12LifeResidenceMutationCommitted();
         return true;
+    }
+}
+
+/// <summary>Canonical stable key encoding for selected Person census rows.</summary>
+internal static class DailyV1PersonCensusIdentity
+{
+    internal static string SectionIdFor(PersonId personId)
+    {
+        if (personId == null) throw new ArgumentNullException(nameof(personId));
+        return "p12b.person-life-residence/"
+            + personId.Value.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            + ":" + personId.Value;
     }
 }

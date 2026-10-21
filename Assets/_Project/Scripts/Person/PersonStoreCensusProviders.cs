@@ -20,12 +20,7 @@ public sealed class PersonMembershipCensusProvider : IOwnerSectionCensusProvider
 
     public OwnerSectionCensusWitness GetCurrentCensus()
     {
-        return new OwnerSectionCensusWitness(
-            SectionId,
-            SchemaVersion,
-            owner,
-            owner.Persons.Count,
-            owner.Revision);
+        return owner.GetMembershipCensusWitness();
     }
 }
 
@@ -47,12 +42,7 @@ public sealed class PersonMaterializationBindingCensusProvider : IOwnerSectionCe
 
     public OwnerSectionCensusWitness GetCurrentCensus()
     {
-        return new OwnerSectionCensusWitness(
-            SectionId,
-            SchemaVersion,
-            owner,
-            owner.MaterializedBindingCount,
-            owner.Revision);
+        return owner.GetMaterializationBindingCensusWitness();
     }
 }
 

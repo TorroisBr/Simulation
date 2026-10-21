@@ -20,20 +20,13 @@ public sealed class PersonLifeResidenceCensusProvider : IOwnerSectionCensusProvi
 
     public OwnerSectionCensusWitness GetCurrentCensus()
     {
-        return new OwnerSectionCensusWitness(
-            SectionId,
-            SchemaVersion,
-            owner,
-            1,
-            PersonRuntimeOwnerBridge.GetLifeResidenceRevision(owner));
+        return owner.GetLifeResidenceCensusWitness();
     }
 
     public static string SectionIdFor(PersonId personId)
     {
         if (personId == null) throw new ArgumentNullException(nameof(personId));
-        return SectionPrefix
-            + personId.Value.Length.ToString(CultureInfo.InvariantCulture)
-            + ":" + personId.Value;
+        return DailyV1PersonCensusIdentity.SectionIdFor(personId);
     }
 
     public static IReadOnlyList<IOwnerSectionCensusProvider> CreateProviders(

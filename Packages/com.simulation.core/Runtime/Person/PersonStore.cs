@@ -142,6 +142,18 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
     public int MaterializedBindingCount => personsByNpcRuntimeId.Count;
     public long Revision => revision;
 
+    internal OwnerSectionCensusWitness GetMembershipCensusWitness()
+    {
+        return new OwnerSectionCensusWitness(
+            "p12d.person.membership", 1, this, persons.Count, revision);
+    }
+
+    internal OwnerSectionCensusWitness GetMaterializationBindingCensusWitness()
+    {
+        return new OwnerSectionCensusWitness(
+            "p12d.person.materialization-binding", 1, this, MaterializedBindingCount, revision);
+    }
+
     public PersonStore()
     {
         personSnapshot = persons.AsReadOnly();

@@ -90,6 +90,7 @@
       <Compile Include="SimulationRecordSequenceCoreTests.cs" Link="Persistence/SimulationRecordSequenceCoreTests.cs" />
       <Compile Include="RuntimeIdAllocatorCoreTests.cs" Link="Identity/RuntimeIdAllocatorCoreTests.cs" />
       <Compile Include="PersonRuntimeCoreTests.cs" Link="Person/PersonRuntimeCoreTests.cs" />
+      <Compile Include="PersonCensusProviderTests.cs" Link="Person/PersonCensusProviderTests.cs" />
       <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Person/PersonOwnerSnapshotTests.cs" Link="Person/PersonOwnerSnapshotTests.cs" />
       <Compile Include="PersonChronologyCoreTests.cs" Link="Person/PersonChronologyCoreTests.cs" />
       <Compile Include="PersonNaturalMortalityCoreTests.cs" Link="Person/PersonNaturalMortalityCoreTests.cs" />
