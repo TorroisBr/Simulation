@@ -217,10 +217,10 @@ internal sealed class P12ADailyV1Census
     }
     internal IReadOnlyList<P12ACensusSectionValue> Sections => sections;
     internal P12ADailyV1SectionManifest Manifest => manifest;
-    internal static IReadOnlyList<string> FixedRequiredSectionIds => Array.AsReadOnly((string[])FixedRequired.Clone());
-    internal static IReadOnlyList<string> FixedEmptySectionIds => Array.AsReadOnly((string[])FixedEmpty.Clone());
-    internal static IReadOnlyList<string> NpcSectionPrefixes => Array.AsReadOnly((string[])NpcPrefixes.Clone());
-    internal static IReadOnlyList<string> CitySectionPrefixes => Array.AsReadOnly((string[])CityPrefixes.Clone());
+    internal static IReadOnlyList<string> FixedRequiredSectionIds => DailyV1SelectedOwnerSectionCensusContract.FixedRequired;
+    internal static IReadOnlyList<string> FixedEmptySectionIds => DailyV1SelectedOwnerSectionCensusContract.FixedEmpty;
+    internal static IReadOnlyList<string> NpcSectionPrefixes => DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes;
+    internal static IReadOnlyList<string> CitySectionPrefixes => DailyV1SelectedOwnerSectionCensusContract.CityPrefixes;
 
     internal static bool TryCreate(IReadOnlyList<OwnerSectionCensusSnapshot> snapshots,
         out P12ADailyV1Census census, out P12AResult result)
@@ -239,14 +239,14 @@ internal sealed class P12ADailyV1Census
         }
         ordered.Sort((left, right) => StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
 
-        HashSet<string> fixedRequired = new HashSet<string>(FixedRequired, StringComparer.Ordinal);
-        HashSet<string> fixedEmpty = new HashSet<string>(FixedEmpty, StringComparer.Ordinal);
+        HashSet<string> fixedRequired = new HashSet<string>(DailyV1SelectedOwnerSectionCensusContract.FixedRequired, StringComparer.Ordinal);
+        HashSet<string> fixedEmpty = new HashSet<string>(DailyV1SelectedOwnerSectionCensusContract.FixedEmpty, StringComparer.Ordinal);
         HashSet<string> seenFixedRequired = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string> seenFixedEmpty = new HashSet<string>(StringComparer.Ordinal);
         List<HashSet<string>> npcFamilies = new List<HashSet<string>>();
-        foreach (string prefix in NpcPrefixes) npcFamilies.Add(new HashSet<string>(StringComparer.Ordinal));
+        foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes) npcFamilies.Add(new HashSet<string>(StringComparer.Ordinal));
         List<HashSet<string>> cityFamilies = new List<HashSet<string>>();
-        foreach (string prefix in CityPrefixes) cityFamilies.Add(new HashSet<string>(StringComparer.Ordinal));
+        foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.CityPrefixes) cityFamilies.Add(new HashSet<string>(StringComparer.Ordinal));
         HashSet<string> npcIds = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string> nonPersonNpcIds = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string> personIds = new HashSet<string>(StringComparer.Ordinal);
@@ -266,19 +266,19 @@ internal sealed class P12ADailyV1Census
                     || !seenFixedEmpty.Add(id)) return false;
                 continue;
             }
-            int familyIndex = FindFamily(id, NpcPrefixes);
+            int familyIndex = FindFamily(id, DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes);
             if (familyIndex >= 0)
             {
                 if (snapshot.Role != OwnerSectionRole.Required
-                    || !TryDynamicKey(id, NpcPrefixes[familyIndex], out string key)
+                    || !TryDynamicKey(id, DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes[familyIndex], out string key)
                     || !npcFamilies[familyIndex].Add(key)) return false;
                 npcIds.Add(key); continue;
             }
-            familyIndex = FindFamily(id, CityPrefixes);
+            familyIndex = FindFamily(id, DailyV1SelectedOwnerSectionCensusContract.CityPrefixes);
             if (familyIndex >= 0)
             {
                 if (snapshot.Role != OwnerSectionRole.Required
-                    || !TryCityKey(id, CityPrefixes[familyIndex], out string key)
+                    || !TryCityKey(id, DailyV1SelectedOwnerSectionCensusContract.CityPrefixes[familyIndex], out string key)
                     || !cityFamilies[familyIndex].Add(key)) return false;
                 cityIds.Add(key); continue;
             }
@@ -378,14 +378,14 @@ internal sealed class P12ADailyV1Census
         ordered.Sort((left, right) => StringComparer.Ordinal.Compare(left == null ? null : left.Id,
             right == null ? null : right.Id));
         HashSet<string> seenIds = new HashSet<string>(StringComparer.Ordinal);
-        HashSet<string> fixedRequired = new HashSet<string>(FixedRequired, StringComparer.Ordinal);
-        HashSet<string> fixedEmpty = new HashSet<string>(FixedEmpty, StringComparer.Ordinal);
+        HashSet<string> fixedRequired = new HashSet<string>(DailyV1SelectedOwnerSectionCensusContract.FixedRequired, StringComparer.Ordinal);
+        HashSet<string> fixedEmpty = new HashSet<string>(DailyV1SelectedOwnerSectionCensusContract.FixedEmpty, StringComparer.Ordinal);
         HashSet<string> seenFixedRequired = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string> seenFixedEmpty = new HashSet<string>(StringComparer.Ordinal);
         List<HashSet<string>> npcFamilies = new List<HashSet<string>>();
-        foreach (string prefix in NpcPrefixes) npcFamilies.Add(new HashSet<string>(StringComparer.Ordinal));
+        foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes) npcFamilies.Add(new HashSet<string>(StringComparer.Ordinal));
         List<HashSet<string>> cityFamilies = new List<HashSet<string>>();
-        foreach (string prefix in CityPrefixes) cityFamilies.Add(new HashSet<string>(StringComparer.Ordinal));
+        foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.CityPrefixes) cityFamilies.Add(new HashSet<string>(StringComparer.Ordinal));
         HashSet<string> npcIds = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string> nonPersonNpcIds = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string> personIds = new HashSet<string>(StringComparer.Ordinal);
@@ -408,19 +408,19 @@ internal sealed class P12ADailyV1Census
                     || !seenFixedEmpty.Add(id)) return false;
                 continue;
             }
-            int familyIndex = FindFamily(id, NpcPrefixes);
+            int familyIndex = FindFamily(id, DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes);
             if (familyIndex >= 0)
             {
                 if (value.Role != OwnerSectionRole.Required
-                    || !TryDynamicKey(id, NpcPrefixes[familyIndex], out string key)
+                    || !TryDynamicKey(id, DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes[familyIndex], out string key)
                     || !npcFamilies[familyIndex].Add(key)) return false;
                 npcIds.Add(key); continue;
             }
-            familyIndex = FindFamily(id, CityPrefixes);
+            familyIndex = FindFamily(id, DailyV1SelectedOwnerSectionCensusContract.CityPrefixes);
             if (familyIndex >= 0)
             {
                 if (value.Role != OwnerSectionRole.Required
-                    || !TryCityKey(id, CityPrefixes[familyIndex], out string key)
+                    || !TryCityKey(id, DailyV1SelectedOwnerSectionCensusContract.CityPrefixes[familyIndex], out string key)
                     || !cityFamilies[familyIndex].Add(key)) return false;
                 cityIds.Add(key); continue;
             }
@@ -437,13 +437,15 @@ internal sealed class P12ADailyV1Census
             return false;
         }
 
-        if (seenFixedRequired.Count != FixedRequired.Length || seenFixedEmpty.Count != FixedEmpty.Length
+        if (seenFixedRequired.Count != DailyV1SelectedOwnerSectionCensusContract.FixedRequired.Count
+            || seenFixedEmpty.Count != DailyV1SelectedOwnerSectionCensusContract.FixedEmpty.Count
             || npcFamilies.Count == 0 || npcFamilies[0].Count == 0 || cityFamilies[0].Count == 0) return false;
         foreach (HashSet<string> family in npcFamilies) if (!SameSet(family, npcFamilies[0])) return false;
         foreach (HashSet<string> family in cityFamilies) if (!SameSet(family, cityFamilies[0])) return false;
         foreach (string id in nonPersonNpcIds) if (!npcIds.Contains(id)) return false;
-        long expectedCount = 61L + (long)NpcPrefixes.Length * npcIds.Count
-            + nonPersonNpcIds.Count + personIds.Count + (long)CityPrefixes.Length * cityIds.Count;
+        long expectedCount = 61L + (long)DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes.Count * npcIds.Count
+            + nonPersonNpcIds.Count + personIds.Count
+            + (long)DailyV1SelectedOwnerSectionCensusContract.CityPrefixes.Count * cityIds.Count;
         if (expectedCount != ordered.Count) return false;
 
         List<P12ASectionContract> contracts = new List<P12ASectionContract>(ordered.Count);
@@ -455,24 +457,13 @@ internal sealed class P12ADailyV1Census
         return true;
     }
 
-    internal static string ExpectedAliasGroupForSection(string id)
-    {
-        foreach (string[] group in FixedAliasGroups)
-            if (Array.IndexOf(group, id) >= 0) return "alias/" + group[0];
-        foreach (string[] group in NpcAliasFamilies)
-        {
-            foreach (string prefix in group)
-                if (TryDynamicKey(id, prefix, out string key)) return "alias/" + group[0] + key;
-        }
-        foreach (string prefix in CityPopulationAliasFamily)
-            if (TryEncodedCityKey(id, prefix, out string key))
-                return "alias/" + CityPopulationAliasFamily[0] + key.Length.ToString(
-                    System.Globalization.CultureInfo.InvariantCulture) + ":" + key;
-        return null;
-    }
+    internal static string ExpectedAliasGroupForSection(string id) =>
+        DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(id);
 
-    private static int FindFamily(string id, string[] prefixes)
-    { for (int i = 0; i < prefixes.Length; i++) if (id.StartsWith(prefixes[i], StringComparison.Ordinal)) return i; return -1; }
+    private static bool ContainsOrdinal(IReadOnlyList<string> values, string value)
+    { for (int i = 0; i < values.Count; i++) if (string.Equals(values[i], value, StringComparison.Ordinal)) return true; return false; }
+    private static int FindFamily(string id, IReadOnlyList<string> prefixes)
+    { for (int i = 0; i < prefixes.Count; i++) if (id.StartsWith(prefixes[i], StringComparison.Ordinal)) return i; return -1; }
     private static bool TryDynamicKey(string id, string prefix, out string key)
     {
         key = null; if (!id.StartsWith(prefix, StringComparison.Ordinal)) return false;
@@ -493,88 +484,6 @@ internal sealed class P12ADailyV1Census
     }
     private static bool TryPersonKey(string id, out string key) => TryEncodedCityKey(id, "p12b.person-life-residence/", out key);
     private static bool SameSet(HashSet<string> left, HashSet<string> right) => left.SetEquals(right);
-
-    private static readonly string[] NpcPrefixes =
-    {
-        "p12f.explorable-site-knowledge/", "p12f.local-topology-knowledge.places/",
-        "p12f.local-topology-knowledge.connections/", "p12f.adventure-intel.opposition/",
-        "p12f.adventure-intel.notable-items/", "p12f.adventure-intel.common-resources/",
-        "p12f.adventure-intel.access/", "p12f.commercial-knowledge.markets/",
-        "p12f.commercial-knowledge.liquidity/", "p12f.commercial-knowledge.share-receipts/",
-        "p12f.spatial-knowledge.locations/", "p12f.spatial-knowledge.routes/",
-        "p12f.npc-travel-state/", "p12f.inventory/", "p12e.npc-money-account/",
-        "p12b.merchant-trade-plan/", "p12b.npc-travel-plan/",
-        "p12d.npc-local-observation-receipts/", "p12d.npc-merchant-trade-state-receipts/",
-        "p12b.npc-status-crime-state/", "p12b.npc-current-action/", "p12b.npc-life-state/"
-    };
-    private static readonly string[] CityPrefixes =
-    {
-        "p12b.city.important-npcs/", "p12e.city-market-stock-rows/",
-        "p12d.city-population.aggregate/", "p12d.city-population.operation-receipts/"
-    };
-    private static readonly string[][] FixedAliasGroups =
-    {
-        new[] { "p12b.justice-p18-receipts", "p12b.justice-records" },
-        new[] { "p12c.runtime-id-allocator.decisions", "p12c.runtime-id-allocator.events",
-            "p12c.runtime-id-allocator.travel-parties" },
-        new[] { "p12c.runtime-identities.cities", "p12c.runtime-identities.explorable-sites",
-            "p12c.runtime-identities.local-connections", "p12c.runtime-identities.local-places",
-            "p12c.runtime-identities.locations", "p12c.runtime-identities.notable-items",
-            "p12c.runtime-identities.npcs", "p12c.runtime-identities.routes" },
-        new[] { "p12d.legacy-spatial-network.locations", "p12d.legacy-spatial-network.routes" },
-        new[] { "p12d.person.materialization-binding", "p12d.person.membership" },
-        new[] { "p12e.armed-force.contingents", "p12e.armed-force.forces",
-            "p12e.armed-force.relevant-person-references" },
-        new[] { "p12e.faction.affiliations", "p12e.faction.records" },
-        new[] { "p12e.office.incumbencies", "p12e.office.records", "p12e.office.tenures" },
-        new[] { "p12e.political-claim.recognitions", "p12e.political-claim.records" },
-        new[] { "p12e.property.ownership", "p12e.property.transfer-history" },
-        new[] { "p8a.hexes", "p8a.locations", "p8a.scale-context", "p8b.crossings" }
-    };
-    private static readonly string[][] NpcAliasFamilies =
-    {
-        new[] { "p12b.npc-current-action/", "p12b.npc-life-state/", "p12b.npc-residence/",
-            "p12b.npc-status-crime-state/", "p12f.npc-travel-state/" },
-        new[] { "p12f.adventure-intel.access/", "p12f.adventure-intel.common-resources/",
-            "p12f.adventure-intel.notable-items/", "p12f.adventure-intel.opposition/" },
-        new[] { "p12f.commercial-knowledge.liquidity/", "p12f.commercial-knowledge.markets/",
-            "p12f.commercial-knowledge.share-receipts/" },
-        new[] { "p12f.local-topology-knowledge.connections/", "p12f.local-topology-knowledge.places/" },
-        new[] { "p12f.spatial-knowledge.locations/", "p12f.spatial-knowledge.routes/" }
-    };
-    private static readonly string[] CityPopulationAliasFamily =
-    {
-        "p12d.city-population.aggregate/", "p12d.city-population.operation-receipts/"
-    };
-    private static readonly string[] FixedEmpty =
-    {
-        "p12c.runtime-identities.explorable-sites", "p12c.runtime-identities.local-places",
-        "p12c.runtime-identities.local-connections", "p12c.runtime-identities.notable-items",
-        "p12d.explorable-sites", "p8b.passage-option-barrier-state", "p8b.crossings",
-        "p8c.city-site-location-bindings", "p8c.person-positions", "p8d.spatial-route-observations",
-        "p8d.person-route-plan-history", "p12f.npc-decision-occurrence-receipts",
-        "p12e.economy-keyed-sale-receipts"
-    };
-    private static readonly string[] FixedRequired =
-    {
-        "p12d.person.membership", "p12d.person.materialization-binding",
-        "p12c.runtime-identities.npcs", "p12c.runtime-identities.cities", "p12c.runtime-identities.locations",
-        "p12c.runtime-identities.routes", "p12d.legacy-spatial-network.locations", "p12d.legacy-spatial-network.routes",
-        "p8a.hexes", "p8a.locations", "p8a.scale-context", "p12c.runtime-id-allocator.events",
-        "p12c.runtime-id-allocator.decisions", "p12c.runtime-id-allocator.travel-parties",
-        "p12c.simulation-record-sequence", "p12d.genealogy.parentage", "p12f.political-knowledge.holders",
-        "p12f.political-decisions.records", "p12.crime-social-appraisal.outcomes",
-        "p12.crime-social-appraisal.knowledge", "p12.crime-social-appraisal.reactions", "p12b.justice-records",
-        "p12b.crime-p18-receipts", "p12b.justice-p18-receipts", "p12e.armed-force.forces",
-        "p12e.armed-force.contingents", "p12e.armed-force.relevant-person-references",
-        "p12e.contingent-manpower.states", "p12e.armed-force-spatial.positions", "p12e.conflicts",
-        "p12e.wars", "p12e.battles", "p12e.institution.records", "p12e.office.records",
-        "p12e.office.incumbencies", "p12e.office.tenures", "p12e.faction.records",
-        "p12e.faction.affiliations", "p12e.political-claim.records", "p12e.political-claim.recognitions",
-        "p12e.political-support.relations", "p12e.property.ownership", "p12e.property.transfer-history",
-        "p12e.estate.records", "p12f.actor-choice-inputs", "p12f.scheduled-directives",
-        "p12f.travel-parties", "p12f.expeditions"
-    };
 
     private sealed class ReferenceComparer : IEqualityComparer<object>
     {

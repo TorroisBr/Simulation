@@ -49,6 +49,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialNetworkOwner.cs" Link="Geography/SpatialNetworkOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialGeography.cs" Link="Geography/SpatialGeography.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationHost.cs" Link="Application/DailyV1ApplicationHost.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedOwnerSectionCensusContract.cs" Link="Application/DailyV1SelectedOwnerSectionCensusContract.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/ActorChoiceContracts.cs" Link="Application/ActorChoiceContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/ActorChoiceStore.cs" Link="Application/ActorChoiceStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/ScheduledDirectiveStore.cs" Link="Application/ScheduledDirectiveStore.cs" />

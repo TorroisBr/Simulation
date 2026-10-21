@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using NUnit.Framework;
 
 public sealed class DailyV1ExecutionBoundaryStateTests
@@ -37,10 +38,7 @@ public sealed class DailyV1ExecutionBoundaryStateTests
         EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow();
         SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(1, 1, 1));
         WorldId world = new WorldId(Guid.NewGuid());
-        OwnerSectionCensusSnapshot[] sections =
-        {
-            new OwnerSectionCensusSnapshot("city.market", 1, OwnerSectionRole.Required, new object(), 1, 4L)
-        };
+        OwnerSectionCensusSnapshot[] sections = CreateCompleteSnapshot();
         Assert.That(state.TryRecordCompletedCore(), Is.True);
         Assert.That(state.TryCreateCompletedAdvanceToken(
             admission, configuration, calendar, SimulationRuntimeCompositionProfile.Standard,
@@ -140,10 +138,7 @@ public sealed class DailyV1ExecutionBoundaryStateTests
         SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(1, 1, 1));
         WorldId world = new WorldId(Guid.NewGuid());
         object owner = new object();
-        OwnerSectionCensusSnapshot[] sections =
-        {
-            new OwnerSectionCensusSnapshot("city.market", 1, OwnerSectionRole.Required, owner, 1, 4L)
-        };
+        OwnerSectionCensusSnapshot[] sections = CreateCompleteSnapshot();
 
         Assert.That(state.TryRecordCompletedCore(), Is.True);
         Assert.That(state.TryCreateCompletedAdvanceToken(
@@ -179,10 +174,7 @@ public sealed class DailyV1ExecutionBoundaryStateTests
         EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow();
         SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(1, 1, 1));
         WorldId world = new WorldId(Guid.NewGuid());
-        OwnerSectionCensusSnapshot[] sections =
-        {
-            new OwnerSectionCensusSnapshot("city.market", 1, OwnerSectionRole.Required, new object(), 1, 2L)
-        };
+        OwnerSectionCensusSnapshot[] sections = CreateCompleteSnapshot();
 
         Assert.That(state.TryCreateRestoredContinuationToken(
             admission, configuration, calendar, SimulationRuntimeCompositionProfile.Standard,
@@ -198,5 +190,80 @@ public sealed class DailyV1ExecutionBoundaryStateTests
         Assert.That(restored.CompletedCoreSequence, Is.EqualTo(11L));
         Assert.That(state.CompletedCoreSequence, Is.EqualTo(11L));
         Assert.That(state.CurrentCaptureToken, Is.SameAs(restored));
+    }
+
+    [Test]
+    public void CompletedTokenRejectsIncompleteSelectedProfileCensus()
+    {
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
+        Assert.That(state.TryRecordCompletedCore(), Is.True);
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow();
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(1, 1, 1));
+        Assert.That(state.TryCreateCompletedAdvanceToken(
+            admission, configuration, calendar, SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(Guid.NewGuid()), 1L, 1L,
+            new[] { new OwnerSectionCensusSnapshot("city.market", 1, OwnerSectionRole.Required, new object(), 1, 1L) },
+            out DailyCaptureEligibilityToken token), Is.False);
+        Assert.That(token, Is.Null);
+        Assert.That(state.CurrentCaptureToken, Is.Null);
+    }
+
+    [Test]
+    public void SelectedProfileCensusRejectsMissingDynamicOwnerAndBrokenAlias()
+    {
+        OwnerSectionCensusSnapshot[] complete = CreateCompleteSnapshot();
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(complete), Is.True);
+
+        List<OwnerSectionCensusSnapshot> missingDynamic = new List<OwnerSectionCensusSnapshot>(complete);
+        missingDynamic.RemoveAt(missingDynamic.FindIndex(value =>
+            value.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes[0] + "npc-1"));
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(missingDynamic), Is.False);
+
+        List<OwnerSectionCensusSnapshot> brokenAlias = new List<OwnerSectionCensusSnapshot>(complete);
+        int aliasIndex = brokenAlias.FindIndex(value => value.SectionId == "p12b.justice-records");
+        OwnerSectionCensusSnapshot original = brokenAlias[aliasIndex];
+        brokenAlias[aliasIndex] = new OwnerSectionCensusSnapshot(original.SectionId,
+            original.SchemaVersion, original.Role, new object(), original.Cardinality, original.Revision);
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(brokenAlias), Is.False);
+    }
+
+    [Test]
+    public void SelectedProfileCensusRejectsNonemptyFixedEmptyWitness()
+    {
+        List<OwnerSectionCensusSnapshot> sections = new List<OwnerSectionCensusSnapshot>(CreateCompleteSnapshot());
+        int index = sections.FindIndex(value => value.SectionId == DailyV1SelectedOwnerSectionCensusContract.FixedEmpty[0]);
+        OwnerSectionCensusSnapshot original = sections[index];
+        sections[index] = new OwnerSectionCensusSnapshot(original.SectionId,
+            original.SchemaVersion, original.Role, original.OwnerInstanceIdentity, 1, original.Revision);
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(sections), Is.False);
+    }
+
+    private static OwnerSectionCensusSnapshot[] CreateCompleteSnapshot()
+    {
+        const string npc = "npc-1";
+        const string city = "city-1";
+        List<OwnerSectionCensusSnapshot> result = new List<OwnerSectionCensusSnapshot>();
+        Dictionary<string, object> identities = new Dictionary<string, object>(StringComparer.Ordinal);
+        foreach (string id in DailyV1SelectedOwnerSectionCensusContract.FixedRequired)
+            Add(id, OwnerSectionRole.Required, 1);
+        foreach (string id in DailyV1SelectedOwnerSectionCensusContract.FixedEmpty)
+            Add(id, OwnerSectionRole.ExplicitlyEmpty, 0);
+        foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
+            Add(prefix + npc, OwnerSectionRole.Required, 1);
+        foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.CityPrefixes)
+            Add(prefix == "p12b.city.important-npcs/" ? prefix + city : prefix + city.Length + ":" + city,
+                OwnerSectionRole.Required, 1);
+        return result.ToArray();
+
+        void Add(string id, OwnerSectionRole role, int cardinality)
+        {
+            string alias = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(id);
+            if (alias == null) alias = "unique/" + id;
+            if (!identities.TryGetValue(alias, out object identity))
+                identities.Add(alias, identity = new object());
+            result.Add(new OwnerSectionCensusSnapshot(id, 1, role, identity, cardinality, 1L));
+        }
     }
 }

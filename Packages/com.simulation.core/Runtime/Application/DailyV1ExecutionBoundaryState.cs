@@ -170,7 +170,8 @@ internal sealed class DailyV1ExecutionBoundaryState
         out DailyCaptureEligibilityToken token)
     {
         token = null;
-        if (completedCoreSequence <= 0L)
+        if (completedCoreSequence <= 0L
+            || !DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(ownerSections))
             return false;
 
         token = new DailyCaptureEligibilityToken(
@@ -202,7 +203,8 @@ internal sealed class DailyV1ExecutionBoundaryState
         out DailyCaptureEligibilityToken token)
     {
         token = null;
-        if (restoredCoreSequence <= 0L || completedCoreSequence != 0L || AdvanceLeaseHeld)
+        if (restoredCoreSequence <= 0L || completedCoreSequence != 0L || AdvanceLeaseHeld
+            || !DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(ownerSections))
             return false;
 
         DailyCaptureEligibilityToken candidate = new DailyCaptureEligibilityToken(
