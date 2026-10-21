@@ -24,6 +24,10 @@ public sealed class DailyV1SelectedStealActionExecutionTests
         Assert.That(result.Succeeded, Is.True);
         Assert.That(operation.Order, Is.EqualTo(new[] {
             "p12-begin", "transfer", "theft-log", "wanted-status", "warrant-log", "p12-end" }));
+        Assert.That(operation.PerpetratorBalanceAtTheftLog,
+            Is.GreaterThan(perpetratorBefore));
+        Assert.That(operation.VictimBalanceAtTheftLog,
+            Is.LessThan(victimBefore));
         Assert.That(fixture.Perpetrator.MoneyAccount.Balance, Is.GreaterThan(perpetratorBefore));
         Assert.That(fixture.Victim.MoneyAccount.Balance, Is.LessThan(victimBefore));
         Assert.That(fixture.Justice.WantedRecords, Has.Count.EqualTo(1));
@@ -55,6 +59,8 @@ public sealed class DailyV1SelectedStealActionExecutionTests
         Assert.That(result.Succeeded, Is.False);
         Assert.That(operation.TransferCalls, Is.Zero);
         Assert.That(operation.Order, Is.EqualTo(new[] { "p12-begin", "p12-end" }));
+        Assert.That(fixture.Perpetrator.MoneyAccount.Balance, Is.EqualTo(0f));
+        Assert.That(fixture.Victim.MoneyAccount.Balance, Is.EqualTo(100f));
         Assert.That(fixture.Justice.WantedRecords, Is.Empty);
     }
 
@@ -75,7 +81,26 @@ public sealed class DailyV1SelectedStealActionExecutionTests
     }
 
     [Test]
-    public void SelectedStealCompensatesRejectedSocialCommitAndWarnsOnFailedRollback()
+    public void SelectedStealCompensatesRejectedSocialCommit()
+    {
+        StealFixture fixture = CreateFixture();
+        RecordingStealBoundary operation = new RecordingStealBoundary(fixture.SocialWorld, fixture.Justice);
+        operation.InjectDuplicateAfterFirstTransfer = true;
+        float perpetratorBefore = fixture.Perpetrator.MoneyAccount.Balance;
+        float victimBefore = fixture.Victim.MoneyAccount.Balance;
+
+        Assert.That(Dispatch(fixture, operation, out DailyV1SelectedActionDispatchResult result), Is.True);
+
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(operation.Order, Is.EqualTo(new[] {
+            "p12-begin", "transfer", "theft-log", "rollback", "p12-end" }));
+        Assert.That(fixture.Perpetrator.MoneyAccount.Balance, Is.EqualTo(perpetratorBefore));
+        Assert.That(fixture.Victim.MoneyAccount.Balance, Is.EqualTo(victimBefore));
+        Assert.That(fixture.Justice.WantedRecords, Is.Empty);
+    }
+
+    [Test]
+    public void SelectedStealWarnsWhenCoreCompensationFails()
     {
         StealFixture fixture = CreateFixture();
         RecordingStealBoundary operation = new RecordingStealBoundary(fixture.SocialWorld, fixture.Justice)
@@ -164,7 +189,6 @@ public sealed class DailyV1SelectedStealActionExecutionTests
         internal DailyV1NpcRuntimeOwners Victim { get; }
         internal CrimeSocialAppraisalWorldState SocialWorld { get; }
         internal DailyV1NpcActionPayloadOwner Payload { get; }
-
         internal StealFixture(
             DailyV1EffectiveDefinitions definitions,
             DailyV1SelectedRuntimeOwnerGraph graph,
@@ -271,6 +295,8 @@ public sealed class DailyV1SelectedStealActionExecutionTests
         internal bool InjectDuplicateAfterFirstTransfer { get; set; }
         internal bool FailRollback { get; set; }
         internal DailyV1JusticeWantedRecordOwner ProjectedWantedRecord { get; private set; }
+        internal float PerpetratorBalanceAtTheftLog { get; private set; }
+        internal float VictimBalanceAtTheftLog { get; private set; }
 
         public CrimeSocialAppraisalWorldState SocialAppraisalWorldState => SocialWorld;
         public ITheftOutcomeSink TheftOutcomeSink { get; set; }
@@ -290,30 +316,30 @@ public sealed class DailyV1SelectedStealActionExecutionTests
             finally { order.Add("p12-end"); }
         }
 
-
-        public EconomyTransactionResult TryTransferMoney(
+        public EconomyTransactionResult ExecuteMoneyTransferWithinOperation(
             DailyV1NpcRuntimeOwners source,
             DailyV1NpcRuntimeOwners destination,
-            int amount)
+            Func<EconomyTransactionResult> operation)
         {
             TransferCalls++;
             order.Add(TransferCalls == 1 ? "transfer" : "rollback");
             if (TransferCalls > 1 && FailRollback)
                 return EconomyTransactionResult.CreateFailure(
-                    EconomyTransactionType.MoneyTransfer, MoneyEffect.Transfer,
+                    EconomyTransactionType.MoneyTransfer,
+                    MoneyEffect.Transfer,
                     EconomyTransactionFailureReason.TransactionCommitFailed,
-                    source?.RuntimeId, destination?.RuntimeId);
-            EconomyTransactionResult result = DailyV1MoneyTransferOperation.TryExecute(
-                source?.MoneyAccount, destination?.MoneyAccount, amount,
-                source?.RuntimeId, destination?.RuntimeId);
-            if (TransferCalls == 1 && InjectDuplicateAfterFirstTransfer && result.Success)
+                    source?.RuntimeId,
+                    destination?.RuntimeId);
+            EconomyTransactionResult result = operation?.Invoke();
+            if (TransferCalls == 1 && InjectDuplicateAfterFirstTransfer && result?.Success == true)
             {
-                TheftOutcome duplicate = CreateOutcome(destination, source, amount);
+                TheftOutcome duplicate = CreateOutcome(destination, source, result.Amount);
                 Assert.That(SocialWorld.TheftOutcomes.TryRecord(
                     duplicate, out CrimeOutcomeStoreFailure failure), Is.True, failure.ToString());
             }
             return result;
         }
+
 
         public bool TryProjectWantedRecord(DailyV1NpcRuntimeOwners target,
             DailyV1CityRuntimeOwners city, DailyV1JusticeWantedRecordOwner record)
@@ -353,7 +379,12 @@ public sealed class DailyV1SelectedStealActionExecutionTests
         }
 
         public void PublishTheft(DailyV1NpcRuntimeOwners perpetrator,
-            DailyV1NpcRuntimeOwners victim, int amount) => order.Add("theft-log");
+            DailyV1NpcRuntimeOwners victim, int amount)
+        {
+            PerpetratorBalanceAtTheftLog = perpetrator.MoneyAccount.Balance;
+            VictimBalanceAtTheftLog = victim.MoneyAccount.Balance;
+            order.Add("theft-log");
+        }
         public void LogCompensationFailure() => order.Add("compensation-warning");
         public void PublishWantedRecord(DailyV1NpcRuntimeOwners target,
             DailyV1CityRuntimeOwners city, DailyV1JusticeWantedRecordOwner record)
@@ -366,18 +397,19 @@ public sealed class DailyV1SelectedStealActionExecutionTests
         private TheftOutcome CreateOutcome(
             DailyV1NpcRuntimeOwners perpetrator,
             DailyV1NpcRuntimeOwners victim,
-            int amount)
+            float amount)
         {
             Assert.That(SocialWorld.PersonStore.TryGetByMaterializedNpcRuntimeId(
                 perpetrator.RuntimeId, out PersonRuntime perpetratorPerson), Is.True);
             Assert.That(SocialWorld.PersonStore.TryGetByMaterializedNpcRuntimeId(
                 victim.RuntimeId, out PersonRuntime victimPerson), Is.True);
             long day = SocialWorld.SimulationTime.AbsoluteDay;
-            string key = "theft/selected-slot";
+            const string key = "theft/selected-slot";
             TheftOutcomeId id = TheftOutcomeId.Create(
                 perpetratorPerson.PersonId, victimPerson.PersonId, day, key);
             return new TheftOutcome(id, perpetratorPerson.PersonId, victimPerson.PersonId,
-                amount, day, key, "decision/steal");
+                (int)amount, day, key, "decision/steal");
         }
+
     }
 }

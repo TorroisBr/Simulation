@@ -1555,21 +1555,37 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 using (scope) return operation();
             }
 
-            public EconomyTransactionResult TryTransferMoney(
+            public EconomyTransactionResult ExecuteMoneyTransferWithinOperation(
                 DailyV1NpcRuntimeOwners source,
                 DailyV1NpcRuntimeOwners destination,
-                int amount)
+                Func<EconomyTransactionResult> operation)
             {
-                if (!TryResolveParticipant(source, out NpcRuntime exactSource)
+                if (operation == null
+                    || !TryResolveParticipant(source, out NpcRuntime exactSource)
                     || !TryResolveParticipant(destination, out NpcRuntime exactDestination)
-                    || ReferenceEquals(exactSource, exactDestination)
-                    || amount <= 0)
+                    || ReferenceEquals(exactSource, exactDestination))
                     return EconomyTransactionResult.CreateFailure(
-                        EconomyTransactionType.MoneyTransfer, MoneyEffect.Transfer,
+                        EconomyTransactionType.MoneyTransfer,
+                        MoneyEffect.Transfer,
                         EconomyTransactionFailureReason.InvalidInput,
-                        source?.RuntimeId, destination?.RuntimeId);
-                return runtime.economyTransactionService.TryTransferMoney(
-                    exactSource, exactDestination, amount);
+                        source?.RuntimeId,
+                        destination?.RuntimeId);
+
+                if (runtime.runtimeAdmissionContext == null) return operation();
+                if (!runtime.TryBeginNpcMoneyTransferCensusOperation(
+                        exactSource,
+                        exactDestination,
+                        out SimulationOperationScope scope,
+                        out _,
+                        out _))
+                    return EconomyTransactionResult.CreateFailure(
+                        EconomyTransactionType.MoneyTransfer,
+                        MoneyEffect.Transfer,
+                        EconomyTransactionFailureReason.TransactionCommitFailed,
+                        source.RuntimeId,
+                        destination.RuntimeId);
+
+                using (scope) return operation();
             }
 
             public bool TryProjectWantedRecord(

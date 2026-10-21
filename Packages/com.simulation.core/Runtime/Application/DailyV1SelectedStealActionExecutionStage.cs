@@ -15,10 +15,10 @@ internal static class DailyV1SelectedStealActionExecutionStage
         DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
 
         bool ExecuteWithinOperation(Func<bool> operation);
-        EconomyTransactionResult TryTransferMoney(
+        EconomyTransactionResult ExecuteMoneyTransferWithinOperation(
             DailyV1NpcRuntimeOwners source,
             DailyV1NpcRuntimeOwners destination,
-            int amount);
+            Func<EconomyTransactionResult> operation);
         bool TryProjectWantedRecord(
             DailyV1NpcRuntimeOwners target,
             DailyV1CityRuntimeOwners city,
@@ -179,7 +179,8 @@ internal static class DailyV1SelectedStealActionExecutionStage
         }
 
         if (amount <= 0) return false;
-        EconomyTransactionResult transfer = boundary.TryTransferMoney(victim, perpetrator, amount);
+        EconomyTransactionResult transfer = ExecuteMoneyTransfer(
+            victim, perpetrator, amount, boundary);
         if (transfer?.Success != true) return false;
 
         // Keep the legacy observable ordering: the theft log is emitted after
@@ -187,8 +188,8 @@ internal static class DailyV1SelectedStealActionExecutionStage
         boundary.PublishTheft(perpetrator, victim, amount);
         if (theftOutcome != null && !theftOutcomeSink.TryAcceptTheftOutcome(theftOutcome))
         {
-            EconomyTransactionResult rollback = boundary.TryTransferMoney(
-                perpetrator, victim, amount);
+            EconomyTransactionResult rollback = ExecuteMoneyTransfer(
+                perpetrator, victim, amount, boundary);
             if (rollback?.Success != true) boundary.LogCompensationFailure();
             return false;
         }
@@ -242,6 +243,31 @@ internal static class DailyV1SelectedStealActionExecutionStage
 
         boundary.PublishWantedRecord(perpetrator, city, warrant);
         return true;
+    }
+
+    private static EconomyTransactionResult ExecuteMoneyTransfer(
+        DailyV1NpcRuntimeOwners source,
+        DailyV1NpcRuntimeOwners destination,
+        int amount,
+        ISelectedStealActionBoundary boundary)
+    {
+        EconomyTransactionResult preflightFailure = DailyV1MoneyTransferOperation.Validate(
+            source?.MoneyAccount,
+            destination?.MoneyAccount,
+            amount,
+            source?.RuntimeId,
+            destination?.RuntimeId);
+        if (preflightFailure != null) return preflightFailure;
+
+        return boundary.ExecuteMoneyTransferWithinOperation(
+            source,
+            destination,
+            () => DailyV1MoneyTransferOperation.TryExecute(
+                source.MoneyAccount,
+                destination.MoneyAccount,
+                amount,
+                source.RuntimeId,
+                destination.RuntimeId));
     }
 
     private static bool TryFindExactNpc(
