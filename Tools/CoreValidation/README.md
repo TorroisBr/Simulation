@@ -54,9 +54,12 @@ storage and generated dependency-input hashes. Keep the private source copy and
 the exact input-identifying manifest together during review.
 
 The cold and warm test gates also retain separate private .NET host-trace files.
-Per-process `DOTNET_HOST_TRACE` output isolates the testhost trace so the selected CLR
-is bound to each test assembly runtime configuration.
-Trace paths stay inside the protected run directory and are never published.
+The runner writes SDK-specific host-trace settings into each isolated VSTest
+testhost through a per-gate runsettings file. TRACEFILE names a file inside the
+protected run directory. The runner binds the unique trace containing the exact
+test assembly runtime-configuration paths; process filenames vary by SDK launch
+mode. The settings file and selected trace hashes are retained in the private
+manifest. Neither is published.
 
 For the final .NET-only proof, invoke the Core runner from a sparse isolated
 worktree that contains the explicitly listed package/project/test/demo/tool

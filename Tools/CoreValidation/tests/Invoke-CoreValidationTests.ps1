@@ -118,10 +118,22 @@ try {
 
     $traceDirectory = Join-Path $aclTestDirectory 'runtime-traces'
     $null = Set-ProtectedEvidenceDirectory -Path $traceDirectory
+    $settingsPath = Join-Path $aclTestDirectory 'testhost.runsettings'
+    $traceFilePath = Join-Path $traceDirectory 'testhost-runtime-selection.log'
+    $settingsRecord = New-CoreHostTraceRunSettings -Path $settingsPath -TraceFilePath $traceFilePath -SdkVersion '9.0.315'
+    $null = Assert-ProtectedEvidenceFile -Path $settingsPath -ProtectedRoot $aclTestDirectory
+    [xml]$settingsXml = [IO.File]::ReadAllText($settingsPath)
+    $settingsEnvironment = $settingsXml.RunSettings.RunConfiguration.EnvironmentVariables
+    Assert-True ($settingsRecord.tracePrefix -ceq 'COREHOST') 'SDK 9 runsettings must use the supported COREHOST trace prefix.'
+    Assert-True ($settingsEnvironment.COREHOST_TRACE -ceq '1') 'Runsettings must enable tracing inside the testhost process.'
+    Assert-True ([IO.Path]::IsPathFullyQualified($settingsEnvironment.COREHOST_TRACEFILE)) 'Runsettings must send the trace to an absolute file path.'
+    Assert-True ($settingsEnvironment.COREHOST_TRACEFILE -ceq [IO.Path]::GetFullPath($traceFilePath)) 'Runsettings must bind the trace to the protected run directory.'
+    $settings10 = New-CoreHostTraceRunSettings -Path (Join-Path $aclTestDirectory 'testhost-net10.runsettings') -TraceFilePath $traceFilePath -SdkVersion '10.0.100'
+    Assert-True ($settings10.tracePrefix -ceq 'DOTNET_HOST') 'SDK 10 runsettings must use the renamed DOTNET_HOST trace prefix.'
     $testAssemblyPath = Join-Path $aclTestDirectory 'output/Simulation.Core.Tests.dll'
     $runtimeConfigPath = [regex]::Replace($testAssemblyPath, '(?i)\.dll$', '.runtimeconfig.json')
     $runtimeDevConfigPath = [regex]::Replace($testAssemblyPath, '(?i)\.dll$', '.runtimeconfig.dev.json')
-    $tracePath = Join-Path $traceDirectory 'testhost.12345.log'
+    $tracePath = Join-Path $traceDirectory 'dotnet.12345.log'
     $traceLines = @(
         'Tracing enabled @ Wed Oct 14 16:33:24 2026 GMT',
         "Runtime config is cfg=$runtimeConfigPath dev=$runtimeDevConfigPath",
@@ -131,15 +143,26 @@ try {
     $null = Assert-ProtectedEvidenceFile -Path $tracePath -ProtectedRoot $traceDirectory
     $selection = Get-CoreRuntimeSelectionTrace -TraceDirectory $traceDirectory -TestAssemblyPath $testAssemblyPath
     Assert-True ($selection.selectedClr -ceq '8.0.28') 'The selected CLR must come from the bound testhost runtime-config block.'
-    Assert-True ($selection.fileName -ceq 'testhost.12345.log') 'Only the testhost process trace may be selected.'
+    Assert-True ($selection.fileName -ceq 'dotnet.12345.log') 'The trace must be selected by exact test-assembly runtime-config identity, independent of process filename.'
     $traceBytes=[IO.File]::ReadAllBytes($tracePath)
     Assert-True ($selection.bytes -eq $traceBytes.LongLength) 'Recorded trace length must match the parsed byte snapshot.'
     $traceSha=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($traceBytes)).ToLowerInvariant()
     Assert-True ($selection.sha256 -ceq $traceSha) 'Recorded trace hash must match the same parsed byte snapshot.'
 
-    $duplicateTrace = Join-Path $traceDirectory 'testhost.12346.log'
+    $unrelatedTrace = Join-Path $traceDirectory 'MSBuild.12344.log'
+    $unrelatedLines = @(
+        'Tracing enabled @ Wed Oct 14 16:33:24 2026 GMT',
+        'Runtime config is cfg=C:\Program Files\dotnet\sdk\9.0.315\MSBuild.runtimeconfig.json dev=C:\Program Files\dotnet\sdk\9.0.315\MSBuild.runtimeconfig.dev.json',
+        'Chose FX version [C:\Program Files\dotnet\shared\Microsoft.NETCore.App\9.0.20]'
+    )
+    [IO.File]::WriteAllLines($unrelatedTrace, [string[]]$unrelatedLines, [Text.UTF8Encoding]::new($false))
+    $selectionWithUnrelated = Get-CoreRuntimeSelectionTrace -TraceDirectory $traceDirectory -TestAssemblyPath $testAssemblyPath
+    Assert-True ($selectionWithUnrelated.fileName -ceq 'dotnet.12345.log') 'Unrelated SDK host traces must not change the exact test-assembly binding.'
+    Remove-Item -LiteralPath $unrelatedTrace -Force
+
+    $duplicateTrace = Join-Path $traceDirectory 'dotnet.12346.log'
     [IO.File]::WriteAllText($duplicateTrace, [string]::Join([Environment]::NewLine, $traceLines), [Text.UTF8Encoding]::new($false))
-    Assert-Rejected { Get-CoreRuntimeSelectionTrace -TraceDirectory $traceDirectory -TestAssemblyPath $testAssemblyPath } 'Multiple testhost traces must be rejected as ambiguous.'
+    Assert-Rejected { Get-CoreRuntimeSelectionTrace -TraceDirectory $traceDirectory -TestAssemblyPath $testAssemblyPath } 'Multiple process traces bound to the test assembly must be rejected as ambiguous.'
     Remove-Item -LiteralPath $duplicateTrace -Force
 
     $mismatchedConfig = @($traceLines)
@@ -157,4 +180,4 @@ finally {
     }
 }
 
-Write-Output 'Core validation self-tests PASS: populated/parameterized, failed, not-executed, empty discovery, malformed/missing report, run identity/summary outcome, ID/count integrity, input stability, exact testhost runtime selection, and protected evidence ACL.'
+Write-Output 'Core validation self-tests PASS: populated/parameterized, failed, not-executed, empty discovery, malformed/missing report, run identity/summary outcome, ID/count integrity, input stability, SDK-specific testhost trace settings, exact assembly runtime selection, and protected evidence ACL.'
