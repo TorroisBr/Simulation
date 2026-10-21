@@ -6,8 +6,6 @@ using System;
 /// </summary>
 internal interface IDailyV1SelectedDailyExecutionBoundary
 {
-    bool EconomyEnabled { get; }
-
     void AdvancePlaceContent();
     void BeginLoggerDay(long absoluteDay);
     void AdvanceSelectedDemography();
@@ -30,8 +28,10 @@ internal static class DailyV1SelectedDailyExecutionStage
 {
     internal static void Advance(
         long absoluteDay,
+        DailyV1EffectiveDefinitions definitions,
         IDailyV1SelectedDailyExecutionBoundary boundary)
     {
+        if (definitions == null) throw new ArgumentNullException(nameof(definitions));
         if (boundary == null) throw new ArgumentNullException(nameof(boundary));
 
         boundary.AdvancePlaceContent();
@@ -40,7 +40,7 @@ internal static class DailyV1SelectedDailyExecutionStage
         boundary.BeginSimulationDay();
         boundary.PrepareScheduledDirectives(absoluteDay);
 
-        if (boundary.EconomyEnabled)
+        if (definitions.EffectiveConfiguration?.Economy?.Enabled == true)
             boundary.SimulateEconomyDay();
 
         boundary.RefreshLocalKnowledgeAndShare();

@@ -237,6 +237,9 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             return true;
         }
 
+        // Core has already applied the admitted Crime.Enabled and
+        // Crime.AutonomousEnabled settings before asking this host to project
+        // the selected action into its Unity compatibility object.
         private bool TryProjectStealAction(
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcActionCandidate candidate)
@@ -248,8 +251,7 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
                 || string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
                 || !TryGetActionAsset(actor, candidate.Action, out NpcActionData actionAsset)
                 || decisionSystem.GetProviderForAction(npcRuntime, actionAsset)
-                    is not CrimeSystem crimeSystem
-                || !crimeSystem.AllowAutonomousAction(actionAsset)
+                    is not CrimeSystem
                 || !graph.TryGetNpcOwner(payload.TargetNpcRuntimeId,
                     out DailyV1NpcRuntimeOwners targetOwner)
                 || !graph.ContainsExactNpcOwner(targetOwner)
@@ -298,8 +300,7 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
                 || !graph.ContainsExactNpcOwner(targetOwner)
                 || !TryGetActionAsset(actor, action, out NpcActionData actionAsset)
                 || decisionSystem.GetProviderForAction(npcRuntime, actionAsset)
-                    is not CrimeSystem crimeSystem
-                || !crimeSystem.AllowAutonomousAction(actionAsset))
+                    is not CrimeSystem)
                 return false;
 
             CityRuntime currentCity = npcRuntime.CurrentCity;
@@ -330,7 +331,6 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
                 || !TryGetActionAsset(actor, candidate.Action, out NpcActionData actionAsset)
                 || decisionSystem.GetProviderForAction(npcRuntime, actionAsset)
                     is not CrimeSystem crimeSystem
-                || !crimeSystem.AllowAutonomousAction(actionAsset)
                 || !crimeSystem.TryProjectSelectedCityRuntime(
                     graph, payload.TargetCityRuntimeId, out CityRuntime destinationCity))
                 return false;

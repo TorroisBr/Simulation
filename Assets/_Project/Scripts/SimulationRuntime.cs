@@ -10489,8 +10489,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         activeDailyGameplayExecutionProbeForTest?.RecordAdvanceDayAfterClockAdvanceInvocation();
         if (runtimeAdmissionContext != null && DailyDemographicSystem.CanAdvanceSelected(this))
         {
+            DailyV1EffectiveDefinitions definitions = SelectedRuntimeOwnerGraph?.Definitions;
+            if (definitions == null)
+                throw new InvalidOperationException(
+                    "The selected Daily-v1 runtime has no admitted effective definitions for its daily execution.");
             DailyV1SelectedDailyExecutionStage.Advance(
                 CurrentDay,
+                definitions,
                 new SelectedDailyV1ExecutionBoundary(this));
             return;
         }
@@ -10544,7 +10549,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         }
 
-        public bool EconomyEnabled => runtime.configuration.Economy.Enabled == true;
         public void AdvancePlaceContent() => runtime.placeContentStore?.AdvanceDays(1);
         public void BeginLoggerDay(long absoluteDay) => runtime.logger?.BeginDay(absoluteDay);
 

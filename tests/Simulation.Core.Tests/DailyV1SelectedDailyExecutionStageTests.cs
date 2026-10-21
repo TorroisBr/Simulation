@@ -7,9 +7,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     [Test]
     public void AdvanceRunsSelectedDailyPhasesInTheEstablishedOrder()
     {
-        FakeBoundary boundary = new FakeBoundary { EconomyEnabled = true };
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        FakeBoundary boundary = new FakeBoundary();
 
-        DailyV1SelectedDailyExecutionStage.Advance(23L, boundary);
+        DailyV1SelectedDailyExecutionStage.Advance(23L, definitions, boundary);
 
         Assert.That(boundary.Calls, Is.EqualTo(new[]
         {
@@ -22,9 +23,11 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     [Test]
     public void AdvanceOmitsEconomyWhenTheSelectedConfigurationDisablesIt()
     {
-        FakeBoundary boundary = new FakeBoundary { EconomyEnabled = false };
+        DailyV1EffectiveDefinitions definitions = CopyWithEconomyEnabled(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(), false);
+        FakeBoundary boundary = new FakeBoundary();
 
-        DailyV1SelectedDailyExecutionStage.Advance(0L, boundary);
+        DailyV1SelectedDailyExecutionStage.Advance(0L, definitions, boundary);
 
         Assert.That(boundary.Calls, Does.Not.Contain("economy"));
         Assert.That(boundary.Calls[4], Is.EqualTo("directives:0"));
@@ -37,12 +40,12 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     {
         FakeBoundary boundary = new FakeBoundary
         {
-            EconomyEnabled = true,
             ThrowOnDemography = true
         };
 
         Assert.Throws<InvalidOperationException>(() =>
-            DailyV1SelectedDailyExecutionStage.Advance(9L, boundary));
+            DailyV1SelectedDailyExecutionStage.Advance(
+                9L, DailyV1CapturedSelectedContentFixture.CreateDefinitions(), boundary));
 
         Assert.That(boundary.Calls, Is.EqualTo(new[]
         {
@@ -50,12 +53,56 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         }));
     }
 
+    [Test]
+    public void AdvanceRequiresTheAdmittedDefinitionGraph()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            DailyV1SelectedDailyExecutionStage.Advance(0L, null, new FakeBoundary()));
+    }
+
+    private static DailyV1EffectiveDefinitions CopyWithEconomyEnabled(
+        DailyV1EffectiveDefinitions definitions,
+        bool enabled)
+    {
+        EffectiveSimulationConfiguration current = definitions.EffectiveConfiguration;
+        EffectiveSimulationConfiguration configuration = new EffectiveSimulationConfiguration(
+            current.Population,
+            new EffectiveEconomyConfiguration(enabled),
+            current.Travel,
+            current.Crime,
+            current.GuardCrime,
+            current.NaturalMortality,
+            current.AggregateDemography,
+            current.MerchantTrade,
+            current.CommercialKnowledge);
+        return new DailyV1EffectiveDefinitions(
+            definitions.Configuration,
+            configuration,
+            definitions.Calendar,
+            null,
+            definitions.Cities.Values,
+            definitions.Items.Values,
+            definitions.Npcs.Values,
+            definitions.Jobs.Values,
+            definitions.Actions.Values,
+            definitions.Statuses.Values,
+            null,
+            definitions.StageOrder,
+            definitions.ProfileContractIdentity,
+            definitions.GeographyProfileContractIdentity,
+            definitions.GeographyStageIdentity,
+            definitions.HexCoordinateConvention,
+            definitions.HexCoordinateCanonicalOrder,
+            null,
+            definitions.Traits.Values,
+            definitions.CapabilityAttributes.Values,
+            definitions.ExplorableSites.Values);
+    }
+
     private sealed class FakeBoundary : IDailyV1SelectedDailyExecutionBoundary
     {
         internal List<string> Calls { get; } = new List<string>();
         internal bool ThrowOnDemography { get; set; }
-        public bool EconomyEnabled { get; set; }
-
         public void AdvancePlaceContent() => Calls.Add("place-content");
         public void BeginLoggerDay(long absoluteDay) => Calls.Add("logger:" + absoluteDay);
         public void AdvanceSelectedDemography()
