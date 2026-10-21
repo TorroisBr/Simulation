@@ -250,7 +250,7 @@ internal sealed class P12FScheduledDirectiveOwnerSnapshot
             Mode = directive.Mode;
             Operation = directive.Operation;
             ActorRuntimeId = directive.ActorRuntimeId;
-            ActionDefinitionId = directive.Action?.DefinitionId;
+            ActionDefinitionId = directive.ActionDefinitionId;
             State = directive.State;
             ProcessedDay = directive.ProcessedDay;
             ResultReason = directive.ResultReason;
@@ -273,8 +273,10 @@ internal sealed class P12FScheduledDirectiveOwnerSnapshot
 
         internal ScheduledDirective Create(NpcActionData action)
         {
+            if (action == null) throw new ArgumentNullException(nameof(action));
             ScheduledDirective directive = new ScheduledDirective(
-                Id, AbsoluteDay, Mode, Operation, ActorRuntimeId, action);
+                Id, AbsoluteDay, Mode, Operation, ActorRuntimeId,
+                action.DefinitionId, (int)action.actionType);
             if (!directive.RestoreP12FState(State, ProcessedDay, ResultReason))
                 throw new InvalidOperationException("The captured ScheduledDirective disposition is invalid.");
             return directive;
@@ -344,7 +346,7 @@ internal sealed class P12FScheduledDirectiveOwnerSnapshot
         foreach (ScheduledDirective row in liveRows)
         {
             if (row == null || string.IsNullOrWhiteSpace(row.DirectiveId)
-                || !identities.Add(row.DirectiveId) || string.IsNullOrWhiteSpace(row.Action?.DefinitionId)
+                || !identities.Add(row.DirectiveId) || string.IsNullOrWhiteSpace(row.ActionDefinitionId)
                 || !Enum.IsDefined(typeof(ScheduledDirectiveState), row.State))
             {
                 failure = "Scheduled Directive identity, action definition, or terminal disposition is invalid.";
@@ -434,6 +436,11 @@ internal sealed class P12FScheduledDirectiveOwnerSnapshot
                 || action == null || !string.Equals(action.DefinitionId, row.ActionDefinitionId, StringComparison.Ordinal))
             {
                 failure = "A Scheduled Directive action definition is missing or has a mismatched stable identity.";
+                return false;
+            }
+            if (action.actionType != NpcActionType.EscapePrison)
+            {
+                failure = "A Scheduled Directive action definition is not the admitted EscapePrison action.";
                 return false;
             }
             try { stagedRows.Add(row.Create(action)); }

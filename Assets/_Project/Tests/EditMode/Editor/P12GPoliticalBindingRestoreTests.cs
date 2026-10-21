@@ -2685,7 +2685,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             AppendValue(signature, key + "/mode", row.Mode);
             AppendValue(signature, key + "/operation", row.Operation);
             AppendValue(signature, key + "/actor-runtime", row.ActorRuntimeId);
-            AppendValue(signature, key + "/action-id", row.Action?.DefinitionId);
+            AppendValue(signature, key + "/action-id", row.ActionDefinitionId);
             AppendValue(signature, key + "/state", row.State);
             AppendValue(signature, key + "/processed-day", row.ProcessedDay);
             AppendValue(signature, key + "/result-reason", row.ResultReason);

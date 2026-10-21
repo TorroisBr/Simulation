@@ -10596,6 +10596,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             roster,
             personStore,
             actorChoiceStore,
+            scheduledDirectiveSystem?.Store,
             CurrentDay,
             configuration.MerchantTrade.Enabled,
             new SelectedDailyV1ActorTurnExecutionBoundary(this, graph, runtimeByOwner));
@@ -10640,8 +10641,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         public void EvaluateStatus(DailyV1NpcRuntimeOwners actor) => runtime.EvaluateStatus(RequireExactActor(actor));
 
-        public bool TryProcessScheduledDirective(DailyV1NpcRuntimeOwners actor) =>
-            runtime.TryProcessScheduledDirective(RequireExactActor(actor));
+        public void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive) =>
+            runtime.ProcessScheduledDirective(RequireExactActor(actor), directive);
 
         public bool TryProcessActorChoice(DailyV1NpcRuntimeOwners actor, int rosterOrdinal) =>
             runtime.TryProcessActorChoice(RequireExactActor(actor), rosterOrdinal);
@@ -12656,6 +12657,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return false;
         }
 
+        ProcessScheduledDirective(npcRuntime, directive);
+        return true;
+    }
+
+    private void ProcessScheduledDirective(NpcRuntime npcRuntime, ScheduledDirective directive)
+    {
         npcRuntime.SetCurrentActionRuntime(null);
 
         if (directive.Mode == ScheduledDirectiveMode.RequestAction)
@@ -12670,15 +12677,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         {
             SkipDirective(directive, "Directive mode is not supported.");
         }
-
-        return true;
     }
 
     private void ProcessRequestedActionDirective(NpcRuntime npcRuntime, ScheduledDirective directive)
     {
+        if (!TryResolveScheduledDirectiveAction(npcRuntime, directive, out NpcActionData action))
+        {
+            SkipDirective(directive, "Actor is not in a compatible state for the requested action.");
+            return;
+        }
+
         NpcActionRuntime requestedAction = npcDecisionSystem != null
-            && IsActionEnabledForRuntime(npcRuntime, directive.Action)
-            ? npcDecisionSystem.CreateRequestedAction(npcRuntime, directive.Action)
+            && IsActionEnabledForRuntime(npcRuntime, action)
+            ? npcDecisionSystem.CreateRequestedAction(npcRuntime, action)
             : null;
 
         if (requestedAction == null)
@@ -12711,6 +12722,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return;
         }
 
+        if (!TryResolveScheduledDirectiveAction(npcRuntime, directive, out NpcActionData action))
+        {
+            SkipDirective(directive, "Admitted Escape status effects are unavailable.");
+            return;
+        }
+
         if (justiceSystem.IsArrested(npcRuntime) == false)
         {
             SkipDirective(directive, "Actor is not arrested; escape outcome is incompatible with current state.");
@@ -12718,15 +12735,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         }
 
         if (npcRuntime.UsesSelectedDailyV1Definitions
-                ? !npcRuntime.TryGetConfiguredActionStatusNodes(directive.Action, out _, out _, out _, out _)
-                : !npcRuntime.TryGetConfiguredActionStatusChanges(directive.Action, out _, out _, out _, out _))
+                ? !npcRuntime.TryGetConfiguredActionStatusNodes(action, out _, out _, out _, out _)
+                : !npcRuntime.TryGetConfiguredActionStatusChanges(action, out _, out _, out _, out _))
         {
             SkipDirective(directive, "Admitted Escape status effects are unavailable.");
             return;
         }
-        CrimeActionSettings settings = npcRuntime.GetConfiguredCrimeActionSettings(directive.Action);
+        CrimeActionSettings settings = npcRuntime.GetConfiguredCrimeActionSettings(action);
 
-        npcRuntime.SetCurrentActionRuntime(new NpcActionRuntime(directive.Action));
+        npcRuntime.SetCurrentActionRuntime(new NpcActionRuntime(action));
 
         if (!TryBeginP12CrimeJusticeActionScope(
                 new[] { npcRuntime },
@@ -12740,7 +12757,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             escaped = justiceSystem.ApplyEscapeSuccess(npcRuntime, settings.escapeBountyPenalty);
             if (escaped)
                 ApplySuccessStatusChanges(
-                    npcRuntime, npcRuntime.CurrentActionRuntime, directive.Action,
+                    npcRuntime, npcRuntime.CurrentActionRuntime, action,
                     actionSucceeded: true,
                     reuseForcedEscapeScope: true);
         }
@@ -12751,6 +12768,41 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return;
         }
         directive.MarkSucceeded(CurrentDay);
+    }
+
+    private bool TryResolveScheduledDirectiveAction(
+        NpcRuntime npcRuntime,
+        ScheduledDirective directive,
+        out NpcActionData action)
+    {
+        action = null;
+        if (npcRuntime == null || directive == null
+            || string.IsNullOrWhiteSpace(directive.ActionDefinitionId)) return false;
+
+        if (npcRuntime.UsesSelectedDailyV1Definitions)
+        {
+            return npcRuntime.TryGetSelectedDailyV1ActionByDefinitionId(
+                    directive.ActionDefinitionId, out action)
+                && action != null
+                && action.actionType == NpcActionType.EscapePrison;
+        }
+
+        int matches = 0;
+        if (configuredActions != null)
+        {
+            foreach (NpcActionData configuredAction in configuredActions)
+            {
+                if (configuredAction != null
+                    && string.Equals(configuredAction.DefinitionId,
+                        directive.ActionDefinitionId, StringComparison.Ordinal))
+                {
+                    action = configuredAction;
+                    matches++;
+                }
+            }
+        }
+        return matches == 1 && action != null
+            && npcRuntime.GetConfiguredActionType(action) == NpcActionType.EscapePrison;
     }
 
     private void SkipDirective(ScheduledDirective directive, string reason)

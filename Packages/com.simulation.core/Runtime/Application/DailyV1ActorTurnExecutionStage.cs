@@ -34,7 +34,7 @@ internal interface IDailyV1ActorTurnExecutionBoundary
     bool IsOnActiveExpedition(DailyV1NpcRuntimeOwners actor);
     bool IsReservedToday(DailyV1NpcRuntimeOwners actor);
     void EvaluateStatus(DailyV1NpcRuntimeOwners actor);
-    bool TryProcessScheduledDirective(DailyV1NpcRuntimeOwners actor);
+    void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive);
     bool TryProcessActorChoice(DailyV1NpcRuntimeOwners actor, int rosterOrdinal);
     void AdvanceMerchantTradeState(DailyV1NpcRuntimeOwners actor);
     void EvaluateAndExecuteAction(DailyV1NpcRuntimeOwners actor);
@@ -53,6 +53,7 @@ internal static class DailyV1ActorTurnExecutionStage
         IReadOnlyList<DailyV1ActorTurnRosterEntry> roster,
         PersonStore personStore,
         ActorChoiceStore actorChoiceStore,
+        ScheduledDirectiveStore scheduledDirectiveStore,
         long absoluteDay,
         bool merchantTradeEnabled,
         IDailyV1ActorTurnExecutionBoundary boundary)
@@ -110,7 +111,7 @@ internal static class DailyV1ActorTurnExecutionStage
 
             if (hasPendingChoice && boundary.IsInSpatialTransit(actor, personId))
             {
-                boundary.TryProcessScheduledDirective(actor);
+                TryProcessScheduledDirective(actor, scheduledDirectiveStore, boundary);
                 DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,
                     rosterOrdinal, ActorChoiceDeferralReason.Traveling);
                 continue;
@@ -118,7 +119,7 @@ internal static class DailyV1ActorTurnExecutionStage
 
             if (actor.Travel.IsTraveling)
             {
-                boundary.TryProcessScheduledDirective(actor);
+                TryProcessScheduledDirective(actor, scheduledDirectiveStore, boundary);
                 DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,
                     rosterOrdinal, ActorChoiceDeferralReason.Traveling);
                 continue;
@@ -126,7 +127,7 @@ internal static class DailyV1ActorTurnExecutionStage
 
             if (boundary.IsOnActiveExpedition(actor))
             {
-                boundary.TryProcessScheduledDirective(actor);
+                TryProcessScheduledDirective(actor, scheduledDirectiveStore, boundary);
                 DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,
                     rosterOrdinal, ActorChoiceDeferralReason.ExpeditionParticipant);
                 continue;
@@ -143,7 +144,7 @@ internal static class DailyV1ActorTurnExecutionStage
 
             if (actorChoiceStore.TryGetNextPendingForActor(personId, out _))
             {
-                if (boundary.TryProcessScheduledDirective(actor))
+                if (TryProcessScheduledDirective(actor, scheduledDirectiveStore, boundary))
                 {
                     DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,
                         rosterOrdinal, ActorChoiceDeferralReason.ScheduledDirective);
@@ -157,7 +158,7 @@ internal static class DailyV1ActorTurnExecutionStage
             if (merchantTradeEnabled)
                 boundary.AdvanceMerchantTradeState(actor);
 
-            if (boundary.TryProcessScheduledDirective(actor))
+            if (TryProcessScheduledDirective(actor, scheduledDirectiveStore, boundary))
             {
                 DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,
                     rosterOrdinal, ActorChoiceDeferralReason.ScheduledDirective);
@@ -171,6 +172,19 @@ internal static class DailyV1ActorTurnExecutionStage
         }
 
         RejectActorChoicesWithoutMaterializedTurn(actorChoiceStore, roster, absoluteDay);
+        return true;
+    }
+
+    private static bool TryProcessScheduledDirective(
+        DailyV1NpcRuntimeOwners actor,
+        ScheduledDirectiveStore directiveStore,
+        IDailyV1ActorTurnExecutionBoundary boundary)
+    {
+        if (directiveStore == null
+            || !directiveStore.TryTakeDirective(actor.RuntimeId, out ScheduledDirective directive))
+            return false;
+
+        boundary.ProcessScheduledDirective(actor, directive);
         return true;
     }
 

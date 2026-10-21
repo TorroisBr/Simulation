@@ -135,7 +135,8 @@ public sealed class RuntimeGuardSystemEntryPointTests
             ScheduledDirectiveMode.RequestAction,
             ScheduledDirectiveOperation.EscapePrison,
             "guard-directive-actor",
-            escape);
+            escape.DefinitionId,
+            (int)escape.actionType);
         Assert.That(store.Add(existing), Is.True);
         ScheduledDirectiveSystem system = new ScheduledDirectiveSystem(store, new RuntimeIdentityRegistry());
         object faultedGuard = CreateGuard(true);
@@ -147,7 +148,8 @@ public sealed class RuntimeGuardSystemEntryPointTests
             ScheduledDirectiveMode.ForceOutcome,
             ScheduledDirectiveOperation.EscapePrison,
             "guard-directive-actor",
-            escape);
+            escape.DefinitionId,
+            (int)escape.actionType);
         Assert.That(store.Add(rejected), Is.False);
         Assert.That(existing.MarkSucceeded(1L), Is.False);
         Assert.Throws<InvalidOperationException>(() => system.PrepareDay(1L));

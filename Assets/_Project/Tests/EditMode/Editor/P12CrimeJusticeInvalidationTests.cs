@@ -292,7 +292,8 @@ public sealed class P12CrimeJusticeInvalidationTests
             ScheduledDirectiveMode.ForceOutcome,
             ScheduledDirectiveOperation.EscapePrison,
             actor.RuntimeId,
-            action);
+            action.DefinitionId,
+            (int)action.actionType);
         SimulationTime time = new SimulationTime();
         ScheduledDirectiveStore store = new ScheduledDirectiveStore(time);
         Assert.That(store.Add(directive), Is.True);

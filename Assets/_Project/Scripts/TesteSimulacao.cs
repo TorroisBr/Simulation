@@ -2895,7 +2895,8 @@ public class TesteSimulacao : MonoBehaviour
                         (ScheduledDirectiveMode)(selectedDirective.mode?.Value ?? 0),
                         (ScheduledDirectiveOperation)(selectedDirective.operation?.Value ?? 0),
                         actorRuntime.RuntimeId,
-                        actionAsset);
+                        actionAsset.DefinitionId,
+                        (int)actionAsset.actionType);
                     scheduledDirectiveStore.Add(directive);
                 }
                 catch (System.ArgumentException exception)
@@ -2950,7 +2951,8 @@ public class TesteSimulacao : MonoBehaviour
                     directiveConfig.mode,
                     directiveConfig.operation,
                     actorRuntime.RuntimeId,
-                    directiveConfig.action);
+                    directiveConfig.action.DefinitionId,
+                    (int)directiveConfig.action.actionType);
                 scheduledDirectiveStore.Add(directive);
             }
             catch (System.ArgumentException exception)

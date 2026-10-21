@@ -102,7 +102,7 @@ public sealed class P12FStandaloneOwnerSnapshotTests
             NpcActionType.EscapePrison, NpcActionCategory.Justice);
         ScheduledDirective directive = new ScheduledDirective("directive-terminal", 4L,
             ScheduledDirectiveMode.RequestAction, ScheduledDirectiveOperation.EscapePrison,
-            "npc-missing-is-preserved", action);
+            "npc-missing-is-preserved", action.DefinitionId, (int)action.actionType);
         Assert.That(source.Add(directive), Is.True);
         Assert.That(directive.MarkSkipped(2L, "preserved terminal reason"), Is.True);
         long sourceRevision = source.Revision;
@@ -128,7 +128,7 @@ public sealed class P12FStandaloneOwnerSnapshotTests
         Assert.That(staged.Revision, Is.EqualTo(sourceRevision));
         Assert.That(staged.Directives, Has.Count.EqualTo(1));
         Assert.That(staged.Directives[0], Is.Not.SameAs(directive));
-        Assert.That(staged.Directives[0].Action, Is.SameAs(stagedAction));
+        Assert.That(staged.Directives[0].ActionDefinitionId, Is.EqualTo(stagedAction.DefinitionId));
         Assert.That(staged.Directives[0].ActorRuntimeId, Is.EqualTo("npc-missing-is-preserved"));
         Assert.That(staged.Directives[0].State, Is.EqualTo(ScheduledDirectiveState.Skipped));
         Assert.That(staged.Directives[0].ProcessedDay, Is.EqualTo(2L));

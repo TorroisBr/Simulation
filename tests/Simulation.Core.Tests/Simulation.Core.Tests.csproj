@@ -41,6 +41,7 @@
     <Compile Include="DailyV1SelectedRuntimeOwnerGraphTests.cs" />
     <Compile Include="DailyV1DecisionRecordsTests.cs" />
     <Compile Include="DailyV1ActorChoiceStoreTests.cs" />
+    <Compile Include="ScheduledDirectiveStoreTests.cs" />
     <Compile Include="DailyV1ActorTurnExecutionStageTests.cs" />
     <Compile Include="DailyV1SelectedDailyExecutionStageTests.cs" />
     <Compile Include="DailyV1SelectedDemographyStageTests.cs" />

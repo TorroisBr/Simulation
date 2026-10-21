@@ -89,7 +89,8 @@ public sealed class SimulationRuntimeOrchestrationTests
             ScheduledDirectiveMode.RequestAction,
             ScheduledDirectiveOperation.EscapePrison,
             actor.RuntimeId,
-            escape);
+            escape.DefinitionId,
+            (int)escape.actionType);
         ScheduledDirectiveStore directiveStore = new ScheduledDirectiveStore(records.Time);
         Assert.That(directiveStore.Add(directive), Is.True);
         ScheduledDirectiveSystem directiveSystem = new ScheduledDirectiveSystem(directiveStore, registry);

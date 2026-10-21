@@ -24,16 +24,16 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             new DailyV1ActorTurnRosterEntry(1, null, null),
             new DailyV1ActorTurnRosterEntry(2, secondPersonId, second)
         };
-        RecordingBoundary boundary = new RecordingBoundary { ScheduledDirectiveRuntimeId = second.RuntimeId };
+        ScheduledDirectiveStore directives = CreatePreparedDirectiveStore(second, 5L);
+        RecordingBoundary boundary = new RecordingBoundary();
 
         Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
-            graph, roster, people, choices, 5L, true, boundary), Is.True);
+            graph, roster, people, choices, directives, 5L, true, boundary), Is.True);
 
         Assert.That(boundary.Events, Is.EqualTo(new[]
         {
             "status:" + first.RuntimeId,
             "merchant:" + first.RuntimeId,
-            "directive:" + first.RuntimeId,
             "choice:" + first.RuntimeId + ":0",
             "action:" + first.RuntimeId,
             "status:" + second.RuntimeId,
@@ -58,18 +58,15 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             WorldCommandOrigin.LocalPlayer, WorldCommandAuthorityMode.Request, 4L,
             out ActorChoiceInput input, out ActorChoiceStoreFailureCode captureFailure),
             Is.True, captureFailure.ToString());
-        RecordingBoundary boundary = new RecordingBoundary
-        {
-            IsSpatialTransit = true,
-            ScheduledDirectiveRuntimeId = actor.RuntimeId
-        };
+        ScheduledDirectiveStore directives = CreatePreparedDirectiveStore(actor, 5L);
+        RecordingBoundary boundary = new RecordingBoundary { IsSpatialTransit = true };
         IReadOnlyList<DailyV1ActorTurnRosterEntry> roster = new[]
         {
             new DailyV1ActorTurnRosterEntry(0, personId, actor)
         };
 
         Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
-            graph, roster, people, choices, 5L, true, boundary), Is.True);
+            graph, roster, people, choices, directives, 5L, true, boundary), Is.True);
 
         Assert.That(boundary.Events, Is.EqualTo(new[] { "directive:" + actor.RuntimeId }));
         Assert.That(choices.TryGet(input.InputId, out ActorChoiceInput deferred), Is.True);
@@ -92,7 +89,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         };
 
         Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
-            graph, incompleteRoster, people, choices, 5L, true, boundary), Is.False);
+            graph, incompleteRoster, people, choices, null, 5L, true, boundary), Is.False);
         Assert.That(boundary.Events, Is.Empty);
     }
 
@@ -146,21 +143,35 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         return personId;
     }
 
+    private static ScheduledDirectiveStore CreatePreparedDirectiveStore(
+        DailyV1NpcRuntimeOwners actor,
+        long absoluteDay)
+    {
+        ScheduledDirectiveStore store = new ScheduledDirectiveStore(new SimulationTime(absoluteDay));
+        ScheduledDirective directive = new ScheduledDirective(
+            "directive-" + actor.RuntimeId,
+            absoluteDay,
+            ScheduledDirectiveMode.RequestAction,
+            ScheduledDirectiveOperation.EscapePrison,
+            actor.RuntimeId,
+            "action/escape-prison",
+            DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue);
+        Assert.That(store.Add(directive), Is.True);
+        store.PrepareDay(absoluteDay, runtimeId => runtimeId == actor.RuntimeId);
+        return store;
+    }
+
     private sealed class RecordingBoundary : IDailyV1ActorTurnExecutionBoundary
     {
         internal readonly List<string> Events = new List<string>();
-        internal string ScheduledDirectiveRuntimeId;
         internal bool IsSpatialTransit;
 
         public bool IsInSpatialTransit(DailyV1NpcRuntimeOwners actor, PersonId personId) => IsSpatialTransit;
         public bool IsOnActiveExpedition(DailyV1NpcRuntimeOwners actor) => false;
         public bool IsReservedToday(DailyV1NpcRuntimeOwners actor) => false;
         public void EvaluateStatus(DailyV1NpcRuntimeOwners actor) => Events.Add("status:" + actor.RuntimeId);
-        public bool TryProcessScheduledDirective(DailyV1NpcRuntimeOwners actor)
-        {
+        public void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive) =>
             Events.Add("directive:" + actor.RuntimeId);
-            return string.Equals(ScheduledDirectiveRuntimeId, actor.RuntimeId);
-        }
         public bool TryProcessActorChoice(DailyV1NpcRuntimeOwners actor, int rosterOrdinal)
         {
             Events.Add("choice:" + actor.RuntimeId + ":" + rosterOrdinal);

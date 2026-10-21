@@ -386,7 +386,8 @@ public sealed class P12SoloTravelStartOperationTests
             ScheduledDirectiveMode.RequestAction,
             ScheduledDirectiveOperation.EscapePrison,
             "p12-scheduled-travel-actor",
-            travelAction));
+            travelAction.DefinitionId,
+            (int)travelAction.actionType));
     }
 
     [Test]
