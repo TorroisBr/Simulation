@@ -78,6 +78,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/PersonId.cs" Link="Identity/PersonId.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/WorldIdentity.cs" Link="Identity/WorldIdentity.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocator.cs" Link="Identity/RuntimeIdAllocator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/DailyV1RuntimeIdentityIndex.cs" Link="Identity/DailyV1RuntimeIdentityIndex.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocatorCensusCounter.cs" Link="Identity/RuntimeIdAllocatorCensusCounter.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocatorOwnerBridge.cs" Link="Identity/RuntimeIdAllocatorOwnerBridge.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonRuntime.cs" Link="Person/PersonRuntime.cs" />

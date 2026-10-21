@@ -18,6 +18,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal SpatialNetworkOwner SpatialNetwork { get; }
     internal DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
     internal TravelPartyStore TravelParties { get; }
+    internal DailyV1RuntimeIdentityIndex RuntimeIdentityIndex { get; }
 
     private DailyV1SelectedRuntimeOwnerGraph(
         DailyV1EffectiveDefinitions definitions,
@@ -25,7 +26,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         List<DailyV1NpcRuntimeOwners> npcs,
         SpatialNetworkOwner spatialNetwork,
         DailyV1JusticeRecordsOwner justiceRecordsOwner,
-        TravelPartyStore travelParties)
+        TravelPartyStore travelParties,
+        DailyV1RuntimeIdentityIndex runtimeIdentityIndex)
     {
         Definitions = definitions;
         this.cities = cities.AsReadOnly();
@@ -33,6 +35,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         SpatialNetwork = spatialNetwork;
         JusticeRecordsOwner = justiceRecordsOwner;
         TravelParties = travelParties;
+        RuntimeIdentityIndex = runtimeIdentityIndex;
     }
 
     internal static bool TryCreate(
@@ -73,6 +76,36 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         SpatialNetworkOwner spatialNetwork,
         DailyV1JusticeRecordsOwner justiceRecordsOwner,
         TravelPartyStore travelParties,
+        out DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        return TryCreate(definitions, cityOwners, npcOwners, spatialNetwork,
+            justiceRecordsOwner, travelParties, null, out graph);
+    }
+
+    internal static bool TryCreate(
+        DailyV1EffectiveDefinitions definitions,
+        IEnumerable<DailyV1CityRuntimeOwners> cityOwners,
+        IEnumerable<DailyV1NpcRuntimeOwners> npcOwners,
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1JusticeRecordsOwner justiceRecordsOwner,
+        TravelPartyStore travelParties,
+        DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
+        out DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        return TryCreateCore(definitions, cityOwners, npcOwners, spatialNetwork,
+            justiceRecordsOwner, travelParties, runtimeIdentityIndex, null, 0, out graph);
+    }
+
+    private static bool TryCreateCore(
+        DailyV1EffectiveDefinitions definitions,
+        IEnumerable<DailyV1CityRuntimeOwners> cityOwners,
+        IEnumerable<DailyV1NpcRuntimeOwners> npcOwners,
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1JusticeRecordsOwner justiceRecordsOwner,
+        TravelPartyStore travelParties,
+        DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
+        string pendingNpcIdentityId,
+        int pendingNpcMembershipDelta,
         out DailyV1SelectedRuntimeOwnerGraph graph)
     {
         graph = null;
@@ -126,10 +159,72 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         if (justiceRecordsOwner != null
             && !MatchesJusticeRecords(cities, npcs, justiceRecordsOwner)) return false;
 
+        if (runtimeIdentityIndex != null
+            && !MatchesRuntimeIdentityIndex(runtimeIdentityIndex, cities, npcs, spatialNetwork,
+                pendingNpcIdentityId, pendingNpcMembershipDelta)) return false;
+
         graph = new DailyV1SelectedRuntimeOwnerGraph(
             definitions, cities, npcs, spatialNetwork, justiceRecordsOwner,
-            travelParties);
+            travelParties, runtimeIdentityIndex);
         return true;
+    }
+
+    private static bool MatchesRuntimeIdentityIndex(
+        DailyV1RuntimeIdentityIndex identityIndex,
+        IReadOnlyList<DailyV1CityRuntimeOwners> cities,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> npcs,
+        SpatialNetworkOwner spatialNetwork,
+        string pendingNpcIdentityId,
+        int pendingNpcMembershipDelta)
+    {
+        if (pendingNpcMembershipDelta < -1 || pendingNpcMembershipDelta > 1
+            || (pendingNpcMembershipDelta == 0) != (pendingNpcIdentityId == null)) return false;
+        if (pendingNpcMembershipDelta == 1
+            && !identityIndex.CanRegister(pendingNpcIdentityId)) return false;
+        if (pendingNpcMembershipDelta == -1
+            && !identityIndex.HasIdentity(pendingNpcIdentityId, DailyV1RuntimeIdentityKind.Npc)) return false;
+
+        foreach (DailyV1CityRuntimeOwners city in cities)
+            if (!identityIndex.HasIdentity(city.RuntimeId, DailyV1RuntimeIdentityKind.City)
+                || !identityIndex.HasIdentity(city.LocationRuntimeId, DailyV1RuntimeIdentityKind.Location)) return false;
+        foreach (DailyV1NpcRuntimeOwners npc in npcs)
+            if (string.Equals(npc.RuntimeId, pendingNpcIdentityId, StringComparison.Ordinal)
+                ? !identityIndex.CanRegister(npc.RuntimeId)
+                : !identityIndex.HasIdentity(npc.RuntimeId, DailyV1RuntimeIdentityKind.Npc)) return false;
+        if (spatialNetwork != null)
+        {
+            foreach (SpatialLocationRuntime location in spatialNetwork.Locations)
+                if (!identityIndex.HasIdentity(location.RuntimeId, DailyV1RuntimeIdentityKind.Location)) return false;
+            foreach (SpatialRouteRuntime route in spatialNetwork.Routes)
+                if (!identityIndex.HasIdentity(route.RuntimeId, DailyV1RuntimeIdentityKind.Route)) return false;
+        }
+
+        int locationCount = spatialNetwork != null
+            ? Count(spatialNetwork.Locations)
+            : CountDistinctCityLocations(cities);
+        int routeCount = spatialNetwork != null ? spatialNetwork.RouteCount : 0;
+        return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.City) == cities.Count
+            && identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Npc) == npcs.Count - pendingNpcMembershipDelta
+            && identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Location) == locationCount
+            && identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Route) == routeCount
+            && identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.ExplorableSite) == 0
+            && identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.LocalPlace) == 0
+            && identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.LocalConnection) == 0
+            && identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.NotableItem) == 0;
+    }
+
+    private static int Count<T>(IEnumerable<T> values)
+    {
+        int count = 0;
+        foreach (T _ in values) count++;
+        return count;
+    }
+
+    private static int CountDistinctCityLocations(IReadOnlyList<DailyV1CityRuntimeOwners> cities)
+    {
+        HashSet<string> locations = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1CityRuntimeOwners city in cities) locations.Add(city.LocationRuntimeId);
+        return locations.Count;
     }
 
     private static bool MatchesJusticeRecords(
@@ -217,6 +312,19 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         TravelPartyStore travelParties,
         out DailyV1SelectedRuntimeOwnerGraph graph)
     {
+        return TryCreateFromExactOwners(cityOwners, npcOwners, spatialNetwork,
+            justiceRecordsOwner, travelParties, null, out graph);
+    }
+
+    internal static bool TryCreateFromExactOwners(
+        IEnumerable<DailyV1CityRuntimeOwners> cityOwners,
+        IEnumerable<DailyV1NpcRuntimeOwners> npcOwners,
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1JusticeRecordsOwner justiceRecordsOwner,
+        TravelPartyStore travelParties,
+        DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
+        out DailyV1SelectedRuntimeOwnerGraph graph)
+    {
         graph = null;
         if (cityOwners == null || npcOwners == null) return false;
 
@@ -240,7 +348,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
 
         return definitions != null
             && TryCreate(definitions, cities, npcs, spatialNetwork,
-                justiceRecordsOwner, travelParties, out graph);
+                justiceRecordsOwner, travelParties, runtimeIdentityIndex, out graph);
     }
 
     internal static bool TryCreateInitialCityOwner(
@@ -553,8 +661,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         {
             owner
         };
-        return TryCreate(Definitions, cities, updatedNpcs, SpatialNetwork,
-            JusticeRecordsOwner, TravelParties, out graph);
+        return TryCreateCore(Definitions, cities, updatedNpcs, SpatialNetwork,
+            JusticeRecordsOwner, TravelParties, RuntimeIdentityIndex, owner.RuntimeId, 1, out graph);
     }
 
     /// <summary>
@@ -581,8 +689,9 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
             updatedNpcs.Add(current);
         }
 
-        return removed && TryCreate(Definitions, cities, updatedNpcs, SpatialNetwork,
-            JusticeRecordsOwner, TravelParties, out graph);
+        return removed && TryCreateCore(Definitions, cities, updatedNpcs, SpatialNetwork,
+            JusticeRecordsOwner, TravelParties, RuntimeIdentityIndex,
+            owner.RuntimeId, -1, out graph);
     }
 
     /// <summary>
@@ -1254,6 +1363,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
 {
     private readonly DailyV1EffectiveDefinitions definitions;
     private readonly SpatialNetworkOwner spatialNetwork;
+    private readonly DailyV1RuntimeIdentityIndex identityIndex;
     private readonly List<DailyV1CityRuntimeOwners> cities = new List<DailyV1CityRuntimeOwners>();
     private readonly List<DailyV1NpcRuntimeOwners> npcs = new List<DailyV1NpcRuntimeOwners>();
     private readonly Dictionary<string, List<DailyV1CityRuntimeOwners>> citiesByDefinition =
@@ -1264,15 +1374,18 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
 
     internal DailyV1SelectedRuntimeOwnerGraphBuilder(
         DailyV1EffectiveDefinitions definitions,
-        SpatialNetworkOwner spatialNetwork = null)
+        SpatialNetworkOwner spatialNetwork = null,
+        DailyV1RuntimeIdentityIndex identityIndex = null)
     {
         this.definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
         this.spatialNetwork = spatialNetwork ?? new SpatialNetworkOwner();
+        this.identityIndex = identityIndex ?? new DailyV1RuntimeIdentityIndex();
     }
 
     internal IReadOnlyList<DailyV1CityRuntimeOwners> Cities => cities.AsReadOnly();
     internal IReadOnlyList<DailyV1NpcRuntimeOwners> Npcs => npcs.AsReadOnly();
     internal SpatialNetworkOwner SpatialNetwork => spatialNetwork;
+    internal DailyV1RuntimeIdentityIndex RuntimeIdentityIndex => identityIndex;
 
     /// <summary>
     /// Builds the configured selected owner graph using only Core-owned
@@ -1296,10 +1409,9 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
     }
 
     /// <summary>
-    /// Performs the selected City's identity allocation and authoritative
-    /// owner construction in Core. The callback only admits the corresponding
-    /// host location projection; it receives the already allocated identity
-    /// and must not allocate another one.
+    /// Performs selected Location identity registration and authoritative
+    /// owner construction in Core. Optional callbacks only project or roll
+    /// back the existing identity in a host-owned lookup.
     /// </summary>
     internal bool TryCreateConfiguredCities(
         RuntimeIdAllocator runtimeIds,
@@ -1322,22 +1434,56 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
 
             string locationRuntimeId = runtimeIds.AllocateLocationId();
             SpatialLocationRuntime location = new SpatialLocationRuntime(locationRuntimeId);
+            bool identityStaged = false;
+            bool identityRevisionAdvanced = false;
+            Func<bool> registerIdentity = () =>
+            {
+                if (!identityIndex.TryStageRegister(locationRuntimeId, DailyV1RuntimeIdentityKind.Location))
+                    return false;
+                identityStaged = true;
+                try
+                {
+                    if (tryRegisterLocationIdentity != null && !tryRegisterLocationIdentity(location))
+                    {
+                        identityIndex.TryRemoveStaged(locationRuntimeId, DailyV1RuntimeIdentityKind.Location);
+                        identityStaged = false;
+                        return false;
+                    }
+                    if (!identityIndex.TryAdvanceRevision())
+                        throw new InvalidOperationException("Core runtime identity revision is exhausted during Location genesis.");
+                    identityRevisionAdvanced = true;
+                    return true;
+                }
+                catch
+                {
+                    if (identityRevisionAdvanced) identityIndex.TryRollbackRevision();
+                    if (identityStaged) identityIndex.TryRemoveStaged(locationRuntimeId, DailyV1RuntimeIdentityKind.Location);
+                    identityRevisionAdvanced = false;
+                    identityStaged = false;
+                    throw;
+                }
+            };
+            Action rollbackIdentity = () =>
+            {
+                rollbackLocationIdentity?.Invoke(location);
+                if (identityRevisionAdvanced && !identityIndex.TryRollbackRevision())
+                    throw new InvalidOperationException("Core Location identity revision rollback failed.");
+                if (identityStaged && !identityIndex.TryRemoveStaged(locationRuntimeId, DailyV1RuntimeIdentityKind.Location))
+                    throw new InvalidOperationException("Core Location identity rollback failed.");
+                identityRevisionAdvanced = false;
+                identityStaged = false;
+            };
             if (!spatialNetwork.TryRegisterLocation(
                     location,
-                    tryRegisterLocationIdentity == null
-                        ? (Func<bool>)(() => true)
-                        : () => tryRegisterLocationIdentity(location),
-                    () => rollbackLocationIdentity?.Invoke(location),
+                    registerIdentity,
+                    rollbackIdentity,
                     null))
                 continue;
 
             string cityRuntimeId = runtimeIds.AllocateCityId();
             if (!TryAddInitialCity(cityRuntimeId, locationRuntimeId, definition, out _))
             {
-                Action rollback = rollbackLocationIdentity == null
-                    ? (Action)(() => { })
-                    : () => rollbackLocationIdentity(location);
-                if (!spatialNetwork.TryRollbackGenesisLocation(location, rollback))
+                if (!spatialNetwork.TryRollbackGenesisLocation(location, rollbackIdentity))
                     throw new InvalidOperationException(
                         "A failed selected City genesis insertion could not roll back its spatial location.");
                 return false;
@@ -1417,9 +1563,17 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
             || string.IsNullOrWhiteSpace(runtimeId)
             || string.IsNullOrWhiteSpace(locationRuntimeId)
             || !runtimeIds.Add(runtimeId)) return false;
+        bool locationIdentityAdded = false;
+        if (!TryEnsureIdentity(locationRuntimeId, DailyV1RuntimeIdentityKind.Location,
+                out locationIdentityAdded))
+        {
+            runtimeIds.Remove(runtimeId);
+            return false;
+        }
         if (!locationIds.Add(locationRuntimeId))
         {
             runtimeIds.Remove(runtimeId);
+            if (locationIdentityAdded) RollbackIdentity(locationRuntimeId, DailyV1RuntimeIdentityKind.Location);
             return false;
         }
         SpatialLocationRuntime registeredLocationHere = null;
@@ -1430,6 +1584,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
             {
                 runtimeIds.Remove(runtimeId);
                 locationIds.Remove(locationRuntimeId);
+                if (locationIdentityAdded) RollbackIdentity(locationRuntimeId, DailyV1RuntimeIdentityKind.Location);
                 return false;
             }
             registeredLocationHere = location;
@@ -1444,6 +1599,29 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
                 && !spatialNetwork.TryRollbackGenesisLocation(registeredLocationHere, () => { }))
                 throw new InvalidOperationException(
                     "A failed selected City owner creation could not roll back its spatial location.");
+            if (locationIdentityAdded) RollbackIdentity(locationRuntimeId, DailyV1RuntimeIdentityKind.Location);
+            return false;
+        }
+
+        if (!identityIndex.TryStageRegister(runtimeId, DailyV1RuntimeIdentityKind.City))
+        {
+            runtimeIds.Remove(runtimeId);
+            locationIds.Remove(locationRuntimeId);
+            if (registeredLocationHere != null
+                && !spatialNetwork.TryRollbackGenesisLocation(registeredLocationHere, () => { }))
+                throw new InvalidOperationException("A rejected City identity could not roll back its staged Location.");
+            if (locationIdentityAdded) RollbackIdentity(locationRuntimeId, DailyV1RuntimeIdentityKind.Location);
+            return false;
+        }
+        if (!identityIndex.TryAdvanceRevision())
+        {
+            identityIndex.TryRemoveStaged(runtimeId, DailyV1RuntimeIdentityKind.City);
+            runtimeIds.Remove(runtimeId);
+            locationIds.Remove(locationRuntimeId);
+            if (registeredLocationHere != null
+                && !spatialNetwork.TryRollbackGenesisLocation(registeredLocationHere, () => { }))
+                throw new InvalidOperationException("A rejected City revision could not roll back its staged Location.");
+            if (locationIdentityAdded) RollbackIdentity(locationRuntimeId, DailyV1RuntimeIdentityKind.Location);
             return false;
         }
 
@@ -1461,6 +1639,9 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
     internal bool TryRemoveInitialCity(DailyV1CityRuntimeOwners owners)
     {
         if (built || owners == null || !cities.Remove(owners)) return false;
+        if (!identityIndex.TryRemoveStaged(owners.RuntimeId, DailyV1RuntimeIdentityKind.City)
+            || !identityIndex.TryRollbackRevision())
+            throw new InvalidOperationException("Cannot roll back the Core City identity committed at genesis.");
         locationIds.Remove(owners.LocationRuntimeId);
         runtimeIds.Remove(owners.RuntimeId);
         if (citiesByDefinition.TryGetValue(owners.Definition.DefinitionId, out List<DailyV1CityRuntimeOwners> matches))
@@ -1478,7 +1659,9 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
         out DailyV1NpcRuntimeOwners owners)
     {
         owners = null;
-        if (built || string.IsNullOrWhiteSpace(runtimeId) || !runtimeIds.Add(runtimeId)) return false;
+        if (built || string.IsNullOrWhiteSpace(runtimeId) || runtimeIds.Contains(runtimeId)
+            || !identityIndex.CanRegister(runtimeId)) return false;
+        runtimeIds.Add(runtimeId);
         if (!IsExactConfiguredNpc(definition, configuration)
             || (!string.IsNullOrWhiteSpace(configuration.startingCity)
                 && !definitions.Cities.ContainsKey(configuration.startingCity))
@@ -1504,6 +1687,18 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
             }
         }
 
+        if (!identityIndex.TryStageRegister(runtimeId, DailyV1RuntimeIdentityKind.Npc))
+        {
+            runtimeIds.Remove(runtimeId);
+            return false;
+        }
+        if (!identityIndex.TryAdvanceRevision())
+        {
+            identityIndex.TryRemoveStaged(runtimeId, DailyV1RuntimeIdentityKind.Npc);
+            runtimeIds.Remove(runtimeId);
+            return false;
+        }
+
         npcs.Add(candidate);
         owners = candidate;
         return true;
@@ -1512,6 +1707,9 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
     internal bool TryRemoveInitialNpc(DailyV1NpcRuntimeOwners owners)
     {
         if (built || owners == null || !npcs.Remove(owners)) return false;
+        if (!identityIndex.TryRemoveStaged(owners.RuntimeId, DailyV1RuntimeIdentityKind.Npc)
+            || !identityIndex.TryRollbackRevision())
+            throw new InvalidOperationException("Cannot roll back the Core NPC identity committed at genesis.");
         runtimeIds.Remove(owners.RuntimeId);
         return true;
     }
@@ -1553,12 +1751,74 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
         graph = null;
         if (built || !MatchesConfiguredCityRows() || !MatchesConfiguredNpcRows()
             || !HasConsistentInitialPresence()) return false;
+        if (!TryBindSpatialIdentities()) return false;
         if (!DailyV1SelectedRuntimeOwnerGraph.TryCreate(
                 definitions, cities, npcs, spatialNetwork, justiceRecordsOwner,
-                travelParties, out graph))
+                travelParties, identityIndex, out graph))
             return false;
         built = true;
         return true;
+    }
+
+    private bool TryBindSpatialIdentities()
+    {
+        List<KeyValuePair<string, DailyV1RuntimeIdentityKind>> added =
+            new List<KeyValuePair<string, DailyV1RuntimeIdentityKind>>();
+        foreach (SpatialLocationRuntime location in spatialNetwork.Locations)
+        {
+            if (location == null || !TryEnsureIdentity(location.RuntimeId,
+                    DailyV1RuntimeIdentityKind.Location, out bool wasAdded))
+            {
+                RollbackIdentities(added);
+                return false;
+            }
+            if (wasAdded) added.Add(new KeyValuePair<string, DailyV1RuntimeIdentityKind>(
+                location.RuntimeId, DailyV1RuntimeIdentityKind.Location));
+        }
+        foreach (SpatialRouteRuntime route in spatialNetwork.Routes)
+        {
+            if (route == null || !TryEnsureIdentity(route.RuntimeId,
+                    DailyV1RuntimeIdentityKind.Route, out bool wasAdded))
+            {
+                RollbackIdentities(added);
+                return false;
+            }
+            if (wasAdded) added.Add(new KeyValuePair<string, DailyV1RuntimeIdentityKind>(
+                route.RuntimeId, DailyV1RuntimeIdentityKind.Route));
+        }
+        return true;
+    }
+
+    private bool TryEnsureIdentity(
+        string runtimeId,
+        DailyV1RuntimeIdentityKind kind,
+        out bool added)
+    {
+        added = false;
+        if (identityIndex.HasIdentity(runtimeId, kind)) return true;
+        if (!identityIndex.TryStageRegister(runtimeId, kind)) return false;
+        if (!identityIndex.TryAdvanceRevision())
+        {
+            if (!identityIndex.TryRemoveStaged(runtimeId, kind))
+                throw new InvalidOperationException("A rejected Core runtime identity could not be removed.");
+            return false;
+        }
+        added = true;
+        return true;
+    }
+
+    private void RollbackIdentity(string runtimeId, DailyV1RuntimeIdentityKind kind)
+    {
+        if (!identityIndex.TryRemoveStaged(runtimeId, kind)
+            || !identityIndex.TryRollbackRevision())
+            throw new InvalidOperationException("A staged Core runtime identity could not be rolled back.");
+    }
+
+    private void RollbackIdentities(
+        List<KeyValuePair<string, DailyV1RuntimeIdentityKind>> identities)
+    {
+        for (int i = identities.Count - 1; i >= 0; i--)
+            RollbackIdentity(identities[i].Key, identities[i].Value);
     }
 
     private bool IsExactConfiguredNpc(

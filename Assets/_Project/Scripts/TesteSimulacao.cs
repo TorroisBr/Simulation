@@ -2291,7 +2291,8 @@ public class TesteSimulacao : MonoBehaviour
                     "Selected City construction requires the admitted typed graph and its captured configuration.");
 
             selectedRuntimeOwnerGraphBuilder = new DailyV1SelectedRuntimeOwnerGraphBuilder(
-                selectedDefinitions, spatialNetwork.SelectedOwner);
+                selectedDefinitions, spatialNetwork.SelectedOwner,
+                runtimeIdentityRegistry.CoreIdentityIndex);
             selectedInitialRuntimeOwnerGraph = null;
             Dictionary<string, SpatialLocationRuntime> selectedLocationsByRuntimeId =
                 new Dictionary<string, SpatialLocationRuntime>(System.StringComparer.Ordinal);
@@ -2299,11 +2300,11 @@ public class TesteSimulacao : MonoBehaviour
                     runtimeIdAllocator,
                     selectedLocation =>
                     {
-                        if (!runtimeIdentityRegistry.RegisterLocation(selectedLocation)) return false;
+                        if (!runtimeIdentityRegistry.BindSelectedLocationProjection(selectedLocation)) return false;
                         selectedLocationsByRuntimeId.Add(selectedLocation.RuntimeId, selectedLocation);
                         return true;
                     },
-                    selectedLocation => runtimeIdentityRegistry.RollbackGenesisLocation(selectedLocation)))
+                    selectedLocation => runtimeIdentityRegistry.RollbackSelectedLocationProjection(selectedLocation)))
                 throw new System.InvalidOperationException(
                     "The selected City owner graph could not construct the exact admitted Daily-v1 owner set.");
 
@@ -2321,7 +2322,7 @@ public class TesteSimulacao : MonoBehaviour
                         selectedCityOwners.Definition, selectedDefinitions, selectedBindings))
                     throw new System.InvalidOperationException(
                         "The selected City Unity/P12 identity projection could not attach to its Core-owned runtime.");
-                if (!runtimeIdentityRegistry.RegisterCity(selectedCity))
+                if (!runtimeIdentityRegistry.BindSelectedCityProjection(selectedCity))
                 {
                     selectedRuntimeOwnerGraphBuilder.TryRemoveInitialCity(selectedCityOwners);
                     continue;
@@ -2716,7 +2717,7 @@ public class TesteSimulacao : MonoBehaviour
                         resolveSelectedCityProjection))
                     throw new System.InvalidOperationException(
                         "The selected NPC Unity/P12 identity projection could not attach to its Core-owned runtime.");
-                if (!runtimeIdentityRegistry.RegisterNpc(selectedNpc))
+                if (!runtimeIdentityRegistry.BindSelectedNpcProjection(selectedNpc))
                 {
                     startingCity?.RemoveImportantNpc(selectedNpc);
                     selectedRuntimeOwnerGraphBuilder.TryRemoveInitialNpc(selectedNpc.SelectedRuntimeOwners);

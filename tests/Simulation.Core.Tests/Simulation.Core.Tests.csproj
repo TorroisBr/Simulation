@@ -27,6 +27,7 @@
     <Compile Include="SimulationTimeCoreTests.cs" />
     <Compile Include="SimulationRuntimeAdmissionContextTests.cs" />
     <Compile Include="DailyV1ExecutionBoundaryStateTests.cs" />
+    <Compile Include="DailyV1RuntimeIdentityIndexTests.cs" />
     <Compile Include="MoneyAccountRuntimeCoreTests.cs" />
     <Compile Include="DailyV1MoneyTransferOperationTests.cs" Link="Economy/DailyV1MoneyTransferOperationTests.cs" />
     <Compile Include="DailyV1CityEconomicOwnerCoreTests.cs" />

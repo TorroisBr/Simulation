@@ -526,6 +526,19 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         Assert.That(graph.Cities, Has.Count.EqualTo(cityIds.Count));
         Assert.That(graph.Npcs, Has.Count.EqualTo(npcIds.Count));
         Assert.That(graph.MatchesExactOwnerInstances(builder.Cities, builder.Npcs), Is.True);
+        Assert.That(graph.RuntimeIdentityIndex, Is.SameAs(builder.RuntimeIdentityIndex));
+        Assert.That(graph.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.City),
+            Is.EqualTo(graph.Cities.Count));
+        Assert.That(graph.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Npc),
+            Is.EqualTo(graph.Npcs.Count));
+        Assert.That(graph.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Location),
+            Is.EqualTo(graph.SpatialNetwork.LocationCount));
+        Assert.That(graph.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Route),
+            Is.EqualTo(graph.SpatialNetwork.RouteCount));
+        Assert.That(graph.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.ExplorableSite), Is.Zero);
+        Assert.That(graph.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.LocalPlace), Is.Zero);
+        Assert.That(graph.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.LocalConnection), Is.Zero);
+        Assert.That(graph.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.NotableItem), Is.Zero);
 
         foreach (string definitionId in npcIds)
         {

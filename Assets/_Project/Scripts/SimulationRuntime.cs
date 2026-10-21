@@ -9838,7 +9838,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         return dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(current, graph);
     }
 
-    private static DailyV1SelectedRuntimeOwnerGraph TryCreateSelectedRuntimeOwnerGraph(
+    private DailyV1SelectedRuntimeOwnerGraph TryCreateSelectedRuntimeOwnerGraph(
         IReadOnlyList<CityRuntime> cityRuntimes,
         IReadOnlyList<NpcRuntime> npcRuntimes,
         SpatialNetworkOwner spatialNetwork,
@@ -9866,6 +9866,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             spatialNetwork,
             justiceRecordsOwner,
             travelParties,
+            p12RuntimeIdentityRegistry?.CoreIdentityIndex,
             out DailyV1SelectedRuntimeOwnerGraph graph) ? graph : null;
     }
 

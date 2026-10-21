@@ -63,11 +63,22 @@ public sealed class RuntimeIdentityRegistryCensusProvider : IOwnerSectionCensusP
 
     public OwnerSectionCensusWitness GetCurrentCensus()
     {
-        return new OwnerSectionCensusWitness(
-            sectionId,
-            SchemaVersion,
-            owner,
-            owner.GetCensusCardinality(index),
-            owner.CensusRevision);
+        return owner.CoreIdentityIndex.GetOwnerSectionCensusWitness(ToIdentityKind(index));
+    }
+
+    private static DailyV1RuntimeIdentityKind ToIdentityKind(RuntimeIdentityCensusIndex index)
+    {
+        switch (index)
+        {
+            case RuntimeIdentityCensusIndex.Npcs: return DailyV1RuntimeIdentityKind.Npc;
+            case RuntimeIdentityCensusIndex.Cities: return DailyV1RuntimeIdentityKind.City;
+            case RuntimeIdentityCensusIndex.Locations: return DailyV1RuntimeIdentityKind.Location;
+            case RuntimeIdentityCensusIndex.Routes: return DailyV1RuntimeIdentityKind.Route;
+            case RuntimeIdentityCensusIndex.ExplorableSites: return DailyV1RuntimeIdentityKind.ExplorableSite;
+            case RuntimeIdentityCensusIndex.LocalPlaces: return DailyV1RuntimeIdentityKind.LocalPlace;
+            case RuntimeIdentityCensusIndex.LocalConnections: return DailyV1RuntimeIdentityKind.LocalConnection;
+            case RuntimeIdentityCensusIndex.NotableItems: return DailyV1RuntimeIdentityKind.NotableItem;
+            default: throw new ArgumentOutOfRangeException(nameof(index));
+        }
     }
 }

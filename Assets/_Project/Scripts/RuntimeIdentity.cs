@@ -14,13 +14,54 @@ public sealed class RuntimeIdentityRegistry
     private readonly Dictionary<string, LocalTopologyConnectionRuntime> localConnectionsByRuntimeId = new Dictionary<string, LocalTopologyConnectionRuntime>(StringComparer.Ordinal);
     private readonly Dictionary<string, NotableItemRuntime> notableItemsByRuntimeId = new Dictionary<string, NotableItemRuntime>(StringComparer.Ordinal);
     private readonly SimulationLogger logger;
-    private long censusRevision;
+    private readonly DailyV1RuntimeIdentityIndex identityIndex = new DailyV1RuntimeIdentityIndex();
 
-    internal long CensusRevision => censusRevision;
+    internal long CensusRevision => identityIndex.CensusRevision;
+    internal object CensusOwnerIdentity => identityIndex.CensusOwnerIdentity;
+    internal DailyV1RuntimeIdentityIndex CoreIdentityIndex => identityIndex;
 
     public RuntimeIdentityRegistry(SimulationLogger logger = null)
+        : this(logger, null)
+    {
+    }
+
+    internal RuntimeIdentityRegistry(
+        SimulationLogger logger,
+        DailyV1RuntimeIdentityIndex sharedIdentityIndex)
     {
         this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
+        identityIndex = sharedIdentityIndex ?? new DailyV1RuntimeIdentityIndex();
+    }
+
+    internal bool BindSelectedNpcProjection(NpcRuntime npcRuntime) =>
+        npcRuntime != null && TryBindProjection(npcRuntime.RuntimeId,
+            DailyV1RuntimeIdentityKind.Npc, npcsByRuntimeId, npcRuntime);
+
+    internal bool BindSelectedCityProjection(CityRuntime cityRuntime) =>
+        cityRuntime != null && TryBindProjection(cityRuntime.RuntimeId,
+            DailyV1RuntimeIdentityKind.City, citiesByRuntimeId, cityRuntime);
+
+    internal bool BindSelectedLocationProjection(SpatialLocationRuntime location) =>
+        location != null && TryBindProjection(location.RuntimeId,
+            DailyV1RuntimeIdentityKind.Location, locationsByRuntimeId, location);
+
+    internal void RollbackSelectedLocationProjection(SpatialLocationRuntime location)
+    {
+        if (location == null || !locationsByRuntimeId.TryGetValue(location.RuntimeId, out SpatialLocationRuntime current)
+            || !ReferenceEquals(location, current))
+            throw new InvalidOperationException("Cannot roll back a selected Location projection that does not match its Core identity.");
+        locationsByRuntimeId.Remove(location.RuntimeId);
+    }
+
+    private bool TryBindProjection<TValue>(
+        string runtimeId,
+        DailyV1RuntimeIdentityKind kind,
+        Dictionary<string, TValue> projections,
+        TValue value)
+    {
+        return identityIndex.HasIdentity(runtimeId, kind)
+            && !projections.ContainsKey(runtimeId)
+            && projections.TryAdd(runtimeId, value);
     }
 
     public bool RegisterNpc(NpcRuntime npcRuntime)
@@ -48,6 +89,7 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (!TryStageIdentity(npcRuntime.RuntimeId, DailyV1RuntimeIdentityKind.Npc, "NPC")) return false;
         npcsByRuntimeId.Add(npcRuntime.RuntimeId, npcRuntime);
         AdvanceCensusRevision();
         return true;
@@ -73,7 +115,7 @@ public sealed class RuntimeIdentityRegistry
             duplicateIdentity = true;
             return false;
         }
-        return censusRevision < long.MaxValue;
+        return identityIndex.CensusRevision < long.MaxValue;
     }
 
     public bool RegisterCity(CityRuntime cityRuntime)
@@ -101,6 +143,7 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (!TryStageIdentity(cityRuntime.RuntimeId, DailyV1RuntimeIdentityKind.City, "City")) return false;
         citiesByRuntimeId.Add(cityRuntime.RuntimeId, cityRuntime);
         AdvanceCensusRevision();
         return true;
@@ -142,9 +185,12 @@ public sealed class RuntimeIdentityRegistry
         }
 
         bool indexAdded = false;
+        bool identityAdded = false;
         bool revisionAdvanced = false;
         try
         {
+            if (!TryStageIdentity(location.RuntimeId, DailyV1RuntimeIdentityKind.Location, "Location")) return false;
+            identityAdded = true;
             locationsByRuntimeId.Add(location.RuntimeId, location);
             indexAdded = true;
             completedMutation?.Invoke("RuntimeIdentity.Location.Index");
@@ -155,8 +201,9 @@ public sealed class RuntimeIdentityRegistry
         }
         catch
         {
-            if (revisionAdvanced) censusRevision--;
+            if (revisionAdvanced) RollbackCensusRevision();
             if (indexAdded) locationsByRuntimeId.Remove(location.RuntimeId);
+            if (identityAdded) identityIndex.TryRemoveStaged(location.RuntimeId, DailyV1RuntimeIdentityKind.Location);
             throw;
         }
     }
@@ -186,6 +233,7 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (!TryStageIdentity(route.RuntimeId, DailyV1RuntimeIdentityKind.Route, "Route")) return false;
         routesByRuntimeId.Add(route.RuntimeId, route);
         AdvanceCensusRevision();
         return true;
@@ -227,9 +275,12 @@ public sealed class RuntimeIdentityRegistry
         }
 
         bool indexAdded = false;
+        bool identityAdded = false;
         bool revisionAdvanced = false;
         try
         {
+            if (!TryStageIdentity(site.RuntimeId, DailyV1RuntimeIdentityKind.ExplorableSite, "ExplorableSite")) return false;
+            identityAdded = true;
             explorableSitesByRuntimeId.Add(site.RuntimeId, site);
             indexAdded = true;
             completedMutation?.Invoke("RuntimeIdentity.ExplorableSite.Index");
@@ -240,8 +291,9 @@ public sealed class RuntimeIdentityRegistry
         }
         catch
         {
-            if (revisionAdvanced) censusRevision--;
+            if (revisionAdvanced) RollbackCensusRevision();
             if (indexAdded) explorableSitesByRuntimeId.Remove(site.RuntimeId);
+            if (identityAdded) identityIndex.TryRemoveStaged(site.RuntimeId, DailyV1RuntimeIdentityKind.ExplorableSite);
             throw;
         }
     }
@@ -271,6 +323,7 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (!TryStageIdentity(localPlace.RuntimeId, DailyV1RuntimeIdentityKind.LocalPlace, "LocalPlace")) return false;
         localPlacesByRuntimeId.Add(localPlace.RuntimeId, localPlace);
         AdvanceCensusRevision();
         return true;
@@ -301,6 +354,7 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (!TryStageIdentity(localConnection.RuntimeId, DailyV1RuntimeIdentityKind.LocalConnection, "LocalConnection")) return false;
         localConnectionsByRuntimeId.Add(localConnection.RuntimeId, localConnection);
         AdvanceCensusRevision();
         return true;
@@ -331,6 +385,7 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (!TryStageIdentity(notableItem.RuntimeId, DailyV1RuntimeIdentityKind.NotableItem, "NotableItem")) return false;
         notableItemsByRuntimeId.Add(notableItem.RuntimeId, notableItem);
         AdvanceCensusRevision();
         return true;
@@ -431,12 +486,17 @@ public sealed class RuntimeIdentityRegistry
 
         int addedPlaces = 0;
         int addedConnections = 0;
+        int stagedPlaces = 0;
+        int stagedConnections = 0;
         bool revisionAdvanced = false;
         try
         {
             for (int i = 0; i < localPlaces.Count; i++)
             {
                 LocalPlaceRuntime localPlace = localPlaces[i];
+                if (!TryStageIdentity(localPlace.RuntimeId, DailyV1RuntimeIdentityKind.LocalPlace, "LocalPlace"))
+                    throw new InvalidOperationException("The Core runtime identity index rejected a prevalidated LocalPlace id.");
+                stagedPlaces++;
                 localPlacesByRuntimeId.Add(localPlace.RuntimeId, localPlace);
                 addedPlaces++;
                 completedMutation?.Invoke("RuntimeIdentity.LocalPlace.Index." + i.ToString(CultureInfo.InvariantCulture));
@@ -445,6 +505,9 @@ public sealed class RuntimeIdentityRegistry
             for (int i = 0; i < localConnections.Count; i++)
             {
                 LocalTopologyConnectionRuntime localConnection = localConnections[i];
+                if (!TryStageIdentity(localConnection.RuntimeId, DailyV1RuntimeIdentityKind.LocalConnection, "LocalConnection"))
+                    throw new InvalidOperationException("The Core runtime identity index rejected a prevalidated LocalConnection id.");
+                stagedConnections++;
                 localConnectionsByRuntimeId.Add(localConnection.RuntimeId, localConnection);
                 addedConnections++;
                 completedMutation?.Invoke("RuntimeIdentity.LocalConnection.Index." + i.ToString(CultureInfo.InvariantCulture));
@@ -461,11 +524,15 @@ public sealed class RuntimeIdentityRegistry
         }
         catch
         {
-            if (revisionAdvanced) censusRevision--;
+            if (revisionAdvanced) RollbackCensusRevision();
             for (int i = addedConnections - 1; i >= 0; i--)
                 localConnectionsByRuntimeId.Remove(localConnections[i].RuntimeId);
             for (int i = addedPlaces - 1; i >= 0; i--)
                 localPlacesByRuntimeId.Remove(localPlaces[i].RuntimeId);
+            for (int i = stagedConnections - 1; i >= 0; i--)
+                identityIndex.TryRemoveStaged(localConnections[i].RuntimeId, DailyV1RuntimeIdentityKind.LocalConnection);
+            for (int i = stagedPlaces - 1; i >= 0; i--)
+                identityIndex.TryRemoveStaged(localPlaces[i].RuntimeId, DailyV1RuntimeIdentityKind.LocalPlace);
             throw;
         }
     }
@@ -474,37 +541,21 @@ public sealed class RuntimeIdentityRegistry
     {
         switch (index)
         {
-            case RuntimeIdentityCensusIndex.Npcs: return npcsByRuntimeId.Count;
-            case RuntimeIdentityCensusIndex.Cities: return citiesByRuntimeId.Count;
-            case RuntimeIdentityCensusIndex.Locations: return locationsByRuntimeId.Count;
-            case RuntimeIdentityCensusIndex.Routes: return routesByRuntimeId.Count;
-            case RuntimeIdentityCensusIndex.ExplorableSites: return explorableSitesByRuntimeId.Count;
-            case RuntimeIdentityCensusIndex.LocalPlaces: return localPlacesByRuntimeId.Count;
-            case RuntimeIdentityCensusIndex.LocalConnections: return localConnectionsByRuntimeId.Count;
-            case RuntimeIdentityCensusIndex.NotableItems: return notableItemsByRuntimeId.Count;
+            case RuntimeIdentityCensusIndex.Npcs: return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Npc);
+            case RuntimeIdentityCensusIndex.Cities: return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.City);
+            case RuntimeIdentityCensusIndex.Locations: return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Location);
+            case RuntimeIdentityCensusIndex.Routes: return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Route);
+            case RuntimeIdentityCensusIndex.ExplorableSites: return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.ExplorableSite);
+            case RuntimeIdentityCensusIndex.LocalPlaces: return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.LocalPlace);
+            case RuntimeIdentityCensusIndex.LocalConnections: return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.LocalConnection);
+            case RuntimeIdentityCensusIndex.NotableItems: return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.NotableItem);
             default: throw new ArgumentOutOfRangeException(nameof(index));
         }
     }
 
     internal IReadOnlyList<KeyValuePair<string, string>> CaptureRegisteredRuntimeIdentityValues()
     {
-        List<KeyValuePair<string, string>> values = new List<KeyValuePair<string, string>>();
-        AddIdentityValues(values, "npc", npcsByRuntimeId);
-        AddIdentityValues(values, "city", citiesByRuntimeId);
-        AddIdentityValues(values, "location", locationsByRuntimeId);
-        AddIdentityValues(values, "route", routesByRuntimeId);
-        AddIdentityValues(values, "site", explorableSitesByRuntimeId);
-        AddIdentityValues(values, "local-place", localPlacesByRuntimeId);
-        AddIdentityValues(values, "local-connection", localConnectionsByRuntimeId);
-        AddIdentityValues(values, "notable-item", notableItemsByRuntimeId);
-        values.Sort((left, right) =>
-        {
-            int familyOrder = string.Compare(left.Key, right.Key, StringComparison.Ordinal);
-            return familyOrder != 0
-                ? familyOrder
-                : string.Compare(left.Value, right.Value, StringComparison.Ordinal);
-        });
-        return values.AsReadOnly();
+        return identityIndex.CaptureRegisteredValues();
     }
 
     private static void AddIdentityValues<TValue>(
@@ -518,7 +569,7 @@ public sealed class RuntimeIdentityRegistry
 
     private bool CanAdvanceCensusRevision(string identityKind)
     {
-        if (censusRevision < long.MaxValue)
+        if (identityIndex.CensusRevision < long.MaxValue)
         {
             return true;
         }
@@ -529,31 +580,55 @@ public sealed class RuntimeIdentityRegistry
 
     private void AdvanceCensusRevision()
     {
-        censusRevision++;
+        if (!identityIndex.TryAdvanceRevision())
+            throw new InvalidOperationException("Runtime identity census revision is exhausted.");
+    }
+
+    private bool TryStageIdentity(string runtimeId, DailyV1RuntimeIdentityKind kind, string identityKind)
+    {
+        if (!identityIndex.TryStageRegister(runtimeId, kind))
+        {
+            if (identityIndex.CensusRevision == long.MaxValue)
+                logger.LogError($"Cannot register {identityKind} runtime identity: census revision is exhausted.");
+            else
+                logger.LogError($"Cannot register {identityKind} runtime identity: Core rejected duplicate or invalid RuntimeId '{runtimeId}'.");
+            return false;
+        }
+        return true;
+    }
+
+    private void RollbackCensusRevision()
+    {
+        if (!identityIndex.TryRollbackRevision())
+            throw new InvalidOperationException("Runtime identity census revision rollback failed.");
     }
 
     internal void RollbackGenesisExplorableSite(ExplorableSiteRuntime site)
     {
         if (site == null || !explorableSitesByRuntimeId.TryGetValue(site.RuntimeId, out ExplorableSiteRuntime current)
-            || !ReferenceEquals(site, current) || censusRevision <= 0)
+            || !ReferenceEquals(site, current) || CensusRevision <= 0)
             throw new InvalidOperationException("Cannot roll back the P10-B ExplorableSite identity insertion.");
         explorableSitesByRuntimeId.Remove(site.RuntimeId);
-        censusRevision--;
+        if (!identityIndex.TryRemoveStaged(site.RuntimeId, DailyV1RuntimeIdentityKind.ExplorableSite)
+            || !identityIndex.TryRollbackRevision())
+            throw new InvalidOperationException("Core ExplorableSite identity rollback failed.");
     }
 
     internal void RollbackGenesisLocation(SpatialLocationRuntime location)
     {
         if (location == null || !locationsByRuntimeId.TryGetValue(location.RuntimeId, out SpatialLocationRuntime current)
-            || !ReferenceEquals(location, current) || censusRevision <= 0)
+            || !ReferenceEquals(location, current) || CensusRevision <= 0)
             throw new InvalidOperationException("Cannot roll back the P10-B Location identity insertion.");
         locationsByRuntimeId.Remove(location.RuntimeId);
-        censusRevision--;
+        if (!identityIndex.TryRemoveStaged(location.RuntimeId, DailyV1RuntimeIdentityKind.Location)
+            || !identityIndex.TryRollbackRevision())
+            throw new InvalidOperationException("Core Location identity rollback failed.");
     }
 
     internal void RollbackGenesisLocalTopologyMembers(
         IReadOnlyList<LocalPlaceRuntime> places, IReadOnlyList<LocalTopologyConnectionRuntime> connections)
     {
-        if (places == null || connections == null || censusRevision <= 0)
+        if (places == null || connections == null || CensusRevision <= 0)
             throw new InvalidOperationException("Cannot roll back the P10-B LocalTopology identity batch.");
         foreach (LocalPlaceRuntime place in places)
             if (place == null || !localPlacesByRuntimeId.TryGetValue(place.RuntimeId, out LocalPlaceRuntime currentPlace)
@@ -565,7 +640,14 @@ public sealed class RuntimeIdentityRegistry
                 throw new InvalidOperationException("P10-B LocalConnection identity rollback did not match the inserted object.");
         foreach (LocalPlaceRuntime place in places) localPlacesByRuntimeId.Remove(place.RuntimeId);
         foreach (LocalTopologyConnectionRuntime connection in connections) localConnectionsByRuntimeId.Remove(connection.RuntimeId);
-        censusRevision--;
+        foreach (LocalPlaceRuntime place in places)
+            if (!identityIndex.TryRemoveStaged(place.RuntimeId, DailyV1RuntimeIdentityKind.LocalPlace))
+                throw new InvalidOperationException("Core LocalPlace identity rollback failed.");
+        foreach (LocalTopologyConnectionRuntime connection in connections)
+            if (!identityIndex.TryRemoveStaged(connection.RuntimeId, DailyV1RuntimeIdentityKind.LocalConnection))
+                throw new InvalidOperationException("Core LocalConnection identity rollback failed.");
+        if (!identityIndex.TryRollbackRevision())
+            throw new InvalidOperationException("Core LocalTopology revision rollback failed.");
     }
 
     public bool TryGetNpc(string runtimeId, out NpcRuntime npcRuntime)
@@ -762,54 +844,22 @@ public sealed class RuntimeIdentityRegistry
 
     private bool TryGetRegisteredType(string runtimeId, out string registeredType)
     {
-        if (npcsByRuntimeId.ContainsKey(runtimeId) == true)
+        if (identityIndex.TryGetKind(runtimeId, out DailyV1RuntimeIdentityKind kind))
         {
-            registeredType = "NPC";
+            registeredType = kind switch
+            {
+                DailyV1RuntimeIdentityKind.Npc => "NPC",
+                DailyV1RuntimeIdentityKind.City => "City",
+                DailyV1RuntimeIdentityKind.Location => "Location",
+                DailyV1RuntimeIdentityKind.Route => "Route",
+                DailyV1RuntimeIdentityKind.ExplorableSite => "ExplorableSite",
+                DailyV1RuntimeIdentityKind.LocalPlace => "LocalPlace",
+                DailyV1RuntimeIdentityKind.LocalConnection => "LocalConnection",
+                DailyV1RuntimeIdentityKind.NotableItem => "NotableItem",
+                _ => null
+            };
             return true;
         }
-
-        if (citiesByRuntimeId.ContainsKey(runtimeId) == true)
-        {
-            registeredType = "City";
-            return true;
-        }
-
-        if (locationsByRuntimeId.ContainsKey(runtimeId) == true)
-        {
-            registeredType = "Location";
-            return true;
-        }
-
-        if (routesByRuntimeId.ContainsKey(runtimeId) == true)
-        {
-            registeredType = "Route";
-            return true;
-        }
-
-        if (explorableSitesByRuntimeId.ContainsKey(runtimeId) == true)
-        {
-            registeredType = "ExplorableSite";
-            return true;
-        }
-
-        if (localPlacesByRuntimeId.ContainsKey(runtimeId) == true)
-        {
-            registeredType = "LocalPlace";
-            return true;
-        }
-
-        if (localConnectionsByRuntimeId.ContainsKey(runtimeId) == true)
-        {
-            registeredType = "LocalConnection";
-            return true;
-        }
-
-        if (notableItemsByRuntimeId.ContainsKey(runtimeId) == true)
-        {
-            registeredType = "NotableItem";
-            return true;
-        }
-
         registeredType = null;
         return false;
     }
