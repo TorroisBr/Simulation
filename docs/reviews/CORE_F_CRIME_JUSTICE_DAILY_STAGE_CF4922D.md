@@ -1,6 +1,6 @@
 # CORE-F Crime/Justice daily-stage exact-tip review
 
-**Verdict:** `VALIDATED_CANDIDATE` / PASS  
+**Verdict:** `VALIDATED_CANDIDATE` / PASS
 **Review scope:** Bounded selected Daily-v1 Crime/Justice daily-stage integration and its validation evidence.
 
 ## Reviewed identity
