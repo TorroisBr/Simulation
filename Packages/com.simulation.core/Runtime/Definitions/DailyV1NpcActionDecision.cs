@@ -644,10 +644,12 @@ internal static class DailyV1SelectedNpcActionDecisionStage
                 continue;
             }
 
-            if (!boundary.TryPrepareAutonomousProviderAction(actor, candidate, out float utility))
-                candidate.Utility = 0f;
-            else
-                candidate.Utility = UnityMathfCompatibility.Max(0f, utility);
+            // A graph-backed actor may only select actions handled by the
+            // explicit Core planning paths above. The generic provider route
+            // remains available only to the graphless compatibility path; it
+            // must not let a Unity provider become an alternate planner for
+            // an admitted owner graph.
+            candidate.Utility = 0f;
         }
 
         selected = DailyV1NpcActionDecision.ChooseWeightedCandidate(

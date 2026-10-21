@@ -488,7 +488,8 @@ public sealed class DailyV1CrimeActionPlanningTests
         Assert.That(selected, Is.Null,
             "A disabled provider contributes no positive autonomous candidate.");
         Assert.That(boundary.StealProjectionCalls, Is.Zero);
-        Assert.That(boundary.LegacyProviderPlanCalls, Is.EqualTo(1));
+        Assert.That(boundary.LegacyProviderPlanCalls, Is.Zero,
+            "A selected graph must not call the Unity provider planner for a disabled action.");
     }
 
     [Test]

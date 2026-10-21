@@ -63,6 +63,33 @@ public sealed class DailyV1GuardActionPlanningTests
     }
 
     [Test]
+    public void SelectedGraphActionDoesNotFallBackToUnityProviderPlanning()
+    {
+        ArrestFixture fixture = CreateArrestFixture("npc/guard", "npc/target");
+        DailyV1ActionDefinition travel = ActionOfType(
+            fixture.Definitions, DailyV1NpcDefinitionRules.TravelActionTypeValue);
+        RecordingSelectedDecisionBoundary boundary = new RecordingSelectedDecisionBoundary();
+        FixedActionRandom random = new FixedActionRandom(0f);
+
+        Assert.That(DailyV1SelectedNpcActionDecisionStage.TryChoose(
+            fixture.Graph,
+            fixture.Guard,
+            new[] { travel },
+            fixture.Guard.Status.Statuses,
+            12L,
+            random,
+            boundary,
+            out DailyV1NpcActionCandidate selected), Is.True);
+
+        Assert.That(selected, Is.Null,
+            "A selected graph action with no Core-supported host projection must remain unavailable.");
+        Assert.That(boundary.LegacyProviderPlanCalls, Is.Zero,
+            "Graph-backed choice must never delegate action planning to a Unity provider.");
+        Assert.That(random.Calls, Is.Zero,
+            "An unavailable candidate must not perturb the deterministic decision stream.");
+    }
+
+    [Test]
     public void SelectedActionEligibilityUsesTheAdmittedEffectiveConfiguration()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -327,6 +354,17 @@ public sealed class DailyV1GuardActionPlanningTests
             if (action.Values.actionType?.Value == DailyV1NpcDefinitionRules.ArrestActionTypeValue)
                 return action;
         Assert.Fail("The selected fixture must contain an Arrest action node.");
+        return null;
+    }
+
+    private static DailyV1ActionDefinition ActionOfType(
+        DailyV1EffectiveDefinitions definitions,
+        int actionType)
+    {
+        foreach (DailyV1ActionDefinition action in definitions.Actions.Values)
+            if (action.Values.actionType?.Value == actionType)
+                return action;
+        Assert.Fail("The selected fixture must contain action type " + actionType + ".");
         return null;
     }
 
