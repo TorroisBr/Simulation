@@ -4258,6 +4258,110 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void SelectedCrimeJusticeDailyStageContinuesAcrossPublicDailyAdvances()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        Assert.That(config.hiddenStatus, Is.Not.Null);
+        GameObject hostObject = new GameObject("P12 selected Crime Justice multi-day public advance");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
+        DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(graph, Is.Not.Null);
+        Assert.That(runtime.HasExactSelectedRuntimeOwnerGraph(graph.Definitions), Is.True);
+        Assert.That(runtime.NpcRuntimes.All(npc => npc == null || npc.UsesSelectedDailyV1Definitions), Is.True,
+            "The Core stage is admitted only for the complete selected Daily-v1 owner roster.");
+
+        JusticeSystem justice = runtime.JusticeSystemForWorldBoundary;
+        Assert.That(justice, Is.Not.Null);
+        Assert.That(ReferenceEquals(graph.JusticeRecordsOwner, justice.CoreOwner), Is.True);
+        NpcRuntime guard = runtime.NpcRuntimes.First(npc =>
+            npc != null && npc.UsesSelectedDailyV1Definitions
+            && npc.NpcData?.job?.jobType == NpcJobType.Guard);
+        NpcRuntime target = runtime.NpcRuntimes.First(npc =>
+            npc != null && npc != guard && npc.UsesSelectedDailyV1Definitions
+            && ReferenceEquals(npc.CurrentCity, guard.CurrentCity));
+        NpcRuntime hiddenActor = runtime.NpcRuntimes.First(npc =>
+            npc != null && npc != guard && npc != target && npc.UsesSelectedDailyV1Definitions);
+
+        MethodInfo beginActionScope = typeof(SimulationRuntime).GetMethod(
+            "TryBeginP12CrimeJusticeActionScope", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(beginActionScope, Is.Not.Null);
+        object[] scopeArguments = { new[] { target, guard, hiddenActor }, true, null };
+        Assert.That(beginActionScope.Invoke(runtime, scopeArguments), Is.EqualTo(true));
+        IDisposable setupScope = scopeArguments[2] as IDisposable;
+        Assert.That(setupScope, Is.Not.Null);
+        using (setupScope)
+        {
+            Assert.That(justice.CreateOrIncreaseWarrant(target, target.CurrentCity, 12f, 4), Is.Not.Null);
+            Assert.That(justice.Arrest(guard, target, target.CurrentCity), Is.True);
+            hiddenActor.AddStatus(config.hiddenStatus);
+            hiddenActor.HideForDays(3);
+        }
+
+        PrisonSentenceRuntime sentence = ReadPrivateField<IList<PrisonSentenceRuntime>>(
+            justice, "prisonSentences").Single();
+        int remainingSentenceDays = sentence.RemainingDays;
+        int remainingHiddenDays = hiddenActor.HiddenDaysRemaining;
+        long justiceRevision = justice.P12CrimeJusticeRevision;
+        long hiddenRevision = hiddenActor.P12CrimeJusticeRevision;
+        Assert.That(sentence.WasArrestedToday, Is.True);
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long epochBefore, out ContinuationCensusFailure epochFailure), Is.True,
+            epochFailure.ToString());
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure), Is.True,
+            censusFailure.ToString());
+        long startingDay = runtime.CurrentDay;
+
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstAdvanceFailure), Is.True,
+            firstAdvanceFailure.ToString());
+        Assert.That(runtime.CurrentDay, Is.EqualTo(startingDay + 1));
+        Assert.That(sentence.WasArrestedToday, Is.False,
+            "The first public admitted day executes the selected Justice clear-arrested marker phase.");
+        Assert.That(sentence.RemainingDays, Is.EqualTo(remainingSentenceDays - 1),
+            "The first public admitted day decrements the selected sentence once.");
+        Assert.That(hiddenActor.HiddenDaysRemaining, Is.EqualTo(remainingHiddenDays - 1),
+            "The first public admitted day decrements the selected Crime hidden timer once.");
+        Assert.That(justice.P12CrimeJusticeRevision, Is.GreaterThanOrEqualTo(justiceRevision + 2),
+            "The arrest-marker clear and sentence advancement commit through admitted Justice writes.");
+        Assert.That(hiddenActor.P12CrimeJusticeRevision, Is.GreaterThanOrEqualTo(hiddenRevision + 1),
+            "The hidden-state decrement commits through its selected NPC owner.");
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long epochAfterFirst, out ContinuationCensusFailure firstEpochFailure), Is.True,
+            firstEpochFailure.ToString());
+        Assert.That(epochAfterFirst, Is.GreaterThan(epochBefore));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure firstCensusFailure), Is.True,
+            firstCensusFailure.ToString());
+
+        long justiceRevisionAfterFirst = justice.P12CrimeJusticeRevision;
+        long hiddenRevisionAfterFirst = hiddenActor.P12CrimeJusticeRevision;
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure secondAdvanceFailure), Is.True,
+            secondAdvanceFailure.ToString());
+        Assert.That(runtime.CurrentDay, Is.EqualTo(startingDay + 2));
+        Assert.That(sentence.RemainingDays, Is.EqualTo(remainingSentenceDays - 2),
+            "The second public admitted day continues the same selected sentence exactly once.");
+        Assert.That(justice.IsArrested(target), Is.True,
+            "The selected actor remains arrested while its active sentence has days remaining.");
+        Assert.That(hiddenActor.HiddenDaysRemaining, Is.EqualTo(remainingHiddenDays - 2),
+            "The second public admitted day continues the selected Crime hidden timer exactly once.");
+        Assert.That(justice.P12CrimeJusticeRevision, Is.GreaterThan(justiceRevisionAfterFirst));
+        Assert.That(hiddenActor.P12CrimeJusticeRevision, Is.GreaterThan(hiddenRevisionAfterFirst));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long epochAfterSecond, out ContinuationCensusFailure secondEpochFailure), Is.True,
+            secondEpochFailure.ToString());
+        Assert.That(epochAfterSecond, Is.GreaterThan(epochAfterFirst));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure secondCensusFailure), Is.True,
+            secondCensusFailure.ToString());
+    }
+
+    [Test]
     public void DailyV1RestoreHydratesNonemptyPersonAndGenealogyGraphAndContinuesDeterministically()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
