@@ -10,13 +10,13 @@ internal static class DailyV1SelectedLocalKnowledgeRefreshStage
 {
     internal static bool TryRun(
         DailyV1SelectedRuntimeOwnerGraph graph,
-        long absoluteDay,
-        bool merchantObservationEnabled,
-        bool sharingEnabled,
-        EffectiveCommercialKnowledgeConfiguration knowledgeConfiguration)
+        long absoluteDay)
     {
         if (graph == null || absoluteDay < 0L)
             return false;
+
+        EffectiveSimulationConfiguration configuration = graph.Definitions?.EffectiveConfiguration;
+        bool merchantTradeEnabled = configuration?.MerchantTrade?.Enabled == true;
 
         foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
         {
@@ -28,7 +28,7 @@ internal static class DailyV1SelectedLocalKnowledgeRefreshStage
             if (npc.SpatialKnowledge == null) return false;
             npc.SpatialKnowledge.DiscoverLocation(npc.Travel.CurrentLocationRuntimeId);
 
-            if (!merchantObservationEnabled
+            if (!merchantTradeEnabled
                 || string.IsNullOrWhiteSpace(npc.Travel.CurrentCityRuntimeId)
                 || !DailyV1NpcDefinitionRules.HasJobType(npc.Definition, graph.Definitions,
                     DailyV1NpcDefinitionRules.MerchantJobTypeValue))
@@ -42,11 +42,11 @@ internal static class DailyV1SelectedLocalKnowledgeRefreshStage
                 npc, city, absoluteDay);
         }
 
-        if (!sharingEnabled) return true;
+        if (!merchantTradeEnabled) return true;
         int maximum = Math.Max(1,
-            knowledgeConfiguration?.MaxSharedObservationsPerInteraction ?? 2);
+            configuration?.CommercialKnowledge?.MaxSharedObservationsPerInteraction ?? 2);
         return DailyV1CommercialKnowledgeSharingStage.TryShareAmongPresentMerchants(
-            graph, absoluteDay, knowledgeConfiguration, maximum);
+            graph, absoluteDay, configuration?.CommercialKnowledge, maximum);
     }
 
     private static bool TryFindCity(

@@ -107,7 +107,7 @@ public sealed class DailyV1CommercialKnowledgeSharingStageTests
         DailyV1CityRuntimeOwners city = graph.Cities.Single();
 
         Assert.That(DailyV1SelectedLocalKnowledgeRefreshStage.TryRun(
-            graph, 7L, true, false, new EffectiveCommercialKnowledgeConfiguration()), Is.True);
+            graph, 7L), Is.True);
 
         Assert.That(merchant.SpatialKnowledge.KnowsLocation(city.LocationRuntimeId), Is.True);
         Assert.That(merchant.CommercialKnowledge.TryGetLiquidityObservation(
@@ -117,21 +117,39 @@ public sealed class DailyV1CommercialKnowledgeSharingStageTests
         Assert.That(liquidity.Source, Is.EqualTo(DailyV1CommercialKnowledgeSource.DirectObservation));
     }
 
-    private static DailyV1SelectedRuntimeOwnerGraph CreateGraph(
-        int merchantCount,
-        out DailyV1NpcRuntimeOwners first,
-        out DailyV1NpcRuntimeOwners second) =>
-        CreateGraph(merchantCount, out first, out second, out _);
+    [Test]
+    public void LocalKnowledgeRefreshUsesAdmittedMerchantPolicyWhenCapturingMarket()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(2,
+            out DailyV1NpcRuntimeOwners merchant, out _, merchantTradeEnabled: false);
+        DailyV1CityRuntimeOwners city = graph.Cities.Single();
+
+        Assert.That(DailyV1SelectedLocalKnowledgeRefreshStage.TryRun(graph, 7L), Is.True);
+
+        Assert.That(merchant.SpatialKnowledge.KnowsLocation(city.LocationRuntimeId), Is.True);
+        Assert.That(merchant.CommercialKnowledge.Observations, Is.Empty,
+            "Disabled admitted MerchantTrade configuration suppresses observation and sharing.");
+    }
 
     private static DailyV1SelectedRuntimeOwnerGraph CreateGraph(
         int merchantCount,
         out DailyV1NpcRuntimeOwners first,
         out DailyV1NpcRuntimeOwners second,
-        out DailyV1NpcRuntimeOwners third)
+        bool merchantTradeEnabled = true) =>
+        CreateGraph(merchantCount, out first, out second, out _, merchantTradeEnabled);
+
+    private static DailyV1SelectedRuntimeOwnerGraph CreateGraph(
+        int merchantCount,
+        out DailyV1NpcRuntimeOwners first,
+        out DailyV1NpcRuntimeOwners second,
+        out DailyV1NpcRuntimeOwners third,
+        bool merchantTradeEnabled = true)
     {
         Assert.That(merchantCount, Is.InRange(2, 3));
         DailyV1EffectiveDefinitions definitions =
             DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        if (!merchantTradeEnabled)
+            definitions = CopyWithMerchantTradeEnabled(definitions, enabled: false);
         DailyV1CityDefinition cityDefinition = definitions.Cities.Values.First();
         Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialCityOwner(
             "city/sharing-test", "location/sharing-test", definitions, cityDefinition,
@@ -160,5 +178,44 @@ public sealed class DailyV1CommercialKnowledgeSharingStageTests
         second = merchants[1];
         third = merchantCount > 2 ? merchants[2] : null;
         return graph;
+    }
+
+    private static DailyV1EffectiveDefinitions CopyWithMerchantTradeEnabled(
+        DailyV1EffectiveDefinitions definitions,
+        bool enabled)
+    {
+        EffectiveSimulationConfiguration current = definitions.EffectiveConfiguration;
+        EffectiveSimulationConfiguration configuration = new EffectiveSimulationConfiguration(
+            current.Population,
+            current.Economy,
+            current.Travel,
+            current.Crime,
+            current.GuardCrime,
+            current.NaturalMortality,
+            current.AggregateDemography,
+            new EffectiveMerchantTradeConfiguration(enabled, false, 5, 0.7f, 0.25f, 3),
+            current.CommercialKnowledge);
+        return new DailyV1EffectiveDefinitions(
+            definitions.Configuration,
+            configuration,
+            definitions.Calendar,
+            null,
+            definitions.Cities.Values,
+            definitions.Items.Values,
+            definitions.Npcs.Values,
+            definitions.Jobs.Values,
+            definitions.Actions.Values,
+            definitions.Statuses.Values,
+            null,
+            definitions.StageOrder,
+            definitions.ProfileContractIdentity,
+            definitions.GeographyProfileContractIdentity,
+            definitions.GeographyStageIdentity,
+            definitions.HexCoordinateConvention,
+            definitions.HexCoordinateCanonicalOrder,
+            null,
+            definitions.Traits.Values,
+            definitions.CapabilityAttributes.Values,
+            definitions.ExplorableSites.Values);
     }
 }

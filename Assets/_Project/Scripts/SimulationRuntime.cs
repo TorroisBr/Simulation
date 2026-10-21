@@ -13073,21 +13073,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             throw new InvalidOperationException(
                 "The selected local-knowledge stage received an incomplete runtime NPC owner roster.");
 
-        bool merchantTradeEnabled = configuration.MerchantTrade.Enabled;
-        bool merchantObservationEnabled = merchantTradeEnabled && merchantSystem != null;
-        bool sharingEnabled = merchantTradeEnabled && commercialKnowledgeSharingSystem != null;
-        if (merchantObservationEnabled)
+        bool merchantTradeEnabled = graph.Definitions.EffectiveConfiguration?.MerchantTrade?.Enabled == true;
+        if (merchantTradeEnabled && merchantSystem != null)
             merchantSystem.EnsureCanAdvanceSelectedTradeState();
-        if (sharingEnabled)
+        if (merchantTradeEnabled && commercialKnowledgeSharingSystem != null)
             commercialKnowledgeSharingSystem.EnsureCanShare();
 
-        EffectiveCommercialKnowledgeConfiguration knowledgeConfiguration = sharingEnabled
-            ? commercialKnowledgeSharingSystem.SelectedKnowledgeConfiguration
-            : graph.Definitions.EffectiveConfiguration?.CommercialKnowledge
-                ?? configuration.CommercialKnowledge;
         if (!DailyV1SelectedLocalKnowledgeRefreshStage.TryRun(
-                graph, CurrentDay, merchantObservationEnabled, sharingEnabled,
-                knowledgeConfiguration))
+                graph, CurrentDay))
             throw new InvalidOperationException(
                 "The selected Core local-knowledge stage could not complete against its exact runtime owner graph.");
 
