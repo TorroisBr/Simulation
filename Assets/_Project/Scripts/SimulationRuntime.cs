@@ -10489,13 +10489,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         activeDailyGameplayExecutionProbeForTest?.RecordAdvanceDayAfterClockAdvanceInvocation();
         if (runtimeAdmissionContext != null && DailyDemographicSystem.CanAdvanceSelected(this))
         {
-            DailyV1EffectiveDefinitions definitions = SelectedRuntimeOwnerGraph?.Definitions;
-            if (definitions == null)
+            DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
+            if (graph == null || graph.Definitions == null)
                 throw new InvalidOperationException(
                     "The selected Daily-v1 runtime has no admitted effective definitions for its daily execution.");
             DailyV1SelectedDailyExecutionStage.Advance(
                 CurrentDay,
-                definitions,
+                graph,
                 new SelectedDailyV1ExecutionBoundary(this));
             return;
         }
@@ -10563,8 +10563,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         public void BeginSimulationDay() => runtime.BeginSimulationDay();
         public void PrepareScheduledDirectives(long absoluteDay) =>
             runtime.scheduledDirectiveSystem?.PrepareDay(absoluteDay);
-        public void SimulateEconomyDay() => runtime.SimulateEconomyDay();
-        public void RefreshLocalKnowledgeAndShare() => runtime.RefreshLocalKnowledgeAndShare();
+        public void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph) =>
+            runtime.EnsureSelectedEconomyCanRun(graph);
+        public void LogSelectedDailyEconomy(
+            DailyV1CityRuntimeOwners owner,
+            SimulationLogCategory category,
+            string message) => runtime.LogSelectedDailyEconomy(owner, category, message);
+        public void EnsureSelectedLocalKnowledgeCanRun(DailyV1SelectedRuntimeOwnerGraph graph) =>
+            runtime.EnsureSelectedLocalKnowledgeCanRun(graph);
         public void AdvanceActiveExpeditions() =>
             runtime.adventureExpeditionAutonomySystem?.AdvanceActiveExpeditions();
         public void StartAutonomousExpeditions() => runtime.StartAutonomousExpeditions();
@@ -12992,7 +12998,26 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     private bool TrySimulateSelectedDailyEconomyDay()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
-        if (graph == null || cities == null || cities.Count != graph.Cities.Count
+        if (!CanRunSelectedEconomy(graph)) return false;
+
+        return graph.TrySimulateDailyEconomyDay(
+            graph.Cities,
+            CurrentDay,
+            calendar?.SemanticVersion,
+            (owner, category, message) => LogSelectedDailyEconomy(owner, category, message));
+    }
+
+    private void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (!CanRunSelectedEconomy(graph))
+            throw new InvalidOperationException(
+                "The selected Core economy stage could not admit its exact runtime owner graph.");
+    }
+
+    private bool CanRunSelectedEconomy(DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph == null || !ReferenceEquals(graph, SelectedRuntimeOwnerGraph)
+            || cities == null || cities.Count != graph.Cities.Count
             || !HasExactSelectedRuntimeOwnerGraph(graph.Definitions))
             return false;
         if (calendar == null && graph.Cities.Any(city => city.HasLocalDailyMaterialFlow))
@@ -13005,11 +13030,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 return false;
         }
 
-        return graph.TrySimulateDailyEconomyDay(
-            graph.Cities,
-            CurrentDay,
-            calendar?.SemanticVersion,
-            (owner, category, message) => LogSelectedDailyEconomy(owner, category, message));
+        return true;
     }
 
     private void LogSelectedDailyEconomy(
@@ -13055,6 +13076,20 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
         if (graph == null) return false;
 
+        EnsureSelectedLocalKnowledgeCanRun(graph);
+        if (!DailyV1SelectedLocalKnowledgeRefreshStage.TryRun(graph, CurrentDay))
+            throw new InvalidOperationException(
+                "The selected Core local-knowledge stage could not complete against its exact runtime owner graph.");
+
+        return true;
+    }
+
+    private void EnsureSelectedLocalKnowledgeCanRun(DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph == null || !ReferenceEquals(graph, SelectedRuntimeOwnerGraph))
+            throw new InvalidOperationException(
+                "The selected local-knowledge stage requires the current Core owner graph.");
+
         List<DailyV1NpcRuntimeOwners> owners = new List<DailyV1NpcRuntimeOwners>();
         foreach (NpcRuntime runtime in npcRuntimes)
         {
@@ -13078,13 +13113,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             merchantSystem.EnsureCanAdvanceSelectedTradeState();
         if (merchantTradeEnabled && commercialKnowledgeSharingSystem != null)
             commercialKnowledgeSharingSystem.EnsureCanShare();
-
-        if (!DailyV1SelectedLocalKnowledgeRefreshStage.TryRun(
-                graph, CurrentDay))
-            throw new InvalidOperationException(
-                "The selected Core local-knowledge stage could not complete against its exact runtime owner graph.");
-
-        return true;
     }
 
     private bool IsDeadNpc(string runtimeId)

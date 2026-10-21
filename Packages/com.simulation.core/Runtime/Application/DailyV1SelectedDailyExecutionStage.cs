@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 /// <summary>
 /// Operations which are still hosted outside Core while the selected
@@ -11,8 +12,12 @@ internal interface IDailyV1SelectedDailyExecutionBoundary
     void AdvanceSelectedDemography();
     void BeginSimulationDay();
     void PrepareScheduledDirectives(long absoluteDay);
-    void SimulateEconomyDay();
-    void RefreshLocalKnowledgeAndShare();
+    void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph);
+    void LogSelectedDailyEconomy(
+        DailyV1CityRuntimeOwners owner,
+        SimulationLogCategory category,
+        string message);
+    void EnsureSelectedLocalKnowledgeCanRun(DailyV1SelectedRuntimeOwnerGraph graph);
     void AdvanceActiveExpeditions();
     void StartAutonomousExpeditions();
     void AdvanceActorTurns();
@@ -28,11 +33,12 @@ internal static class DailyV1SelectedDailyExecutionStage
 {
     internal static void Advance(
         long absoluteDay,
-        DailyV1EffectiveDefinitions definitions,
+        DailyV1SelectedRuntimeOwnerGraph graph,
         IDailyV1SelectedDailyExecutionBoundary boundary)
     {
-        if (definitions == null) throw new ArgumentNullException(nameof(definitions));
+        if (graph == null) throw new ArgumentNullException(nameof(graph));
         if (boundary == null) throw new ArgumentNullException(nameof(boundary));
+        if (absoluteDay < 0L) throw new ArgumentOutOfRangeException(nameof(absoluteDay));
 
         boundary.AdvancePlaceContent();
         boundary.BeginLoggerDay(absoluteDay);
@@ -40,13 +46,37 @@ internal static class DailyV1SelectedDailyExecutionStage
         boundary.BeginSimulationDay();
         boundary.PrepareScheduledDirectives(absoluteDay);
 
-        if (definitions.EffectiveConfiguration?.Economy?.Enabled == true)
-            boundary.SimulateEconomyDay();
+        if (graph.Definitions.EffectiveConfiguration?.Economy?.Enabled == true)
+        {
+            boundary.EnsureSelectedEconomyCanRun(graph);
+            if (!graph.TrySimulateDailyEconomyDay(
+                    graph.Cities,
+                    absoluteDay,
+                    GetCalendarSemanticVersion(graph.Definitions.Calendar),
+                    boundary.LogSelectedDailyEconomy))
+                throw new InvalidOperationException(
+                    "The selected Core economy stage could not complete against its exact runtime owner graph.");
+        }
 
-        boundary.RefreshLocalKnowledgeAndShare();
+        boundary.EnsureSelectedLocalKnowledgeCanRun(graph);
+        if (!DailyV1SelectedLocalKnowledgeRefreshStage.TryRun(graph, absoluteDay))
+            throw new InvalidOperationException(
+                "The selected Core local-knowledge stage could not complete against its exact runtime owner graph.");
+
         boundary.AdvanceActiveExpeditions();
         boundary.StartAutonomousExpeditions();
         boundary.AdvanceActorTurns();
         boundary.AdvanceTravelAndObserve();
+    }
+
+    private static string GetCalendarSemanticVersion(DailyV1CalendarDefinition calendar)
+    {
+        if (calendar == null) throw new InvalidOperationException(
+            "The selected Core economy stage requires an admitted calendar definition.");
+
+        CalendarDefinition definition = calendar.monthLengths != null && calendar.monthLengths.Count > 0
+            ? new CalendarDefinition(new List<int>(calendar.monthLengths), calendar.daysPerWeek)
+            : new CalendarDefinition(calendar.monthsPerYear, calendar.weeksPerMonth, calendar.daysPerWeek);
+        return new SimulationCalendar(definition).SemanticVersion;
     }
 }
