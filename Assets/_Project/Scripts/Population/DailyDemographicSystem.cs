@@ -144,14 +144,19 @@ public static class DailyDemographicSystem
         if (graph == null || !HasExactCityPopulationBindings(world, graph))
             throw new InvalidOperationException(
                 "The admitted Daily-v1 demographic stage could not bind its exact Core population owners.");
+        EffectiveSimulationConfiguration selectedConfiguration =
+            graph.Definitions?.EffectiveConfiguration;
+        if (selectedConfiguration == null)
+            throw new InvalidOperationException(
+                "The admitted Daily-v1 demographic stage has no effective configuration in its Core definition graph.");
 
         DailyV1SelectedDemographyResult selected = DailyV1SelectedDemographyStage.Advance(
             graph,
             world.PersonStore,
             world.CurrentDay,
             world.Calendar,
-            world.Configuration.NaturalMortality,
-            world.Configuration.AggregateDemography,
+            selectedConfiguration.NaturalMortality,
+            selectedConfiguration.AggregateDemography,
             mortalitySamples,
             aggregateProvider,
             new RuntimeDemographyBoundary(world, graph));
