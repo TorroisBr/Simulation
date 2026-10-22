@@ -26,6 +26,8 @@ internal sealed class DailyV1ExecutionBoundaryState
     private readonly object operationSyncRoot = new object();
     private readonly List<DailyV1OperationScopeKind> activeOperationScopes =
         new List<DailyV1OperationScopeKind>();
+    private readonly DailyV1MutationEpochState mutationEpochState =
+        new DailyV1MutationEpochState();
     private bool runtimeIdentityBound;
     private bool runtimeConfigurationBound;
     private DailyV1AdvanceLease advanceLease;
@@ -212,6 +214,12 @@ internal sealed class DailyV1ExecutionBoundaryState
     internal long CompletedCoreSequence => completedCoreSequence;
     internal object RuntimeInstanceIdentity => runtimeInstanceIdentity;
     internal DailyCaptureEligibilityToken CurrentCaptureToken => currentCaptureToken;
+    /// <summary>
+    /// The mutation epoch paired with this runtime's operation registry,
+    /// completed-boundary sequence, and capture token. Continuation census
+    /// protocols attached to this runtime must share this exact state.
+    /// </summary>
+    internal DailyV1MutationEpochState MutationEpochState => mutationEpochState;
     internal DailyV1SelectedRuntimeOwnerGraph SelectedRuntimeOwnerGraph => selectedRuntimeOwnerGraph;
 
     internal bool TryBindSelectedRuntimeOwnerGraph(DailyV1SelectedRuntimeOwnerGraph graph)

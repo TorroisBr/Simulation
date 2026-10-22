@@ -312,6 +312,9 @@ public sealed class ContinuationCensusProtocolTests
             new WorldId(System.Guid.NewGuid()));
         ContinuationCensusProtocol protocol = CreateOperationProtocol(runtimeState);
 
+        Assert.That(protocol.MutationEpochState, Is.SameAs(runtimeState.MutationEpochState),
+            "P12 mutation epoch state belongs to the same Core runtime boundary as operation and capture state.");
+
         Assert.That(protocol.TryAssessRegisteredOperationQuiescence(out _), Is.True);
         Assert.That(protocol.TryEnterOperation(
             "runtime.advance", out SimulationOperationScope runtimeOperation, out _), Is.True);

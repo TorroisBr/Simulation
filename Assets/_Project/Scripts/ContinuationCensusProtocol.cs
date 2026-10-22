@@ -228,7 +228,8 @@ public sealed class ContinuationCensusProtocol
         ? sharedExecutionState.ActiveRuntimeOperationCount
         : standaloneActiveOperationCount;
     internal int ActiveOperationCount => activeOperationCount;
-    private readonly DailyV1MutationEpochState mutationEpochState = new DailyV1MutationEpochState();
+    private readonly DailyV1MutationEpochState mutationEpochState;
+    internal DailyV1MutationEpochState MutationEpochState => mutationEpochState;
     private DailyV1MutationEpochReservation activeMutationEpochReservation =>
         mutationEpochState.ActiveReservation;
     private int protocolFaulted;
@@ -247,6 +248,8 @@ public sealed class ContinuationCensusProtocol
     internal ContinuationCensusProtocol(DailyV1ExecutionBoundaryState sharedExecutionState)
     {
         this.sharedExecutionState = sharedExecutionState;
+        mutationEpochState = sharedExecutionState?.MutationEpochState
+            ?? new DailyV1MutationEpochState();
     }
 
     /// <summary>
