@@ -167,9 +167,9 @@ public class TesteSimulacao : MonoBehaviour
     [System.NonSerialized] private DailyV1SelectedRuntimeOwnerGraphBuilder selectedRuntimeOwnerGraphBuilder;
     [System.NonSerialized] private DailyV1SelectedRuntimeOwnerGraph selectedInitialRuntimeOwnerGraph;
     private bool UsesSelectedDefinitionBindings => selectedDefinitions != null && selectedDefinitionBindings != null;
-    private SimulationActiveSession activeSession;
-    private readonly object activeSessionGate = new object();
-    private int activeSessionOperationCount;
+    private readonly DailyV1ApplicationSessionGate<SimulationActiveSession> activeSessionGate =
+        new DailyV1ApplicationSessionGate<SimulationActiveSession>();
+    private SimulationActiveSession activeSession => activeSessionGate.Current;
     private Thread bootstrapStartThread;
     private int bootstrapStartThreadId;
     private SimulationRuntimeAdmissionContext runtimeAdmissionContext;
@@ -754,7 +754,7 @@ public class TesteSimulacao : MonoBehaviour
 
             unpublishedWorldId = null;
             draftComposition = null;
-            if (Interlocked.CompareExchange(ref activeSession, candidateSession, null) != null)
+            if (!activeSessionGate.TryPublishInitial(candidateSession))
                 throw new System.InvalidOperationException("A simulation session was already published for this bootstrap owner.");
             ReleaseBootstrapAliases();
         }
@@ -787,7 +787,7 @@ public class TesteSimulacao : MonoBehaviour
 
     private SimulationActiveSession CaptureActiveSession()
     {
-        return Volatile.Read(ref activeSession);
+        return activeSessionGate.Current;
     }
 
     private bool TryBeginActiveSessionOperation(out SimulationActiveSession session)
@@ -799,28 +799,12 @@ public class TesteSimulacao : MonoBehaviour
         SimulationActiveSession expectedSession,
         out SimulationActiveSession session)
     {
-        lock (activeSessionGate)
-        {
-            session = activeSession;
-            if (session == null || (expectedSession != null && !ReferenceEquals(session, expectedSession)))
-            {
-                session = null;
-                return false;
-            }
-
-            activeSessionOperationCount++;
-            return true;
-        }
+        return activeSessionGate.TryBeginOperation(expectedSession, out session);
     }
 
     private void EndActiveSessionOperation()
     {
-        lock (activeSessionGate)
-        {
-            if (activeSessionOperationCount <= 0)
-                throw new System.InvalidOperationException("Active-session operation scope underflow.");
-            activeSessionOperationCount--;
-        }
+        activeSessionGate.EndOperation();
     }
 
     /// <summary>Single-reference exchange seam for a privately built, restored Daily-v1 session.</summary>
@@ -831,9 +815,9 @@ public class TesteSimulacao : MonoBehaviour
         if (candidateSession == null)
             return false;
 
-        lock (activeSessionGate)
+        lock (activeSessionGate.SyncRoot)
         {
-            if (activeSessionOperationCount != 0
+            if (activeSessionGate.ActiveOperationCount != 0
                 || candidateSession.AdmissionContext == null
                 || !candidateSession.AdmissionContext.IsOwnedByCurrentThread()
                 || !candidateSession.AdmissionContext.IsRestoredContinuation
@@ -844,16 +828,15 @@ public class TesteSimulacao : MonoBehaviour
 
             if (expectedSession == null)
             {
-                if (activeSession != null || runtimeAdmissionContext == null
+                if (activeSessionGate.Current != null || runtimeAdmissionContext == null
                     || runtimeAdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
                     || runtimeAdmissionContext.IsRestoredContinuation
                     || !runtimeAdmissionContext.IsOwnedByCurrentThread())
                     return false;
-                Interlocked.Exchange(ref activeSession, candidateSession);
-                return true;
+                return activeSessionGate.TryPublishInitial(candidateSession);
             }
 
-            if (!ReferenceEquals(activeSession, expectedSession)
+            if (!ReferenceEquals(activeSessionGate.Current, expectedSession)
                 || expectedSession.AdmissionContext == null
                 || !expectedSession.AdmissionContext.IsOwnedByCurrentThread()
                 || !expectedSession.IsProfileCompatibleWith(candidateSession)
@@ -861,8 +844,7 @@ public class TesteSimulacao : MonoBehaviour
                 || !expectedSession.Runtime.HasValidCompletedDailyBoundaryAdmission())
                 return false;
 
-            Interlocked.Exchange(ref activeSession, candidateSession);
-            return true;
+            return activeSessionGate.TryPublishReplacement(expectedSession, candidateSession);
         }
     }
 
@@ -887,10 +869,10 @@ public class TesteSimulacao : MonoBehaviour
     private bool TryLoadDailyV1ContinuationAtPath(string persistentDataPath, out string resultCode)
     {
         resultCode = P12AResultCode.Busy.ToString();
-        lock (activeSessionGate)
+        lock (activeSessionGate.SyncRoot)
         {
-            SimulationActiveSession expectedSession = activeSession;
-            if (expectedSession == null || activeSessionOperationCount != 0
+            SimulationActiveSession expectedSession = activeSessionGate.Current;
+            if (expectedSession == null || activeSessionGate.ActiveOperationCount != 0
                 || expectedSession.AdmissionContext == null
                 || expectedSession.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
                 || runtimeAdmissionContext == null || runtimeAdmissionContext.IsRestoredContinuation
@@ -1029,11 +1011,11 @@ public class TesteSimulacao : MonoBehaviour
         System.Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null,
         System.Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null)
     {
-        lock (activeSessionGate)
+        lock (activeSessionGate.SyncRoot)
         {
-            SimulationActiveSession expectedSession = activeSession;
+            SimulationActiveSession expectedSession = activeSessionGate.Current;
             if (expectedSession == null
-                || activeSessionOperationCount != 0
+                || activeSessionGate.ActiveOperationCount != 0
                 || expectedSession.AdmissionContext == null
                 || expectedSession.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
                 || !expectedSession.AdmissionContext.IsOwnedByCurrentThread()
