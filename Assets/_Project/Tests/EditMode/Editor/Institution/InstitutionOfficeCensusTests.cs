@@ -495,9 +495,7 @@ public sealed class InstitutionOfficeCensusTests
     private static long ReadProtocolMutationEpoch(SimulationRuntime runtime)
     {
         ContinuationCensusProtocol protocol = GetCensusProtocol(runtime);
-        return (long)typeof(ContinuationCensusProtocol)
-            .GetField("mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(protocol);
+        return SimulationTestFactory.ReadContinuationMutationEpoch(protocol);
     }
 
     private static int ReadActiveOperationCount(SimulationRuntime runtime)

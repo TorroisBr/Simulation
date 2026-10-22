@@ -131,8 +131,7 @@ public sealed class SpatialNetworkCensusTests
         Assert.That(identityLocationsAfter.Revision, Is.EqualTo(identityLocationsBefore.Revision));
 
         RuntimeIdentityRegistry saturatedRegistry = new RuntimeIdentityRegistry();
-        typeof(RuntimeIdentityRegistry).GetField("censusRevision", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(saturatedRegistry, long.MaxValue);
+        SetCoreIdentityRevision(saturatedRegistry, long.MaxValue);
         SpatialNetworkRuntime saturatedOwner = new SpatialNetworkRuntime(saturatedRegistry);
         LogAssert.Expect(LogType.Error, "Cannot register Location runtime identity: census revision is exhausted.");
         Assert.That(saturatedOwner.RegisterLocation(new SpatialLocationRuntime("saturated-location")), Is.False);
@@ -473,8 +472,7 @@ public sealed class SpatialNetworkCensusTests
         Assert.That(existing.LocationCount, Is.EqualTo(1));
 
         RuntimeIdentityRegistry saturated = new RuntimeIdentityRegistry();
-        typeof(RuntimeIdentityRegistry).GetField("censusRevision", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(saturated, long.MaxValue);
+        SetCoreIdentityRevision(saturated, long.MaxValue);
         SpatialNetworkOwnerSnapshot capacity = new SpatialNetworkOwnerSnapshot(
             SpatialNetworkOwnerSnapshot.CurrentSchemaVersion,
             1,
@@ -496,5 +494,18 @@ public sealed class SpatialNetworkCensusTests
         string sectionId)
     {
         return providers.Single(provider => provider.GetCurrentCensus().SectionId == sectionId).GetCurrentCensus();
+    }
+
+    private static void SetCoreIdentityRevision(RuntimeIdentityRegistry registry, long revision)
+    {
+        FieldInfo indexField = typeof(RuntimeIdentityRegistry)
+            .GetField("identityIndex", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(indexField, Is.Not.Null);
+        object coreIdentityIndex = indexField.GetValue(registry);
+        Assert.That(coreIdentityIndex, Is.Not.Null);
+        FieldInfo revisionField = coreIdentityIndex.GetType()
+            .GetField("censusRevision", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(revisionField, Is.Not.Null);
+        revisionField.SetValue(coreIdentityIndex, revision);
     }
 }

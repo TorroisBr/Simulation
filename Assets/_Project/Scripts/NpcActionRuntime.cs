@@ -437,15 +437,60 @@ public class NpcTravelPlanRuntime
 
     internal bool CanInstallOwnerState(NpcTravelPlanState state)
     {
-        if (state == null) return false;
-        if (selectedOwner != null && !MatchesSelectedOwner()) return false;
+        return CanProjectOwnerState(state)
+            && (MatchesOwnerState(state) || CanCommitP12Mutation());
+    }
+
+    /// <summary>
+    /// Preflights the Unity projection for a Core-owned TravelPlan commit
+    /// without performing P12 admission. Core performs that admission
+    /// immediately before the authoritative owner write.
+    /// </summary>
+    internal bool CanProjectOwnerState(NpcTravelPlanState state)
+    {
+        if (state == null || (selectedOwner != null && !MatchesSelectedOwner())) return false;
         if (MatchesOwnerState(state)) return true;
         long currentRevision = Revision;
-        if (currentRevision == long.MaxValue || !CanCommitP12Mutation()) return false;
+        if (currentRevision == long.MaxValue) return false;
         return selectedOwner == null
             || selectedOwner.CanCommit(state.TargetLocation?.RuntimeId,
                 state.TargetCity?.RuntimeId, state.Reason, state.Utility,
                 state.ExpectedCost, state.OriginDecisionId);
+    }
+
+    /// <summary>Runs the existing P12 admission bound to this exact TravelPlan owner.</summary>
+    internal bool CanAdmitSelectedOwnerMutation() => CanCommitP12Mutation();
+
+    /// <summary>
+    /// Mirrors a Core-committed TravelPlan into the Unity compatibility
+    /// projection and publishes the existing P12 receipt. This does not write
+    /// the authoritative owner or repeat admission.
+    /// </summary>
+    internal bool PublishCommittedOwnerState(NpcTravelPlanState state)
+    {
+        if (state == null || selectedOwner == null
+            || !selectedOwner.Matches(state.TargetLocation?.RuntimeId,
+                state.TargetCity?.RuntimeId, state.Reason, state.Utility,
+                state.ExpectedCost, state.OriginDecisionId))
+            return false;
+
+        if (MatchesOwnerState(state))
+            return selectedOwner.Revision == revision && MatchesSelectedOwner();
+
+        if (revision == long.MaxValue
+            || selectedOwner.Revision != revision + 1L)
+            return false;
+
+        targetLocation = state.TargetLocation;
+        targetCity = state.TargetCity;
+        reason = state.Reason;
+        utility = state.Utility;
+        expectedCost = state.ExpectedCost;
+        originDecisionId = state.OriginDecisionId;
+        revision = selectedOwner.Revision;
+        if (!MatchesSelectedOwner()) return false;
+        NotifyP12MutationCommitted();
+        return true;
     }
 
     internal bool InstallOwnerState(NpcTravelPlanState state)

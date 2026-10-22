@@ -222,10 +222,13 @@ public sealed class P12CPrivateRootCompositionTests
             out P12CStagedContinuationRoot stagedC,
             out string cDiagnostic), Is.True, cDiagnostic);
 
-        RuntimeIdentityRegistry sourceIdentities = FindOwnerSection(
-            captureToken.OwnerSections, RuntimeIdentityRegistryCensusProvider.NpcsSectionId)
-            .OwnerInstanceIdentity as RuntimeIdentityRegistry;
+        RuntimeIdentityRegistry sourceIdentities = (RuntimeIdentityRegistry)typeof(SimulationRuntime)
+            .GetField("p12RuntimeIdentityRegistry", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(sourceRuntime);
         Assert.That(sourceIdentities, Is.Not.Null);
+        Assert.That(FindOwnerSection(
+            captureToken.OwnerSections, RuntimeIdentityRegistryCensusProvider.NpcsSectionId)
+            .OwnerInstanceIdentity, Is.SameAs(sourceIdentities.CoreIdentityIndex));
         List<ItemData> itemDefinitions = CollectCurrentItemDefinitions(sourceRuntime);
         List<CityData> cityDefinitions = new List<CityData>();
         foreach (CityRuntime city in sourceRuntime.Cities)

@@ -890,6 +890,7 @@ public sealed class EconomyTransactionTests
         authoring.enabledModules.Add(SimulationModule.Merchant);
         authoring.Cities.Add(cityAsset);
         authoring.Npcs.Add(npcConfig);
+        authoring.Actions.Add(sellAction);
         EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
             contentOverrides: authoring.CreateConfigurationOverrides());
         CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(authoring.Calendar, out _);
@@ -1009,6 +1010,7 @@ public sealed class EconomyTransactionTests
         authoring.enabledModules.Add(SimulationModule.Merchant);
         authoring.Cities.Add(cityAsset);
         authoring.Npcs.Add(npcConfig);
+        authoring.Actions.Add(actionAsset);
         EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
             contentOverrides: authoring.CreateConfigurationOverrides());
         CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(authoring.Calendar, out _);
@@ -1026,6 +1028,8 @@ public sealed class EconomyTransactionTests
             Assert.That(merchant.Inventory.TryAddSelectedItem(item, 2, 1f), Is.True);
 
         RuntimeIdentityRegistry identityRegistry = new RuntimeIdentityRegistry();
+        Assert.That(identityRegistry.RegisterCity(city), Is.True);
+        Assert.That(identityRegistry.RegisterNpc(merchant), Is.True);
         SpatialNetworkRuntime spatialNetwork = new SpatialNetworkRuntime(identityRegistry);
         Assert.That(spatialNetwork.RegisterLocation(location), Is.True);
         SimulationTime time = new SimulationTime();
@@ -1094,6 +1098,7 @@ public sealed class EconomyTransactionTests
         ItemData itemAsset = SimulationTestFactory.CreateItem("daily-selected-plan-sale-item", 10f);
         CityData cityAsset = SimulationTestFactory.CreateCityData("daily-selected-plan-sale-city",
             SimulationTestFactory.CreateMarketItem(itemAsset, 0, 8));
+        CityData remoteCityAsset = SimulationTestFactory.CreateCityData("daily-selected-plan-sale-remote-city");
         NpcData npcAsset = SimulationTestFactory.CreateNpc(
             "daily-selected-plan-sale-merchant", NpcJobType.Merchant, MerchantBehavior.Traveling);
         NpcActionData sellAction = SimulationTestFactory.CreateAction(
@@ -1108,7 +1113,9 @@ public sealed class EconomyTransactionTests
         SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
         authoring.enabledModules.Add(SimulationModule.Merchant);
         authoring.Cities.Add(cityAsset);
+        authoring.Cities.Add(remoteCityAsset);
         authoring.Npcs.Add(npcConfig);
+        authoring.Actions.Add(sellAction);
         EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
             contentOverrides: authoring.CreateConfigurationOverrides());
         CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(authoring.Calendar, out _);
@@ -1118,6 +1125,9 @@ public sealed class EconomyTransactionTests
         CityRuntime city = CityRuntime.CreateSelectedDailyV1(
             "daily-selected-plan-sale-city-runtime", definitions.Cities[cityAsset.DefinitionId], definitions,
             bindings, new SpatialLocationRuntime("daily-selected-plan-sale-location"));
+        CityRuntime remoteCity = CityRuntime.CreateSelectedDailyV1(
+            "daily-selected-plan-sale-remote-city-runtime", definitions.Cities[remoteCityAsset.DefinitionId], definitions,
+            bindings, new SpatialLocationRuntime("daily-selected-plan-sale-remote-location"));
         NpcRuntime merchant = NpcRuntime.CreateSelectedDailyV1(
             "daily-selected-plan-sale-merchant-runtime", definitions.Npcs[npcAsset.DefinitionId],
             definitions, bindings, city, 20f);
@@ -1128,6 +1138,13 @@ public sealed class EconomyTransactionTests
         Assert.That(merchant.SelectedRuntimeOwners.MerchantTradePlan.TryInstallState(
             item, city.RuntimeId, city.RuntimeId, 2, 2, 1f, 0, 0,
             "daily-selected-plan-sale-origin"), Is.True);
+        List<NpcRuntime> profileNpcs = new List<NpcRuntime> { merchant };
+        for (int index = 1; index < 10; index++)
+        {
+            profileNpcs.Add(NpcRuntime.CreateSelectedDailyV1(
+                "daily-selected-plan-sale-remote-merchant-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                definitions.Npcs[npcAsset.DefinitionId], definitions, bindings, remoteCity, 20f));
+        }
 
         SimulationTime time = new SimulationTime();
         EconomyTransactionService transactionService = new EconomyTransactionService();
@@ -1144,17 +1161,17 @@ public sealed class EconomyTransactionTests
         Assert.That(merchant.CommercialKnowledge.SelectedOwner.Observations.Count, Is.EqualTo(1));
 
         WorldId worldId = new WorldId(Guid.NewGuid());
-        SimulationRuntime runtime = new SimulationRuntime(
+        DailyV1SelectedProfileFixture profile = DailyV1SelectedProfileFixture.Create(
             time,
-            new[] { city },
-            new[] { merchant },
+            "daily-selected-plan-sale-profile",
+            cities: new[] { city, remoteCity },
+            npcs: profileNpcs,
             configuredActions: new[] { sellAction },
-            npcDecisionSystem: new NpcDecisionSystem(new List<INpcActionProvider> { merchantSystem }),
-            merchantSystem: merchantSystem,
-            economyTransactionService: transactionService,
+            decisionSystem: new NpcDecisionSystem(new List<INpcActionProvider> { merchantSystem }),
             configuration: effective,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
-            worldId: worldId);
+            economyTransactionService: transactionService,
+            merchantSystem: merchantSystem);
+        SimulationRuntime runtime = profile.Runtime;
         BindP12CensusRuntime(transactionService, runtime);
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialAssessment),
             Is.True, initialAssessment.ToString());
@@ -1163,6 +1180,31 @@ public sealed class EconomyTransactionTests
         Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True,
             "Daily-v1 capture-profile fixtures must complete publication before advancing.");
 
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(selectedGraph, Is.Not.Null);
+        Assert.That(selectedGraph.TryGetNpcOwner(merchant.RuntimeId,
+            out DailyV1NpcRuntimeOwners selectedMerchant), Is.True);
+        Assert.That(selectedMerchant, Is.SameAs(merchant.SelectedRuntimeOwners));
+        Assert.That(selectedMerchant.Travel.CurrentCityRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(selectedMerchant.MerchantTradePlan.TargetCityRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(DailyV1SelectedNpcActionDecisionStage.TryResolveConfiguredActions(
+            selectedGraph.Definitions, out IReadOnlyList<DailyV1ActionDefinition> selectedActions), Is.True);
+        DailyV1ActionDefinition selectedSellAction = selectedGraph.Definitions.Actions[sellAction.DefinitionId];
+        bool configuredSell = false;
+        foreach (DailyV1ActionDefinition selectedAction in selectedActions)
+            if (ReferenceEquals(selectedAction, selectedSellAction)) configuredSell = true;
+        Assert.That(configuredSell, Is.True, "The exact admitted SellGoods definition must be in the selected profile action sequence.");
+        Assert.That(selectedGraph.Definitions.EffectiveConfiguration.MerchantTrade.Enabled, Is.True);
+        Assert.That(selectedMerchant.CommercialKnowledge.TryGetObservation(
+            city.Location.RuntimeId, item.DefinitionId,
+            out DailyV1CommercialMarketObservation selectedObservation), Is.True);
+        Assert.That(DailyV1MerchantActionPlanning.TryPlanSelectedPlannedMarketSale(
+            selectedGraph, selectedMerchant, selectedSellAction, runtime.CurrentDay, 10f,
+            out DailyV1MerchantLocalSalePlan selectedPlan), Is.True,
+            "The selected Core planner must accept the exact admitted active plan and local market facts.");
+        if (selectedPlan == null)
+            Assert.Fail($"The admitted planned sale produced no executable plan. observed={selectedObservation.ObservedPrice}, observedDay={selectedObservation.ObservedDay}, currentDay={runtime.CurrentDay}, purchase={selectedMerchant.MerchantTradePlan.PurchasePricePerItem}, remaining={selectedMerchant.MerchantTradePlan.RemainingAmount}, inventory={selectedMerchant.Inventory.GetAmount(item)}, maxTrade={selectedGraph.Definitions.EffectiveConfiguration.MerchantTrade.MaxTradeAmount}, wait={selectedMerchant.MerchantTradePlan.WaitDaysAtDestination}, maxWait={selectedGraph.Definitions.EffectiveConfiguration.MerchantTrade.MaxUnprofitablePlanWaitDays}.");
+
         float moneyBefore = merchant.MoneyAccount.Balance;
         long accountRevisionBefore = merchant.MoneyAccount.Revision;
         long inventoryRevisionBefore = merchant.Inventory.Revision;
@@ -1170,6 +1212,12 @@ public sealed class EconomyTransactionTests
         long planRevisionBefore = merchant.SelectedRuntimeOwners.MerchantTradePlan.Revision;
         Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure), Is.True, failure.ToString());
 
+        if (merchant.CurrentAction == null)
+            Assert.Fail("The admitted planned market sale did not publish a Unity action projection.");
+        if (merchant.CurrentActionRuntime == null)
+            Assert.Fail("The admitted planned market sale projected its action identity without an action runtime.");
+        if (merchant.CurrentActionRuntime.SelectedOwner == null)
+            Assert.Fail("The admitted planned market sale projection lost its Core payload owner.");
         Assert.That(merchant.CurrentAction, Is.SameAs(sellAction));
         Assert.That(merchant.CurrentActionRuntime, Is.Not.Null);
         Assert.That(merchant.CurrentActionRuntime.TargetCity, Is.SameAs(city));

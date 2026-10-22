@@ -405,9 +405,7 @@ public sealed class ActorChoiceCensusTests
             "npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(protocolField, Is.Not.Null);
         object protocol = protocolField.GetValue(runtime);
-        FieldInfo epochField = typeof(ContinuationCensusProtocol).GetField(
-            "mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.That(epochField, Is.Not.Null);
-        epochField.SetValue(protocol, epoch);
+        SimulationTestFactory.SetContinuationMutationEpoch(
+            (ContinuationCensusProtocol)protocol, epoch);
     }
 }

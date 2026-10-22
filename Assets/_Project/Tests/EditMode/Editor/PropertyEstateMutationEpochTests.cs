@@ -392,9 +392,7 @@ public sealed class PropertyEstateMutationEpochTests
 
     private static long ReadProtocolMutationEpoch(ContinuationCensusProtocol protocol)
     {
-        return (long)typeof(ContinuationCensusProtocol)
-            .GetField("mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(protocol);
+        return SimulationTestFactory.ReadContinuationMutationEpoch(protocol);
     }
 
     private static void AssertMutation(

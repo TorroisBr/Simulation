@@ -214,8 +214,9 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                 (int)SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1;
             serializedBootstrap.ApplyModifiedPropertiesWithoutUndo();
             InvalidOperationException admissionFailure = Assert.Throws<InvalidOperationException>(() => bootstrap.Start());
-            Assert.That(admissionFailure.Message, Does.Contain("P12 runtime-admission adapter"),
-                "The accepted Daily-v1 owner inventory must reject publication when the generic site introduces an excluded root.");
+            Assert.That(admissionFailure.Message,
+                Does.Contain("selected Core City/NPC/Justice owner graph"),
+                "The accepted Daily-v1 Core owner graph must reject publication when the generic site introduces an excluded root.");
 
             Assert.That(bootstrap.Bootstrap, Is.Null,
                 "A non-empty generic site profile cannot publish through the selected Daily-v1 admission.");

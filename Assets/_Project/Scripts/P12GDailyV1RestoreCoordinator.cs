@@ -489,6 +489,23 @@ internal static partial class P12GDailyV1RestoreCoordinator
             privateCandidateObserver?.Invoke(candidate);
 
             SimulationRuntime targetRuntime = candidate.Runtime;
+            if (candidate.IdentityRegistry == null
+                || !candidate.IdentityRegistry.HasMatchingCoreIdentityProjectionCardinalities())
+            {
+                failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                diagnostic = "The private target identity lookup projection cardinalities do not match the Core identity census.";
+                return false;
+            }
+            if (!targetRuntime.HasSameP12RuntimeIdentitySpatialOwners(
+                    candidate.IdentityRegistry,
+                    candidate.SpatialNetwork,
+                    candidate.ExplorableSites))
+            {
+                failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
+                diagnostic = "The private target identity, spatial-network, or explorable-site owner binding is inconsistent.";
+                return false;
+            }
+
             if (!TryValidatePersonNpcGenealogyBindings(targetRuntime, out string personBindingDiagnostic))
             {
                 failure = P12GDailyV1RestoreFailure.BindingValidationFailed;

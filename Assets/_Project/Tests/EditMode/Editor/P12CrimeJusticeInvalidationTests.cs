@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 
@@ -54,7 +55,7 @@ public sealed class P12CrimeJusticeInvalidationTests
     }
 
     [Test]
-    public void P12RosterReconciliationFollowsNpcStatusOwnerReplacementWithTheSameRuntimeId()
+    public void P12RosterReconciliationRejectsReusedRuntimeIdAndAcceptsFreshIdentity()
     {
         NpcRuntime original = CreateNpc("p12-cj-reused-runtime-id");
         SimulationRuntime runtime = CreateP12Runtime(null, new[] { original });
@@ -67,12 +68,20 @@ public sealed class P12CrimeJusticeInvalidationTests
             Is.True, unregisterFailure.ToString());
         Assert.That(FindLifecycleProviderOrNull(runtime, sectionId), Is.Null);
 
-        NpcRuntime replacement = CreateNpc(original.RuntimeId);
-        Assert.That(runtime.TryRegisterNpc(replacement, out WorldNpcRegistryFailure registerFailure),
-            Is.True, registerFailure.ToString());
-        IOwnerSectionCensusProvider replacementProvider = FindLifecycleProvider(runtime, sectionId);
+        NpcRuntime reusedIdentity = CreateNpc(original.RuntimeId);
+        Assert.That(runtime.TryRegisterNpc(reusedIdentity, out WorldNpcRegistryFailure reusedFailure),
+            Is.False);
+        Assert.That(reusedFailure, Is.EqualTo(WorldNpcRegistryFailure.DuplicateRuntimeId));
+        Assert.That(FindLifecycleProviderOrNull(runtime, sectionId), Is.Null,
+            "an unregistered runtime identity remains reserved and cannot be rebound to a different NPC instance");
+
+        NpcRuntime freshIdentity = CreateNpc("p12-cj-fresh-runtime-id");
+        Assert.That(runtime.TryRegisterNpc(freshIdentity, out WorldNpcRegistryFailure freshFailure),
+            Is.True, freshFailure.ToString());
+        string freshSectionId = P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(freshIdentity.RuntimeId);
+        IOwnerSectionCensusProvider replacementProvider = FindLifecycleProvider(runtime, freshSectionId);
         Assert.That(replacementProvider, Is.Not.SameAs(originalProvider));
-        Assert.That(replacementProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(replacement));
+        Assert.That(replacementProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(freshIdentity));
         Assert.That(replacementProvider.GetCurrentCensus().Cardinality, Is.EqualTo(1));
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epoch, out ContinuationCensusFailure epochFailure),
             Is.True, epochFailure.ToString());
@@ -375,8 +384,9 @@ public sealed class P12CrimeJusticeInvalidationTests
         NpcRuntime npc = CreateNpc("p12-cj-daily-npc");
         npc.HideForDays(0);
         npc.AddStatus(hidden);
-        CrimeSystem crime = new CrimeSystem(null, null, hidden);
-        SimulationRuntime runtime = CreateP12Runtime(new[] { city }, new[] { npc }, crime: crime);
+        JusticeSystem justice = new JusticeSystem(null, null, null, null, null, null);
+        CrimeSystem crime = new CrimeSystem(justice, null, hidden);
+        SimulationRuntime runtime = CreateP12Runtime(new[] { city }, new[] { npc }, justice, crime);
         P12CrimeJusticeCensusProvider.NpcStatusSectionProvider provider =
             new P12CrimeJusticeCensusProvider.NpcStatusSectionProvider(npc);
 
@@ -519,21 +529,155 @@ public sealed class P12CrimeJusticeInvalidationTests
         SimulationTime simulationTime = null,
         IReadOnlyList<NpcActionData> configuredActions = null)
     {
+        SimulationTime time = simulationTime ?? new SimulationTime();
+        List<CityRuntime> cityOwners = cities == null
+            ? new List<CityRuntime>()
+            : new List<CityRuntime>(cities);
+        if (cityOwners.Count == 0)
+            cityOwners.Add(SimulationTestFactory.CreateCity(
+                "p12-crime-justice-default-city", "p12-crime-justice-default-location"));
+        int cityIndex = 0;
+        while (cityOwners.Count < 2)
+        {
+            cityOwners.Add(SimulationTestFactory.CreateCity(
+                "p12-crime-justice-profile-city-" + cityIndex,
+                "p12-crime-justice-profile-location-" + cityIndex));
+            cityIndex++;
+        }
+        List<NpcRuntime> npcOwners = npcs == null
+            ? new List<NpcRuntime>()
+            : new List<NpcRuntime>(npcs);
+        if (npcOwners.Count == 0)
+            npcOwners.Add(new NpcRuntime("p12-crime-justice-default-npc",
+                SimulationTestFactory.CreateNpc("p12-crime-justice-default-npc-definition")));
+        int npcIndex = 0;
+        while (npcOwners.Count < 10)
+        {
+            string suffix = npcIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            npcOwners.Add(new NpcRuntime(
+                "p12-crime-justice-profile-npc-" + suffix,
+                SimulationTestFactory.CreateNpc("p12-crime-justice-profile-definition-" + suffix)));
+            npcIndex++;
+        }
+        Assert.That(cityOwners, Has.Count.EqualTo(2),
+            "P12 selected-profile fixtures use the accepted two-City owner cardinality.");
+        Assert.That(npcOwners, Has.Count.EqualTo(10),
+            "P12 selected-profile fixtures use the accepted ten-NPC owner cardinality.");
+
+        RuntimeIdentityRegistry identities = new RuntimeIdentityRegistry();
+        foreach (CityRuntime city in cityOwners)
+            Assert.That(identities.RegisterCity(city), Is.True);
+        foreach (NpcRuntime npc in npcOwners)
+            Assert.That(identities.RegisterNpc(npc), Is.True);
+
+        SpatialNetworkRuntime network = new SpatialNetworkRuntime(identities);
+        foreach (CityRuntime city in cityOwners)
+            Assert.That(network.RegisterLocation(city.Location), Is.True);
+        for (int i = 0; i + 1 < cityOwners.Count; i++)
+        {
+            Assert.That(network.RegisterRoute(new SpatialRouteRuntime(
+                "p12-crime-justice-route-forward-" + i,
+                cityOwners[i].Location, cityOwners[i + 1].Location, 1)), Is.True);
+            Assert.That(network.RegisterRoute(new SpatialRouteRuntime(
+                "p12-crime-justice-route-reverse-" + i,
+                cityOwners[i + 1].Location, cityOwners[i].Location, 1)), Is.True);
+        }
+
+        RecordFixture records = SimulationTestFactory.CreateRecordFixtureWithTime(time);
+        EconomyTransactionService economyTransactions = new EconomyTransactionService();
+        TravelSystem travel = new TravelSystem(
+            network,
+            location => cityOwners.FirstOrDefault(city => ReferenceEquals(city.Location, location)),
+            1f,
+            records.EventRecorder,
+            null,
+            economyTransactions);
+        JusticeSystem resolvedJustice = justice ?? crime?.JusticeOwner
+            ?? new JusticeSystem(null, null, null, null, records.EventRecorder, null);
+        CrimeSystem resolvedCrime = crime ?? new CrimeSystem(
+            resolvedJustice,
+            travel,
+            null,
+            transactionService: economyTransactions,
+            configuration: new EffectiveCrimeConfiguration(false, false),
+            simulationTime: time);
+        Assert.That(resolvedCrime.JusticeOwner, Is.SameAs(resolvedJustice),
+            "The selected Daily-v1 P12 fixture composes the exact Justice owner used by Crime.");
+        TravelPartyStore travelParties = new TravelPartyStore();
+        TravelPartySystem travelPartySystem = new TravelPartySystem(
+            travelParties,
+            records.Allocator,
+            identities,
+            travel,
+            time,
+            records.Sequence,
+            records.EventRecorder,
+            transactionService: economyTransactions);
+        ExplorableSiteStore sites = new ExplorableSiteStore();
+        ExplorableSiteKnowledgeSystem siteKnowledge = new ExplorableSiteKnowledgeSystem();
+        ExpeditionStore expeditions = new ExpeditionStore();
+        ExpeditionSystem expeditionSystem = new ExpeditionSystem(
+            expeditions,
+            records.Allocator,
+            identities,
+            sites,
+            travelPartySystem,
+            travelParties,
+            siteKnowledge,
+            time,
+            records.EventRecorder);
+        ScheduledDirectiveSystem directives = scheduledDirectiveSystem
+            ?? new ScheduledDirectiveSystem(new ScheduledDirectiveStore(time), identities);
         SimulationRuntime runtime = new SimulationRuntime(
-            simulationTime ?? new SimulationTime(),
-            cities,
-            npcs,
+            time,
+            cityOwners,
+            npcOwners,
             configuredActions: configuredActions,
-            scheduledDirectiveSystem: scheduledDirectiveSystem,
-            justiceSystem: justice,
-            crimeSystem: crime,
+            scheduledDirectiveSystem: directives,
+            justiceSystem: resolvedJustice,
+            crimeSystem: resolvedCrime,
             npcDecisionSystem: decisionSystem,
+            travelSystem: travel,
+            travelPartySystem: travelPartySystem,
+            explorableSiteStore: sites,
+            explorableSiteKnowledgeSystem: siteKnowledge,
+            expeditionSystem: expeditionSystem,
+            decisionRecorder: records.DecisionRecorder,
+            runtimeIdAllocator: records.Allocator,
+            recordSequence: records.Sequence,
+            economyTransactionService: economyTransactions,
+            spatialAuthorityStore: CreateSpatialAuthority(cityOwners),
             configuration: configuration ?? SimulationConfigurationDefaults.Create(),
             randomSource: randomSource,
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            runtimeIdentityRegistry: identities,
+            spatialNetworkRuntime: network,
+            requireP12ReceiptCensusOwners: true,
+            requireP12RuntimeIdentitySpatialCensusOwners: true,
             worldId: new WorldId(System.Guid.NewGuid()));
         Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
         return runtime;
+    }
+
+    private static SpatialAuthorityStore CreateSpatialAuthority(IReadOnlyList<CityRuntime> cities)
+    {
+        const string prefix = "p12-crime-justice";
+        HexId hexId = new HexId(prefix + "-hex");
+        SpatialGeographyDefinition geography = new SpatialGeographyDefinition(
+            new SpatialWorldScaleContext(prefix + "-scale", "fixture", "v1", 1m, "step"),
+            new[]
+            {
+                new HexRecord(hexId, new HexCoordinate(0, 0),
+                    new TerrainReference(new TerrainDefinitionId("terrain." + prefix), "v1"))
+            },
+            // This selected Daily-v1 proving profile has two runtime
+            // locations but only its first is an authored P8 Location.
+            cities.Take(1).Select(city => new LocationRecord(
+                new LocationId(city.Location.RuntimeId), hexId)).ToArray());
+        SpatialAuthorityStore authority = new SpatialAuthorityStore();
+        if (!authority.TryComposeGeography(geography, out SpatialAuthorityFailure failure))
+            throw new InvalidOperationException("Could not create the P12 Crime/Justice P8 fixture: " + failure);
+        return authority;
     }
 
     private static IDisposable EnterDailyAdvanceOperation(SimulationRuntime runtime)

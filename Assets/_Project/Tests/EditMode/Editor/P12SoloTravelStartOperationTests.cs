@@ -18,7 +18,7 @@ public sealed class P12SoloTravelStartOperationTests
     [Test]
     public void DailySelectedTravelStart_BatchesOwnerCallbacksUnderNestedOperation()
     {
-        ActorFixture fixture = CreateFixture();
+        ActorFixture fixture = CreateFixture(selectedDailyProfile: true);
         ContinuationCensusProtocol protocol = GetProtocol(fixture.Runtime);
         List<int> travelOperationDepths = new List<int>();
         List<bool> soloOperationActiveAtTravelMutation = new List<bool>();
@@ -59,7 +59,7 @@ public sealed class P12SoloTravelStartOperationTests
         Assert.That(fixture.Npc.MoneyAccount.Revision, Is.EqualTo(1));
         Assert.That(fixture.Npc.TravelPlan.IsActive, Is.False);
         Assert.That(fixture.Npc.SpatialKnowledge.KnowsLocation(fixture.World.A.Location.RuntimeId), Is.True);
-        Assert.That(fixture.Npc.SpatialKnowledge.KnowsRoute(fixture.World.RouteAB.RuntimeId), Is.True);
+        Assert.That(fixture.Npc.SpatialKnowledge.KnowsRoute(fixture.TravelRouteId), Is.True);
         Assert.That(fixture.Records.Events.Events, Has.Count.EqualTo(1));
         Assert.That(fixture.Records.Events.Events[0].EventType, Is.EqualTo(DomainEventType.NpcTravelStarted));
 
@@ -117,7 +117,10 @@ public sealed class P12SoloTravelStartOperationTests
     [Test]
     public void DailySelectedTravelStart_EventSequenceExhaustionKeepsTravelAndBatchesEventId()
     {
-        ActorFixture fixture = CreateFixture(recordDecision: false, sequenceNextValue: long.MaxValue);
+        ActorFixture fixture = CreateFixture(
+            recordDecision: false,
+            sequenceNextValue: long.MaxValue,
+            selectedDailyProfile: true);
         IOwnerSectionCensusProvider eventProvider = RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(
             fixture.Records.Allocator);
         IOwnerSectionCensusProvider sequenceProvider = new SimulationRecordSequenceCensusProvider(
@@ -415,11 +418,12 @@ public sealed class P12SoloTravelStartOperationTests
         bool recordDecision = true,
         bool bindProviderToSelectedSystem = true,
         long? sequenceNextValue = null,
-        long? travelStateRevision = null)
+        long? travelStateRevision = null,
+        bool selectedDailyProfile = false)
     {
         ThreeCityFixture world = new ThreeCityFixture(false, routeABTravelDays: 2);
         RecordFixture records = SimulationTestFactory.CreateRecordFixture();
-        if (sequenceNextValue.HasValue)
+        if (sequenceNextValue.HasValue && !selectedDailyProfile)
             SetPrivateField(records.Sequence, "nextSequence", sequenceNextValue.Value);
         NpcRuntime npc = new NpcRuntime(
             "p12-solo-travel-actor",
@@ -435,28 +439,84 @@ public sealed class P12SoloTravelStartOperationTests
             NpcActionCategory.Travel);
         action.baseUtility = 100f;
         action.canFail = false;
-        TravelSystem travel = world.CreateTravelSystem(records.Time, records.EventRecorder);
-        TravelSystem providerTravel = bindProviderToSelectedSystem
-            ? travel
-            : world.CreateTravelSystem(records.Time, records.EventRecorder);
-        TravelActionProvider provider = new TravelActionProvider(providerTravel);
-        SimulationRuntime runtime = new SimulationRuntime(
-            records.Time,
-            new[] { world.A, world.B, world.C },
-            new[] { npc },
-            economyEnabled: false,
-            configuredActions: new[] { action },
-            npcDecisionSystem: new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
-            decisionRecorder: recordDecision ? records.DecisionRecorder : null,
-            travelSystem: travel,
-            recordSequence: records.Sequence,
-            runtimeIdAllocator: records.Allocator,
-            runtimeAdmissionContext: admitted
-                ? SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1()
-                : null,
-            worldId: new WorldId(System.Guid.NewGuid()));
+        TravelSystem travel;
+        TravelActionProvider provider = null;
+        SimulationRuntime runtime;
+        string travelRouteId = world.RouteAB.RuntimeId;
+        if (selectedDailyProfile)
+        {
+            if (!admitted || !bindProviderToSelectedSystem)
+                throw new ArgumentException("The selected-profile travel fixture requires its admitted provider.");
+            DailyV1SelectedProfileFixture profile = DailyV1SelectedProfileFixture.Create(
+                records.Time,
+                "p12-solo-travel-selected-profile",
+                cities: new[] { world.A, world.B },
+                npcs: new[] { npc },
+                configuredActions: new[] { action },
+                decisionSystemFactory: (selectedRecords, selectedTravel, merchant) =>
+                {
+                    provider = new TravelActionProvider(selectedTravel);
+                    return new NpcDecisionSystem(new List<INpcActionProvider> { provider });
+                },
+                configureRecords: selectedRecords =>
+                {
+                    if (!recordDecision && sequenceNextValue.HasValue)
+                    {
+                        NpcDecisionRecord originDecision = selectedRecords.DecisionRecorder.RecordChosenAction(
+                            npc,
+                            new NpcActionRuntime(
+                                action,
+                                world.B,
+                                null,
+                                NpcTravelReason.Trade,
+                                2f,
+                                0f),
+                            NpcDecisionOrigin.Autonomous);
+                        if (originDecision == null)
+                            throw new InvalidOperationException(
+                                "The event-sequence exhaustion fixture could not record its existing travel decision.");
+                        npc.TravelPlan.Set(
+                            world.B,
+                            NpcTravelReason.Trade,
+                            100f,
+                            2f,
+                            originDecision.DecisionId);
+                    }
+
+                    if (sequenceNextValue.HasValue)
+                        SetPrivateField(selectedRecords.Sequence, "nextSequence", sequenceNextValue.Value);
+                },
+                routeTravelDays: 2);
+            records = profile.Records;
+            travel = profile.Travel;
+            runtime = profile.Runtime;
+            travelRouteId = profile.RouteIds[0];
+        }
+        else
+        {
+            travel = world.CreateTravelSystem(records.Time, records.EventRecorder);
+            TravelSystem providerTravel = bindProviderToSelectedSystem
+                ? travel
+                : world.CreateTravelSystem(records.Time, records.EventRecorder);
+            provider = new TravelActionProvider(providerTravel);
+            runtime = new SimulationRuntime(
+                records.Time,
+                new[] { world.A, world.B, world.C },
+                new[] { npc },
+                economyEnabled: false,
+                configuredActions: new[] { action },
+                npcDecisionSystem: new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
+                decisionRecorder: recordDecision ? records.DecisionRecorder : null,
+                travelSystem: travel,
+                recordSequence: records.Sequence,
+                runtimeIdAllocator: records.Allocator,
+                runtimeAdmissionContext: admitted
+                    ? SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1()
+                    : null,
+                worldId: new WorldId(System.Guid.NewGuid()));
+        }
         Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
-        return new ActorFixture(world, records, npc, action, travel, provider, runtime);
+        return new ActorFixture(world, records, npc, action, travel, provider, runtime, travelRouteId);
     }
 
     private static ContinuationCensusProtocol GetProtocol(SimulationRuntime runtime)
@@ -475,9 +535,7 @@ public sealed class P12SoloTravelStartOperationTests
 
     private static long ReadProtocolEpoch(ContinuationCensusProtocol protocol)
     {
-        return (long)typeof(ContinuationCensusProtocol)
-            .GetField("mutationEpoch", PrivateInstance)
-            .GetValue(protocol);
+        return SimulationTestFactory.ReadContinuationMutationEpoch(protocol);
     }
 
     private static bool IsSoloTravelOperationActive(SimulationRuntime runtime)
@@ -557,6 +615,7 @@ public sealed class P12SoloTravelStartOperationTests
         public TravelSystem Travel { get; }
         public TravelActionProvider Provider { get; }
         public SimulationRuntime Runtime { get; }
+        public string TravelRouteId { get; }
 
         public ActorFixture(
             ThreeCityFixture world,
@@ -565,7 +624,8 @@ public sealed class P12SoloTravelStartOperationTests
             NpcActionData action,
             TravelSystem travel,
             TravelActionProvider provider,
-            SimulationRuntime runtime)
+            SimulationRuntime runtime,
+            string travelRouteId)
         {
             World = world;
             Records = records;
@@ -574,6 +634,7 @@ public sealed class P12SoloTravelStartOperationTests
             Travel = travel;
             Provider = provider;
             Runtime = runtime;
+            TravelRouteId = travelRouteId;
         }
     }
 }

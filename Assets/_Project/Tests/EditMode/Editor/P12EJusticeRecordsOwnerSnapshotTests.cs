@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 
@@ -585,15 +586,144 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         JusticeSystem justice,
         PersonStore people)
     {
+        List<CityRuntime> cityOwners = cities == null
+            ? new List<CityRuntime>()
+            : new List<CityRuntime>(cities);
+        if (cityOwners.Count == 0)
+            cityOwners.Add(CreateCity("p12e-justice-default-city"));
+        int cityIndex = 0;
+        while (cityOwners.Count < 2)
+        {
+            string suffix = cityIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            cityOwners.Add(CreateCity("p12e-justice-profile-city-" + suffix));
+            cityIndex++;
+        }
+
+        List<NpcRuntime> npcOwners = npcs == null
+            ? new List<NpcRuntime>()
+            : new List<NpcRuntime>(npcs);
+        if (npcOwners.Count == 0)
+            npcOwners.Add(CreateNpc("p12e-justice-default-npc"));
+        int npcIndex = 0;
+        while (npcOwners.Count < 10)
+        {
+            string suffix = npcIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            npcOwners.Add(CreateNpc("p12e-justice-profile-npc-" + suffix));
+            npcIndex++;
+        }
+        Assert.That(cityOwners, Has.Count.EqualTo(2),
+            "P12 selected-profile fixtures use two runtime City identities.");
+        Assert.That(npcOwners, Has.Count.EqualTo(10),
+            "P12 selected-profile fixtures use ten runtime NPC identities.");
+
+        RuntimeIdentityRegistry identities = new RuntimeIdentityRegistry();
+        foreach (CityRuntime city in cityOwners)
+            Assert.That(identities.RegisterCity(city), Is.True);
+        foreach (NpcRuntime npc in npcOwners)
+            Assert.That(identities.RegisterNpc(npc), Is.True);
+
+        SpatialNetworkRuntime network = new SpatialNetworkRuntime(identities);
+        foreach (CityRuntime city in cityOwners)
+            Assert.That(network.RegisterLocation(city.Location), Is.True);
+        for (int i = 0; i + 1 < cityOwners.Count; i++)
+        {
+            Assert.That(network.RegisterRoute(new SpatialRouteRuntime(
+                "p12e-justice-route-forward-" + i,
+                cityOwners[i].Location, cityOwners[i + 1].Location, 1)), Is.True);
+            Assert.That(network.RegisterRoute(new SpatialRouteRuntime(
+                "p12e-justice-route-reverse-" + i,
+                cityOwners[i + 1].Location, cityOwners[i].Location, 1)), Is.True);
+        }
+
+        SimulationTime time = new SimulationTime();
+        RecordFixture records = SimulationTestFactory.CreateRecordFixtureWithTime(time);
+        EconomyTransactionService economyTransactions = new EconomyTransactionService();
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(null);
+        SpatialAuthorityStore spatialAuthority = CreateSpatialAuthority(cityOwners);
+        ExplorableSiteStore sites = new ExplorableSiteStore();
+        ExplorableSiteKnowledgeSystem siteKnowledge = new ExplorableSiteKnowledgeSystem();
+        TravelSystem travel = new TravelSystem(
+            network,
+            location => cityOwners.FirstOrDefault(city => ReferenceEquals(city.Location, location)),
+            1f,
+            records.EventRecorder,
+            null,
+            economyTransactions);
+        CrimeSystem crime = new CrimeSystem(
+            justice,
+            travel,
+            null,
+            logger,
+            economyTransactions,
+            new EffectiveCrimeConfiguration(false, false),
+            simulationTime: time);
+        TravelPartyStore travelParties = new TravelPartyStore();
+        TravelPartySystem travelPartySystem = new TravelPartySystem(
+            travelParties,
+            records.Allocator,
+            identities,
+            travel,
+            time,
+            records.Sequence,
+            records.EventRecorder,
+            transactionService: economyTransactions);
+        ExpeditionStore expeditions = new ExpeditionStore();
+        ExpeditionSystem expeditionSystem = new ExpeditionSystem(
+            expeditions,
+            records.Allocator,
+            identities,
+            sites,
+            travelPartySystem,
+            travelParties,
+            siteKnowledge,
+            time,
+            records.EventRecorder);
+        ScheduledDirectiveSystem directives = new ScheduledDirectiveSystem(
+            new ScheduledDirectiveStore(time), identities);
         SimulationRuntime runtime = new SimulationRuntime(
-            new SimulationTime(), cities, npcs,
+            time, cityOwners, npcOwners,
+            scheduledDirectiveSystem: directives,
             justiceSystem: justice,
-            personStore: people,
+            personStore: people ?? new PersonStore(),
+            decisionRecorder: records.DecisionRecorder,
+            runtimeIdAllocator: records.Allocator,
+            recordSequence: records.Sequence,
+            logger: logger,
+            crimeSystem: crime,
+            economyTransactionService: economyTransactions,
+            explorableSiteStore: sites,
+            explorableSiteKnowledgeSystem: siteKnowledge,
+            travelSystem: travel,
+            travelPartySystem: travelPartySystem,
+            expeditionSystem: expeditionSystem,
+            spatialAuthorityStore: spatialAuthority,
             configuration: SimulationConfigurationDefaults.Create(),
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            runtimeIdentityRegistry: identities,
+            spatialNetworkRuntime: network,
+            requireP12ReceiptCensusOwners: true,
+            requireP12RuntimeIdentitySpatialCensusOwners: true,
             worldId: new WorldId(Guid.NewGuid()));
         Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
         return runtime;
+    }
+
+    private static SpatialAuthorityStore CreateSpatialAuthority(IReadOnlyList<CityRuntime> cities)
+    {
+        HexId hexId = new HexId("p12e-justice-hex");
+        SpatialGeographyDefinition geography = new SpatialGeographyDefinition(
+            new SpatialWorldScaleContext("p12e-justice-scale", "fixture", "v1", 1m, "step"),
+            new[]
+            {
+                new HexRecord(hexId, new HexCoordinate(0, 0),
+                    new TerrainReference(new TerrainDefinitionId("terrain.p12e-justice"), "v1"))
+            },
+            cities.Take(1).Select(city => new LocationRecord(
+                new LocationId(city.Location.RuntimeId), hexId)).ToArray());
+        SpatialAuthorityStore authority = new SpatialAuthorityStore();
+        if (!authority.TryComposeGeography(geography, out SpatialAuthorityFailure failure))
+            throw new InvalidOperationException("Could not create the P12-E Justice P8 fixture: " + failure);
+        return authority;
     }
 
     private static void AssertCaptureRejectsPersonBinding(

@@ -2263,7 +2263,16 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
 
     public bool IsArrested(NpcRuntime targetRuntime)
     {
-        return targetRuntime != null && arrestedStatus != null && targetRuntime.CurrentStatus.Contains(arrestedStatus) == true;
+        if (targetRuntime == null)
+            return false;
+
+        if (targetRuntime.UsesSelectedDailyV1Definitions)
+        {
+            return targetRuntime.HasSelectedDailyV1Status(
+                targetRuntime.SelectedDailyV1DefinitionGraph?.Configuration?.arrestedStatus);
+        }
+
+        return arrestedStatus != null && targetRuntime.CurrentStatus.Contains(arrestedStatus);
     }
 
     public WantedRecordRuntime GetActiveWarrant(NpcRuntime targetRuntime, CityRuntime cityRuntime)

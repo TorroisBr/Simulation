@@ -541,18 +541,17 @@ public sealed class P12PopulationLifecycleInvalidationTests
         NpcActionData action = SimulationTestFactory.CreateAction(
             "p12-current-action-autonomous", NpcActionType.Normal);
         action.baseUtility = 10f;
-        SimulationRuntime runtime = new SimulationRuntime(
-            new SimulationTime(),
-            null,
-            new[] { actor },
-            configuration: CreateP12Configuration(),
+        DailyV1SelectedProfileFixture profile = DailyV1SelectedProfileFixture.Create(
+            "p12-current-action-autonomous-profile",
+            npcs: new[] { actor },
+            decisionSystem: new NpcDecisionSystem(new List<INpcActionProvider>()),
             configuredActions: new[] { action },
-            npcDecisionSystem: new NpcDecisionSystem(new List<INpcActionProvider>()),
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
-            worldId: new WorldId(System.Guid.NewGuid()));
+            configuration: CreateP12Configuration());
+        SimulationRuntime runtime = profile.Runtime;
         Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
 
-        runtime.AdvanceDay();
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.True,
+            advanceFailure.ToString());
 
         Assert.That(runtime.CurrentDay, Is.EqualTo(1L));
         Assert.That(actor.CurrentActionRuntime, Is.Not.Null);
@@ -746,7 +745,7 @@ public sealed class P12PopulationLifecycleInvalidationTests
     public void LivePersonBindAndMaterializeActorChoicesRespectP12CurrentActionOwner()
     {
         P12ActorChoiceFixture bound = CreateP12ActorChoiceFixture(
-            "p12-actor-choice-bound", preexistingActor: true, atCityLocation: true, inventoryAmount: 10);
+            "p12-actor-choice-bound", preexistingActor: true, inventoryAmount: 10);
         NpcCurrentActionCensusProvider boundActionProvider = new NpcCurrentActionCensusProvider(bound.Actor);
         string boundSectionId = boundActionProvider.GetCurrentCensus().SectionId;
         Assert.That(bound.Runtime.TryBindExistingNpcToPerson(
@@ -759,7 +758,8 @@ public sealed class P12PopulationLifecycleInvalidationTests
         CaptureP12ActorChoice(bound.Runtime, bound.Person.PersonId, bound.SellAction.DefinitionId,
             "p12-actor-choice-bound-input");
 
-        bound.Runtime.AdvanceDay();
+        Assert.That(bound.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure boundAdvanceFailure), Is.True,
+            boundAdvanceFailure.ToString());
 
         Assert.That(bound.Runtime.ActorChoiceStore.Inputs, Has.Count.EqualTo(1));
         ActorChoiceInput accepted = bound.Runtime.ActorChoiceStore.Inputs[0];
@@ -774,7 +774,7 @@ public sealed class P12PopulationLifecycleInvalidationTests
         AssertCensus(bound.Runtime);
 
         P12ActorChoiceFixture materialized = CreateP12ActorChoiceFixture(
-            "p12-actor-choice-materialized", preexistingActor: false, atCityLocation: false, inventoryAmount: 0);
+            "p12-actor-choice-materialized", preexistingActor: false, inventoryAmount: 0);
         Assert.That(materialized.Runtime.TryMaterializePerson(
             materialized.Person.PersonId,
             SimulationTestFactory.CreateNpc("p12-actor-choice-materialized-definition", NpcJobType.Merchant, MerchantBehavior.Local),
@@ -790,7 +790,8 @@ public sealed class P12PopulationLifecycleInvalidationTests
         CaptureP12ActorChoice(materialized.Runtime, materialized.Person.PersonId,
             materialized.SellAction.DefinitionId, "p12-actor-choice-materialized-input");
 
-        materialized.Runtime.AdvanceDay();
+        Assert.That(materialized.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure materializedAdvanceFailure), Is.True,
+            materializedAdvanceFailure.ToString());
 
         Assert.That(materialized.Runtime.ActorChoiceStore.Inputs, Has.Count.EqualTo(1));
         ActorChoiceInput rejected = materialized.Runtime.ActorChoiceStore.Inputs[0];
@@ -963,10 +964,8 @@ public sealed class P12PopulationLifecycleInvalidationTests
     private static P12ActorChoiceFixture CreateP12ActorChoiceFixture(
         string prefix,
         bool preexistingActor,
-        bool atCityLocation,
         int inventoryAmount)
     {
-        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
         ItemData item = SimulationTestFactory.CreateItem(prefix + "-item", 10f);
         CityRuntime city = SimulationTestFactory.CreateAccountBackedCity(
             prefix + "-city",
@@ -975,10 +974,6 @@ public sealed class P12PopulationLifecycleInvalidationTests
             SimulationTestFactory.CreateMarketItem(item, 100, 100));
         NpcActionData sellAction = SimulationTestFactory.CreateAction(
             prefix + "-sell-goods", NpcActionType.SellGoods, NpcActionCategory.Commerce);
-        MerchantSystem merchantSystem = SimulationTestFactory.CreateMerchantSystem(
-            null, records.Time, records.DecisionRecorder, maxTradeAmount: 5);
-        NpcDecisionSystem decisionSystem = new NpcDecisionSystem(
-            new List<INpcActionProvider> { merchantSystem });
         EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow(
             contentOverrides: new SimulationConfigurationOverrides(
                 economy: new EconomyConfigurationOverrides(false),
@@ -989,27 +984,6 @@ public sealed class P12PopulationLifecycleInvalidationTests
         PersonRuntime person = new PersonRuntime(personId);
         Assert.That(people.TryRegister(person, out PersonStoreFailure personFailure),
             Is.True, personFailure.ToString());
-
-        SpatialAuthorityStore spatial = new SpatialAuthorityStore();
-        LocationId locationId = new LocationId(city.Location.RuntimeId);
-        HexId anchorHexId = new HexId(prefix + "-anchor");
-        Assert.That(spatial.TryRegisterHex(
-            new HexRecord(anchorHexId), out SpatialAuthorityFailure hexFailure), Is.True, hexFailure?.ToString());
-        Assert.That(spatial.TryRegisterLocation(
-            new LocationRecord(locationId, anchorHexId), out SpatialAuthorityFailure locationFailure),
-            Is.True, locationFailure?.ToString());
-        LegacySpatialAnchorBindingStore anchorBindings = new LegacySpatialAnchorBindingStore(spatial);
-        Assert.That(anchorBindings.TryBindCity(city.RuntimeId, locationId, out SpatialAnchorBindingFailure anchorFailure),
-            Is.True, anchorFailure?.ToString());
-        PersonSpatialPositionStore positions = new PersonSpatialPositionStore(
-            people,
-            spatial,
-            new SpatialPassageTraversalOptionResolver(spatial.PassageAuthority));
-        StablePositionReference position = atCityLocation
-            ? StablePositionReference.ForLocation(locationId)
-            : StablePositionReference.ForHex(anchorHexId);
-        Assert.That(positions.TrySetAt(personId, position, out PersonSpatialPositionFailure positionFailure),
-            Is.True, positionFailure?.ToString());
 
         NpcRuntime actor = null;
         if (preexistingActor)
@@ -1023,23 +997,20 @@ public sealed class P12PopulationLifecycleInvalidationTests
                 actor.Inventory.AddItem(item, inventoryAmount, 1f);
         }
 
-        SimulationRuntime runtime = new SimulationRuntime(
-            records.Time,
-            new[] { city },
-            actor == null ? null : new[] { actor },
-            configuredActions: new[] { sellAction },
-            npcDecisionSystem: decisionSystem,
-            decisionRecorder: records.DecisionRecorder,
-            merchantSystem: merchantSystem,
-            configuration: configuration,
+        DailyV1SelectedProfileFixture profile = DailyV1SelectedProfileFixture.Create(
+            prefix + "-profile",
+            cities: new[] { city },
+            npcs: actor == null ? System.Array.Empty<NpcRuntime>() : new[] { actor },
             personStore: people,
-            spatialAuthorityStore: spatial,
-            legacySpatialAnchorBindingStore: anchorBindings,
-            personSpatialPositionStore: positions,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
-            worldId: new WorldId(System.Guid.NewGuid()));
+            configuredActions: new[] { sellAction },
+            merchantSystemFactory: (records, _) => SimulationTestFactory.CreateMerchantSystem(
+                null, records.Time, records.DecisionRecorder, maxTradeAmount: 5),
+            decisionSystemFactory: (_, _, merchant) => new NpcDecisionSystem(
+                new List<INpcActionProvider> { merchant }),
+            configuration: configuration);
+        SimulationRuntime runtime = profile.Runtime;
         Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
-        return new P12ActorChoiceFixture(runtime, records, city, person, actor, item, sellAction);
+        return new P12ActorChoiceFixture(runtime, profile.Records, city, person, actor, item, sellAction);
     }
 
     private static void InstallPriorAction(SimulationRuntime runtime, NpcRuntime npc, string definitionId)
@@ -1186,10 +1157,7 @@ public sealed class P12PopulationLifecycleInvalidationTests
             "npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(protocolField, Is.Not.Null);
         ContinuationCensusProtocol protocol = (ContinuationCensusProtocol)protocolField.GetValue(runtime);
-        FieldInfo epochField = typeof(ContinuationCensusProtocol).GetField(
-            "mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.That(epochField, Is.Not.Null);
-        epochField.SetValue(protocol, value);
+        SimulationTestFactory.SetContinuationMutationEpoch(protocol, value);
     }
 
     private static void SetPopulationRevision(SettlementPopulationRuntime population, long value)

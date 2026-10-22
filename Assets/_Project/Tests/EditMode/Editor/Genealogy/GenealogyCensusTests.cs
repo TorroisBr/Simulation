@@ -165,7 +165,7 @@ public sealed class GenealogyCensusTests
         PersonId child = new PersonId("selected-genealogy-epoch-child");
         Assert.That(runtime.TryRegisterPerson(new PersonRuntime(parent), out _), Is.True);
         Assert.That(runtime.TryRegisterPerson(new PersonRuntime(child), out _), Is.True);
-        SetPrivateField(protocol, "mutationEpoch", long.MaxValue);
+        SimulationTestFactory.SetContinuationMutationEpoch(protocol, long.MaxValue);
 
         Assert.That(runtime.TryAddParentage(parent, child, out PersonGenealogyFailure failure), Is.False);
         Assert.That(failure, Is.EqualTo(PersonGenealogyFailure.RuntimeFaulted));

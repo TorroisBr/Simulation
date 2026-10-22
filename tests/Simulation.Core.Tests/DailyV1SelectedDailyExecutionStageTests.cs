@@ -11,18 +11,22 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(definitions);
         FakeBoundary boundary = new FakeBoundary();
+        ScheduledDirectiveStore directives = CreateDirectiveForFirstNpc(graph, 23L);
         long[] marketRevisionsBefore = graph.Cities.Select(city => city.Market.Revision).ToArray();
         long[] spatialKnowledgeRevisionsBefore = graph.Npcs
             .Select(npc => npc.SpatialKnowledge.Revision).ToArray();
 
-        DailyV1SelectedDailyExecutionStage.Advance(23L, graph, boundary);
+        DailyV1SelectedDailyExecutionStage.Advance(23L, graph, directives, boundary);
 
         Assert.That(boundary.Calls, Is.EqualTo(new[]
         {
             "place-content", "logger:23", "demography", "begin-day",
-            "directives:23", "economy-preflight", "knowledge-preflight", "expeditions",
+            "economy-preflight", "knowledge-preflight", "expeditions",
             "autonomous-expeditions", "actor-turns", "travel-and-observe"
         }));
+        Assert.That(directives.TryTakeDirective(graph.Npcs[0].RuntimeId,
+            out ScheduledDirective preparedDirective), Is.True);
+        Assert.That(preparedDirective.ActorRuntimeId, Is.EqualTo(graph.Npcs[0].RuntimeId));
         Assert.That(graph.Cities.Select(city => city.Market.Revision).ToArray(),
             Is.Not.EqualTo(marketRevisionsBefore),
             "The Core phase owns and commits the selected daily Economy writes.");
@@ -45,7 +49,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             DailyV1EffectiveDefinitions definitions = CreateFiniteFlowDefinitions(calendar);
             DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(definitions);
 
-            DailyV1SelectedDailyExecutionStage.Advance(23L, graph, new FakeBoundary());
+            DailyV1SelectedDailyExecutionStage.Advance(23L, graph, null, new FakeBoundary());
 
             string expected = calendar.monthLengths != null && calendar.monthLengths.Count > 0
                 ? new SimulationCalendar(new CalendarDefinition(
@@ -65,11 +69,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(definitions);
         FakeBoundary boundary = new FakeBoundary();
 
-        DailyV1SelectedDailyExecutionStage.Advance(0L, graph, boundary);
+        DailyV1SelectedDailyExecutionStage.Advance(0L, graph, null, boundary);
 
         Assert.That(boundary.Calls, Does.Not.Contain("economy-preflight"));
-        Assert.That(boundary.Calls[4], Is.EqualTo("directives:0"));
-        Assert.That(boundary.Calls[5], Is.EqualTo("knowledge-preflight"));
+        Assert.That(boundary.Calls[4], Is.EqualTo("knowledge-preflight"));
         Assert.That(boundary.Calls[^1], Is.EqualTo("travel-and-observe"));
     }
 
@@ -85,7 +88,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
 
         Assert.Throws<InvalidOperationException>(() =>
             DailyV1SelectedDailyExecutionStage.Advance(
-                9L, graph, boundary));
+                9L, graph, null, boundary));
 
         Assert.That(boundary.Calls, Is.EqualTo(new[]
         {
@@ -97,7 +100,23 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     public void AdvanceRequiresTheAdmittedDefinitionGraph()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            DailyV1SelectedDailyExecutionStage.Advance(0L, null, new FakeBoundary()));
+            DailyV1SelectedDailyExecutionStage.Advance(0L, null, null, new FakeBoundary()));
+    }
+
+    private static ScheduledDirectiveStore CreateDirectiveForFirstNpc(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        long absoluteDay)
+    {
+        Assert.That(graph.Npcs, Is.Not.Empty);
+        ScheduledDirectiveStore directives = new ScheduledDirectiveStore(new SimulationTime(absoluteDay));
+        Assert.That(directives.Add(new ScheduledDirective(
+            "directive/daily-stage", absoluteDay,
+            ScheduledDirectiveMode.RequestAction,
+            ScheduledDirectiveOperation.EscapePrison,
+            graph.Npcs[0].RuntimeId,
+            "action/escape",
+            DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue)), Is.True);
+        return directives;
     }
 
     private static DailyV1SelectedRuntimeOwnerGraph CreateGraph(
@@ -193,7 +212,6 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             if (ThrowOnDemography) throw new InvalidOperationException("demography failed");
         }
         public void BeginSimulationDay() => Calls.Add("begin-day");
-        public void PrepareScheduledDirectives(long absoluteDay) => Calls.Add("directives:" + absoluteDay);
         public void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph)
         {
             Assert.That(graph, Is.Not.Null);

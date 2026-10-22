@@ -414,10 +414,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         private readonly Action logTradeReposition;
         private readonly Func<DailyV1SelectedTravelTransitionPlan, SpatialRouteRuntime, float, bool>
             canCommitPreparedTransition;
-        private readonly Func<DailyV1SelectedTravelTransitionPlan, bool> commitPreparedTransition;
+        private readonly Func<DailyV1SelectedTravelTransitionPlan, bool> tryPrepareTransitionProjection;
+        private readonly Func<DailyV1SelectedTravelTransitionPlan, bool> canAdmitPreparedTransition;
+        private readonly Action<DailyV1SelectedTravelTransitionPlan> publishCommittedTransition;
         private readonly Action<DailyV1SelectedActionExecutionStage.SoloTravelResult> publishTravelStarted;
         private readonly Action logCommercialScouting;
-        private readonly Action clearTravelPlan;
+        private readonly Func<DailyV1NpcRuntimeOwners, bool> canProjectTravelPlanClear;
+        private readonly Func<DailyV1NpcRuntimeOwners, bool> canAdmitTravelPlanClear;
+        private readonly Action<DailyV1NpcRuntimeOwners> publishCommittedTravelPlanClear;
 
         internal SelectedSoloTravelActionBoundaryAdapter(
             Func<Func<bool>, bool> executeWithinOperation,
@@ -425,10 +429,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             Action logTradeReposition,
             Func<DailyV1SelectedTravelTransitionPlan, SpatialRouteRuntime, float, bool>
                 canCommitPreparedTransition,
-            Func<DailyV1SelectedTravelTransitionPlan, bool> commitPreparedTransition,
+            Func<DailyV1SelectedTravelTransitionPlan, bool> tryPrepareTransitionProjection,
+            Func<DailyV1SelectedTravelTransitionPlan, bool> canAdmitPreparedTransition,
+            Action<DailyV1SelectedTravelTransitionPlan> publishCommittedTransition,
             Action<DailyV1SelectedActionExecutionStage.SoloTravelResult> publishTravelStarted,
             Action logCommercialScouting,
-            Action clearTravelPlan)
+            Func<DailyV1NpcRuntimeOwners, bool> canProjectTravelPlanClear,
+            Func<DailyV1NpcRuntimeOwners, bool> canAdmitTravelPlanClear,
+            Action<DailyV1NpcRuntimeOwners> publishCommittedTravelPlanClear)
         {
             this.executeWithinOperation = executeWithinOperation
                 ?? throw new ArgumentNullException(nameof(executeWithinOperation));
@@ -438,14 +446,22 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 ?? throw new ArgumentNullException(nameof(logTradeReposition));
             this.canCommitPreparedTransition = canCommitPreparedTransition
                 ?? throw new ArgumentNullException(nameof(canCommitPreparedTransition));
-            this.commitPreparedTransition = commitPreparedTransition
-                ?? throw new ArgumentNullException(nameof(commitPreparedTransition));
+            this.tryPrepareTransitionProjection = tryPrepareTransitionProjection
+                ?? throw new ArgumentNullException(nameof(tryPrepareTransitionProjection));
+            this.canAdmitPreparedTransition = canAdmitPreparedTransition
+                ?? throw new ArgumentNullException(nameof(canAdmitPreparedTransition));
+            this.publishCommittedTransition = publishCommittedTransition
+                ?? throw new ArgumentNullException(nameof(publishCommittedTransition));
             this.publishTravelStarted = publishTravelStarted
                 ?? throw new ArgumentNullException(nameof(publishTravelStarted));
             this.logCommercialScouting = logCommercialScouting
                 ?? throw new ArgumentNullException(nameof(logCommercialScouting));
-            this.clearTravelPlan = clearTravelPlan
-                ?? throw new ArgumentNullException(nameof(clearTravelPlan));
+            this.canProjectTravelPlanClear = canProjectTravelPlanClear
+                ?? throw new ArgumentNullException(nameof(canProjectTravelPlanClear));
+            this.canAdmitTravelPlanClear = canAdmitTravelPlanClear
+                ?? throw new ArgumentNullException(nameof(canAdmitTravelPlanClear));
+            this.publishCommittedTravelPlanClear = publishCommittedTravelPlanClear
+                ?? throw new ArgumentNullException(nameof(publishCommittedTravelPlanClear));
         }
 
         public bool ExecuteWithinOperation(Func<bool> operation) => executeWithinOperation(operation);
@@ -454,12 +470,21 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         public bool CanCommitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan,
             SpatialRouteRuntime route, float travelCost) =>
             canCommitPreparedTransition(plan, route, travelCost);
-        public bool CommitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan) =>
-            commitPreparedTransition(plan);
+        public bool TryPrepareTransitionProjection(DailyV1SelectedTravelTransitionPlan plan) =>
+            tryPrepareTransitionProjection(plan);
+        public bool CanAdmitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan) =>
+            canAdmitPreparedTransition(plan);
+        public void PublishCommittedTransition(DailyV1SelectedTravelTransitionPlan plan) =>
+            publishCommittedTransition(plan);
         public void PublishTravelStarted(DailyV1SelectedActionExecutionStage.SoloTravelResult result) =>
             publishTravelStarted(result);
         public void LogCommercialScouting() => logCommercialScouting();
-        public void ClearTravelPlan() => clearTravelPlan();
+        public bool CanProjectTravelPlanClear(DailyV1NpcRuntimeOwners actor) =>
+            canProjectTravelPlanClear(actor);
+        public bool CanAdmitTravelPlanClear(DailyV1NpcRuntimeOwners actor) =>
+            canAdmitTravelPlanClear(actor);
+        public void PublishCommittedTravelPlanClear(DailyV1NpcRuntimeOwners actor) =>
+            publishCommittedTravelPlanClear(actor);
     }
 
     /// <summary>Bridges the separate selected status operation to exact Unity
@@ -630,34 +655,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 || !ReferenceEquals(graph.TravelParties, travelProvider.SelectedTravelPartyStore))
                 return false;
 
-            boundary = new SelectedSoloTravelActionBoundaryAdapter(
-                operation =>
-                {
-                    if (runtime.runtimeAdmissionContext == null) return operation();
-                    if (!runtime.TryBeginP12SoloTravelStartOperation(
-                            exactActor, travelProvider,
-                            out P12SoloTravelStartOperationScope travelStartScope))
-                        throw new InvalidOperationException(
-                            "The P12 solo travel-start owner operation could not be admitted.");
-                    using (travelStartScope) return operation();
-                },
-                () => runtime.travelSystem != null
-                    && runtime.travelSystem.CanStartTravel(
-                        exactActor, actionRuntime.TargetCity, out _, out _),
-                () => runtime.merchantSystem?.LogTradeRepositionDecision(
-                    exactActor, exactActor.CurrentCity, actionRuntime),
-                (plan, route, travelCost) => runtime.travelSystem != null
-                    && runtime.travelSystem.CanCommitSelectedSoloTravelTransition(
-                        exactActor, plan, route, travelCost, actionRuntime.TargetCity),
-                plan => actionRuntime.TargetCity != null
-                    && exactActor.TryCommitPreparedSelectedTravelTransition(
-                        plan, actionRuntime.TargetCity.Location, actionRuntime.TargetCity),
-                travel => runtime.travelSystem?.PublishSelectedSoloTravelStarted(
-                    exactActor, actionRuntime.TargetCity, travel),
-                () => runtime.merchantSystem?.LogCommercialScoutingDecision(
-                    exactActor, actionRuntime),
-                () => exactActor.ClearTravelPlan());
-            return true;
+            boundary = runtime.CreateSelectedSoloTravelActionBoundary(
+                exactActor, travelProvider, actionRuntime);
+            return boundary != null;
         }
 
         public bool TryGetFleeCityActionBoundary(
@@ -1131,6 +1131,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             private readonly NpcRuntime actorRuntime;
             private readonly CityRuntime targetCityProjection;
             private readonly DailyV1CityRuntimeOwners targetCityOwner;
+            private DailyV1NpcRuntimeOwners preparedActorOwner;
+            private NpcTravelPlanState preparedTravelPlanState;
 
             internal SelectedFleeCityActionBoundaryAdapter(
                 SelectedActionDispatchBoundaryAdapter dispatchBoundary,
@@ -1161,12 +1163,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 using (scope) return operation();
             }
 
-            public bool CommitTravelPlan(
+            public bool CanPrepareTravelPlanProjection(
                 DailyV1NpcRuntimeOwners actor,
                 DailyV1CityRuntimeOwners destination,
                 float travelCost,
                 string originDecisionId)
             {
+                preparedActorOwner = null;
+                preparedTravelPlanState = null;
                 if (!ReferenceEquals(destination, targetCityOwner)
                     || !dispatchBoundary.TryGetExactActor(
                         actor, actor?.ActionSlot?.CurrentAction, out NpcRuntime exactActor)
@@ -1187,9 +1191,48 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     80f,
                     travelCost,
                     string.IsNullOrWhiteSpace(originDecisionId) ? null : originDecisionId);
-                return exactActor.TravelPlan.CanInstallOwnerState(next)
-                    && exactActor.TravelPlan.InstallOwnerState(next)
-                    && exactActor.TravelPlan.MatchesSelectedOwner();
+                if (!exactActor.TravelPlan.CanProjectOwnerState(next)) return false;
+                preparedActorOwner = actor;
+                preparedTravelPlanState = next;
+                return true;
+            }
+
+            public bool CanAdmitTravelPlanMutation() => preparedTravelPlanState != null
+                && ReferenceEquals(preparedActorOwner, actorRuntime.SelectedRuntimeOwners)
+                && dispatchBoundary.TryGetExactActor(
+                    preparedActorOwner,
+                    preparedActorOwner?.ActionSlot?.CurrentAction,
+                    out NpcRuntime exactActor)
+                && ReferenceEquals(exactActor, actorRuntime)
+                && exactActor.TravelPlan.CanAdmitSelectedOwnerMutation();
+
+            public void PublishCommittedTravelPlan(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1CityRuntimeOwners destination,
+                float travelCost,
+                string originDecisionId)
+            {
+                NpcTravelPlanState expected = preparedTravelPlanState;
+                string normalizedDecisionId = string.IsNullOrWhiteSpace(originDecisionId)
+                    ? null
+                    : originDecisionId;
+                if (expected == null
+                    || !ReferenceEquals(actor, preparedActorOwner)
+                    || !ReferenceEquals(actor, actorRuntime.SelectedRuntimeOwners)
+                    || !ReferenceEquals(destination, targetCityOwner)
+                    || !ReferenceEquals(expected.TargetLocation, targetCityProjection.Location)
+                    || !ReferenceEquals(expected.TargetCity, targetCityProjection)
+                    || expected.Reason != NpcTravelReason.Flee
+                    || !expected.Utility.Equals(80f)
+                    || !expected.ExpectedCost.Equals(travelCost)
+                    || !string.Equals(expected.OriginDecisionId, normalizedDecisionId,
+                        StringComparison.Ordinal)
+                    || !actorRuntime.TravelPlan.PublishCommittedOwnerState(expected))
+                    throw new InvalidOperationException(
+                        "A committed selected FleeCity TravelPlan could not publish its Unity projection.");
+
+                preparedActorOwner = null;
+                preparedTravelPlanState = null;
             }
         }
 
@@ -9813,10 +9856,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners).Where(owner => owner != null));
 
     /// <summary>
-    /// Replaces the constructor-rebuilt owner graph with the exact Core graph
-    /// used during unpublished genesis composition. Both graphs must contain
-    /// the same live owners and admitted definition object, and the runtime
-    /// must not have crossed a completed boundary.
+    /// Adopts the exact Core graph used during unpublished genesis composition.
+    /// The runtime constructor has already bound NPC memberships, so the graph
+    /// can complete its one-time PersonStore binding without rebuilding the
+    /// owner join. The runtime must not have crossed a completed boundary.
     /// </summary>
     internal bool TryAdoptInitialSelectedRuntimeOwnerGraph(DailyV1SelectedRuntimeOwnerGraph graph)
     {
@@ -9840,13 +9883,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners).Where(owner => owner != null)))
             return false;
 
-        if (!DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
-                graph.Cities, graph.Npcs, graph.SpatialNetwork, exactJusticeOwner,
-                graph.TravelParties, current.RuntimeIdentityIndex, personStore,
-                out DailyV1SelectedRuntimeOwnerGraph runtimeGraph))
+        if (!graph.TryBindPersonStore(personStore))
             return false;
 
-        return dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(current, runtimeGraph);
+        return dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(current, graph);
     }
 
     private DailyV1SelectedRuntimeOwnerGraph TryCreateSelectedRuntimeOwnerGraph(
@@ -10024,7 +10064,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             FaultRuntimeAdmission();
             return false;
         }
-
         if (!dailyExecutionBoundary.TryCreateCompletedAdvanceToken(
                 runtimeAdmissionContext,
                 configuration,
@@ -10510,6 +10549,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             DailyV1SelectedDailyExecutionStage.Advance(
                 CurrentDay,
                 graph,
+                scheduledDirectiveSystem?.Store,
                 new SelectedDailyV1ExecutionBoundary(this));
             return;
         }
@@ -10575,8 +10615,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         }
 
         public void BeginSimulationDay() => runtime.BeginSimulationDay();
-        public void PrepareScheduledDirectives(long absoluteDay) =>
-            runtime.scheduledDirectiveSystem?.PrepareDay(absoluteDay);
         public void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph) =>
             runtime.EnsureSelectedEconomyCanRun(graph);
         public void LogSelectedDailyEconomy(
@@ -13608,6 +13646,103 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         logger?.LogWarning($"Scheduled directive '{directive.DirectiveId}' was skipped: {reason}");
     }
 
+    private SelectedSoloTravelActionBoundaryAdapter CreateSelectedSoloTravelActionBoundary(
+        NpcRuntime exactActor,
+        TravelActionProvider travelProvider,
+        NpcActionRuntime actionRuntime)
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
+        if (exactActor == null || travelProvider == null || actionRuntime == null
+            || graph?.TravelParties == null
+            || !ReferenceEquals(exactActor.SelectedRuntimeOwnerGraph, graph)
+            || !graph.ContainsExactNpcOwner(exactActor.SelectedRuntimeOwners)
+            || !ReferenceEquals(graph.TravelParties, travelProvider.SelectedTravelPartyStore)
+            || actionRuntime.TargetCity?.SelectedRuntimeOwners == null
+            || !graph.ContainsExactCityOwner(actionRuntime.TargetCity.SelectedRuntimeOwners)
+            || actionRuntime.TargetCity.Location == null
+            || !graph.TryGetCityLocationRuntimeId(
+                actionRuntime.TargetCity.RuntimeId, out string targetLocationRuntimeId)
+            || !string.Equals(targetLocationRuntimeId,
+                actionRuntime.TargetCity.Location.RuntimeId, StringComparison.Ordinal))
+            return null;
+
+        DailyV1NpcRuntimeOwners actor = exactActor.SelectedRuntimeOwners;
+        DailyV1SelectedTravelTransitionPlan preparedTransition = null;
+        CityRuntime[] preparedChangedCities = null;
+        NpcTravelPlanState clearedTravelPlan = new NpcTravelPlanState(
+            null, null, NpcTravelReason.None, 0f, 0f, null);
+
+        return new SelectedSoloTravelActionBoundaryAdapter(
+            operation =>
+            {
+                if (runtimeAdmissionContext == null) return operation();
+                if (!TryBeginP12SoloTravelStartOperation(
+                        exactActor, travelProvider,
+                        out P12SoloTravelStartOperationScope travelStartScope))
+                    throw new InvalidOperationException(
+                        "The P12 solo travel-start owner operation could not be admitted.");
+                using (travelStartScope) return operation();
+            },
+            () => travelSystem != null
+                && travelSystem.CanStartTravel(exactActor, actionRuntime.TargetCity, out _, out _),
+            () => merchantSystem?.LogTradeRepositionDecision(
+                exactActor, exactActor.CurrentCity, actionRuntime),
+            (plan, route, travelCost) => travelSystem != null
+                && travelSystem.CanCommitSelectedSoloTravelTransition(
+                    exactActor, plan, route, travelCost, actionRuntime.TargetCity),
+            plan =>
+            {
+                if (plan == null
+                    || !ReferenceEquals(plan.Npc, actor)
+                    || !string.Equals(plan.DestinationCityRuntimeId,
+                        actionRuntime.TargetCity.RuntimeId, StringComparison.Ordinal)
+                    || !string.Equals(plan.DestinationLocationRuntimeId,
+                        actionRuntime.TargetCity.Location.RuntimeId, StringComparison.Ordinal))
+                    return false;
+
+                IReadOnlyList<CityRuntime> candidates = exactActor.CurrentCity == null
+                    ? Array.Empty<CityRuntime>()
+                    : new[] { exactActor.CurrentCity };
+                if (!exactActor.CanPrepareSelectedTravelProjection(
+                        plan, candidates, out preparedChangedCities))
+                    return false;
+                preparedTransition = plan;
+                return true;
+            },
+            plan => ReferenceEquals(preparedTransition, plan)
+                && exactActor.CanAdmitPreparedSelectedTravelDay(plan, preparedChangedCities),
+            plan =>
+            {
+                if (!ReferenceEquals(preparedTransition, plan)
+                    || !plan.IsCommitted
+                    || !exactActor.TryProjectCommittedSelectedTravelTransition(
+                        plan, preparedChangedCities,
+                        null, null,
+                        actionRuntime.TargetCity.Location, actionRuntime.TargetCity))
+                    throw new InvalidOperationException(
+                        "A committed selected solo travel transition could not publish its Unity projection.");
+
+                if (!plan.IsNoOp
+                    && (preparedChangedCities.Length != 0 || plan.TravelRevisionChanges))
+                    exactActor.RecordSelectedTravelOwnerMutationCommitted(
+                        plan, preparedChangedCities);
+            },
+            travel => travelSystem?.PublishSelectedSoloTravelStarted(
+                exactActor, actionRuntime.TargetCity, travel),
+            () => merchantSystem?.LogCommercialScoutingDecision(exactActor, actionRuntime),
+            owner => ReferenceEquals(owner, actor)
+                && exactActor.TravelPlan.CanProjectOwnerState(clearedTravelPlan),
+            owner => ReferenceEquals(owner, actor)
+                && exactActor.TravelPlan.CanAdmitSelectedOwnerMutation(),
+            owner =>
+            {
+                if (!ReferenceEquals(owner, actor)
+                    || !exactActor.TravelPlan.PublishCommittedOwnerState(clearedTravelPlan))
+                    throw new InvalidOperationException(
+                        "A committed selected TravelPlan clear could not publish its Unity projection.");
+            });
+    }
+
     private NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)
     {
         if (npcRuntime == null || action == null || IsActionEnabledForRuntime(npcRuntime, action) == false)
@@ -13758,33 +13893,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             && string.Equals(npcRuntime.SelectedRuntimeOwners.ActionSlot.CurrentPayload.OriginDecisionId,
                 actionRuntime.OriginDecisionId, StringComparison.Ordinal))
         {
-            SelectedSoloTravelActionBoundaryAdapter boundary = new SelectedSoloTravelActionBoundaryAdapter(
-                operation =>
-                {
-                    if (runtimeAdmissionContext == null) return operation();
-                    if (!TryBeginP12SoloTravelStartOperation(
-                            npcRuntime, selectedTravelProvider,
-                            out P12SoloTravelStartOperationScope travelStartScope))
-                        throw new InvalidOperationException(
-                            "The P12 solo travel-start owner operation could not be admitted.");
-                    using (travelStartScope) return operation();
-                },
-                () => travelSystem != null
-                    && travelSystem.CanStartTravel(npcRuntime, actionRuntime.TargetCity, out _, out _),
-                () => merchantSystem?.LogTradeRepositionDecision(
-                    npcRuntime, npcRuntime.CurrentCity, actionRuntime),
-                (plan, route, travelCost) => travelSystem != null
-                    && travelSystem.CanCommitSelectedSoloTravelTransition(
-                        npcRuntime, plan, route, travelCost, actionRuntime.TargetCity),
-                plan => actionRuntime.TargetCity != null
-                    && npcRuntime.TryCommitPreparedSelectedTravelTransition(
-                        plan, actionRuntime.TargetCity.Location, actionRuntime.TargetCity),
-                travel => travelSystem?.PublishSelectedSoloTravelStarted(
-                    npcRuntime, actionRuntime.TargetCity, travel),
-                () => merchantSystem?.LogCommercialScoutingDecision(npcRuntime, actionRuntime),
-                () => npcRuntime.ClearTravelPlan());
+            SelectedSoloTravelActionBoundaryAdapter boundary =
+                CreateSelectedSoloTravelActionBoundary(
+                    npcRuntime, selectedTravelProvider, actionRuntime);
 
-            if (DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
+            if (boundary != null
+                && DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
                     SelectedRuntimeOwnerGraph,
                     npcRuntime.SelectedRuntimeOwners,
                     selectedTravelAction,

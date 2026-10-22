@@ -270,10 +270,7 @@ public sealed class P12PoliticalClaimCensusTests
     private static void SetProtocolMutationEpoch(SimulationRuntime runtime, long epoch)
     {
         object protocol = GetProtocol(runtime);
-        FieldInfo field = typeof(ContinuationCensusProtocol).GetField(
-            "mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.That(field, Is.Not.Null);
-        field.SetValue(protocol, epoch);
+        SimulationTestFactory.SetContinuationMutationEpoch((ContinuationCensusProtocol)protocol, epoch);
     }
 
     private static void SetPoliticalClaimStoreRevision(PoliticalClaimStore owner, long revision)

@@ -598,6 +598,131 @@ public sealed class RuntimeIdentityRegistry
         }
     }
 
+    /// <summary>
+    /// Verifies that every Unity-facing lookup projection still mirrors the
+    /// Core-owned identity index. Restore and composition admission use this
+    /// read-only check so a valid Core census cannot mask a stale host lookup.
+    /// </summary>
+    internal bool HasConsistentCoreIdentityProjections(
+        IEnumerable<NpcRuntime> activeNpcs,
+        IEnumerable<CityRuntime> cities,
+        IEnumerable<SpatialLocationRuntime> locations,
+        IEnumerable<SpatialRouteRuntime> routes,
+        IEnumerable<ExplorableSiteRuntime> sites,
+        IEnumerable<LocalTopologyRuntime> localTopologies,
+        IEnumerable<NotableItemRuntime> notableItems)
+    {
+        return HasMatchingCoreIdentityProjectionCardinalities()
+            && IsConsistentProjectionEntries(npcsByRuntimeId, DailyV1RuntimeIdentityKind.Npc,
+                value => value?.RuntimeId, activeNpcs, allowRetainedNpcIdentities: true)
+            && IsConsistentProjectionEntries(citiesByRuntimeId, DailyV1RuntimeIdentityKind.City,
+                value => value?.RuntimeId, cities)
+            && IsConsistentProjectionEntries(locationsByRuntimeId, DailyV1RuntimeIdentityKind.Location,
+                value => value?.RuntimeId, locations)
+            && IsConsistentProjectionEntries(routesByRuntimeId, DailyV1RuntimeIdentityKind.Route,
+                value => value?.RuntimeId, routes)
+            && IsConsistentProjectionEntries(explorableSitesByRuntimeId, DailyV1RuntimeIdentityKind.ExplorableSite,
+                value => value?.RuntimeId, sites)
+            && IsConsistentProjectionEntries(localPlacesByRuntimeId, DailyV1RuntimeIdentityKind.LocalPlace,
+                value => value?.RuntimeId, EnumerateLocalPlaces(localTopologies))
+            && IsConsistentProjectionEntries(localConnectionsByRuntimeId, DailyV1RuntimeIdentityKind.LocalConnection,
+                value => value?.RuntimeId, EnumerateLocalConnections(localTopologies))
+            && IsConsistentProjectionEntries(notableItemsByRuntimeId, DailyV1RuntimeIdentityKind.NotableItem,
+                value => value?.RuntimeId, notableItems);
+    }
+
+    internal bool HasMatchingCoreIdentityProjectionCardinalities() =>
+        HasProjectionCardinality(npcsByRuntimeId, DailyV1RuntimeIdentityKind.Npc)
+        && HasProjectionCardinality(citiesByRuntimeId, DailyV1RuntimeIdentityKind.City)
+        && HasProjectionCardinality(locationsByRuntimeId, DailyV1RuntimeIdentityKind.Location)
+        && HasProjectionCardinality(routesByRuntimeId, DailyV1RuntimeIdentityKind.Route)
+        && HasProjectionCardinality(explorableSitesByRuntimeId, DailyV1RuntimeIdentityKind.ExplorableSite)
+        && HasProjectionCardinality(localPlacesByRuntimeId, DailyV1RuntimeIdentityKind.LocalPlace)
+        && HasProjectionCardinality(localConnectionsByRuntimeId, DailyV1RuntimeIdentityKind.LocalConnection)
+        && HasProjectionCardinality(notableItemsByRuntimeId, DailyV1RuntimeIdentityKind.NotableItem);
+
+    private bool HasProjectionCardinality<TValue>(
+        Dictionary<string, TValue> projection,
+        DailyV1RuntimeIdentityKind kind)
+        where TValue : class =>
+        projection != null && projection.Count == identityIndex.GetCardinality(kind);
+
+    private bool IsConsistentProjectionEntries<TValue>(
+        Dictionary<string, TValue> projection,
+        DailyV1RuntimeIdentityKind kind,
+        Func<TValue, string> runtimeId,
+        IEnumerable<TValue> expectedOwners,
+        bool allowRetainedNpcIdentities = false)
+        where TValue : class
+    {
+        if (projection == null || runtimeId == null || expectedOwners == null) return false;
+
+        HashSet<string> expectedIds = new HashSet<string>(StringComparer.Ordinal);
+        int expectedCount = 0;
+        foreach (TValue expectedOwner in expectedOwners)
+        {
+            string expectedId = runtimeId(expectedOwner);
+            if (expectedOwner == null
+                || string.IsNullOrWhiteSpace(expectedId)
+                || !expectedIds.Add(expectedId)
+                || !identityIndex.HasIdentity(expectedId, kind)
+                || !projection.TryGetValue(expectedId, out TValue projectedOwner)
+                || !ReferenceEquals(projectedOwner, expectedOwner))
+                return false;
+
+            expectedCount++;
+        }
+
+        if (expectedCount > projection.Count
+            || (!allowRetainedNpcIdentities && expectedCount != projection.Count))
+            return false;
+
+        foreach (KeyValuePair<string, TValue> entry in projection)
+        {
+            string valueId = runtimeId(entry.Value);
+            if (entry.Value == null
+                || string.IsNullOrWhiteSpace(entry.Key)
+                || !string.Equals(entry.Key, valueId, StringComparison.Ordinal)
+                || !identityIndex.HasIdentity(entry.Key, kind)
+                || (!allowRetainedNpcIdentities && !expectedIds.Contains(entry.Key)))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static IEnumerable<LocalPlaceRuntime> EnumerateLocalPlaces(
+        IEnumerable<LocalTopologyRuntime> localTopologies)
+    {
+        foreach (LocalTopologyRuntime topology in localTopologies ?? Array.Empty<LocalTopologyRuntime>())
+        {
+            if (topology == null)
+            {
+                yield return null;
+                continue;
+            }
+
+            foreach (LocalPlaceRuntime place in topology.Places)
+                yield return place;
+        }
+    }
+
+    private static IEnumerable<LocalTopologyConnectionRuntime> EnumerateLocalConnections(
+        IEnumerable<LocalTopologyRuntime> localTopologies)
+    {
+        foreach (LocalTopologyRuntime topology in localTopologies ?? Array.Empty<LocalTopologyRuntime>())
+        {
+            if (topology == null)
+            {
+                yield return null;
+                continue;
+            }
+
+            foreach (LocalTopologyConnectionRuntime connection in topology.Connections)
+                yield return connection;
+        }
+    }
+
     internal IReadOnlyList<KeyValuePair<string, string>> CaptureRegisteredRuntimeIdentityValues()
     {
         return identityIndex.CaptureRegisteredValues();

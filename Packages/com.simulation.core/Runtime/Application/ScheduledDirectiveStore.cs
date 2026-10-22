@@ -348,6 +348,22 @@ public sealed class ScheduledDirectiveStore : IAuthoritativeMutationGuardBindabl
         }
     }
 
+    /// <summary>
+    /// Prepares selected Daily-v1 directives against the Core-owned identity
+    /// authority. Unity's typed object projection is not needed to decide
+    /// whether a scheduled actor RuntimeId exists as an NPC.
+    /// </summary>
+    internal void PrepareSelectedDailyV1Day(
+        long absoluteDay,
+        DailyV1RuntimeIdentityIndex identityIndex)
+    {
+        if (identityIndex == null)
+            throw new ArgumentNullException(nameof(identityIndex));
+
+        PrepareDay(absoluteDay,
+            runtimeId => identityIndex.HasIdentity(runtimeId, DailyV1RuntimeIdentityKind.Npc));
+    }
+
     /// <summary>Consumes only the transient prepared lookup; it does not revise owner state.</summary>
     internal bool TryTakeDirective(string actorRuntimeId, out ScheduledDirective directive)
     {

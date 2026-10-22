@@ -479,9 +479,7 @@ public sealed class P12TravelPartyStartOperationTests
 
     private static long ReadProtocolEpoch(ContinuationCensusProtocol protocol)
     {
-        return (long)typeof(ContinuationCensusProtocol)
-            .GetField("mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(protocol);
+        return SimulationTestFactory.ReadContinuationMutationEpoch(protocol);
     }
 
     private static float[] CaptureBalances(TravelPartyFixture fixture)

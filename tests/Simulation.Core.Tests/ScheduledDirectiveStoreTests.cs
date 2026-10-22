@@ -94,6 +94,31 @@ public sealed class ScheduledDirectiveStoreTests
     }
 
     [Test]
+    public void SelectedDailyPreparationUsesCoreNpcIdentityKind()
+    {
+        DailyV1RuntimeIdentityIndex npcIndex = new DailyV1RuntimeIdentityIndex();
+        Assert.That(npcIndex.TryStageRegister("npc/actor", DailyV1RuntimeIdentityKind.Npc), Is.True);
+        Assert.That(npcIndex.TryAdvanceRevision(), Is.True);
+        ScheduledDirectiveStore resolvedStore = new ScheduledDirectiveStore(new SimulationTime());
+        Assert.That(resolvedStore.Add(CreateDirective("directive/npc", 1L, "action/escape")), Is.True);
+
+        resolvedStore.PrepareSelectedDailyV1Day(1L, npcIndex);
+        Assert.That(resolvedStore.TryTakeDirective("npc/actor", out _), Is.True);
+
+        DailyV1RuntimeIdentityIndex cityIndex = new DailyV1RuntimeIdentityIndex();
+        Assert.That(cityIndex.TryStageRegister("npc/actor", DailyV1RuntimeIdentityKind.City), Is.True);
+        Assert.That(cityIndex.TryAdvanceRevision(), Is.True);
+        ScheduledDirectiveStore rejectedStore = new ScheduledDirectiveStore(new SimulationTime());
+        ScheduledDirective rejected = CreateDirective("directive/wrong-kind", 1L, "action/escape");
+        Assert.That(rejectedStore.Add(rejected), Is.True);
+
+        rejectedStore.PrepareSelectedDailyV1Day(1L, cityIndex);
+        Assert.That(rejected.State, Is.EqualTo(ScheduledDirectiveState.Skipped));
+        Assert.That(rejected.ResultReason, Is.EqualTo(
+            "Actor RuntimeId 'npc/actor' could not be resolved."));
+    }
+
+    [Test]
     public void PrepareMarksConflictingAndUnresolvedRowsThroughOwnerTransitions()
     {
         ScheduledDirectiveStore conflictStore = new ScheduledDirectiveStore(new SimulationTime());

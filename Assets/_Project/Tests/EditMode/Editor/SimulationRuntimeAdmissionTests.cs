@@ -238,43 +238,45 @@ public sealed class SimulationRuntimeAdmissionTests
     [Test]
     public void DailyProfileScopesAdvancesAndRoutesOwnedClockThroughRuntime()
     {
-        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
-        NpcRuntime npc = new NpcRuntime("npc-admission", SimulationTestFactory.CreateNpc("admission"));
-        NpcActionData action = SimulationTestFactory.CreateAction("admission-travel", NpcActionType.Travel);
-        action.baseUtility = 1f;
-        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
-
+        SimulationTime time = new SimulationTime();
+        CityRuntime city = SimulationTestFactory.CreateCity("daily-profile-clock-city", "daily-profile-clock-location");
+        NpcRuntime npc = new NpcRuntime("npc-admission", SimulationTestFactory.CreateNpc("admission"), city, 0f);
+        NpcActionData[] actions = CreatePositiveNormalProbeActions("admission-probe", npc);
         SimulationRuntime runtime = null;
+        RecordFixture records = null;
         int operationObservations = 0;
         bool reentrantClockWasRejected = false;
         SimulationTimeAdvanceFailure reentrantClockFailure = SimulationTimeAdvanceFailure.None;
-        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        AdmissionProbeRandomSource randomSource = new AdmissionProbeRandomSource(npc.RuntimeId, () =>
         {
             Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
             Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
             reentrantClockWasRejected = !records.Time.TryAdvanceDay(out reentrantClockFailure);
             operationObservations++;
         });
-        runtime = new SimulationRuntime(
-            records.Time,
-            null,
-            new[] { npc },
-            economyEnabled: false,
-            configuredActions: new[] { action },
-            npcDecisionSystem: new NpcDecisionSystem(new System.Collections.Generic.List<INpcActionProvider> { provider }),
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
-            worldId: new WorldId(Guid.NewGuid()));
-        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
+        DailyV1SelectedProfileFixture profile = DailyV1SelectedProfileFixture.Create(
+            time,
+            "daily-profile-clock-owner-profile",
+            cities: new[] { city },
+            npcs: new[] { npc },
+            configuredActions: actions,
+            decisionSystemFactory: (selectedRecords, selectedTravel, merchant) =>
+                new NpcDecisionSystem(new List<INpcActionProvider>(), randomSource));
+        records = profile.Records;
+        runtime = profile.Runtime;
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True,
+            "The selected-profile clock test must publish its complete world before advancing it.");
 
-        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure before), Is.True, before.ToString());
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure before), Is.True,
+            "The published selected-profile fixture must begin with a valid census: " + before);
         Assert.That(records.Time.TryAdvanceDay(out SimulationTimeAdvanceFailure directClockFailure), Is.True,
-            directClockFailure.ToString());
+            "The runtime-owned clock must dispatch the selected daily core: " + directClockFailure);
         Assert.That(runtime.CurrentDay, Is.EqualTo(1L), "the runtime-owned clock dispatches a complete day advance");
         Assert.That(operationObservations, Is.EqualTo(1));
         Assert.That(reentrantClockWasRejected, Is.True);
         Assert.That(reentrantClockFailure, Is.EqualTo(SimulationTimeAdvanceFailure.RuntimeFaulted));
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure afterDirectClock), Is.True,
-            afterDirectClock.ToString());
+            "The runtime must remain assessable after direct clock dispatch: " + afterDirectClock);
 
         Assert.That(runtime.TryAdvanceDays(0, out int zeroDaysAdvanced, out SimulationRuntimeAdvanceFailure zeroFailure), Is.True);
         Assert.That(zeroDaysAdvanced, Is.Zero);
@@ -284,7 +286,7 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(invalidFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.InvalidDayCount));
 
         Assert.That(runtime.TryAdvanceDays(2, out int daysAdvanced, out SimulationRuntimeAdvanceFailure batchFailure), Is.True,
-            batchFailure.ToString());
+            "The runtime must retain clock ownership for a batch after direct clock dispatch: " + batchFailure);
         Assert.That(daysAdvanced, Is.EqualTo(2));
         Assert.That(runtime.CurrentDay, Is.EqualTo(3L));
         Assert.That(operationObservations, Is.EqualTo(3), "one outer scope covers each full multi-day batch");
@@ -308,7 +310,6 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(runtime.TryGetCompletedDailyCaptureToken(
             out _, out DailyCaptureEligibilityFailure stillNoBoundary), Is.False);
         Assert.That(stillNoBoundary, Is.EqualTo(DailyCaptureEligibilityFailure.NoCompletedBoundary));
-
         Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstAdvance), Is.True,
             firstAdvance.ToString());
         Assert.That(runtime.TryGetCompletedDailyCaptureToken(
@@ -386,15 +387,13 @@ public sealed class SimulationRuntimeAdmissionTests
     [Test]
     public void UnadmittedRestoredOwnerVectorCaptureRejectsActiveAdvanceAndWrongThread()
     {
-        NpcActionData action = SimulationTestFactory.CreateAction("restore-vector-probe", NpcActionType.Travel);
-        action.baseUtility = 1f;
         NpcRuntime npc = new NpcRuntime("restore-vector-probe", SimulationTestFactory.CreateNpc("restore-vector-probe"));
-        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+        NpcActionData[] actions = CreatePositiveNormalProbeActions("restore-vector-probe-action", npc);
 
         SimulationRuntime runtime = null;
         bool capturedDuringAdvance = true;
         ContinuationCensusFailure advanceCaptureFailure = ContinuationCensusFailure.None;
-        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        AdmissionProbeRandomSource randomSource = new AdmissionProbeRandomSource(npc.RuntimeId, () =>
         {
             capturedDuringAdvance = runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
                 out _, out _, out advanceCaptureFailure);
@@ -402,8 +401,8 @@ public sealed class SimulationRuntimeAdmissionTests
         runtime = CreatePublishedDailyCaptureRuntime(
             new SimulationTime(),
             new[] { npc },
-            new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
-            new[] { action });
+            new NpcDecisionSystem(new List<INpcActionProvider>(), randomSource),
+            actions);
 
         Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.True,
             advanceFailure.ToString());
@@ -609,14 +608,12 @@ public sealed class SimulationRuntimeAdmissionTests
     [Test]
     public void CompletedDailyTokenIsUnavailableDuringCallbacksAndBatchPublishesOnlyOnceAtReturn()
     {
-        NpcActionData action = SimulationTestFactory.CreateAction("daily-token-probe", NpcActionType.Travel);
-        action.baseUtility = 1f;
         NpcRuntime npc = new NpcRuntime("npc-daily-token-probe", SimulationTestFactory.CreateNpc("daily-token-probe"));
-        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+        NpcActionData[] actions = CreatePositiveNormalProbeActions("daily-token-probe-action", npc);
 
         SimulationRuntime runtime = null;
         int callbackCount = 0;
-        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        AdmissionProbeRandomSource randomSource = new AdmissionProbeRandomSource(npc.RuntimeId, () =>
         {
             Assert.That(runtime.TryGetCompletedDailyCaptureToken(
                 out _, out DailyCaptureEligibilityFailure failure), Is.False);
@@ -626,8 +623,8 @@ public sealed class SimulationRuntimeAdmissionTests
         runtime = CreatePublishedDailyCaptureRuntime(
             new SimulationTime(),
             new[] { npc },
-            new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
-            new[] { action });
+            new NpcDecisionSystem(new List<INpcActionProvider>(), randomSource),
+            actions);
 
         Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstFailure), Is.True,
             firstFailure.ToString());
@@ -646,14 +643,12 @@ public sealed class SimulationRuntimeAdmissionTests
     [Test]
     public void PartialBatchExceptionKeepsOnlyNormallyCompletedCoreSequenceAndIssuesNoToken()
     {
-        NpcActionData action = SimulationTestFactory.CreateAction("daily-token-throw", NpcActionType.Travel);
-        action.baseUtility = 1f;
         NpcRuntime npc = new NpcRuntime("npc-daily-token-throw", SimulationTestFactory.CreateNpc("daily-token-throw"));
-        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+        NpcActionData[] actions = CreatePositiveNormalProbeActions("daily-token-throw-action", npc);
 
         SimulationRuntime runtime = null;
         int callbackCount = 0;
-        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        AdmissionProbeRandomSource randomSource = new AdmissionProbeRandomSource(npc.RuntimeId, () =>
         {
             callbackCount++;
             if (callbackCount == 2) throw new InvalidOperationException("injected second-day callback failure");
@@ -661,8 +656,8 @@ public sealed class SimulationRuntimeAdmissionTests
         runtime = CreatePublishedDailyCaptureRuntime(
             new SimulationTime(),
             new[] { npc },
-            new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
-            new[] { action });
+            new NpcDecisionSystem(new List<INpcActionProvider>(), randomSource),
+            actions);
 
         Assert.Throws<InvalidOperationException>(() => runtime.TryAdvanceDays(
             2, out _, out SimulationRuntimeAdvanceFailure _));
@@ -784,16 +779,14 @@ public sealed class SimulationRuntimeAdmissionTests
     [Test]
     public void CompletedDailyTokenRejectsFinalCensusMismatchAfterCompletedBatchCores()
     {
-        NpcActionData action = SimulationTestFactory.CreateAction("daily-token-final-census", NpcActionType.Travel);
-        action.baseUtility = 1f;
         NpcRuntime npc = new NpcRuntime("npc-daily-token-final-census", SimulationTestFactory.CreateNpc("final-census"));
-        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+        NpcActionData[] actions = CreatePositiveNormalProbeActions("daily-token-final-census-action", npc);
 
         SimulationRuntime runtime = null;
         ContinuationCensusProtocol protocol = null;
         int callbackCount = 0;
         bool removedSection = false;
-        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        AdmissionProbeRandomSource randomSource = new AdmissionProbeRandomSource(npc.RuntimeId, () =>
         {
             callbackCount++;
             if (callbackCount != 2) return;
@@ -814,8 +807,8 @@ public sealed class SimulationRuntimeAdmissionTests
         runtime = CreatePublishedDailyCaptureRuntime(
             new SimulationTime(),
             new[] { npc },
-            new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
-            new[] { action });
+            new NpcDecisionSystem(new List<INpcActionProvider>(), randomSource),
+            actions);
         protocol = ReadPrivateField<ContinuationCensusProtocol>(runtime, "npcRosterCensusProtocol");
 
         bool advanced = runtime.TryAdvanceDays(
@@ -839,15 +832,13 @@ public sealed class SimulationRuntimeAdmissionTests
     [Test]
     public void CompletedDailyTokenIsNotPublishedAfterOperationScopeDisposalFault()
     {
-        NpcActionData action = SimulationTestFactory.CreateAction("daily-token-scope-disposal", NpcActionType.Travel);
-        action.baseUtility = 1f;
         NpcRuntime npc = new NpcRuntime("npc-daily-token-scope-disposal", SimulationTestFactory.CreateNpc("scope-disposal"));
-        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+        NpcActionData[] actions = CreatePositiveNormalProbeActions("daily-token-scope-disposal-action", npc);
 
         SimulationRuntime runtime = null;
         ContinuationCensusProtocol protocol = null;
         int callbackCount = 0;
-        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        AdmissionProbeRandomSource randomSource = new AdmissionProbeRandomSource(npc.RuntimeId, () =>
         {
             callbackCount++;
             WritePrivateField(protocol, "activeOperationCount", 0);
@@ -855,8 +846,8 @@ public sealed class SimulationRuntimeAdmissionTests
         runtime = CreatePublishedDailyCaptureRuntime(
             new SimulationTime(),
             new[] { npc },
-            new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
-            new[] { action });
+            new NpcDecisionSystem(new List<INpcActionProvider>(), randomSource),
+            actions);
         protocol = ReadPrivateField<ContinuationCensusProtocol>(runtime, "npcRosterCensusProtocol");
 
         bool advanced = runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure);
@@ -1551,14 +1542,14 @@ public sealed class SimulationRuntimeAdmissionTests
             null,
             time,
             null);
-        SimulationRuntime runtime = new SimulationRuntime(
+        DailyV1SelectedProfileFixture profile = DailyV1SelectedProfileFixture.Create(
             time,
-            new[] { city },
-            new[] { merchant },
-            merchantSystem: merchantSystem,
+            "p12-merchant-daily-profile",
+            cities: new[] { city },
+            npcs: new[] { merchant },
             configuration: configuration,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
-            worldId: new WorldId(Guid.NewGuid()));
+            merchantSystem: merchantSystem);
+        SimulationRuntime runtime = profile.Runtime;
         Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
 
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
@@ -2248,16 +2239,12 @@ public sealed class SimulationRuntimeAdmissionTests
             "p12-daily-market-production-city",
             cityData,
             new SpatialLocationRuntime("p12-daily-market-production-location"));
-        SimulationRuntime runtime = new SimulationRuntime(
-            new SimulationTime(),
-            new[] { city },
-            new NpcRuntime[0],
-            economyEnabled: true,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
-            worldId: new WorldId(Guid.NewGuid()));
+        DailyV1SelectedProfileFixture profile = DailyV1SelectedProfileFixture.Create(
+            "p12-daily-market-production-profile",
+            cities: new[] { city },
+            economyEnabled: true);
+        SimulationRuntime runtime = profile.Runtime;
         Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
-        EconomyTransactionService service = new EconomyTransactionService();
-        BindP12CensusRuntime(service, runtime);
         long initialMarketRevision = city.Market.Revision;
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
             Is.True, beforeFailure.ToString());
@@ -2286,16 +2273,12 @@ public sealed class SimulationRuntimeAdmissionTests
             "p12-daily-free-consumption-city",
             cityData,
             new SpatialLocationRuntime("p12-daily-free-consumption-location"));
-        SimulationRuntime runtime = new SimulationRuntime(
-            new SimulationTime(),
-            new[] { city },
-            new NpcRuntime[0],
-            economyEnabled: true,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
-            worldId: new WorldId(Guid.NewGuid()));
+        DailyV1SelectedProfileFixture profile = DailyV1SelectedProfileFixture.Create(
+            "p12-daily-free-consumption-profile",
+            cities: new[] { city },
+            economyEnabled: true);
+        SimulationRuntime runtime = profile.Runtime;
         Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
-        EconomyTransactionService service = new EconomyTransactionService();
-        BindP12CensusRuntime(service, runtime);
         long initialMarketRevision = city.Market.Revision;
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
             Is.True, beforeFailure.ToString());
@@ -2323,16 +2306,12 @@ public sealed class SimulationRuntimeAdmissionTests
             "p12-daily-price-refresh-city",
             cityData,
             new SpatialLocationRuntime("p12-daily-price-refresh-location"));
-        SimulationRuntime runtime = new SimulationRuntime(
-            new SimulationTime(),
-            new[] { city },
-            new NpcRuntime[0],
-            economyEnabled: true,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
-            worldId: new WorldId(Guid.NewGuid()));
+        DailyV1SelectedProfileFixture profile = DailyV1SelectedProfileFixture.Create(
+            "p12-daily-price-refresh-profile",
+            cities: new[] { city },
+            economyEnabled: true);
+        SimulationRuntime runtime = profile.Runtime;
         Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
-        EconomyTransactionService service = new EconomyTransactionService();
-        BindP12CensusRuntime(service, runtime);
         long initialMarketRevision = city.Market.Revision;
         Assert.That(city.Market.GetPrice(item), Is.EqualTo(5f));
         item.basePrice = 6f;
@@ -2532,8 +2511,11 @@ public sealed class SimulationRuntimeAdmissionTests
         ContinuationCensusProtocol protocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
             .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(runtime);
-        typeof(ContinuationCensusProtocol).GetField("mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(protocol, long.MaxValue);
+        object mutationEpochState = typeof(ContinuationCensusProtocol)
+            .GetField("mutationEpochState", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(protocol);
+        mutationEpochState.GetType().GetField("epoch", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(mutationEpochState, long.MaxValue);
 
         EconomyTransactionResult result = service.TryExecuteNpcTrade(buyer, seller, item, 2, 10f);
 
@@ -4835,6 +4817,108 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestoreRejectsSameIdNpcProjectionOutsideTheAdmittedRuntimeGraph()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject hostObject = new GameObject("P12-G reject counterfeit runtime identity projection");
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+            Assert.That(sourceSession, Is.Not.Null);
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+
+            SimulationActiveSession privateCandidate = null;
+            string counterfeitRuntimeId = null;
+            Assert.That(host.TryRestoreDailyContinuationForTest(candidate =>
+                {
+                    privateCandidate = candidate;
+                    NpcRuntime activeNpc = candidate.Runtime.NpcRuntimes.FirstOrDefault();
+                    Assert.That(activeNpc, Is.Not.Null);
+                    Dictionary<string, NpcRuntime> npcProjection =
+                        ReadPrivateField<Dictionary<string, NpcRuntime>>(
+                            candidate.IdentityRegistry, "npcsByRuntimeId");
+                    Assert.That(npcProjection, Is.Not.Null);
+                    Assert.That(npcProjection.TryGetValue(activeNpc.RuntimeId, out NpcRuntime registeredNpc), Is.True);
+                    Assert.That(registeredNpc, Is.SameAs(activeNpc));
+
+                    // Keep identity kind and RuntimeId unchanged while replacing
+                    // the private candidate's typed projection value. Admission
+                    // must reject it before publishing this detached graph.
+                    counterfeitRuntimeId = activeNpc.RuntimeId;
+                    npcProjection[activeNpc.RuntimeId] = new NpcRuntime(
+                        activeNpc.RuntimeId, activeNpc.NpcData, activeNpc.CurrentCity, 0f);
+                },
+                    out P12GDailyV1RestoreFailure failure,
+                    out string diagnostic),
+                Is.False);
+            Assert.That(privateCandidate, Is.Not.Null);
+            Assert.That(counterfeitRuntimeId, Is.Not.Null.And.Not.Empty);
+            Assert.That(privateCandidate.Runtime.HasSameP12RuntimeIdentitySpatialOwners(
+                    privateCandidate.IdentityRegistry,
+                    privateCandidate.SpatialNetwork,
+                    privateCandidate.ExplorableSites),
+                Is.False);
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.BindingValidationFailed), diagnostic);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(host, "activeSession"), Is.SameAs(sourceSession));
+            Assert.That(sourceSession.Runtime.CurrentDay, Is.EqualTo(1L));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(hostObject);
+        }
+    }
+
+    [Test]
+    public void DailyV1RestoreRejectsSourceIdentityProjectionOutsideTheAdmittedRuntimeGraph()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject hostObject = new GameObject("P12-G reject counterfeit source identity projection");
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+            Assert.That(sourceSession, Is.Not.Null);
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+            long sourceDay = sourceSession.Runtime.CurrentDay;
+            NpcRuntime activeNpc = sourceSession.Runtime.NpcRuntimes.FirstOrDefault();
+            Assert.That(activeNpc, Is.Not.Null);
+            Dictionary<string, NpcRuntime> npcProjection = ReadPrivateField<Dictionary<string, NpcRuntime>>(
+                sourceSession.IdentityRegistry, "npcsByRuntimeId");
+            Assert.That(npcProjection, Is.Not.Null);
+            npcProjection[activeNpc.RuntimeId] = new NpcRuntime(
+                activeNpc.RuntimeId, activeNpc.NpcData, activeNpc.CurrentCity, 0f);
+
+            Assert.That(sourceSession.Runtime.HasSameP12RuntimeIdentitySpatialOwners(
+                    sourceSession.IdentityRegistry,
+                    sourceSession.SpatialNetwork,
+                    sourceSession.ExplorableSites),
+                Is.False);
+            Assert.That(host.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure failure,
+                    out string diagnostic),
+                Is.False);
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.InvalidSourceSession), diagnostic);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(host, "activeSession"), Is.SameAs(sourceSession));
+            Assert.That(sourceSession.Runtime.CurrentDay, Is.EqualTo(sourceDay));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(hostObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreDoesNotReplayFutureScheduledDirectiveAndItsFirstDueAdvanceMatches()
     {
         SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
@@ -4931,25 +5015,36 @@ public sealed class SimulationRuntimeAdmissionTests
     {
         SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
-        NpcActionData steal = AssetDatabase.LoadAssetAtPath<NpcActionData>(
-            "Assets/_Project/Data/Actions/Action-Roubar.asset");
         NpcActionData arrest = AssetDatabase.LoadAssetAtPath<NpcActionData>(
             "Assets/_Project/Data/Actions/Action-Prender.asset");
         Assert.That(sourceConfig, Is.Not.Null);
-        Assert.That(steal, Is.Not.Null);
         Assert.That(arrest, Is.Not.Null);
-        Assert.That(steal.actionType, Is.EqualTo(NpcActionType.Steal));
         Assert.That(arrest.actionType, Is.EqualTo(NpcActionType.Arrest));
 
         SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
         NpcSimulationConfig actorConfig = config.Npcs.Single(entry =>
             entry?.npc != null && string.Equals(entry.npc.id, "JOBSON", StringComparison.Ordinal));
         NpcData actorDefinition = actorConfig.npc;
+        const int initialSentenceDays = 5;
+        const float initialWarrantBounty = 50f;
         NpcActionData escape = SimulationTestFactory.CreateAction(
             "p12g-successful-directive-escape", NpcActionType.EscapePrison, NpcActionCategory.Justice);
         escape.canFail = false;
         escape.crimeSettings.escapeBountyPenalty = 7f;
+        // The restore/replay regression uses an admitted initial warrant and
+        // Core Guard, with autonomous Crime disabled. Scheduled Escape remains
+        // runtime-enabled while no independent autonomous Escape can occur on
+        // the boundary after the directive succeeds.
+        config.crimeAutonomousEnabled = false;
         config.Actions.Add(escape);
+        config.InitialWarrants.Clear();
+        config.InitialWarrants.Add(new InitialWantedRecordConfig
+        {
+            target = actorDefinition,
+            city = actorConfig.startingCity,
+            bounty = initialWarrantBounty,
+            sentenceDays = initialSentenceDays
+        });
         config.ScheduledDirectives.Add(new ScheduledDirectiveConfig
         {
             absoluteDay = 3L,
@@ -4959,7 +5054,6 @@ public sealed class SimulationRuntimeAdmissionTests
             action = escape
         });
 
-        bool originalStealCanFail = steal.canFail;
         bool originalArrestCanFail = arrest.canFail;
         // Selected runtimes execute the immutable definition graph captured at
         // bootstrap. Configure successful outcomes before either graph is built.
@@ -4967,7 +5061,6 @@ public sealed class SimulationRuntimeAdmissionTests
         GameObject restoredObject = new GameObject("P12-G successful directive restored");
         try
         {
-            steal.canFail = false;
             arrest.canFail = false;
             TesteSimulacao uninterrupted = uninterruptedObject.AddComponent<TesteSimulacao>();
             TesteSimulacao restored = restoredObject.AddComponent<TesteSimulacao>();
@@ -5016,12 +5109,28 @@ public sealed class SimulationRuntimeAdmissionTests
                         out ContinuationCensusFailure censusFailure), Is.True, censusFailure.ToString());
             }
 
-            void SelectOnly(SimulationRuntime runtime, NpcActionData action)
+            void AssertBuiltInDecisionConfiguration(SimulationRuntime runtime)
             {
-                List<NpcActionData> configuredActions = ReadPrivateField<List<NpcActionData>>(runtime, "configuredActions");
-                Assert.That(configuredActions, Is.Not.Null);
-                configuredActions.Clear();
-                configuredActions.Add(action);
+                EffectiveSimulationConfiguration effective = ReadPrivateField<EffectiveSimulationConfiguration>(
+                    runtime, "configuration");
+                NpcDecisionSystem decisions = ReadPrivateField<NpcDecisionSystem>(runtime, "npcDecisionSystem");
+                Assert.That(effective, Is.Not.Null);
+                Assert.That(effective.Crime.Enabled, Is.True);
+                Assert.That(effective.Crime.AutonomousEnabled, Is.False);
+                Assert.That(effective.GuardCrime.Enabled, Is.True);
+                Assert.That(decisions, Is.Not.Null);
+                Assert.That(decisions.HasProvider<CrimeSystem>(), Is.True);
+                Assert.That(decisions.HasProvider<GuardSystem>(), Is.True);
+                Assert.That(decisions.GetProviderForAction(escape), Is.TypeOf<CrimeSystem>());
+                Assert.That(decisions.GetProviderForAction(arrest), Is.TypeOf<GuardSystem>());
+            }
+
+            long ReadMutationEpoch(SimulationRuntime runtime)
+            {
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                        out long epoch, out ContinuationCensusFailure failure),
+                    Is.True, failure.ToString());
+                return epoch;
             }
 
             JusticeSystem controlJustice = ReadPrivateField<JusticeSystem>(uninterruptedSession.Runtime, "justiceSystem");
@@ -5029,32 +5138,18 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(controlJustice, Is.Not.Null);
             Assert.That(sourceJustice, Is.Not.Null);
 
-            SelectOnly(uninterruptedSession.Runtime, steal);
-            SelectOnly(sourceSession.Runtime, steal);
-            Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlTheftFailure),
-                Is.True, controlTheftFailure.ToString());
-            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceTheftFailure),
-                Is.True, sourceTheftFailure.ToString());
-            CrimeSocialAppraisalWorldState controlCrimeSocial = uninterruptedSession.Runtime.CrimeSocialAppraisal;
-            CrimeSocialAppraisalWorldState sourceCrimeSocial = sourceSession.Runtime.CrimeSocialAppraisal;
-            Assert.That(controlCrimeSocial.TheftOutcomes.Count, Is.GreaterThan(0));
-            Assert.That(controlCrimeSocial.CrimeKnowledge.Count, Is.GreaterThan(0));
-            Assert.That(controlCrimeSocial.SocialReactions.Count, Is.GreaterThan(0));
-            Assert.That(sourceCrimeSocial.TheftOutcomes.Count, Is.EqualTo(controlCrimeSocial.TheftOutcomes.Count));
-            Assert.That(sourceCrimeSocial.CrimeKnowledge.Count, Is.EqualTo(controlCrimeSocial.CrimeKnowledge.Count));
-            Assert.That(sourceCrimeSocial.SocialReactions.Count, Is.EqualTo(controlCrimeSocial.SocialReactions.Count));
-            Assert.That(controlJustice.HasActiveWarrantInCity(controlActor, controlActor.CurrentCity), Is.True,
-                "The selected Daily-v1 Jobson actor must create its warrant through a normal successful Steal action.");
+            Assert.That(controlJustice.HasActiveWarrantInCity(controlActor, controlActor.CurrentCity), Is.True);
             Assert.That(sourceJustice.HasActiveWarrantInCity(sourceActor, sourceActor.CurrentCity), Is.True);
+            Assert.That(controlJustice.GetBounty(controlActor, controlActor.CurrentCity),
+                Is.EqualTo(initialWarrantBounty));
+            Assert.That(sourceJustice.GetBounty(sourceActor, sourceActor.CurrentCity),
+                Is.EqualTo(initialWarrantBounty));
 
-            SelectOnly(uninterruptedSession.Runtime, arrest);
-            SelectOnly(sourceSession.Runtime, arrest);
-            // Guard target selection and arrest mutation are owned by the
-            // selected Core graph. The Unity provider remains available to
-            // compatibility runtimes, but must not be required to execute this
-            // admitted Daily-v1 action.
-            WritePrivateField(sourceSession.Runtime, "npcDecisionSystem",
-                new NpcDecisionSystem(new List<INpcActionProvider>()));
+            // The effective built-in provider composition is a compatibility
+            // input. Autonomous Crime is disabled, while the same admitted
+            // Crime and Guard providers remain composed on every host.
+            AssertBuiltInDecisionConfiguration(uninterruptedSession.Runtime);
+            AssertBuiltInDecisionConfiguration(sourceSession.Runtime);
             Assert.That(controlJustice.HasActiveWarrantInCity(controlActor, controlActor.CurrentCity), Is.True);
             Assert.That(sourceJustice.HasActiveWarrantInCity(sourceActor, sourceActor.CurrentCity), Is.True);
             Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlArrestFailure),
@@ -5062,16 +5157,21 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceArrestFailure),
                 Is.True, sourceArrestFailure.ToString());
             Assert.That(controlJustice.IsArrested(controlActor), Is.True,
-                "The selected Daily-v1 Guard must arrest the warrant target through the normal Arrest action.");
+                "The selected Daily-v1 Guard must arrest the initial-warrant target through the normal Arrest action.");
             Assert.That(sourceJustice.IsArrested(sourceActor), Is.True);
             Assert.That(controlJustice.WasArrestedToday(controlActor), Is.True);
-            Assert.That(controlJustice.GetRemainingSentenceDays(controlActor), Is.GreaterThan(1));
+            Assert.That(sourceJustice.WasArrestedToday(sourceActor), Is.True);
+            Assert.That(controlJustice.GetRemainingSentenceDays(controlActor),
+                Is.EqualTo(initialSentenceDays));
+            Assert.That(sourceJustice.GetRemainingSentenceDays(sourceActor),
+                Is.EqualTo(initialSentenceDays));
 
             ScheduledDirectiveStore sourceDirectiveStore = sourceSession.Composition.ScheduledDirectives;
             ScheduledDirective sourceDirective = sourceDirectiveStore.Directives.Single();
             Assert.That(sourceDirective.State, Is.EqualTo(ScheduledDirectiveState.Pending));
             Assert.That(sourceDirective.AbsoluteDay, Is.EqualTo(3L));
             long sourceDirectiveRevision = sourceDirectiveStore.Revision;
+            long controlEpochAtSourceBoundary = ReadMutationEpoch(uninterruptedSession.Runtime);
             DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(sourceSession.Runtime);
             string sourceOwnerGraph = CaptureCompleteDailyV1OwnerProjection(sourceSession, sourceToken);
             string sourceRoots = CaptureContinuationRootFacts(sourceSession, includeWorldIdentity: false);
@@ -5086,32 +5186,71 @@ public sealed class SimulationRuntimeAdmissionTests
                 restoreFailure + ": " + restoreDiagnostic);
             SimulationActiveSession restoredSession = ReadPrivateField<SimulationActiveSession>(restored, "activeSession");
             Assert.That(restoredSession, Is.Not.SameAs(sourceSession));
+            AssertBuiltInDecisionConfiguration(restoredSession.Runtime);
             DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restoredSession.Runtime);
             Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredToken), Is.EqualTo(sourceOwnerGraph));
             Assert.That(CaptureContinuationRootFacts(restoredSession, includeWorldIdentity: false), Is.EqualTo(sourceRoots));
+            Assert.That(restoredSession.Runtime.CurrentDay, Is.EqualTo(sourceSession.Runtime.CurrentDay));
 
             NpcRuntime restoredActor = restoredSession.Runtime.NpcRuntimes.Single(
                 npc => npc?.NpcData != null && string.Equals(npc.NpcData.id, actorDefinition.id, StringComparison.Ordinal));
             JusticeSystem restoredJustice = ReadPrivateField<JusticeSystem>(restoredSession.Runtime, "justiceSystem");
             Assert.That(restoredJustice.IsArrested(restoredActor), Is.True);
+            Assert.That(restoredJustice.WasArrestedToday(restoredActor),
+                Is.EqualTo(controlJustice.WasArrestedToday(controlActor)),
+                "Restore must retain the persisted day-1 Guard arrest marker at the captured boundary.");
             Assert.That(restoredJustice.WasArrestedToday(restoredActor), Is.True);
+
+            Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlResetFailure),
+                Is.True, controlResetFailure.ToString());
+            Assert.That(restoredSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredResetFailure),
+                Is.True, restoredResetFailure.ToString());
+            Assert.That(controlJustice.WasArrestedToday(controlActor), Is.False,
+                "Start-of-day reset clears the prior-day Guard arrest marker before the next sentence decrement.");
+            Assert.That(restoredJustice.WasArrestedToday(restoredActor), Is.False,
+                "The restored runtime must apply the same next-day reset after hydrating the true marker.");
             Assert.That(restoredJustice.GetRemainingSentenceDays(restoredActor),
                 Is.EqualTo(controlJustice.GetRemainingSentenceDays(controlActor)));
             Assert.That(restoredJustice.GetBounty(restoredActor, restoredActor.CurrentCity),
                 Is.EqualTo(controlJustice.GetBounty(controlActor, controlActor.CurrentCity)));
+            Assert.That(controlJustice.GetRemainingSentenceDays(controlActor), Is.GreaterThan(2),
+                "The day-3 RequestAction must remain eligible after that day's sentence decrement.");
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                    restoredSession, GetCompletedDailyToken(restoredSession.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    uninterruptedSession, GetCompletedDailyToken(uninterruptedSession.Runtime))));
+            Assert.That(CaptureContinuationRootFacts(restoredSession, includeWorldIdentity: false),
+                Is.EqualTo(CaptureContinuationRootFacts(uninterruptedSession, includeWorldIdentity: false)));
+
             ScheduledDirective restoredDirective = restoredSession.Composition.ScheduledDirectives.Directives.Single();
             Assert.That(restoredDirective.DirectiveId, Is.EqualTo(sourceDirective.DirectiveId));
             Assert.That(restoredDirective.State, Is.EqualTo(ScheduledDirectiveState.Pending));
             Assert.That(restoredSession.Composition.ScheduledDirectives.Revision, Is.EqualTo(sourceDirectiveRevision));
+            // Shared mutation epochs are target-runtime bookkeeping rather
+            // than persisted owner state. Both boundary reads must be valid;
+            // continuation parity is checked by the next boundary's delta.
+            long sourceEpochAtRestoreBoundary = ReadMutationEpoch(sourceSession.Runtime);
+            long restoredEpochAtRestoreBoundary = ReadMutationEpoch(restoredSession.Runtime);
+            Assert.That(sourceEpochAtRestoreBoundary, Is.EqualTo(controlEpochAtSourceBoundary),
+                "The uninterrupted and source runtimes have applied the same day-1 mutations before restoration.");
+            Assert.That(sourceEpochAtRestoreBoundary, Is.GreaterThanOrEqualTo(0L));
+            Assert.That(restoredEpochAtRestoreBoundary, Is.GreaterThanOrEqualTo(0L));
 
-            SelectOnly(uninterruptedSession.Runtime, escape);
-            SelectOnly(restoredSession.Runtime, escape);
             float bountyBeforeEscape = controlJustice.GetBounty(controlActor, controlActor.CurrentCity);
             long directiveRevisionBeforeEscape = sourceDirectiveStore.Revision;
+            long controlEpochBeforeEscape = ReadMutationEpoch(uninterruptedSession.Runtime);
+            long restoredEpochBeforeEscape = ReadMutationEpoch(restoredSession.Runtime);
             Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlEscapeFailure),
                 Is.True, controlEscapeFailure.ToString());
             Assert.That(restoredSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredEscapeFailure),
                 Is.True, restoredEscapeFailure.ToString());
+            long controlEpochAfterEscape = ReadMutationEpoch(uninterruptedSession.Runtime);
+            long restoredEpochAfterEscape = ReadMutationEpoch(restoredSession.Runtime);
+            Assert.That(controlEpochAfterEscape, Is.GreaterThan(controlEpochBeforeEscape));
+            Assert.That(restoredEpochAfterEscape, Is.GreaterThan(restoredEpochBeforeEscape));
+            Assert.That(restoredEpochAfterEscape - restoredEpochBeforeEscape,
+                Is.EqualTo(controlEpochAfterEscape - controlEpochBeforeEscape),
+                "The restored runtime applies the same committed owner invalidations through the Escape/Guard boundary.");
 
             ScheduledDirective controlDirective = uninterruptedSession.Composition.ScheduledDirectives.Directives.Single();
             restoredDirective = restoredSession.Composition.ScheduledDirectives.Directives.Single();
@@ -5123,14 +5262,22 @@ public sealed class SimulationRuntimeAdmissionTests
                 Is.EqualTo(directiveRevisionBeforeEscape + 1L));
             Assert.That(restoredSession.Composition.ScheduledDirectives.Revision,
                 Is.EqualTo(uninterruptedSession.Composition.ScheduledDirectives.Revision));
-            Assert.That(controlJustice.IsArrested(controlActor), Is.False);
-            Assert.That(restoredJustice.IsArrested(restoredActor), Is.False);
-            Assert.That(controlJustice.GetRemainingSentenceDays(controlActor), Is.Zero);
-            Assert.That(restoredJustice.GetRemainingSentenceDays(restoredActor), Is.Zero);
+            Assert.That(controlJustice.IsArrested(controlActor), Is.True,
+                "The ordered Guard turn may re-arrest the actor after the scheduled Escape succeeds in the same daily boundary.");
+            Assert.That(restoredJustice.IsArrested(restoredActor), Is.True,
+                "Restoration must preserve the same-day ordered Guard response after the successful scheduled Escape.");
+            Assert.That(controlJustice.GetRemainingSentenceDays(controlActor),
+                Is.EqualTo(initialSentenceDays),
+                "The later ordered Guard arrest creates a fresh sentence from the committed warrant policy.");
+            Assert.That(restoredJustice.GetRemainingSentenceDays(restoredActor),
+                Is.EqualTo(controlJustice.GetRemainingSentenceDays(controlActor)));
+            Assert.That(controlJustice.WasArrestedToday(controlActor), Is.True);
+            Assert.That(restoredJustice.WasArrestedToday(restoredActor), Is.True);
             Assert.That(controlJustice.GetBounty(controlActor, controlActor.CurrentCity),
                 Is.EqualTo(bountyBeforeEscape + escape.crimeSettings.escapeBountyPenalty));
+            float bountyAfterEscape = controlJustice.GetBounty(controlActor, controlActor.CurrentCity);
             Assert.That(restoredJustice.GetBounty(restoredActor, restoredActor.CurrentCity),
-                Is.EqualTo(controlJustice.GetBounty(controlActor, controlActor.CurrentCity)));
+                Is.EqualTo(bountyAfterEscape));
 
             restoredToken = GetCompletedDailyToken(restoredSession.Runtime);
             DailyCaptureEligibilityToken controlToken = GetCompletedDailyToken(uninterruptedSession.Runtime);
@@ -5144,10 +5291,15 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(restoredSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredNextFailure),
                 Is.True, restoredNextFailure.ToString());
             Assert.That(controlJustice.GetBounty(controlActor, controlActor.CurrentCity),
-                Is.EqualTo(bountyBeforeEscape + escape.crimeSettings.escapeBountyPenalty),
-                "A terminal successful directive must not apply its escape penalty again on a later boundary.");
+                Is.EqualTo(bountyAfterEscape),
+                "A terminal successful directive must not apply its Escape effect on a later boundary.");
             Assert.That(restoredJustice.GetBounty(restoredActor, restoredActor.CurrentCity),
-                Is.EqualTo(controlJustice.GetBounty(controlActor, controlActor.CurrentCity)));
+                Is.EqualTo(bountyAfterEscape),
+                "The restored terminal directive must not replay its Escape effect on a later boundary.");
+            Assert.That(controlDirective.State, Is.EqualTo(ScheduledDirectiveState.Succeeded));
+            Assert.That(controlDirective.ProcessedDay, Is.EqualTo(3L));
+            Assert.That(restoredDirective.State, Is.EqualTo(ScheduledDirectiveState.Succeeded));
+            Assert.That(restoredDirective.ProcessedDay, Is.EqualTo(3L));
             Assert.That(uninterruptedSession.Composition.ScheduledDirectives.Revision,
                 Is.EqualTo(directiveRevisionBeforeEscape + 1L));
             Assert.That(restoredSession.Composition.ScheduledDirectives.Revision,
@@ -5161,8 +5313,153 @@ public sealed class SimulationRuntimeAdmissionTests
         }
         finally
         {
-            steal.canFail = originalStealCanFail;
             arrest.canFail = originalArrestCanFail;
+            UnityEngine.Object.DestroyImmediate(uninterruptedObject);
+            UnityEngine.Object.DestroyImmediate(restoredObject);
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    [Test]
+    public void DailyV1RestorePreservesNonemptyCrimeSocialOwnersAcrossContinuation()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        NpcActionData steal = AssetDatabase.LoadAssetAtPath<NpcActionData>(
+            "Assets/_Project/Data/Actions/Action-Roubar.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        Assert.That(steal, Is.Not.Null);
+        Assert.That(steal.actionType, Is.EqualTo(NpcActionType.Steal));
+
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        bool originalStealCanFail = steal.canFail;
+        GameObject uninterruptedObject = new GameObject("P12 CrimeSocial uninterrupted control");
+        GameObject restoredObject = new GameObject("P12 CrimeSocial restored continuation");
+        try
+        {
+            // The selected graph captures authored action policy at bootstrap.
+            // Make the proving Steal outcome deterministic before either host
+            // composes its Daily-v1 definition graph.
+            steal.canFail = false;
+            TesteSimulacao uninterrupted = uninterruptedObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao restored = restoredObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(uninterrupted, config);
+            ConfigureSelectedBootstrap(restored, config);
+            InvokeInitializeSimulation(uninterrupted, null);
+            InvokeInitializeSimulation(restored, null);
+
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(
+                uninterrupted, "activeSession");
+            SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(
+                restored, "activeSession");
+            Assert.That(controlSession, Is.Not.Null);
+            Assert.That(sourceSession, Is.Not.Null);
+
+            void SelectOnlySteal(SimulationRuntime runtime)
+            {
+                List<NpcActionData> configuredActions = ReadPrivateField<List<NpcActionData>>(
+                    runtime, "configuredActions");
+                Assert.That(configuredActions, Is.Not.Null);
+                configuredActions.Clear();
+                configuredActions.Add(steal);
+            }
+
+            NpcRuntime AdmitStealParticipants(SimulationRuntime runtime)
+            {
+                NpcRuntime thief = runtime.NpcRuntimes.FirstOrDefault(candidate =>
+                    candidate?.NpcData?.acoesPadrao != null
+                    && candidate.NpcData.acoesPadrao.Any(preference =>
+                        preference != null && ReferenceEquals(preference.action, steal)));
+                Assert.That(thief, Is.Not.Null,
+                    "The selected profile must retain the authored NPC with the default Steal action.");
+                CityRuntime city = thief.CurrentCity;
+                Assert.That(city, Is.Not.Null);
+                Assert.That(city.ImportantNpcs.Count, Is.GreaterThan(1),
+                    "The admitted local city roster must provide an eligible theft target.");
+
+                foreach (NpcRuntime participant in city.ImportantNpcs)
+                {
+                    PersonId personId = new PersonId("p12-crime-social-restore-" + participant.RuntimeId);
+                    Assert.That(runtime.TryRegisterPerson(new PersonRuntime(personId, runtime.CurrentDay),
+                        out PersonStoreFailure registrationFailure), Is.True, registrationFailure.ToString());
+                    Assert.That(runtime.TryBindExistingNpcToPerson(personId, participant.RuntimeId,
+                        out PersonMaterializationFailure bindingFailure), Is.True, bindingFailure.ToString());
+                }
+                Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure),
+                    Is.True, censusFailure.ToString());
+                SelectOnlySteal(runtime);
+                return thief;
+            }
+
+            void AssertNonemptyCrimeSocial(SimulationRuntime runtime)
+            {
+                CrimeSocialAppraisalWorldState crimeSocial = runtime.CrimeSocialAppraisal;
+                Assert.That(crimeSocial, Is.Not.Null);
+                Assert.That(crimeSocial.TheftOutcomes.Count, Is.GreaterThan(0));
+                Assert.That(crimeSocial.CrimeKnowledge.Count, Is.GreaterThan(0));
+                Assert.That(crimeSocial.SocialReactions.Count, Is.GreaterThan(0));
+            }
+
+            NpcRuntime controlThief = AdmitStealParticipants(controlSession.Runtime);
+            NpcRuntime sourceThief = AdmitStealParticipants(sourceSession.Runtime);
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFailure),
+                Is.True, controlFailure.ToString());
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceFailure),
+                Is.True, sourceFailure.ToString());
+            AssertNonemptyCrimeSocial(controlSession.Runtime);
+            AssertNonemptyCrimeSocial(sourceSession.Runtime);
+            Assert.That(controlSession.Runtime.JusticeSystemForWorldBoundary.HasActiveWarrantInCity(
+                    controlThief, controlThief.CurrentCity),
+                Is.True,
+                "The selected Daily-v1 actor must create a warrant through the successful Steal action.");
+            Assert.That(sourceSession.Runtime.JusticeSystemForWorldBoundary.HasActiveWarrantInCity(
+                    sourceThief, sourceThief.CurrentCity),
+                Is.True,
+                "The source runtime must retain the same Steal-to-Justice effect before capture.");
+
+            string controlProjection = CaptureCompleteDailyV1OwnerProjection(
+                controlSession, GetCompletedDailyToken(controlSession.Runtime));
+            string sourceProjection = CaptureCompleteDailyV1OwnerProjection(
+                sourceSession, GetCompletedDailyToken(sourceSession.Runtime));
+            Assert.That(sourceProjection, Is.EqualTo(controlProjection));
+
+            Assert.That(restored.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure restoreFailure,
+                    out string restoreDiagnostic), Is.True,
+                restoreFailure + ": " + restoreDiagnostic);
+            SimulationActiveSession restoredSession = ReadPrivateField<SimulationActiveSession>(
+                restored, "activeSession");
+            Assert.That(restoredSession, Is.Not.Null);
+            Assert.That(restoredSession, Is.Not.SameAs(sourceSession));
+            AssertNonemptyCrimeSocial(restoredSession.Runtime);
+            NpcRuntime restoredThief = restoredSession.Runtime.NpcRuntimes.Single(candidate =>
+                candidate?.RuntimeId == sourceThief.RuntimeId);
+            Assert.That(restoredSession.Runtime.JusticeSystemForWorldBoundary.HasActiveWarrantInCity(
+                    restoredThief, restoredThief.CurrentCity),
+                Is.True,
+                "Detached restore must preserve the warrant produced by the admitted Steal action.");
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                    restoredSession, GetCompletedDailyToken(restoredSession.Runtime)),
+                Is.EqualTo(controlProjection));
+
+            // The uninterrupted and restored hosts use the same test action
+            // input for the next boundary, then compare all selected owners.
+            SelectOnlySteal(controlSession.Runtime);
+            SelectOnlySteal(restoredSession.Runtime);
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextControlFailure),
+                Is.True, nextControlFailure.ToString());
+            Assert.That(restoredSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextRestoredFailure),
+                Is.True, nextRestoredFailure.ToString());
+            AssertNonemptyCrimeSocial(controlSession.Runtime);
+            AssertNonemptyCrimeSocial(restoredSession.Runtime);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                    restoredSession, GetCompletedDailyToken(restoredSession.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    controlSession, GetCompletedDailyToken(controlSession.Runtime))));
+        }
+        finally
+        {
+            steal.canFail = originalStealCanFail;
             UnityEngine.Object.DestroyImmediate(uninterruptedObject);
             UnityEngine.Object.DestroyImmediate(restoredObject);
             UnityEngine.Object.DestroyImmediate(config);
@@ -5246,9 +5543,8 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(justice.Arrest(guard, actor, actor.CurrentCity), Is.True);
             }
 
-            // Keep this providerless Escape test scoped to the action under
-            // test. Core can also execute Guard Arrest without GuardSystem;
-            // unrelated autonomous actions must not change the Escape result.
+            // Keep Escape as the scheduled action under test. A later ordered
+            // Guard turn is still allowed to respond to its successful release.
             List<NpcActionData> configuredActions = ReadPrivateField<List<NpcActionData>>(
                 runtime, "configuredActions");
             Assert.That(configuredActions, Is.Not.Null);
@@ -5265,9 +5561,22 @@ public sealed class SimulationRuntimeAdmissionTests
             ScheduledDirective directive = session.Composition.ScheduledDirectives.Directives.Single();
             Assert.That(directive.State, Is.EqualTo(ScheduledDirectiveState.Succeeded));
             Assert.That(directive.ProcessedDay, Is.EqualTo(1L));
-            Assert.That(justice.IsArrested(actor), Is.False);
-            Assert.That(actor.CurrentStatus.Any(status => ReferenceEquals(status, config.freeStatus)), Is.True);
-            Assert.That(actor.CurrentStatus.Any(status => ReferenceEquals(status, config.arrestedStatus)), Is.False);
+            if (mode == ScheduledDirectiveMode.RequestAction)
+            {
+                Assert.That(justice.IsArrested(actor), Is.True,
+                    "The ordered Guard turn may arrest the actor after a successful scheduled Escape in the same daily boundary.");
+                Assert.That(justice.WasArrestedToday(actor), Is.True);
+                Assert.That(actor.CurrentStatus.Any(status => ReferenceEquals(status, config.arrestedStatus)), Is.True);
+                Assert.That(actor.CurrentStatus.Any(status => ReferenceEquals(status, config.freeStatus)), Is.False);
+                Assert.That(justice.GetBounty(actor, actor.CurrentCity), Is.EqualTo(15f),
+                    "The successful Escape penalty remains committed even when a later Guard turn re-arrests the actor.");
+            }
+            else
+            {
+                Assert.That(justice.IsArrested(actor), Is.False);
+                Assert.That(actor.CurrentStatus.Any(status => ReferenceEquals(status, config.freeStatus)), Is.True);
+                Assert.That(actor.CurrentStatus.Any(status => ReferenceEquals(status, config.arrestedStatus)), Is.False);
+            }
             Assert.That(actor.P12CrimeJusticeRevision, Is.GreaterThan(0L));
             Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
                     out long afterEscapeEpoch, out ContinuationCensusFailure afterEscapeFailure),
@@ -5287,23 +5596,35 @@ public sealed class SimulationRuntimeAdmissionTests
     {
         SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
-        NpcActionData steal = AssetDatabase.LoadAssetAtPath<NpcActionData>(
-            "Assets/_Project/Data/Actions/Action-Roubar.asset");
         NpcActionData arrest = AssetDatabase.LoadAssetAtPath<NpcActionData>(
             "Assets/_Project/Data/Actions/Action-Prender.asset");
         Assert.That(sourceConfig, Is.Not.Null);
-        Assert.That(steal, Is.Not.Null);
         Assert.That(arrest, Is.Not.Null);
 
         SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
         NpcSimulationConfig actorConfig = config.Npcs.Single(entry =>
             entry?.npc != null && string.Equals(entry.npc.id, "JOBSON", StringComparison.Ordinal));
         NpcData actorDefinition = actorConfig.npc;
+        const int initialSentenceDays = 5;
+        const float initialWarrantBounty = 50f;
         NpcActionData escape = SimulationTestFactory.CreateAction(
             "p12g-successful-party-directive-escape", NpcActionType.EscapePrison, NpcActionCategory.Justice);
         escape.canFail = false;
         escape.crimeSettings.escapeBountyPenalty = 7f;
+        // The restore/replay regression uses an admitted initial warrant and
+        // Core Guard, with autonomous Crime disabled. Scheduled Escape remains
+        // runtime-enabled while no independent autonomous Escape can occur on
+        // the boundary after the directive succeeds.
+        config.crimeAutonomousEnabled = false;
         config.Actions.Add(escape);
+        config.InitialWarrants.Clear();
+        config.InitialWarrants.Add(new InitialWantedRecordConfig
+        {
+            target = actorDefinition,
+            city = actorConfig.startingCity,
+            bounty = initialWarrantBounty,
+            sentenceDays = initialSentenceDays
+        });
         config.ScheduledDirectives.Add(new ScheduledDirectiveConfig
         {
             absoluteDay = 3L,
@@ -5313,7 +5634,6 @@ public sealed class SimulationRuntimeAdmissionTests
             action = escape
         });
 
-        bool originalStealCanFail = steal.canFail;
         bool originalArrestCanFail = arrest.canFail;
         // Selected runtimes execute the immutable definition graph captured at
         // bootstrap. Configure successful outcomes before either graph is built.
@@ -5321,7 +5641,6 @@ public sealed class SimulationRuntimeAdmissionTests
         GameObject restoredObject = new GameObject("P12-G successful directive-party restored");
         try
         {
-            steal.canFail = false;
             arrest.canFail = false;
             TesteSimulacao uninterrupted = uninterruptedObject.AddComponent<TesteSimulacao>();
             TesteSimulacao restored = restoredObject.AddComponent<TesteSimulacao>();
@@ -5370,12 +5689,28 @@ public sealed class SimulationRuntimeAdmissionTests
                         out ContinuationCensusFailure censusFailure), Is.True, censusFailure.ToString());
             }
 
-            void SelectOnly(SimulationRuntime runtime, NpcActionData action)
+            void AssertBuiltInDecisionConfiguration(SimulationRuntime runtime)
             {
-                List<NpcActionData> configuredActions = ReadPrivateField<List<NpcActionData>>(runtime, "configuredActions");
-                Assert.That(configuredActions, Is.Not.Null);
-                configuredActions.Clear();
-                configuredActions.Add(action);
+                EffectiveSimulationConfiguration effective = ReadPrivateField<EffectiveSimulationConfiguration>(
+                    runtime, "configuration");
+                NpcDecisionSystem decisions = ReadPrivateField<NpcDecisionSystem>(runtime, "npcDecisionSystem");
+                Assert.That(effective, Is.Not.Null);
+                Assert.That(effective.Crime.Enabled, Is.True);
+                Assert.That(effective.Crime.AutonomousEnabled, Is.False);
+                Assert.That(effective.GuardCrime.Enabled, Is.True);
+                Assert.That(decisions, Is.Not.Null);
+                Assert.That(decisions.HasProvider<CrimeSystem>(), Is.True);
+                Assert.That(decisions.HasProvider<GuardSystem>(), Is.True);
+                Assert.That(decisions.GetProviderForAction(escape), Is.TypeOf<CrimeSystem>());
+                Assert.That(decisions.GetProviderForAction(arrest), Is.TypeOf<GuardSystem>());
+            }
+
+            long ReadMutationEpoch(SimulationRuntime runtime)
+            {
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                        out long epoch, out ContinuationCensusFailure failure),
+                    Is.True, failure.ToString());
+                return epoch;
             }
 
             JusticeSystem controlJustice = ReadPrivateField<JusticeSystem>(uninterruptedSession.Runtime, "justiceSystem");
@@ -5396,27 +5731,43 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(sourceParty.MemberRuntimeIds, Does.Not.Contain(sourceGuard.RuntimeId));
             Assert.That(sourceParty.TravelPartyId, Is.EqualTo(controlParty.TravelPartyId));
 
-            SelectOnly(uninterruptedSession.Runtime, steal);
-            SelectOnly(sourceSession.Runtime, steal);
-            Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlTheftFailure),
-                Is.True, controlTheftFailure.ToString());
-            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceTheftFailure),
-                Is.True, sourceTheftFailure.ToString());
-            Assert.That(uninterruptedSession.Runtime.CrimeSocialAppraisal.TheftOutcomes.Count, Is.GreaterThan(0));
-            Assert.That(uninterruptedSession.Runtime.CrimeSocialAppraisal.CrimeKnowledge.Count, Is.GreaterThan(0));
-            Assert.That(uninterruptedSession.Runtime.CrimeSocialAppraisal.SocialReactions.Count, Is.GreaterThan(0));
-            Assert.That(controlJustice.HasActiveWarrantInCity(controlActor, controlActor.CurrentCity), Is.True);
-            Assert.That(sourceJustice.HasActiveWarrantInCity(sourceActor, sourceActor.CurrentCity), Is.True);
-
-            SelectOnly(uninterruptedSession.Runtime, arrest);
-            SelectOnly(sourceSession.Runtime, arrest);
+            // Source, control, and restored hosts use the same effective
+            // built-in provider set; P12 compatibility binds that set rather
+            // than serializing the provider objects themselves.
+            AssertBuiltInDecisionConfiguration(uninterruptedSession.Runtime);
+            AssertBuiltInDecisionConfiguration(sourceSession.Runtime);
             Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlArrestFailure),
                 Is.True, controlArrestFailure.ToString());
             Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceArrestFailure),
                 Is.True, sourceArrestFailure.ToString());
+            Assert.That(controlJustice.IsArrested(controlActor), Is.True,
+                "The Core Guard must execute the admitted Arrest action against the initialized warrant.");
+            Assert.That(sourceJustice.IsArrested(sourceActor), Is.True);
+            Assert.That(controlJustice.WasArrestedToday(controlActor), Is.True);
+            Assert.That(sourceJustice.WasArrestedToday(sourceActor), Is.True);
+            Assert.That(controlJustice.GetRemainingSentenceDays(controlActor),
+                Is.EqualTo(initialSentenceDays));
+            Assert.That(sourceJustice.GetRemainingSentenceDays(sourceActor),
+                Is.EqualTo(initialSentenceDays));
+
+            Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlResetFailure),
+                Is.True, controlResetFailure.ToString());
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceResetFailure),
+                Is.True, sourceResetFailure.ToString());
+            Assert.That(controlJustice.WasArrestedToday(controlActor), Is.False,
+                "Start-of-day reset clears the prior-day Guard arrest marker before the next sentence decrement.");
+            Assert.That(sourceJustice.WasArrestedToday(sourceActor), Is.False);
+            Assert.That(controlJustice.HasActiveWarrantInCity(controlActor, controlActor.CurrentCity), Is.True);
+            Assert.That(sourceJustice.HasActiveWarrantInCity(sourceActor, sourceActor.CurrentCity), Is.True);
+            Assert.That(controlJustice.GetBounty(controlActor, controlActor.CurrentCity),
+                Is.EqualTo(initialWarrantBounty));
+            Assert.That(sourceJustice.GetBounty(sourceActor, sourceActor.CurrentCity),
+                Is.EqualTo(initialWarrantBounty));
+
             Assert.That(controlJustice.IsArrested(controlActor), Is.True);
             Assert.That(sourceJustice.IsArrested(sourceActor), Is.True);
-            Assert.That(sourceJustice.GetRemainingSentenceDays(sourceActor), Is.GreaterThan(1));
+            Assert.That(sourceJustice.GetRemainingSentenceDays(sourceActor), Is.GreaterThan(2),
+                "The day-3 RequestAction must remain eligible after that day's sentence decrement.");
 
             // Restore at the completed day-2 boundary, with both the sentence and active commitment present.
             Assert.That(controlParty.IsActive, Is.True);
@@ -5447,6 +5798,7 @@ public sealed class SimulationRuntimeAdmissionTests
                 restoreFailure + ": " + restoreDiagnostic);
             SimulationActiveSession restoredSession = ReadPrivateField<SimulationActiveSession>(restored, "activeSession");
             Assert.That(restoredSession, Is.Not.SameAs(sourceSession));
+            AssertBuiltInDecisionConfiguration(restoredSession.Runtime);
             DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restoredSession.Runtime);
             Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredToken), Is.EqualTo(sourceOwnerGraph));
             Assert.That(CaptureContinuationRootFacts(restoredSession, includeWorldIdentity: false), Is.EqualTo(sourceRoots));
@@ -5474,15 +5826,28 @@ public sealed class SimulationRuntimeAdmissionTests
                     restoredSession.IdentityRegistry.TryGetNpc(runtimeId, out NpcRuntime npc)
                         ? npc.TravelDaysRemaining : -1), Is.EqualTo(memberProgress));
 
-            SelectOnly(uninterruptedSession.Runtime, escape);
-            SelectOnly(restoredSession.Runtime, escape);
             float bountyBeforeEscape = controlJustice.GetBounty(controlActor, controlActor.CurrentCity);
             Assert.That(controlParty.IsActive, Is.True);
             Assert.That(restoredParty.IsActive, Is.True);
+            // The target rebuilds a fresh shared epoch on restore; only the
+            // subsequent committed mutation delta must match its source run.
+            long controlEpochBeforeEscape = ReadMutationEpoch(uninterruptedSession.Runtime);
+            long sourceEpochAtRestoreBoundary = ReadMutationEpoch(sourceSession.Runtime);
+            long restoredEpochBeforeEscape = ReadMutationEpoch(restoredSession.Runtime);
+            Assert.That(sourceEpochAtRestoreBoundary, Is.EqualTo(controlEpochBeforeEscape),
+                "The uninterrupted and source runtimes have applied the same pre-restore mutations.");
+            Assert.That(sourceEpochAtRestoreBoundary, Is.GreaterThanOrEqualTo(0L));
             Assert.That(uninterrupted.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlEscapeFailure),
                 Is.True, controlEscapeFailure.ToString());
             Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredEscapeFailure),
                 Is.True, restoredEscapeFailure.ToString());
+            long controlEpochAfterEscape = ReadMutationEpoch(uninterruptedSession.Runtime);
+            long restoredEpochAfterEscape = ReadMutationEpoch(restoredSession.Runtime);
+            Assert.That(controlEpochAfterEscape, Is.GreaterThan(controlEpochBeforeEscape));
+            Assert.That(restoredEpochAfterEscape, Is.GreaterThan(restoredEpochBeforeEscape));
+            Assert.That(restoredEpochAfterEscape - restoredEpochBeforeEscape,
+                Is.EqualTo(controlEpochAfterEscape - controlEpochBeforeEscape),
+                "The restored runtime applies the same committed owner invalidations through the Escape/Guard boundary.");
 
             ScheduledDirective controlDirective = uninterruptedSession.Composition.ScheduledDirectives.Directives.Single();
             restoredDirective = restoredSession.Composition.ScheduledDirectives.Directives.Single();
@@ -5494,12 +5859,15 @@ public sealed class SimulationRuntimeAdmissionTests
                 Is.EqualTo(sourceDirectiveRevision + 1L));
             Assert.That(restoredSession.Composition.ScheduledDirectives.Revision,
                 Is.EqualTo(uninterruptedSession.Composition.ScheduledDirectives.Revision));
-            Assert.That(controlJustice.IsArrested(controlActor), Is.False);
-            Assert.That(restoredJustice.IsArrested(restoredActor), Is.False);
+            Assert.That(controlJustice.IsArrested(controlActor), Is.True,
+                "The ordered Guard turn may re-arrest the actor after the scheduled Escape succeeds in the same daily boundary.");
+            Assert.That(restoredJustice.IsArrested(restoredActor), Is.True,
+                "Restoration must preserve the same-day ordered Guard response after the successful scheduled Escape.");
             Assert.That(controlJustice.GetBounty(controlActor, controlActor.CurrentCity),
                 Is.EqualTo(bountyBeforeEscape + escape.crimeSettings.escapeBountyPenalty));
+            float bountyAfterEscape = controlJustice.GetBounty(controlActor, controlActor.CurrentCity);
             Assert.That(restoredJustice.GetBounty(restoredActor, restoredActor.CurrentCity),
-                Is.EqualTo(controlJustice.GetBounty(controlActor, controlActor.CurrentCity)));
+                Is.EqualTo(bountyAfterEscape));
             Assert.That(CaptureCompleteDailyV1OwnerProjection(
                     restoredSession, GetCompletedDailyToken(restoredSession.Runtime)),
                 Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
@@ -5512,10 +5880,15 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredNextFailure),
                 Is.True, restoredNextFailure.ToString());
             Assert.That(controlJustice.GetBounty(controlActor, controlActor.CurrentCity),
-                Is.EqualTo(bountyBeforeEscape + escape.crimeSettings.escapeBountyPenalty),
-                "A terminal successful directive must not replay its effect on the next boundary.");
+                Is.EqualTo(bountyAfterEscape),
+                "A terminal successful directive must not apply its Escape effect on a later boundary.");
             Assert.That(restoredJustice.GetBounty(restoredActor, restoredActor.CurrentCity),
-                Is.EqualTo(controlJustice.GetBounty(controlActor, controlActor.CurrentCity)));
+                Is.EqualTo(bountyAfterEscape),
+                "The restored terminal directive must not replay its Escape effect on a later boundary.");
+            Assert.That(controlDirective.State, Is.EqualTo(ScheduledDirectiveState.Succeeded));
+            Assert.That(controlDirective.ProcessedDay, Is.EqualTo(3L));
+            Assert.That(restoredDirective.State, Is.EqualTo(ScheduledDirectiveState.Succeeded));
+            Assert.That(restoredDirective.ProcessedDay, Is.EqualTo(3L));
             Assert.That(uninterruptedSession.Composition.ScheduledDirectives.Revision,
                 Is.EqualTo(sourceDirectiveRevision + 1L));
             Assert.That(restoredSession.Composition.ScheduledDirectives.Revision,
@@ -5529,7 +5902,6 @@ public sealed class SimulationRuntimeAdmissionTests
         }
         finally
         {
-            steal.canFail = originalStealCanFail;
             arrest.canFail = originalArrestCanFail;
             UnityEngine.Object.DestroyImmediate(uninterruptedObject);
             UnityEngine.Object.DestroyImmediate(restoredObject);
@@ -11553,6 +11925,20 @@ public sealed class SimulationRuntimeAdmissionTests
         method.Invoke(bootstrap, new object[] { stageCompleted });
     }
 
+    private static NpcActionData[] CreatePositiveNormalProbeActions(string idPrefix, NpcRuntime npc)
+    {
+        if (string.IsNullOrWhiteSpace(idPrefix)) throw new ArgumentException("A probe action prefix is required.", nameof(idPrefix));
+        if (npc == null) throw new ArgumentNullException(nameof(npc));
+
+        NpcActionData first = SimulationTestFactory.CreateAction(idPrefix + "-a", NpcActionType.Normal);
+        NpcActionData second = SimulationTestFactory.CreateAction(idPrefix + "-b", NpcActionType.Normal);
+        first.baseUtility = 1f;
+        second.baseUtility = 1f;
+        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = first, baseUtility = 1f });
+        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = second, baseUtility = 1f });
+        return new[] { first, second };
+    }
+
     private static SimulationRuntime CreatePublishedDailyCaptureRuntime(
         SimulationTime time,
         NpcRuntime[] npcRuntimes = null,
@@ -11574,15 +11960,138 @@ public sealed class SimulationRuntimeAdmissionTests
         NpcDecisionSystem npcDecisionSystem = null,
         IReadOnlyList<NpcActionData> configuredActions = null)
     {
-        return new SimulationRuntime(
-            time ?? new SimulationTime(),
+        // These capture/admission tests exercise the accepted Daily-v1
+        // continuation profile. Compose its real fixed owners and complete
+        // dynamic owner families instead of creating a partial runtime that
+        // must fail closed under the current P12 inventory contract.
+        List<CityRuntime> cities = new List<CityRuntime>();
+        if (npcRuntimes != null)
+        {
+            foreach (NpcRuntime npc in npcRuntimes)
+            {
+                CityRuntime currentCity = npc?.CurrentCity;
+                if (currentCity != null && !cities.Any(city => ReferenceEquals(city, currentCity)))
+                    cities.Add(currentCity);
+            }
+        }
+        for (int index = 0; cities.Count < 2; index++)
+        {
+            CityRuntime city = SimulationTestFactory.CreateCity(
+                "daily-capture-city-" + index,
+                "daily-capture-location-" + index);
+            if (cities.Any(existing => string.Equals(existing.RuntimeId, city.RuntimeId, StringComparison.Ordinal)))
+                continue;
+            cities.Add(city);
+        }
+
+        List<NpcRuntime> npcs = npcRuntimes != null
+            ? new List<NpcRuntime>(npcRuntimes)
+            : new List<NpcRuntime>();
+        for (int index = 0; npcs.Count < 10; index++)
+        {
+            string runtimeId = "daily-capture-npc-" + index;
+            if (npcs.Any(npc => npc != null && string.Equals(npc.RuntimeId, runtimeId, StringComparison.Ordinal)))
+                continue;
+            npcs.Add(new NpcRuntime(
+                runtimeId,
+                SimulationTestFactory.CreateNpc("definition-" + runtimeId),
+                cities[index % cities.Count],
+                0f));
+        }
+
+        RuntimeIdentityRegistry identities = new RuntimeIdentityRegistry();
+        foreach (CityRuntime city in cities)
+            Assert.That(identities.RegisterCity(city), Is.True, city.RuntimeId);
+        foreach (NpcRuntime npc in npcs)
+            Assert.That(identities.RegisterNpc(npc), Is.True, npc?.RuntimeId);
+
+        SpatialNetworkRuntime network = new SpatialNetworkRuntime(identities);
+        foreach (CityRuntime city in cities)
+            Assert.That(network.RegisterLocation(city.Location), Is.True, city.Location.RuntimeId);
+        for (int index = 0; index < cities.Count; index++)
+        {
+            CityRuntime origin = cities[index];
+            CityRuntime destination = cities[(index + 1) % cities.Count];
+            Assert.That(network.RegisterRoute(new SpatialRouteRuntime(
+                "daily-capture-route-" + index,
+                origin.Location,
+                destination.Location,
+                1)), Is.True);
+        }
+
+        RecordFixture records = SimulationTestFactory.CreateRecordFixtureWithTime(
+            time ?? new SimulationTime());
+        EconomyTransactionService transactionService = new EconomyTransactionService();
+        TravelSystem travelSystem = new TravelSystem(
+            network,
+            location => cities.FirstOrDefault(city => ReferenceEquals(city.Location, location)),
+            1f,
+            records.EventRecorder,
             null,
-            npcRuntimes,
+            transactionService);
+        ScheduledDirectiveStore directiveStore = new ScheduledDirectiveStore(records.Time);
+        ScheduledDirectiveSystem directiveSystem = new ScheduledDirectiveSystem(directiveStore, identities);
+        JusticeSystem justiceSystem = new JusticeSystem(null, null, null, null,
+            records.EventRecorder, null);
+        CrimeSystem crimeSystem = new CrimeSystem(
+            justiceSystem,
+            travelSystem,
+            null,
+            transactionService: transactionService,
+            configuration: new EffectiveCrimeConfiguration(false, false),
+            simulationTime: records.Time);
+        TravelPartyStore travelPartyStore = new TravelPartyStore();
+        TravelPartySystem travelPartySystem = new TravelPartySystem(
+            travelPartyStore,
+            records.Allocator,
+            identities,
+            travelSystem,
+            records.Time,
+            records.Sequence,
+            records.EventRecorder,
+            transactionService: transactionService);
+        ExplorableSiteStore siteStore = new ExplorableSiteStore();
+        ExplorableSiteKnowledgeSystem siteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
+        ExpeditionSystem expeditionSystem = new ExpeditionSystem(
+            new ExpeditionStore(),
+            records.Allocator,
+            identities,
+            siteStore,
+            travelPartySystem,
+            travelPartyStore,
+            siteKnowledgeSystem,
+            records.Time,
+            records.EventRecorder);
+
+        SimulationRuntime runtime = new SimulationRuntime(
+            records.Time,
+            cities,
+            npcs,
             economyEnabled: false,
             configuredActions: configuredActions,
+            scheduledDirectiveSystem: directiveSystem,
             npcDecisionSystem: npcDecisionSystem,
+            justiceSystem: justiceSystem,
+            crimeSystem: crimeSystem,
+            travelSystem: travelSystem,
+            travelPartySystem: travelPartySystem,
+            decisionRecorder: records.DecisionRecorder,
+            explorableSiteStore: siteStore,
+            explorableSiteKnowledgeSystem: siteKnowledgeSystem,
+            expeditionSystem: expeditionSystem,
+            spatialAuthorityStore: CreateSingleLocationSpatialAuthority(),
+            recordSequence: records.Sequence,
+            runtimeIdAllocator: records.Allocator,
+            economyTransactionService: transactionService,
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            runtimeIdentityRegistry: identities,
+            spatialNetworkRuntime: network,
+            requireP12RuntimeIdentitySpatialCensusOwners: true,
+            requireP12ReceiptCensusOwners: true,
             worldId: worldId ?? new WorldId(Guid.NewGuid()));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialFailure), Is.True,
+            "The complete selected-profile test fixture must satisfy owner census before publication: " + initialFailure);
+        return runtime;
     }
 
     private static void AssertRestoredAdmissionWasNotPublished(SimulationRuntime runtime)
@@ -11669,6 +12178,36 @@ public sealed class SimulationRuntimeAdmissionTests
         public void Replace(string source, string destination) => inner.Replace(source, destination);
         public void Move(string source, string destination) => inner.Move(source, destination);
         public void Delete(string path) => inner.Delete(path);
+    }
+
+    private sealed class AdmissionProbeRandomSource : IAuthoritativeRandomSource
+    {
+        private readonly IAuthoritativeRandomSource inner = new DeterministicRandomSource();
+        private readonly string decisionStreamPrefix;
+        private readonly Action observeDecision;
+
+        public AdmissionProbeRandomSource(string actorRuntimeId, Action observeDecision)
+        {
+            if (string.IsNullOrWhiteSpace(actorRuntimeId))
+                throw new ArgumentException("An observed actor runtime identity is required.", nameof(actorRuntimeId));
+            decisionStreamPrefix = "npc-decision|" + actorRuntimeId + "|";
+            this.observeDecision = observeDecision;
+        }
+
+        public float NextUnit(string streamKey, long drawIndex = 0L)
+        {
+            float value = inner.NextUnit(streamKey, drawIndex);
+            if (observeDecision != null
+                && streamKey != null
+                && streamKey.StartsWith(decisionStreamPrefix, StringComparison.Ordinal))
+                observeDecision();
+            return value;
+        }
+
+        public DeterministicRandomStream CreateStream(string streamKey)
+        {
+            return inner.CreateStream(streamKey);
+        }
     }
 
     private sealed class AdmissionProbeActionProvider : INpcActionProvider

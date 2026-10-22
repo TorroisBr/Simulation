@@ -131,6 +131,20 @@ public class NpcRuntime : ICapabilityConditionSource
         && selectedRuntimeOwners != null
         && ReferenceEquals(selectedRuntimeOwners.Definitions, selectedDefinitionGraph)
         && selectedRuntimeOwners.TryCopyStatusDefinitionIds(destination);
+
+    internal bool HasSelectedDailyV1Status(string statusDefinitionId)
+    {
+        DailyV1NpcRuntimeOwners owners = selectedRuntimeOwners;
+        DailyV1EffectiveDefinitions definitions = selectedDefinitionGraph;
+        return owners != null
+            && definitions != null
+            && ReferenceEquals(owners.Definitions, definitions)
+            && !string.IsNullOrWhiteSpace(statusDefinitionId)
+            && definitions.Statuses.TryGetValue(statusDefinitionId, out DailyV1StatusDefinition status)
+            && owners.Status != null
+            && owners.Status.Contains(status);
+    }
+
     internal bool HasJobType(NpcJobType jobType)
     {
         if (selectedDailyV1Definition == null)
@@ -2566,6 +2580,26 @@ public class NpcRuntime : ICapabilityConditionSource
         out CityRuntime[] changedCities)
     {
         changedCities = null;
+        if (!CanPrepareSelectedTravelProjection(plan, projectionCandidates,
+                out CityRuntime[] preparedChangedCities)
+            || !CanAdmitPreparedSelectedTravelDay(plan, preparedChangedCities))
+            return false;
+
+        changedCities = preparedChangedCities;
+        return true;
+    }
+
+    /// <summary>
+    /// Preflights exact Unity City/NPC projections for a Core-owned travel
+    /// transition without performing P12 admission. The caller can then run
+    /// admission at the Core owner's immediate pre-commit boundary.
+    /// </summary>
+    internal bool CanPrepareSelectedTravelProjection(
+        DailyV1SelectedTravelTransitionPlan plan,
+        IReadOnlyList<CityRuntime> projectionCandidates,
+        out CityRuntime[] changedCities)
+    {
+        changedCities = null;
         if (selectedRuntimeOwners == null
             || plan == null
             || !ReferenceEquals(plan.Npc, selectedRuntimeOwners)
@@ -2595,10 +2629,24 @@ public class NpcRuntime : ICapabilityConditionSource
             changed.Add(projection);
         }
 
-        if (!plan.IsNoOp && !CanCommitP12TravelStateMutation(plan.TravelRevisionChanges, changed))
-            return false;
         changedCities = changed.ToArray();
         return true;
+    }
+
+    /// <summary>Performs the existing P12 admission immediately before Core installs a prepared travel plan.</summary>
+    internal bool CanAdmitPreparedSelectedTravelDay(
+        DailyV1SelectedTravelTransitionPlan plan,
+        IReadOnlyList<CityRuntime> changedCities)
+    {
+        if (selectedRuntimeOwners == null
+            || plan == null
+            || !ReferenceEquals(plan.Npc, selectedRuntimeOwners)
+            || !HasConsistentSelectedTravelState)
+            return false;
+
+        return plan.IsNoOp
+            || CanCommitP12TravelStateMutation(
+                plan.TravelRevisionChanges, changedCities ?? Array.Empty<CityRuntime>());
     }
 
     /// <summary>
@@ -2619,6 +2667,35 @@ public class NpcRuntime : ICapabilityConditionSource
             || !plan.IsCommitted)
             return false;
 
+        SpatialLocationRuntime nextCurrentLocation = arriving ? destinationLocation : currentLocation;
+        CityRuntime nextCurrentCity = arriving ? destinationCity : currentCity;
+        SpatialLocationRuntime nextDestinationLocation = arriving ? null : destinationLocation;
+        CityRuntime nextDestinationCity = arriving ? null : destinationCity;
+        if (!TryProjectCommittedSelectedTravelTransition(
+                plan, changedCities,
+                nextCurrentLocation, nextCurrentCity,
+                nextDestinationLocation, nextDestinationCity))
+            return false;
+
+        if (arriving) arrivedCity = nextCurrentCity;
+        return true;
+    }
+
+    /// <summary>Projects a committed Core travel owner using the exact host-side locations and cities selected before commit.</summary>
+    internal bool TryProjectCommittedSelectedTravelTransition(
+        DailyV1SelectedTravelTransitionPlan plan,
+        IReadOnlyList<CityRuntime> changedCities,
+        SpatialLocationRuntime nextCurrentLocation,
+        CityRuntime nextCurrentCity,
+        SpatialLocationRuntime nextDestinationLocation,
+        CityRuntime nextDestinationCity)
+    {
+        if (selectedRuntimeOwners == null
+            || plan == null
+            || !ReferenceEquals(plan.Npc, selectedRuntimeOwners)
+            || !plan.IsCommitted)
+            return false;
+
         foreach (CityRuntime changedCity in changedCities ?? Array.Empty<CityRuntime>())
         {
             bool shouldContain = changedCity.SelectedRuntimeOwners.NpcPresence.Contains(RuntimeId);
@@ -2626,10 +2703,10 @@ public class NpcRuntime : ICapabilityConditionSource
                 throw new InvalidOperationException("A committed Core presence transition could not update its Unity object projection.");
         }
 
-        currentLocation = arriving ? destinationLocation : currentLocation;
-        currentCity = arriving ? destinationCity : currentCity;
-        destinationLocation = arriving ? null : destinationLocation;
-        destinationCity = arriving ? null : destinationCity;
+        currentLocation = nextCurrentLocation;
+        currentCity = nextCurrentCity;
+        destinationLocation = nextDestinationLocation;
+        destinationCity = nextDestinationCity;
         travelDaysRemaining = selectedRuntimeOwners.Travel.TravelDaysRemaining;
         travelDaysTotal = selectedRuntimeOwners.Travel.TravelDaysTotal;
         travelRouteRuntimeId = selectedRuntimeOwners.Travel.TravelRouteRuntimeId;
@@ -2639,7 +2716,6 @@ public class NpcRuntime : ICapabilityConditionSource
         if (!HasConsistentSelectedTravelState)
             throw new InvalidOperationException("The selected NPC projection differs from the committed Core travel owner.");
 
-        if (arriving) arrivedCity = currentCity;
         return true;
     }
 

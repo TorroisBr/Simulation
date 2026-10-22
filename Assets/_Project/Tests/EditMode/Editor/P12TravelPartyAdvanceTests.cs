@@ -211,19 +211,30 @@ public sealed class P12TravelPartyAdvanceTests
     [Test]
     public void DailyTravelPartyAdvanceBatchesOwnersAndSequenceUnderNestedOperation()
     {
-        TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture(routeTravelDays: 1);
-        Assert.That(fixture.System.TryStartTravelParty(CreatePartyContext(fixture), out _), Is.True);
-        SimulationRuntime runtime = CreateDailyRuntime(
-            new[] { fixture.World.A, fixture.World.B, fixture.World.C },
-            fixture.Members,
-            fixture.Records.Time,
-            fixture.Travel,
-            fixture.System,
-            fixture.Records.Sequence,
-            fixture.Records.Allocator);
+        const string prefix = "p12-travel-party-advance-selected";
+        CityRuntime cityA = SimulationTestFactory.CreateCity(prefix + "-city-a", prefix + "-location-a");
+        CityRuntime cityB = SimulationTestFactory.CreateCity(prefix + "-city-b", prefix + "-location-b");
+        NpcRuntime bruno = CreateTravelPartyMember(prefix + "-bruno", cityA);
+        NpcRuntime caio = CreateTravelPartyMember(prefix + "-caio", cityA);
+        NpcRuntime marta = CreateTravelPartyMember(prefix + "-marta", cityA);
+        NpcRuntime[] members = { bruno, caio, marta };
+        string routeABId = prefix + "-route-0-forward";
+        DailyV1SelectedProfileFixture profile = DailyV1SelectedProfileFixture.Create(
+            prefix,
+            cities: new[] { cityA, cityB },
+            npcs: members,
+            configureTravelPartySystem: system => Assert.That(system.TryStartTravelParty(
+                new ActionExecutionContext(prefix + "-start", new[]
+                {
+                    new ActionExecutionParticipant(bruno.RuntimeId, ActionExecutionParticipantRole.Performer),
+                    new ActionExecutionParticipant(caio.RuntimeId, ActionExecutionParticipantRole.Performer),
+                    new ActionExecutionParticipant(marta.RuntimeId, ActionExecutionParticipantRole.Support)
+                }, cityB.Location.RuntimeId, routeABId), out _), Is.True));
+        SimulationRuntime runtime = profile.Runtime;
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
         ContinuationCensusProtocol protocol = GetProtocol(runtime);
         List<int> activeOperationsAtTravelOwnerCommit = new List<int>();
-        WrapNpcTravelCommitted(fixture.Bruno, () =>
+        WrapNpcTravelCommitted(bruno, () =>
         {
             Assert.That(protocol.TryReadActiveOperationCount(out int active, out ContinuationCensusFailure failure), Is.True,
                 failure.ToString());
@@ -234,8 +245,9 @@ public sealed class P12TravelPartyAdvanceTests
 
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long beforeStartDayClear, out ContinuationCensusFailure readBefore),
             Is.True, readBefore.ToString());
-        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstFailure), Is.True, firstFailure.ToString());
-        Assert.That(fixture.Members.All(member => !member.TravelStartedToday), Is.True);
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstFailure), Is.True,
+            firstFailure.ToString());
+        Assert.That(members.All(member => !member.TravelStartedToday), Is.True);
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long afterStartDayClear, out ContinuationCensusFailure readAfter),
             Is.True, readAfter.ToString());
         Assert.That(afterStartDayClear, Is.EqualTo(beforeStartDayClear + 1));
@@ -244,20 +256,21 @@ public sealed class P12TravelPartyAdvanceTests
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long beforeArrival, out ContinuationCensusFailure readBeforeArrival),
             Is.True, readBeforeArrival.ToString());
         IOwnerSectionCensusProvider eventCounterProvider =
-            RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(fixture.Records.Allocator);
+            RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(profile.Records.Allocator);
         long eventCounterRevisionBeforeArrival = eventCounterProvider.GetCurrentCensus().Revision;
-        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure arrivalFailure), Is.True, arrivalFailure.ToString());
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure arrivalFailure), Is.True,
+            arrivalFailure.ToString());
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long afterArrival, out ContinuationCensusFailure readAfterArrival),
             Is.True, readAfterArrival.ToString());
         Assert.That(afterArrival, Is.EqualTo(beforeArrival + 1),
             "TravelParty, City, NPC, SpatialKnowledge, Event-counter, and record-sequence writes share one nested operation epoch");
         Assert.That(eventCounterProvider.GetCurrentCensus().Revision, Is.EqualTo(eventCounterRevisionBeforeArrival + 1),
             "the arrival event ID allocation is included in the selected allocator census");
-        Assert.That(fixture.Parties.ActiveParties, Is.Empty);
-        Assert.That(fixture.Members.All(member => member.CurrentCity == fixture.World.B
+        Assert.That(profile.TravelParties.ActiveParties, Is.Empty);
+        Assert.That(members.All(member => member.CurrentCity == cityB
             && member.ActiveTravelPartyId == null && !member.IsTraveling), Is.True);
-        Assert.That(fixture.World.B.ImportantNpcs.Count, Is.EqualTo(fixture.Members.Count));
-        Assert.That(fixture.Records.Events.Events.Last().EventType, Is.EqualTo(DomainEventType.TravelPartyArrived));
+        Assert.That(cityB.ImportantNpcs.Count, Is.EqualTo(members.Length));
+        Assert.That(profile.Records.Events.Events.Last().EventType, Is.EqualTo(DomainEventType.TravelPartyArrived));
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
             assessment.ToString());
 
@@ -358,6 +371,15 @@ public sealed class P12TravelPartyAdvanceTests
         }, fixture.World.B.Location.RuntimeId, fixture.World.RouteAB.RuntimeId);
     }
 
+    private static NpcRuntime CreateTravelPartyMember(string runtimeId, CityRuntime city)
+    {
+        return new NpcRuntime(
+            runtimeId,
+            SimulationTestFactory.CreateNpc(runtimeId, NpcJobType.Merchant),
+            city,
+            100f);
+    }
+
     private static NpcTravelStateCensusProvider GetTravelStateProvider(SimulationRuntime runtime, string runtimeId)
     {
         ContinuationCensusProtocol protocol = GetProtocol(runtime);
@@ -375,9 +397,7 @@ public sealed class P12TravelPartyAdvanceTests
 
     private static long ReadProtocolEpoch(ContinuationCensusProtocol protocol)
     {
-        return (long)typeof(ContinuationCensusProtocol)
-            .GetField("mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(protocol);
+        return SimulationTestFactory.ReadContinuationMutationEpoch(protocol);
     }
 
     private static void SetTravelStateRevision(NpcRuntime npc, long revision)

@@ -459,9 +459,14 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             Is.True, anchorAdvance.ToString());
         DailyCaptureEligibilityToken anchorToken = GetCompletedToken(runtime);
 
-        RuntimeIdentityRegistry identityRegistry = GetOwner<RuntimeIdentityRegistry>(
+        DailyV1RuntimeIdentityIndex identityIndex = GetOwner<DailyV1RuntimeIdentityIndex>(
             anchorToken.OwnerSections, RuntimeIdentityRegistryCensusProvider.NpcsSectionId);
+        RuntimeIdentityRegistry identityRegistry = ReadPrivateField<RuntimeIdentityRegistry>(
+            runtime, "p12RuntimeIdentityRegistry");
+        Assert.That(identityIndex, Is.Not.Null);
         Assert.That(identityRegistry, Is.Not.Null);
+        Assert.That(identityIndex, Is.SameAs(identityRegistry.CoreIdentityIndex),
+            "The P12 C identity census must bind to the Core authority projected by the Unity registry.");
         return new AnchorFixture(bootstrap, config, composition, runtime, normalContext, anchorToken, identityRegistry);
     }
 
@@ -1458,11 +1463,11 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         AppendValue(signature, "C/random-algorithm-version", random.AlgorithmVersion);
         AppendValue(signature, "C/random-seed", random.Seed);
 
-        RuntimeIdentityRegistry identities = GetOwner<RuntimeIdentityRegistry>(
+        DailyV1RuntimeIdentityIndex identities = GetOwner<DailyV1RuntimeIdentityIndex>(
             token.OwnerSections, RuntimeIdentityRegistryCensusProvider.NpcsSectionId);
-        Assert.That(identities, Is.SameAs(session.IdentityRegistry),
-            "The C census and admitted session must retain the same RuntimeIdentityRegistry owner.");
-        foreach (KeyValuePair<string, string> identity in identities.CaptureRegisteredRuntimeIdentityValues()
+        Assert.That(identities, Is.SameAs(session.IdentityRegistry.CoreIdentityIndex),
+            "The C census must retain the exact Core identity authority projected by the admitted Unity registry.");
+        foreach (KeyValuePair<string, string> identity in session.IdentityRegistry.CaptureRegisteredRuntimeIdentityValues()
                      .OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
             AppendValue(signature, "C/runtime-identity-family", identity.Key);

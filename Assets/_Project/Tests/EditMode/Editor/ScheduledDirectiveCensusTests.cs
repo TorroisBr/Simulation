@@ -401,7 +401,8 @@ public sealed class ScheduledDirectiveCensusTests
         Assert.That(original, Is.Not.Null);
         callbackField.SetValue(fixture.Store, new Action(() =>
         {
-            SetPrivateField(protocol, "mutationEpoch", long.MaxValue);
+            SimulationTestFactory.SetContinuationMutationEpoch(
+                (ContinuationCensusProtocol)protocol, long.MaxValue);
             original();
         }));
 
@@ -558,7 +559,8 @@ public sealed class ScheduledDirectiveCensusTests
     private static long ReadMutationEpoch(SimulationRuntime runtime)
     {
         object protocol = ReadPrivateField<object>(runtime, "npcRosterCensusProtocol");
-        return ReadPrivateField<long>(protocol, "mutationEpoch");
+        return SimulationTestFactory.ReadContinuationMutationEpoch(
+            (ContinuationCensusProtocol)protocol);
     }
 
     private static void AssertMutationEpoch(SimulationRuntime runtime, long expected, string message)
@@ -572,7 +574,8 @@ public sealed class ScheduledDirectiveCensusTests
     private static void SetMutationEpoch(SimulationRuntime runtime, long epoch)
     {
         object protocol = ReadPrivateField<object>(runtime, "npcRosterCensusProtocol");
-        SetPrivateField(protocol, "mutationEpoch", epoch);
+        SimulationTestFactory.SetContinuationMutationEpoch(
+            (ContinuationCensusProtocol)protocol, epoch);
     }
 
     private static void AssertDirectiveRemainsUnbound(ScheduledDirective directive)

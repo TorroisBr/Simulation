@@ -11,7 +11,6 @@ internal interface IDailyV1SelectedDailyExecutionBoundary
     void BeginLoggerDay(long absoluteDay);
     void AdvanceSelectedDemography();
     void BeginSimulationDay();
-    void PrepareScheduledDirectives(long absoluteDay);
     void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph);
     void LogSelectedDailyEconomy(
         DailyV1CityRuntimeOwners owner,
@@ -34,6 +33,7 @@ internal static class DailyV1SelectedDailyExecutionStage
     internal static void Advance(
         long absoluteDay,
         DailyV1SelectedRuntimeOwnerGraph graph,
+        ScheduledDirectiveStore scheduledDirectives,
         IDailyV1SelectedDailyExecutionBoundary boundary)
     {
         if (graph == null) throw new ArgumentNullException(nameof(graph));
@@ -44,7 +44,13 @@ internal static class DailyV1SelectedDailyExecutionStage
         boundary.BeginLoggerDay(absoluteDay);
         boundary.AdvanceSelectedDemography();
         boundary.BeginSimulationDay();
-        boundary.PrepareScheduledDirectives(absoluteDay);
+        if (scheduledDirectives != null)
+        {
+            if (graph.RuntimeIdentityIndex == null)
+                throw new InvalidOperationException(
+                    "Selected Daily-v1 directive preparation requires the Core runtime identity index.");
+            scheduledDirectives.PrepareSelectedDailyV1Day(absoluteDay, graph.RuntimeIdentityIndex);
+        }
 
         if (graph.Definitions.EffectiveConfiguration?.Economy?.Enabled == true)
         {

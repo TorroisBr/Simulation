@@ -367,6 +367,8 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         Assert.That(npc.Inventory.TryAddItem(item, 3, 4.5f), Is.True);
         Assert.That(npc.MoneyAccount.TryCredit(2.5f), Is.True);
         npc.HideForDays(2);
+        Assert.That(npc.HiddenDaysRemaining, Is.EqualTo(3),
+            "Two hidden days include the current day in the existing runtime countdown.");
         Assert.That(npc.SetResidenceSettlementRuntimeId(city.RuntimeId), Is.True);
         NpcActionRuntime actionRuntime = new NpcActionRuntime(action, destinationCity, item, 2, 3.25f);
         actionRuntime.SetSuccessChanceMultiplier(0.4f);
@@ -438,7 +440,8 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         Assert.That(capturedD.CurrentCityRuntimeId, Is.EqualTo(city.RuntimeId));
         Assert.That(capturedD.CurrentLocationRuntimeId, Is.EqualTo(city.Location.RuntimeId));
         Assert.That(capturedD.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
-        Assert.That(capturedD.HiddenDaysRemaining, Is.EqualTo(3));
+        Assert.That(capturedD.HiddenDaysRemaining, Is.EqualTo(2),
+            "A complete Daily-v1 boundary advances the existing hidden-day countdown once.");
         Assert.That(capturedF.Action.ActionDefinitionId, Is.EqualTo(action.DefinitionId));
         Assert.That(capturedF.Action.Amount, Is.EqualTo(2));
         Assert.That(capturedF.Action.TargetCityRuntimeId, Is.EqualTo(destinationCity.RuntimeId));
@@ -502,9 +505,9 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         Assert.That(restored.Inventory.Revision, Is.EqualTo(npc.Inventory.Revision));
         Assert.That(restored.MoneyAccount.Balance, Is.EqualTo(27.5f));
         Assert.That(restored.MoneyAccount.Revision, Is.EqualTo(1L));
-        Assert.That(restored.HiddenDaysRemaining, Is.EqualTo(3));
+        Assert.That(restored.HiddenDaysRemaining, Is.EqualTo(2));
         Assert.That(restored.AdvanceHiddenDay(), Is.False);
-        Assert.That(restored.HiddenDaysRemaining, Is.EqualTo(2),
+        Assert.That(restored.HiddenDaysRemaining, Is.EqualTo(1),
             "staging must not consume the hidden-day clock; the next explicit day input advances it once");
         Assert.That(restored.TravelPlan.TargetCity, Is.SameAs(stagedCities[1]));
         Assert.That(restored.TravelPlan.Utility, Is.EqualTo(2.75f));
@@ -1213,14 +1216,66 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             routeIds[1], networkLocations[1], networkLocations[0], 1)), Is.True);
 
         if (siteStore == null) siteStore = new ExplorableSiteStore();
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
+        EconomyTransactionService transactionService = new EconomyTransactionService();
+        TravelSystem travelSystem = new TravelSystem(
+            network,
+            location => cities.FirstOrDefault(city => ReferenceEquals(city.Location, location)),
+            1f,
+            records.EventRecorder,
+            null,
+            transactionService);
+        ScheduledDirectiveStore directiveStore = new ScheduledDirectiveStore(records.Time);
+        ScheduledDirectiveSystem directiveSystem = new ScheduledDirectiveSystem(directiveStore, identities);
+        JusticeSystem justiceSystem = new JusticeSystem(null, null, null, null,
+            records.EventRecorder, null);
+        CrimeSystem crimeSystem = new CrimeSystem(justiceSystem, travelSystem, null,
+            transactionService: transactionService,
+            configuration: new EffectiveCrimeConfiguration(false, false),
+            simulationTime: records.Time);
+        TravelPartyStore travelPartyStore = new TravelPartyStore();
+        TravelPartySystem travelPartySystem = new TravelPartySystem(
+            travelPartyStore,
+            records.Allocator,
+            identities,
+            travelSystem,
+            records.Time,
+            records.Sequence,
+            records.EventRecorder,
+            transactionService: transactionService);
+        ExpeditionStore expeditionStore = new ExpeditionStore();
+        ExplorableSiteKnowledgeSystem siteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
+        ExpeditionSystem expeditionSystem = new ExpeditionSystem(
+            expeditionStore,
+            records.Allocator,
+            identities,
+            siteStore,
+            travelPartySystem,
+            travelPartyStore,
+            siteKnowledgeSystem,
+            records.Time,
+            records.EventRecorder);
+
         SimulationRuntime runtime = new SimulationRuntime(
-            new SimulationTime(), cities, npcs,
+            records.Time, cities, npcs,
             economyEnabled: false,
+            scheduledDirectiveSystem: directiveSystem,
+            justiceSystem: justiceSystem,
+            crimeSystem: crimeSystem,
+            travelSystem: travelSystem,
+            travelPartySystem: travelPartySystem,
+            decisionRecorder: records.DecisionRecorder,
             explorableSiteStore: siteStore,
+            explorableSiteKnowledgeSystem: siteKnowledgeSystem,
+            expeditionSystem: expeditionSystem,
             spatialAuthorityStore: CreateSpatialAuthority(),
             personStore: personStore,
             genealogyStore: genealogyStore,
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            recordSequence: records.Sequence,
+            runtimeIdAllocator: records.Allocator,
+            economyTransactionService: transactionService,
+            requireP12ReceiptCensusOwners: true,
             runtimeIdentityRegistry: identities,
             spatialNetworkRuntime: network,
             requireP12RuntimeIdentitySpatialCensusOwners: true,

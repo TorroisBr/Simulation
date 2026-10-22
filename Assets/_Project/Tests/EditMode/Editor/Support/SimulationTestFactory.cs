@@ -8,6 +8,53 @@ public static class SimulationTestFactory
     private static readonly List<UnityEngine.Object> createdDefinitions = new List<UnityEngine.Object>();
     private static int nextTestJobDefinitionId;
 
+    public static ScheduledDirectiveSystem CreateEmptyScheduledDirectiveSystem(
+        SimulationTime simulationTime,
+        IEnumerable<NpcRuntime> npcs)
+    {
+        if (simulationTime == null) throw new ArgumentNullException(nameof(simulationTime));
+        RuntimeIdentityRegistry identities = new RuntimeIdentityRegistry();
+        if (npcs != null)
+        {
+            foreach (NpcRuntime npc in npcs)
+            {
+                if (npc == null || !identities.RegisterNpc(npc))
+                    throw new InvalidOperationException("The empty scheduled-directive fixture requires unique registered NPC identities.");
+            }
+        }
+
+        return new ScheduledDirectiveSystem(new ScheduledDirectiveStore(simulationTime), identities);
+    }
+
+    public static long ReadContinuationMutationEpoch(ContinuationCensusProtocol protocol)
+    {
+        object state = GetContinuationMutationEpochState(protocol);
+        FieldInfo epochField = state.GetType().GetField("epoch", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (epochField == null || epochField.FieldType != typeof(long))
+            throw new InvalidOperationException("The Core mutation-epoch state no longer exposes the expected test boundary.");
+        return (long)epochField.GetValue(state);
+    }
+
+    public static void SetContinuationMutationEpoch(ContinuationCensusProtocol protocol, long epoch)
+    {
+        object state = GetContinuationMutationEpochState(protocol);
+        FieldInfo epochField = state.GetType().GetField("epoch", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (epochField == null || epochField.FieldType != typeof(long))
+            throw new InvalidOperationException("The Core mutation-epoch state no longer exposes the expected test boundary.");
+        epochField.SetValue(state, epoch);
+    }
+
+    private static object GetContinuationMutationEpochState(ContinuationCensusProtocol protocol)
+    {
+        if (protocol == null) throw new ArgumentNullException(nameof(protocol));
+        FieldInfo stateField = typeof(ContinuationCensusProtocol).GetField(
+            "mutationEpochState", BindingFlags.Instance | BindingFlags.NonPublic);
+        object state = stateField?.GetValue(protocol);
+        if (state == null)
+            throw new InvalidOperationException("ContinuationCensusProtocol has no Core mutation-epoch state.");
+        return state;
+    }
+
     public static ItemData CreateItem(string id, float basePrice = 10f)
     {
         ItemData item = Track(ScriptableObject.CreateInstance<ItemData>());
@@ -272,8 +319,15 @@ public static class SimulationTestFactory
         long absoluteDay = 0L,
         SimulationLogger logger = null)
     {
+        return CreateRecordFixtureWithTime(new SimulationTime(absoluteDay), logger);
+    }
+
+    public static RecordFixture CreateRecordFixtureWithTime(
+        SimulationTime time,
+        SimulationLogger logger = null)
+    {
+        if (time == null) throw new ArgumentNullException(nameof(time));
         RuntimeIdAllocator allocator = new RuntimeIdAllocator();
-        SimulationTime time = new SimulationTime(absoluteDay);
         SimulationRecordSequence sequence = new SimulationRecordSequence();
         NpcDecisionStore decisions = new NpcDecisionStore(logger);
         NpcDecisionRecorder decisionRecorder = new NpcDecisionRecorder(

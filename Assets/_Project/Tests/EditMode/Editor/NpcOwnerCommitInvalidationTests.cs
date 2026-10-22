@@ -447,16 +447,12 @@ public sealed class NpcOwnerCommitInvalidationTests
 
     private static void SetMutationEpoch(ContinuationCensusProtocol protocol, long value)
     {
-        FieldInfo field = typeof(ContinuationCensusProtocol).GetField("mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.That(field, Is.Not.Null);
-        field.SetValue(protocol, value);
+        SimulationTestFactory.SetContinuationMutationEpoch(protocol, value);
     }
 
     private static long ReadMutationEpoch(ContinuationCensusProtocol protocol)
     {
-        FieldInfo field = typeof(ContinuationCensusProtocol).GetField("mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.That(field, Is.Not.Null);
-        return (long)field.GetValue(protocol);
+        return SimulationTestFactory.ReadContinuationMutationEpoch(protocol);
     }
 
     private static void AssertProtocolFaulted(ContinuationCensusProtocol protocol)

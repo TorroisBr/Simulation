@@ -548,7 +548,7 @@ internal sealed class P12DDailyV1OwnerPackage
                 || !TryMatch(token.OwnerSections, expectedWitness.SectionId,
                     expectedWitness.SchemaVersion,
                     i < 4 ? OwnerSectionRole.Required : OwnerSectionRole.ExplicitlyEmpty,
-                    source, expectedWitness.Cardinality, expectedWitness.Revision))
+                    source.CoreIdentityIndex, expectedWitness.Cardinality, expectedWitness.Revision))
                 return false;
             if (expectedRevision < 0L) expectedRevision = expectedWitness.Revision;
             else if (expectedRevision != expectedWitness.Revision) return false;

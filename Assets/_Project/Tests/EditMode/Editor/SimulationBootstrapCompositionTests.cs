@@ -3686,14 +3686,15 @@ public sealed class SimulationBootstrapCompositionTests
 
         RuntimeIdentityRegistry identityRegistry =
             (RuntimeIdentityRegistry)GetRuntimeOwner(runtime, "p12RuntimeIdentityRegistry");
-        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.NpcsSectionId, identityRegistry);
-        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.CitiesSectionId, identityRegistry);
-        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.LocationsSectionId, identityRegistry);
-        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.RoutesSectionId, identityRegistry);
-        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.ExplorableSitesSectionId, identityRegistry);
-        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.LocalPlacesSectionId, identityRegistry);
-        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.LocalConnectionsSectionId, identityRegistry);
-        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.NotableItemsSectionId, identityRegistry);
+        DailyV1RuntimeIdentityIndex identityIndex = identityRegistry.CoreIdentityIndex;
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.NpcsSectionId, identityIndex);
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.CitiesSectionId, identityIndex);
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.LocationsSectionId, identityIndex);
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.RoutesSectionId, identityIndex);
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.ExplorableSitesSectionId, identityIndex);
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.LocalPlacesSectionId, identityIndex);
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.LocalConnectionsSectionId, identityIndex);
+        AddExpectedDailyV1OwnerIdentity(expected, RuntimeIdentityRegistryCensusProvider.NotableItemsSectionId, identityIndex);
 
         SpatialNetworkRuntime spatialNetwork =
             (SpatialNetworkRuntime)GetRuntimeOwner(runtime, "p12SpatialNetworkRuntime");
