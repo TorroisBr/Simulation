@@ -450,7 +450,7 @@ internal static class P12DNpcRootOwnerSnapshot
             || token.CompletedCoreSequence <= 0L || token.AbsoluteDay < 0L || token.MutationEpoch < 0L)
             return false;
 
-        if (!runtime.TryValidateCompletedDailyCaptureToken(token, out _))
+        if (!runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
         {
             failure = P12DNpcRootOwnerSnapshotFailure.StaleCapture;
             return false;
@@ -513,7 +513,7 @@ internal static class P12DNpcRootOwnerSnapshot
             fRows.Add(fRow);
         }
 
-        if (!runtime.TryValidateCompletedDailyCaptureToken(token, out _)
+        if (!runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _)
             || !evidence.AreReceiptOwnersStillExactZero())
         {
             failure = P12DNpcRootOwnerSnapshotFailure.StaleCapture;
@@ -943,7 +943,7 @@ internal static class P12DNpcRootOwnerSnapshot
                 || dProjection.Evidence != null || fProjection.Evidence != null))
             || dProjection.Rows == null || fProjection.Rows == null
             || dProjection.Rows.Count != fProjection.Rows.Count
-            || (requireCaptureEvidence && !sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _)))
+            || (requireCaptureEvidence && !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _)))
         {
             failure = P12DNpcRootOwnerSnapshotFailure.StaleCapture;
             return false;
@@ -1315,7 +1315,7 @@ internal static class P12DNpcRootOwnerSnapshot
             }
         }
 
-        if (requireCaptureEvidence && (!sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _)
+        if (requireCaptureEvidence && (!sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _)
             || !dProjection.Evidence.AreReceiptOwnersStillExactZero()))
         {
             failure = P12DNpcRootOwnerSnapshotFailure.StaleCapture;
@@ -1338,7 +1338,7 @@ internal static class P12DNpcRootOwnerSnapshot
             return false;
         }
 
-        if (requireCaptureEvidence && !sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _))
+        if (requireCaptureEvidence && !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
         {
             failure = P12DNpcRootOwnerSnapshotFailure.StaleCapture;
             return false;

@@ -84,7 +84,7 @@ internal sealed class P12FDailyV1OwnerCapture
             || token.CompletedCoreSequence <= 0L || token.AbsoluteDay < 0L
             || token.MutationEpoch < 0L
             || !ReferenceEquals(token.WorldId, sourceRuntime.WorldId)
-            || !sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _))
+            || !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
             return false;
 
         try
@@ -110,7 +110,7 @@ internal sealed class P12FDailyV1OwnerCapture
                 || !P12FTravelPartyOwnerSnapshot.TryCapture(
                     travelPartyOwner, token, exactOwnerSectionVector,
                     out P12FTravelPartyOwnerSnapshot travelPartySnapshot, out _)
-                || !P12FExpeditionOwnerSnapshot.TryCapture(
+                || !P12FExpeditionOwnerSnapshotOperations.TryCapture(
                     expeditionOwner, token, exactOwnerSectionVector,
                     out P12FExpeditionOwnerSnapshot expeditionSnapshot, out _))
             {
@@ -119,7 +119,7 @@ internal sealed class P12FDailyV1OwnerCapture
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.FOwnerSnapshotsCaptured);
 
-            if (!sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _))
+            if (!sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
             {
                 failure = P12FDailyV1OwnerPackageFailure.StaleBoundary;
                 return false;
@@ -177,7 +177,7 @@ internal sealed class P12FDailyV1OwnerCapture
             || context.StagedSimulationTime.AbsoluteDay != exactCompletedToken.AbsoluteDay
             || stagedE.WorldId == null
             || !string.Equals(stagedE.WorldId.Value, exactCompletedToken.WorldId?.Value, StringComparison.Ordinal)
-            || !sourceRuntime.TryValidateCompletedDailyCaptureToken(exactCompletedToken, out _))
+            || !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(exactCompletedToken, out _))
             return false;
 
         if (!TryBuildActionMap(admittedActionDefinitions,
@@ -244,7 +244,7 @@ internal sealed class P12FDailyV1OwnerCapture
         }
         stageObserver?.Invoke(P12GDailyV1RestoreStage.FTravelPartiesStaged);
 
-        if (!P12FExpeditionOwnerSnapshot.TryStage(
+        if (!P12FExpeditionOwnerSnapshotOperations.TryStage(
                 expeditions, stagedD.Npcs, stagedD.NpcFRows,
                 stagedD.RuntimeIdentities, stagedTravelParties,
                 out ExpeditionStore stagedExpeditions, out _))
@@ -416,7 +416,7 @@ internal sealed class P12FDailyV1OwnerPackage
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.FTravelPartiesStaged);
 
-            if (!P12FExpeditionOwnerSnapshot.TryStage(decoded.Expeditions,
+            if (!P12FExpeditionOwnerSnapshotOperations.TryStage(decoded.Expeditions,
                     context.P12DPackage.Npcs, context.P12DPackage.NpcFRows,
                     context.P12DPackage.RuntimeIdentities, travelParties,
                     out ExpeditionStore expeditions, out _))

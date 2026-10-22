@@ -35,6 +35,18 @@ internal interface IDailyV1SelectedMerchantTradeStateBoundary
 }
 
 /// <summary>
+/// Existing Unity/P12 admission wrapper for one selected actor's daily
+/// Merchant state operation. Core owns invoking the operation and its owner
+/// mutations; the host supplies only the established admission lifetime.
+/// </summary>
+internal interface IDailyV1SelectedMerchantTradeStateAdmissionBoundary
+{
+    bool ExecuteWithinSelectedMerchantDailyOperation(
+        DailyV1NpcRuntimeOwners actor,
+        Func<bool> operation);
+}
+
+/// <summary>
 /// Advances the selected Daily-v1 merchant plan from the same Core owner graph
 /// used by selected actions and continuation capture. This is the existing
 /// once-per-actor daily trade-state pass, not an additional trade operation.

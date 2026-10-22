@@ -312,6 +312,8 @@ public sealed class DailyV1SelectedCrimeJusticeDailyStageTests
 
         internal FakeBoundary(DailyV1SelectedRuntimeOwnerGraph graph) => this.graph = graph;
 
+        public DailyV1JusticeRecordsOwner JusticeRecordsOwner => graph.JusticeRecordsOwner;
+
         public void ExecuteWithinDailyMutation(
             DailyV1SelectedCrimeJusticeDailyPhase phase,
             Action mutation)

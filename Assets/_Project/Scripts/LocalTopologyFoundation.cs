@@ -1,11 +1,6 @@
 using System;
 using System.Collections.Generic;
 
-public enum LocalTopologyOwnerKind
-{
-    City,
-    ExplorableSite
-}
 public enum LocalTopologyPublicationState
 {
     Draft,
@@ -64,7 +59,7 @@ public sealed class LocalTopologySemanticOwnerReference : IEquatable<LocalTopolo
         ^ (LocationId?.GetHashCode() ?? 0);
 }
 [Serializable]
-public sealed class LocalTopologyOwnerReference
+public sealed class LocalTopologyOwnerReference : ISpatialTopologyOwnerIdentity
 {
     private readonly string ownerRuntimeId;
     private readonly LocalTopologyOwnerKind ownerKind;

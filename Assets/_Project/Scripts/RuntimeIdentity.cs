@@ -45,6 +45,20 @@ public sealed class RuntimeIdentityRegistry
         location != null && TryBindProjection(location.RuntimeId,
             DailyV1RuntimeIdentityKind.Location, locationsByRuntimeId, location);
 
+    internal bool BindSelectedRouteProjection(SpatialRouteRuntime route) =>
+        route != null && TryBindProjection(route.RuntimeId,
+            DailyV1RuntimeIdentityKind.Route, routesByRuntimeId, route);
+
+    internal void RollbackSelectedRouteProjection(SpatialRouteRuntime route)
+    {
+        if (route == null
+            || !routesByRuntimeId.TryGetValue(route.RuntimeId, out SpatialRouteRuntime current)
+            || !ReferenceEquals(route, current)
+            || !routesByRuntimeId.Remove(route.RuntimeId))
+            throw new InvalidOperationException(
+                "Cannot roll back a selected Route lookup that does not match its Core identity.");
+    }
+
     internal bool TryBindSelectedLocationProjection(
         SpatialLocationRuntime location,
         IDictionary<string, SpatialLocationRuntime> selectedLocationsByRuntimeId)

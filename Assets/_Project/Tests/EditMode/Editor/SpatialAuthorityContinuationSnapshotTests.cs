@@ -627,7 +627,7 @@ public sealed class SpatialAuthorityContinuationSnapshotTests
 
     private static Type InnerType(string name)
     {
-        Type result = typeof(SpatialAuthorityStore).Assembly.GetType(name, false);
+        Type result = typeof(TesteSimulacao).Assembly.GetType(name, false);
         Assert.That(result, Is.Not.Null, "Missing internal P12-C geography type " + name);
         return result;
     }

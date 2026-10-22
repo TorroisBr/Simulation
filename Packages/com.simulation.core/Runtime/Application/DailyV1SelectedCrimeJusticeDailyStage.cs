@@ -18,6 +18,8 @@ internal enum DailyV1SelectedCrimeJusticeDailyPhase
 internal interface IDailyV1SelectedCrimeJusticeDailyBoundary
     : DailyV1SelectedActionExecutionStage.ISelectedNpcOwnerMutationBoundary
 {
+    DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
+
     void ExecuteWithinDailyMutation(
         DailyV1SelectedCrimeJusticeDailyPhase phase,
         Action mutation);
@@ -54,7 +56,10 @@ internal static class DailyV1SelectedCrimeJusticeDailyStage
             || !TryResolveStatus(graph.Definitions, graph.Definitions.Configuration?.wantedStatus,
                 out DailyV1StatusDefinition wantedStatus)
             || !TryValidateRoster(graph, orderedRoster)
-            || (justiceSystemPresent && !TryValidateJusticeOwners(graph)))
+            || (justiceSystemPresent
+                && (graph.JusticeRecordsOwner == null
+                    || !ReferenceEquals(graph.JusticeRecordsOwner, boundary.JusticeRecordsOwner)
+                    || !TryValidateJusticeOwners(graph))))
             return false;
 
         if (justiceSystemPresent)

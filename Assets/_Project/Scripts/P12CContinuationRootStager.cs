@@ -37,7 +37,7 @@ internal sealed class DailyCaptureStagingAttempt
             || token.AdmissionContext == null
             || token.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || token.CompletedCoreSequence <= 0L
-            || !sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _))
+            || !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
             return false;
 
         attempt = new DailyCaptureStagingAttempt(sourceRuntime, token, ownerSections);
@@ -53,7 +53,7 @@ internal sealed class DailyCaptureStagingAttempt
             && ReferenceEquals(token, candidateToken)
             && ReferenceEquals(ownerSections, candidateOwnerSections)
             && candidateRuntime != null
-            && candidateRuntime.TryValidateCompletedDailyCaptureToken(candidateToken, out _);
+            && candidateRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(candidateToken, out _);
     }
 
     internal bool IsCurrent => IsCurrentFor(sourceRuntime, token, ownerSections);

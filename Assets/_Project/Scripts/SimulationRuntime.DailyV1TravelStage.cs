@@ -3,9 +3,10 @@ using System.Collections.Generic;
 
 public sealed partial class SimulationRuntime
 {
-    private bool TryAdvanceSelectedTravelDayStage(out IReadOnlyList<NpcRuntime> arrivedNpcs)
+    private bool TryCreateSelectedTravelDayExecutionContext(
+        out IDailyV1SelectedTravelDayExecutionContext context)
     {
-        arrivedNpcs = null;
+        context = null;
         DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
         if (graph == null) return false;
         travelPartySystem?.EnsureSelectedDailyTravelAdvanceAvailable();
@@ -19,44 +20,103 @@ public sealed partial class SimulationRuntime
             ? travelSystem.GetManagedTravelPartyNpcRuntimeIds()
             : Array.Empty<string>();
 
-        bool advanced = DailyV1SelectedTravelDayStage.TryAdvance(
-            graph,
-            travelPartySystem?.Store,
-            managedPartyMembers,
-            boundary,
-            operation =>
-            {
-                if (runtimeAdmissionContext == null) return operation();
-                if (!TryBeginP12TravelPartyAdvanceOperation(
-                        out P12TravelPartyAdvanceOperationScope operationScope))
-                    throw new InvalidOperationException(
-                        "The P12 TravelParty advance owner operation could not be admitted.");
-                using (operationScope) return operation();
-            },
-            travelSystem != null,
-            out IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
-            out IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults);
-        if (!advanced) return false;
-
-        foreach (DailyV1SelectedTravelPartyArrivalResult partyArrival in partyArrivals)
-        {
-            foreach (DailyV1NpcRuntimeOwners owner in partyArrival.Members)
-                boundary.AddPartyArrival(owner);
-            if (!partyArrival.EventRecorded)
-                travelPartySystem?.WarnSelectedTravelPartyArrivalEventFailure(partyArrival.Party);
-        }
-
-        // Core publishes solo event/log outputs at their original per-result
-        // callback positions, but the shared arrival list consumed by later
-        // stages has always been party-first, then solo RuntimeId order.
-        foreach (DailyV1SelectedSoloTravelDayResult soloResult in soloResults)
-        {
-            if (soloResult?.ShouldReport == true && soloResult.Arrived)
-                boundary.AddSoloArrival(soloResult.Npc);
-        }
-
-        arrivedNpcs = boundary.Arrivals;
+        context = new SelectedDailyV1TravelDayExecutionContext(
+            this, travelPartySystem?.Store, managedPartyMembers, boundary,
+            advanceSoloTravel: travelSystem != null);
         return true;
+    }
+
+    private bool TryAdvanceSelectedTravelDayStage(out IReadOnlyList<NpcRuntime> arrivedNpcs)
+    {
+        arrivedNpcs = null;
+        if (!TryCreateSelectedTravelDayExecutionContext(
+                out IDailyV1SelectedTravelDayExecutionContext context)
+            || !(context is SelectedDailyV1TravelDayExecutionContext selectedContext)
+            || !DailyV1SelectedDailyExecutionStage.TryAdvanceTravelDay(
+                SelectedRuntimeOwnerGraph, selectedContext,
+                out IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
+                out IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults))
+            return false;
+
+        selectedContext.PublishCompletedTravelResults(partyArrivals, soloResults);
+        arrivedNpcs = selectedContext.Arrivals;
+        return true;
+    }
+
+    private sealed class SelectedDailyV1TravelDayExecutionContext
+        : IDailyV1SelectedTravelDayExecutionContext
+    {
+        private readonly SimulationRuntime runtime;
+        private readonly SelectedTravelDayBoundary boundary;
+
+        internal SelectedDailyV1TravelDayExecutionContext(
+            SimulationRuntime runtime,
+            TravelPartyStore partyStore,
+            IReadOnlyCollection<string> managedTravelPartyNpcRuntimeIds,
+            SelectedTravelDayBoundary boundary,
+            bool advanceSoloTravel)
+        {
+            this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+            PartyStore = partyStore;
+            ManagedTravelPartyNpcRuntimeIds = managedTravelPartyNpcRuntimeIds
+                ?? throw new ArgumentNullException(nameof(managedTravelPartyNpcRuntimeIds));
+            this.boundary = boundary ?? throw new ArgumentNullException(nameof(boundary));
+            AdvanceSoloTravel = advanceSoloTravel;
+        }
+
+        public TravelPartyStore PartyStore { get; }
+        public IReadOnlyCollection<string> ManagedTravelPartyNpcRuntimeIds { get; }
+        public IDailyV1SelectedTravelDayBoundary Boundary => boundary;
+        internal IReadOnlyList<NpcRuntime> Arrivals => boundary.Arrivals;
+        public bool AdvanceSoloTravel { get; }
+
+        public bool ExecuteWithinPartyOwnerOperation(Func<bool> operation)
+        {
+            if (operation == null) return false;
+            if (runtime.runtimeAdmissionContext == null) return operation();
+            if (!runtime.TryBeginP12TravelPartyAdvanceOperation(
+                    out P12TravelPartyAdvanceOperationScope operationScope))
+                throw new InvalidOperationException(
+                    "The P12 TravelParty advance owner operation could not be admitted.");
+            using (operationScope) return operation();
+        }
+
+        public void PublishCompletedTravelResults(
+            IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
+            IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults)
+        {
+            foreach (DailyV1SelectedTravelPartyArrivalResult partyArrival in partyArrivals)
+            {
+                foreach (DailyV1NpcRuntimeOwners owner in partyArrival.Members)
+                    boundary.AddPartyArrival(owner);
+                if (!partyArrival.EventRecorded)
+                    runtime.travelPartySystem?.WarnSelectedTravelPartyArrivalEventFailure(partyArrival.Party);
+            }
+
+            // Core publishes solo event/log outputs at their original per-result
+            // callback positions, but the shared arrival list consumed by later
+            // stages has always been party-first, then solo RuntimeId order.
+            foreach (DailyV1SelectedSoloTravelDayResult soloResult in soloResults)
+            {
+                if (soloResult?.ShouldReport == true && soloResult.Arrived)
+                    boundary.AddSoloArrival(soloResult.Npc);
+            }
+        }
+
+        public void ObserveCompletedTravelResults() =>
+            runtime.ObserveTravelArrivals(boundary.Arrivals);
+    }
+
+    private void ObserveTravelArrivals(IReadOnlyList<NpcRuntime> arrivedNpcs)
+    {
+        foreach (NpcRuntime arrivedNpc in arrivedNpcs ?? Array.Empty<NpcRuntime>())
+        {
+            ObserveArrivedExplorableSites(arrivedNpc);
+            if (arrivedNpc?.CurrentCity != null && configuration.MerchantTrade.Enabled)
+                merchantSystem?.ObserveCurrentMarket(arrivedNpc);
+        }
+
+        expeditionSystem?.ReconcileAfterTravel(arrivedNpcs ?? Array.Empty<NpcRuntime>());
     }
 
     private sealed class SelectedTravelDayBoundary : IDailyV1SelectedTravelDayBoundary

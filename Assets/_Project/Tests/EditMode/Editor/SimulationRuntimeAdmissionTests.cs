@@ -837,11 +837,16 @@ public sealed class SimulationRuntimeAdmissionTests
 
         SimulationRuntime runtime = null;
         ContinuationCensusProtocol protocol = null;
+        DailyV1ExecutionBoundaryState executionBoundaryState = null;
         int callbackCount = 0;
+        bool endedSharedProtocolOperation = false;
         AdmissionProbeRandomSource randomSource = new AdmissionProbeRandomSource(npc.RuntimeId, () =>
         {
             callbackCount++;
-            WritePrivateField(protocol, "activeOperationCount", 0);
+            MethodInfo endProtocolOperation = typeof(DailyV1ExecutionBoundaryState).GetMethod(
+                "TryEndRuntimeProtocolOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            if (endProtocolOperation != null && executionBoundaryState != null)
+                endedSharedProtocolOperation = (bool)endProtocolOperation.Invoke(executionBoundaryState, null);
         });
         runtime = CreatePublishedDailyCaptureRuntime(
             new SimulationTime(),
@@ -849,10 +854,13 @@ public sealed class SimulationRuntimeAdmissionTests
             new NpcDecisionSystem(new List<INpcActionProvider>(), randomSource),
             actions);
         protocol = ReadPrivateField<ContinuationCensusProtocol>(runtime, "npcRosterCensusProtocol");
+        executionBoundaryState = ReadPrivateField<DailyV1ExecutionBoundaryState>(protocol, "sharedExecutionState");
 
         bool advanced = runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure);
 
         Assert.That(callbackCount, Is.EqualTo(1));
+        Assert.That(endedSharedProtocolOperation, Is.True,
+            "The test must remove the shared protocol scope before its matching scope object is disposed.");
         Assert.That(advanced, Is.False);
         Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(runtime.CurrentDay, Is.EqualTo(1L), "the domain core completed before scope disposal detected the accounting fault");
@@ -2686,11 +2694,16 @@ public sealed class SimulationRuntimeAdmissionTests
         }
 
         Assert.That(runtime.CurrentDay, Is.EqualTo(1L));
+        Assert.That(runtime.ExecutionBoundaryState.ActiveOperationCount, Is.Zero,
+            "The outer DailyAdvance scope closes when an admitted day-stage operation throws.");
+        Assert.That(runtime.ExecutionBoundaryState.ActiveRuntimeOperationCount, Is.Zero,
+            "The inner P12 runtime.advance-day scope also closes on the exception path.");
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
         Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
         Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retryFailure), Is.False);
         Assert.That(retryFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(runtime.CurrentDay, Is.EqualTo(1L));
+        Assert.That(runtime.ExecutionBoundaryState.ActiveOperationCount, Is.Zero);
     }
 
     [Test]
@@ -3177,13 +3190,18 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(activeOwner.TryPublishRestoredSession(sourceSession, candidateSession), Is.False,
                     "A restored session must not exchange while an owner operation is in flight.");
                 Assert.That(activeOwner.Bootstrap, Is.SameAs(sourceSession.Composition));
-                Assert.That(sourceSession.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True,
-                    "Rejected exchange must leave the source boundary and active reference unchanged.");
+                Assert.That(ReadPrivateField<SimulationActiveSession>(activeOwner, "activeSession"),
+                    Is.SameAs(sourceSession),
+                    "Rejected exchange must leave the active-session reference unchanged.");
             }
             finally
             {
-                endOperation.Invoke(activeOwner, null);
+                endOperation.Invoke(activeOwner, new[] { Enum.ToObject(
+                    endOperation.GetParameters()[0].ParameterType, 0) });
             }
+
+            Assert.That(sourceSession.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True,
+                "Rejected exchange must preserve the source completed boundary after the operation closes.");
 
             Assert.That(activeOwner.TryPublishRestoredSession(sourceSession, candidateSession), Is.True,
                 "An admitted restored candidate may publish at an idle owner-thread boundary.");
@@ -7856,7 +7874,8 @@ public sealed class SimulationRuntimeAdmissionTests
             }
             finally
             {
-                endOperation.Invoke(source, null);
+                endOperation.Invoke(source, new[] { Enum.ToObject(
+                    endOperation.GetParameters()[0].ParameterType, 0) });
             }
 
             Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
@@ -11521,7 +11540,7 @@ public sealed class SimulationRuntimeAdmissionTests
             out P12FTravelPartyOwnerSnapshot travelPartySnapshot,
             out P12FCommitmentSnapshotFailure travelPartyFailure), Is.True, travelPartyFailure.ToString());
         snapshots.Add("F/TravelParties", travelPartySnapshot);
-        Assert.That(P12FExpeditionOwnerSnapshot.TryCapture(
+        Assert.That(P12FExpeditionOwnerSnapshotOperations.TryCapture(
             composition.Expeditions, token, vector,
             out P12FExpeditionOwnerSnapshot expeditionSnapshot,
             out P12FCommitmentSnapshotFailure expeditionFailure), Is.True, expeditionFailure.ToString());

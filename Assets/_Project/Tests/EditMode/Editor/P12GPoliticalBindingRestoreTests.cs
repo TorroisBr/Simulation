@@ -75,6 +75,30 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         AssertOwnerVectorFactsEqual(sourceToken.OwnerSections, controlToken.OwnerSections);
         AssertPoliticalOwnersAreAuthenticAndPopulated(source.Session, sourceToken);
 
+        DailyV1ExecutionBoundaryState sourceExecutionState = source.Session.Runtime.ExecutionBoundaryState;
+        Assert.That(sourceExecutionState.TryBeginOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+        try
+        {
+            Assert.That(source.Session.Runtime.TryGetCompletedDailyCaptureToken(out _,
+                out DailyCaptureEligibilityFailure publicQueryFailure), Is.False,
+                "Public completed-token queries remain strict while a save operation is active.");
+            Assert.That(publicQueryFailure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
+            Assert.That(source.Session.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken,
+                out DailyCaptureEligibilityFailure publicValidationFailure), Is.False,
+                "Public token validation cannot borrow the save-only capture allowance.");
+            Assert.That(publicValidationFailure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
+            Assert.That(source.Session.Runtime.TryGetCompletedDailyCaptureTokenForContinuationSave(
+                out DailyCaptureEligibilityToken saveToken, out DailyCaptureEligibilityFailure saveFailure), Is.True,
+                saveFailure.ToString());
+            Assert.That(saveToken, Is.SameAs(sourceToken));
+            Assert.That(source.Session.Runtime.TryValidateCompletedDailyCaptureTokenForContinuationSave(
+                sourceToken, out saveFailure), Is.True, saveFailure.ToString());
+        }
+        finally
+        {
+            Assert.That(sourceExecutionState.TryEndOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+        }
+
         List<P12GDailyV1RestoreStage> stages = new List<P12GDailyV1RestoreStage>();
         using (SimulationRuntime.DailyGameplayExecutionProbeForTest gameplayProbe =
                SimulationRuntime.BeginDailyGameplayExecutionProbeForTest())
@@ -118,14 +142,27 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             AssertIndependentOwners(source.Session, sourceToken, restored, restoredToken);
             AssertIndependentOwners(restored, restoredToken, control.Session, controlToken);
 
-            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+            Assert.That(sourceExecutionState.TryBeginOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+            bool captureSucceeded;
+            P12AContinuationImage capturedImage;
+            SimulationActiveSession capturedImageCandidate;
+            P12GDailyV1RestoreFailure captureFailure;
+            string captureDiagnostic;
+            try
+            {
+                captureSucceeded = P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
                     source.Session,
                     source.NormalBootstrapContext,
-                    out P12AContinuationImage capturedImage,
-                    out SimulationActiveSession capturedImageCandidate,
-                    out P12GDailyV1RestoreFailure captureFailure,
-                    out string captureDiagnostic),
-                Is.True, captureFailure + ": " + captureDiagnostic);
+                    out capturedImage,
+                    out capturedImageCandidate,
+                    out captureFailure,
+                    out captureDiagnostic);
+            }
+            finally
+            {
+                Assert.That(sourceExecutionState.TryEndOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+            }
+            Assert.That(captureSucceeded, Is.True, captureFailure + ": " + captureDiagnostic);
             Assert.That(capturedImageCandidate, Is.Not.Null);
             Assert.That(capturedImage, Is.Not.Null);
             Assert.That(capturedImage.Header.Day, Is.EqualTo(sourceToken.AbsoluteDay));
@@ -153,13 +190,27 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                 ".NET 8.0", "8.0.1.0", "Windows", "win-x64", "x64", "net8.0",
                 new[] { new P12AAssemblyIdentityV2("Simulation.Core", "1.0.0.0",
                     "4b37a0ac-246b-47c5-9bbc-fd79704e0666") }, "numeric", 1);
-            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureDotNetV2Image(
+            Assert.That(sourceExecutionState.TryBeginOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+            bool dotNetCaptureSucceeded;
+            P12AContinuationImage dotNetImage;
+            SimulationActiveSession dotNetCaptureCandidate;
+            P12GDailyV1RestoreFailure dotNetCaptureFailure;
+            string dotNetCaptureDiagnostic;
+            try
+            {
+                dotNetCaptureSucceeded = P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureDotNetV2Image(
                     source.Session, source.NormalBootstrapContext, hostIdentity,
-                    out P12AContinuationImage dotNetImage,
-                    out SimulationActiveSession dotNetCaptureCandidate,
-                    out P12GDailyV1RestoreFailure dotNetCaptureFailure,
-                    out string dotNetCaptureDiagnostic),
-                Is.True, dotNetCaptureFailure + ": " + dotNetCaptureDiagnostic);
+                    out dotNetImage,
+                    out dotNetCaptureCandidate,
+                    out dotNetCaptureFailure,
+                    out dotNetCaptureDiagnostic);
+            }
+            finally
+            {
+                Assert.That(sourceExecutionState.TryEndOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+            }
+            Assert.That(dotNetCaptureSucceeded, Is.True,
+                dotNetCaptureFailure + ": " + dotNetCaptureDiagnostic);
             Assert.That(dotNetCaptureCandidate, Is.Not.Null);
             Assert.That(dotNetImage.Header.CompatibilityV2, Is.Not.Null);
             Assert.That(P12AContinuationCodec.TryEncode(dotNetImage, imageCensus.Manifest,
@@ -2776,7 +2827,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             AppendValue(signature, key + "/origin-decision", row.OriginDecisionId);
         }
 
-        Assert.That(P12FExpeditionOwnerSnapshot.TryCapture(
+        Assert.That(P12FExpeditionOwnerSnapshotOperations.TryCapture(
             session.Composition.Expeditions, token, vector,
             out P12FExpeditionOwnerSnapshot expeditions,
             out P12FCommitmentSnapshotFailure expeditionFailure), Is.True, expeditionFailure.ToString());

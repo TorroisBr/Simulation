@@ -122,7 +122,7 @@ internal sealed class P12DDailyV1OwnerPackage
             || !stagingAttempt.IsCurrentFor(sourceRuntime, token, exactOwnerSectionVector)
             || !ReferenceEquals(token.WorldId, sourceRuntime.WorldId)
             || !token.WorldId.Equals(stagedWorldId)
-            || !sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _)
+            || !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _)
             || !sourceRuntime.HasSameP12RuntimeIdentitySpatialOwners(
                 sourceRuntimeIdentities, sourceSpatialNetwork, sourceExplorableSites))
         {
@@ -187,7 +187,7 @@ internal sealed class P12DDailyV1OwnerPackage
             return false;
         }
 
-        if (!sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _)
+        if (!sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _)
             || !TryValidateCapturedOwnerCardinalities(
                 token, sourcePersons, personSnapshot, sourceGenealogy, genealogySnapshot,
                 sourceSpatialNetwork, spatialSnapshot, sourceExplorableSites, siteSnapshot))
@@ -317,7 +317,7 @@ internal sealed class P12DDailyV1OwnerPackage
             || stagedSites == null || stagedSites.Count != 0 || stagedSites.Revision != 0L
             || !TryValidateStagedIdentityCardinalities(
                 token, stagedRuntimeIdentities, sourceRuntimeIdentities)
-            || !sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _)
+            || !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _)
             || !TryValidateFinalGraph(
                 stagedCities, stagedNpcRoster, stagedPersons, stagedGenealogy,
                 stagedLocations, stagedSpatialNetwork,

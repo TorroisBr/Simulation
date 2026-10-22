@@ -17,8 +17,553 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(graph.Definitions, Is.SameAs(definitions));
         Assert.That(graph.Cities, Is.Not.Empty);
         Assert.That(graph.Npcs, Is.Not.Empty);
+        Assert.That(graph.JusticeRecordsOwner, Is.Not.Null);
+        Assert.That(graph.JusticeRecordsOwner.WantedRecords, Is.Empty);
+        Assert.That(definitions.Configuration.explorableSites, Is.Empty,
+            "The selected Daily-v1 owner composition has no P10 site/topology input.");
+        Assert.That(graph.Npcs.Any(npc => npc.CommercialKnowledge.Observations.Count > 0), Is.True,
+            "Core configured composition seeds admitted day-zero commercial rows for traveling Merchants.");
         foreach (DailyV1CityRuntimeOwners city in graph.Cities)
             Assert.That(graph.SpatialNetwork.ContainsLocationId(city.LocationRuntimeId), Is.True);
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            Assert.That(npc.Definitions, Is.SameAs(definitions));
+            Assert.That(npc.CommercialKnowledge.Definitions, Is.SameAs(definitions));
+            Assert.That(npc.SpatialKnowledge.OwnerRuntimeId, Is.EqualTo(npc.RuntimeId));
+            Assert.That(npc.SpatialKnowledge.KnownLocationRuntimeIds,
+                Does.Contain(npc.Travel.CurrentLocationRuntimeId));
+        }
+    }
+
+    [Test]
+    public void ConfiguredGenesisComposesDirectiveJusticeSpatialAndCommercialOwnersInCore()
+    {
+        DailyV1EffectiveDefinitions baseline = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1EffectiveDefinitions definitions = WithScheduledDirectives(baseline, new[]
+        {
+            new DailyV1ScheduledDirectiveConfig(4,
+                new DailyV1EnumValue(0, "RequestAction"),
+                new DailyV1EnumValue(0, "EscapePrison"),
+                "JOBSON", "FUGIR_DA_PRISAO")
+        });
+        definitions = WithInitialWarrants(definitions, new[]
+        {
+            new DailyV1InitialWantedRecordConfig("JOBSON", "CAMPO_VERDE", 9f, 2)
+        });
+
+        Assert.That(DailyV1SelectedRuntimeOwnerGraphBuilder.TryBuildConfigured(
+            definitions, new RuntimeIdAllocator(), out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        Assert.That(graph.ScheduledDirectives, Is.Not.Null);
+        ScheduledDirective directive = graph.ScheduledDirectives.Directives.Single();
+        DailyV1NpcRuntimeOwners actor = graph.Npcs.Single(owner =>
+            string.Equals(owner.Definition.DefinitionId, "JOBSON", StringComparison.Ordinal));
+        Assert.That(directive.DirectiveId, Is.EqualTo("directive-000001"));
+        Assert.That(directive.ActorRuntimeId, Is.EqualTo(actor.RuntimeId));
+        Assert.That(directive.ActionDefinitionId,
+            Is.EqualTo(definitions.Actions["FUGIR_DA_PRISAO"].DefinitionId));
+        Assert.That(directive.AbsoluteDay, Is.EqualTo(4));
+        Assert.That(directive.State, Is.EqualTo(ScheduledDirectiveState.Pending));
+        Assert.That(graph.JusticeRecordsOwner.WantedRecords, Has.Count.EqualTo(1));
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(owner =>
+            string.Equals(owner.Definition.DefinitionId, "CAMPO_VERDE", StringComparison.Ordinal));
+        DailyV1JusticeWantedRecordOwner wanted = graph.JusticeRecordsOwner.WantedRecords[0];
+        Assert.That(wanted.TargetRuntimeId, Is.EqualTo(actor.RuntimeId));
+        Assert.That(wanted.CityRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(wanted.Bounty, Is.EqualTo(9f));
+        Assert.That(wanted.SentenceDays, Is.EqualTo(2));
+        Assert.That(graph.JusticeRecordsOwner.Revision, Is.Zero,
+            "Configured genesis remains outside post-admission P12 mutation accounting.");
+        Assert.That(actor.Status.Statuses, Does.Contain(definitions.Statuses[
+            definitions.Configuration.wantedStatus]));
+        Assert.That(actor.SpatialKnowledge.KnowsLocation(city.LocationRuntimeId), Is.True);
+        Assert.That(graph.Npcs.Any(owner => owner.CommercialKnowledge.Observations.Count > 0), Is.True);
+        Assert.That(definitions.Configuration.explorableSites, Is.Empty,
+            "This composition includes no P10 Ruin or LocalTopology rows.");
+    }
+
+    [Test]
+    public void ConfiguredCityRoutesAreConstructedByCoreAgainstExactOwnersAndBindHostProjection()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+
+        long identityRevisionBeforeRoutes = builder.RuntimeIdentityIndex.CensusRevision;
+        long spatialRevisionBeforeRoutes = GetSpatialRevision(builder.SpatialNetwork);
+        Dictionary<string, SpatialRouteRuntime> routeProjections =
+            new Dictionary<string, SpatialRouteRuntime>(StringComparer.Ordinal);
+        List<string> expectedRoutePairs = new List<string>();
+        foreach (DailyV1CityRuntimeOwners origin in builder.Cities)
+        {
+            List<DailyV1CityConnection> connections = new List<DailyV1CityConnection>(
+                origin.Definition.Values.connections ?? Array.Empty<DailyV1CityConnection>());
+            connections.Sort((left, right) =>
+            {
+                int destination = StringComparer.Ordinal.Compare(left?.destination, right?.destination);
+                return destination != 0
+                    ? destination
+                    : Nullable.Compare(left != null ? (int?)left.travelDays : null,
+                        right != null ? (int?)right.travelDays : null);
+            });
+            foreach (DailyV1CityConnection connection in connections)
+            {
+                if (connection == null || string.IsNullOrWhiteSpace(connection.destination)) continue;
+                List<DailyV1CityRuntimeOwners> destinations = builder.Cities
+                    .Where(city => string.Equals(city.Definition.DefinitionId,
+                        connection.destination, StringComparison.Ordinal)).ToList();
+                if (destinations.Count != 1 || ReferenceEquals(origin, destinations[0])) continue;
+                expectedRoutePairs.Add(origin.LocationRuntimeId + "->" + destinations[0].LocationRuntimeId + ":" +
+                    Math.Max(1, connection.travelDays).ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
+
+        Assert.That(builder.TryCreateConfiguredCityRoutes(allocator, route =>
+        {
+            Assert.That(builder.RuntimeIdentityIndex.HasIdentity(
+                route.RuntimeId, DailyV1RuntimeIdentityKind.Route), Is.True,
+                "Core stages the exact Route identity before the Unity projection binds it.");
+            return routeProjections.TryAdd(route.RuntimeId, route);
+        }, route =>
+        {
+            Assert.That(routeProjections.TryGetValue(route.RuntimeId,
+                out SpatialRouteRuntime current), Is.True);
+            Assert.That(current, Is.SameAs(route));
+            Assert.That(routeProjections.Remove(route.RuntimeId), Is.True);
+        }), Is.True);
+
+        IReadOnlyList<SpatialRouteRuntime> routes = builder.SpatialNetwork.Routes;
+        Assert.That(routes.Select(route => route.RuntimeId),
+            Is.EqualTo(new[] { "route-000001", "route-000002" }));
+        Assert.That(routes.Select(route => route.Origin.RuntimeId + "->" +
+            route.Destination.RuntimeId + ":" + route.TravelDays), Is.EqualTo(expectedRoutePairs));
+        Assert.That(routeProjections.Count, Is.EqualTo(routes.Count));
+        Assert.That(builder.RuntimeIdentityIndex.CensusRevision,
+            Is.EqualTo(identityRevisionBeforeRoutes + routes.Count));
+        Assert.That(GetSpatialRevision(builder.SpatialNetwork),
+            Is.EqualTo(spatialRevisionBeforeRoutes + routes.Count));
+        foreach (SpatialRouteRuntime route in routes)
+        {
+            Assert.That(routeProjections[route.RuntimeId], Is.SameAs(route));
+            Assert.That(builder.RuntimeIdentityIndex.HasIdentity(
+                route.RuntimeId, DailyV1RuntimeIdentityKind.Route), Is.True);
+        }
+
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        Assert.That(graph.SpatialNetwork.Routes, Is.EqualTo(routes));
+        Assert.That(graph.RuntimeIdentityIndex, Is.SameAs(builder.RuntimeIdentityIndex));
+    }
+
+    [Test]
+    public void RejectedCityRouteProjectionDoesNotPublishCoreIdentityOrSpatialMutation()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        long identityRevisionBeforeRoutes = builder.RuntimeIdentityIndex.CensusRevision;
+        long spatialRevisionBeforeRoutes = GetSpatialRevision(builder.SpatialNetwork);
+        int rollbackCalls = 0;
+
+        Assert.That(builder.TryCreateConfiguredCityRoutes(allocator, _ => false, _ => rollbackCalls++), Is.True);
+
+        Assert.That(builder.SpatialNetwork.Routes, Is.Empty);
+        Assert.That(builder.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Route), Is.Zero);
+        Assert.That(builder.RuntimeIdentityIndex.CensusRevision, Is.EqualTo(identityRevisionBeforeRoutes));
+        Assert.That(GetSpatialRevision(builder.SpatialNetwork), Is.EqualTo(spatialRevisionBeforeRoutes));
+        Assert.That(rollbackCalls, Is.Zero,
+            "A host projection that rejects binding has not published an entry to roll back.");
+    }
+
+    [Test]
+    public void ConfiguredScheduledDirectivesUseCoreActorAndAdmittedActionIdentities()
+    {
+        DailyV1EffectiveDefinitions baseline = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1EffectiveDefinitions definitions = WithScheduledDirectives(baseline, new[]
+        {
+            new DailyV1ScheduledDirectiveConfig(4,
+                new DailyV1EnumValue(0, "RequestAction"),
+                new DailyV1EnumValue(0, "EscapePrison"),
+                "JOBSON", "FUGIR_DA_PRISAO"),
+            new DailyV1ScheduledDirectiveConfig(5,
+                new DailyV1EnumValue(0, "RequestAction"),
+                new DailyV1EnumValue(0, "EscapePrison"),
+                "JOBSON", "VIAJAR"),
+            new DailyV1ScheduledDirectiveConfig(6,
+                new DailyV1EnumValue(0, "RequestAction"),
+                new DailyV1EnumValue(0, "EscapePrison"),
+                "UNKNOWN_ACTOR", "FUGIR_DA_PRISAO")
+        });
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredCityRoutes(allocator), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+
+        ScheduledDirectiveStore directiveStore = new ScheduledDirectiveStore(new SimulationTime());
+        List<string> warnings = new List<string>();
+        List<string> errors = new List<string>();
+        Assert.That(builder.TryCreateConfiguredScheduledDirectives(
+            allocator, directiveStore, warnings.Add, errors.Add), Is.True);
+
+        ScheduledDirective directive = directiveStore.Directives.Single();
+        DailyV1NpcRuntimeOwners actor = builder.Npcs.Single(owner =>
+            owner.Definition.DefinitionId == "JOBSON");
+        DailyV1ActionDefinition action = definitions.Actions["FUGIR_DA_PRISAO"];
+        Assert.That(directive.DirectiveId, Is.EqualTo("directive-000001"));
+        Assert.That(directive.AbsoluteDay, Is.EqualTo(4));
+        Assert.That(directive.Mode, Is.EqualTo(ScheduledDirectiveMode.RequestAction));
+        Assert.That(directive.Operation, Is.EqualTo(ScheduledDirectiveOperation.EscapePrison));
+        Assert.That(directive.ActorRuntimeId, Is.EqualTo(actor.RuntimeId));
+        Assert.That(directive.ActionDefinitionId, Is.EqualTo(action.DefinitionId));
+        Assert.That(directive.State, Is.EqualTo(ScheduledDirectiveState.Pending));
+        Assert.That(warnings, Has.Count.EqualTo(1),
+            "A non-EscapePrison admitted action is rejected before directive identity allocation.");
+        Assert.That(errors, Is.Empty);
+    }
+
+    [Test]
+    public void ConfiguredInitialJusticeStateUsesExactCoreOwnersAndPreservesDefaultsAndOrder()
+    {
+        DailyV1EffectiveDefinitions baseline = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1EffectiveDefinitions definitions = WithInitialWarrants(baseline, new[]
+        {
+            new DailyV1InitialWantedRecordConfig("JOBSON", "CAMPO_VERDE", -4f, 0),
+            new DailyV1InitialWantedRecordConfig("JOBSON", "CAMPO_VERDE", 6f, 2),
+            new DailyV1InitialWantedRecordConfig("JORGE", "SERRA_DE_FERRO", 7f, 4),
+            new DailyV1InitialWantedRecordConfig("UNKNOWN_NPC", "CAMPO_VERDE", 10f, 5),
+            new DailyV1InitialWantedRecordConfig("JORGE", "UNKNOWN_CITY", 10f, 5),
+            null
+        });
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredCityRoutes(allocator), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+
+        DailyV1JusticeRecordsOwner justice = new DailyV1JusticeRecordsOwner();
+        Assert.That(builder.TryCreateConfiguredInitialJusticeState(justice), Is.True);
+        Assert.That(justice.WantedRecords, Has.Count.EqualTo(2));
+        Assert.That(justice.Revision, Is.Zero,
+            "Genesis rows do not publish a post-admission P12 owner revision.");
+        Assert.That(justice.HasP12MutationBoundary, Is.False);
+
+        DailyV1NpcRuntimeOwners jobson = builder.Npcs.Single(owner =>
+            owner.Definition.DefinitionId == "JOBSON");
+        DailyV1CityRuntimeOwners campoVerde = builder.Cities.Single(owner =>
+            owner.Definition.DefinitionId == "CAMPO_VERDE");
+        DailyV1NpcRuntimeOwners jorge = builder.Npcs.Single(owner =>
+            owner.Definition.DefinitionId == "JORGE");
+        DailyV1CityRuntimeOwners serraDeFerro = builder.Cities.Single(owner =>
+            owner.Definition.DefinitionId == "SERRA_DE_FERRO");
+        DailyV1JusticeWantedRecordOwner first = justice.WantedRecords[0];
+        DailyV1JusticeWantedRecordOwner second = justice.WantedRecords[1];
+        Assert.That(first.TargetRuntimeId, Is.EqualTo(jobson.RuntimeId));
+        Assert.That(first.CityRuntimeId, Is.EqualTo(campoVerde.RuntimeId));
+        Assert.That(first.Bounty, Is.EqualTo(6f));
+        Assert.That(first.SentenceDays, Is.EqualTo(3));
+        Assert.That(second.TargetRuntimeId, Is.EqualTo(jorge.RuntimeId));
+        Assert.That(second.CityRuntimeId, Is.EqualTo(serraDeFerro.RuntimeId));
+        Assert.That(second.Bounty, Is.EqualTo(7f));
+        Assert.That(second.SentenceDays, Is.EqualTo(4));
+
+        DailyV1StatusDefinition wanted = definitions.Statuses[definitions.Configuration.wantedStatus];
+        Assert.That(jobson.Status.Statuses, Does.Contain(wanted));
+        Assert.That(jorge.Status.Statuses, Does.Contain(wanted));
+        foreach (DailyV1NpcRuntimeOwners npc in builder.Npcs.Where(owner =>
+            owner != jobson && owner != jorge))
+            Assert.That(npc.Status.Statuses, Does.Not.Contain(wanted));
+
+        Assert.That(builder.TryBuild(justice, out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        Assert.That(graph.JusticeRecordsOwner, Is.SameAs(justice));
+        Assert.That(graph.JusticeRecordsOwner.WantedRecords[0], Is.SameAs(first));
+        Assert.That(graph.JusticeRecordsOwner.WantedRecords[1], Is.SameAs(second));
+    }
+
+    [Test]
+    public void InitialSpatialKnowledgeIsSeededFromCoreRouteOrderAndOwnerIdentities()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        Assert.That(builder.TryCreateConfiguredCities(allocator), Is.True);
+        Assert.That(builder.TryCreateConfiguredCityRoutes(allocator), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+
+        Dictionary<DailyV1NpcRuntimeOwners, string[]> expectedLocations =
+            new Dictionary<DailyV1NpcRuntimeOwners, string[]>();
+        Dictionary<DailyV1NpcRuntimeOwners, string[]> expectedRoutes =
+            new Dictionary<DailyV1NpcRuntimeOwners, string[]>();
+        foreach (DailyV1NpcRuntimeOwners npc in builder.Npcs)
+        {
+            List<string> locations = new List<string>();
+            List<string> routes = new List<string>();
+            if (builder.SpatialNetwork.TryGetLocation(npc.Travel.CurrentLocationRuntimeId,
+                    out SpatialLocationRuntime start))
+            {
+                locations.Add(start.RuntimeId);
+                foreach (SpatialRouteRuntime route in builder.SpatialNetwork.GetOutgoingRoutes(start))
+                {
+                    if (route == null) continue;
+                    routes.Add(route.RuntimeId);
+                    if (route.Destination != null && !locations.Contains(route.Destination.RuntimeId))
+                        locations.Add(route.Destination.RuntimeId);
+                }
+            }
+            expectedLocations.Add(npc, locations.ToArray());
+            expectedRoutes.Add(npc, routes.ToArray());
+        }
+
+        Assert.That(builder.TryBootstrapInitialSpatialKnowledge(), Is.True);
+        foreach (DailyV1NpcRuntimeOwners npc in builder.Npcs)
+        {
+            Assert.That(npc.SpatialKnowledge.OwnerRuntimeId, Is.EqualTo(npc.RuntimeId));
+            Assert.That(npc.SpatialKnowledge.KnownLocationRuntimeIds, Is.EqualTo(expectedLocations[npc]));
+            Assert.That(npc.SpatialKnowledge.KnownRouteRuntimeIds, Is.EqualTo(expectedRoutes[npc]));
+            Assert.That(npc.SpatialKnowledge.Revision,
+                Is.EqualTo(expectedLocations[npc].Length + expectedRoutes[npc].Length));
+        }
+
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+            Assert.That(graph.Npcs.Single(owner => owner.RuntimeId == npc.RuntimeId).SpatialKnowledge,
+                Is.SameAs(npc.SpatialKnowledge));
+    }
+
+    [Test]
+    public void InitialCommercialKnowledgeUsesExactSelectedMarketRowsWithoutAddingSiteOrTopologyFacts()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(definitions.Configuration.explorableSites, Is.Empty,
+            "The selected Daily-v1 profile proves P12F commercial owners without admitting P10 site content.");
+
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        Assert.That(builder.TryCreateConfiguredCities(allocator), Is.True);
+        Assert.That(builder.TryCreateConfiguredCityRoutes(allocator), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBootstrapInitialSpatialKnowledge(), Is.True);
+
+        Dictionary<DailyV1NpcRuntimeOwners, List<DailyV1CityRuntimeOwners>> expectedCities =
+            new Dictionary<DailyV1NpcRuntimeOwners, List<DailyV1CityRuntimeOwners>>();
+        foreach (DailyV1NpcRuntimeOwners npc in builder.Npcs)
+        {
+            List<DailyV1CityRuntimeOwners> citiesToObserve = new List<DailyV1CityRuntimeOwners>();
+            bool isTravelingMerchant = npc.Lifecycle.LifeState == NpcLifeState.Alive
+                && DailyV1NpcDefinitionRules.HasJobType(npc.Definition, definitions,
+                    DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+                && DailyV1NpcDefinitionRules.HasMerchantBehavior(npc.Definition, definitions,
+                    DailyV1NpcDefinitionRules.TravelingMerchantBehaviorValue);
+            if (isTravelingMerchant)
+            {
+                DailyV1CityRuntimeOwners origin = builder.Cities.Single(city =>
+                    string.Equals(city.RuntimeId, npc.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+                if (npc.SpatialKnowledge.KnowsLocation(origin.LocationRuntimeId))
+                    citiesToObserve.Add(origin);
+
+                Assert.That(builder.SpatialNetwork.TryGetLocation(origin.LocationRuntimeId,
+                    out SpatialLocationRuntime originLocation), Is.True);
+                List<SpatialRouteRuntime> routes = builder.SpatialNetwork.GetOutgoingRoutes(originLocation)
+                    .Where(route => route != null
+                        && npc.SpatialKnowledge.KnowsRoute(route.RuntimeId)
+                        && npc.SpatialKnowledge.KnowsLocation(route.Destination.RuntimeId)
+                        && builder.SpatialNetwork.TryGetSingleDirectRoute(originLocation,
+                            route.Destination, out SpatialRouteRuntime directRoute, out _)
+                        && ReferenceEquals(directRoute, route))
+                    .OrderBy(route => route.RuntimeId, StringComparer.Ordinal)
+                    .ToList();
+                foreach (SpatialRouteRuntime route in routes)
+                {
+                    DailyV1CityRuntimeOwners destination = builder.Cities.SingleOrDefault(city =>
+                        string.Equals(city.LocationRuntimeId, route.Destination.RuntimeId,
+                            StringComparison.Ordinal));
+                    if (destination != null) citiesToObserve.Add(destination);
+                }
+            }
+            expectedCities.Add(npc, citiesToObserve);
+        }
+
+        Dictionary<DailyV1NpcRuntimeOwners, long> spatialRevisions = builder.Npcs
+            .ToDictionary(npc => npc, npc => npc.SpatialKnowledge.Revision);
+        Dictionary<DailyV1NpcRuntimeOwners, string[]> spatialLocations = builder.Npcs
+            .ToDictionary(npc => npc, npc => npc.SpatialKnowledge.KnownLocationRuntimeIds.ToArray());
+        Dictionary<DailyV1NpcRuntimeOwners, string[]> spatialRoutes = builder.Npcs
+            .ToDictionary(npc => npc, npc => npc.SpatialKnowledge.KnownRouteRuntimeIds.ToArray());
+        Dictionary<DailyV1CityRuntimeOwners, long> marketRevisions = builder.Cities
+            .ToDictionary(city => city, city => city.Market.Revision);
+        Assert.That(builder.TryBootstrapInitialCommercialKnowledge(1L), Is.True,
+            "A non-day-zero call is a no-op and does not consume the one-shot day-zero bootstrap.");
+        foreach (DailyV1NpcRuntimeOwners npc in builder.Npcs)
+        {
+            Assert.That(npc.CommercialKnowledge.Observations, Is.Empty);
+            Assert.That(npc.CommercialKnowledge.LiquidityObservations, Is.Empty);
+        }
+
+        long spatialNetworkRevision = builder.SpatialNetwork.Revision;
+        Assert.That(builder.TryBootstrapInitialCommercialKnowledge(0L), Is.True);
+        Assert.That(expectedCities.Values.SelectMany(cities => cities).SelectMany(city => city.Market.Items),
+            Is.Not.Empty, "The accepted selected profile must exercise actual CommercialKnowledge market rows.");
+        Assert.That(expectedCities.Count(pair => pair.Value.Count > 0), Is.GreaterThan(0),
+            "At least one alive traveling Merchant has a current or known direct destination market.");
+        foreach (DailyV1NpcRuntimeOwners npc in builder.Npcs)
+        {
+            List<DailyV1CityRuntimeOwners> expected = expectedCities[npc];
+            List<DailyV1CommercialMarketObservation> expectedMarkets = new List<DailyV1CommercialMarketObservation>();
+            List<DailyV1CommercialLiquidityObservation> expectedLiquidity = new List<DailyV1CommercialLiquidityObservation>();
+            foreach (DailyV1CityRuntimeOwners city in expected)
+            {
+                foreach (DailyV1MarketItemState marketItem in city.Market.Items)
+                {
+                    if (marketItem == null || marketItem.Item == null
+                        || string.IsNullOrWhiteSpace(marketItem.Item.DefinitionId)) continue;
+                    expectedMarkets.Add(new DailyV1CommercialMarketObservation(city.LocationRuntimeId,
+                        marketItem.Item, marketItem.CurrentPrice, marketItem.Amount, 0L, 0L,
+                        DailyV1CommercialKnowledgeSource.InitialScenarioKnowledge));
+                }
+                MarketCounterpartyRuntime counterparty = city.Counterparty;
+                expectedLiquidity.Add(new DailyV1CommercialLiquidityObservation(
+                    city.LocationRuntimeId, counterparty.LiquidityMode,
+                    counterparty.LiquidityMode == MarketLiquidityMode.AccountBacked
+                        ? counterparty.MoneyAccount.Balance : 0f,
+                    0L, 0L, DailyV1CommercialKnowledgeSource.InitialScenarioKnowledge));
+            }
+
+            IReadOnlyList<DailyV1CommercialMarketObservation> actualMarkets =
+                npc.CommercialKnowledge.Observations;
+            IReadOnlyList<DailyV1CommercialLiquidityObservation> actualLiquidity =
+                npc.CommercialKnowledge.LiquidityObservations;
+            Assert.That(actualMarkets, Has.Count.EqualTo(expectedMarkets.Count), npc.Definition.DefinitionId);
+            Assert.That(actualLiquidity, Has.Count.EqualTo(expectedLiquidity.Count), npc.Definition.DefinitionId);
+            for (int index = 0; index < expectedMarkets.Count; index++)
+            {
+                DailyV1CommercialMarketObservation actual = actualMarkets[index];
+                DailyV1CommercialMarketObservation expectedMarket = expectedMarkets[index];
+                Assert.That(actual.LocationRuntimeId, Is.EqualTo(expectedMarket.LocationRuntimeId));
+                Assert.That(actual.ItemDefinition, Is.SameAs(expectedMarket.ItemDefinition));
+                Assert.That(actual.ItemDefinition, Is.SameAs(definitions.Items[actual.ItemDefinitionId]));
+                Assert.That(actual.ObservedPrice, Is.EqualTo(expectedMarket.ObservedPrice));
+                Assert.That(actual.ObservedStock, Is.EqualTo(expectedMarket.ObservedStock));
+                Assert.That(actual.ObservedDay, Is.Zero);
+                Assert.That(actual.ReceivedDay, Is.Zero);
+                Assert.That(actual.Source, Is.EqualTo(
+                    DailyV1CommercialKnowledgeSource.InitialScenarioKnowledge));
+                Assert.That(actual.SourceRuntimeId, Is.Null);
+            }
+            for (int index = 0; index < expectedLiquidity.Count; index++)
+            {
+                DailyV1CommercialLiquidityObservation actual = actualLiquidity[index];
+                DailyV1CommercialLiquidityObservation expectedRow = expectedLiquidity[index];
+                Assert.That(actual.LocationRuntimeId, Is.EqualTo(expectedRow.LocationRuntimeId));
+                Assert.That(actual.LiquidityMode, Is.EqualTo(expectedRow.LiquidityMode));
+                Assert.That(actual.ObservedPurchasingPower, Is.EqualTo(expectedRow.ObservedPurchasingPower));
+                Assert.That(actual.ObservedDay, Is.Zero);
+                Assert.That(actual.ReceivedDay, Is.Zero);
+                Assert.That(actual.Source, Is.EqualTo(
+                    DailyV1CommercialKnowledgeSource.InitialScenarioKnowledge));
+                Assert.That(actual.SourceRuntimeId, Is.Null);
+            }
+            Assert.That(npc.CommercialKnowledge.Revision,
+                Is.EqualTo(expectedMarkets.Count + expectedLiquidity.Count),
+                "Each accepted P12F owner row keeps the existing local revision semantics.");
+            Assert.That(npc.CommercialKnowledge.TryCopyOwnerSnapshot(out _, out _,
+                out IReadOnlyList<DailyV1CommercialKnowledgeShareReceipt> receipts), Is.True);
+            Assert.That(receipts, Is.Empty);
+            Assert.That(npc.SpatialKnowledge.Revision, Is.EqualTo(spatialRevisions[npc]));
+            Assert.That(npc.SpatialKnowledge.KnownLocationRuntimeIds,
+                Is.EqualTo(spatialLocations[npc]));
+            Assert.That(npc.SpatialKnowledge.KnownRouteRuntimeIds,
+                Is.EqualTo(spatialRoutes[npc]),
+                "Commercial seeding does not discover or imply additional spatial facts.");
+        }
+
+        Assert.That(builder.SpatialNetwork.Revision, Is.EqualTo(spatialNetworkRevision));
+        foreach (DailyV1CityRuntimeOwners city in builder.Cities)
+            Assert.That(city.Market.Revision, Is.EqualTo(marketRevisions[city]),
+                "Commercial observations read selected market truth without mutating the market owner.");
+
+        Assert.That(builder.TryBootstrapInitialCommercialKnowledge(0L), Is.False,
+            "The day-zero seed is one-shot.");
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            DailyV1NpcRuntimeOwners builderOwner = builder.Npcs.Single(owner =>
+                string.Equals(owner.RuntimeId, npc.RuntimeId, StringComparison.Ordinal));
+            Assert.That(npc.CommercialKnowledge, Is.SameAs(builderOwner.CommercialKnowledge));
+            Assert.That(npc.CommercialKnowledge.Definitions, Is.SameAs(definitions));
+        }
+        Assert.That(graph.Definitions.Configuration.explorableSites, Is.Empty,
+            "The commercial seed does not create or imply P10 site/topology content.");
+    }
+
+    private static DailyV1EffectiveDefinitions WithScheduledDirectives(
+        DailyV1EffectiveDefinitions baseline,
+        IReadOnlyList<DailyV1ScheduledDirectiveConfig> scheduledDirectives)
+    {
+        DailyV1SimulationConfigData current = baseline.Configuration;
+        return WithConfiguredJusticeAndDirectiveInputs(
+            baseline, current.initialWarrants, scheduledDirectives);
+    }
+
+    private static DailyV1EffectiveDefinitions WithInitialWarrants(
+        DailyV1EffectiveDefinitions baseline,
+        IReadOnlyList<DailyV1InitialWantedRecordConfig> initialWarrants)
+    {
+        DailyV1SimulationConfigData current = baseline.Configuration;
+        return WithConfiguredJusticeAndDirectiveInputs(
+            baseline, initialWarrants, current.scheduledDirectives);
+    }
+
+    private static DailyV1EffectiveDefinitions WithConfiguredJusticeAndDirectiveInputs(
+        DailyV1EffectiveDefinitions baseline,
+        IReadOnlyList<DailyV1InitialWantedRecordConfig> initialWarrants,
+        IReadOnlyList<DailyV1ScheduledDirectiveConfig> scheduledDirectives)
+    {
+        DailyV1SimulationConfigData current = baseline.Configuration;
+        DailyV1SimulationConfigData configuration = new DailyV1SimulationConfigData(
+            current.simulationName, current.calendar, current.enabledModules, current.cities,
+            current.explorableSites, current.npcs, current.actions, current.statuses, current.jobs,
+            initialWarrants, scheduledDirectives, current.useAuthoredGeographyProfile,
+            current.authoredHexId, current.authoredHexQ, current.authoredHexR,
+            current.authoredTerrainDefinitionId, current.authoredTerrainRevisionToken,
+            current.authoredLocationId, current.authoredScaleConventionId,
+            current.authoredScaleSourceIdentity, current.authoredScaleSourceVersion,
+            current.authoredDistancePerNeighborStep, current.authoredScaleUnit,
+            current.authoredP10RuinSite, current.genesisProfileContractIdentity,
+            current.p10bStableSiteKey, current.travelCostPerDay,
+            current.allowMerchantTradeRepositioning, current.maxMerchantTradeAmount,
+            current.localMerchantWholesalePriceMultiplier, current.localMerchantReserveRatio,
+            current.maxUnprofitablePlanWaitDays, current.crimeAutonomousEnabled,
+            current.commercialKnowledge, current.useFixedSimulationSeed, current.simulationSeed,
+            current.includeEconomySnapshots, current.economySnapshotIntervalDays,
+            current.logSettings, current.naturalMortalityEnabled,
+            current.naturalMortalityAnnualProbability, current.aggregateDemographyEnabled,
+            current.aggregateAnnualBirthRate, current.aggregateAnnualDeathRate,
+            current.freeStatus, current.wantedStatus, current.arrestedStatus, current.hiddenStatus);
+        return new DailyV1EffectiveDefinitions(configuration, baseline.EffectiveConfiguration,
+            baseline.Calendar, null, baseline.Cities.Values, baseline.Items.Values,
+            baseline.Npcs.Values, baseline.Jobs.Values, baseline.Actions.Values,
+            baseline.Statuses.Values, null, baseline.StageOrder, baseline.ProfileContractIdentity,
+            baseline.GeographyProfileContractIdentity, baseline.GeographyStageIdentity,
+            baseline.HexCoordinateConvention, baseline.HexCoordinateCanonicalOrder, null,
+            baseline.Traits.Values, baseline.CapabilityAttributes.Values, baseline.ExplorableSites.Values);
+    }
+
+    private static long GetSpatialRevision(SpatialNetworkOwner owner)
+    {
+        return owner.Revision;
     }
 
     [Test]
@@ -1426,7 +1971,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
     }
 
     [Test]
-    public void SelectedTravelDayStageRunsPartyOperationBeforeSoloTravel()
+    public void SelectedDailyExecutionRunsCorePartyThenSoloTravelAfterActorTurns()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1SelectedRuntimeOwnerGraphBuilder builder =
@@ -1449,6 +1994,8 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             partyDestination, 1, "ordered-party", "ordered-party-route",
             out DailyV1SelectedTravelTransitionPlan partyStart), Is.True);
         Assert.That(graph.TryCommitTravelTransition(partyMember, partyStart, null), Is.True);
+        Assert.That(partyOrigin.NpcPresence.Contains(partyMember.RuntimeId), Is.False,
+            "The committed travel departure already removes the member from origin presence before arrival-day execution.");
 
         TravelPartyRuntime party = new TravelPartyRuntime(
             "ordered-party-1", partyOrigin.LocationRuntimeId, partyDestination.LocationRuntimeId,
@@ -1480,33 +2027,74 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
 
         List<string> order = new List<string>();
         RecordingTravelStageBoundary boundary = new RecordingTravelStageBoundary(order);
-        Assert.That(DailyV1SelectedTravelDayStage.TryAdvance(
-            graph,
-            store,
-            new[] { partyMember.RuntimeId },
-            boundary,
-            operation =>
-            {
-                order.Add("party-operation-enter");
-                bool committed = operation();
-                order.Add("party-operation-exit");
-                return committed;
-            },
-            advanceSoloTravel: true,
-            out IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
-            out IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults), Is.True);
+        long partyTravelRevisionBefore = partyMember.Travel.Revision;
+        long soloTravelRevisionBefore = solo.Travel.Revision;
+        RecordingTravelExecutionContext context = new RecordingTravelExecutionContext(
+            order, store, new[] { partyMember.RuntimeId }, boundary, advanceSoloTravel: true);
+        RecordingDailyExecutionBoundary dailyBoundary = new RecordingDailyExecutionBoundary(
+            order, context, graph, partyMember, solo);
+        Assert.That(graph.TryBindPersonStore(new PersonStore()), Is.True);
+        DailyV1SelectedDailyExecutionStage.Advance(
+            3L, graph, null, dailyBoundary);
 
-        Assert.That(partyArrivals, Has.Count.EqualTo(1));
-        Assert.That(soloResults, Has.Count.EqualTo(1));
-        Assert.That(soloResults[0].Npc, Is.SameAs(solo));
+        Assert.That(context.PartyArrivals, Has.Count.EqualTo(1));
+        Assert.That(context.SoloResults, Has.Count.EqualTo(1));
+        Assert.That(context.PartyArrivals[0].Party, Is.SameAs(party));
+        Assert.That(context.PartyArrivals[0].Members, Has.Count.EqualTo(1));
+        Assert.That(context.PartyArrivals[0].Members[0], Is.SameAs(partyMember));
+        Assert.That(context.SoloResults[0].Npc, Is.SameAs(solo));
+        Assert.That(context.SoloResults[0].WasCommitted, Is.True);
+        Assert.That(context.SoloResults[0].Arrived, Is.False);
+        Assert.That(context.PartyOperationCount, Is.EqualTo(1),
+            "The exact TravelParty owner operation is admitted once around the party batch.");
+        Assert.That(partyMember.Travel.Revision, Is.EqualTo(partyTravelRevisionBefore + 2),
+            "Core commits the arriving travel transition and then clears active-party identity.");
+        Assert.That(solo.Travel.Revision, Is.EqualTo(soloTravelRevisionBefore + 1),
+            "Core advances the ungrouped solo travel owner once after the party operation.");
+        Assert.That(partyMember.Travel.CurrentCityRuntimeId, Is.EqualTo(partyDestination.RuntimeId));
+        Assert.That(partyMember.Travel.ActiveTravelPartyId, Is.Null);
+        Assert.That(partyMember.SpatialKnowledge.Revision,
+            Is.EqualTo(dailyBoundary.PartySpatialKnowledgeRevisionBeforeTravel
+                + (dailyBoundary.PartyKnewDestinationBeforeTravel ? 0 : 1)));
+        Assert.That(solo.Travel.TravelDaysRemaining, Is.EqualTo(1));
+        Assert.That(solo.Travel.CurrentCityRuntimeId, Is.Null,
+            "An en-route solo traveler with no current City remains between Cities until arrival.");
+        Assert.That(solo.Travel.DestinationCityRuntimeId, Is.EqualTo(soloDestination.RuntimeId));
+        Assert.That(solo.SpatialKnowledge.Revision,
+            Is.EqualTo(dailyBoundary.SoloSpatialKnowledgeRevisionBeforeTravel),
+            "The non-arriving solo result does not discover or mutate spatial knowledge.");
+        Assert.That(store.ActiveParties, Is.Empty);
+        Assert.That(store.Revision, Is.EqualTo(dailyBoundary.PartyStoreRevisionBeforeTravel + 1));
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            long expectedDelta = ReferenceEquals(city, partyDestination) ? 1L : 0L;
+            Assert.That(city.NpcPresence.Revision,
+                Is.EqualTo(dailyBoundary.CityPresenceRevisionsBeforeTravel[city.RuntimeId] + expectedDelta),
+                "Arrival adds the member only to its exact destination because origin presence was already removed at departure.");
+        }
+        Assert.That(partyOrigin.NpcPresence.Contains(partyMember.RuntimeId), Is.False);
+        Assert.That(partyDestination.NpcPresence.Contains(partyMember.RuntimeId), Is.True);
         Assert.That(order.IndexOf("party-operation-enter"), Is.LessThan(order.IndexOf("party-event")));
         Assert.That(order.IndexOf("party-event"), Is.LessThan(order.IndexOf("party-operation-exit")));
         Assert.That(order.IndexOf("party-operation-exit"), Is.LessThan(order.IndexOf("solo-result")));
+        Assert.That(order.IndexOf("actor-turns"), Is.LessThan(order.IndexOf("travel-context")));
+        Assert.That(order.IndexOf("travel-context"), Is.LessThan(order.IndexOf("party-operation-enter")));
+        Assert.That(order.IndexOf("solo-result"), Is.LessThan(order.IndexOf("results-published")));
+        Assert.That(order.IndexOf("results-published"), Is.LessThan(order.IndexOf("travel-observation")));
+        Assert.That(order, Does.Not.Contain("travel-and-observe"),
+            "The Core daily stage invokes the travel operation directly instead of the former Unity travel callback.");
+        Assert.That(boundary.PublishedTransitions, Is.EqualTo(new[]
+        {
+            $"{partyMember.RuntimeId}:True",
+            $"{partyMember.RuntimeId}:False",
+            $"{solo.RuntimeId}:False"
+        }), "Committed Core transitions publish the existing Unity/P12 notifications in owner order.");
     }
 
     private sealed class RecordingTravelStageBoundary : IDailyV1SelectedTravelDayBoundary
     {
         private readonly List<string> order;
+        internal List<string> PublishedTransitions { get; } = new List<string>();
 
         internal RecordingTravelStageBoundary(List<string> order) => this.order = order;
 
@@ -1529,6 +2117,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         {
             Assert.That(plan, Is.SameAs(projectionReceipt));
             Assert.That(plan.IsCommitted, Is.True);
+            PublishedTransitions.Add(npc.RuntimeId + ":" + arriving);
             order.Add("publish:" + npc.RuntimeId + ":" + arriving);
         }
 
@@ -1542,5 +2131,213 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         {
             order.Add("solo-result");
         }
+    }
+
+    private sealed class RecordingDailyExecutionBoundary
+        : IDailyV1SelectedDailyExecutionBoundary
+    {
+        private readonly List<string> order;
+        private readonly RecordingTravelExecutionContext travelContext;
+        private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+        private readonly DailyV1NpcRuntimeOwners partyMember;
+        private readonly DailyV1NpcRuntimeOwners solo;
+
+        internal long PartySpatialKnowledgeRevisionBeforeTravel { get; private set; }
+        internal long SoloSpatialKnowledgeRevisionBeforeTravel { get; private set; }
+        internal bool PartyKnewDestinationBeforeTravel { get; private set; }
+        internal long PartyStoreRevisionBeforeTravel { get; private set; }
+        internal Dictionary<string, long> CityPresenceRevisionsBeforeTravel { get; } =
+            new Dictionary<string, long>(StringComparer.Ordinal);
+
+        internal RecordingDailyExecutionBoundary(
+            List<string> order,
+            RecordingTravelExecutionContext travelContext,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners partyMember,
+            DailyV1NpcRuntimeOwners solo)
+        {
+            this.order = order;
+            this.travelContext = travelContext;
+            this.graph = graph;
+            this.partyMember = partyMember;
+            this.solo = solo;
+        }
+
+        public void BeginLoggerDay(long absoluteDay) => order.Add("logger:" + absoluteDay);
+        public bool TryCreateSelectedDemographyContext(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedDemographyExecutionContext context)
+        {
+            order.Add("demography");
+            DailyV1CalendarDefinition definition = graph.Definitions.Calendar;
+            SimulationCalendar calendar = definition.monthLengths != null && definition.monthLengths.Count > 0
+                ? new SimulationCalendar(new CalendarDefinition(
+                    new List<int>(definition.monthLengths), definition.daysPerWeek))
+                : new SimulationCalendar(new CalendarDefinition(
+                    definition.monthsPerYear, definition.weeksPerMonth, definition.daysPerWeek));
+            context = new RecordingDemographyContext(graph.PersonStore, calendar, graph.Cities);
+            return true;
+        }
+        public bool TryCreateSelectedDayStartContext(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedDayStartExecutionContext context)
+        {
+            context = null;
+            return false;
+        }
+        public void BeginSimulationDay() => order.Add("begin-day");
+        public void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph) =>
+            order.Add("economy-preflight");
+        public void LogSelectedDailyEconomy(
+            DailyV1CityRuntimeOwners owner,
+            SimulationLogCategory category,
+            string message) { }
+        public void EnsureSelectedLocalKnowledgeCanRun(DailyV1SelectedRuntimeOwnerGraph graph) =>
+            order.Add("knowledge-preflight");
+        public bool TryCreateSelectedActorTurnContext(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedActorTurnExecutionContext context)
+        {
+            PartySpatialKnowledgeRevisionBeforeTravel = partyMember.SpatialKnowledge.Revision;
+            SoloSpatialKnowledgeRevisionBeforeTravel = solo.SpatialKnowledge.Revision;
+            PartyKnewDestinationBeforeTravel = partyMember.SpatialKnowledge.KnownLocationRuntimeIds
+                .Contains(partyMember.Travel.DestinationLocationRuntimeId);
+            PartyStoreRevisionBeforeTravel = travelContext.PartyStore.Revision;
+            foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+                CityPresenceRevisionsBeforeTravel.Add(city.RuntimeId, city.NpcPresence.Revision);
+            order.Add("actor-context");
+            context = new NoOpActorTurnContext(graph);
+            return true;
+        }
+
+        public bool TryCreateSelectedTravelDayContext(
+            out IDailyV1SelectedTravelDayExecutionContext context)
+        {
+            order.Add("travel-context");
+            context = travelContext;
+            return true;
+        }
+
+        private sealed class NoOpActorTurnContext : IDailyV1SelectedActorTurnExecutionContext
+        {
+            internal NoOpActorTurnContext(DailyV1SelectedRuntimeOwnerGraph graph)
+            {
+                RuntimeRoster = graph.Npcs.Select(npc => new DailyV1ActorTurnRosterProjection(
+                    npc.RuntimeId, null)).ToList();
+                PersonStore = graph.PersonStore;
+                ActorChoiceStore = new ActorChoiceStore(PersonStore);
+                Boundary = new NoOpActorTurnBoundary();
+            }
+
+            public IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
+            public PersonStore PersonStore { get; }
+            public ActorChoiceStore ActorChoiceStore { get; }
+            public IDailyV1ActorTurnExecutionBoundary Boundary { get; }
+        }
+
+        private sealed class RecordingDemographyContext : IDailyV1SelectedDemographyExecutionContext
+        {
+            internal RecordingDemographyContext(
+                PersonStore personStore,
+                SimulationCalendar calendar,
+                IReadOnlyList<DailyV1CityRuntimeOwners> cities)
+            {
+                PersonStore = personStore;
+                Calendar = calendar;
+                Boundary = new NoOpDemographyBoundary(cities);
+            }
+
+            public PersonStore PersonStore { get; }
+            public SimulationCalendar Calendar { get; }
+            public IPersonNaturalMortalitySampleProvider MortalitySamples => null;
+            public IAggregateDemographyProvider AggregateProvider => null;
+            public IDailyV1SelectedDemographyBoundary Boundary { get; }
+            public void PublishResult(DailyV1SelectedDemographyResult result) { }
+        }
+
+        private sealed class NoOpDemographyBoundary : IDailyV1SelectedDemographyBoundary
+        {
+            private readonly IReadOnlyDictionary<string, int> floors;
+
+            internal NoOpDemographyBoundary(IReadOnlyList<DailyV1CityRuntimeOwners> cities)
+            {
+                Dictionary<string, int> values = new Dictionary<string, int>(StringComparer.Ordinal);
+                foreach (DailyV1CityRuntimeOwners city in cities)
+                    values[city.RuntimeId] = city.Population.CurrentPopulation;
+                floors = values;
+            }
+
+            public bool TryApplyPersonDeath(PersonId personId, out string failure)
+            {
+                failure = "No mortality is expected in this fixture.";
+                return false;
+            }
+
+            public IReadOnlyDictionary<string, int> BuildRepresentedResidentFloors() => floors;
+        }
+
+        private sealed class NoOpActorTurnBoundary : IDailyV1ActorTurnExecutionBoundary
+        {
+            public bool IsInSpatialTransit(DailyV1NpcRuntimeOwners actor, PersonId personId) => false;
+            public bool IsReservedToday(DailyV1NpcRuntimeOwners actor) => false;
+            public void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive) { }
+            public bool TryProcessActorChoice(DailyV1NpcRuntimeOwners actor, int rosterOrdinal) => false;
+            public void AdvanceMerchantTradeState(DailyV1NpcRuntimeOwners actor) { }
+            public void EvaluateAndExecuteAction(DailyV1NpcRuntimeOwners actor) { }
+        }
+    }
+
+    private sealed class RecordingTravelExecutionContext
+        : IDailyV1SelectedTravelDayExecutionContext
+    {
+        private readonly List<string> order;
+        private readonly TravelPartyStore partyStore;
+        private readonly IReadOnlyCollection<string> managedPartyMembers;
+        private readonly RecordingTravelStageBoundary boundary;
+
+        internal int PartyOperationCount { get; private set; }
+        internal IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> PartyArrivals { get; private set; }
+        internal IReadOnlyList<DailyV1SelectedSoloTravelDayResult> SoloResults { get; private set; }
+
+        internal RecordingTravelExecutionContext(
+            List<string> order,
+            TravelPartyStore partyStore,
+            IReadOnlyCollection<string> managedPartyMembers,
+            RecordingTravelStageBoundary boundary,
+            bool advanceSoloTravel)
+        {
+            this.order = order;
+            this.partyStore = partyStore;
+            this.managedPartyMembers = managedPartyMembers;
+            this.boundary = boundary;
+            AdvanceSoloTravel = advanceSoloTravel;
+        }
+
+        public TravelPartyStore PartyStore => partyStore;
+        public IReadOnlyCollection<string> ManagedTravelPartyNpcRuntimeIds => managedPartyMembers;
+        public IDailyV1SelectedTravelDayBoundary Boundary => boundary;
+        public bool AdvanceSoloTravel { get; }
+
+        public bool ExecuteWithinPartyOwnerOperation(Func<bool> operation)
+        {
+            PartyOperationCount++;
+            order.Add("party-operation-enter");
+            bool result = operation();
+            order.Add("party-operation-exit");
+            return result;
+        }
+
+        public void PublishCompletedTravelResults(
+            IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
+            IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults)
+        {
+            Assert.That(partyArrivals, Has.Count.EqualTo(1));
+            Assert.That(soloResults, Has.Count.EqualTo(1));
+            PartyArrivals = partyArrivals;
+            SoloResults = soloResults;
+            order.Add("results-published");
+        }
+
+        public void ObserveCompletedTravelResults() => order.Add("travel-observation");
     }
 }

@@ -264,9 +264,8 @@ public sealed class P12TravelPartyStartOperationTests
         Assert.That(typeof(SimulationRuntime)
             .GetField("activeP12TravelPartyStartOperationContext", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(runtime), Is.Null);
-        Assert.That((int)typeof(ContinuationCensusProtocol)
-            .GetField("activeOperationCount", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(protocol), Is.Zero, "the finally path must dispose the operation scope after notification failure");
+        Assert.That(protocol.ActiveOperationCount, Is.Zero,
+            "the finally path must dispose the operation scope after notification failure");
     }
 
     [TestCase("party-allocator")]

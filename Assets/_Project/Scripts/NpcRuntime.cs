@@ -487,6 +487,30 @@ public class NpcRuntime : ICapabilityConditionSource
         NotifyP12CrimeJusticeMutationCommitted();
     }
 
+    /// <summary>
+    /// Refreshes the Unity compatibility list after Core applies unpublished
+    /// selected-profile genesis state. Genesis precedes runtime admission, so
+    /// this projection must not publish a P12 mutation callback.
+    /// </summary>
+    internal bool TryRefreshSelectedStatusProjectionForGenesis(DailyV1NpcRuntimeOwners owner)
+    {
+        if (!ReferenceEquals(selectedRuntimeOwners, owner)
+            || !ReferenceEquals(selectedDailyV1StatusOwner, owner?.Status)
+            || !ReferenceEquals(selectedDefinitionGraph, owner?.Definitions)
+            || selectedDefinitionBindings == null)
+            return false;
+
+        try
+        {
+            RefreshSelectedStatusProjection();
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>Synchronizes the legacy hidden-day mirror and publishes one P12 leaf commit.</summary>
     internal void NotifyCoreSelectedDailyV1HiddenMutationCommitted(DailyV1NpcRuntimeOwners owner)
     {
@@ -1668,7 +1692,7 @@ public class NpcRuntime : ICapabilityConditionSource
 
     internal bool TryBindPersonRuntime(PersonRuntime person)
     {
-        if (person == null || PersonId == null || PersonId != person.PersonId)
+        if (person == null || person.PersonId == null || PersonId == null || PersonId != person.PersonId)
         {
             return false;
         }
@@ -1678,6 +1702,12 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         }
 
+        // A restored NPC may initially reconstruct its PersonId from the
+        // persisted string value. Once the exact PersonStore binding is
+        // admitted, retain that store-owned identity instance for subsequent
+        // owner-graph joins.
+        personIdentity = person.PersonId;
+        personIdValue = person.PersonId.Value;
         personRuntime = person;
         return true;
     }

@@ -2367,6 +2367,53 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    internal bool TryReadP12CrimeJusticeCoreCensus(
+        Func<string, bool> isNpcRuntimeIdInstalled,
+        Func<string, bool> isCityRuntimeIdInstalled,
+        out int wantedCount,
+        out int sentenceCount,
+        out long revision)
+    {
+        wantedCount = 0;
+        sentenceCount = 0;
+        revision = justiceRecordsOwner.Revision;
+        if (isNpcRuntimeIdInstalled == null || isCityRuntimeIdInstalled == null
+            || revision < 0L || justiceRecordsOwner.WantedRecords == null
+            || justiceRecordsOwner.Sentences == null)
+            return false;
+
+        HashSet<DailyV1JusticeWantedRecordOwner> wantedRows =
+            new HashSet<DailyV1JusticeWantedRecordOwner>();
+        foreach (DailyV1JusticeWantedRecordOwner record in justiceRecordsOwner.WantedRecords)
+        {
+            if (record == null || string.IsNullOrWhiteSpace(record.TargetRuntimeId)
+                || string.IsNullOrWhiteSpace(record.CityRuntimeId)
+                || !isNpcRuntimeIdInstalled(record.TargetRuntimeId)
+                || !isCityRuntimeIdInstalled(record.CityRuntimeId)
+                || !wantedRows.Add(record))
+                return false;
+        }
+
+        HashSet<DailyV1JusticeSentenceOwner> sentenceRows =
+            new HashSet<DailyV1JusticeSentenceOwner>();
+        foreach (DailyV1JusticeSentenceOwner sentence in justiceRecordsOwner.Sentences)
+        {
+            if (sentence == null || string.IsNullOrWhiteSpace(sentence.TargetRuntimeId)
+                || string.IsNullOrWhiteSpace(sentence.CityRuntimeId)
+                || sentence.Warrant == null || !wantedRows.Contains(sentence.Warrant)
+                || !string.Equals(sentence.TargetRuntimeId, sentence.Warrant.TargetRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(sentence.CityRuntimeId, sentence.Warrant.CityRuntimeId, StringComparison.Ordinal)
+                || !isNpcRuntimeIdInstalled(sentence.TargetRuntimeId)
+                || !isCityRuntimeIdInstalled(sentence.CityRuntimeId)
+                || !sentenceRows.Add(sentence))
+                return false;
+        }
+
+        wantedCount = justiceRecordsOwner.WantedRecords.Count;
+        sentenceCount = justiceRecordsOwner.Sentences.Count;
+        return true;
+    }
+
     internal bool TryCaptureP12EOwnerSnapshotRows(
         out IReadOnlyList<P12EJusticeWantedSnapshotRow> wantedRows,
         out IReadOnlyList<P12EJusticeSentenceSnapshotRow> sentenceRows)
@@ -2546,57 +2593,19 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
 
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
     {
-        if (mutationGuardBinding.CanBindTo(guard) == false
-            || justiceRecordsOwner.CanBindMutationGuard(guard) == false)
-        {
-            return false;
-        }
-
-        foreach (WantedRecordRuntime record in wantedRecords)
-        {
-            if (record != null && record.CanBindMutationGuard(guard) == false)
-            {
-                return false;
-            }
-        }
-
-        foreach (PrisonSentenceRuntime sentence in prisonSentences)
-        {
-            if (sentence != null && sentence.CanBindMutationGuard(guard) == false)
-            {
-                return false;
-            }
-        }
-
-        return true;
+        // The Core owner contains the authoritative rows and validates every
+        // row's guard binding. Enumerating the Unity projection here can force
+        // a reference projection before constructor-time owner rows have had
+        // their runtime views materialized.
+        return mutationGuardBinding.CanBindTo(guard)
+            && justiceRecordsOwner.CanBindMutationGuard(guard);
     }
 
     internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
     {
-        if (CanBindMutationGuard(guard) == false
-            || mutationGuardBinding.TryBindTo(guard) == false
-            || justiceRecordsOwner.TryBindMutationGuard(guard) == false)
-        {
-            return false;
-        }
-
-        foreach (WantedRecordRuntime record in wantedRecords)
-        {
-            if (record != null && record.TryBindMutationGuard(guard) == false)
-            {
-                return false;
-            }
-        }
-
-        foreach (PrisonSentenceRuntime sentence in prisonSentences)
-        {
-            if (sentence != null && sentence.TryBindMutationGuard(guard) == false)
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return CanBindMutationGuard(guard)
+            && mutationGuardBinding.TryBindTo(guard)
+            && justiceRecordsOwner.TryBindMutationGuard(guard);
     }
 
     bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)

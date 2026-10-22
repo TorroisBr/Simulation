@@ -2,6 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
+/// <summary>
+/// Read-only P8 location identity consumed by anchor ownership. Unity spatial
+/// authorities and the detached Core spatial authority implement this same
+/// contract; anchor registration never creates or substitutes Location truth.
+/// </summary>
+public interface ISpatialLocationLookup
+{
+    bool TryGet(LocationId id, out LocationRecord location);
+}
+
 public enum SpatialAnchorOwnerKind { City = 0, ExplorableSite = 1 }
 
 /// <summary>Stable semantic identity of a legacy domain object receiving a spatial anchor.</summary>
@@ -50,19 +60,19 @@ public sealed class SpatialAnchorBindingFailure
 public sealed class LegacySpatialAnchorBindingStore : IAuthoritativeMutationGuardBindable
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
-    private readonly SpatialAuthorityStore spatialAuthorityStore;
+    private readonly ISpatialLocationLookup spatialAuthorityStore;
     private readonly Func<SpatialAnchorOwnerId, bool> ownerExists;
     private readonly Dictionary<string, SpatialAnchorBinding> byOwner = new Dictionary<string, SpatialAnchorBinding>(StringComparer.Ordinal);
     private readonly Dictionary<string, string> ownerByLocation = new Dictionary<string, string>(StringComparer.Ordinal);
     private long revision;
 
-    public LegacySpatialAnchorBindingStore(SpatialAuthorityStore spatialAuthorityStore)
+    public LegacySpatialAnchorBindingStore(ISpatialLocationLookup spatialAuthorityStore)
         : this(spatialAuthorityStore, null)
     {
     }
 
     internal LegacySpatialAnchorBindingStore(
-        SpatialAuthorityStore spatialAuthorityStore,
+        ISpatialLocationLookup spatialAuthorityStore,
         Func<SpatialAnchorOwnerId, bool> ownerExists)
     {
         this.spatialAuthorityStore = spatialAuthorityStore ?? throw new ArgumentNullException(nameof(spatialAuthorityStore));
@@ -171,7 +181,7 @@ public sealed class LegacySpatialAnchorBindingStore : IAuthoritativeMutationGuar
         return new SpatialAnchorBindingInvariantReport(violations);
     }
 
-    internal LegacySpatialAnchorBindingStore Clone(SpatialAuthorityStore targetSpatial, Func<SpatialAnchorOwnerId, bool> targetOwnerExists = null)
+    internal LegacySpatialAnchorBindingStore Clone(ISpatialLocationLookup targetSpatial, Func<SpatialAnchorOwnerId, bool> targetOwnerExists = null)
     {
         LegacySpatialAnchorBindingStore copy = new LegacySpatialAnchorBindingStore(
             targetSpatial ?? throw new ArgumentNullException(nameof(targetSpatial)),

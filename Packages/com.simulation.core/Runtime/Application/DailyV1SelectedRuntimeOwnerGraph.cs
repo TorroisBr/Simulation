@@ -19,7 +19,9 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
     internal TravelPartyStore TravelParties { get; }
     internal DailyV1RuntimeIdentityIndex RuntimeIdentityIndex { get; }
+    internal ExpeditionStore Expeditions { get; private set; }
     internal PersonStore PersonStore { get; private set; }
+    internal ScheduledDirectiveStore ScheduledDirectives { get; private set; }
 
     private DailyV1SelectedRuntimeOwnerGraph(
         DailyV1EffectiveDefinitions definitions,
@@ -53,6 +55,31 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         if (PersonStore != null) return ReferenceEquals(PersonStore, personStore);
         if (!MatchesPersonStore(personStore, npcs)) return false;
         PersonStore = personStore;
+        return true;
+    }
+
+    /// <summary>
+    /// Binds the exact configured directive store after Core genesis. Restored
+    /// graphs may leave this unset until the persisted store is staged.
+    /// </summary>
+    internal bool TryBindScheduledDirectives(ScheduledDirectiveStore store)
+    {
+        if (store == null) return false;
+        if (ScheduledDirectives != null) return ReferenceEquals(ScheduledDirectives, store);
+        ScheduledDirectives = store;
+        return true;
+    }
+
+    /// <summary>
+    /// Binds the exact expedition owner used by the runtime after genesis.
+    /// Actor eligibility reads this owner from the selected graph so a host
+    /// cannot substitute a parallel expedition store at the turn boundary.
+    /// </summary>
+    internal bool TryBindExpeditionStore(ExpeditionStore store)
+    {
+        if (store == null) return false;
+        if (Expeditions != null) return ReferenceEquals(Expeditions, store);
+        Expeditions = store;
         return true;
     }
 
@@ -827,9 +854,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         {
             owner
         };
-        return TryCreateCore(Definitions, cities, updatedNpcs, SpatialNetwork,
-            JusticeRecordsOwner, TravelParties, RuntimeIdentityIndex, PersonStore,
-            owner.RuntimeId, 1, out graph);
+        return TryCreateMembershipGraph(updatedNpcs, owner.RuntimeId, 1, out graph);
     }
 
     /// <summary>
@@ -856,9 +881,28 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
             updatedNpcs.Add(current);
         }
 
-        return removed && TryCreateCore(Definitions, cities, updatedNpcs, SpatialNetwork,
-            JusticeRecordsOwner, TravelParties, RuntimeIdentityIndex, PersonStore,
-            owner.RuntimeId, -1, out graph);
+        return removed && TryCreateMembershipGraph(updatedNpcs, owner.RuntimeId, -1, out graph);
+    }
+
+    private bool TryCreateMembershipGraph(
+        IReadOnlyList<DailyV1NpcRuntimeOwners> updatedNpcs,
+        string pendingNpcIdentityId,
+        int pendingNpcMembershipDelta,
+        out DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (!TryCreateCore(Definitions, cities, updatedNpcs, SpatialNetwork,
+                JusticeRecordsOwner, TravelParties, RuntimeIdentityIndex, PersonStore,
+                pendingNpcIdentityId, pendingNpcMembershipDelta, out graph))
+            return false;
+
+        if ((ScheduledDirectives != null && !graph.TryBindScheduledDirectives(ScheduledDirectives))
+            || (Expeditions != null && !graph.TryBindExpeditionStore(Expeditions)))
+        {
+            graph = null;
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -1538,6 +1582,9 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
     private readonly HashSet<string> runtimeIds = new HashSet<string>(StringComparer.Ordinal);
     private readonly HashSet<string> locationIds = new HashSet<string>(StringComparer.Ordinal);
     private bool built;
+    private bool initialJusticeStateCreated;
+    private bool initialCommercialKnowledgeCreated;
+    internal string LastInitialJusticeStateFailure { get; private set; }
 
     internal DailyV1SelectedRuntimeOwnerGraphBuilder(
         DailyV1EffectiveDefinitions definitions,
@@ -1555,10 +1602,10 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
     internal DailyV1RuntimeIdentityIndex RuntimeIdentityIndex => identityIndex;
 
     /// <summary>
-    /// Builds the configured selected owner graph using only Core-owned
-    /// identity allocation and spatial membership. A failed build is a
-    /// discarded genesis candidate; callers must not publish its allocator
-    /// or any partial owner projection.
+    /// Builds the configured selected owner graph and its supported day-zero
+    /// spatial, commercial, and Justice genesis owners without Unity
+    /// projection callbacks. A failed build is a discarded genesis candidate;
+    /// callers must not publish its allocator or any partial owner projection.
     /// </summary>
     internal static bool TryBuildConfigured(
         DailyV1EffectiveDefinitions definitions,
@@ -1570,9 +1617,17 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
 
         DailyV1SelectedRuntimeOwnerGraphBuilder builder =
             new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        SimulationTime simulationTime = new SimulationTime();
+        ScheduledDirectiveStore scheduledDirectives = new ScheduledDirectiveStore(simulationTime);
+        DailyV1JusticeRecordsOwner justice = new DailyV1JusticeRecordsOwner();
         return builder.TryCreateConfiguredCities(runtimeIds)
+            && builder.TryCreateConfiguredCityRoutes(runtimeIds)
             && builder.TryCreateConfiguredNpcs(runtimeIds, null)
-            && builder.TryBuild(out graph);
+            && builder.TryCreateConfiguredScheduledDirectives(runtimeIds, scheduledDirectives)
+            && builder.TryBootstrapInitialSpatialKnowledge()
+            && builder.TryBootstrapInitialCommercialKnowledge(0L)
+            && builder.TryCreateConfiguredInitialJusticeState(justice)
+            && builder.TryBuild(justice, null, scheduledDirectives, out graph);
     }
 
     /// <summary>
@@ -1717,6 +1772,547 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Creates the selected profile's scheduled directives against the exact
+    /// Core NPC owners and admitted action definitions. Unity may project the
+    /// resulting stores for compatibility, but does not resolve or construct
+    /// selected directive authority.
+    /// </summary>
+    internal bool TryCreateConfiguredScheduledDirectives(
+        RuntimeIdAllocator runtimeIds,
+        ScheduledDirectiveStore directiveStore,
+        Action<string> logWarning = null,
+        Action<string> logError = null)
+    {
+        if (built || runtimeIds == null || directiveStore == null
+            || definitions.Configuration == null)
+            return false;
+
+        foreach (DailyV1ScheduledDirectiveConfig selectedDirective in
+            definitions.Configuration.scheduledDirectives ?? Array.Empty<DailyV1ScheduledDirectiveConfig>())
+        {
+            if (selectedDirective == null)
+            {
+                logWarning?.Invoke("Skipping null selected scheduled directive configuration.");
+                continue;
+            }
+            if (string.IsNullOrWhiteSpace(selectedDirective.actor))
+            {
+                logWarning?.Invoke("Skipping selected scheduled directive configuration: actor definition is null.");
+                continue;
+            }
+            if (string.IsNullOrWhiteSpace(selectedDirective.action)
+                || !definitions.Actions.TryGetValue(selectedDirective.action,
+                    out DailyV1ActionDefinition action)
+                || action?.Values?.actionType?.Value != DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue)
+            {
+                logWarning?.Invoke("Skipping selected scheduled directive configuration: EscapePrison requires a matching admitted action definition.");
+                continue;
+            }
+
+            DailyV1NpcRuntimeOwners actor = null;
+            int actorMatches = 0;
+            foreach (DailyV1NpcRuntimeOwners candidate in npcs)
+            {
+                if (candidate?.Definition == null
+                    || !string.Equals(candidate.Definition.DefinitionId, selectedDirective.actor,
+                        StringComparison.Ordinal))
+                    continue;
+                actor = candidate;
+                actorMatches++;
+                if (actorMatches > 1) break;
+            }
+            if (actorMatches != 1) continue;
+
+            try
+            {
+                ScheduledDirective directive = new ScheduledDirective(
+                    runtimeIds.AllocateDirectiveId(),
+                    selectedDirective.absoluteDay,
+                    (ScheduledDirectiveMode)(selectedDirective.mode?.Value ?? 0),
+                    (ScheduledDirectiveOperation)(selectedDirective.operation?.Value ?? 0),
+                    actor.RuntimeId,
+                    action.DefinitionId,
+                    action.Values.actionType.Value);
+                directiveStore.Add(directive);
+            }
+            catch (ArgumentException exception)
+            {
+                logError?.Invoke("Cannot create scheduled directive: " + exception.Message);
+            }
+            catch (InvalidOperationException exception)
+            {
+                logError?.Invoke("Cannot allocate DirectiveId: " + exception.Message);
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Creates the selected profile's initial warrant rows and wanted-status
+    /// memberships on their Core owners before the graph is admitted to a
+    /// runtime. Unity later binds reference projections for those exact rows.
+    /// </summary>
+    internal bool TryCreateConfiguredInitialJusticeState(DailyV1JusticeRecordsOwner justiceRecordsOwner)
+    {
+        LastInitialJusticeStateFailure = null;
+        if (built || initialJusticeStateCreated || justiceRecordsOwner == null
+            || definitions.Configuration == null || justiceRecordsOwner.HasP12MutationBoundary
+            || justiceRecordsOwner.Revision != 0L || justiceRecordsOwner.WantedRecords.Count != 0
+            || justiceRecordsOwner.Sentences.Count != 0)
+        {
+            LastInitialJusticeStateFailure = "builder or initial owner is not at genesis";
+            return false;
+        }
+
+        DailyV1StatusDefinition wantedStatus = null;
+        string wantedStatusId = definitions.Configuration.wantedStatus;
+        bool hasApplicableWarrant = false;
+        foreach (DailyV1InitialWantedRecordConfig selectedWarrant in
+            definitions.Configuration.initialWarrants ?? Array.Empty<DailyV1InitialWantedRecordConfig>())
+        {
+            if (selectedWarrant == null
+                || string.IsNullOrWhiteSpace(selectedWarrant.target)
+                || string.IsNullOrWhiteSpace(selectedWarrant.city))
+                continue;
+
+            if (ResolveUniqueNpc(selectedWarrant.target) != null
+                && ResolveUniqueStartingCity(selectedWarrant.city) != null)
+            {
+                hasApplicableWarrant = true;
+                break;
+            }
+        }
+
+        // A wanted-status definition is required only when this profile will
+        // create a selected initial warrant. Non-Justice proving profiles can
+        // carry the shared configuration object without admitting that status.
+        if (!string.IsNullOrWhiteSpace(wantedStatusId)
+            && (!definitions.Statuses.TryGetValue(wantedStatusId, out wantedStatus)
+                || wantedStatus == null))
+        {
+            if (hasApplicableWarrant)
+            {
+                LastInitialJusticeStateFailure = "configured wanted status is absent while an initial warrant applies";
+                return false;
+            }
+            wantedStatus = null;
+        }
+
+        foreach (DailyV1InitialWantedRecordConfig selectedWarrant in
+            definitions.Configuration.initialWarrants ?? Array.Empty<DailyV1InitialWantedRecordConfig>())
+        {
+            if (selectedWarrant == null
+                || string.IsNullOrWhiteSpace(selectedWarrant.target)
+                || string.IsNullOrWhiteSpace(selectedWarrant.city))
+                continue;
+
+            DailyV1NpcRuntimeOwners target = ResolveUniqueNpc(selectedWarrant.target);
+            DailyV1CityRuntimeOwners city = ResolveUniqueStartingCity(selectedWarrant.city);
+            if (target == null || city == null) continue;
+
+            DailyV1JusticeWantedRecordOwner record = justiceRecordsOwner.FindActiveWantedRecord(
+                target.RuntimeId, city.RuntimeId);
+            if (record == null)
+            {
+                record = new DailyV1JusticeWantedRecordOwner(
+                    target.RuntimeId, city.RuntimeId, selectedWarrant.bounty, selectedWarrant.sentenceDays);
+                if (!justiceRecordsOwner.TryAddWantedRecord(record))
+                {
+                    LastInitialJusticeStateFailure = "initial warrant row could not be added";
+                    return false;
+                }
+            }
+            else if (!record.TryAddPenalty(selectedWarrant.bounty, selectedWarrant.sentenceDays))
+            {
+                LastInitialJusticeStateFailure = "initial warrant penalty could not be added";
+                return false;
+            }
+
+            // JusticeSystem.CreateOrIncreaseWarrant synchronizes this target
+            // immediately after each accepted configuration row. Preserve that
+            // ordered insertion behavior before the final roster-wide pass.
+            if (wantedStatus != null && !target.Status.Contains(wantedStatus)
+                && !target.Status.TryAdd(wantedStatus))
+            {
+                LastInitialJusticeStateFailure = "target wanted-status owner rejected an initial warrant membership";
+                return false;
+            }
+        }
+
+        if (wantedStatus != null)
+        {
+            // Match JusticeSystem.SyncWantedStatuses' roster order and exact
+            // active-warrant predicate, including removal of authored stale
+            // wanted membership for actors without an active warrant.
+            foreach (DailyV1NpcRuntimeOwners target in npcs)
+            {
+                if (target == null)
+                {
+                    LastInitialJusticeStateFailure = "selected NPC owner is null during wanted-status synchronization";
+                    return false;
+                }
+                bool hasActiveWarrant = justiceRecordsOwner.FindActiveWantedRecords(target.RuntimeId).Count > 0;
+                bool hasWantedStatus = target.Status.Contains(wantedStatus);
+                if (hasActiveWarrant && !hasWantedStatus && !target.Status.TryAdd(wantedStatus))
+                {
+                    LastInitialJusticeStateFailure = "wanted-status owner rejected an active-warrant membership";
+                    return false;
+                }
+                if (!hasActiveWarrant && hasWantedStatus && !target.Status.TryRemove(wantedStatus))
+                {
+                    LastInitialJusticeStateFailure = "wanted-status owner rejected stale-membership removal";
+                    return false;
+                }
+            }
+        }
+
+        initialJusticeStateCreated = true;
+        LastInitialJusticeStateFailure = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Seeds selected actors' initial local spatial knowledge from the exact
+    /// Core City/Location/Route graph. The caller uses this path only when no
+    /// selected explorable-site content requires the host's existing site-aware
+    /// bootstrap behavior.
+    /// </summary>
+    internal bool TryBootstrapInitialSpatialKnowledge()
+    {
+        if (built || definitions.Configuration == null) return false;
+
+        foreach (DailyV1NpcRuntimeOwners npc in npcs)
+        {
+            string startingLocationId = npc?.Travel?.CurrentLocationRuntimeId;
+            if (string.IsNullOrWhiteSpace(startingLocationId)
+                || !spatialNetwork.TryGetLocation(startingLocationId, out SpatialLocationRuntime startingLocation))
+                continue;
+
+            npc.SpatialKnowledge.DiscoverLocation(startingLocation.RuntimeId);
+            foreach (SpatialRouteRuntime route in spatialNetwork.GetOutgoingRoutes(startingLocation))
+            {
+                if (route == null) continue;
+                npc.SpatialKnowledge.DiscoverRoute(route.RuntimeId);
+                npc.SpatialKnowledge.DiscoverLocation(route.Destination?.RuntimeId);
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Seeds the accepted selected-profile traveling Merchants from the exact
+    /// Core Market, Counterparty, Travel, SpatialKnowledge, and CommercialKnowledge
+    /// owners. This mirrors the existing day-zero scenario-knowledge bootstrap;
+    /// it does not add site/topology facts or mutate spatial knowledge.
+    /// </summary>
+    internal bool TryBootstrapInitialCommercialKnowledge(long absoluteDay)
+    {
+        if (built || initialCommercialKnowledgeCreated || definitions.Configuration == null)
+            return false;
+        if (absoluteDay != 0L) return true;
+
+        foreach (DailyV1NpcRuntimeOwners npc in npcs)
+        {
+            if (npc == null) return false;
+            if (npc.Lifecycle?.LifeState != NpcLifeState.Alive
+                || !DailyV1NpcDefinitionRules.HasJobType(npc.Definition, definitions,
+                    DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+                || !DailyV1NpcDefinitionRules.HasMerchantBehavior(npc.Definition, definitions,
+                    DailyV1NpcDefinitionRules.TravelingMerchantBehaviorValue))
+                continue;
+
+            if (!TryFindCityByRuntimeId(npc.Travel?.CurrentCityRuntimeId,
+                    out DailyV1CityRuntimeOwners originCity))
+                continue;
+
+            if (npc.SpatialKnowledge.KnowsLocation(originCity.LocationRuntimeId))
+                ObserveInitialMarket(npc, originCity, absoluteDay);
+
+            if (!spatialNetwork.TryGetLocation(originCity.LocationRuntimeId,
+                    out SpatialLocationRuntime originLocation)
+                || !npc.SpatialKnowledge.KnowsLocation(originLocation.RuntimeId))
+                continue;
+
+            List<SpatialRouteRuntime> knownDirectRoutes = new List<SpatialRouteRuntime>();
+            foreach (SpatialRouteRuntime route in spatialNetwork.GetOutgoingRoutes(originLocation))
+            {
+                if (route == null || !ReferenceEquals(route.Origin, originLocation)
+                    || !npc.SpatialKnowledge.KnowsRoute(route.RuntimeId)
+                    || route.Destination == null
+                    || !npc.SpatialKnowledge.KnowsLocation(route.Destination.RuntimeId)
+                    || !spatialNetwork.TryGetSingleDirectRoute(originLocation,
+                        route.Destination, out SpatialRouteRuntime directRoute, out _)
+                    || !ReferenceEquals(directRoute, route))
+                    continue;
+                knownDirectRoutes.Add(route);
+            }
+            knownDirectRoutes.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left?.RuntimeId ?? string.Empty, right?.RuntimeId ?? string.Empty));
+
+            foreach (SpatialRouteRuntime route in knownDirectRoutes)
+                if (TryFindCityByLocation(route.Destination.RuntimeId,
+                        out DailyV1CityRuntimeOwners destinationCity))
+                    ObserveInitialMarket(npc, destinationCity, absoluteDay);
+        }
+
+        initialCommercialKnowledgeCreated = true;
+        return true;
+    }
+
+    private static void ObserveInitialMarket(
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1CityRuntimeOwners city,
+        long absoluteDay)
+    {
+        if (npc?.CommercialKnowledge == null || city?.Market == null || city.Counterparty == null)
+            return;
+
+        foreach (DailyV1MarketItemState marketItem in city.Market.Items)
+        {
+            if (marketItem == null || marketItem.Item == null
+                || string.IsNullOrWhiteSpace(marketItem.Item.DefinitionId))
+                continue;
+
+            npc.CommercialKnowledge.RecordObservation(new DailyV1CommercialMarketObservation(
+                city.LocationRuntimeId, marketItem.Item, marketItem.CurrentPrice,
+                marketItem.Amount, absoluteDay, absoluteDay,
+                DailyV1CommercialKnowledgeSource.InitialScenarioKnowledge));
+        }
+
+        MarketCounterpartyRuntime counterparty = city.Counterparty;
+        float observedPurchasingPower = counterparty.LiquidityMode == MarketLiquidityMode.AccountBacked
+            ? counterparty.MoneyAccount.Balance
+            : 0f;
+        npc.CommercialKnowledge.RecordLiquidityObservation(new DailyV1CommercialLiquidityObservation(
+            city.LocationRuntimeId, counterparty.LiquidityMode, observedPurchasingPower,
+            absoluteDay, absoluteDay,
+            DailyV1CommercialKnowledgeSource.InitialScenarioKnowledge));
+    }
+
+    private bool TryFindCityByLocation(
+        string locationRuntimeId,
+        out DailyV1CityRuntimeOwners city)
+    {
+        city = null;
+        if (string.IsNullOrWhiteSpace(locationRuntimeId)) return false;
+        foreach (DailyV1CityRuntimeOwners candidate in cities)
+        {
+            if (!string.Equals(candidate?.LocationRuntimeId, locationRuntimeId,
+                    StringComparison.Ordinal))
+                continue;
+            if (city != null) return false;
+            city = candidate;
+        }
+        return city != null;
+    }
+
+    private bool TryFindCityByRuntimeId(
+        string cityRuntimeId,
+        out DailyV1CityRuntimeOwners city)
+    {
+        city = null;
+        if (string.IsNullOrWhiteSpace(cityRuntimeId)) return false;
+        foreach (DailyV1CityRuntimeOwners candidate in cities)
+        {
+            if (!string.Equals(candidate?.RuntimeId, cityRuntimeId,
+                    StringComparison.Ordinal))
+                continue;
+            if (city != null) return false;
+            city = candidate;
+        }
+        return city != null;
+    }
+
+    private DailyV1NpcRuntimeOwners ResolveUniqueNpc(string definitionId)
+    {
+        DailyV1NpcRuntimeOwners match = null;
+        foreach (DailyV1NpcRuntimeOwners candidate in npcs)
+        {
+            if (candidate?.Definition == null
+                || !string.Equals(candidate.Definition.DefinitionId, definitionId, StringComparison.Ordinal))
+                continue;
+            if (match != null) return null;
+            match = candidate;
+        }
+        return match;
+    }
+
+    /// <summary>
+    /// Constructs selected City routes from the admitted immutable definition
+    /// graph and registers them in the Core spatial owner. The optional
+    /// callback only binds the already-admitted Route object into a host lookup;
+    /// Core owns route validity, identity, ordering, allocation and topology.
+    /// </summary>
+    internal bool TryCreateConfiguredCityRoutes(
+        RuntimeIdAllocator runtimeIds,
+        Func<SpatialRouteRuntime, bool> tryBindRouteProjection = null,
+        Action<SpatialRouteRuntime> rollbackRouteProjection = null,
+        Action<string> logWarning = null,
+        Action<string> logError = null)
+    {
+        if (built || runtimeIds == null
+            || ((tryBindRouteProjection == null) != (rollbackRouteProjection == null)))
+            return false;
+
+        foreach (DailyV1CityRuntimeOwners origin in cities)
+        {
+            if (origin?.Definition?.Values?.connections == null) continue;
+
+            List<DailyV1CityConnection> connections = new List<DailyV1CityConnection>(
+                origin.Definition.Values.connections);
+            connections.Sort((left, right) =>
+            {
+                int destination = StringComparer.Ordinal.Compare(left?.destination, right?.destination);
+                return destination != 0
+                    ? destination
+                    : Nullable.Compare(left != null ? (int?)left.travelDays : null,
+                        right != null ? (int?)right.travelDays : null);
+            });
+
+            foreach (DailyV1CityConnection connection in connections)
+            {
+                if (connection == null)
+                {
+                    logWarning?.Invoke($"Skipping invalid spatial route from city '{origin.Definition.Values.cityName}': connection is null.");
+                    continue;
+                }
+                if (string.IsNullOrWhiteSpace(connection.destination))
+                {
+                    logWarning?.Invoke($"Skipping invalid spatial route from city '{origin.Definition.Values.cityName}': destination definition is null.");
+                    continue;
+                }
+
+                if (!citiesByDefinition.TryGetValue(connection.destination,
+                        out List<DailyV1CityRuntimeOwners> destinations)
+                    || destinations.Count == 0)
+                {
+                    logWarning?.Invoke($"City definition '{connection.destination}' has no runtime instance.");
+                    continue;
+                }
+                if (destinations.Count > 1)
+                {
+                    logError?.Invoke($"City definition '{connection.destination}' is ambiguous: {destinations.Count} runtime instances exist. Resolve by RuntimeId instead.");
+                    continue;
+                }
+
+                DailyV1CityRuntimeOwners destination = destinations[0];
+                if (ReferenceEquals(origin, destination))
+                {
+                    logWarning?.Invoke($"Skipping invalid self route for city '{origin.Definition.Values.cityName}'.");
+                    continue;
+                }
+                if (!spatialNetwork.TryGetLocation(origin.LocationRuntimeId,
+                        out SpatialLocationRuntime originLocation)
+                    || !spatialNetwork.TryGetLocation(destination.LocationRuntimeId,
+                        out SpatialLocationRuntime destinationLocation))
+                {
+                    logError?.Invoke("Cannot register spatial route: origin and destination must both be registered locations.");
+                    continue;
+                }
+
+                string routeRuntimeId = runtimeIds.AllocateRouteId();
+                SpatialRouteRuntime route = new SpatialRouteRuntime(
+                    routeRuntimeId, originLocation, destinationLocation, connection.travelDays);
+                if (!spatialNetwork.CanAdvanceRevision)
+                {
+                    logError?.Invoke("Cannot register spatial route: spatial network census revision is exhausted.");
+                    continue;
+                }
+                if (spatialNetwork.ContainsLocationId(routeRuntimeId)
+                    || spatialNetwork.ContainsRouteId(routeRuntimeId))
+                {
+                    if (identityIndex.TryGetKind(routeRuntimeId, out DailyV1RuntimeIdentityKind existingKind))
+                        logError?.Invoke($"Duplicate RuntimeId '{routeRuntimeId}' while registering Route; it is already registered as {GetIdentityKindName(existingKind)}.");
+                    else
+                        logError?.Invoke($"Duplicate RuntimeId '{routeRuntimeId}' while registering Route.");
+                    continue;
+                }
+                if (!identityIndex.TryStageRegister(routeRuntimeId, DailyV1RuntimeIdentityKind.Route))
+                {
+                    LogRouteIdentityRejection(routeRuntimeId, logError);
+                    continue;
+                }
+                if (!identityIndex.TryAdvanceRevision())
+                {
+                    identityIndex.TryRemoveStaged(routeRuntimeId, DailyV1RuntimeIdentityKind.Route);
+                    logError?.Invoke("Cannot register Route runtime identity: census revision is exhausted.");
+                    continue;
+                }
+
+                bool routeProjectionBound = false;
+                try
+                {
+                    if (tryBindRouteProjection != null)
+                    {
+                        if (!tryBindRouteProjection(route))
+                        {
+                            RollbackRouteIdentity(routeRuntimeId);
+                            continue;
+                        }
+                        routeProjectionBound = true;
+                    }
+
+                    if (!spatialNetwork.TryRegisterRoute(route, () => true))
+                    {
+                        if (routeProjectionBound) rollbackRouteProjection(route);
+                        RollbackRouteIdentity(routeRuntimeId);
+                    }
+                }
+                catch
+                {
+                    if (routeProjectionBound) rollbackRouteProjection(route);
+                    RollbackRouteIdentity(routeRuntimeId);
+                    throw;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private void LogRouteIdentityRejection(string runtimeId, Action<string> logError)
+    {
+        if (logError == null) return;
+        if (identityIndex.CensusRevision == long.MaxValue)
+        {
+            logError("Cannot register Route runtime identity: census revision is exhausted.");
+            return;
+        }
+        if (identityIndex.TryGetKind(runtimeId, out DailyV1RuntimeIdentityKind existingKind))
+        {
+            logError($"Duplicate RuntimeId '{runtimeId}' while registering Route; it is already registered as {GetIdentityKindName(existingKind)}.");
+            return;
+        }
+        logError($"Cannot register Route runtime identity: Core rejected RuntimeId '{runtimeId}'.");
+    }
+
+    private void RollbackRouteIdentity(string runtimeId)
+    {
+        if (!identityIndex.TryRemoveStaged(runtimeId, DailyV1RuntimeIdentityKind.Route))
+            throw new InvalidOperationException("Core Route identity rollback failed.");
+        if (!identityIndex.TryRollbackRevision())
+            throw new InvalidOperationException("Core Route identity revision rollback failed.");
+    }
+
+    private static string GetIdentityKindName(DailyV1RuntimeIdentityKind kind)
+    {
+        switch (kind)
+        {
+            case DailyV1RuntimeIdentityKind.Npc: return "NPC";
+            case DailyV1RuntimeIdentityKind.City: return "City";
+            case DailyV1RuntimeIdentityKind.Location: return "Location";
+            case DailyV1RuntimeIdentityKind.Route: return "Route";
+            case DailyV1RuntimeIdentityKind.ExplorableSite: return "ExplorableSite";
+            case DailyV1RuntimeIdentityKind.LocalPlace: return "LocalPlace";
+            case DailyV1RuntimeIdentityKind.LocalConnection: return "LocalConnection";
+            case DailyV1RuntimeIdentityKind.NotableItem: return "NotableItem";
+            default: return "unknown";
+        }
     }
 
     internal bool TryAddInitialCity(
@@ -1915,6 +2511,15 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
         TravelPartyStore travelParties,
         out DailyV1SelectedRuntimeOwnerGraph graph)
     {
+        return TryBuild(justiceRecordsOwner, travelParties, null, out graph);
+    }
+
+    internal bool TryBuild(
+        DailyV1JusticeRecordsOwner justiceRecordsOwner,
+        TravelPartyStore travelParties,
+        ScheduledDirectiveStore scheduledDirectives,
+        out DailyV1SelectedRuntimeOwnerGraph graph)
+    {
         graph = null;
         if (built || !MatchesConfiguredCityRows() || !MatchesConfiguredNpcRows()
             || !HasConsistentInitialPresence()) return false;
@@ -1923,6 +2528,11 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
                 definitions, cities, npcs, spatialNetwork, justiceRecordsOwner,
                 travelParties, identityIndex, out graph))
             return false;
+        if (scheduledDirectives != null && !graph.TryBindScheduledDirectives(scheduledDirectives))
+        {
+            graph = null;
+            return false;
+        }
         built = true;
         return true;
     }

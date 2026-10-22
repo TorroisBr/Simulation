@@ -31,12 +31,6 @@ public sealed class OwnerSectionContract
     public OwnerSectionRole Role { get; }
 }
 
-/// <summary>Reads a live witness from one concrete owner instance.</summary>
-public interface IOwnerSectionCensusProvider
-{
-    OwnerSectionCensusWitness GetCurrentCensus();
-}
-
 internal sealed class ContinuationMutationEpochReservation
 {
     internal readonly ContinuationCensusProtocol Owner;
@@ -228,11 +222,32 @@ public sealed class ContinuationCensusProtocol
     private bool providersSealed;
     private bool operationsSealed;
     private OwnerThreadBinding ownerThreadBinding;
-    private int activeOperationCount;
+    private readonly DailyV1ExecutionBoundaryState sharedExecutionState;
+    private int standaloneActiveOperationCount;
+    private int activeOperationCount => sharedExecutionState != null
+        ? sharedExecutionState.ActiveRuntimeOperationCount
+        : standaloneActiveOperationCount;
+    internal int ActiveOperationCount => activeOperationCount;
     private readonly DailyV1MutationEpochState mutationEpochState = new DailyV1MutationEpochState();
     private DailyV1MutationEpochReservation activeMutationEpochReservation =>
         mutationEpochState.ActiveReservation;
     private int protocolFaulted;
+
+    public ContinuationCensusProtocol()
+        : this(null)
+    {
+    }
+
+    /// <summary>
+    /// Uses the active runtime's Core operation registry for P12 operation
+    /// scopes. Standalone protocol instances keep their local test/kernel
+    /// accounting, while an admitted runtime shares one registry with its
+    /// active-session gate and completed-boundary state.
+    /// </summary>
+    internal ContinuationCensusProtocol(DailyV1ExecutionBoundaryState sharedExecutionState)
+    {
+        this.sharedExecutionState = sharedExecutionState;
+    }
 
     /// <summary>
     /// Declares one logical section requirement. This is generic protocol input;
@@ -1088,6 +1103,16 @@ public sealed class ContinuationCensusProtocol
             || expectedOwnerThread.ManagedThreadId != expectedOwnerThreadId
             || !ReferenceEquals(Thread.CurrentThread, expectedOwnerThread)
             || Thread.CurrentThread.ManagedThreadId != expectedOwnerThreadId)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.WrongOwnerThread;
+            return false;
+        }
+
+        if (sharedExecutionState != null
+            && (sharedExecutionState.AdmissionContext == null
+                || !ReferenceEquals(sharedExecutionState.AdmissionContext.ExpectedOwnerThread, expectedOwnerThread)
+                || sharedExecutionState.AdmissionContext.ExpectedOwnerThreadId != expectedOwnerThreadId))
         {
             Fault();
             failure = ContinuationCensusFailure.WrongOwnerThread;
@@ -2200,7 +2225,19 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        activeOperationCount++;
+        if (sharedExecutionState != null)
+        {
+            if (!sharedExecutionState.TryBeginRuntimeProtocolOperation())
+            {
+                Fault();
+                failure = ContinuationCensusFailure.ProtocolFaulted;
+                return false;
+            }
+        }
+        else
+        {
+            standaloneActiveOperationCount++;
+        }
         OwnerThreadBinding binding = Volatile.Read(ref ownerThreadBinding);
         scope = new SimulationOperationScope(this, binding.Thread, binding.ManagedThreadId);
         failure = ContinuationCensusFailure.None;
@@ -2245,12 +2282,25 @@ public sealed class ContinuationCensusProtocol
     }
 
     /// <summary>
-    /// Reads a copied, ordinally ordered census only when every registered
-    /// section is current and the sealed operation tracker has no active scope
-    /// or pending mutation-epoch reservation. This is a read-only boundary
-    /// witness; it does not grant profile admission or make the protocol a lock.
+    /// Captures with no enclosing application operation. This strict overload
+    /// remains the default for token queries and detached restore candidates.
     /// </summary>
     internal bool TryCaptureQuiescentOwnerSectionSnapshot(
+        out IReadOnlyList<OwnerSectionCensusSnapshot> snapshots,
+        out long observedMutationEpoch,
+        out ContinuationCensusFailure failure) =>
+        TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.None,
+            out snapshots,
+            out observedMutationEpoch,
+            out failure);
+
+    /// <summary>
+    /// Reads a copied, ordinal census with protocol operations idle and only
+    /// the explicitly authorized outer application scope, if any.
+    /// </summary>
+    internal bool TryCaptureQuiescentOwnerSectionSnapshot(
+        DailyV1CaptureScopeAllowance allowedOuterScope,
         out IReadOnlyList<OwnerSectionCensusSnapshot> snapshots,
         out long observedMutationEpoch,
         out ContinuationCensusFailure failure)
@@ -2274,7 +2324,11 @@ public sealed class ContinuationCensusProtocol
         }
 
         if (!TryRequireOwnerThread(out failure)) return false;
-        if (activeOperationCount != 0 || activeMutationEpochReservation != null)
+        if (!HasExpectedProtocolOperationCount(allowedOuterScope)
+            || activeMutationEpochReservation != null
+            || (sharedExecutionState != null
+                && !sharedExecutionState.TryAssessCaptureScope(allowedOuterScope))
+            || (sharedExecutionState == null && allowedOuterScope != DailyV1CaptureScopeAllowance.None))
         {
             failure = ContinuationCensusFailure.OperationInProgress;
             return false;
@@ -2333,8 +2387,11 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
         if (!TryRequireOwnerThread(out failure)) return false;
-        if (activeOperationCount != 0
+        if (!HasExpectedProtocolOperationCount(allowedOuterScope)
             || activeMutationEpochReservation != null
+            || (sharedExecutionState != null
+                && !sharedExecutionState.TryAssessCaptureScope(allowedOuterScope))
+            || (sharedExecutionState == null && allowedOuterScope != DailyV1CaptureScopeAllowance.None)
             || mutationEpochState.CurrentEpoch != startingEpoch)
         {
             failure = ContinuationCensusFailure.OperationInProgress;
@@ -2345,6 +2402,14 @@ public sealed class ContinuationCensusProtocol
         observedMutationEpoch = startingEpoch;
         failure = ContinuationCensusFailure.None;
         return true;
+    }
+
+    private bool HasExpectedProtocolOperationCount(DailyV1CaptureScopeAllowance allowance)
+    {
+        // The allowed DailyAdvance scope is the outer runtime scope. Any
+        // registered RuntimeProtocol operation has already closed before the
+        // held-lease token-finalization capture begins.
+        return activeOperationCount == 0;
     }
 
     internal void ExitOperation(Thread scopeOwnerThread, int scopeOwnerThreadId)
@@ -2361,7 +2426,14 @@ public sealed class ContinuationCensusProtocol
             return;
         }
 
-        activeOperationCount--;
+        if (sharedExecutionState != null)
+        {
+            if (!sharedExecutionState.TryEndRuntimeProtocolOperation()) Fault();
+        }
+        else
+        {
+            standaloneActiveOperationCount--;
+        }
     }
 
     private bool TryBuildSpatialKnowledgeFamily(

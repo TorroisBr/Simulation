@@ -18,21 +18,138 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
 
         DailyV1SelectedDailyExecutionStage.Advance(23L, graph, directives, boundary);
 
-        Assert.That(boundary.Calls, Is.EqualTo(new[]
+        List<string> expectedCalls = new List<string>
         {
-            "place-content", "logger:23", "demography", "begin-day",
-            "economy-preflight", "knowledge-preflight", "expeditions",
-            "autonomous-expeditions", "actor-turns", "travel-and-observe"
-        }));
+            "logger:23", "demography", "begin-day",
+            "economy-preflight", "knowledge-preflight", "actor-context"
+        };
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            if (npc.Lifecycle.LifeState == NpcLifeState.Alive)
+            {
+                expectedCalls.Add("actor-merchant:" + npc.RuntimeId);
+                if (ReferenceEquals(npc, graph.Npcs[0])) expectedCalls.Add("directive");
+            }
+        }
+        expectedCalls.AddRange(new[] { "travel-context", "travel-results", "travel-observation" });
+        Assert.That(boundary.Calls, Is.EqualTo(expectedCalls));
+        Assert.That(boundary.Calls, Does.Not.Contain("place-content"));
+        Assert.That(boundary.Calls, Does.Not.Contain("expeditions"));
+        Assert.That(boundary.Calls, Does.Not.Contain("autonomous-expeditions"),
+            "The accepted profile has no place-content, explorable-site, or autonomy producer to invoke.");
         Assert.That(directives.TryTakeDirective(graph.Npcs[0].RuntimeId,
-            out ScheduledDirective preparedDirective), Is.True);
-        Assert.That(preparedDirective.ActorRuntimeId, Is.EqualTo(graph.Npcs[0].RuntimeId));
+            out _), Is.False, "The Core actor-turn stage consumes its prepared selected directive.");
         Assert.That(graph.Cities.Select(city => city.Market.Revision).ToArray(),
             Is.Not.EqualTo(marketRevisionsBefore),
             "The Core phase owns and commits the selected daily Economy writes.");
         Assert.That(graph.Npcs.Select(npc => npc.SpatialKnowledge.Revision).ToArray(),
             Is.Not.EqualTo(spatialKnowledgeRevisionsBefore),
             "The Core phase owns and commits the selected local Knowledge writes.");
+    }
+
+    [Test]
+    public void AdvanceRunsSelectedCrimeJusticeScopesAndMerchantUrgencyInCoreDayStartPosition()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(),
+            new DailyV1JusticeRecordsOwner());
+        Assert.That(graph.Definitions.EffectiveConfiguration.MerchantTrade.Enabled, Is.True,
+            "The positive plan-urgency case is admitted by the immutable selected configuration.");
+        DailyV1NpcRuntimeOwners localMerchant = graph.Npcs.First(owner =>
+            DailyV1NpcDefinitionRules.HasJobType(owner.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+            && DailyV1NpcDefinitionRules.HasMerchantBehavior(owner.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.LocalMerchantBehaviorValue));
+        DailyV1CityRuntimeOwners origin = graph.Cities.Single(city =>
+            string.Equals(city.RuntimeId, localMerchant.Travel.CurrentCityRuntimeId,
+                StringComparison.Ordinal));
+        DailyV1CityRuntimeOwners target = graph.Cities.First(city => !ReferenceEquals(city, origin));
+        DailyV1ItemDefinition item = graph.Definitions.Items.Values.First();
+        Assert.That(graph.TryInstallMerchantTradePlan(localMerchant, item,
+            origin.RuntimeId, target.RuntimeId, 2, 1f, "decision/day-start-plan"), Is.True);
+        long planRevision = localMerchant.MerchantTradePlan.Revision;
+
+        FakeBoundary boundary = new FakeBoundary
+        {
+            UseSelectedDayStartContext = true,
+            CrimeSystemPresent = true,
+            JusticeSystemPresent = true
+        };
+
+        DailyV1SelectedDailyExecutionStage.Advance(23L, graph, null, boundary);
+
+        Assert.That(boundary.Calls, Does.Not.Contain("begin-day"),
+            "The admitted selected graph runs the Core day-start stages directly.");
+        Assert.That(boundary.DayStartPhases, Is.EqualTo(new[]
+        {
+            DailyV1SelectedCrimeJusticeDailyPhase.ClearArrestedToday,
+            DailyV1SelectedCrimeJusticeDailyPhase.AdvanceHiddenStatuses,
+            DailyV1SelectedCrimeJusticeDailyPhase.AdvanceSentences,
+            DailyV1SelectedCrimeJusticeDailyPhase.SyncWantedStatuses
+        }), "The four existing P12 daily scopes retain their order.");
+        Assert.That(boundary.Calls.IndexOf("merchant-plan"), Is.GreaterThan(
+            boundary.Calls.IndexOf("crime:" + DailyV1SelectedCrimeJusticeDailyPhase.SyncWantedStatuses)));
+        Assert.That(boundary.Calls.IndexOf("merchant-plan"), Is.LessThan(
+            boundary.Calls.IndexOf("economy-preflight")));
+        Assert.That(boundary.Calls.IndexOf("merchant-plan"), Is.LessThan(
+            boundary.Calls.IndexOf("actor-context")));
+        Assert.That(localMerchant.MerchantTradePlan.HasData, Is.True,
+            "The day-start urgency phase preserves an admitted plan; actor-turn Merchant eligibility handles local-plan cleanup later.");
+        Assert.That(localMerchant.MerchantTradePlan.PendingTravelDays, Is.EqualTo(1),
+            "The day-start urgency phase advances the exact active plan's pending-travel count.");
+        Assert.That(localMerchant.MerchantTradePlan.Revision, Is.EqualTo(planRevision + 1L));
+    }
+
+    [Test]
+    public void AdvanceRejectsDayStartBoundaryBoundToAnotherJusticeOwner()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(),
+            new DailyV1JusticeRecordsOwner());
+        FakeBoundary boundary = new FakeBoundary
+        {
+            UseSelectedDayStartContext = true,
+            JusticeSystemPresent = true,
+            SubstituteJusticeRecordsOwner = new DailyV1JusticeRecordsOwner()
+        };
+
+        Assert.Throws<InvalidOperationException>(() =>
+            DailyV1SelectedDailyExecutionStage.Advance(23L, graph, null, boundary));
+        Assert.That(boundary.DayStartPhases, Is.Empty,
+            "Core must reject a substituted Justice owner before admitting any Crime/Justice scope.");
+        Assert.That(boundary.Calls, Does.Not.Contain("begin-day"));
+    }
+
+    [Test]
+    public void AdvanceUsesAdmittedMerchantConfigurationForPlanUrgency()
+    {
+        DailyV1EffectiveDefinitions definitions = CopyWithMerchantTradeEnabled(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(), false);
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(definitions);
+        Assert.That(graph.Definitions.EffectiveConfiguration.MerchantTrade.Enabled, Is.False,
+            "The graph carries the selected immutable configuration used by the Core day stage.");
+        DailyV1NpcRuntimeOwners localMerchant = graph.Npcs.First(owner =>
+            DailyV1NpcDefinitionRules.HasJobType(owner.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+            && DailyV1NpcDefinitionRules.HasMerchantBehavior(owner.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.LocalMerchantBehaviorValue));
+        DailyV1CityRuntimeOwners origin = graph.Cities.Single(city =>
+            string.Equals(city.RuntimeId, localMerchant.Travel.CurrentCityRuntimeId,
+                StringComparison.Ordinal));
+        DailyV1CityRuntimeOwners target = graph.Cities.First(city => !ReferenceEquals(city, origin));
+        DailyV1ItemDefinition item = graph.Definitions.Items.Values.First();
+        Assert.That(graph.TryInstallMerchantTradePlan(localMerchant, item,
+            origin.RuntimeId, target.RuntimeId, 2, 1f, "decision/disabled-plan"), Is.True);
+        long planRevision = localMerchant.MerchantTradePlan.Revision;
+        FakeBoundary boundary = new FakeBoundary { UseSelectedDayStartContext = true };
+
+        DailyV1SelectedDailyExecutionStage.Advance(23L, graph, null, boundary);
+
+        Assert.That(boundary.Calls, Does.Not.Contain("merchant-plan"));
+        Assert.That(boundary.Calls, Does.Not.Contain("actor-merchant:" + localMerchant.RuntimeId),
+            "Core actor-turn eligibility follows the same admitted Merchant setting.");
+        Assert.That(localMerchant.MerchantTradePlan.HasData, Is.True);
+        Assert.That(localMerchant.MerchantTradePlan.Revision, Is.EqualTo(planRevision));
     }
 
     [Test]
@@ -72,8 +189,18 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         DailyV1SelectedDailyExecutionStage.Advance(0L, graph, null, boundary);
 
         Assert.That(boundary.Calls, Does.Not.Contain("economy-preflight"));
-        Assert.That(boundary.Calls[4], Is.EqualTo("knowledge-preflight"));
-        Assert.That(boundary.Calls[^1], Is.EqualTo("travel-and-observe"));
+        Assert.That(boundary.Calls[3], Is.EqualTo("knowledge-preflight"));
+        int actorContext = boundary.Calls.IndexOf("actor-context");
+        int merchantPass = boundary.Calls.FindIndex(call =>
+            call.StartsWith("actor-merchant:", StringComparison.Ordinal));
+        int travelContext = boundary.Calls.IndexOf("travel-context");
+        int travelResults = boundary.Calls.IndexOf("travel-results");
+        int travelObservation = boundary.Calls.IndexOf("travel-observation");
+        Assert.That(actorContext, Is.GreaterThanOrEqualTo(0));
+        Assert.That(merchantPass, Is.GreaterThan(actorContext));
+        Assert.That(travelContext, Is.GreaterThan(merchantPass));
+        Assert.That(travelResults, Is.GreaterThan(travelContext));
+        Assert.That(travelObservation, Is.GreaterThan(travelResults));
     }
 
     [Test]
@@ -92,8 +219,57 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
 
         Assert.That(boundary.Calls, Is.EqualTo(new[]
         {
-            "place-content", "logger:9", "demography"
+            "logger:9", "demography"
         }));
+    }
+
+    [Test]
+    public void RuntimeAdvanceStageInvokesSelectedDailyCoreBeforeCompletionAndTokenPublication()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions());
+        const long absoluteDay = 23L;
+        ScheduledDirectiveStore directives = CreateDirectiveForFirstNpc(graph, absoluteDay);
+        FakeBoundary dailyBoundary = new FakeBoundary();
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
+        FakeRuntimeAdvanceBoundary advanceBoundary = new FakeRuntimeAdvanceBoundary(
+            state, absoluteDay, graph, directives, dailyBoundary);
+
+        Assert.That(DailyV1RuntimeAdvanceStage.TryAdvanceDay(
+            state, advanceBoundary, out DailyV1RuntimeAdvanceFailureCode failure), Is.True);
+        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.None));
+        Assert.That(advanceBoundary.Calls, Is.EqualTo(new[]
+        {
+            "owner", "healthy", "capacity:1", "selected-clock", "healthy", "operation",
+            "selected-clock", "healthy", "selected-context", "completed", "token"
+        }));
+        Assert.That(dailyBoundary.Calls, Does.Contain("begin-day"));
+        Assert.That(dailyBoundary.Calls, Does.Contain("actor-context"));
+        Assert.That(dailyBoundary.Calls, Does.Contain("travel-context"));
+        Assert.That(state.CompletedCoreSequence, Is.EqualTo(1L));
+        Assert.That(state.AdvanceLeaseHeld, Is.False);
+    }
+
+    [Test]
+    public void SelectedDailyContextFailureAfterClockAdvanceFaultsAndCannotPublishBoundary()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions());
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
+        FakeRuntimeAdvanceBoundary advanceBoundary = new FakeRuntimeAdvanceBoundary(
+            state, 23L, graph, null, new FakeBoundary())
+        {
+            FailSelectedContext = true
+        };
+
+        Assert.That(DailyV1RuntimeAdvanceStage.TryAdvanceDay(
+            state, advanceBoundary, out DailyV1RuntimeAdvanceFailureCode failure), Is.False);
+        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted));
+        Assert.That(advanceBoundary.Calls, Does.Contain("fault"));
+        Assert.That(advanceBoundary.Calls, Does.Not.Contain("completed"));
+        Assert.That(advanceBoundary.Calls, Does.Not.Contain("token"));
+        Assert.That(state.CompletedCoreSequence, Is.Zero);
+        Assert.That(state.AdvanceLeaseHeld, Is.False);
     }
 
     [Test]
@@ -101,6 +277,34 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     {
         Assert.Throws<ArgumentNullException>(() =>
             DailyV1SelectedDailyExecutionStage.Advance(0L, null, null, new FakeBoundary()));
+    }
+
+    [Test]
+    public void AdvanceRejectsASubstitutedScheduledDirectiveStore()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions());
+        ScheduledDirectiveStore substituted = new ScheduledDirectiveStore(new SimulationTime(4L));
+        FakeBoundary boundary = new FakeBoundary();
+
+        Assert.Throws<InvalidOperationException>(() =>
+            DailyV1SelectedDailyExecutionStage.Advance(0L, graph, substituted, boundary));
+        Assert.That(boundary.Calls, Is.Empty,
+            "Owner identity preflight must reject a substitute before any daily callback or write.");
+    }
+
+    [Test]
+    public void AdvanceRejectsActorContextWithDifferentPersonStoreInstance()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions());
+        FakeBoundary boundary = new FakeBoundary { SubstituteActorPersonStore = true };
+
+        Assert.Throws<InvalidOperationException>(() =>
+            DailyV1SelectedDailyExecutionStage.Advance(0L, graph, null, boundary));
+        Assert.That(boundary.Calls, Does.Contain("actor-context"));
+        Assert.That(boundary.Calls, Does.Not.Contain("directive"),
+            "The Core actor operation stage must not run with a substituted PersonStore.");
     }
 
     private static ScheduledDirectiveStore CreateDirectiveForFirstNpc(
@@ -116,11 +320,19 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             graph.Npcs[0].RuntimeId,
             "action/escape",
             DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue)), Is.True);
+        Assert.That(graph.TryBindScheduledDirectives(directives), Is.True);
         return directives;
     }
 
     private static DailyV1SelectedRuntimeOwnerGraph CreateGraph(
         DailyV1EffectiveDefinitions definitions)
+    {
+        return CreateGraph(definitions, null);
+    }
+
+    private static DailyV1SelectedRuntimeOwnerGraph CreateGraph(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1JusticeRecordsOwner justiceRecordsOwner)
     {
         DailyV1SelectedRuntimeOwnerGraphBuilder builder =
             new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
@@ -128,7 +340,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
         Assert.That(builder.TryCreateConfiguredNpcs(allocator,
             cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
-        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        Assert.That(builder.TryBuild(justiceRecordsOwner, out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        Assert.That(graph.TryBindPersonStore(new PersonStore()), Is.True);
         return graph;
     }
 
@@ -146,6 +359,52 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             current.NaturalMortality,
             current.AggregateDemography,
             current.MerchantTrade,
+            current.CommercialKnowledge);
+        return new DailyV1EffectiveDefinitions(
+            definitions.Configuration,
+            configuration,
+            definitions.Calendar,
+            null,
+            definitions.Cities.Values,
+            definitions.Items.Values,
+            definitions.Npcs.Values,
+            definitions.Jobs.Values,
+            definitions.Actions.Values,
+            definitions.Statuses.Values,
+            null,
+            definitions.StageOrder,
+            definitions.ProfileContractIdentity,
+            definitions.GeographyProfileContractIdentity,
+            definitions.GeographyStageIdentity,
+            definitions.HexCoordinateConvention,
+            definitions.HexCoordinateCanonicalOrder,
+            null,
+            definitions.Traits.Values,
+            definitions.CapabilityAttributes.Values,
+            definitions.ExplorableSites.Values);
+    }
+
+    private static DailyV1EffectiveDefinitions CopyWithMerchantTradeEnabled(
+        DailyV1EffectiveDefinitions definitions,
+        bool enabled)
+    {
+        EffectiveSimulationConfiguration current = definitions.EffectiveConfiguration;
+        EffectiveMerchantTradeConfiguration currentMerchant = current.MerchantTrade;
+        EffectiveSimulationConfiguration configuration = new EffectiveSimulationConfiguration(
+            current.Population,
+            current.Economy,
+            current.Travel,
+            current.Crime,
+            current.GuardCrime,
+            current.NaturalMortality,
+            current.AggregateDemography,
+            new EffectiveMerchantTradeConfiguration(
+                enabled,
+                currentMerchant.AllowAutonomousTradeRepositioning,
+                currentMerchant.MaxTradeAmount,
+                currentMerchant.LocalWholesalePriceMultiplier,
+                currentMerchant.LocalReserveRatio,
+                currentMerchant.MaxUnprofitablePlanWaitDays),
             current.CommercialKnowledge);
         return new DailyV1EffectiveDefinitions(
             definitions.Configuration,
@@ -203,13 +462,36 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     private sealed class FakeBoundary : IDailyV1SelectedDailyExecutionBoundary
     {
         internal List<string> Calls { get; } = new List<string>();
+        internal List<DailyV1SelectedCrimeJusticeDailyPhase> DayStartPhases { get; } =
+            new List<DailyV1SelectedCrimeJusticeDailyPhase>();
         internal bool ThrowOnDemography { get; set; }
-        public void AdvancePlaceContent() => Calls.Add("place-content");
+        internal bool SubstituteActorPersonStore { get; set; }
+        internal bool UseSelectedDayStartContext { get; set; }
+        internal bool CrimeSystemPresent { get; set; }
+        internal bool JusticeSystemPresent { get; set; }
+        internal DailyV1JusticeRecordsOwner SubstituteJusticeRecordsOwner { get; set; }
         public void BeginLoggerDay(long absoluteDay) => Calls.Add("logger:" + absoluteDay);
-        public void AdvanceSelectedDemography()
+        public bool TryCreateSelectedDemographyContext(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedDemographyExecutionContext context)
         {
             Calls.Add("demography");
             if (ThrowOnDemography) throw new InvalidOperationException("demography failed");
+            context = new FakeDemographyContext(graph);
+            return true;
+        }
+        public bool TryCreateSelectedDayStartContext(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedDayStartExecutionContext context)
+        {
+            if (!UseSelectedDayStartContext)
+            {
+                context = null;
+                return false;
+            }
+            Calls.Add("day-start-context");
+            context = new FakeDayStartContext(this, graph);
+            return true;
         }
         public void BeginSimulationDay() => Calls.Add("begin-day");
         public void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph)
@@ -229,9 +511,349 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             Assert.That(graph, Is.Not.Null);
             Calls.Add("knowledge-preflight");
         }
-        public void AdvanceActiveExpeditions() => Calls.Add("expeditions");
-        public void StartAutonomousExpeditions() => Calls.Add("autonomous-expeditions");
-        public void AdvanceActorTurns() => Calls.Add("actor-turns");
-        public void AdvanceTravelAndObserve() => Calls.Add("travel-and-observe");
+        public bool TryCreateSelectedActorTurnContext(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedActorTurnExecutionContext context)
+        {
+            Calls.Add("actor-context");
+            List<DailyV1ActorTurnRosterProjection> runtimeRoster = graph.Npcs
+                .Select(npc => new DailyV1ActorTurnRosterProjection(
+                    npc.RuntimeId, null))
+                .ToList();
+            PersonStore people = SubstituteActorPersonStore
+                ? new PersonStore()
+                : graph.PersonStore;
+            context = new FakeActorTurnContext(
+                runtimeRoster, people, new ActorChoiceStore(people), new FakeActorTurnBoundary(this));
+            return true;
+        }
+        public bool TryCreateSelectedTravelDayContext(
+            out IDailyV1SelectedTravelDayExecutionContext context)
+        {
+            Calls.Add("travel-context");
+            context = new FakeTravelContext(this);
+            return true;
+        }
+
+        private sealed class FakeDemographyContext : IDailyV1SelectedDemographyExecutionContext
+        {
+            internal FakeDemographyContext(DailyV1SelectedRuntimeOwnerGraph graph)
+            {
+                PersonStore = graph.PersonStore;
+                DailyV1CalendarDefinition definition = graph.Definitions.Calendar;
+                Calendar = definition.monthLengths != null && definition.monthLengths.Count > 0
+                    ? new SimulationCalendar(new CalendarDefinition(
+                        new List<int>(definition.monthLengths), definition.daysPerWeek))
+                    : new SimulationCalendar(new CalendarDefinition(
+                        definition.monthsPerYear, definition.weeksPerMonth, definition.daysPerWeek));
+                Boundary = new FakeDemographyBoundary(graph);
+            }
+
+            public PersonStore PersonStore { get; }
+            public SimulationCalendar Calendar { get; }
+            public IPersonNaturalMortalitySampleProvider MortalitySamples => null;
+            public IAggregateDemographyProvider AggregateProvider => null;
+            public IDailyV1SelectedDemographyBoundary Boundary { get; }
+            public void PublishResult(DailyV1SelectedDemographyResult result) { }
+        }
+
+        private sealed class FakeDemographyBoundary : IDailyV1SelectedDemographyBoundary
+        {
+            private readonly IReadOnlyDictionary<string, int> representedFloors;
+
+            internal FakeDemographyBoundary(DailyV1SelectedRuntimeOwnerGraph graph)
+            {
+                Dictionary<string, int> floors = new Dictionary<string, int>(StringComparer.Ordinal);
+                foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+                    floors[city.RuntimeId] = city.Population.CurrentPopulation;
+                representedFloors = floors;
+            }
+
+            public bool TryApplyPersonDeath(PersonId personId, out string failure)
+            {
+                failure = "No mortality is expected in this fixture.";
+                return false;
+            }
+
+            public IReadOnlyDictionary<string, int> BuildRepresentedResidentFloors() => representedFloors;
+        }
+
+        private sealed class FakeTravelContext : IDailyV1SelectedTravelDayExecutionContext
+        {
+            private readonly FakeBoundary owner;
+            internal FakeTravelContext(FakeBoundary owner) => this.owner = owner;
+            public TravelPartyStore PartyStore => null;
+            public IReadOnlyCollection<string> ManagedTravelPartyNpcRuntimeIds => Array.Empty<string>();
+            public IDailyV1SelectedTravelDayBoundary Boundary => EmptyTravelBoundary.Instance;
+            public bool AdvanceSoloTravel => false;
+            public bool ExecuteWithinPartyOwnerOperation(Func<bool> operation) => operation?.Invoke() == true;
+            public void PublishCompletedTravelResults(
+                IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
+                IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults)
+            {
+                Assert.That(partyArrivals, Is.Empty);
+                Assert.That(soloResults, Is.Empty);
+                owner.Calls.Add("travel-results");
+            }
+            public void ObserveCompletedTravelResults() => owner.Calls.Add("travel-observation");
+        }
+
+        private sealed class EmptyTravelBoundary : IDailyV1SelectedTravelDayBoundary
+        {
+            internal static readonly EmptyTravelBoundary Instance = new EmptyTravelBoundary();
+            public bool TryPrepareTransition(DailyV1NpcRuntimeOwners npc,
+                DailyV1SelectedTravelTransitionPlan plan, bool arriving, out object projectionReceipt)
+            { projectionReceipt = null; return false; }
+            public void PublishCommittedTransition(DailyV1NpcRuntimeOwners npc,
+                DailyV1SelectedTravelTransitionPlan plan, bool arriving, object projectionReceipt) =>
+                throw new AssertionException("No travel transition is expected in this fixture.");
+            public bool PublishTravelPartyArrival(TravelPartyRuntime party) => false;
+            public void PublishSoloTravelResult(DailyV1SelectedSoloTravelDayResult result) =>
+                throw new AssertionException("No solo travel result is expected in this fixture.");
+        }
+
+        private sealed class FakeActorTurnContext : IDailyV1SelectedActorTurnExecutionContext
+        {
+            internal FakeActorTurnContext(
+                IReadOnlyList<DailyV1ActorTurnRosterProjection> runtimeRoster,
+                PersonStore personStore,
+                ActorChoiceStore actorChoiceStore,
+                IDailyV1ActorTurnExecutionBoundary boundary)
+            {
+                RuntimeRoster = runtimeRoster;
+                PersonStore = personStore;
+                ActorChoiceStore = actorChoiceStore;
+                Boundary = boundary;
+            }
+
+            public IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
+            public PersonStore PersonStore { get; }
+            public ActorChoiceStore ActorChoiceStore { get; }
+            public IDailyV1ActorTurnExecutionBoundary Boundary { get; }
+        }
+
+        private sealed class FakeDayStartContext : IDailyV1SelectedDayStartExecutionContext
+        {
+            internal FakeDayStartContext(
+                FakeBoundary owner,
+                DailyV1SelectedRuntimeOwnerGraph graph)
+            {
+                RuntimeRoster = graph.Npcs.Select(npc =>
+                    new DailyV1ActorTurnRosterProjection(
+                        npc.RuntimeId, null)).ToList();
+                CrimeSystemPresent = owner.CrimeSystemPresent;
+                JusticeSystemPresent = owner.JusticeSystemPresent;
+                FakeDayStartOperationBoundary operationBoundary =
+                    new FakeDayStartOperationBoundary(owner, graph);
+                CrimeJusticeBoundary = operationBoundary;
+                MerchantTradeBoundary = operationBoundary;
+            }
+
+            public IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
+            public bool CrimeSystemPresent { get; }
+            public bool JusticeSystemPresent { get; }
+            public IDailyV1SelectedCrimeJusticeDailyBoundary CrimeJusticeBoundary { get; }
+            public IDailyV1SelectedMerchantTradeStateBoundary MerchantTradeBoundary { get; }
+        }
+
+        private sealed class FakeDayStartOperationBoundary
+            : IDailyV1SelectedCrimeJusticeDailyBoundary,
+                IDailyV1SelectedMerchantTradeStateBoundary
+        {
+            private readonly FakeBoundary owner;
+            private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+
+            internal FakeDayStartOperationBoundary(
+                FakeBoundary owner,
+                DailyV1SelectedRuntimeOwnerGraph graph)
+            {
+                this.owner = owner;
+                this.graph = graph;
+            }
+
+            public DailyV1JusticeRecordsOwner JusticeRecordsOwner =>
+                owner.SubstituteJusticeRecordsOwner ?? graph.JusticeRecordsOwner;
+
+            public void ExecuteWithinDailyMutation(
+                DailyV1SelectedCrimeJusticeDailyPhase phase,
+                Action mutation)
+            {
+                owner.DayStartPhases.Add(phase);
+                owner.Calls.Add("crime:" + phase);
+                mutation();
+            }
+
+            public bool CanProjectStatusChanges(
+                DailyV1NpcRuntimeOwners actor,
+                IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
+                graph.ContainsExactNpcOwner(actor);
+
+            public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners actor)
+            {
+                if (!graph.ContainsExactNpcOwner(actor)
+                    || !actor.CanAdvanceCrimeJusticeRevision(1))
+                    throw new InvalidOperationException("The fake day-start owner is not admitted.");
+            }
+
+            public void NotifyStatusMutationCommitted(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1StatusDefinition status,
+                bool added) => actor.NotifyCrimeJusticeMutationCommitted();
+
+            public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners actor) =>
+                actor.NotifyCrimeJusticeMutationCommitted();
+
+            public bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence) =>
+                graph.JusticeRecordsOwner.ContainsSentence(sentence);
+
+            public void CommitSentenceProjectionRemoval(DailyV1JusticeSentenceOwner sentence) { }
+            public void Log(SimulationLogCategory category, string message) { }
+            public void LogWarning(string message) { }
+
+            public bool TryInstallPlanState(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1ItemDefinition item,
+                string originCityRuntimeId,
+                string targetCityRuntimeId,
+                int plannedAmount,
+                int remainingAmount,
+                float purchasePricePerItem,
+                int waitDaysAtDestination,
+                int pendingTravelDays,
+                string originDecisionId)
+            {
+                owner.Calls.Add("merchant-plan");
+                return actor.MerchantTradePlan.TryInstallState(item,
+                    originCityRuntimeId, targetCityRuntimeId, plannedAmount,
+                    remainingAmount, purchasePricePerItem, waitDaysAtDestination,
+                    pendingTravelDays, originDecisionId);
+            }
+
+            public bool TrySetTradeTravelPlan(
+                DailyV1NpcRuntimeOwners actor,
+                string targetCityRuntimeId,
+                float utility,
+                string originDecisionId) => false;
+
+            public void ClearTradeTravelPlan(DailyV1NpcRuntimeOwners actor) { }
+            public NpcDecisionRecord RecordTradeRedirect(
+                DailyV1NpcRuntimeOwners actor,
+                string targetLocationRuntimeId,
+                CommercialDecisionEvidence evidence) => null;
+            public void LogTrade(string message) { }
+        }
+
+        private sealed class FakeActorTurnBoundary : IDailyV1ActorTurnExecutionBoundary
+        {
+            private readonly FakeBoundary owner;
+            internal FakeActorTurnBoundary(FakeBoundary owner) => this.owner = owner;
+            public bool IsInSpatialTransit(DailyV1NpcRuntimeOwners actor, PersonId personId) => false;
+            public bool IsReservedToday(DailyV1NpcRuntimeOwners actor) => false;
+            public void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive) =>
+                owner.Calls.Add("directive");
+            public bool TryProcessActorChoice(DailyV1NpcRuntimeOwners actor, int rosterOrdinal) => false;
+            public void AdvanceMerchantTradeState(DailyV1NpcRuntimeOwners actor) =>
+                owner.Calls.Add("actor-merchant:" + actor.RuntimeId);
+            public void EvaluateAndExecuteAction(DailyV1NpcRuntimeOwners actor) { }
+        }
+    }
+
+    private sealed class FakeRuntimeAdvanceBoundary : IDailyV1RuntimeAdvanceBoundary
+    {
+        private readonly DailyV1ExecutionBoundaryState state;
+        private readonly long absoluteDay;
+        private readonly SimulationTime selectedClock;
+        private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+        private readonly ScheduledDirectiveStore directives;
+        private readonly IDailyV1SelectedDailyExecutionBoundary executionBoundary;
+        internal List<string> Calls { get; } = new List<string>();
+        internal bool FailSelectedContext { get; set; }
+
+        internal FakeRuntimeAdvanceBoundary(
+            DailyV1ExecutionBoundaryState state,
+            long absoluteDay,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            ScheduledDirectiveStore directives,
+            IDailyV1SelectedDailyExecutionBoundary executionBoundary)
+        {
+            this.state = state;
+            this.absoluteDay = absoluteDay;
+            selectedClock = new SimulationTime(absoluteDay - 1L);
+            this.graph = graph;
+            this.directives = directives;
+            this.executionBoundary = executionBoundary;
+        }
+
+        public bool HasRuntimeAdmission => true;
+        public bool IsAdmissionOwnerThreadCurrent { get { Calls.Add("owner"); return true; } }
+        public bool IsDailyCaptureProfile => true;
+        public bool HasCoreSelectedDailyExecution => true;
+        public SimulationTime SelectedDailyClock
+        {
+            get { Calls.Add("selected-clock"); return selectedClock; }
+        }
+        public bool CanMutate { get { Calls.Add("healthy"); return true; } }
+        public bool HasIntradayTimeline => false;
+        public bool TryPreflightDailyCoreSequenceCapacity(
+            long requestedBoundaries, out DailyV1RuntimeAdvanceFailureCode failure)
+        {
+            Calls.Add("capacity:" + requestedBoundaries);
+            failure = DailyV1RuntimeAdvanceFailureCode.None;
+            return state.CanRecordCompletedCoreCount(requestedBoundaries);
+        }
+        public bool TryValidateClockAdvance(out DailyV1RuntimeAdvanceFailureCode failure)
+        {
+            Calls.Add("clock-validation");
+            failure = DailyV1RuntimeAdvanceFailureCode.None;
+            return true;
+        }
+        public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope)
+        {
+            Calls.Add("operation");
+            operationScope = new FakeOperationScope();
+            return true;
+        }
+        public bool TryCreateSelectedDailyExecutionContext(
+            out long day,
+            out DailyV1SelectedRuntimeOwnerGraph selectedGraph,
+            out ScheduledDirectiveStore scheduledDirectives,
+            out IDailyV1SelectedDailyExecutionBoundary boundary)
+        {
+            Calls.Add("selected-context");
+            day = absoluteDay;
+            selectedGraph = FailSelectedContext ? null : graph;
+            scheduledDirectives = directives;
+            boundary = FailSelectedContext ? null : executionBoundary;
+            return !FailSelectedContext;
+        }
+        public bool TryAdvanceDayCore(out DailyV1RuntimeAdvanceFailureCode failure)
+        {
+            failure = DailyV1RuntimeAdvanceFailureCode.TemporalAdvanceFailed;
+            return false;
+        }
+        public bool TryAdvanceIntradayToNextDayBoundary(out DailyV1RuntimeAdvanceFailureCode failure)
+        {
+            failure = DailyV1RuntimeAdvanceFailureCode.TemporalAdvanceFailed;
+            return false;
+        }
+        public bool TryRecordCompletedDailyCore(out DailyV1RuntimeAdvanceFailureCode failure)
+        {
+            Calls.Add("completed");
+            failure = state.TryRecordCompletedCore()
+                ? DailyV1RuntimeAdvanceFailureCode.None
+                : DailyV1RuntimeAdvanceFailureCode.CompletedBoundarySequenceOverflow;
+            return failure == DailyV1RuntimeAdvanceFailureCode.None;
+        }
+        public bool TryPublishCompletedDailyCaptureToken()
+        {
+            Calls.Add("token");
+            return true;
+        }
+        public void FaultRuntimeAdmission() => Calls.Add("fault");
+    }
+
+    private sealed class FakeOperationScope : IDisposable
+    {
+        public void Dispose() { }
     }
 }

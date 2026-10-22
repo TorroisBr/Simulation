@@ -32,11 +32,9 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 
         Assert.That(boundary.Events, Is.EqualTo(new[]
         {
-            "status:" + first.RuntimeId,
             "merchant:" + first.RuntimeId,
             "choice:" + first.RuntimeId + ":0",
             "action:" + first.RuntimeId,
-            "status:" + second.RuntimeId,
             "directive:" + second.RuntimeId
         }));
         Assert.That(choices.TryGet(input.InputId, out ActorChoiceInput deferred), Is.True);
@@ -45,6 +43,104 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         Assert.That(deferred.Dispositions.Single().DeferralReason,
             Is.EqualTo(ActorChoiceDeferralReason.ScheduledDirective));
         Assert.That(deferred.Dispositions.Single().ActorTurnRosterOrdinal, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void CoreBuildsExactActorRosterFromHostIdentityProjection()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            out DailyV1NpcRuntimeOwners first, out DailyV1NpcRuntimeOwners second);
+        PersonId firstPerson = new PersonId("person-roster-first");
+        PersonId dynamicPerson = new PersonId("person-roster-dynamic");
+        PersonId secondPerson = new PersonId("person-roster-second");
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> projection = new[]
+        {
+            new DailyV1ActorTurnRosterProjection(
+                first.RuntimeId, firstPerson),
+            null,
+            new DailyV1ActorTurnRosterProjection(
+                "npc/unbound-dynamic", dynamicPerson),
+            new DailyV1ActorTurnRosterProjection(
+                second.RuntimeId, secondPerson)
+        };
+
+        Assert.That(DailyV1ActorTurnExecutionStage.TryBuildRoster(
+            graph, projection, out IReadOnlyList<DailyV1ActorTurnRosterEntry> roster), Is.True);
+        Assert.That(roster, Has.Count.EqualTo(4));
+        Assert.That(roster[0].RosterOrdinal, Is.Zero);
+        Assert.That(roster[0].PersonId, Is.SameAs(firstPerson));
+        Assert.That(roster[0].ActorOwner, Is.SameAs(first));
+        Assert.That(roster[1].RosterOrdinal, Is.EqualTo(1));
+        Assert.That(roster[1].PersonId, Is.Null);
+        Assert.That(roster[1].ActorOwner, Is.Null);
+        Assert.That(roster[2].RosterOrdinal, Is.EqualTo(2));
+        Assert.That(roster[2].PersonId, Is.SameAs(dynamicPerson));
+        Assert.That(roster[2].ActorOwner, Is.Null,
+            "A dynamic/unselected actor remains a host identity row, not a selected Core owner.");
+        Assert.That(roster[3].RosterOrdinal, Is.EqualTo(3));
+        Assert.That(roster[3].PersonId, Is.SameAs(secondPerson));
+        Assert.That(roster[3].ActorOwner, Is.SameAs(second),
+            "Core joins selected identity projections to the exact owner instances in its graph.");
+
+        Assert.That(DailyV1ActorTurnExecutionStage.TryBuildRoster(
+            graph,
+            new[]
+            {
+                new DailyV1ActorTurnRosterProjection(
+                    first.RuntimeId, firstPerson),
+                new DailyV1ActorTurnRosterProjection(
+                    first.RuntimeId, secondPerson)
+            },
+            out _), Is.False, "Core rejects a duplicated selected RuntimeId before actor execution.");
+    }
+
+    [Test]
+    public void CoreRejectsSelectedRosterPersonThatDiffersFromMaterializedStoreBinding()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            out DailyV1NpcRuntimeOwners actor);
+        PersonStore people = new PersonStore();
+        PersonId boundPerson = RegisterMaterializedPerson(people, actor, "person-exact-roster-binding");
+        Assert.That(graph.TryBindPersonStore(people), Is.True);
+
+        Assert.That(DailyV1ActorTurnExecutionStage.TryBuildRoster(
+            graph,
+            new[]
+            {
+                new DailyV1ActorTurnRosterProjection(
+                    actor.RuntimeId, new PersonId(boundPerson.Value))
+            },
+            out _), Is.False,
+            "A selected host projection must retain the exact materialized PersonId instance owned by Core.");
+        Assert.That(DailyV1ActorTurnExecutionStage.TryBuildRoster(
+            graph,
+            new[] { new DailyV1ActorTurnRosterProjection(actor.RuntimeId, boundPerson) },
+            out IReadOnlyList<DailyV1ActorTurnRosterEntry> roster), Is.True);
+        Assert.That(roster[0].PersonId, Is.SameAs(boundPerson));
+    }
+
+    [Test]
+    public void CoreRejectsMismatchedMaterializedPersonBeforeActorTurnDispatch()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            out DailyV1NpcRuntimeOwners actor);
+        PersonStore people = new PersonStore();
+        PersonId boundPerson = RegisterMaterializedPerson(
+            people, actor, "person-exact-dispatch-binding");
+        Assert.That(graph.TryBindPersonStore(people), Is.True);
+
+        ActorChoiceStore choices = new ActorChoiceStore(people);
+        RecordingBoundary boundary = new RecordingBoundary();
+        IReadOnlyList<DailyV1ActorTurnRosterEntry> mismatchedRoster = new[]
+        {
+            new DailyV1ActorTurnRosterEntry(
+                0, new PersonId(boundPerson.Value), actor)
+        };
+
+        Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
+            graph, mismatchedRoster, people, choices, null, 1L, true, boundary), Is.False);
+        Assert.That(boundary.Events, Is.Empty,
+            "A host identity projection cannot dispatch any actor work for a different PersonId instance.");
     }
 
     [Test]
@@ -73,6 +169,207 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         Assert.That(deferred.Dispositions.Single().DeferralReason,
             Is.EqualTo(ActorChoiceDeferralReason.Traveling));
         Assert.That(deferred.Dispositions.Single().ActorTurnRosterOrdinal, Is.Zero);
+    }
+
+    [Test]
+    public void CoreExpeditionOwnerDefersActorChoiceWithoutUnityExpeditionQuery()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
+        PersonStore people = new PersonStore();
+        PersonId personId = RegisterMaterializedPerson(people, actor, "person-expedition");
+        ActorChoiceStore choices = new ActorChoiceStore(people);
+        Assert.That(choices.TryCapture("command-expedition", personId, "action.sell-goods",
+            WorldCommandOrigin.LocalPlayer, WorldCommandAuthorityMode.Request, 4L,
+            out ActorChoiceInput input, out ActorChoiceStoreFailureCode captureFailure),
+            Is.True, captureFailure.ToString());
+
+        ExpeditionStore expeditions = new ExpeditionStore();
+        ExpeditionRuntime activeExpedition = new ExpeditionRuntime(
+            "expedition-active", "site-1", "location-origin", "location-target", "route-outbound",
+            null, "decision-expedition", new[] { actor.RuntimeId }, new[] { actor.RuntimeId },
+            System.Array.Empty<string>(), ExpeditionState.AtSite);
+        Assert.That(expeditions.Add(activeExpedition), Is.True);
+        Assert.That(graph.TryBindExpeditionStore(expeditions), Is.True);
+        Assert.That(graph.Expeditions, Is.SameAs(expeditions));
+        long expeditionRevision = expeditions.Revision;
+        RecordingBoundary boundary = new RecordingBoundary();
+
+        Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
+            graph,
+            new[] { new DailyV1ActorTurnRosterEntry(0, personId, actor) },
+            people,
+            choices,
+            null,
+            5L,
+            false,
+            boundary), Is.True);
+
+        Assert.That(boundary.Events, Is.Empty,
+            "Expedition membership is read from the Core owner before any host gameplay callback.");
+        Assert.That(expeditions.GetById("expedition-active"), Is.SameAs(activeExpedition));
+        Assert.That(expeditions.Revision, Is.EqualTo(expeditionRevision));
+        Assert.That(choices.TryGet(input.InputId, out ActorChoiceInput deferred), Is.True);
+        Assert.That(deferred.Status, Is.EqualTo(ActorChoiceInputStatus.Pending));
+        Assert.That(deferred.Dispositions.Single().Kind, Is.EqualTo(ActorChoiceDispositionKind.Deferred));
+        Assert.That(deferred.Dispositions.Single().DeferralReason,
+            Is.EqualTo(ActorChoiceDeferralReason.ExpeditionParticipant));
+        Assert.That(deferred.Dispositions.Single().ActorTurnRosterOrdinal, Is.Zero);
+    }
+
+    [Test]
+    public void SelectedActorTurnRunsCoreActorChoiceStageWithoutUnityGameplayCallback()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
+        PersonStore people = new PersonStore();
+        PersonId personId = RegisterMaterializedPerson(people, actor, "person-core-choice");
+        ActorChoiceStore choices = new ActorChoiceStore(people);
+        Assert.That(choices.TryCapture("command-core-choice", personId,
+            "action/not-admitted", WorldCommandOrigin.LocalPlayer,
+            WorldCommandAuthorityMode.Request, 4L,
+            out ActorChoiceInput input, out ActorChoiceStoreFailureCode captureFailure),
+            Is.True, captureFailure.ToString());
+
+        DailyV1ActionDefinition priorAction = actor.Definitions.Actions["VENDER_MERCADORIA"];
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            actor.Definitions, priorAction, null, null, null, 0,
+            0f, 1f, NpcTravelReason.None, 0f, null, null, null, null,
+            out DailyV1NpcActionPayloadOwner priorPayload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, priorAction,
+            priorPayload, () => true), Is.True);
+
+        CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary();
+        boundary.BindGraph(graph);
+        long actionSlotRevisionBefore = actor.ActionSlot.Revision;
+        Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
+            graph,
+            new[] { new DailyV1ActorTurnRosterEntry(0, personId, actor) },
+            people, choices, null, 5L, merchantTradeEnabled: false, boundary: boundary), Is.True);
+
+        Assert.That(boundary.Events, Does.Not.Contain("legacy-choice-callback"),
+            "The selected Core actor-choice path does not invoke the legacy Unity choice callback.");
+        Assert.That(boundary.Events, Does.Not.Contain("legacy-action-callback"),
+            "A rejected choice does not dispatch through the legacy Unity action callback.");
+        Assert.That(actor.ActionSlot.CurrentAction, Is.Null);
+        Assert.That(actor.ActionSlot.CurrentPayload, Is.Null);
+        Assert.That(actor.ActionSlot.Revision, Is.EqualTo(actionSlotRevisionBefore + 1L),
+            "The selected Core path clears the prior action slot before rejecting the unavailable choice.");
+        Assert.That(choices.TryGet(input.InputId, out ActorChoiceInput rejected), Is.True);
+        Assert.That(rejected.Status, Is.EqualTo(ActorChoiceInputStatus.Rejected));
+        Assert.That(rejected.Dispositions.Single().Failure,
+            Is.EqualTo(ActorChoiceFailure.ActionUnavailable));
+    }
+
+    [Test]
+    public void SelectedActorChoiceDispatchUsesCoreActionExecutionPorts()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(owner =>
+            owner.RuntimeId == actor.Travel.CurrentCityRuntimeId);
+        DailyV1ItemDefinition iron = graph.Definitions.Items["FERRO"];
+        Assert.That(actor.Inventory.TryAddItem(iron, 5, 10f), Is.True);
+        float referencePrice = actor.Inventory.GetAverageUnitCost(iron);
+        Assert.That(actor.CommercialKnowledge.RecordObservation(new DailyV1CommercialMarketObservation(
+            city.LocationRuntimeId, iron, referencePrice + 3f, 12, 20L, 20L,
+            DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+
+        PersonStore people = new PersonStore();
+        PersonId personId = RegisterMaterializedPerson(people, actor, "person-core-choice-sale");
+        ActorChoiceStore choices = new ActorChoiceStore(people);
+        int choiceAdmissionCount = 0;
+        int choiceCommitCount = 0;
+        choices.BindP12MutationBoundary(
+            () => { choiceAdmissionCount++; return true; },
+            () => choiceCommitCount++);
+        Assert.That(choices.TryCapture("command-core-choice-sale", personId,
+            "VENDER_MERCADORIA", WorldCommandOrigin.LocalPlayer,
+            WorldCommandAuthorityMode.Request, 19L,
+            out ActorChoiceInput input, out ActorChoiceStoreFailureCode captureFailure),
+            Is.True, captureFailure.ToString());
+
+        int inventoryBefore = actor.Inventory.GetAmount(iron);
+        int marketBefore = city.Market.GetAmount(iron);
+        float balanceBefore = actor.MoneyAccount.Balance;
+        long accountRevisionBefore = actor.MoneyAccount.Revision;
+        long inventoryRevisionBefore = actor.Inventory.Revision;
+        long marketRevisionBefore = city.Market.Revision;
+
+        CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary();
+        boundary.BindGraph(graph);
+        Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
+            graph,
+            new[] { new DailyV1ActorTurnRosterEntry(0, personId, actor) },
+            people, choices, null, 20L, merchantTradeEnabled: false, boundary: boundary), Is.True);
+
+        Assert.That(boundary.Events, Does.Contain("complete-dispatch"),
+            "The committed actor-choice slot was dispatched through the Core selected action stage.");
+        Assert.That(boundary.Events, Does.Not.Contain("legacy-choice-callback"));
+        Assert.That(boundary.Events, Does.Not.Contain("legacy-action-callback"));
+        Assert.That(choices.TryGet(input.InputId, out ActorChoiceInput attempted), Is.True);
+        Assert.That(attempted.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
+        Assert.That(attempted.Dispositions[0].DecisionRecordId,
+            Is.EqualTo(boundary.Decisions.Decisions.Single().DecisionId));
+        Assert.That(attempted.Dispositions[1].AttemptOutcome,
+            Is.EqualTo(ActorChoiceAttemptOutcome.Succeeded));
+        DailyV1NpcActionPayloadOwner salePayload = actor.ActionSlot.CurrentPayload;
+        Assert.That(salePayload, Is.Not.Null);
+        Assert.That(boundary.SaleAdmissionCount, Is.EqualTo(1));
+        Assert.That(boundary.ActionSlotAdmissionCount, Is.EqualTo(1));
+        Assert.That(boundary.SaleReceiptCount, Is.EqualTo(1));
+        Assert.That(boundary.SaleDisposeCount, Is.EqualTo(1));
+        Assert.That(boundary.LastSaleCommit?.Succeeded, Is.True);
+        Assert.That(actor.Inventory.GetAmount(iron), Is.EqualTo(inventoryBefore - salePayload.Amount));
+        Assert.That(city.Market.GetAmount(iron), Is.EqualTo(marketBefore + salePayload.Amount));
+        Assert.That(actor.MoneyAccount.Balance, Is.GreaterThan(balanceBefore));
+        Assert.That(actor.MoneyAccount.Revision, Is.EqualTo(accountRevisionBefore + 1L));
+        Assert.That(actor.Inventory.Revision, Is.EqualTo(inventoryRevisionBefore + 1L));
+        Assert.That(city.Market.Revision, Is.EqualTo(marketRevisionBefore + 1L));
+        Assert.That(choiceAdmissionCount, Is.EqualTo(3),
+            "Capture, dispatch-start and returned-attempt transitions each use their existing P12 boundary.");
+        Assert.That(choiceCommitCount, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void SelectedActorChoiceEligibilityUsesAdmittedMerchantConfiguration()
+    {
+        DailyV1EffectiveDefinitions definitions = CopyWithMerchantTradeEnabled(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(), false);
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            definitions, out DailyV1NpcRuntimeOwners actor);
+        Assert.That(graph.Definitions.EffectiveConfiguration.MerchantTrade.Enabled, Is.False);
+
+        PersonStore people = new PersonStore();
+        PersonId personId = RegisterMaterializedPerson(people, actor, "person-disabled-merchant-choice");
+        ActorChoiceStore choices = new ActorChoiceStore(people);
+        Assert.That(choices.TryCapture("command-disabled-merchant-choice", personId,
+            "VENDER_MERCADORIA", WorldCommandOrigin.LocalPlayer,
+            WorldCommandAuthorityMode.Request, 4L,
+            out ActorChoiceInput input, out ActorChoiceStoreFailureCode captureFailure),
+            Is.True, captureFailure.ToString());
+
+        CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary();
+        boundary.BindGraph(graph);
+        DailyV1ActionDefinition priorAction = actor.Definitions.Actions["VENDER_MERCADORIA"];
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            actor.Definitions, priorAction, null, null, null, 0,
+            0f, 1f, NpcTravelReason.None, 0f, null, null, null, null,
+            out DailyV1NpcActionPayloadOwner priorPayload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, priorAction,
+            priorPayload, () => true), Is.True);
+        long actionSlotRevisionBefore = actor.ActionSlot.Revision;
+        Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
+            graph,
+            new[] { new DailyV1ActorTurnRosterEntry(0, personId, actor) },
+            people, choices, null, 5L, merchantTradeEnabled: false, boundary: boundary), Is.True);
+
+        Assert.That(actor.ActionSlot.CurrentAction, Is.Null);
+        Assert.That(actor.ActionSlot.CurrentPayload, Is.Null);
+        Assert.That(actor.ActionSlot.Revision, Is.EqualTo(actionSlotRevisionBefore + 1L));
+        Assert.That(boundary.Events, Is.Empty,
+            "A disabled admitted Merchant capability rejects before Unity projection or sale dispatch.");
+        Assert.That(choices.TryGet(input.InputId, out ActorChoiceInput rejected), Is.True);
+        Assert.That(rejected.Status, Is.EqualTo(ActorChoiceInputStatus.Rejected));
+        Assert.That(rejected.Dispositions.Single().Failure,
+            Is.EqualTo(ActorChoiceFailure.ActionUnavailable));
     }
 
     [Test]
@@ -258,7 +555,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         boundary.BindGraph(graph);
         Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
             graph, new[] { new DailyV1ActorTurnRosterEntry(0, personId, actor) },
-            people, choices, directives, 12L, merchantTradeEnabled: false, boundary), Is.True);
+            people, choices, directives, 12L, false, boundary), Is.True);
 
         Assert.That(directive.State, Is.EqualTo(ScheduledDirectiveState.Succeeded), directive.ResultReason);
         Assert.That(justice.ContainsSentence(sentence), Is.False);
@@ -267,6 +564,10 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         Assert.That(boundary.Events.Count(value => value == "p12-begin"), Is.EqualTo(1));
         Assert.That(boundary.Events.Count(value => value == "p12-end"), Is.EqualTo(1));
         Assert.That(boundary.Events, Does.Contain("escape-published"));
+        Assert.That(boundary.Events, Does.Not.Contain("legacy-directive"),
+            "Selected RequestAction/ForceOutcome directives execute through Core, not the Unity gameplay callback.");
+        Assert.That(boundary.Events, Does.Not.Contain("reserved-query"),
+            "The selected Daily-v1 exact-empty reservation fact is established by the admitted profile and Core owner graph.");
     }
 
     private static DailyV1SelectedRuntimeOwnerGraph CreateGraph(out DailyV1NpcRuntimeOwners actor)
@@ -283,7 +584,27 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         out DailyV1NpcRuntimeOwners second,
         bool includeSecond)
     {
-        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        return CreateGraph(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(),
+            out first, out second, includeSecond);
+    }
+
+    private static DailyV1SelectedRuntimeOwnerGraph CreateGraph(
+        DailyV1EffectiveDefinitions definitions,
+        out DailyV1NpcRuntimeOwners actor)
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            definitions, out DailyV1NpcRuntimeOwners first, out _, includeSecond: false);
+        actor = first;
+        return graph;
+    }
+
+    private static DailyV1SelectedRuntimeOwnerGraph CreateGraph(
+        DailyV1EffectiveDefinitions definitions,
+        out DailyV1NpcRuntimeOwners first,
+        out DailyV1NpcRuntimeOwners second,
+        bool includeSecond)
+    {
         DailyV1SelectedRuntimeOwnerGraphBuilder builder =
             new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
         RuntimeIdAllocator allocator = new RuntimeIdAllocator();
@@ -304,6 +625,52 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             completeGraph.Cities, selectedOwners, completeGraph.SpatialNetwork,
             out DailyV1SelectedRuntimeOwnerGraph selectedGraph), Is.True);
         return selectedGraph;
+    }
+
+    private static DailyV1EffectiveDefinitions CopyWithMerchantTradeEnabled(
+        DailyV1EffectiveDefinitions definitions,
+        bool enabled)
+    {
+        EffectiveSimulationConfiguration current = definitions.EffectiveConfiguration;
+        EffectiveMerchantTradeConfiguration currentMerchant = current.MerchantTrade;
+        EffectiveSimulationConfiguration configuration = new EffectiveSimulationConfiguration(
+            current.Population,
+            current.Economy,
+            current.Travel,
+            current.Crime,
+            current.GuardCrime,
+            current.NaturalMortality,
+            current.AggregateDemography,
+            new EffectiveMerchantTradeConfiguration(
+                enabled,
+                currentMerchant.AllowAutonomousTradeRepositioning,
+                currentMerchant.MaxTradeAmount,
+                currentMerchant.LocalWholesalePriceMultiplier,
+                currentMerchant.LocalReserveRatio,
+                currentMerchant.MaxUnprofitablePlanWaitDays),
+            current.CommercialKnowledge);
+        return new DailyV1EffectiveDefinitions(
+            definitions.Configuration,
+            configuration,
+            definitions.Calendar,
+            null,
+            definitions.Cities.Values,
+            definitions.Items.Values,
+            definitions.Npcs.Values,
+            definitions.Jobs.Values,
+            definitions.Actions.Values,
+            definitions.Statuses.Values,
+            null,
+            definitions.StageOrder,
+            definitions.ProfileContractIdentity,
+            definitions.GeographyProfileContractIdentity,
+            definitions.GeographyStageIdentity,
+            definitions.HexCoordinateConvention,
+            definitions.HexCoordinateCanonicalOrder,
+            null,
+            definitions.Traits.Values,
+            definitions.CapabilityAttributes.Values,
+            definitions.ExplorableSites.Values);
     }
 
     private static PersonId RegisterMaterializedPerson(
@@ -337,13 +704,12 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         return store;
     }
 
-    private sealed class RecordingBoundary : IDailyV1ActorTurnExecutionBoundary
+    private class RecordingBoundary : IDailyV1ActorTurnExecutionBoundary
     {
         internal readonly List<string> Events = new List<string>();
         internal bool IsSpatialTransit;
 
         public bool IsInSpatialTransit(DailyV1NpcRuntimeOwners actor, PersonId personId) => IsSpatialTransit;
-        public bool IsOnActiveExpedition(DailyV1NpcRuntimeOwners actor) => false;
         public bool IsReservedToday(DailyV1NpcRuntimeOwners actor) => false;
         public void EvaluateStatus(DailyV1NpcRuntimeOwners actor) => Events.Add("status:" + actor.RuntimeId);
         public void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive) =>
@@ -357,13 +723,72 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         public void EvaluateAndExecuteAction(DailyV1NpcRuntimeOwners actor) => Events.Add("action:" + actor.RuntimeId);
     }
 
+    private sealed class CoreActorChoiceTurnBoundary : RecordingBoundary,
+        IDailyV1SelectedActorChoiceExecutionContext
+    {
+        private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+        internal readonly TestActorChoiceBoundary ChoiceBoundary = new TestActorChoiceBoundary();
+
+        internal CoreActorChoiceTurnBoundary(DailyV1SelectedRuntimeOwnerGraph graph) =>
+            this.graph = graph;
+
+        public bool TryGetActorChoiceExecutionContext(
+            DailyV1NpcRuntimeOwners actor,
+            out bool actorAtCurrentCityLocation,
+            out bool decisionSystemAvailable,
+            out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
+        {
+            actorAtCurrentCityLocation = false;
+            decisionSystemAvailable = true;
+            executionBoundary = graph.ContainsExactNpcOwner(actor) ? ChoiceBoundary : null;
+            return executionBoundary != null;
+        }
+    }
+
+    private sealed class TestActorChoiceBoundary : IDailyV1ActorChoiceExecutionBoundary
+    {
+        internal int ClearCount;
+        public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor)
+        {
+            ClearCount++;
+            actor.ActionSlot.TrySetCurrentAction(null, null);
+            actor.ActionSlot.NotifyCurrentActionMutationCommitted();
+        }
+        public bool TryGetDecisionRecordOwners(DailyV1NpcRuntimeOwners actor,
+            out RuntimeIdAllocator idAllocator, out SimulationRecordSequence recordSequence,
+            out NpcDecisionStore decisionStore)
+        {
+            idAllocator = null;
+            recordSequence = null;
+            decisionStore = null;
+            return false;
+        }
+        public bool TryPrepareRequestedActionProjection(DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) => false;
+        public bool TryRefreshRequestedActionProjection(DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) => false;
+        public bool CanCommitRequestedActionSlot(DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) => false;
+        public bool TryPublishRequestedActionProjection(DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) => false;
+        public void CancelPreparedRequestedActionProjection(DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) { }
+        public void LogRequestedActionDecisionFailure(string message) { }
+        public NpcActionResultType? ExecuteCurrentAction(DailyV1NpcRuntimeOwners actor) =>
+            throw new AssertionException("The unavailable actor-choice fixture must not dispatch an action.");
+    }
+
     private sealed class CoreSelectedActionBoundary :
         IDailyV1ActorTurnExecutionBoundary,
+        IDailyV1SelectedActorChoiceExecutionContext,
+        IDailyV1CoreActorChoiceExecutionBoundary,
         IDailyV1SelectedActorActionExecutionBoundary,
         IDailyV1SelectedNpcActionDecisionBoundary,
         IDailyV1SelectedActionDispatchBoundary,
         DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary,
-        DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary
+        DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary,
+        IDailyV1SelectedOpenMarketSaleBoundary,
+        IDailyV1SelectedOpenMarketPurchaseBoundary
     {
         internal readonly List<string> Events = new List<string>();
         internal readonly NpcDecisionStore Decisions = new NpcDecisionStore();
@@ -374,6 +799,11 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         private DailyV1NpcActionPayloadOwner preparedProjectionPayload;
         internal bool RejectNextActionSlotAdmission;
         internal bool CanProjectSelectedAction = true;
+        internal int SaleAdmissionCount;
+        internal int ActionSlotAdmissionCount;
+        internal int SaleReceiptCount;
+        internal int SaleDisposeCount;
+        internal DailyV1SelectedOpenMarketSaleCommitResult LastSaleCommit;
         internal long NextDecisionIdSequence => allocator.CaptureSnapshot().Counters
             .Single(counter => counter.FamilyId == "decision").NextSequence;
         internal long NextRecordSequence => sequence.CaptureSnapshot().NextSequence;
@@ -411,6 +841,58 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             return true;
         }
 
+        public bool TryGetActorChoiceExecutionContext(
+            DailyV1NpcRuntimeOwners actor,
+            out bool actorAtCurrentCityLocation,
+            out bool decisionSystemAvailable,
+            out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
+        {
+            actorAtCurrentCityLocation = CurrentGraph?.ContainsExactNpcOwner(actor) == true;
+            decisionSystemAvailable = true;
+            executionBoundary = actorAtCurrentCityLocation ? this : null;
+            return executionBoundary != null;
+        }
+
+        public bool TryPrepareRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            if (!CurrentGraph.ContainsExactNpcOwner(actor) || payload == null
+                || !CanProjectSelectedAction || preparedProjectionPayload != null)
+                return false;
+            preparedProjectionActor = actor;
+            preparedProjectionPayload = payload;
+            return true;
+        }
+
+        public bool TryRefreshRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) =>
+            ReferenceEquals(preparedProjectionActor, actor)
+            && ReferenceEquals(preparedProjectionPayload, payload);
+
+        public bool CanCommitRequestedActionSlot(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) =>
+            CanCommitSelectedActionSlot(actor, payload);
+
+        public bool TryPublishRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) =>
+            TryPublishSelectedActionProjection(actor, payload);
+
+        public void CancelPreparedRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) =>
+            CancelPreparedSelectedActionProjection(actor, payload);
+
+        public void LogRequestedActionDecisionFailure(string message) =>
+            Events.Add("choice-decision-failure:" + message);
+
+        public NpcActionResultType? ExecuteCurrentAction(DailyV1NpcRuntimeOwners actor) =>
+            throw new AssertionException(
+                "Selected actor-choice execution must use Core action ports, not the legacy callback.");
+
         public bool TryPrepareSelectedActionProjection(
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcActionCandidate selected,
@@ -433,6 +915,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             if (!ReferenceEquals(preparedProjectionActor, actor)
                 || !ReferenceEquals(preparedProjectionPayload, payload))
                 return false;
+            ActionSlotAdmissionCount++;
             if (!RejectNextActionSlotAdmission) return true;
             RejectNextActionSlotAdmission = false;
             return false;
@@ -575,14 +1058,21 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         }
 
         public bool IsInSpatialTransit(DailyV1NpcRuntimeOwners actor, PersonId personId) => false;
-        public bool IsOnActiveExpedition(DailyV1NpcRuntimeOwners actor) => false;
-        public bool IsReservedToday(DailyV1NpcRuntimeOwners actor) => false;
+        public bool IsReservedToday(DailyV1NpcRuntimeOwners actor)
+        {
+            Events.Add("reserved-query");
+            return false;
+        }
         public void EvaluateStatus(DailyV1NpcRuntimeOwners actor) => Events.Add("status");
         public void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive) =>
             Events.Add("legacy-directive");
-        public bool TryProcessActorChoice(DailyV1NpcRuntimeOwners actor, int rosterOrdinal) => false;
+        public bool TryProcessActorChoice(DailyV1NpcRuntimeOwners actor, int rosterOrdinal)
+        {
+            Events.Add("legacy-choice-callback");
+            return false;
+        }
         public void AdvanceMerchantTradeState(DailyV1NpcRuntimeOwners actor) { }
-        public void EvaluateAndExecuteAction(DailyV1NpcRuntimeOwners actor) => Events.Add("legacy-action");
+        public void EvaluateAndExecuteAction(DailyV1NpcRuntimeOwners actor) => Events.Add("legacy-action-callback");
 
         public DailyV1JusticeRecordsOwner JusticeRecordsOwner => CurrentGraph.JusticeRecordsOwner;
         public bool ExecuteWithinOperation(System.Func<bool> operation)
@@ -636,9 +1126,9 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         }
         public bool TryGetMarketBoundaries(DailyV1NpcRuntimeOwners actor, out IDailyV1SelectedOpenMarketSaleBoundary saleBoundary, out IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary)
         {
-            saleBoundary = null;
-            purchaseBoundary = null;
-            return false;
+            saleBoundary = this;
+            purchaseBoundary = this;
+            return CurrentGraph.ContainsExactNpcOwner(actor);
         }
         public bool TryGetNpcTradeBoundary(DailyV1NpcRuntimeOwners seller, DailyV1NpcRuntimeOwners buyer, out IDailyV1SelectedNpcTradeBoundary boundary)
         {
@@ -670,6 +1160,24 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         public bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor) => false;
         public void PublishTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor) { }
         public void CompleteCrossCityBuy(DailyV1NpcRuntimeOwners actor, DailyV1SelectedCrossCityBuyResult result) { }
+
+        public bool TryBegin()
+        {
+            SaleAdmissionCount++;
+            return true;
+        }
+
+        public void Complete(DailyV1SelectedOpenMarketSaleCommitResult result)
+        {
+            SaleReceiptCount++;
+            LastSaleCommit = result;
+        }
+
+        public void Complete(DailyV1SelectedOpenMarketPurchaseCommitResult result) { }
+
+        public void Dispose() => SaleDisposeCount++;
+
+        public bool CanUseAccountBacked => true;
 
         public DailyV1SelectedActionStatusPlanResult ExecuteWithinOperation(DailyV1NpcRuntimeOwners actor, DailyV1NpcRuntimeOwners target, System.Func<DailyV1SelectedActionStatusPlanResult> operation)
         {

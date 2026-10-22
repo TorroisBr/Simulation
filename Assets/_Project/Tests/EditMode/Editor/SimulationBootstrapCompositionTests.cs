@@ -127,8 +127,10 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(second.Runtime.WorldId, Is.SameAs(secondIdentity));
         Assert.That(firstIdentity, Is.Not.EqualTo(secondIdentity));
         Assert.That(first.Bootstrap.ProfileFingerprint, Is.EqualTo(second.Bootstrap.ProfileFingerprint));
-        IAuthoritativeRandomSource firstRandom = ReadPrivateField<SimulationActiveSession>(first, "activeSession").RandomSource;
-        IAuthoritativeRandomSource secondRandom = ReadPrivateField<SimulationActiveSession>(second, "activeSession").RandomSource;
+        IAuthoritativeRandomSource firstRandom = ReadPrivateField<IAuthoritativeRandomSource>(
+            first.Runtime, "randomSource");
+        IAuthoritativeRandomSource secondRandom = ReadPrivateField<IAuthoritativeRandomSource>(
+            second.Runtime, "randomSource");
         Assert.That(firstRandom.NextUnit("world-identity-independent-stream"),
             Is.EqualTo(secondRandom.NextUnit("world-identity-independent-stream")));
 
@@ -197,6 +199,63 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(
             deterministicSource.CaptureSnapshot().Seed,
             Is.EqualTo(expectedEffectiveSeed));
+    }
+
+    [Test]
+    public void SelectedDailyV1InitialWarrantsAreCoreRowsWithExactUnityReferenceProjections()
+    {
+        SimulationConfigData source = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(source, Is.Not.Null);
+        SimulationConfigData config = CloneDailyV1ProfileForCapturedDefinitionTest(
+            source, out CityData selectedCity, out NpcData selectedNpc, out _);
+        config.initialWarrants = new List<InitialWantedRecordConfig>
+        {
+            new InitialWantedRecordConfig
+            {
+                target = selectedNpc,
+                city = selectedCity,
+                bounty = 11f,
+                sentenceDays = 2
+            },
+            new InitialWantedRecordConfig
+            {
+                target = selectedNpc,
+                city = selectedCity,
+                bounty = 7f,
+                sentenceDays = 3
+            }
+        };
+
+        GameObject simulationObject = new GameObject("selected-daily-v1-core-justice-genesis-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+
+        simulation.Start();
+
+        NpcRuntime target = simulation.Runtime.NpcRuntimes.Single(npc => npc.DefinitionId == selectedNpc.DefinitionId);
+        CityRuntime city = simulation.Runtime.Cities.Single(value => value.DefinitionId == selectedCity.DefinitionId);
+        DailyV1SelectedRuntimeOwnerGraph graph = simulation.Runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(graph, Is.Not.Null);
+        Assert.That(graph.JusticeRecordsOwner, Is.SameAs(simulation.Runtime.JusticeSystemForWorldBoundary.CoreOwner));
+        DailyV1JusticeWantedRecordOwner coreRow = graph.JusticeRecordsOwner.WantedRecords.Single();
+        Assert.That(coreRow.TargetRuntimeId, Is.EqualTo(target.RuntimeId));
+        Assert.That(coreRow.CityRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(coreRow.Bounty, Is.EqualTo(18f));
+        Assert.That(coreRow.SentenceDays, Is.EqualTo(5));
+        Assert.That(graph.JusticeRecordsOwner.Revision, Is.Zero,
+            "Initial selected rows are genesis state, not a post-admission P12 mutation.");
+
+        WantedRecordRuntime unityProjection = simulation.Runtime.JusticeSystemForWorldBoundary
+            .GetActiveWarrants(target).Single();
+        Assert.That(unityProjection.CoreOwner, Is.SameAs(coreRow));
+        Assert.That(unityProjection.Target, Is.SameAs(target));
+        Assert.That(unityProjection.City, Is.SameAs(city));
+        Assert.That(target.CurrentStatus, Does.Contain(config.wantedStatus));
     }
 
     [Test]
@@ -307,7 +366,7 @@ public sealed class SimulationBootstrapCompositionTests
             .GetValue(simulation), Is.Null);
         Assert.That(typeof(TesteSimulacao).GetField("draftComposition", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(simulation), Is.Null);
-        Assert.That(typeof(TesteSimulacao).GetField("activeSession", BindingFlags.Instance | BindingFlags.NonPublic)
+        Assert.That(typeof(TesteSimulacao).GetProperty("activeSession", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(simulation), Is.Null);
 
         simulation.Start();
@@ -1188,12 +1247,57 @@ public sealed class SimulationBootstrapCompositionTests
         {
             NpcRuntime npc = knowledgeOwners[npcIndex];
             CommercialKnowledgeRuntime commercial = ReadPrivateField<CommercialKnowledgeRuntime>(npc, "commercialKnowledge");
+            DailyV1NpcRuntimeOwners coreNpc = npc.SelectedRuntimeOwners;
+            Assert.That(coreNpc, Is.Not.Null,
+                "The selected Daily-v1 projection must bind its exact Core NPC owner graph.");
+            Assert.That(commercial.SelectedOwner, Is.SameAs(coreNpc.CommercialKnowledge),
+                "P12F census and Unity projection must read the same Core CommercialKnowledge authority.");
+            Assert.That(commercial.Revision, Is.EqualTo(coreNpc.CommercialKnowledge.Revision));
             List<CommercialKnowledgeShareReceipt> commercialShareReceipts =
                 ReadPrivateField<List<CommercialKnowledgeShareReceipt>>(commercial, "shareReceipts");
             int marketCount = commercial.Observations.Count;
             int liquidityCount = commercial.LiquidityObservations.Count;
             int shareReceiptCount = commercialShareReceipts.Count;
             long commercialRevision = commercial.Revision;
+
+            IReadOnlyList<DailyV1CommercialMarketObservation> coreMarketRows =
+                coreNpc.CommercialKnowledge.Observations;
+            Assert.That(commercial.Observations, Has.Count.EqualTo(coreMarketRows.Count));
+            for (int rowIndex = 0; rowIndex < coreMarketRows.Count; rowIndex++)
+            {
+                CommercialMarketObservation projected = commercial.Observations[rowIndex];
+                DailyV1CommercialMarketObservation coreRow = coreMarketRows[rowIndex];
+                Assert.That(projected.LocationRuntimeId, Is.EqualTo(coreRow.LocationRuntimeId));
+                Assert.That(projected.ItemDefinitionId, Is.EqualTo(coreRow.ItemDefinitionId));
+                Assert.That(projected.ObservedPrice, Is.EqualTo(coreRow.ObservedPrice));
+                Assert.That(projected.ObservedStock, Is.EqualTo(coreRow.ObservedStock));
+                Assert.That(projected.ObservedDay, Is.EqualTo(coreRow.ObservedDay));
+                Assert.That(projected.ReceivedDay, Is.EqualTo(coreRow.ReceivedDay));
+                Assert.That((int)projected.Source, Is.EqualTo((int)coreRow.Source));
+                CityRuntime projectedCity = runtime.Cities.Single(city =>
+                    city.Location != null && city.Location.RuntimeId == coreRow.LocationRuntimeId);
+                MarketItemRuntime projectedMarketItem = projectedCity.Market.Items.Single(item =>
+                    item != null && item.Item != null
+                    && string.Equals(item.Item.DefinitionId, coreRow.ItemDefinitionId,
+                        System.StringComparison.Ordinal));
+                Assert.That(projected.ItemDefinition, Is.SameAs(projectedMarketItem.Item),
+                    "Core ItemDefinition identity projects to the exact selected Unity ItemData asset.");
+            }
+
+            IReadOnlyList<DailyV1CommercialLiquidityObservation> coreLiquidityRows =
+                coreNpc.CommercialKnowledge.LiquidityObservations;
+            Assert.That(commercial.LiquidityObservations, Has.Count.EqualTo(coreLiquidityRows.Count));
+            for (int rowIndex = 0; rowIndex < coreLiquidityRows.Count; rowIndex++)
+            {
+                CommercialLiquidityObservation projected = commercial.LiquidityObservations[rowIndex];
+                DailyV1CommercialLiquidityObservation coreRow = coreLiquidityRows[rowIndex];
+                Assert.That(projected.LocationRuntimeId, Is.EqualTo(coreRow.LocationRuntimeId));
+                Assert.That(projected.LiquidityMode, Is.EqualTo(coreRow.LiquidityMode));
+                Assert.That(projected.ObservedPurchasingPower, Is.EqualTo(coreRow.ObservedPurchasingPower));
+                Assert.That(projected.ObservedDay, Is.EqualTo(coreRow.ObservedDay));
+                Assert.That(projected.ReceivedDay, Is.EqualTo(coreRow.ReceivedDay));
+                Assert.That((int)projected.Source, Is.EqualTo((int)coreRow.Source));
+            }
 
             object[] typedOwners =
             {
@@ -4858,10 +4962,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(simulation.SpatialNetwork.Routes, Has.Some.Property("TravelDays").EqualTo(5));
         Assert.That(simulation.TryGetNpcRuntime("npc-000001", out NpcRuntime actorRuntime), Is.True);
         Assert.That(actorRuntime.CurrentStatus, Is.EqualTo(new[] { authoredStatus, config.wantedStatus }));
-        SimulationActiveSession activeSession = typeof(TesteSimulacao).GetField("activeSession", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(simulation) as SimulationActiveSession;
-        Assert.That(activeSession, Is.Not.Null);
-        JusticeSystem justice = activeSession.Justice;
+        JusticeSystem justice = simulation.Runtime.JusticeSystemForWorldBoundary;
         WantedRecordRuntime warrant = justice.GetActiveWarrants(actorRuntime).Single();
         Assert.That(warrant.Bounty, Is.EqualTo(18f));
         Assert.That(warrant.SentenceDays, Is.EqualTo(5));
@@ -4918,9 +5019,15 @@ public sealed class SimulationBootstrapCompositionTests
         FieldInfo field = target.GetType().GetField(
             fieldName,
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-        Assert.That(field, Is.Not.Null, "Expected field " + fieldName + " on " + target.GetType().Name + ".");
-        T value = field.GetValue(target) as T;
-        Assert.That(value, Is.Not.Null, "Expected existing owner field " + fieldName + ".");
+        PropertyInfo property = field == null
+            ? target.GetType().GetProperty(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            : null;
+        Assert.That(field != null || property != null, Is.True,
+            "Expected field or property " + fieldName + " on " + target.GetType().Name + ".");
+        T value = (field != null ? field.GetValue(target) : property.GetValue(target)) as T;
+        Assert.That(value, Is.Not.Null, "Expected existing owner member " + fieldName + ".");
         return value;
     }
 

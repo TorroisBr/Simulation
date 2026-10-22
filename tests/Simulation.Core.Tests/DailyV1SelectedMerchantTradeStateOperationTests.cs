@@ -8,6 +8,63 @@ using NUnit.Framework;
 public sealed class DailyV1SelectedMerchantTradeStateOperationTests
 {
     [Test]
+    public void ActorTurnStageRunsCoreMerchantPassInsideTheHostAdmissionBoundary()
+    {
+        DailyV1SelectedRuntimeOwnerGraph authoredGraph = CreateGraph(out _);
+        DailyV1NpcRuntimeOwners merchant = authoredGraph.Npcs.First(owner =>
+            owner.Lifecycle.LifeState == NpcLifeState.Alive
+            && !owner.Travel.IsTraveling
+            && DailyV1NpcDefinitionRules.HasJobType(owner.Definition, authoredGraph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue));
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+            authoredGraph.Cities, new[] { merchant }, authoredGraph.SpatialNetwork,
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(owner =>
+            string.Equals(owner.RuntimeId, merchant.Travel.CurrentCityRuntimeId,
+                StringComparison.Ordinal));
+        Assert.That(city.Market.Items, Is.Not.Empty);
+
+        PersonStore people = new PersonStore();
+        PersonId personId = new PersonId("person-selected-merchant-pass");
+        Assert.That(people.TryRegister(new PersonRuntime(personId), out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(people.TryBindMaterializedNpc(personId, merchant.RuntimeId,
+            out PersonStoreFailure bindFailure), Is.True, bindFailure.ToString());
+        Assert.That(graph.TryBindPersonStore(people), Is.True,
+            "The actor operation uses the exact PersonStore identity bound to its selected owner graph.");
+        ActorChoiceStore choices = new ActorChoiceStore(people);
+        CoreActorTurnBoundary boundary = new CoreActorTurnBoundary(graph);
+        long priorCommercialRevision = merchant.CommercialKnowledge.Revision;
+        IReadOnlyList<DailyV1MarketItemState> marketRows = city.Market.Items;
+
+        Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
+            graph,
+            new[] { new DailyV1ActorTurnRosterEntry(0, personId, merchant) },
+            people, choices, null, 37L, merchantTradeEnabled: true,
+            boundary: boundary), Is.True);
+
+        Assert.That(boundary.AdmissionScopeCount, Is.EqualTo(1));
+        Assert.That(boundary.CompletedScopeCount, Is.EqualTo(1));
+        Assert.That(boundary.MerchantOwnerChangedInsideScope, Is.True,
+            "The existing admission window encloses the Core operation's actual owner write.");
+        Assert.That(boundary.LegacyMerchantCallbackCount, Is.Zero,
+            "The selected actor-turn path invokes the Core merchant operation directly.");
+        Assert.That(merchant.CommercialKnowledge.Revision, Is.GreaterThan(priorCommercialRevision));
+        Assert.That(merchant.SpatialKnowledge.KnowsLocation(city.LocationRuntimeId), Is.True);
+        foreach (DailyV1MarketItemState row in marketRows)
+        {
+            Assert.That(merchant.CommercialKnowledge.TryGetObservation(
+                city.LocationRuntimeId, row.Item.DefinitionId,
+                out DailyV1CommercialMarketObservation observation), Is.True);
+            Assert.That(observation.ItemDefinition, Is.SameAs(row.Item));
+            Assert.That(observation.ObservedDay, Is.EqualTo(37L));
+        }
+        Assert.That(merchant.CommercialKnowledge.TryGetLiquidityObservation(
+            city.LocationRuntimeId, out DailyV1CommercialLiquidityObservation liquidity), Is.True);
+        Assert.That(liquidity.ObservedDay, Is.EqualTo(37L));
+    }
+
+    [Test]
     public void MerchantDailyPassObservesTheCoreMarketAndSpatialOwners()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out _);
@@ -308,6 +365,176 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
             return null;
         }
 
+        public void LogTrade(string message) { }
+    }
+
+    private sealed class CoreActorTurnBoundary :
+        IDailyV1ActorTurnExecutionBoundary,
+        IDailyV1SelectedActorChoiceExecutionContext,
+        IDailyV1CoreActorChoiceExecutionBoundary,
+        IDailyV1SelectedMerchantTradeStateBoundary,
+        IDailyV1SelectedMerchantTradeStateAdmissionBoundary
+    {
+        private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+        private readonly DeterministicRandomSource random = new DeterministicRandomSource(7);
+        internal int AdmissionScopeCount;
+        internal int CompletedScopeCount;
+        internal int LegacyMerchantCallbackCount;
+        internal bool MerchantOwnerChangedInsideScope;
+
+        internal CoreActorTurnBoundary(DailyV1SelectedRuntimeOwnerGraph graph) =>
+            this.graph = graph;
+
+        public bool IsInSpatialTransit(DailyV1NpcRuntimeOwners actor, PersonId personId) => false;
+        public bool IsReservedToday(DailyV1NpcRuntimeOwners actor) => false;
+        public void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive) { }
+        public bool TryProcessActorChoice(DailyV1NpcRuntimeOwners actor, int rosterOrdinal) => false;
+        public void AdvanceMerchantTradeState(DailyV1NpcRuntimeOwners actor) => LegacyMerchantCallbackCount++;
+        public void EvaluateAndExecuteAction(DailyV1NpcRuntimeOwners actor) { }
+
+        public IAuthoritativeRandomSource RandomSource => random;
+        public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor) =>
+            graph.ContainsExactNpcOwner(actor);
+        public void LogSkippedDirective(ScheduledDirective directive, string reason) { }
+        public bool TryCreateDecisionBoundary(
+            DailyV1NpcRuntimeOwners actor,
+            out IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary)
+        {
+            decisionBoundary = null;
+            return false;
+        }
+        public bool TryGetDecisionRecordOwners(
+            DailyV1NpcRuntimeOwners actor,
+            out RuntimeIdAllocator idAllocator,
+            out SimulationRecordSequence recordSequence,
+            out NpcDecisionStore decisionStore)
+        {
+            idAllocator = null;
+            recordSequence = null;
+            decisionStore = null;
+            return false;
+        }
+        public bool TryPrepareSelectedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionCandidate selected,
+            IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
+            DailyV1NpcActionPayloadOwner payload) => false;
+        public bool CanCommitSelectedActionSlot(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) => false;
+        public bool TryPublishSelectedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) => false;
+        public void CancelPreparedSelectedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) { }
+        public void LogSelectedActionDecisionFailure(DailyV1NpcRuntimeOwners actor, string message) { }
+        public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor) =>
+            graph.TryCommitCurrentActionSlot(actor, null, null, () => true);
+        public bool IsActorAtCurrentCityLocation(DailyV1NpcRuntimeOwners actor) => false;
+        public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor) { }
+        public bool HasExactCurrentActionProjection(DailyV1NpcRuntimeOwners actor) => false;
+        public bool TryGetDispatchBoundary(
+            DailyV1NpcRuntimeOwners actor,
+            out IDailyV1SelectedActionDispatchBoundary dispatchBoundary)
+        {
+            dispatchBoundary = null;
+            return false;
+        }
+        public bool TryCompleteDispatch(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1SelectedActionDispatchResult dispatch,
+            out bool actionSucceeded,
+            out NpcActionResultType? resultType,
+            out string resultMessage)
+        {
+            actionSucceeded = false;
+            resultType = null;
+            resultMessage = null;
+            return false;
+        }
+        public bool TryGetActionStatusBoundary(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcRuntimeOwners target,
+            bool reuseExistingOperation,
+            out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary boundary)
+        {
+            boundary = null;
+            return false;
+        }
+        public bool TryInstallForcedOutcomeAction(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action) => false;
+        public bool TryGetForcedEscapeBoundary(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action,
+            out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary)
+        {
+            boundary = null;
+            return false;
+        }
+
+        public bool TryGetActorChoiceExecutionContext(
+            DailyV1NpcRuntimeOwners actor,
+            out bool actorAtCurrentCityLocation,
+            out bool decisionSystemAvailable,
+            out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
+        {
+            actorAtCurrentCityLocation = graph.ContainsExactNpcOwner(actor);
+            decisionSystemAvailable = true;
+            executionBoundary = actorAtCurrentCityLocation ? this : null;
+            return executionBoundary != null;
+        }
+        public bool TryPrepareRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) => false;
+        public bool TryRefreshRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) => false;
+        public bool CanCommitRequestedActionSlot(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) => false;
+        public bool TryPublishRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) => false;
+        public void CancelPreparedRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload) { }
+        public void LogRequestedActionDecisionFailure(string message) { }
+        public NpcActionResultType? ExecuteCurrentAction(DailyV1NpcRuntimeOwners actor) =>
+            throw new AssertionException("The selected Core actor-action boundary has no dispatch fixture.");
+
+        public bool ExecuteWithinSelectedMerchantDailyOperation(
+            DailyV1NpcRuntimeOwners actor, Func<bool> operation)
+        {
+            if (!graph.ContainsExactNpcOwner(actor) || operation == null) return false;
+            AdmissionScopeCount++;
+            long priorRevision = actor.CommercialKnowledge.Revision;
+            if (!operation()) return false;
+            CompletedScopeCount++;
+            MerchantOwnerChangedInsideScope =
+                actor.CommercialKnowledge.Revision > priorRevision;
+            return true;
+        }
+
+        public bool TryInstallPlanState(DailyV1NpcRuntimeOwners actor,
+            DailyV1ItemDefinition item, string originCityRuntimeId,
+            string targetCityRuntimeId, int plannedAmount, int remainingAmount,
+            float purchasePricePerItem, int waitDaysAtDestination,
+            int pendingTravelDays, string originDecisionId) =>
+            actor.MerchantTradePlan.TryInstallState(item, originCityRuntimeId,
+                targetCityRuntimeId, plannedAmount, remainingAmount,
+                purchasePricePerItem, waitDaysAtDestination, pendingTravelDays,
+                originDecisionId);
+
+        public bool TrySetTradeTravelPlan(DailyV1NpcRuntimeOwners actor,
+            string targetCityRuntimeId, float utility, string originDecisionId) =>
+            graph.TryCommitMerchantTradeTravelPlan(actor, targetCityRuntimeId,
+                utility, originDecisionId, () => true, out _);
+
+        public void ClearTradeTravelPlan(DailyV1NpcRuntimeOwners actor) { }
+        public NpcDecisionRecord RecordTradeRedirect(DailyV1NpcRuntimeOwners actor,
+            string targetLocationRuntimeId, CommercialDecisionEvidence evidence) => null;
         public void LogTrade(string message) { }
     }
 }

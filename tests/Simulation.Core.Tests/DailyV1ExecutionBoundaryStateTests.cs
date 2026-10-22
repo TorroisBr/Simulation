@@ -68,6 +68,46 @@ public sealed class DailyV1ExecutionBoundaryStateTests
     }
 
     [Test]
+    public void SelectedRuntimeBoundaryStateOwnsExactClockAdmissionWorldAndConfigurationIdentities()
+    {
+        SimulationTime clock = new SimulationTime(4L);
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        WorldId world = new WorldId(Guid.NewGuid());
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState(
+            clock, admission, SimulationRuntimeCompositionProfile.Standard, world);
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow();
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(1, 1, 1));
+
+        Assert.That(state.SimulationTime, Is.SameAs(clock));
+        Assert.That(state.AdmissionContext, Is.SameAs(admission));
+        Assert.That(state.WorldId, Is.SameAs(world));
+        Assert.That(state.TryBindRuntimeConfiguration(configuration, calendar), Is.True);
+        Assert.That(state.ConfigurationIdentity, Is.SameAs(configuration));
+        Assert.That(state.CalendarIdentity, Is.SameAs(calendar));
+        Assert.That(state.TryBindRuntimeConfiguration(configuration, calendar), Is.True,
+            "Rebinding is idempotent only for the exact same configuration and calendar instances.");
+        Assert.That(state.TryBindRuntimeConfiguration(configuration,
+            new SimulationCalendar(new CalendarDefinition(1, 1, 1))), Is.False);
+
+        Assert.That(state.TryRecordCompletedCore(), Is.True);
+        OwnerSectionCensusSnapshot[] sections = CreateCompleteSnapshot();
+        Assert.That(state.TryCreateCompletedAdvanceToken(
+            admission, configuration, calendar, SimulationRuntimeCompositionProfile.Standard,
+            WorldId.Parse(world.Value), 4L, 9L, sections, out _), Is.False,
+            "A selected runtime must not publish a token for a host-substituted WorldId instance.");
+        Assert.That(state.TryCreateCompletedAdvanceToken(
+            admission, configuration, calendar, SimulationRuntimeCompositionProfile.Standard,
+            world, 3L, 9L, sections, out _), Is.False,
+            "A selected runtime must not publish a token for a day other than its owned clock.");
+        Assert.That(state.TryCreateCompletedAdvanceToken(
+            admission, configuration, calendar, SimulationRuntimeCompositionProfile.Standard,
+            world, 4L, 9L, sections, out DailyCaptureEligibilityToken token), Is.True);
+        Assert.That(token.WorldId, Is.SameAs(world));
+        Assert.That(token.AbsoluteDay, Is.EqualTo(clock.AbsoluteDay));
+    }
+
+    [Test]
     public void CompletedCoreSequencePreflightAndIncrementRejectOverflow()
     {
         DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();

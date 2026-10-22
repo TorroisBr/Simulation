@@ -40,6 +40,7 @@
     <Compile Include="DailyV1SelectedOpenMarketPurchaseTests.cs" />
     <Compile Include="DailyV1SelectedCrossCityBuyExecutionTests.cs" />
     <Compile Include="SpatialNetworkOwnerTests.cs" Link="Geography/SpatialNetworkOwnerTests.cs" />
+    <Compile Include="LegacySpatialAnchorBindingStoreCoreTests.cs" Link="Geography/LegacySpatialAnchorBindingStoreCoreTests.cs" />
     <Compile Include="DailyV1SelectedRuntimeOwnerGraphTests.cs" />
     <Compile Include="DailyV1DecisionRecordsTests.cs" />
     <Compile Include="DailyV1ActorChoiceStoreTests.cs" />
@@ -50,6 +51,8 @@
     <Compile Include="DailyV1SelectedDemographyStageTests.cs" />
     <Compile Include="DailyV1SelectedMerchantTradeStateOperationTests.cs" />
     <Compile Include="DailyV1CommercialKnowledgeSharingStageTests.cs" />
+    <Compile Include="DailyV1SelectedLocalKnowledgeOwnerBindingTests.cs" />
+    <Compile Include="ExpeditionStoreCoreTests.cs" />
     <Compile Include="DailyV1RuntimeAdvanceStageTests.cs" />
     <Compile Include="DailyV1InventoryMarketOwnerTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/DeterministicRandomCoreTests.cs" Link="Determinism/DeterministicRandomCoreTests.cs" />
@@ -87,6 +90,7 @@
     <Compile Include="ActionExecutionTests.cs" Link="Application/ActionExecutionTests.cs" />
       <Compile Include="DailyV1ApplicationHostTests.cs" Link="Application/DailyV1ApplicationHostTests.cs" />
     <Compile Include="DailyV1ApplicationSessionGateTests.cs" Link="Application/DailyV1ApplicationSessionGateTests.cs" />
+    <Compile Include="DailyV1GenesisComposerTests.cs" Link="Application/DailyV1GenesisComposerTests.cs" />
       <Compile Include="DailyV1DotNetHostEnvironmentIdentityFactoryTests.cs" Link="Application/DailyV1DotNetHostEnvironmentIdentityFactoryTests.cs" />
       <Compile Include="SimulationRecordSequenceCoreTests.cs" Link="Persistence/SimulationRecordSequenceCoreTests.cs" />
       <Compile Include="RuntimeIdAllocatorCoreTests.cs" Link="Identity/RuntimeIdAllocatorCoreTests.cs" />

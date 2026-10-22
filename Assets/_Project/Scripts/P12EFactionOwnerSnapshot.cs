@@ -127,7 +127,7 @@ internal sealed class P12EFactionOwnerSnapshot
             || owner.Revision != revision || owner.Count != factionCount || owner.AffiliationCount != affiliationCount
             || !Matches(vector, FactionStoreCensusProvider.FactionsSectionId, owner, factionCount, revision)
             || !Matches(vector, FactionStoreCensusProvider.AffiliationsSectionId, owner, affiliationCount, revision)
-            || !runtime.TryValidateCompletedDailyCaptureToken(token, out _))
+            || !runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
         {
             snapshot = null;
             if (failure.Code == P12EFactionSnapshotFailureCode.None) failure = P12EFactionSnapshotFailure.Create(

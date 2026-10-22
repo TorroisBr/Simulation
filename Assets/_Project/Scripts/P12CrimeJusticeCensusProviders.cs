@@ -69,6 +69,8 @@ public static class P12CrimeJusticeCensusProvider
         private readonly JusticeSystem owner;
         private readonly Func<NpcRuntime, bool> isNpcInstalled;
         private readonly Func<CityRuntime, bool> isCityInstalled;
+        private readonly Func<string, bool> isNpcRuntimeIdInstalled;
+        private readonly Func<string, bool> isCityRuntimeIdInstalled;
 
         public JusticeRecordsSectionProvider(
             JusticeSystem owner,
@@ -80,16 +82,33 @@ public static class P12CrimeJusticeCensusProvider
             this.isCityInstalled = isCityInstalled ?? throw new ArgumentNullException(nameof(isCityInstalled));
         }
 
+        public JusticeRecordsSectionProvider(
+            JusticeSystem owner,
+            Func<string, bool> isNpcRuntimeIdInstalled,
+            Func<string, bool> isCityRuntimeIdInstalled)
+        {
+            this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            isNpcInstalled = null;
+            isCityInstalled = null;
+            this.isNpcRuntimeIdInstalled = isNpcRuntimeIdInstalled
+                ?? throw new ArgumentNullException(nameof(isNpcRuntimeIdInstalled));
+            this.isCityRuntimeIdInstalled = isCityRuntimeIdInstalled
+                ?? throw new ArgumentNullException(nameof(isCityRuntimeIdInstalled));
+        }
+
         public JusticeSystem JusticeOwner => owner;
 
         public OwnerSectionCensusWitness GetCurrentCensus()
         {
-            if (!owner.TryReadP12CrimeJusticeCensus(
-                    isNpcInstalled,
-                    isCityInstalled,
-                    out int wantedCount,
-                    out int sentenceCount,
-                    out long revision))
+            int wantedCount;
+            int sentenceCount;
+            long revision;
+            bool captured = isNpcRuntimeIdInstalled != null
+                ? owner.TryReadP12CrimeJusticeCoreCensus(isNpcRuntimeIdInstalled,
+                    isCityRuntimeIdInstalled, out wantedCount, out sentenceCount, out revision)
+                : owner.TryReadP12CrimeJusticeCensus(isNpcInstalled,
+                    isCityInstalled, out wantedCount, out sentenceCount, out revision);
+            if (!captured)
                 throw new InvalidOperationException("Justice rows do not resolve to the current selected owners.");
 
             int cardinality = checked(wantedCount + sentenceCount);

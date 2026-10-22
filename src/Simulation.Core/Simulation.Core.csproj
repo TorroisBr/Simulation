@@ -15,6 +15,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/WorldCommandValues.cs" Link="WorldCommandValues.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/DailyV1DecisionRecords.cs" Link="DailyV1DecisionRecords.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/DailyV1DecisionRecordOperation.cs" Link="DailyV1DecisionRecordOperation.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/IOwnerSectionCensusProvider.cs" Link="IOwnerSectionCensusProvider.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/MutationStatusBinding.cs" Link="MutationStatusBinding.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Mutation/AuthoritativeMutationGuard.cs" Link="Mutation/AuthoritativeMutationGuard.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionContracts.cs" Link="Institution/InstitutionContracts.cs" />
@@ -48,8 +49,12 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialRuntimeValues.cs" Link="Geography/SpatialRuntimeValues.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialNetworkOwner.cs" Link="Geography/SpatialNetworkOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialGeography.cs" Link="Geography/SpatialGeography.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialAuthority.cs" Link="Geography/SpatialAuthority.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialPassageAuthority.cs" Link="Geography/SpatialPassageAuthority.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/LegacySpatialAnchorBindingStore.cs" Link="Geography/LegacySpatialAnchorBindingStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationHost.cs" Link="Application/DailyV1ApplicationHost.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationSessionGate.cs" Link="Application/DailyV1ApplicationSessionGate.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1GenesisComposer.cs" Link="Application/DailyV1GenesisComposer.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedOwnerSectionCensusContract.cs" Link="Application/DailyV1SelectedOwnerSectionCensusContract.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/ActorChoiceContracts.cs" Link="Application/ActorChoiceContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/ActorChoiceStore.cs" Link="Application/ActorChoiceStore.cs" />
@@ -103,6 +108,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedTravelTransitionPlan.cs" Link="City/DailyV1SelectedTravelTransitionPlan.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedSoloTravelExecution.cs" Link="City/DailyV1SelectedSoloTravelExecution.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedRuntimeOwnerGraph.cs" Link="Application/DailyV1SelectedRuntimeOwnerGraph.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedLocalKnowledgeOwnerBinding.cs" Link="Application/DailyV1SelectedLocalKnowledgeOwnerBinding.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedActionExecutionStage.cs" Link="Application/DailyV1SelectedActionExecutionStage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedCrimeActionExecutionStage.cs" Link="Application/DailyV1SelectedCrimeActionExecutionStage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedStealActionExecutionStage.cs" Link="Application/DailyV1SelectedStealActionExecutionStage.cs" />
@@ -117,6 +123,10 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonNaturalMortalityQuery.cs" Link="Person/PersonNaturalMortalityQuery.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Temporal/LogicalTimeline.cs" Link="Temporal/LogicalTimeline.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Temporal/P18DDailyBoundaryOwner.cs" Link="Temporal/P18DDailyBoundaryOwner.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/ExpeditionRuntime.cs" Link="Expedition/ExpeditionRuntime.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/ExpeditionStore.cs" Link="Expedition/ExpeditionStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/ExpeditionCensusProvider.cs" Link="Expedition/ExpeditionCensusProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/P12FExpeditionOwnerSnapshot.cs" Link="Expedition/P12FExpeditionOwnerSnapshot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/AggregateDemographyPolicyContracts.cs" Link="Population/AggregateDemographyPolicyContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/DemographicSampling.cs" Link="Population/DemographicSampling.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/DeterministicAggregateDemographyProvider.cs" Link="Population/DeterministicAggregateDemographyProvider.cs" />

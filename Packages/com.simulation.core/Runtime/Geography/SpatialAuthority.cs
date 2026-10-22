@@ -2,6 +2,19 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
+public enum LocalTopologyOwnerKind
+{
+    City,
+    ExplorableSite
+}
+
+/// <summary>Stable Core-facing identity projection for a local-topology owner.</summary>
+public interface ISpatialTopologyOwnerIdentity
+{
+    LocalTopologyOwnerKind OwnerKind { get; }
+    string OwnerRuntimeId { get; }
+}
+
 public enum SpatialReferenceKind
 {
     Hex = 0,
@@ -135,7 +148,7 @@ public sealed class SpatialReference : IEquatable<SpatialReference>
     }
 
     public static SpatialReference ForSubLocation(
-        LocalTopologyOwnerReference topologyOwner,
+        ISpatialTopologyOwnerIdentity topologyOwner,
         string subLocationRuntimeId)
     {
         if (topologyOwner == null)
@@ -192,32 +205,6 @@ public sealed class SpatialLocalTopologyBinding
         OwnerKind = ownerKind;
         OwnerRuntimeId = ownerRuntimeId;
         LocationId = locationId ?? throw new ArgumentNullException(nameof(locationId));
-    }
-}
-
-public sealed class SpatialResolution
-{
-    public SpatialReference Reference { get; }
-    public HexRecord Hex { get; }
-    public LocationRecord Location { get; }
-    public CrossingRecord Crossing { get; }
-    public LocalTopologyRuntime LocalTopology { get; }
-    public LocalPlaceRuntime SubLocation { get; }
-
-    internal SpatialResolution(
-        SpatialReference reference,
-        HexRecord hex,
-        LocationRecord location,
-        CrossingRecord crossing = null,
-        LocalTopologyRuntime localTopology = null,
-        LocalPlaceRuntime subLocation = null)
-    {
-        Reference = reference ?? throw new ArgumentNullException(nameof(reference));
-        Hex = hex;
-        Location = location;
-        Crossing = crossing;
-        LocalTopology = localTopology;
-        SubLocation = subLocation;
     }
 }
 
@@ -311,13 +298,33 @@ public sealed class SpatialAuthorityInvariantReport
     }
 }
 
+internal sealed class SpatialAuthorityResolution
+{
+    internal SpatialReference Reference { get; }
+    internal HexRecord Hex { get; }
+    internal LocationRecord Location { get; }
+    internal CrossingRecord Crossing { get; }
+
+    internal SpatialAuthorityResolution(
+        SpatialReference reference,
+        HexRecord hex,
+        LocationRecord location,
+        CrossingRecord crossing = null)
+    {
+        Reference = reference ?? throw new ArgumentNullException(nameof(reference));
+        Hex = hex;
+        Location = location;
+        Crossing = crossing;
+    }
+}
+
 /// <summary>
 /// Authoritative world-bound Hex/Location identity, finite factual geography,
 /// and the smallest explicit bridge from existing LocalTopology/SubLocation
 /// identities to a Location. It does not provide grid generation, traversal,
 /// or travel time.
 /// </summary>
-public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
+public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable, ISpatialLocationLookup
 {
     private static readonly HexCoordinate[] NeighborDeltas =
     {
@@ -360,6 +367,7 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
     public SpatialWorldScaleContext ScaleContext => scaleContext;
     public string CoordinateConventionVersion => coordinateConventionVersion;
     public string CoordinateCanonicalOrder => coordinateCanonicalOrder;
+    internal bool CanMutateSpatialAuthority => mutationGuardBinding.CanMutate;
 
     public IReadOnlyList<HexRecord> Hexes => SortedHexes();
     public IReadOnlyList<LocationRecord> Locations => SortedLocations();
@@ -678,25 +686,9 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
         return true;
     }
 
-    public bool TryBindLocalTopology(
-        LocalTopologyRuntime topology,
-        LocationId locationId,
-        out SpatialAuthorityFailure failure)
-    {
-        return TryBindLocalTopologyCore(topology, locationId, null, out failure);
-    }
-
-    internal bool TryBindLocalTopologyForP10Genesis(
-        LocalTopologyRuntime topology,
-        LocationId locationId,
-        Action<string> completedMutation,
-        out SpatialAuthorityFailure failure)
-    {
-        return TryBindLocalTopologyCore(topology, locationId, completedMutation, out failure);
-    }
-
-    private bool TryBindLocalTopologyCore(
-        LocalTopologyRuntime topology,
+    internal bool TryBindTopologyOwner(
+        LocalTopologyOwnerKind ownerKind,
+        string ownerRuntimeId,
         LocationId locationId,
         Action<string> completedMutation,
         out SpatialAuthorityFailure failure)
@@ -707,16 +699,10 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             return Fail(SpatialAuthorityFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
         }
 
-        if (topology == null || topology.Owner == null || locationId == null)
+        if (!Enum.IsDefined(typeof(LocalTopologyOwnerKind), ownerKind)
+            || string.IsNullOrWhiteSpace(ownerRuntimeId) || locationId == null)
         {
-            return Fail(SpatialAuthorityFailureCode.InvalidTopologyBinding, "A topology binding requires a topology, owner, and LocationId.", out failure);
-        }
-
-        if (topology.Owner.SemanticOwner != null
-            && topology.Owner.SemanticOwner.LocationId != locationId)
-        {
-            return Fail(SpatialAuthorityFailureCode.InvalidTopologyBinding,
-                "The semantic topology owner LocationId must match its P8 spatial binding.", out failure);
+            return Fail(SpatialAuthorityFailureCode.InvalidTopologyBinding, "A topology binding requires an owner identity and LocationId.", out failure);
         }
 
         if (locationsById.TryGetValue(locationId.Value, out LocationRecord location) == false
@@ -725,12 +711,7 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             return Fail(SpatialAuthorityFailureCode.TopologyLocationNotRegistered, "The topology binding Location is not registered with a valid anchor.", out failure);
         }
 
-        if (topology.TryValidate(out string topologyDiagnostic) == false)
-        {
-            return Fail(SpatialAuthorityFailureCode.InvalidTopologyBinding, topologyDiagnostic, out failure);
-        }
-
-        string key = TopologyKey(topology.Owner.OwnerKind, topology.Owner.OwnerRuntimeId);
+        string key = TopologyKey(ownerKind, ownerRuntimeId);
         if (topologyBindingsByKey.ContainsKey(key))
         {
             return Fail(SpatialAuthorityFailureCode.DuplicateTopologyBinding, "The local topology owner is already spatially bound.", out failure);
@@ -747,7 +728,7 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
         {
             topologyBindingsByKey.Add(
                 key,
-                new SpatialLocalTopologyBinding(topology.Owner.OwnerKind, topology.Owner.OwnerRuntimeId, locationId));
+                new SpatialLocalTopologyBinding(ownerKind, ownerRuntimeId, locationId));
             bindingAdded = true;
             completedMutation?.Invoke("SpatialAuthority.TopologyBinding.Index");
 
@@ -764,11 +745,12 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
         }
     }
 
-    internal void RollbackGenesisTopologyBinding(LocalTopologyOwnerReference owner, LocationId locationId)
+    internal void RollbackGenesisTopologyBinding(LocalTopologyOwnerKind ownerKind, string ownerRuntimeId, LocationId locationId)
     {
-        if (owner == null || locationId == null || revision <= 0)
+        if (!Enum.IsDefined(typeof(LocalTopologyOwnerKind), ownerKind)
+            || string.IsNullOrWhiteSpace(ownerRuntimeId) || locationId == null || revision <= 0)
             throw new InvalidOperationException("Cannot roll back the P10-B spatial topology binding.");
-        string key = TopologyKey(owner.OwnerKind, owner.OwnerRuntimeId);
+        string key = TopologyKey(ownerKind, ownerRuntimeId);
         if (!topologyBindingsByKey.TryGetValue(key, out SpatialLocalTopologyBinding binding)
             || binding.LocationId != locationId)
             throw new InvalidOperationException("Cannot roll back the P10-B spatial topology binding because it changed.");
@@ -806,10 +788,9 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
         return false;
     }
 
-    public bool TryResolve(
+    internal bool TryResolveReference(
         SpatialReference reference,
-        LocalTopologyStore localTopologyStore,
-        out SpatialResolution resolution,
+        out SpatialAuthorityResolution resolution,
         out SpatialAuthorityFailure failure)
     {
         resolution = null;
@@ -819,6 +800,12 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             return Fail(SpatialAuthorityFailureCode.InvalidSpatialReference, "SpatialReference is invalid.", out failure);
         }
 
+        if (reference.Kind == SpatialReferenceKind.SubLocation)
+        {
+            return Fail(SpatialAuthorityFailureCode.TopologyNotRegistered,
+                "SubLocation resolution requires the Unity topology projection adapter.", out failure);
+        }
+
         if (reference.Kind == SpatialReferenceKind.Hex)
         {
             if (TryGet(reference.HexId, out HexRecord hex) == false)
@@ -826,7 +813,7 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
                 return Fail(SpatialAuthorityFailureCode.HexNotRegistered, "SpatialReference Hex is not registered.", out failure);
             }
 
-            resolution = new SpatialResolution(reference, hex, null);
+            resolution = new SpatialAuthorityResolution(reference, hex, null);
             return true;
         }
 
@@ -838,7 +825,7 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             }
 
             TryGet(location.AnchorHexId, out HexRecord anchorHex);
-            resolution = new SpatialResolution(reference, anchorHex, location);
+            resolution = new SpatialAuthorityResolution(reference, anchorHex, location);
             return true;
         }
 
@@ -850,53 +837,11 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             }
 
             TryGet(crossing.AnchorHexId, out HexRecord crossingAnchor);
-            resolution = new SpatialResolution(reference, crossingAnchor, null, crossing);
+            resolution = new SpatialAuthorityResolution(reference, crossingAnchor, null, crossing);
             return true;
         }
 
-        if (reference.TopologyOwnerKind.HasValue == false
-            || string.IsNullOrWhiteSpace(reference.TopologyOwnerRuntimeId)
-            || string.IsNullOrWhiteSpace(reference.SubLocationRuntimeId))
-        {
-            return Fail(SpatialAuthorityFailureCode.InvalidSpatialReference, "SubLocation SpatialReference is incomplete.", out failure);
-        }
-
-        if (TryGetTopologyBinding(
-                reference.TopologyOwnerKind.Value,
-                reference.TopologyOwnerRuntimeId,
-                out SpatialLocalTopologyBinding binding) == false)
-        {
-            return Fail(SpatialAuthorityFailureCode.TopologyNotRegistered, "SubLocation topology owner has no spatial binding.", out failure);
-        }
-
-        if (localTopologyStore == null
-            || localTopologyStore.TryGetTopologyForOwner(reference.TopologyOwnerRuntimeId, out LocalTopologyRuntime topology) == false
-            || topology.Owner.OwnerKind != reference.TopologyOwnerKind.Value)
-        {
-            return Fail(SpatialAuthorityFailureCode.TopologyNotRegistered, "SubLocation topology is absent from the supplied LocalTopologyStore.", out failure);
-        }
-
-        if (topology.Owner.SemanticOwner != null
-            && topology.Owner.SemanticOwner.LocationId != binding.LocationId)
-        {
-            return Fail(SpatialAuthorityFailureCode.InvalidTopologyBinding,
-                "SubLocation semantic owner does not match its canonical P8 Location binding.", out failure);
-        }
-
-        if (topology.TryValidate(out string topologyDiagnostic) == false
-            || topology.TryGetPlace(reference.SubLocationRuntimeId, out LocalPlaceRuntime place) == false)
-        {
-            return Fail(SpatialAuthorityFailureCode.SubLocationNotRegistered, topologyDiagnostic ?? "SubLocation is absent from its owning topology.", out failure);
-        }
-
-        if (TryGet(binding.LocationId, out LocationRecord boundLocation) == false
-            || TryGet(boundLocation.AnchorHexId, out HexRecord boundHex) == false)
-        {
-            return Fail(SpatialAuthorityFailureCode.LocationNotRegistered, "SubLocation binding resolves to an absent Location or Hex.", out failure);
-        }
-
-        resolution = new SpatialResolution(reference, boundHex, boundLocation, localTopology: topology, subLocation: place);
-        return true;
+        return Fail(SpatialAuthorityFailureCode.InvalidSpatialReference, "SpatialReference kind is unsupported.", out failure);
     }
 
     internal SpatialAuthorityStore Clone()
@@ -1112,55 +1057,6 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
         {
             SpatialAuthorityInvariantReport passageReport = PassageAuthority.ValidateInvariants();
             violations.AddRange(passageReport.Violations);
-        }
-
-        return new SpatialAuthorityInvariantReport(violations);
-    }
-
-    public SpatialAuthorityInvariantReport ValidateInvariants(LocalTopologyStore localTopologyStore)
-    {
-        SpatialAuthorityInvariantReport baseReport = ValidateInvariants();
-        List<string> violations = new List<string>(baseReport.Violations);
-        if (topologyBindingsByKey.Count == 0)
-        {
-            return new SpatialAuthorityInvariantReport(violations);
-        }
-
-        if (localTopologyStore == null)
-        {
-            violations.Add("Local topology bindings require a LocalTopologyStore for owner validation.");
-            return new SpatialAuthorityInvariantReport(violations);
-        }
-
-        foreach (SpatialLocalTopologyBinding binding in topologyBindingsByKey.Values)
-        {
-            if (binding == null)
-            {
-                continue;
-            }
-
-            if (localTopologyStore.TryGetTopologyForOwner(binding.OwnerRuntimeId, out LocalTopologyRuntime topology) == false)
-            {
-                violations.Add("Spatial topology binding owner is absent from LocalTopologyStore: " + binding.StableKey + ".");
-                continue;
-            }
-
-            if (topology.Owner == null || topology.Owner.OwnerKind != binding.OwnerKind)
-            {
-                violations.Add("Spatial topology binding owner kind does not match LocalTopologyStore: " + binding.StableKey + ".");
-                continue;
-            }
-
-            if (topology.Owner.SemanticOwner != null
-                && topology.Owner.SemanticOwner.LocationId != binding.LocationId)
-            {
-                violations.Add("Spatial topology binding LocationId does not match the semantic owner: " + binding.StableKey + ".");
-            }
-
-            if (topology.TryValidate(out string diagnostic) == false)
-            {
-                violations.Add("Spatial topology binding owner is invalid: " + binding.StableKey + " (" + diagnostic + ").");
-            }
         }
 
         return new SpatialAuthorityInvariantReport(violations);

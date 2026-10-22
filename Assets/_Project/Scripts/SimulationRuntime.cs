@@ -1786,13 +1786,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
     private readonly AuthoritativeMutationGuard mutationGuard = new AuthoritativeMutationGuard();
     private bool coreMutationGuardAuthoritiesBound;
-    private readonly DailyV1ExecutionBoundaryState dailyExecutionBoundary = new DailyV1ExecutionBoundaryState();
+    private readonly DailyV1ExecutionBoundaryState dailyExecutionBoundary;
     private Func<DailyV1SelectedRuntimeOwnerGraph> selectedRuntimeOwnerGraphProvider;
     private bool advanceLeaseHeld => dailyExecutionBoundary.AdvanceLeaseHeld;
     private long completedDailyCoreSequence => dailyExecutionBoundary.CompletedCoreSequence;
     private DailyCaptureEligibilityToken currentDailyCaptureToken => dailyExecutionBoundary.CurrentCaptureToken;
-    private readonly SimulationRuntimeAdmissionContext runtimeAdmissionContext;
-    private readonly SimulationRuntimeCompositionProfile compositionProfile;
+    private SimulationRuntimeAdmissionContext runtimeAdmissionContext => dailyExecutionBoundary.AdmissionContext;
+    private SimulationRuntimeCompositionProfile compositionProfile => dailyExecutionBoundary.CompositionProfile;
+    private string npcRosterCensusProtocolInitializationFailure;
     private readonly int p16AOwnerThreadId;
     private readonly P17AScenarioAuthorityCapability p17AScenarioAuthorityCapability;
     private readonly long initialAbsoluteDay;
@@ -1806,14 +1807,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     private ActorChoiceP11CensusProvider actorChoiceP11CensusProvider;
     private readonly FactualReadCoordinator factualReadCoordinator;
     private volatile bool factualReadWorldPublished;
-    private readonly SimulationTime simulationTime;
+    private SimulationTime simulationTime => dailyExecutionBoundary.SimulationTime;
     private readonly List<CityRuntime> cities;
     private readonly IReadOnlyList<CityRuntime> cityRuntimeSnapshot;
     private readonly List<NpcRuntime> npcRuntimes;
     private readonly IReadOnlyList<NpcRuntime> npcRuntimeSnapshot;
     private readonly Dictionary<string, NpcRuntime> npcRegistryById;
-    private readonly EffectiveSimulationConfiguration configuration;
-    private readonly SimulationCalendar calendar;
+    private EffectiveSimulationConfiguration configuration => dailyExecutionBoundary.ConfigurationIdentity;
+    private SimulationCalendar calendar => dailyExecutionBoundary.CalendarIdentity;
     private readonly IPersonNaturalMortalitySampleProvider naturalMortalitySamples;
     private readonly IAggregateDemographyProvider aggregateDemographyProvider;
     private DailyDemographyReport lastDailyDemographyReport;
@@ -1917,6 +1918,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         : simulationTime.AbsoluteDay;
     public IReadOnlyList<CityRuntime> Cities => cityRuntimeSnapshot;
     internal DailyV1SelectedRuntimeOwnerGraph SelectedRuntimeOwnerGraph => dailyExecutionBoundary.SelectedRuntimeOwnerGraph;
+    internal DailyV1ExecutionBoundaryState ExecutionBoundaryState => dailyExecutionBoundary;
     public EffectiveSimulationConfiguration Configuration => configuration;
     public SimulationCalendar Calendar => calendar;
     public DailyDemographyReport LastDailyDemographyReport => lastDailyDemographyReport;
@@ -2090,7 +2092,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     public PlaceContentStore PlaceContentStore => placeContentStore;
     public CrimeSocialAppraisalWorldState CrimeSocialAppraisal => crimeSocialAppraisalWorldState;
     /// <summary>The causal world identity retained by a published composition, when supplied.</summary>
-    public WorldId WorldId { get; }
+    public WorldId WorldId => dailyExecutionBoundary.WorldId;
 
     public SimulationRuntime(
         SimulationTime simulationTime,
@@ -2164,9 +2166,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         bool requireP12RuntimeIdentitySpatialCensusOwners = false,
         CrimeSocialAppraisalWorldState p12CrimeSocialAppraisalWorldState = null)
     {
-        WorldId = worldId;
         if (!Enum.IsDefined(typeof(SimulationRuntimeCompositionProfile), compositionProfile))
             throw new ArgumentOutOfRangeException(nameof(compositionProfile));
+        dailyExecutionBoundary = new DailyV1ExecutionBoundaryState(
+            simulationTime,
+            runtimeAdmissionContext,
+            compositionProfile,
+            worldId);
         bool hasP16AProfileState = armedForceSpatialStateStore?.P16Profile != null;
         bool p16AComposition = compositionProfile == SimulationRuntimeCompositionProfile.P16AOneHopMilitary;
         bool p17AComposition = compositionProfile == SimulationRuntimeCompositionProfile.P17AWithdrawalWar;
@@ -2280,7 +2286,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 nameof(requireP12RuntimeIdentitySpatialCensusOwners));
         }
 
-        this.runtimeAdmissionContext = runtimeAdmissionContext;
         this.runtimeIdAllocator = runtimeIdAllocator;
         this.economyTransactionService = economyTransactionService;
         this.requireP12ReceiptCensusOwners = requireP12ReceiptCensusOwners;
@@ -2322,7 +2327,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             ? new List<NpcRuntime>(npcRuntimes)
             : new List<NpcRuntime>();
 
-        this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
         initialAbsoluteDay = this.simulationTime.AbsoluteDay;
         if (!SimulationTimeOwnerBridge.CanBindMutationStatus(this.simulationTime, mutationGuard))
         {
@@ -2553,16 +2557,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             resolvedWarStore,
             resolvedSpatialAuthorityStore);
 
-        this.configuration = resolvedConfiguration;
-        this.calendar = new SimulationCalendar(
+        SimulationCalendar resolvedCalendar = new SimulationCalendar(
             calendarDefinition ?? CalendarDefinition.CreateDefault());
+        if (!dailyExecutionBoundary.TryBindRuntimeConfiguration(
+                resolvedConfiguration, resolvedCalendar))
+            throw new ArgumentException(
+                "The Core runtime identity could not bind its exact effective configuration and calendar.",
+                nameof(configuration));
         this.naturalMortalitySamples = naturalMortalitySamples;
         this.aggregateDemographyProvider = aggregateDemographyProvider;
         this.personStore = resolvedPersonStore;
         this.personStoreCensusProviders = PersonStoreCensusProvider.CreateProviders(resolvedPersonStore);
         this.actorChoiceStore = resolvedActorChoiceStore;
         this.spatialAuthorityStore = resolvedSpatialAuthorityStore;
-        this.compositionProfile = compositionProfile;
         this.structureStore = resolvedStructureStore;
         this.legacySpatialAnchorBindingStore = resolvedLegacySpatialAnchorBindingStore;
         this.personSpatialPositionStore = resolvedPersonSpatialPositionStore;
@@ -2757,6 +2764,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 this.justiceSystem?.CoreOwner,
                 this.travelPartySystem?.Store ?? travelSystem?.SelectedTravelPartyStore,
                 this.personStore);
+        if (selectedOwnerGraph != null
+            && this.scheduledDirectiveSystem?.Store != null
+            && !selectedOwnerGraph.TryBindScheduledDirectives(this.scheduledDirectiveSystem.Store))
+            throw new InvalidOperationException(
+                "The selected runtime owner graph could not bind the exact ScheduledDirectiveStore.");
+        if (selectedOwnerGraph != null && this.expeditionSystem != null
+            && !selectedOwnerGraph.TryBindExpeditionStore(this.expeditionSystem.Store))
+            throw new InvalidOperationException("The selected runtime owner graph could not bind the exact ExpeditionStore.");
         if (!dailyExecutionBoundary.TryBindSelectedRuntimeOwnerGraph(selectedOwnerGraph))
             throw new InvalidOperationException("The selected owner graph could not be bound to this runtime boundary.");
         selectedRuntimeOwnerGraphProvider = () => dailyExecutionBoundary.SelectedRuntimeOwnerGraph;
@@ -2810,13 +2825,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         FactualReadAdmission factualReadAdmission = new FactualReadAdmission(this);
         if (runtimeAdmissionContext != null)
         {
-            if (npcRosterCensusProtocol == null
-                || !SimulationTimeOwnerBridge.TryBindRuntimeAdvanceDispatcher(
+            if (npcRosterCensusProtocol == null)
+            {
+                throw new InvalidOperationException(
+                    "The P12 runtime-admission adapter could not bind because its census protocol failed to initialize: "
+                    + (npcRosterCensusProtocolInitializationFailure ?? "no diagnostic was recorded") + ".");
+            }
+            // A P18-D timeline is the admitted clock authority. Its projected
+            // SimulationTime intentionally rejects independent runtime-clock
+            // dispatch, while DailyV1RuntimeAdvanceStage advances the timeline
+            // boundary directly. Bind the legacy runtime dispatcher only when
+            // no timeline projection owns this clock.
+            if (p18dTimeline == null
+                && !SimulationTimeOwnerBridge.TryBindRuntimeAdvanceDispatcher(
                     simulationTime, TryAdvanceFromRuntimeOwnedClock))
             {
-                npcRosterCensusProtocol?.FaultClosed();
+                npcRosterCensusProtocol.FaultClosed();
                 throw new InvalidOperationException(
-                    "The P12 runtime-admission adapter could not bind to its initialized census protocol and clock.");
+                    "The P12 runtime-admission adapter could not bind to the SimulationTime advance dispatcher.");
             }
 
             if (!factualReadAdmission.TryBindStores(this.factionStore, this.personStore))
@@ -3395,8 +3421,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
     private void InitializeNpcRosterCensusProtocol()
     {
-        ContinuationCensusProtocol protocol = new ContinuationCensusProtocol();
+        npcRosterCensusProtocolInitializationFailure = null;
+        ContinuationCensusProtocol protocol = runtimeAdmissionContext != null
+            ? new ContinuationCensusProtocol(dailyExecutionBoundary)
+            : new ContinuationCensusProtocol();
         npcRosterCensusProtocol = protocol;
+        bool RecordRegistration(bool registered, string registration)
+        {
+            if (!registered && npcRosterCensusProtocolInitializationFailure == null)
+                npcRosterCensusProtocolInitializationFailure = registration;
+            return registered;
+        }
 
         OwnerSectionContract personMembership = new OwnerSectionContract(
             PersonMembershipCensusProvider.SectionId,
@@ -3406,62 +3441,63 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             PersonMaterializationBindingCensusProvider.SectionId,
             PersonMaterializationBindingCensusProvider.SchemaVersion,
             OwnerSectionRole.Required);
-        if (!protocol.RegisterExpectedSection(personMembership, out _)
-            || !protocol.RegisterExpectedSection(personBindings, out _)
-            || !protocol.RegisterCensusProvider(
+        if (!RecordRegistration(protocol.RegisterExpectedSection(personMembership, out _), "PersonMembership section")
+            || !RecordRegistration(protocol.RegisterExpectedSection(personBindings, out _), "PersonMaterializationBinding section")
+            || !RecordRegistration(protocol.RegisterCensusProvider(
                 PersonMembershipCensusProvider.SectionId,
                 personStoreCensusProviders[0],
-                out _)
-            || !protocol.RegisterCensusProvider(
+                out _), "PersonMembership provider")
+            || !RecordRegistration(protocol.RegisterCensusProvider(
                 PersonMaterializationBindingCensusProvider.SectionId,
                 personStoreCensusProviders[1],
-                out _)
-            || !protocol.RegisterSpatialKnowledgeRosterFamily(npcRuntimeSnapshot, out _)
-            || !protocol.RegisterNpcTravelStateRosterFamily(npcRuntimeSnapshot, out _)
-            || !protocol.RegisterInventoryRosterFamily(npcRuntimeSnapshot, out _)
-            || !protocol.RegisterMoneyAccountRosterFamily(npcRuntimeSnapshot, out _)
-            || !protocol.RegisterNpcKnowledgeRosterFamily(npcRuntimeSnapshot, out _)
-            || !protocol.RegisterNpcPlanRosterFamily(npcRuntimeSnapshot, out _)
+                out _), "PersonMaterializationBinding provider")
+            || !RecordRegistration(protocol.RegisterSpatialKnowledgeRosterFamily(npcRuntimeSnapshot, out _), "SpatialKnowledge roster family")
+            || !RecordRegistration(protocol.RegisterNpcTravelStateRosterFamily(npcRuntimeSnapshot, out _), "NpcTravelState roster family")
+            || !RecordRegistration(protocol.RegisterInventoryRosterFamily(npcRuntimeSnapshot, out _), "Inventory roster family")
+            || !RecordRegistration(protocol.RegisterMoneyAccountRosterFamily(npcRuntimeSnapshot, out _), "MoneyAccount roster family")
+            || !RecordRegistration(protocol.RegisterNpcKnowledgeRosterFamily(npcRuntimeSnapshot, out _), "NpcKnowledge roster family")
+            || !RecordRegistration(protocol.RegisterNpcPlanRosterFamily(npcRuntimeSnapshot, out _), "NpcPlan roster family")
             || (runtimeAdmissionContext != null
-                && !protocol.RegisterNpcReceiptOwnerRosterFamily(npcRuntimeSnapshot, out _))
+                && !RecordRegistration(protocol.RegisterNpcReceiptOwnerRosterFamily(npcRuntimeSnapshot, out _), "NpcReceipt owner roster family"))
             || (runtimeAdmissionContext != null
-                && !TryRegisterSimulationRecordSequenceCensusProvider(protocol))
+                && !RecordRegistration(TryRegisterSimulationRecordSequenceCensusProvider(protocol), "SimulationRecordSequence provider"))
             || (runtimeAdmissionContext != null && runtimeIdAllocator != null
-                && !TryRegisterRuntimeIdAllocatorEventCounterCensusProvider(protocol))
+                && !RecordRegistration(TryRegisterRuntimeIdAllocatorEventCounterCensusProvider(protocol), "RuntimeIdAllocator event counter provider"))
             || (runtimeAdmissionContext != null && runtimeIdAllocator != null
-                && !TryRegisterRuntimeIdAllocatorDecisionCounterCensusProvider(protocol))
+                && !RecordRegistration(TryRegisterRuntimeIdAllocatorDecisionCounterCensusProvider(protocol), "RuntimeIdAllocator decision counter provider"))
             || (runtimeAdmissionContext != null && runtimeIdAllocator != null
                 && travelPartySystem != null
-                && !TryRegisterRuntimeIdAllocatorTravelPartyCounterCensusProvider(protocol))
+                && !RecordRegistration(TryRegisterRuntimeIdAllocatorTravelPartyCounterCensusProvider(protocol), "RuntimeIdAllocator TravelParty counter provider"))
             || (runtimeAdmissionContext != null && scheduledDirectiveSystem != null
-                && !TryRegisterScheduledDirectiveCensusProvider(protocol))
+                && !RecordRegistration(TryRegisterScheduledDirectiveCensusProvider(protocol), "ScheduledDirective provider"))
             || (runtimeAdmissionContext != null
-                && !TryRegisterActorChoiceP11CensusProvider(protocol))
+                && !RecordRegistration(TryRegisterActorChoiceP11CensusProvider(protocol), "ActorChoice provider"))
             || (runtimeAdmissionContext != null
-                && !TryRegisterTravelPartyCensusProvider(protocol))
+                && !RecordRegistration(TryRegisterTravelPartyCensusProvider(protocol), "TravelParty provider"))
             || (runtimeAdmissionContext != null
-                && !TryRegisterExpeditionCensusProvider(protocol))
+                && !RecordRegistration(TryRegisterExpeditionCensusProvider(protocol), "Expedition provider"))
             || (runtimeAdmissionContext != null
-                && !TryRegisterCityNpcPresenceCensusProviders(protocol))
-            || (runtimeAdmissionContext != null && !TryRegisterCityMarketCensusProviders(protocol))
-            || (runtimeAdmissionContext != null && !TryRegisterInstitutionOfficeCensusProviders(protocol))
-            || (runtimeAdmissionContext != null && !TryRegisterFactionStoreCensusProviders(protocol))
-            || (runtimeAdmissionContext != null && !TryRegisterPoliticalClaimCensusProviders(protocol))
-            || (runtimeAdmissionContext != null && !TryRegisterPoliticalSupportCensusProviders(protocol))
-            || (runtimeAdmissionContext != null && !TryRegisterPropertyEstateCensusProviders(protocol))
-            || (runtimeAdmissionContext != null && !TryRegisterP12PopulationCensusProviders(protocol))
-            || (runtimeAdmissionContext != null && !TryRegisterP12GateOneFixedOwnerSections(protocol))
-            || (runtimeAdmissionContext != null && !TryRegisterP12CrimeSocialAppraisalOwnerSections(protocol))
+                && !RecordRegistration(TryRegisterCityNpcPresenceCensusProviders(protocol), "City NPC-presence providers"))
+            || (runtimeAdmissionContext != null && !RecordRegistration(TryRegisterCityMarketCensusProviders(protocol), "City Market providers"))
+            || (runtimeAdmissionContext != null && !RecordRegistration(TryRegisterInstitutionOfficeCensusProviders(protocol), "Institution/Office providers"))
+            || (runtimeAdmissionContext != null && !RecordRegistration(TryRegisterFactionStoreCensusProviders(protocol), "Faction providers"))
+            || (runtimeAdmissionContext != null && !RecordRegistration(TryRegisterPoliticalClaimCensusProviders(protocol), "PoliticalClaim providers"))
+            || (runtimeAdmissionContext != null && !RecordRegistration(TryRegisterPoliticalSupportCensusProviders(protocol), "PoliticalSupport providers"))
+            || (runtimeAdmissionContext != null && !RecordRegistration(TryRegisterPropertyEstateCensusProviders(protocol), "Property/Estate providers"))
+            || (runtimeAdmissionContext != null && !RecordRegistration(TryRegisterP12PopulationCensusProviders(protocol), "P12 population providers"))
+            || (runtimeAdmissionContext != null && !RecordRegistration(TryRegisterP12GateOneFixedOwnerSections(protocol), "P12 Gate One fixed owner sections"))
+            || (runtimeAdmissionContext != null && !RecordRegistration(TryRegisterP12CrimeSocialAppraisalOwnerSections(protocol), "P12 Crime/SocialAppraisal owner sections"))
             || (requireP12RuntimeIdentitySpatialCensusOwners
-                && !TryRegisterP12RuntimeIdentitySpatialCensusOwners(protocol))
-            || (requireP12ReceiptCensusOwners && !TryRegisterP12ExactZeroReceiptOwners(protocol))
+                && !RecordRegistration(TryRegisterP12RuntimeIdentitySpatialCensusOwners(protocol), "P12 RuntimeIdentity/Spatial owners"))
+            || (requireP12ReceiptCensusOwners && !RecordRegistration(TryRegisterP12ExactZeroReceiptOwners(protocol), "P12 exact-zero receipt owners"))
             || (runtimeAdmissionContext != null
-                && !TryRegisterP12P8DExactZeroOwnerSections(protocol))
+                && !RecordRegistration(TryRegisterP12P8DExactZeroOwnerSections(protocol), "P12 P8-D exact-zero owner sections"))
             || (runtimeAdmissionContext != null
-                && !TryRegisterP12EMilitaryOwnerSections(protocol))
-            || !protocol.SealExpectedSectionInventory(out _)
-            || !protocol.SealCensusProviderInventory(out _))
+                && !RecordRegistration(TryRegisterP12EMilitaryOwnerSections(protocol), "P12 P8-E military owner sections"))
+            || !RecordRegistration(protocol.SealExpectedSectionInventory(out _), "expected section inventory seal")
+            || !RecordRegistration(protocol.SealCensusProviderInventory(out _), "census provider inventory seal"))
         {
+            npcRosterCensusProtocolInitializationFailure ??= "owner section/provider registration failed";
             npcRosterCensusProtocol = null;
             return;
         }
@@ -3540,12 +3576,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         }
         if (!operationsRegistered || !ownerThreadBound)
         {
+            npcRosterCensusProtocolInitializationFailure =
+                "operation registration or owner-thread binding failed";
             npcRosterCensusProtocol = null;
             return;
         }
 
         if (!protocol.TryAssessOwnerSectionInventory(out _))
         {
+            npcRosterCensusProtocolInitializationFailure = "initial owner-section census failed";
             npcRosterCensusProtocol = null;
             return;
         }
@@ -3640,8 +3679,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                         () => NotifyP12MarketOwnerMutation(sectionId));
                 }
             }
-            catch
+            catch (Exception exception)
             {
+                npcRosterCensusProtocolInitializationFailure =
+                    "P12 mutation-boundary binding failed (" + exception.GetType().Name + ")";
                 protocol.FaultClosed();
                 npcRosterCensusProtocol = null;
             }
@@ -9874,6 +9915,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             || !ReferenceEquals(graph.JusticeRecordsOwner, exactJusticeOwner)
             || !ReferenceEquals(graph.TravelParties,
                 travelPartySystem?.Store ?? travelSystem?.SelectedTravelPartyStore)
+            || !ReferenceEquals(graph.ScheduledDirectives,
+                scheduledDirectiveSystem?.Store)
             || !ReferenceEquals(current.RuntimeIdentityIndex,
                 p12RuntimeIdentityRegistry?.CoreIdentityIndex)
             || !ReferenceEquals(graph.RuntimeIdentityIndex, current.RuntimeIdentityIndex)
@@ -9884,6 +9927,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return false;
 
         if (!graph.TryBindPersonStore(personStore))
+            return false;
+        if (current.Expeditions != null && !graph.TryBindExpeditionStore(current.Expeditions))
             return false;
 
         return dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(current, graph);
@@ -9964,6 +10009,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
     private bool TryReadDailyCaptureEvidence(
         bool finalizingHeldAdvance,
+        DailyV1CaptureScopeAllowance allowedOuterScope,
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
         out DailyCaptureEligibilityFailure failure)
@@ -9983,7 +10029,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return false;
         }
 
-        if (advanceLeaseHeld != finalizingHeldAdvance || HasActiveDailyOperationContext())
+        if (advanceLeaseHeld != finalizingHeldAdvance
+            || finalizingHeldAdvance != (allowedOuterScope == DailyV1CaptureScopeAllowance.DailyAdvance)
+            || HasActiveDailyOperationContext())
         {
             failure = DailyCaptureEligibilityFailure.OperationInProgress;
             return false;
@@ -10002,6 +10050,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         }
 
         if (!npcRosterCensusProtocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            allowedOuterScope,
             out ownerSections,
             out mutationEpoch,
             out ContinuationCensusFailure censusFailure))
@@ -10010,7 +10059,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return false;
         }
 
-        if (advanceLeaseHeld != finalizingHeldAdvance || HasActiveDailyOperationContext())
+        if (advanceLeaseHeld != finalizingHeldAdvance
+            || finalizingHeldAdvance != (allowedOuterScope == DailyV1CaptureScopeAllowance.DailyAdvance)
+            || HasActiveDailyOperationContext())
         {
             ownerSections = null;
             failure = DailyCaptureEligibilityFailure.OperationInProgress;
@@ -10057,6 +10108,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         if (completedDailyCoreSequence <= 0L
             || !TryReadDailyCaptureEvidence(
                 finalizingHeldAdvance: true,
+                DailyV1CaptureScopeAllowance.DailyAdvance,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
                 out long mutationEpoch,
                 out failure))
@@ -10230,17 +10282,33 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
     internal bool TryGetCompletedDailyCaptureToken(
         out DailyCaptureEligibilityToken token,
+        out DailyCaptureEligibilityFailure failure) =>
+        TryGetCompletedDailyCaptureTokenCore(
+            DailyV1CaptureScopeAllowance.None,
+            out token,
+            out failure);
+
+    internal bool TryGetCompletedDailyCaptureTokenForContinuationSave(
+        out DailyCaptureEligibilityToken token,
+        out DailyCaptureEligibilityFailure failure) =>
+        TryGetCompletedDailyCaptureTokenCore(
+            DailyV1CaptureScopeAllowance.ContinuationSave,
+            out token,
+            out failure);
+
+    private bool TryGetCompletedDailyCaptureTokenCore(
+        DailyV1CaptureScopeAllowance allowedOuterScope,
+        out DailyCaptureEligibilityToken token,
         out DailyCaptureEligibilityFailure failure)
     {
         token = null;
         if (!TryReadDailyCaptureEvidence(
             finalizingHeldAdvance: false,
+            allowedOuterScope,
             out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
             out long mutationEpoch,
             out failure))
-        {
             return false;
-        }
 
         DailyCaptureEligibilityToken current = currentDailyCaptureToken;
         if (current == null)
@@ -10359,6 +10427,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     {
         if (!TryReadDailyCaptureEvidence(
                 finalizingHeldAdvance: false,
+                DailyV1CaptureScopeAllowance.None,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
                 out long mutationEpoch,
                 out _))
@@ -10372,16 +10441,47 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
     internal bool TryValidateCompletedDailyCaptureToken(
         DailyCaptureEligibilityToken token,
+        out DailyCaptureEligibilityFailure failure) =>
+        TryValidateCompletedDailyCaptureTokenCore(
+            token,
+            DailyV1CaptureScopeAllowance.None,
+            out failure);
+
+    internal bool TryValidateCompletedDailyCaptureTokenForContinuationSave(
+        DailyCaptureEligibilityToken token,
+        out DailyCaptureEligibilityFailure failure) =>
+        TryValidateCompletedDailyCaptureTokenCore(
+            token,
+            DailyV1CaptureScopeAllowance.ContinuationSave,
+            out failure);
+
+    /// <summary>
+    /// Validates source evidence for P12 owner capture at an idle boundary or
+    /// under the one explicitly admitted outer continuation-save scope.
+    /// Other active application/runtime scopes remain ineligible.
+    /// </summary>
+    internal bool TryValidateCompletedDailyCaptureTokenForP12Capture(
+        DailyCaptureEligibilityToken token,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        return dailyExecutionBoundary.TryAssessCaptureScope(
+                DailyV1CaptureScopeAllowance.ContinuationSave)
+            ? TryValidateCompletedDailyCaptureTokenForContinuationSave(token, out failure)
+            : TryValidateCompletedDailyCaptureToken(token, out failure);
+    }
+
+    private bool TryValidateCompletedDailyCaptureTokenCore(
+        DailyCaptureEligibilityToken token,
+        DailyV1CaptureScopeAllowance allowedOuterScope,
         out DailyCaptureEligibilityFailure failure)
     {
         if (!TryReadDailyCaptureEvidence(
             finalizingHeldAdvance: false,
+            allowedOuterScope,
             out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
             out long mutationEpoch,
             out failure))
-        {
             return false;
-        }
 
         if (token == null || !ReferenceEquals(currentDailyCaptureToken, token))
         {
@@ -10410,13 +10510,47 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
     public bool TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure)
     {
-        bool advanced = DailyV1RuntimeAdvanceStage.TryAdvanceDay(
-            dailyExecutionBoundary, this, out DailyV1RuntimeAdvanceFailureCode coreFailure);
-        failure = (SimulationRuntimeAdvanceFailure)(byte)coreFailure;
+        bool scopeRequired = runtimeAdmissionContext != null;
+        if (scopeRequired && !dailyExecutionBoundary.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance))
+        {
+            FaultRuntimeAdmission();
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
+
+        bool advanced;
+        bool scopeClosed = true;
+        try
+        {
+            advanced = DailyV1RuntimeAdvanceStage.TryAdvanceDay(
+                dailyExecutionBoundary, this, out DailyV1RuntimeAdvanceFailureCode coreFailure);
+            failure = (SimulationRuntimeAdvanceFailure)(byte)coreFailure;
+        }
+        finally
+        {
+            if (scopeRequired)
+            {
+                scopeClosed = dailyExecutionBoundary.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance);
+                if (!scopeClosed) FaultRuntimeAdmission();
+            }
+        }
+
+        if (!scopeClosed)
+        {
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
         return advanced;
     }
 
     private bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
+    {
+        if (!TryAdvanceSimulationClockCore(out failure)) return false;
+        AdvanceDayAfterClockAdvance();
+        return true;
+    }
+
+    private bool TryAdvanceSimulationClockCore(out SimulationRuntimeAdvanceFailure failure)
     {
         failure = SimulationRuntimeAdvanceFailure.None;
         if ((compositionProfile == SimulationRuntimeCompositionProfile.P16AOneHopMilitary
@@ -10440,8 +10574,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 : SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow;
             return false;
         }
-
-        AdvanceDayAfterClockAdvance();
         return true;
     }
 
@@ -10449,6 +10581,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     bool IDailyV1RuntimeAdvanceBoundary.IsAdmissionOwnerThreadCurrent =>
         IsRuntimeAdmissionOwnerThreadCurrent();
     bool IDailyV1RuntimeAdvanceBoundary.IsDailyCaptureProfile => IsDailyCaptureProfile;
+    bool IDailyV1RuntimeAdvanceBoundary.HasCoreSelectedDailyExecution =>
+        runtimeAdmissionContext != null && DailyDemographicSystem.CanAdvanceSelected(this);
+    SimulationTime IDailyV1RuntimeAdvanceBoundary.SelectedDailyClock =>
+        (runtimeAdmissionContext != null && DailyDemographicSystem.CanAdvanceSelected(this))
+            ? simulationTime
+            : null;
     bool IDailyV1RuntimeAdvanceBoundary.CanMutate => mutationGuard.CanMutate;
     bool IDailyV1RuntimeAdvanceBoundary.HasIntradayTimeline => p18dTimeline != null;
 
@@ -10484,6 +10622,22 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return false;
         operationScope = hostScope;
         return true;
+    }
+
+    bool IDailyV1RuntimeAdvanceBoundary.TryCreateSelectedDailyExecutionContext(
+        out long absoluteDay,
+        out DailyV1SelectedRuntimeOwnerGraph graph,
+        out ScheduledDirectiveStore scheduledDirectives,
+        out IDailyV1SelectedDailyExecutionBoundary executionBoundary)
+    {
+        activeDailyGameplayExecutionProbeForTest?.RecordAdvanceDayAfterClockAdvanceInvocation();
+        absoluteDay = CurrentDay;
+        graph = SelectedRuntimeOwnerGraph;
+        scheduledDirectives = scheduledDirectiveSystem?.Store;
+        executionBoundary = graph == null || graph.Definitions == null
+            ? null
+            : new SelectedDailyV1ExecutionBoundary(this);
+        return executionBoundary != null;
     }
 
     bool IDailyV1RuntimeAdvanceBoundary.TryAdvanceDayCore(
@@ -10603,16 +10757,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         }
 
-        public void AdvancePlaceContent() => runtime.placeContentStore?.AdvanceDays(1);
         public void BeginLoggerDay(long absoluteDay) => runtime.logger?.BeginDay(absoluteDay);
 
-        public void AdvanceSelectedDemography()
+        public bool TryCreateSelectedDemographyContext(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedDemographyExecutionContext context)
         {
-            runtime.lastDailyDemographyReport = DailyDemographicSystem.AdvanceSelected(
-                runtime,
-                runtime.naturalMortalitySamples,
-                runtime.aggregateDemographyProvider);
+            context = null;
+            IDailyV1SelectedDemographyBoundary boundary =
+                DailyDemographicSystem.CreateSelectedDemographyBoundary(runtime, graph);
+            if (boundary == null) return false;
+            context = new SelectedDemographyExecutionContext(runtime, boundary);
+            return true;
         }
+
+        public bool TryCreateSelectedDayStartContext(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedDayStartExecutionContext context) =>
+            runtime.TryCreateSelectedDailyV1DayStartContext(graph, out context);
 
         public void BeginSimulationDay() => runtime.BeginSimulationDay();
         public void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph) =>
@@ -10623,11 +10785,38 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             string message) => runtime.LogSelectedDailyEconomy(owner, category, message);
         public void EnsureSelectedLocalKnowledgeCanRun(DailyV1SelectedRuntimeOwnerGraph graph) =>
             runtime.EnsureSelectedLocalKnowledgeCanRun(graph);
-        public void AdvanceActiveExpeditions() =>
-            runtime.adventureExpeditionAutonomySystem?.AdvanceActiveExpeditions();
-        public void StartAutonomousExpeditions() => runtime.StartAutonomousExpeditions();
-        public void AdvanceActorTurns() => runtime.AdvanceActorTurnsForCurrentRuntime();
-        public void AdvanceTravelAndObserve() => runtime.AdvanceTravelAndObserve();
+        public bool TryCreateSelectedActorTurnContext(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedActorTurnExecutionContext context) =>
+            runtime.TryCreateSelectedDailyV1ActorTurnContext(graph, out context);
+        public bool TryCreateSelectedTravelDayContext(
+            out IDailyV1SelectedTravelDayExecutionContext context) =>
+            runtime.TryCreateSelectedTravelDayExecutionContext(out context);
+    }
+
+    private sealed class SelectedDemographyExecutionContext
+        : IDailyV1SelectedDemographyExecutionContext
+    {
+        private readonly SimulationRuntime runtime;
+
+        internal SelectedDemographyExecutionContext(
+            SimulationRuntime runtime,
+            IDailyV1SelectedDemographyBoundary boundary)
+        {
+            this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+            Boundary = boundary ?? throw new ArgumentNullException(nameof(boundary));
+        }
+
+        public PersonStore PersonStore => runtime.PersonStore;
+        public SimulationCalendar Calendar => runtime.Calendar;
+        public IPersonNaturalMortalitySampleProvider MortalitySamples => runtime.naturalMortalitySamples;
+        public IAggregateDemographyProvider AggregateProvider => runtime.aggregateDemographyProvider;
+        public IDailyV1SelectedDemographyBoundary Boundary { get; }
+
+        public void PublishResult(DailyV1SelectedDemographyResult result)
+        {
+            runtime.lastDailyDemographyReport = DailyDemographicSystem.CreateSelectedDemographyReport(result);
+        }
     }
 
     private void StartAutonomousExpeditions()
@@ -10786,23 +10975,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 arrivedNpcs.AddRange(travelSystem.AdvanceTravels(npcRuntimes));
         }
 
-        foreach (NpcRuntime arrivedNpc in arrivedNpcs)
-        {
-            ObserveArrivedExplorableSites(arrivedNpc);
-            if (arrivedNpc?.CurrentCity != null && configuration.MerchantTrade.Enabled)
-                merchantSystem?.ObserveCurrentMarket(arrivedNpc);
-        }
-
-        expeditionSystem?.ReconcileAfterTravel(arrivedNpcs);
+        ObserveTravelArrivals(arrivedNpcs);
     }
 
-    private bool TryAdvanceSelectedDailyV1ActorTurns()
+    private bool TryCreateSelectedDailyV1ActorTurnContext(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedActorTurnExecutionContext context)
     {
-        DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
+        context = null;
         if (graph == null || actorChoiceStore == null || personStore == null)
             return false;
+        EffectiveMerchantTradeConfiguration selectedMerchantConfiguration =
+            graph.Definitions?.EffectiveConfiguration?.MerchantTrade;
+        if (selectedMerchantConfiguration == null)
+            throw new InvalidOperationException(
+                "The selected actor-turn stage requires the admitted Core Merchant configuration.");
 
-        List<DailyV1ActorTurnRosterEntry> roster = new List<DailyV1ActorTurnRosterEntry>(npcRuntimes.Count);
+        List<DailyV1ActorTurnRosterProjection> runtimeRoster =
+            new List<DailyV1ActorTurnRosterProjection>(npcRuntimes.Count);
         Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime> runtimeByOwner =
             new Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime>();
         for (int rosterOrdinal = 0; rosterOrdinal < npcRuntimes.Count; rosterOrdinal++)
@@ -10810,7 +11000,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             NpcRuntime runtime = npcRuntimes[rosterOrdinal];
             if (runtime == null)
             {
-                roster.Add(new DailyV1ActorTurnRosterEntry(rosterOrdinal, null, null));
+                runtimeRoster.Add(null);
                 continue;
             }
 
@@ -10819,7 +11009,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 // P12 permits an unbound dynamic NPC for owner-census purposes.
                 // It has no admitted Daily-v1 actor owner, so preserve its roster
                 // ordinal while excluding it from shared domain execution.
-                roster.Add(new DailyV1ActorTurnRosterEntry(rosterOrdinal, runtime.PersonId, null));
+                runtimeRoster.Add(new DailyV1ActorTurnRosterProjection(
+                    runtime.RuntimeId, runtime.PersonId));
                 continue;
             }
 
@@ -10827,28 +11018,172 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             if (owner == null
                 || !graph.ContainsExactNpcOwner(owner)
                 || !ReferenceEquals(graph.Definitions, owner.Definitions)
+                || !ReferenceEquals(runtime.SelectedRuntimeOwnerGraph, graph)
                 || !string.Equals(runtime.RuntimeId, owner.RuntimeId, StringComparison.Ordinal)
                 || runtimeByOwner.ContainsKey(owner))
                 return false;
 
             runtimeByOwner.Add(owner, runtime);
-            roster.Add(new DailyV1ActorTurnRosterEntry(rosterOrdinal, runtime.PersonId, owner));
+            runtimeRoster.Add(new DailyV1ActorTurnRosterProjection(
+                runtime.RuntimeId, runtime.PersonId));
         }
+
+        context = new SelectedDailyV1ActorTurnExecutionContext(
+            runtimeRoster.AsReadOnly(),
+            personStore,
+            actorChoiceStore,
+            new SelectedDailyV1ActorTurnExecutionBoundary(this, graph, runtimeByOwner));
+        return true;
+    }
+
+    private bool TryCreateSelectedDailyV1DayStartContext(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedDayStartExecutionContext context)
+    {
+        context = null;
+        if (graph == null) return false;
+
+        // Keep the established whole-stage Unity behavior for dynamic or
+        // otherwise unselected roster members. The selected path is available
+        // only when every live runtime member has an exact Core graph owner.
+        List<DailyV1ActorTurnRosterProjection> runtimeRoster =
+            new List<DailyV1ActorTurnRosterProjection>(npcRuntimes.Count);
+        List<DailyV1NpcRuntimeOwners> exactNpcOwners =
+            new List<DailyV1NpcRuntimeOwners>(npcRuntimes.Count);
+        Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime> runtimeByOwner =
+            new Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime>();
+        foreach (NpcRuntime runtime in npcRuntimes)
+        {
+            if (runtime == null)
+            {
+                runtimeRoster.Add(null);
+                continue;
+            }
+            if (!runtime.UsesSelectedDailyV1Definitions)
+                return false;
+
+            DailyV1NpcRuntimeOwners owner = runtime.SelectedRuntimeOwners;
+            if (owner == null
+                || !ReferenceEquals(runtime.SelectedRuntimeOwnerGraph, graph)
+                || !graph.ContainsExactNpcOwner(owner)
+                || !ReferenceEquals(graph.Definitions, owner.Definitions)
+                || !string.Equals(runtime.RuntimeId, owner.RuntimeId, StringComparison.Ordinal)
+                || !runtimeByOwner.TryAdd(owner, runtime))
+                throw new InvalidOperationException(
+                    "The selected Daily-v1 day-start stage requires each exact Core NPC owner instance.");
+
+            exactNpcOwners.Add(owner);
+            runtimeRoster.Add(new DailyV1ActorTurnRosterProjection(
+                runtime.RuntimeId, runtime.PersonId));
+        }
+        if (!graph.MatchesExactOwnerInstances(graph.Cities, exactNpcOwners))
+            throw new InvalidOperationException(
+                "The selected Daily-v1 day-start stage received an incomplete Core owner roster.");
+
+        SelectedDailyV1ActorTurnExecutionBoundary selectedBoundary =
+            new SelectedDailyV1ActorTurnExecutionBoundary(this, graph, runtimeByOwner);
+
+        EffectiveSimulationConfiguration effective = graph.Definitions?.EffectiveConfiguration;
+        if (effective?.Crime == null || effective.MerchantTrade == null)
+            throw new InvalidOperationException(
+                "The selected Daily-v1 day-start stage requires admitted Crime and Merchant configuration.");
+
+        DailyV1JusticeRecordsOwner justiceOwner = graph.JusticeRecordsOwner;
+        bool justiceSystemPresent = justiceOwner != null
+            && this.justiceSystem != null
+            && ReferenceEquals(this.justiceSystem.CoreOwner, justiceOwner);
+        if (this.justiceSystem != null
+            && !ReferenceEquals(this.justiceSystem.CoreOwner, justiceOwner))
+            throw new InvalidOperationException(
+                "Selected daily Justice execution requires the exact Justice owner from the admitted Core graph.");
+
+        bool crimeSystemPresent = justiceOwner != null
+            && this.crimeSystem != null
+            && ReferenceEquals(this.crimeSystem.JusticeOwner?.CoreOwner, justiceOwner);
+        if (this.crimeSystem != null && !crimeSystemPresent)
+            throw new InvalidOperationException(
+                "Selected daily Crime execution requires the exact Justice owner from the admitted Core graph.");
+
+        context = new SelectedDailyV1DayStartExecutionContext(
+            runtimeRoster.AsReadOnly(),
+            crimeSystemPresent,
+            justiceSystemPresent,
+            selectedBoundary);
+        return true;
+    }
+
+    private sealed class SelectedDailyV1DayStartExecutionContext
+        : IDailyV1SelectedDayStartExecutionContext
+    {
+        internal SelectedDailyV1DayStartExecutionContext(
+            IReadOnlyList<DailyV1ActorTurnRosterProjection> runtimeRoster,
+            bool crimeSystemPresent,
+            bool justiceSystemPresent,
+            SelectedDailyV1ActorTurnExecutionBoundary boundary)
+        {
+            RuntimeRoster = runtimeRoster ?? throw new ArgumentNullException(nameof(runtimeRoster));
+            CrimeSystemPresent = crimeSystemPresent;
+            JusticeSystemPresent = justiceSystemPresent;
+            CrimeJusticeBoundary = boundary ?? throw new ArgumentNullException(nameof(boundary));
+            MerchantTradeBoundary = boundary;
+        }
+
+        public IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
+        public bool CrimeSystemPresent { get; }
+        public bool JusticeSystemPresent { get; }
+        public IDailyV1SelectedCrimeJusticeDailyBoundary CrimeJusticeBoundary { get; }
+        public IDailyV1SelectedMerchantTradeStateBoundary MerchantTradeBoundary { get; }
+    }
+
+    private bool TryAdvanceSelectedDailyV1ActorTurns()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
+        if (!TryCreateSelectedDailyV1ActorTurnContext(graph,
+                out IDailyV1SelectedActorTurnExecutionContext context)
+            || context == null
+            || !DailyV1ActorTurnExecutionStage.TryBuildRoster(
+                graph, context.RuntimeRoster,
+                out IReadOnlyList<DailyV1ActorTurnRosterEntry> roster))
+            return false;
 
         return DailyV1ActorTurnExecutionStage.TryRunOrdered(
             graph,
             roster,
-            personStore,
-            actorChoiceStore,
+            context.PersonStore,
+            context.ActorChoiceStore,
             scheduledDirectiveSystem?.Store,
             CurrentDay,
-            configuration.MerchantTrade.Enabled,
-            new SelectedDailyV1ActorTurnExecutionBoundary(this, graph, runtimeByOwner));
+            graph.Definitions.EffectiveConfiguration.MerchantTrade.Enabled,
+            context.Boundary);
+    }
+
+    private sealed class SelectedDailyV1ActorTurnExecutionContext
+        : IDailyV1SelectedActorTurnExecutionContext
+    {
+        internal SelectedDailyV1ActorTurnExecutionContext(
+            IReadOnlyList<DailyV1ActorTurnRosterProjection> runtimeRoster,
+            PersonStore personStore,
+            ActorChoiceStore actorChoiceStore,
+            IDailyV1ActorTurnExecutionBoundary boundary)
+        {
+            RuntimeRoster = runtimeRoster ?? throw new ArgumentNullException(nameof(runtimeRoster));
+            PersonStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
+            ActorChoiceStore = actorChoiceStore ?? throw new ArgumentNullException(nameof(actorChoiceStore));
+            Boundary = boundary ?? throw new ArgumentNullException(nameof(boundary));
+        }
+
+        public IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
+        public PersonStore PersonStore { get; }
+        public ActorChoiceStore ActorChoiceStore { get; }
+        public IDailyV1ActorTurnExecutionBoundary Boundary { get; }
     }
 
     private sealed class SelectedDailyV1ActorTurnExecutionBoundary
         : IDailyV1ActorTurnExecutionBoundary,
+            IDailyV1SelectedActorChoiceExecutionContext,
+            IDailyV1CoreActorChoiceExecutionBoundary,
             IDailyV1SelectedMerchantTradeStateBoundary,
+            IDailyV1SelectedMerchantTradeStateAdmissionBoundary,
             IDailyV1SelectedActorActionExecutionBoundary,
             IDailyV1SelectedCrimeJusticeDailyBoundary
     {
@@ -10877,19 +11212,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 && position.IsInTransit;
         }
 
-        public bool IsOnActiveExpedition(DailyV1NpcRuntimeOwners actor)
-        {
-            return runtime.expeditionSystem != null
-                && runtime.expeditionSystem.IsNpcOnActiveExpedition(RequireExactActor(actor).RuntimeId);
-        }
-
         public bool IsReservedToday(DailyV1NpcRuntimeOwners actor)
         {
-            return runtime.adventureExpeditionAutonomySystem != null
-                && runtime.adventureExpeditionAutonomySystem.IsReservedToday(RequireExactActor(actor).RuntimeId);
+            RequireExactActor(actor);
+            // UnityBootstrap-Daily-v1 admits no site, place, notable item, or
+            // expedition-autonomy producer. Reservation is therefore exactly
+            // empty for this selected graph; a future profile that admits such
+            // producers must add their Core owner/read before changing this.
+            return false;
         }
-
-        public void EvaluateStatus(DailyV1NpcRuntimeOwners actor) => runtime.EvaluateStatus(RequireExactActor(actor));
 
         public void ExecuteWithinDailyMutation(
             DailyV1SelectedCrimeJusticeDailyPhase phase,
@@ -10898,6 +11229,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             if (mutation == null) throw new ArgumentNullException(nameof(mutation));
             runtime.RunP12CrimeJusticeDailyMutation(mutation);
         }
+
+        public DailyV1JusticeRecordsOwner JusticeRecordsOwner => graph.JusticeRecordsOwner;
 
         public bool CanProjectStatusChanges(
             DailyV1NpcRuntimeOwners owner,
@@ -10962,31 +11295,140 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         public bool TryProcessActorChoice(DailyV1NpcRuntimeOwners actor, int rosterOrdinal) =>
             runtime.TryProcessActorChoice(RequireExactActor(actor), rosterOrdinal);
 
-        public void AdvanceMerchantTradeState(DailyV1NpcRuntimeOwners actor)
+        public bool TryGetActorChoiceExecutionContext(
+            DailyV1NpcRuntimeOwners actor,
+            out bool actorAtCurrentCityLocation,
+            out bool decisionSystemAvailable,
+            out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
-            if (runtime.merchantSystem == null) return;
+            actorAtCurrentCityLocation = exactRuntime.CurrentCity != null
+                && runtime.IsActorAtCurrentCityLocation(exactRuntime);
+            decisionSystemAvailable = runtime.npcDecisionSystem != null;
+            executionBoundary = this;
+            return true;
+        }
+
+        public bool TryPrepareRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (preparedActionRuntime != null || preparedActionPayload != null
+                || payload == null || runtime.npcDecisionSystem == null
+                || !runtime.npcDecisionSystem.TryProjectSelectedLocalSale(
+                    exactRuntime, payload, out NpcActionRuntime projectedAction)
+                || projectedAction == null
+                || !ReferenceEquals(projectedAction.SelectedOwner, payload)
+                || !projectedAction.MatchesSelectedOwner())
+                return false;
+
+            preparedActionRuntime = projectedAction;
+            preparedActionPayload = payload;
+            preparedActionActor = actor;
+            return true;
+        }
+
+        public bool TryRefreshRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            RequireExactActor(actor);
+            return ReferenceEquals(preparedActionActor, actor)
+                && ReferenceEquals(preparedActionPayload, payload)
+                && preparedActionRuntime != null
+                && preparedActionRuntime.TryUseSelectedPayload(
+                    payload, graph.Definitions);
+        }
+
+        public bool CanCommitRequestedActionSlot(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            return ReferenceEquals(preparedActionActor, actor)
+                && ReferenceEquals(preparedActionPayload, payload)
+                && preparedActionRuntime != null
+                && exactRuntime.CanCommitP12LifecycleMutation(
+                    false, false, true, preparedActionRuntime);
+        }
+
+        public bool TryPublishRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (!ReferenceEquals(preparedActionActor, actor)
+                || !ReferenceEquals(preparedActionPayload, payload)
+                || preparedActionRuntime == null
+                || !ReferenceEquals(actor.ActionSlot?.CurrentAction, payload?.Action)
+                || !ReferenceEquals(actor.ActionSlot?.CurrentPayload, payload)
+                || !preparedActionRuntime.MatchesSelectedOwner())
+                return false;
+
+            try
+            {
+                if (!exactRuntime.TryInstallPrecommittedCurrentActionRuntime(preparedActionRuntime))
+                    return false;
+                return true;
+            }
+            finally
+            {
+                ClearPreparedActionProjection();
+            }
+        }
+
+        public void CancelPreparedRequestedActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            RequireExactActor(actor);
+            if (ReferenceEquals(preparedActionActor, actor)
+                && ReferenceEquals(preparedActionPayload, payload))
+                ClearPreparedActionProjection();
+        }
+
+        public void LogRequestedActionDecisionFailure(string message) =>
+            runtime.logger?.LogError(message);
+
+        public NpcActionResultType? ExecuteCurrentAction(DailyV1NpcRuntimeOwners actor)
+        {
+            RequireExactActor(actor);
+            if (!DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                    graph, actor, runtime.randomSource, runtime.CurrentDay, this,
+                    out _, out NpcActionResultType? resultType, out _))
+                throw new InvalidOperationException(
+                    "The selected actor-choice action could not execute through its exact Core owner graph.");
+            return resultType;
+        }
+
+        public void AdvanceMerchantTradeState(DailyV1NpcRuntimeOwners actor)
+        {
+            if (!ExecuteWithinSelectedMerchantDailyOperation(actor,
+                    () => DailyV1SelectedMerchantTradeStateOperation.TryAdvance(
+                        graph, actor, runtime.simulationTime.AbsoluteDay, this)))
+                throw new InvalidOperationException(
+                    "The selected Daily-v1 Merchant owner graph could not advance its daily trade state.");
+        }
+
+        public bool ExecuteWithinSelectedMerchantDailyOperation(
+            DailyV1NpcRuntimeOwners actor,
+            Func<bool> operation)
+        {
+            if (operation == null) return false;
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (runtime.merchantSystem == null) return true;
             runtime.merchantSystem.EnsureCanAdvanceSelectedTradeState();
-            void AdvanceSelectedTradeState()
-            {
-                if (!DailyV1SelectedMerchantTradeStateOperation.TryAdvance(
-                    graph, actor, runtime.simulationTime.AbsoluteDay, this))
-                    throw new InvalidOperationException(
-                        "The selected Daily-v1 Merchant owner graph could not advance its daily trade state.");
-            }
             if (runtime.runtimeAdmissionContext == null)
-            {
-                AdvanceSelectedTradeState();
-                return;
-            }
+                return operation();
 
             if (!runtime.TryBeginP12MerchantDailyNpcTradeOperation(
-                    exactRuntime, out P12MerchantOperationScope merchantOperationScope))
+                exactRuntime, out P12MerchantOperationScope merchantOperationScope))
                 throw new InvalidOperationException(
                     "The P12 daily Merchant owner operation could not be admitted.");
 
             using (merchantOperationScope)
-                AdvanceSelectedTradeState();
+                return operation();
         }
 
         public bool TryInstallPlanState(
@@ -12993,10 +13435,38 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         out int daysAdvanced,
         out SimulationRuntimeAdvanceFailure failure)
     {
-        bool advanced = DailyV1RuntimeAdvanceStage.TryAdvanceDays(
-            dailyExecutionBoundary, this, dayCount, out daysAdvanced,
-            out DailyV1RuntimeAdvanceFailureCode coreFailure);
-        failure = (SimulationRuntimeAdvanceFailure)(byte)coreFailure;
+        bool scopeRequired = runtimeAdmissionContext != null && dayCount > 0;
+        if (scopeRequired && !dailyExecutionBoundary.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance))
+        {
+            FaultRuntimeAdmission();
+            daysAdvanced = 0;
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
+
+        bool advanced;
+        bool scopeClosed = true;
+        try
+        {
+            advanced = DailyV1RuntimeAdvanceStage.TryAdvanceDays(
+                dailyExecutionBoundary, this, dayCount, out daysAdvanced,
+                out DailyV1RuntimeAdvanceFailureCode coreFailure);
+            failure = (SimulationRuntimeAdvanceFailure)(byte)coreFailure;
+        }
+        finally
+        {
+            if (scopeRequired)
+            {
+                scopeClosed = dailyExecutionBoundary.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance);
+                if (!scopeClosed) FaultRuntimeAdmission();
+            }
+        }
+
+        if (!scopeClosed)
+        {
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
         return advanced;
     }
 

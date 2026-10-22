@@ -76,11 +76,10 @@ public sealed partial class SimulationRuntime
                 P12CrimeJusticeCensusProvider.JusticeRecordsSectionProvider recordsProvider =
                     new P12CrimeJusticeCensusProvider.JusticeRecordsSectionProvider(
                         justiceSystem,
-                        npc => npc != null
-                            && !string.IsNullOrWhiteSpace(npc.RuntimeId)
-                            && npcRegistryById.TryGetValue(npc.RuntimeId, out NpcRuntime installed)
-                            && ReferenceEquals(installed, npc),
-                        city => city != null && cities.Contains(city));
+                        npcRuntimeId => !string.IsNullOrWhiteSpace(npcRuntimeId)
+                            && npcRegistryById.TryGetValue(npcRuntimeId, out NpcRuntime installed)
+                            && string.Equals(installed.RuntimeId, npcRuntimeId, StringComparison.Ordinal),
+                        IsExactInstalledP12JusticeCityRuntimeId);
                 OwnerSectionCensusWitness recordsWitness = recordsProvider.GetCurrentCensus();
                 if (recordsWitness.SchemaVersion != P12CrimeJusticeCensusProvider.SchemaVersion
                     || !ReferenceEquals(recordsWitness.OwnerInstanceIdentity, justiceSystem))
@@ -188,6 +187,20 @@ public sealed partial class SimulationRuntime
             p12CrimeJusticeBoundNpcs.Add(npc);
         }
         return true;
+    }
+
+    private bool IsExactInstalledP12JusticeCityRuntimeId(string cityRuntimeId)
+    {
+        if (string.IsNullOrWhiteSpace(cityRuntimeId)) return false;
+        int matches = 0;
+        foreach (CityRuntime city in cities)
+        {
+            if (city == null || !string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal))
+                continue;
+            matches++;
+            if (matches > 1) return false;
+        }
+        return matches == 1;
     }
 
     private string GetP12CrimeJusticeNpcSectionId(NpcRuntime npc)

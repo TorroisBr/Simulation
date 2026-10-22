@@ -303,6 +303,130 @@ public sealed class ContinuationCensusProtocolTests
     }
 
     [Test]
+    public void RuntimeProtocolAndApplicationScopesShareTheCoreBoundaryRegistry()
+    {
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        DailyV1ExecutionBoundaryState runtimeState = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(), admission, SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(System.Guid.NewGuid()));
+        ContinuationCensusProtocol protocol = CreateOperationProtocol(runtimeState);
+
+        Assert.That(protocol.TryAssessRegisteredOperationQuiescence(out _), Is.True);
+        Assert.That(protocol.TryEnterOperation(
+            "runtime.advance", out SimulationOperationScope runtimeOperation, out _), Is.True);
+        Assert.That(runtimeState.ActiveOperationCount, Is.EqualTo(1));
+        Assert.That(runtimeState.ActiveRuntimeOperationCount, Is.EqualTo(1));
+        Assert.That(runtimeState.TryBeginOperation(), Is.True,
+            "The active-session operation enters the same Core boundary state.");
+        Assert.That(runtimeState.ActiveOperationCount, Is.EqualTo(2));
+        Assert.That(runtimeState.ActiveRuntimeOperationCount, Is.EqualTo(1));
+
+        runtimeOperation.Dispose();
+        Assert.That(runtimeState.ActiveOperationCount, Is.EqualTo(1));
+        Assert.That(runtimeState.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(protocol.TryAssessRegisteredOperationQuiescence(out _), Is.True,
+            "P12 quiescence retains its established runtime-protocol scope semantics while the outer session call is active.");
+
+        Assert.That(runtimeState.TryEndOperation(), Is.True);
+        Assert.That(runtimeState.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void SharedCaptureRequiresTheExactAuthorizedOuterScopeAndNoProtocolReservation()
+    {
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        DailyV1ExecutionBoundaryState runtimeState = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(), admission, SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(System.Guid.NewGuid()));
+        ContinuationCensusProtocol protocol = CreateOperationProtocol(runtimeState);
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure baseline), Is.True,
+            baseline.ToString());
+
+        Assert.That(runtimeState.TryBeginOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            out _, out _, out ContinuationCensusFailure strictFailure), Is.False,
+            "The default capture route must remain strict-zero.");
+        Assert.That(strictFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.ContinuationSave,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> saveSnapshots,
+            out _,
+            out ContinuationCensusFailure saveFailure), Is.True, saveFailure.ToString());
+        Assert.That(saveSnapshots, Has.Count.EqualTo(1));
+
+        Assert.That(runtimeState.TryBeginOperation(DailyV1OperationScopeKind.Application), Is.True);
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.ContinuationSave,
+            out _, out _, out ContinuationCensusFailure nestedFailure), Is.False);
+        Assert.That(nestedFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        Assert.That(runtimeState.TryEndOperation(DailyV1OperationScopeKind.Application), Is.True);
+
+        Assert.That(protocol.TryEnterOperation(
+            "runtime.advance", out SimulationOperationScope runtimeOperation, out ContinuationCensusFailure enterFailure),
+            Is.True, enterFailure.ToString());
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.ContinuationSave,
+            out _, out _, out ContinuationCensusFailure protocolFailure), Is.False);
+        Assert.That(protocolFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        runtimeOperation.Dispose();
+        Assert.That(runtimeState.TryEndOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+
+        Assert.That(runtimeState.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.DailyAdvance,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> idleAdvanceSnapshots,
+            out _, out ContinuationCensusFailure idleAdvanceFailure), Is.True,
+            idleAdvanceFailure.ToString());
+        Assert.That(idleAdvanceSnapshots, Has.Count.EqualTo(1),
+            "The exact outer DailyAdvance scope is capturable after registered protocol work has closed.");
+        Assert.That(protocol.TryEnterOperation(
+            "runtime.advance-day", out SimulationOperationScope advanceProtocolOperation, out _), Is.True);
+        Assert.That(runtimeState.ActiveOperationCount, Is.EqualTo(2),
+            "One outer DailyAdvance and one registered RuntimeProtocol scope share the same registry.");
+        Assert.That(runtimeState.ActiveRuntimeOperationCount, Is.EqualTo(1),
+            "The P12 protocol's active-operation cardinality remains one inside daily mutation.");
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.DailyAdvance,
+            out _, out _, out ContinuationCensusFailure nestedAdvanceFailure), Is.False,
+            "Token finalization cannot start before the inner protocol scope has closed.");
+        Assert.That(nestedAdvanceFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+
+        Assert.That(protocol.TryReserveMutationEpochCapacity(out ContinuationMutationEpochReservation advanceReservation,
+            out ContinuationCensusFailure reservationFailure), Is.True, reservationFailure.ToString());
+        advanceProtocolOperation.Dispose();
+        Assert.That(runtimeState.ActiveOperationCount, Is.EqualTo(1));
+        Assert.That(runtimeState.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.DailyAdvance,
+            out _, out _, out ContinuationCensusFailure reservedAdvanceFailure), Is.False,
+            "A pending mutation-epoch reservation forbids capture after the protocol scope closes.");
+        Assert.That(reservedAdvanceFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        protocol.ReleaseMutationEpochReservation(advanceReservation);
+
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.DailyAdvance,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> advanceSnapshots,
+            out _,
+            out ContinuationCensusFailure advanceFailure), Is.True, advanceFailure.ToString());
+        Assert.That(advanceSnapshots, Has.Count.EqualTo(1));
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.ContinuationSave,
+            out _, out _, out ContinuationCensusFailure wrongAllowanceFailure), Is.False);
+        Assert.That(wrongAllowanceFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        Assert.That(runtimeState.TryBeginOperation(DailyV1OperationScopeKind.Application), Is.True);
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.DailyAdvance,
+            out _, out _, out ContinuationCensusFailure unrelatedScopeFailure), Is.False,
+            "A generic application operation cannot be nested into daily finalization.");
+        Assert.That(unrelatedScopeFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        Assert.That(runtimeState.TryEndOperation(DailyV1OperationScopeKind.Application), Is.True);
+        Assert.That(runtimeState.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        Assert.That(runtimeState.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
     public void QuiescentSnapshotCopiesCurrentOwnersInOrdinalSectionOrder()
     {
         object firstOwner = new object();
@@ -405,11 +529,7 @@ public sealed class ContinuationCensusProtocolTests
 
         Assert.That(protocol.TryAssessRegisteredOperationQuiescence(out ContinuationCensusFailure failure), Is.False);
         Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
-        FieldInfo activeOperationCount = typeof(ContinuationCensusProtocol).GetField(
-            "activeOperationCount",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.That(activeOperationCount, Is.Not.Null);
-        Assert.That((int)activeOperationCount.GetValue(protocol), Is.EqualTo(1),
+        Assert.That(protocol.ActiveOperationCount, Is.EqualTo(1),
             "off-thread disposal must preserve the active count because the owner thread did not close the scope");
     }
 
@@ -532,10 +652,11 @@ public sealed class ContinuationCensusProtocolTests
         return protocol;
     }
 
-    private static ContinuationCensusProtocol CreateOperationProtocol()
+    private static ContinuationCensusProtocol CreateOperationProtocol(
+        DailyV1ExecutionBoundaryState sharedExecutionState = null)
     {
         RecordFixture records = SimulationTestFactory.CreateRecordFixture();
-        ContinuationCensusProtocol protocol = new ContinuationCensusProtocol();
+        ContinuationCensusProtocol protocol = new ContinuationCensusProtocol(sharedExecutionState);
         Assert.That(protocol.RegisterExpectedSection(new OwnerSectionContract(
             ReceiptSectionId, NpcDecisionRecorder.OccurrenceReceiptSectionSchemaVersion,
             OwnerSectionRole.Required), out _), Is.True);
@@ -544,6 +665,7 @@ public sealed class ContinuationCensusProtocolTests
         Assert.That(protocol.SealCensusProviderInventory(out _), Is.True);
         Assert.That(protocol.RegisterExpectedOperation("bootstrap.publish", out _), Is.True);
         Assert.That(protocol.RegisterExpectedOperation("runtime.advance", out _), Is.True);
+        Assert.That(protocol.RegisterExpectedOperation("runtime.advance-day", out _), Is.True);
         Assert.That(protocol.SealOperationInventory(out _), Is.True);
         Assert.That(protocol.BindOwnerThread(out _), Is.True);
         return protocol;

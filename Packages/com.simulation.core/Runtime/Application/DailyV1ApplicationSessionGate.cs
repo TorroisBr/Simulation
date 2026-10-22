@@ -10,8 +10,15 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
     where TSession : class
 {
     private readonly object syncRoot = new object();
+    private readonly Func<TSession, DailyV1ExecutionBoundaryState> executionState;
     private TSession current;
-    private int activeOperationCount;
+
+    internal DailyV1ApplicationSessionGate(
+        Func<TSession, DailyV1ExecutionBoundaryState> executionState)
+    {
+        this.executionState = executionState
+            ?? throw new ArgumentNullException(nameof(executionState));
+    }
 
     internal object SyncRoot => syncRoot;
 
@@ -19,13 +26,16 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
 
     internal int ActiveOperationCount
     {
-        get
-        {
-            lock (syncRoot) return activeOperationCount;
-        }
+        get { lock (syncRoot) return GetExecutionState(current)?.ActiveOperationCount ?? 0; }
     }
 
-    internal bool TryBeginOperation(TSession expectedSession, out TSession session)
+    internal bool TryBeginOperation(TSession expectedSession, out TSession session) =>
+        TryBeginOperation(expectedSession, DailyV1OperationScopeKind.Application, out session);
+
+    internal bool TryBeginOperation(
+        TSession expectedSession,
+        DailyV1OperationScopeKind scopeKind,
+        out TSession session)
     {
         lock (syncRoot)
         {
@@ -37,24 +47,25 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
                 return false;
             }
 
-            if (activeOperationCount == int.MaxValue)
+            DailyV1ExecutionBoundaryState state = GetExecutionState(session);
+            if (state == null || !state.TryBeginOperation(scopeKind))
             {
                 session = null;
                 return false;
             }
-
-            activeOperationCount++;
             return true;
         }
     }
 
-    internal void EndOperation()
+    internal void EndOperation() => EndOperation(DailyV1OperationScopeKind.Application);
+
+    internal void EndOperation(DailyV1OperationScopeKind scopeKind)
     {
         lock (syncRoot)
         {
-            if (activeOperationCount <= 0)
+            DailyV1ExecutionBoundaryState state = GetExecutionState(current);
+            if (state == null || !state.TryEndOperation(scopeKind))
                 throw new InvalidOperationException("Active-session operation scope underflow.");
-            activeOperationCount--;
         }
     }
 
@@ -63,7 +74,8 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
         if (candidateSession == null) return false;
         lock (syncRoot)
         {
-            if (activeOperationCount != 0 || current != null) return false;
+            DailyV1ExecutionBoundaryState state = GetExecutionState(candidateSession);
+            if (state == null || state.ActiveOperationCount != 0 || current != null) return false;
             return ReferenceEquals(
                 Interlocked.CompareExchange(ref current, candidateSession, null), null);
         }
@@ -74,10 +86,18 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
         if (expectedSession == null || candidateSession == null) return false;
         lock (syncRoot)
         {
-            if (activeOperationCount != 0 || !ReferenceEquals(current, expectedSession))
+            DailyV1ExecutionBoundaryState currentState = GetExecutionState(current);
+            DailyV1ExecutionBoundaryState candidateState = GetExecutionState(candidateSession);
+            if (currentState == null || candidateState == null
+                || currentState.ActiveOperationCount != 0
+                || candidateState.ActiveOperationCount != 0
+                || !ReferenceEquals(current, expectedSession))
                 return false;
             Interlocked.Exchange(ref current, candidateSession);
             return true;
         }
     }
+
+    private DailyV1ExecutionBoundaryState GetExecutionState(TSession session) =>
+        session == null ? null : executionState(session);
 }

@@ -131,7 +131,7 @@ internal sealed class P12EPoliticalClaimOwnerSnapshot
             "Capture requires the exact live P12-B token and its owner-section vector.");
         if (runtime == null || token == null || sharedOwnerSectionVector == null
             || !ReferenceEquals(token.OwnerSections, sharedOwnerSectionVector)
-            || !runtime.TryValidateCompletedDailyCaptureToken(token, out _)) return false;
+            || !runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _)) return false;
         if (token.AdmissionContext == null
             || token.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || token.CompletedCoreSequence <= 0L || token.AbsoluteDay < 0L || token.MutationEpoch < 0L)
@@ -185,7 +185,7 @@ internal sealed class P12EPoliticalClaimOwnerSnapshot
             || owner.Count != claimCount || owner.RecognitionCount != recognitionCount || owner.Revision != revision
             || !Matches(claimWitness, PoliticalClaimStoreCensusProvider.ClaimsSectionId, owner, claimCount, revision)
             || !Matches(recognitionWitness, PoliticalClaimStoreCensusProvider.RecognitionsSectionId, owner, recognitionCount, revision)
-            || !runtime.TryValidateCompletedDailyCaptureToken(token, out _))
+            || !runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
         {
             snapshot = null;
             if (failure.Code == P12EPoliticalClaimSnapshotFailureCode.None)

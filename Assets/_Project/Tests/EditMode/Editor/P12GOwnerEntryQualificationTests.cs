@@ -419,13 +419,26 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         SimulationActiveSession session,
         SimulationRuntimeAdmissionContext normalContext)
     {
-        Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+        DailyV1ExecutionBoundaryState executionState = session.Runtime.ExecutionBoundaryState;
+        Assert.That(executionState.TryBeginOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+        bool captured;
+        P12AContinuationImage image;
+        P12GDailyV1RestoreFailure failure;
+        string diagnostic;
+        try
+        {
+            captured = P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
                 session, normalContext,
-                out P12AContinuationImage image,
+                out image,
                 out _,
-                out P12GDailyV1RestoreFailure failure,
-                out string diagnostic),
-            Is.True, failure + ": " + diagnostic);
+                out failure,
+                out diagnostic);
+        }
+        finally
+        {
+            Assert.That(executionState.TryEndOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+        }
+        Assert.That(captured, Is.True, failure + ": " + diagnostic);
         Assert.That(P12ADailyV1Census.TryCreateForImage(image,
             out P12ADailyV1Census census, out P12AResult censusResult),
             Is.True, censusResult?.Code.ToString());
@@ -439,10 +452,23 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         SimulationActiveSession session,
         SimulationRuntimeAdmissionContext normalContext)
     {
-        Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
-                session, normalContext, out P12AContinuationImage sourceImage, out _,
-                out P12GDailyV1RestoreFailure sourceFailure, out string sourceDiagnostic),
-            Is.True, sourceFailure + ": " + sourceDiagnostic);
+        DailyV1ExecutionBoundaryState executionState = session.Runtime.ExecutionBoundaryState;
+        Assert.That(executionState.TryBeginOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+        bool captured;
+        P12AContinuationImage sourceImage;
+        P12GDailyV1RestoreFailure sourceFailure;
+        string sourceDiagnostic;
+        try
+        {
+            captured = P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+                session, normalContext, out sourceImage, out _,
+                out sourceFailure, out sourceDiagnostic);
+        }
+        finally
+        {
+            Assert.That(executionState.TryEndOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+        }
+        Assert.That(captured, Is.True, sourceFailure + ": " + sourceDiagnostic);
         Assert.That(P12ADailyV1Census.TryCreateForImage(sourceImage,
             out P12ADailyV1Census census, out P12AResult censusResult), Is.True, censusResult?.Code.ToString());
         Assert.That(P12AContinuationCodec.TryDecode(bytes, census.Manifest,

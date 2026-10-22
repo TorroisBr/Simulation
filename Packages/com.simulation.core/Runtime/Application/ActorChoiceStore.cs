@@ -1117,6 +1117,18 @@ internal interface IDailyV1ActorChoiceExecutionBoundary
 }
 
 /// <summary>
+/// A selected actor-choice adapter that exposes the existing Core action
+/// execution ports. Core can therefore dispatch the committed admitted slot
+/// itself; the older ExecuteCurrentAction callback remains only for legacy
+/// hosts that have not adopted the selected action boundary.
+/// </summary>
+internal interface IDailyV1CoreActorChoiceExecutionBoundary
+    : IDailyV1ActorChoiceExecutionBoundary,
+        IDailyV1SelectedActorActionExecutionBoundary
+{
+}
+
+/// <summary>
 /// Executes the one-shot, bounded Daily-v1 Local SellGoods choice during its
 /// roster turn. This is the same graph-owned plan and action payload used by
 /// autonomous execution; host code only supplies Unity action projection and
@@ -1257,9 +1269,23 @@ internal static class DailyV1ActorChoiceExecutionStage
 
         try
         {
-            NpcActionResultType? resultStatus = committed
-                ? boundary.ExecuteCurrentAction(actor)
-                : (NpcActionResultType?)null;
+            NpcActionResultType? resultStatus = null;
+            if (committed)
+            {
+                if (boundary is IDailyV1CoreActorChoiceExecutionBoundary coreBoundary
+                    && coreBoundary.UsesSelectedDailyV1ActionExecution(actor))
+                {
+                    if (!DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                            graph, actor, coreBoundary.RandomSource, absoluteDay,
+                            coreBoundary, out _, out resultStatus, out _))
+                        throw new InvalidOperationException(
+                            "The selected actor-choice action could not execute through its admitted Core owner graph.");
+                }
+                else
+                {
+                    resultStatus = boundary.ExecuteCurrentAction(actor);
+                }
+            }
             if (!store.TryRecordAttemptReturned(input.InputId, absoluteDay,
                     actorTurnRosterOrdinal, resultStatus,
                     out ActorChoiceStoreFailureCode returnFailure))

@@ -310,7 +310,7 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
                 officeOwner, incumbencyCount, officeRevision)
             || !Matches(sharedOwnerSectionVector, InstitutionOfficeCensusProvider.TenuresSectionId,
                 officeOwner, tenureCount, officeRevision)
-            || !runtime.TryValidateCompletedDailyCaptureToken(token, out _))
+            || !runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
         {
             snapshot = null;
             if (failure.Code == P12EInstitutionOfficeSnapshotFailureCode.None)

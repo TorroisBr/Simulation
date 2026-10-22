@@ -116,9 +116,9 @@ public sealed class DailyDemographyReport
 }
 
 /// <summary>
-/// The one daily demographic phase owned by SimulationRuntime. It evaluates named
-/// mortality from a stable Person snapshot, recalculates floors at the world boundary,
-/// and then runs aggregate-only transitions in stable settlement order.
+/// Unity's demographic adapter supplies the existing death writer and represented
+/// resident floors. The selected ordered demographic algorithm is owned by Core;
+/// the legacy non-selected path remains here for other runtime configurations.
 /// </summary>
 public static class DailyDemographicSystem
 {
@@ -159,8 +159,27 @@ public static class DailyDemographicSystem
             selectedConfiguration.AggregateDemography,
             mortalitySamples,
             aggregateProvider,
-            new RuntimeDemographyBoundary(world, graph));
+            CreateSelectedDemographyBoundary(world, graph));
 
+        return CreateSelectedDemographyReport(selected);
+    }
+
+    internal static IDailyV1SelectedDemographyBoundary CreateSelectedDemographyBoundary(
+        SimulationRuntime world,
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        return world != null
+            && graph != null
+            && ReferenceEquals(world.SelectedRuntimeOwnerGraph, graph)
+            && HasExactCityPopulationBindings(world, graph)
+                ? new RuntimeDemographyBoundary(world, graph)
+                : null;
+    }
+
+    internal static DailyDemographyReport CreateSelectedDemographyReport(
+        DailyV1SelectedDemographyResult selected)
+    {
+        if (selected == null) throw new ArgumentNullException(nameof(selected));
         DailyDemographyReport report = new DailyDemographyReport(selected.AbsoluteDay)
         {
             NamedPersonsEvaluated = selected.NamedPersonsEvaluated,

@@ -1,6 +1,21 @@
 using System;
 using System.Collections.Generic;
 
+internal enum DailyV1OperationScopeKind : byte
+{
+    Application = 0,
+    RuntimeProtocol = 1,
+    ContinuationSave = 2,
+    DailyAdvance = 3
+}
+
+internal enum DailyV1CaptureScopeAllowance : byte
+{
+    None = 0,
+    ContinuationSave = 1,
+    DailyAdvance = 2
+}
+
 /// <summary>
 /// Owns the per-runtime single-writer advance lease and completed Daily-v1
 /// core sequence. This is execution state, not a thread lock or persisted data.
@@ -8,13 +23,192 @@ using System.Collections.Generic;
 internal sealed class DailyV1ExecutionBoundaryState
 {
     private readonly object runtimeInstanceIdentity = new object();
+    private readonly object operationSyncRoot = new object();
+    private readonly List<DailyV1OperationScopeKind> activeOperationScopes =
+        new List<DailyV1OperationScopeKind>();
+    private bool runtimeIdentityBound;
+    private bool runtimeConfigurationBound;
     private DailyV1AdvanceLease advanceLease;
     private long completedCoreSequence;
     private DailyCaptureEligibilityToken currentCaptureToken;
     private bool selectedRuntimeOwnerGraphBound;
     private DailyV1SelectedRuntimeOwnerGraph selectedRuntimeOwnerGraph;
 
+    internal SimulationTime SimulationTime { get; private set; }
+    internal SimulationRuntimeAdmissionContext AdmissionContext { get; private set; }
+    internal SimulationRuntimeCompositionProfile CompositionProfile { get; private set; }
+    internal WorldId WorldId { get; private set; }
+    internal EffectiveSimulationConfiguration ConfigurationIdentity { get; private set; }
+    internal SimulationCalendar CalendarIdentity { get; private set; }
+
+    internal DailyV1ExecutionBoundaryState() { }
+
+    /// <summary>
+    /// Constructs the one Core execution state used by a selected runtime.
+    /// Clock, admission, composition and world identities live beside that
+    /// runtime's lease, completed-boundary sequence, graph and capture token;
+    /// a Unity adapter must not keep parallel copies as runtime authority.
+    /// </summary>
+    internal DailyV1ExecutionBoundaryState(
+        SimulationTime simulationTime,
+        SimulationRuntimeAdmissionContext admissionContext,
+        SimulationRuntimeCompositionProfile compositionProfile,
+        WorldId worldId)
+    {
+        if (simulationTime == null) throw new ArgumentNullException(nameof(simulationTime));
+        if (!Enum.IsDefined(typeof(SimulationRuntimeCompositionProfile), compositionProfile))
+            throw new ArgumentOutOfRangeException(nameof(compositionProfile));
+        SimulationTime = simulationTime;
+        AdmissionContext = admissionContext;
+        CompositionProfile = compositionProfile;
+        WorldId = worldId;
+        runtimeIdentityBound = true;
+    }
+
+    internal bool TryBindRuntimeConfiguration(
+        EffectiveSimulationConfiguration configurationIdentity,
+        SimulationCalendar calendarIdentity)
+    {
+        if (!runtimeIdentityBound || configurationIdentity == null || calendarIdentity == null)
+            return false;
+        if (runtimeConfigurationBound)
+            return ReferenceEquals(ConfigurationIdentity, configurationIdentity)
+                && ReferenceEquals(CalendarIdentity, calendarIdentity);
+        ConfigurationIdentity = configurationIdentity;
+        CalendarIdentity = calendarIdentity;
+        runtimeConfigurationBound = true;
+        return true;
+    }
+
+    private bool MatchesBoundRuntimeIdentity(
+        SimulationRuntimeAdmissionContext admissionContext,
+        EffectiveSimulationConfiguration configurationIdentity,
+        SimulationCalendar calendarIdentity,
+        SimulationRuntimeCompositionProfile compositionProfile,
+        WorldId worldId,
+        long absoluteDay)
+    {
+        return !runtimeIdentityBound
+            || (runtimeConfigurationBound
+                && ReferenceEquals(AdmissionContext, admissionContext)
+                && ReferenceEquals(ConfigurationIdentity, configurationIdentity)
+                && ReferenceEquals(CalendarIdentity, calendarIdentity)
+                && CompositionProfile == compositionProfile
+                && ReferenceEquals(WorldId, worldId)
+                && absoluteDay == SimulationTime.AbsoluteDay);
+    }
+
     internal bool AdvanceLeaseHeld => advanceLease != null;
+    /// <summary>
+    /// The single operation count shared by application admission and the P12
+    /// census protocol for this runtime. It is deliberately stored beside the
+    /// runtime lease and capture token, rather than mirrored by a host gate.
+    /// </summary>
+    internal int ActiveOperationCount
+    {
+        get { lock (operationSyncRoot) return activeOperationCount; }
+    }
+
+    internal int ActiveRuntimeOperationCount
+    {
+        get
+        {
+            lock (operationSyncRoot)
+            {
+                int count = 0;
+                foreach (DailyV1OperationScopeKind scope in activeOperationScopes)
+                    if (scope == DailyV1OperationScopeKind.RuntimeProtocol) count++;
+                return count;
+            }
+        }
+    }
+
+    internal bool TryBeginOperation(DailyV1OperationScopeKind kind = DailyV1OperationScopeKind.Application)
+    {
+        lock (operationSyncRoot)
+        {
+            if (AdmissionContext != null && !AdmissionContext.IsOwnedByCurrentThread())
+                return false;
+            if (kind == DailyV1OperationScopeKind.RuntimeProtocol
+                || !Enum.IsDefined(typeof(DailyV1OperationScopeKind), kind))
+                return false;
+            return TryAddOperationScope(kind);
+        }
+    }
+
+    internal bool TryEndOperation(DailyV1OperationScopeKind kind = DailyV1OperationScopeKind.Application)
+    {
+        lock (operationSyncRoot)
+        {
+            if (AdmissionContext != null && !AdmissionContext.IsOwnedByCurrentThread())
+                return false;
+            if (kind == DailyV1OperationScopeKind.RuntimeProtocol
+                || !Enum.IsDefined(typeof(DailyV1OperationScopeKind), kind))
+                return false;
+            return TryRemoveOperationScope(kind);
+        }
+    }
+
+    internal bool TryAssessCaptureScope(DailyV1CaptureScopeAllowance allowance)
+    {
+        lock (operationSyncRoot)
+        {
+            if (AdmissionContext != null && !AdmissionContext.IsOwnedByCurrentThread())
+                return false;
+            if (allowance == DailyV1CaptureScopeAllowance.None)
+                return activeOperationScopes.Count == 0;
+            if (activeOperationScopes.Count != 1)
+                return false;
+
+            DailyV1OperationScopeKind expected = allowance == DailyV1CaptureScopeAllowance.ContinuationSave
+                ? DailyV1OperationScopeKind.ContinuationSave
+                : allowance == DailyV1CaptureScopeAllowance.DailyAdvance
+                    ? DailyV1OperationScopeKind.DailyAdvance
+                    : (DailyV1OperationScopeKind)byte.MaxValue;
+            return activeOperationScopes[0] == expected;
+        }
+    }
+
+    internal bool TryBeginRuntimeProtocolOperation()
+    {
+        lock (operationSyncRoot)
+        {
+            if (AdmissionContext == null || !AdmissionContext.IsOwnedByCurrentThread())
+                return false;
+            return TryAddOperationScope(DailyV1OperationScopeKind.RuntimeProtocol);
+        }
+    }
+
+    internal bool TryEndRuntimeProtocolOperation()
+    {
+        lock (operationSyncRoot)
+        {
+            if (AdmissionContext == null || !AdmissionContext.IsOwnedByCurrentThread())
+                return false;
+            return TryRemoveOperationScope(DailyV1OperationScopeKind.RuntimeProtocol);
+        }
+    }
+
+    private int activeOperationCount => activeOperationScopes.Count;
+
+    private bool TryAddOperationScope(DailyV1OperationScopeKind kind)
+    {
+        if (activeOperationScopes.Count == int.MaxValue) return false;
+        activeOperationScopes.Add(kind);
+        return true;
+    }
+
+    private bool TryRemoveOperationScope(DailyV1OperationScopeKind kind)
+    {
+        for (int index = activeOperationScopes.Count - 1; index >= 0; index--)
+        {
+            if (activeOperationScopes[index] != kind) continue;
+            activeOperationScopes.RemoveAt(index);
+            return true;
+        }
+        return false;
+    }
+
     internal long CompletedCoreSequence => completedCoreSequence;
     internal object RuntimeInstanceIdentity => runtimeInstanceIdentity;
     internal DailyCaptureEligibilityToken CurrentCaptureToken => currentCaptureToken;
@@ -69,7 +263,9 @@ internal sealed class DailyV1ExecutionBoundaryState
         IReadOnlyList<OwnerSectionCensusSnapshot> currentOwnerSections,
         long currentMutationEpoch)
     {
-        return token != null
+        return MatchesBoundRuntimeIdentity(admissionContext, configurationIdentity,
+                calendarIdentity, compositionProfile, worldId, absoluteDay)
+            && token != null
             && ReferenceEquals(token.RuntimeInstanceIdentity, runtimeInstanceIdentity)
             && ReferenceEquals(token.AdmissionContext, admissionContext)
             && ReferenceEquals(token.ConfigurationIdentity, configurationIdentity)
@@ -170,7 +366,9 @@ internal sealed class DailyV1ExecutionBoundaryState
         out DailyCaptureEligibilityToken token)
     {
         token = null;
-        if (completedCoreSequence <= 0L
+        if (!MatchesBoundRuntimeIdentity(admissionContext, configurationIdentity,
+                calendarIdentity, compositionProfile, worldId, absoluteDay)
+            || completedCoreSequence <= 0L
             || !DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(ownerSections))
             return false;
 
@@ -203,7 +401,9 @@ internal sealed class DailyV1ExecutionBoundaryState
         out DailyCaptureEligibilityToken token)
     {
         token = null;
-        if (restoredCoreSequence <= 0L || completedCoreSequence != 0L || AdvanceLeaseHeld
+        if (!MatchesBoundRuntimeIdentity(admissionContext, configurationIdentity,
+                calendarIdentity, compositionProfile, worldId, absoluteDay)
+            || restoredCoreSequence <= 0L || completedCoreSequence != 0L || AdvanceLeaseHeld
             || !DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(ownerSections))
             return false;
 

@@ -693,7 +693,7 @@ internal sealed class P12EDailyV1OwnerPackage
             || !string.Equals(context.P12DPackage.WorldId.Value, token.WorldId?.Value, StringComparison.Ordinal)
             || context.StagedSimulationTime.AbsoluteDay != token.AbsoluteDay
             || sourceRuntime.LocalTopologyStore != null
-            || !sourceRuntime.TryValidateCompletedDailyCaptureToken(token, out _))
+            || !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
             return false;
 
         return true;

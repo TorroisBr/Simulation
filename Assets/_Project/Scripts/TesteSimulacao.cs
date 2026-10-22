@@ -168,7 +168,8 @@ public class TesteSimulacao : MonoBehaviour
     [System.NonSerialized] private DailyV1SelectedRuntimeOwnerGraph selectedInitialRuntimeOwnerGraph;
     private bool UsesSelectedDefinitionBindings => selectedDefinitions != null && selectedDefinitionBindings != null;
     private readonly DailyV1ApplicationSessionGate<SimulationActiveSession> activeSessionGate =
-        new DailyV1ApplicationSessionGate<SimulationActiveSession>();
+        new DailyV1ApplicationSessionGate<SimulationActiveSession>(
+            session => session.Runtime.ExecutionBoundaryState);
     private SimulationActiveSession activeSession => activeSessionGate.Current;
     private Thread bootstrapStartThread;
     private int bootstrapStartThreadId;
@@ -373,7 +374,9 @@ public class TesteSimulacao : MonoBehaviour
     private bool TrySaveDailyV1ContinuationAtPath(string persistentDataPath, out string resultCode)
     {
         resultCode = P12AResultCode.Busy.ToString();
-        if (!TryBeginActiveSessionOperation(out SimulationActiveSession session))
+        if (!TryBeginActiveSessionOperation(
+                DailyV1OperationScopeKind.ContinuationSave,
+                out SimulationActiveSession session))
             return false;
         try
         {
@@ -385,7 +388,7 @@ public class TesteSimulacao : MonoBehaviour
         }
         finally
         {
-            EndActiveSessionOperation();
+            EndActiveSessionOperation(DailyV1OperationScopeKind.ContinuationSave);
         }
     }
     private bool TrySaveCompletedDailyV1Boundary(SimulationActiveSession session, out P12AResult result)
@@ -416,9 +419,16 @@ public class TesteSimulacao : MonoBehaviour
                 runtimeAdmissionContext,
                 out P12AContinuationImage image,
                 out _,
-                out _,
-                out _)
-            || image == null
+                out P12GDailyV1RestoreFailure captureFailure,
+                out string captureDiagnostic))
+        {
+            result = new P12AResult(P12AResultCode.CaptureRejected);
+            session.Logger.LogError("P12-A continuation save failed: " + result.Code
+                + " (" + captureFailure + ": " + captureDiagnostic + ").");
+            return false;
+        }
+
+        if (image == null
             || !P12ADailyV1Census.TryCreateForImage(
                 image,
                 out P12ADailyV1Census census,
@@ -640,7 +650,7 @@ public class TesteSimulacao : MonoBehaviour
                         InitializeJusticeState();
                         if (selectedRuntimeOwnerGraphBuilder != null
                             && !selectedRuntimeOwnerGraphBuilder.TryBuild(
-                                justiceSystem?.CoreOwner, travelPartyStore,
+                                justiceSystem?.CoreOwner, travelPartyStore, scheduledDirectiveStore,
                                 out selectedInitialRuntimeOwnerGraph))
                             throw new System.InvalidOperationException(
                                 "The selected Core City/NPC/Justice owner graph does not exactly match the admitted Daily-v1 genesis composition.");
@@ -671,6 +681,10 @@ public class TesteSimulacao : MonoBehaviour
                                 selectedInitialRuntimeOwnerGraph))
                             throw new System.InvalidOperationException(
                                 "The constructed runtime did not adopt the exact unpublished selected Core owner graph.");
+                        if (selectedInitialRuntimeOwnerGraph != null
+                            && !TryProjectInitialSelectedJusticeRows(selectedInitialRuntimeOwnerGraph))
+                            throw new System.InvalidOperationException(
+                                "The selected Justice rows could not bind their exact Unity reference projections.");
                         simulationRuntime.BindP12EconomyTransactionService(economyTransactionService);
                         if (runtimeAdmissionContext != null
                             && !simulationRuntime.TryBeginBootstrapPublicationScope(out bootstrapPublicationScope))
@@ -790,22 +804,34 @@ public class TesteSimulacao : MonoBehaviour
         return activeSessionGate.Current;
     }
 
-    private bool TryBeginActiveSessionOperation(out SimulationActiveSession session)
-    {
-        return TryBeginActiveSessionOperation(expectedSession: null, out session);
-    }
+    private bool TryBeginActiveSessionOperation(out SimulationActiveSession session) =>
+        TryBeginActiveSessionOperation(
+            expectedSession: null,
+            DailyV1OperationScopeKind.Application,
+            out session);
+
+    private bool TryBeginActiveSessionOperation(
+        DailyV1OperationScopeKind scopeKind,
+        out SimulationActiveSession session) =>
+        TryBeginActiveSessionOperation(expectedSession: null, scopeKind, out session);
 
     private bool TryBeginActiveSessionOperation(
         SimulationActiveSession expectedSession,
-        out SimulationActiveSession session)
-    {
-        return activeSessionGate.TryBeginOperation(expectedSession, out session);
-    }
+        out SimulationActiveSession session) =>
+        TryBeginActiveSessionOperation(
+            expectedSession,
+            DailyV1OperationScopeKind.Application,
+            out session);
 
-    private void EndActiveSessionOperation()
-    {
-        activeSessionGate.EndOperation();
-    }
+    private bool TryBeginActiveSessionOperation(
+        SimulationActiveSession expectedSession,
+        DailyV1OperationScopeKind scopeKind,
+        out SimulationActiveSession session) =>
+        activeSessionGate.TryBeginOperation(expectedSession, scopeKind, out session);
+
+    private void EndActiveSessionOperation(
+        DailyV1OperationScopeKind scopeKind = DailyV1OperationScopeKind.Application) =>
+        activeSessionGate.EndOperation(scopeKind);
 
     /// <summary>Single-reference exchange seam for a privately built, restored Daily-v1 session.</summary>
     internal bool TryPublishRestoredSession(
@@ -1903,25 +1929,46 @@ public class TesteSimulacao : MonoBehaviour
 
     private void SimulateWithSession(SimulationActiveSession expectedSession, int daysToSimulate)
     {
-        if (!TryBeginActiveSessionOperation(expectedSession, out SimulationActiveSession session)) return;
-        try
+        for (int i = 0; i < daysToSimulate; i++)
         {
-            for (int i = 0; i < daysToSimulate; i++)
+            if (!ReferenceEquals(activeSessionGate.Current, expectedSession)) return;
+            expectedSession.Runtime.AdvanceDay();
+
+            SimulationActiveSession session;
+            if (!TryBeginActiveSessionOperation(expectedSession, out session)) return;
+            try
             {
-                session.Runtime.AdvanceDay();
                 AppendNpcStateSummary(session);
                 AppendEconomySnapshotIfNeeded(session, false);
+            }
+            finally
+            {
+                EndActiveSessionOperation();
+            }
+
+            if (!TryBeginActiveSessionOperation(
+                    expectedSession,
+                    DailyV1OperationScopeKind.ContinuationSave,
+                    out session)) return;
+            try
+            {
                 TrySaveCompletedDailyV1Boundary(session, out _);
             }
-
-            if (session.Configuration != null
-                && session.Configuration.includeEconomySnapshots == true
-                && daysToSimulate >= Mathf.Max(1, session.Configuration.economySnapshotIntervalDays))
+            finally
             {
-                AppendEconomySnapshotIfNeeded(session, true);
+                EndActiveSessionOperation(DailyV1OperationScopeKind.ContinuationSave);
             }
+        }
 
-            SaveSimulationLog(session);
+        if (!TryBeginActiveSessionOperation(expectedSession, out SimulationActiveSession finalSession)) return;
+        try
+        {
+            if (finalSession.Configuration != null
+                && finalSession.Configuration.includeEconomySnapshots == true
+                && daysToSimulate >= Mathf.Max(1, finalSession.Configuration.economySnapshotIntervalDays))
+                AppendEconomySnapshotIfNeeded(finalSession, true);
+
+            SaveSimulationLog(finalSession);
         }
         finally
         {
@@ -2356,6 +2403,19 @@ public class TesteSimulacao : MonoBehaviour
 
     private void CreateSpatialRoutes()
     {
+        if (selectedRuntimeOwnerGraphBuilder != null)
+        {
+            if (!selectedRuntimeOwnerGraphBuilder.TryCreateConfiguredCityRoutes(
+                    runtimeIdAllocator,
+                    runtimeIdentityRegistry.BindSelectedRouteProjection,
+                    runtimeIdentityRegistry.RollbackSelectedRouteProjection,
+                    message => logger?.LogWarning(message),
+                    message => logger?.LogError(message)))
+                throw new System.InvalidOperationException(
+                    "The selected Core owner graph could not construct the exact admitted Daily-v1 City routes.");
+            return;
+        }
+
         foreach (CityRuntime originCity in CityRuntimeList)
         {
             if (originCity != null && originCity.SelectedDailyV1Definition != null)
@@ -2791,6 +2851,16 @@ public class TesteSimulacao : MonoBehaviour
             return;
         }
 
+        if (selectedRuntimeOwnerGraphBuilder != null
+            && (explorableSiteStore == null || explorableSiteStore.Count == 0))
+        {
+            if (!selectedRuntimeOwnerGraphBuilder.TryBootstrapInitialCommercialKnowledge(
+                    simulationTime?.AbsoluteDay ?? 0L))
+                throw new System.InvalidOperationException(
+                    "The selected Core owner graph could not seed initial commercial knowledge.");
+            return;
+        }
+
         foreach (NpcRuntime npcRuntime in NpcRuntimeList)
         {
             merchantSystem.BootstrapInitialKnowledge(npcRuntime);
@@ -2801,6 +2871,15 @@ public class TesteSimulacao : MonoBehaviour
     {
         if (spatialNetwork == null)
         {
+            return;
+        }
+
+        if (selectedRuntimeOwnerGraphBuilder != null
+            && (explorableSiteStore == null || explorableSiteStore.Count == 0))
+        {
+            if (!selectedRuntimeOwnerGraphBuilder.TryBootstrapInitialSpatialKnowledge())
+                throw new System.InvalidOperationException(
+                    "The selected Core owner graph could not seed initial spatial knowledge.");
             return;
         }
 
@@ -2839,56 +2918,13 @@ public class TesteSimulacao : MonoBehaviour
     {
         if (UsesSelectedDefinitionBindings)
         {
-            foreach (DailyV1ScheduledDirectiveConfig selectedDirective in
-                selectedDefinitions.Configuration.scheduledDirectives ?? System.Array.Empty<DailyV1ScheduledDirectiveConfig>())
-            {
-                if (selectedDirective == null)
-                {
-                    logger.LogWarning("Skipping null selected scheduled directive configuration.");
-                    continue;
-                }
-                if (string.IsNullOrWhiteSpace(selectedDirective.actor))
-                {
-                    logger.LogWarning("Skipping selected scheduled directive configuration: actor definition is null.");
-                    continue;
-                }
-                if (string.IsNullOrWhiteSpace(selectedDirective.action)
-                    || !selectedDefinitions.Actions.TryGetValue(selectedDirective.action,
-                        out DailyV1ActionDefinition actionNode)
-                    || actionNode.Values.actionType?.Value != (int)NpcActionType.EscapePrison
-                    || selectedDefinitionBindings == null
-                    || !selectedDefinitionBindings.TryGetAsset(actionNode, out NpcActionData actionAsset)
-                    || actionAsset == null)
-                {
-                    logger.LogWarning("Skipping selected scheduled directive configuration: EscapePrison requires a matching admitted action definition.");
-                    continue;
-                }
-
-                NpcRuntime actorRuntime = GetSingleNpcRuntimeByDefinition(selectedDirective.actor);
-                if (actorRuntime == null)
-                    continue;
-
-                try
-                {
-                    ScheduledDirective directive = new ScheduledDirective(
-                        runtimeIdAllocator.AllocateDirectiveId(),
-                        selectedDirective.absoluteDay,
-                        (ScheduledDirectiveMode)(selectedDirective.mode?.Value ?? 0),
-                        (ScheduledDirectiveOperation)(selectedDirective.operation?.Value ?? 0),
-                        actorRuntime.RuntimeId,
-                        actionAsset.DefinitionId,
-                        (int)actionAsset.actionType);
-                    scheduledDirectiveStore.Add(directive);
-                }
-                catch (System.ArgumentException exception)
-                {
-                    logger.LogError("Cannot create scheduled directive: " + exception.Message);
-                }
-                catch (System.InvalidOperationException exception)
-                {
-                    logger.LogError("Cannot allocate DirectiveId: " + exception.Message);
-                }
-            }
+            if (selectedRuntimeOwnerGraphBuilder == null
+                || !selectedRuntimeOwnerGraphBuilder.TryCreateConfiguredScheduledDirectives(
+                    runtimeIdAllocator, scheduledDirectiveStore,
+                    message => logger?.LogWarning(message),
+                    message => logger?.LogError(message)))
+                throw new System.InvalidOperationException(
+                    "The selected Core owner graph could not construct its admitted scheduled directives.");
             return;
         }
 
@@ -3060,27 +3096,63 @@ public class TesteSimulacao : MonoBehaviour
             return;
         }
 
-        if (selectedDefinitions != null)
+        if (UsesSelectedDefinitionBindings)
         {
-            foreach (DailyV1InitialWantedRecordConfig selectedWarrant in
-                selectedDefinitions.Configuration.initialWarrants ?? System.Array.Empty<DailyV1InitialWantedRecordConfig>())
-            {
-                if (selectedWarrant == null
-                    || string.IsNullOrWhiteSpace(selectedWarrant.target)
-                    || string.IsNullOrWhiteSpace(selectedWarrant.city))
-                    continue;
-                NpcRuntime target = GetSingleNpcRuntimeByDefinition(selectedWarrant.target);
-                CityRuntime city = GetSingleCityRuntimeByDefinition(selectedWarrant.city);
-                justiceSystem.CreateOrIncreaseWarrant(target, city,
-                    selectedWarrant.bounty, selectedWarrant.sentenceDays);
-            }
+            if (selectedRuntimeOwnerGraphBuilder == null
+                || !selectedRuntimeOwnerGraphBuilder.TryCreateConfiguredInitialJusticeState(
+                    justiceSystem.CoreOwner))
+                throw new System.InvalidOperationException(
+                    "The selected Core owner graph could not construct its admitted initial Justice state: "
+                    + (selectedRuntimeOwnerGraphBuilder?.LastInitialJusticeStateFailure ?? "builder unavailable") + ".");
+
+            foreach (NpcRuntime npc in NpcRuntimeList)
+                if (npc == null || !npc.TryRefreshSelectedStatusProjectionForGenesis(npc.SelectedRuntimeOwners))
+                    throw new System.InvalidOperationException(
+                        "The selected NPC status compatibility projection could not refresh after Core Justice genesis.");
+
+            return;
         }
-        else
-        {
-            justiceSystem.CreateInitialWarrants(simulationConfig,
-                GetSingleNpcRuntimeByDefinition, GetSingleCityRuntimeByDefinition);
-        }
+
+        justiceSystem.CreateInitialWarrants(simulationConfig,
+            GetSingleNpcRuntimeByDefinition, GetSingleCityRuntimeByDefinition);
         justiceSystem.SyncWantedStatuses(NpcRuntimeList);
+    }
+
+    private bool TryProjectInitialSelectedJusticeRows(DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph == null || justiceSystem == null
+            || !ReferenceEquals(graph.JusticeRecordsOwner, justiceSystem.CoreOwner))
+            return false;
+
+        foreach (DailyV1JusticeWantedRecordOwner row in graph.JusticeRecordsOwner.WantedRecords)
+        {
+            if (row == null) return false;
+            NpcRuntime target = null;
+            int targetMatches = 0;
+            foreach (NpcRuntime candidate in NpcRuntimeList)
+            {
+                if (candidate == null || !string.Equals(candidate.RuntimeId,
+                    row.TargetRuntimeId, System.StringComparison.Ordinal)) continue;
+                target = candidate;
+                targetMatches++;
+            }
+
+            CityRuntime city = null;
+            int cityMatches = 0;
+            foreach (CityRuntime candidate in CityRuntimeList)
+            {
+                if (candidate == null || !string.Equals(candidate.RuntimeId,
+                    row.CityRuntimeId, System.StringComparison.Ordinal)) continue;
+                city = candidate;
+                cityMatches++;
+            }
+
+            if (targetMatches != 1 || cityMatches != 1
+                || !justiceSystem.TryProjectSelectedCoreWantedRecord(row, target, city))
+                return false;
+        }
+
+        return true;
     }
 
     private NpcStatusData ResolveSelectedStatus(string selectedStatusId, NpcStatusData legacyStatus)

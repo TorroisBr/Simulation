@@ -28,7 +28,7 @@ public sealed class P12FCommitmentOwnerSnapshotTests
         Assert.That(partyFailure, Is.EqualTo(P12FCommitmentSnapshotFailure.None));
         Assert.That(stagedParties.Revision, Is.EqualTo(0));
 
-        Assert.That(P12FExpeditionOwnerSnapshot.TryCapture(expeditions, token, token.OwnerSections,
+        Assert.That(P12FExpeditionOwnerSnapshotOperations.TryCapture(expeditions, token, token.OwnerSections,
             out P12FExpeditionOwnerSnapshot expeditionSnapshot, out P12FCommitmentSnapshotFailure expeditionFailure), Is.True);
         Assert.That(expeditionFailure, Is.EqualTo(P12FCommitmentSnapshotFailure.None));
         Assert.That(expeditionSnapshot.Expeditions, Is.Empty);
@@ -94,7 +94,7 @@ public sealed class P12FCommitmentOwnerSnapshotTests
         Assert.That(expedition.TryTraverseLocalConnection("connection-2", "place-current", out _), Is.True);
         DailyCaptureEligibilityToken token = CreateToken(Sections(new TravelPartyStore(), source));
 
-        Assert.That(P12FExpeditionOwnerSnapshot.TryCapture(source, token, token.OwnerSections,
+        Assert.That(P12FExpeditionOwnerSnapshotOperations.TryCapture(source, token, token.OwnerSections,
             out P12FExpeditionOwnerSnapshot snapshot, out P12FCommitmentSnapshotFailure failure), Is.True);
         Assert.That(failure, Is.EqualTo(P12FCommitmentSnapshotFailure.None));
         P12FExpeditionOwnerSnapshotRecord row = snapshot.Expeditions.Single();
@@ -150,7 +150,7 @@ public sealed class P12FCommitmentOwnerSnapshotTests
         ExpeditionRuntime added = new ExpeditionRuntime("exp-added", "site", "origin", "target", "route",
             new[] { "npc" }, new[] { "npc" }, Array.Empty<string>());
         Assert.That(expeditions.Add(added), Is.True);
-        Assert.That(P12FExpeditionOwnerSnapshot.TryCapture(expeditions, staleExpeditionToken,
+        Assert.That(P12FExpeditionOwnerSnapshotOperations.TryCapture(expeditions, staleExpeditionToken,
             staleExpeditionSections, out _, out failure), Is.False);
         Assert.That(failure, Is.EqualTo(P12FCommitmentSnapshotFailure.InvalidOwner));
     }
