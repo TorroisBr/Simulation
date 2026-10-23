@@ -10,9 +10,10 @@ using System.Collections.Generic;
 internal static class DailyV1SelectedActorActionExecutionStage
 {
     /// <summary>
-    /// Identifies the narrow Normal-action shape whose dispatch has no Core
-    /// status write, target, or operation payload and therefore does not need
-    /// a Unity NpcActionRuntime projection.
+    /// Identifies a targetless Normal action whose exact Core slot and typed
+    /// action-status plan are sufficient for dispatch. Actor status effects
+    /// still commit through the Core status owner and the existing host P12
+    /// operation boundary; no Unity NpcActionRuntime is needed.
     /// </summary>
     internal static bool IsProjectionIndependentNormalAction(
         DailyV1SelectedRuntimeOwnerGraph graph,
@@ -32,8 +33,8 @@ internal static class DailyV1SelectedActorActionExecutionStage
                 graph.Definitions, action)
             || !DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
                 graph.Definitions, action,
-                out IReadOnlyList<DailyV1StatusDefinition> actorStatusToRemove,
-                out IReadOnlyList<DailyV1StatusDefinition> actorStatusToAdd,
+                out _,
+                out _,
                 out IReadOnlyList<DailyV1StatusDefinition> targetStatusToRemove,
                 out IReadOnlyList<DailyV1StatusDefinition> targetStatusToAdd))
             return false;
@@ -50,8 +51,6 @@ internal static class DailyV1SelectedActorActionExecutionStage
             && payload.ExpectedNetValue == 0f
             && payload.CommercialDecisionEvidence == null
             && payload.CommercialScoutingEvidence == null
-            && actorStatusToRemove.Count == 0
-            && actorStatusToAdd.Count == 0
             && targetStatusToRemove.Count == 0
             && targetStatusToAdd.Count == 0;
     }
