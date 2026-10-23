@@ -1,8 +1,96 @@
 Set-StrictMode -Version Latest
 
+function Get-CoreRepositoryRelativeIdentity {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$RepositoryRoot, [Parameter(Mandatory)][string]$FullPath)
+
+    $root = [IO.Path]::GetFullPath($RepositoryRoot).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $rootPrefix = $root + [IO.Path]::DirectorySeparatorChar
+    $full = [IO.Path]::GetFullPath($FullPath)
+    if (-not $full.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'A compile input resolved outside the repository root.'
+    }
+    return $full.Substring($rootPrefix.Length).Replace('\', '/')
+}
+
+function Get-CoreProjectCompileInputs {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ProjectRoot,
+        [Parameter(Mandatory)][string[]]$ProjectPaths
+    )
+
+    $root = (Resolve-Path -LiteralPath $ProjectRoot).Path
+    $pending = [System.Collections.Generic.Queue[string]]::new()
+    foreach ($projectPath in $ProjectPaths) { $pending.Enqueue($projectPath) }
+    $seenProjects = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $inputPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+
+    while ($pending.Count -gt 0) {
+        $projectIdentity = $pending.Dequeue().Replace('\', '/')
+        $projectPath = Join-Path $root ($projectIdentity -replace '/', [IO.Path]::DirectorySeparatorChar)
+        if (-not (Test-Path -LiteralPath $projectPath -PathType Leaf)) { throw "Validation project is missing: $projectIdentity" }
+        $projectFullPath = [IO.Path]::GetFullPath($projectPath)
+        $projectRelative = Get-CoreRepositoryRelativeIdentity -RepositoryRoot $root -FullPath $projectFullPath
+        if (-not $seenProjects.Add($projectRelative)) { continue }
+        [void]$inputPaths.Add($projectRelative)
+
+        # Ask MSBuild for its evaluated Compile and ProjectReference items.
+        # This resolves explicit links, imports, conditions, and SDK globs
+        # without duplicating MSBuild's evaluation rules in this runner.
+        $evaluationOutput = @(& dotnet msbuild $projectFullPath -nologo -getItem:Compile -getItem:ProjectReference 2>$null | ForEach-Object { $_.ToString() })
+        $evaluationExitCode = $LASTEXITCODE
+        if ($evaluationExitCode -ne 0) { throw "MSBuild input evaluation failed for project $projectRelative." }
+        try {
+            $evaluation = [string]::Join([Environment]::NewLine, [string[]]$evaluationOutput) | ConvertFrom-Json -ErrorAction Stop
+        } catch {
+            throw "MSBuild returned an unreadable input evaluation for project $projectRelative."
+        }
+
+        foreach ($item in @($evaluation.Items.Compile)) {
+            if ($null -eq $item) { continue }
+            $itemPath = [string]$item.FullPath
+            if ([string]::IsNullOrWhiteSpace($itemPath)) {
+                $itemPath = [string]$item.Identity
+                if (-not [IO.Path]::IsPathRooted($itemPath)) { $itemPath = Join-Path (Split-Path -Parent $projectFullPath) $itemPath }
+            }
+            if ([string]::IsNullOrWhiteSpace($itemPath)) { throw "MSBuild returned a Compile item without a path for $projectRelative." }
+            $itemFullPath = [IO.Path]::GetFullPath($itemPath)
+            # SDK-generated compilation inputs are derived from tracked source,
+            # project, SDK and package inputs; they are not source identities.
+            if ($itemFullPath -match '(?i)[\\/](?:obj|bin)[\\/]') { continue }
+            $itemRelative = Get-CoreRepositoryRelativeIdentity -RepositoryRoot $root -FullPath $itemFullPath
+            if (-not (Test-Path -LiteralPath $itemFullPath -PathType Leaf)) { throw "Declared compile input is missing: $itemRelative" }
+            [void]$inputPaths.Add($itemRelative)
+        }
+
+        foreach ($reference in @($evaluation.Items.ProjectReference)) {
+            if ($null -eq $reference) { continue }
+            $referencePath = [string]$reference.FullPath
+            if ([string]::IsNullOrWhiteSpace($referencePath)) {
+                $referencePath = [string]$reference.Identity
+                if (-not [IO.Path]::IsPathRooted($referencePath)) { $referencePath = Join-Path (Split-Path -Parent $projectFullPath) $referencePath }
+            }
+            if ([string]::IsNullOrWhiteSpace($referencePath)) { throw "MSBuild returned a ProjectReference without a path for $projectRelative." }
+            $referenceFullPath = [IO.Path]::GetFullPath($referencePath)
+            $referenceRelative = Get-CoreRepositoryRelativeIdentity -RepositoryRoot $root -FullPath $referenceFullPath
+            $pending.Enqueue($referenceRelative)
+        }
+    }
+
+    return @($inputPaths | Sort-Object)
+}
+
 function Get-CoreInputSnapshot {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$ProjectRoot)
+    param(
+        [Parameter(Mandatory)][string]$ProjectRoot,
+        [string[]]$ProjectPaths = @(
+            'tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj',
+            'tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj',
+            'tools/Simulation.Lab/Simulation.Lab.csproj'
+        )
+    )
 
     $root = (Resolve-Path -LiteralPath $ProjectRoot).Path
     $fixedInputs = @(
@@ -166,7 +254,8 @@ function Get-CoreInputSnapshot {
         $_ -match '(^|/)(Directory\.Build\.(props|targets)|Directory\.Packages\.props|NuGet\.Config|nuget\.config|[^/]+\.runsettings)$'
     })
     if ($LASTEXITCODE -ne 0) { throw 'Could not enumerate tracked build configuration inputs.' }
-    $relativeInputs = @($fixedInputs + $trackedConfig | Sort-Object -Unique)
+    $projectInputs = Get-CoreProjectCompileInputs -ProjectRoot $root -ProjectPaths $ProjectPaths
+    $relativeInputs = @($fixedInputs + $trackedConfig + $projectInputs | Sort-Object -Unique)
     $entries = foreach ($relative in $relativeInputs) {
         $path = Join-Path $root ($relative -replace '/', [IO.Path]::DirectorySeparatorChar)
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Required validation input is missing: $relative" }
@@ -473,4 +562,4 @@ function Get-CoreTrxAssessment {
     }
 }
 
-Export-ModuleMember -Function Get-CoreInputSnapshot, Get-CoreInputDigest, Compare-CoreInputSnapshots, New-CoreHostTraceRunSettings, Get-CoreRuntimeSelectionTrace, Get-CoreTrxAssessment
+Export-ModuleMember -Function Get-CoreProjectCompileInputs, Get-CoreInputSnapshot, Get-CoreInputDigest, Compare-CoreInputSnapshots, New-CoreHostTraceRunSettings, Get-CoreRuntimeSelectionTrace, Get-CoreTrxAssessment

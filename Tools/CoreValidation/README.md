@@ -50,8 +50,17 @@ explicit private evidence directory supplied by the operator). Review their
 actual contents before publication. This tool does not strip or normalize TRX.
 The manifest records relative source identities, hashes, command arguments,
 test cases, outcomes, available durations, toolchain, elapsed times, build
-storage and generated dependency-input hashes. Keep the private source copy and
-the exact input-identifying manifest together during review.
+storage and generated dependency-input hashes. Before each run, the runner asks
+the pinned MSBuild SDK to evaluate the `Compile` and `ProjectReference` items
+for every project it builds, recursively hashes the repository-contained source
+inputs, and verifies the same snapshot afterward. This binds linked Core files
+and transitive project source that are not present in a hand-maintained source
+list. Generated `bin`/`obj` compile outputs are excluded; project files,
+tracked build configuration, locked dependencies and generated asset snapshots
+remain bound separately. A compile input that resolves outside the repository
+or is missing causes the run to stop rather than produce incomplete source
+evidence. Keep the private source copy and the exact input-identifying manifest
+together during review.
 
 The cold and warm test gates also retain separate private .NET host-trace files.
 The runner writes SDK-specific host-trace settings into each isolated VSTest

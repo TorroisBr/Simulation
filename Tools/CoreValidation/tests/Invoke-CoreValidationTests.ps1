@@ -95,6 +95,19 @@ $afterChanged = @([pscustomobject]@{ path = 'input.cs'; bytes = 1; sha256 = 'b' 
 Assert-True (Compare-CoreInputSnapshots -Before $before -After $afterSame).stable 'Equal input snapshots should be stable.'
 Assert-True (-not (Compare-CoreInputSnapshots -Before $before -After $afterChanged).stable) 'Changed input snapshots must be rejected as unstable.'
 
+$repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+$compileInputs = Get-CoreProjectCompileInputs -ProjectRoot $repositoryRoot -ProjectPaths @('tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj')
+foreach ($requiredInput in @(
+    'Packages/com.simulation.core/Runtime/Application/DailyV1ExecutionBoundaryState.cs',
+    'tests/Simulation.Core.Tests/DailyV1ExecutionBoundaryStateTests.cs',
+    'src/Simulation.DailyV1.DotNetHostIdentity/DailyV1DotNetHostEnvironmentIdentityFactory.cs',
+    'src/Simulation.Core/Simulation.Core.csproj',
+    'src/Simulation.DailyV1.DotNetHostIdentity/Simulation.DailyV1.DotNetHostIdentity.csproj'
+)) {
+    Assert-True ($compileInputs -ccontains $requiredInput) "Evaluated compile graph must include $requiredInput."
+}
+Assert-True (@($compileInputs | Where-Object { [IO.Path]::IsPathRooted($_) }).Count -eq 0) 'Compile input identities must be repository-relative.'
+
 $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..\..')).Path
 $coreInputs = @(Get-CoreInputSnapshot -ProjectRoot $repositoryRoot | ForEach-Object { [string]$_.path })
 foreach ($requiredInput in @(
@@ -180,4 +193,4 @@ finally {
     }
 }
 
-Write-Output 'Core validation self-tests PASS: populated/parameterized, failed, not-executed, empty discovery, malformed/missing report, run identity/summary outcome, ID/count integrity, input stability, SDK-specific testhost trace settings, exact assembly runtime selection, and protected evidence ACL.'
+Write-Output 'Core validation self-tests PASS: populated/parameterized, failed, not-executed, empty discovery, malformed/missing report, run identity/summary outcome, ID/count integrity, input stability, evaluated transitive compile-source closure, SDK-specific testhost trace settings, exact assembly runtime selection, and protected evidence ACL.'

@@ -33,6 +33,11 @@ $projectAssets = @(
 )
 if (-not $SkipLab) { $projectAssets += 'tools/Simulation.Lab/obj/project.assets.json' }
 $records = [System.Collections.Generic.List[object]]::new()
+$inputProjects = @(
+    'tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj',
+    'tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj'
+)
+if (-not $SkipLab) { $inputProjects += 'tools/Simulation.Lab/Simulation.Lab.csproj' }
 
 function Invoke-Dotnet {
     param([string]$Name, [string[]]$Arguments)
@@ -96,7 +101,7 @@ function Get-GeneratedInputSnapshot {
 }
 
 try {
-    $beforeInputs = Get-CoreInputSnapshot -ProjectRoot $root
+    $beforeInputs = Get-CoreInputSnapshot -ProjectRoot $root -ProjectPaths $inputProjects
     $sdkRecord = Invoke-Dotnet -Name 'sdk-version' -Arguments @('--version')
     Assert-CommandPassed $sdkRecord
     $sdkVersion = ($sdkRecord.output | Select-Object -Last 1).Trim()
@@ -203,7 +208,7 @@ try {
     $generatedAfter = Get-GeneratedInputSnapshot -Paths $projectAssets
     $generatedComparison = Compare-CoreInputSnapshots -Before $generatedBefore -After $generatedAfter
     if (-not $generatedComparison.stable) { throw "Generated dependency inputs changed during validation: $($generatedComparison.changedPaths -join ', ')" }
-    $afterInputs = Get-CoreInputSnapshot -ProjectRoot $root
+    $afterInputs = Get-CoreInputSnapshot -ProjectRoot $root -ProjectPaths $inputProjects
     $inputComparison = Compare-CoreInputSnapshots -Before $beforeInputs -After $afterInputs
     if (-not $inputComparison.stable) { throw "Validation inputs changed during execution: $($inputComparison.changedPaths -join ', ')" }
 
