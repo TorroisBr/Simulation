@@ -26,6 +26,8 @@
 /tests/Simulation.Core.Tests/obj/
 /tools/Simulation.Core.CalendarDemo/bin/
 /tools/Simulation.Core.CalendarDemo/obj/
+/src/Simulation.DailyV1.DotNetHostIdentity/bin/
+/src/Simulation.DailyV1.DotNetHostIdentity/obj/
 /tools/Simulation.Lab/bin/
 /tools/Simulation.Lab/obj/
 
