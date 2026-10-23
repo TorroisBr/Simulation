@@ -2,6 +2,8 @@
 
 This is an implementation milestone on the existing CORE-F runtime/application candidate. It does not complete CORE-F, promote Core canonical, or claim a detached host.
 
+Independent exact-tip review: see [REVIEW.md](REVIEW.md). Verdict: `VALIDATED_CANDIDATE`; reviewed code commit `d0f4df4eef9cf17e6fa8a4fe7edece6335cfced3` on base `cebd8cd201149e5192880e32411a5b5ad7237b7d`; no actionable findings.
+
 ## Change
 
 For selected Daily-v1 City owners, `CityRuntime.ImportantNpcs` now resolves the exact Unity NPC projections from the ordered `DailyV1CityNpcPresenceOwner` RuntimeId vector through the owning `SimulationRuntime` registry. The selected Core owner is the membership authority; the old Unity list remains the unselected/legacy path and is cleared when the selected runtime binds. Snapshot membership, membership preflight/commit projections, and Core-to-P12 bridge reads use that same owner-derived view. Binding preflights every selected City projection before changing any City binding.
