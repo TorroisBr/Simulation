@@ -2948,12 +2948,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             throw new InvalidOperationException(
                 "The selected owner graph could not bind the exact P8-C Person-position authority installed by this runtime.");
         if (selectedOwnerGraph != null
-            && !dailyExecutionBoundary.TryBindSelectedRuntimeActorRoster(
+            && !dailyExecutionBoundary.TryBindOrValidateSelectedRuntimeActorRoster(
                 this.npcRuntimes.Select(npc => npc == null
                     ? null
                     : new DailyV1ActorTurnRosterProjection(npc.RuntimeId, npc.PersonId))))
             throw new InvalidOperationException(
-                "The Core runtime boundary could not bind the exact ordered NPC identity roster.");
+                "The Unity NPC projection differs from the exact Core-owned ordered actor identity roster.");
         bool hasCompleteSelectedRuntimeExecutionRoots = this.runtimeIdAllocator != null
             && this.randomSource != null
             && simulationRecordSequence != null

@@ -368,6 +368,80 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     }
 
     /// <summary>
+    /// Binds the initial selected actor order from Core's admitted owner graph.
+    /// Unity may later compare its runtime projections with this exact sequence,
+    /// but does not choose actor-turn ordinals for the shared runtime.
+    /// </summary>
+    internal bool TryBindInitialSelectedRuntimeActorRosterFromOwnerGraph()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = selectedRuntimeOwnerGraph;
+        if (!selectedRuntimeOwnerGraphBound || graph == null
+            || graph.PersonStore == null || selectedRuntimeActorRoster != null)
+            return false;
+
+        List<DailyV1ActorTurnRosterProjection> initialRoster =
+            new List<DailyV1ActorTurnRosterProjection>(graph.Npcs.Count);
+        foreach (DailyV1NpcRuntimeOwners owner in graph.Npcs)
+        {
+            if (owner == null || string.IsNullOrWhiteSpace(owner.RuntimeId)) return false;
+            PersonId personId = null;
+            if (graph.PersonStore.TryGetByMaterializedNpcRuntimeId(
+                    owner.RuntimeId, out PersonRuntime person))
+            {
+                if (person == null || person.PersonId == null
+                    || !person.IsMaterialized
+                    || !string.Equals(person.MaterializedNpcRuntimeId,
+                        owner.RuntimeId, StringComparison.Ordinal))
+                    return false;
+                personId = person.PersonId;
+            }
+            initialRoster.Add(new DailyV1ActorTurnRosterProjection(
+                owner.RuntimeId, personId));
+        }
+
+        return TryBindSelectedRuntimeActorRoster(initialRoster);
+    }
+
+    /// <summary>
+    /// Binds a legacy/unpublished roster once, or proves that a host projection
+    /// exactly matches the Core-created order and PersonId instances. A Unity
+    /// host cannot replace the roster that determines persisted actor ordinals.
+    /// </summary>
+    internal bool TryBindOrValidateSelectedRuntimeActorRoster(
+        IEnumerable<DailyV1ActorTurnRosterProjection> runtimeRoster)
+    {
+        if (!selectedRuntimeOwnerGraphBound || selectedRuntimeOwnerGraph == null
+            || !TryCreateValidatedSelectedRuntimeActorRoster(
+                selectedRuntimeOwnerGraph, runtimeRoster,
+                out IReadOnlyList<DailyV1ActorTurnRosterProjection> candidate))
+            return false;
+
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> existing = selectedRuntimeActorRoster;
+        if (existing == null)
+        {
+            selectedRuntimeActorRoster = candidate;
+            return true;
+        }
+
+        if (existing.Count != candidate.Count) return false;
+        for (int index = 0; index < existing.Count; index++)
+        {
+            DailyV1ActorTurnRosterProjection left = existing[index];
+            DailyV1ActorTurnRosterProjection right = candidate[index];
+            if (left == null || right == null)
+            {
+                if (left != null || right != null) return false;
+                continue;
+            }
+            if (!string.Equals(left.RuntimeId, right.RuntimeId, StringComparison.Ordinal)
+                || !ReferenceEquals(left.PersonId, right.PersonId))
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Prepares the same ordered runtime identity roster with one newly
     /// materialized PersonId. The caller publishes this projection as part of
     /// the existing PersonStore/NPC bind transaction; runtime ID order and

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 
@@ -68,6 +69,19 @@ public sealed class DailyV1GenesisComposerTests
         Assert.That(composition.ActorChoiceStore.PersonStore, Is.SameAs(composition.PersonStore));
         Assert.That(composition.ExecutionBoundaryState.SelectedRuntimeOwnerGraph,
             Is.SameAs(composition.OwnerGraph));
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> actorRoster =
+            composition.ExecutionBoundaryState.SelectedRuntimeActorRoster;
+        Assert.That(actorRoster.Select(member => member.RuntimeId),
+            Is.EqualTo(composition.OwnerGraph.Npcs.Select(owner => owner.RuntimeId)),
+            "Core genesis supplies the exact actor-turn order from its admitted NPC owner graph.");
+        Assert.That(actorRoster.All(member => member.PersonId == null), Is.True,
+            "The genesis fixture has no materialized Person bindings; later bindings update this Core roster through the existing membership transaction.");
+        Assert.That(composition.ExecutionBoundaryState.TryBindOrValidateSelectedRuntimeActorRoster(
+            actorRoster), Is.True,
+            "A host projection that exactly matches Core's actor identities and PersonId instances is accepted.");
+        Assert.That(composition.ExecutionBoundaryState.TryBindOrValidateSelectedRuntimeActorRoster(
+            actorRoster.Reverse()), Is.False,
+            "A host cannot reorder the actor identities that determine persisted actor-choice ordinals.");
         Assert.That(composition.ExecutionBoundaryState.SimulationTime,
             Is.SameAs(composition.SimulationTime));
         Assert.That(composition.ExecutionBoundaryState.WorldId, Is.SameAs(composition.WorldId));

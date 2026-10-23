@@ -234,6 +234,7 @@ internal static class DailyV1GenesisComposer
                     if (!graph.TryBindPersonStore(personStore)
                         || !ReferenceEquals(actorChoiceStore.PersonStore, personStore)
                         || !executionBoundaryState.TryBindSelectedRuntimeOwnerGraph(graph)
+                        || !executionBoundaryState.TryBindInitialSelectedRuntimeActorRosterFromOwnerGraph()
                         || !executionBoundaryState.TryBindSelectedRuntimeExecutionRoots(
                             runtimeIds,
                             randomSource,
