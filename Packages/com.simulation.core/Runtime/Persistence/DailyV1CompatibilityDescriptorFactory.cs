@@ -140,8 +140,10 @@ internal static class DailyV1CompatibilityDescriptorFactory
     {
         fingerprint = null;
         DailyV1SimulationConfigData config = definitions.Configuration;
-        decimal distance = decimal.Parse(config.authoredDistancePerNeighborStep,
-            NumberStyles.Number, CultureInfo.InvariantCulture);
+        if (!decimal.TryParse(config.authoredDistancePerNeighborStep,
+                NumberStyles.Number, CultureInfo.InvariantCulture, out decimal distance)
+            || distance <= 0m)
+            return false;
         byte[][] payloads =
         {
             EncodeHex(config, definitions),
