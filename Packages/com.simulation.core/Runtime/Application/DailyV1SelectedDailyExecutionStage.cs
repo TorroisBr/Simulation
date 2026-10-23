@@ -31,6 +31,9 @@ internal interface IDailyV1SelectedDailyExecutionBoundary
     bool TryCreateSelectedActorTurnContext(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedActorTurnExecutionContext context);
+    bool TryCreateSelectedActorTurnBoundary(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1ActorTurnExecutionBoundary boundary);
     bool TryCreateSelectedTravelDayContext(
         out IDailyV1SelectedTravelDayExecutionContext context);
 }
@@ -70,6 +73,62 @@ internal interface IDailyV1SelectedActorTurnExecutionContext
     PersonStore PersonStore { get; }
     ActorChoiceStore ActorChoiceStore { get; }
     IDailyV1ActorTurnExecutionBoundary Boundary { get; }
+}
+
+/// <summary>
+/// Creates the admitted actor-turn context from Core's exact bound roots.
+/// The host supplies only the selected actor-turn boundary; it cannot choose the
+/// actor roster, PersonStore, or ActorChoiceStore used by the shared stage.
+/// </summary>
+internal static class DailyV1SelectedActorTurnExecutionContextFactory
+{
+    internal static bool TryCreate(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IDailyV1SelectedDailyExecutionBoundary hostBoundary,
+        out IDailyV1SelectedActorTurnExecutionContext context)
+    {
+        context = null;
+        if (executionState == null || graph == null || hostBoundary == null
+            || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+            || !executionState.SelectedRuntimeExecutionRootsBound
+            || executionState.SelectedRuntimeActorRoster == null
+            || graph.PersonStore == null
+            || executionState.SelectedActorChoiceStore == null
+            || !ReferenceEquals(executionState.SelectedActorChoiceStore.PersonStore, graph.PersonStore)
+            || !hostBoundary.TryCreateSelectedActorTurnBoundary(
+                graph, out IDailyV1ActorTurnExecutionBoundary actorBoundary)
+            || actorBoundary == null)
+            return false;
+
+        context = new CoreSelectedActorTurnExecutionContext(
+            executionState.SelectedRuntimeActorRoster,
+            graph.PersonStore,
+            executionState.SelectedActorChoiceStore,
+            actorBoundary);
+        return true;
+    }
+
+    private sealed class CoreSelectedActorTurnExecutionContext
+        : IDailyV1SelectedActorTurnExecutionContext
+    {
+        internal CoreSelectedActorTurnExecutionContext(
+            IReadOnlyList<DailyV1ActorTurnRosterProjection> runtimeRoster,
+            PersonStore personStore,
+            ActorChoiceStore actorChoiceStore,
+            IDailyV1ActorTurnExecutionBoundary boundary)
+        {
+            RuntimeRoster = runtimeRoster ?? throw new ArgumentNullException(nameof(runtimeRoster));
+            PersonStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
+            ActorChoiceStore = actorChoiceStore ?? throw new ArgumentNullException(nameof(actorChoiceStore));
+            Boundary = boundary ?? throw new ArgumentNullException(nameof(boundary));
+        }
+
+        public IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
+        public PersonStore PersonStore { get; }
+        public ActorChoiceStore ActorChoiceStore { get; }
+        public IDailyV1ActorTurnExecutionBoundary Boundary { get; }
+    }
 }
 
 /// <summary>
@@ -148,8 +207,9 @@ internal static class DailyV1SelectedDailyExecutionStage
         if (executionState != null)
         {
             string executionRootFailure = null;
-            if (!boundary.TryCreateSelectedActorTurnContext(graph, out actorTurnContext))
-                executionRootFailure = "host could not create the selected actor-turn context";
+            if (!DailyV1SelectedActorTurnExecutionContextFactory.TryCreate(
+                    executionState, graph, boundary, out actorTurnContext))
+                executionRootFailure = "Core could not bind its exact actor-turn roots to the host action boundary";
             else if (actorTurnContext == null)
                 executionRootFailure = "host returned a null selected actor-turn context";
             else if (actorTurnContext.RuntimeRoster == null)

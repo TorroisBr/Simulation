@@ -11107,6 +11107,18 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             DailyV1SelectedRuntimeOwnerGraph graph,
             out IDailyV1SelectedActorTurnExecutionContext context) =>
             runtime.TryCreateSelectedDailyV1ActorTurnContext(graph, out context);
+        public bool TryCreateSelectedActorTurnBoundary(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1ActorTurnExecutionBoundary boundary)
+        {
+            boundary = null;
+            if (!runtime.TryCreateSelectedDailyV1ActorTurnContext(
+                    graph, out IDailyV1SelectedActorTurnExecutionContext context)
+                || context?.Boundary == null)
+                return false;
+            boundary = context.Boundary;
+            return true;
+        }
         public bool TryCreateSelectedTravelDayContext(
             out IDailyV1SelectedTravelDayExecutionContext context) =>
             runtime.TryCreateSelectedTravelDayExecutionContext(out context);

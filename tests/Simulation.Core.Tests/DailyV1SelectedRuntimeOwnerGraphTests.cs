@@ -2203,6 +2203,13 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             context = new NoOpActorTurnContext(graph);
             return true;
         }
+        public bool TryCreateSelectedActorTurnBoundary(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1ActorTurnExecutionBoundary boundary)
+        {
+            boundary = new NoOpActorTurnBoundary();
+            return graph != null;
+        }
 
         public bool TryCreateSelectedTravelDayContext(
             out IDailyV1SelectedTravelDayExecutionContext context)

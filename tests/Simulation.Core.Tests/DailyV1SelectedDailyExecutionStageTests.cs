@@ -436,6 +436,49 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "The Core actor operation stage must not run with a substituted PersonStore.");
     }
 
+    [Test]
+    public void AdmittedActorTurnContextUsesOnlyCoreBoundRosterAndOwnerRoots()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        FakeBoundary boundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore);
+
+        Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryCreate(
+            state, graph, boundary,
+            out IDailyV1SelectedActorTurnExecutionContext context), Is.True);
+
+        Assert.That(context.RuntimeRoster, Is.SameAs(state.SelectedRuntimeActorRoster));
+        Assert.That(context.PersonStore, Is.SameAs(graph.PersonStore));
+        Assert.That(context.ActorChoiceStore, Is.SameAs(state.SelectedActorChoiceStore));
+        Assert.That(context.ActorChoiceStore.PersonStore, Is.SameAs(context.PersonStore));
+        Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context" }));
+    }
+
+    [Test]
+    public void ActorTurnContextFactoryRejectsUnboundStateBeforeHostBoundary()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(definitions);
+        DailyV1ExecutionBoundaryState unboundState = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(),
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(Guid.NewGuid()));
+        FakeBoundary boundary = new FakeBoundary();
+
+        Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryCreate(
+            unboundState, graph, boundary,
+            out IDailyV1SelectedActorTurnExecutionContext context), Is.False);
+
+        Assert.That(context, Is.Null);
+        Assert.That(boundary.Calls, Is.Empty,
+            "Core must reject incomplete bound roots without asking the host to create a projection boundary.");
+    }
+
     private static ScheduledDirectiveStore CreateDirectiveForFirstNpc(
         DailyV1SelectedRuntimeOwnerGraph graph,
         long absoluteDay)
@@ -460,6 +503,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             DailyV1CapturedSelectedContentFixture.CreateDefinitions(),
             SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
             out DailyV1GenesisComposition composition, out string diagnostic), Is.True, diagnostic);
+        Assert.That(composition.ExecutionBoundaryState.TryBindSelectedRuntimeActorRoster(
+            composition.OwnerGraph.Npcs.Select(owner =>
+                new DailyV1ActorTurnRosterProjection(owner.RuntimeId, null))), Is.True);
         return composition;
     }
 
@@ -485,6 +531,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             new WorldId(Guid.NewGuid()));
         Assert.That(state.TryBindRuntimeConfiguration(
             graph.Definitions.EffectiveConfiguration, runtimeCalendar), Is.True);
+        Assert.That(state.TryBindSelectedRuntimeOwnerGraph(graph), Is.True);
+        Assert.That(state.TryBindSelectedRuntimeActorRoster(graph.Npcs.Select(owner =>
+            new DailyV1ActorTurnRosterProjection(owner.RuntimeId, null))), Is.True);
         return state;
     }
 
@@ -766,6 +815,15 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 : new ActorChoiceStore(people);
             context = new FakeActorTurnContext(
                 runtimeRoster, people, choices, new FakeActorTurnBoundary(this));
+            return true;
+        }
+        public bool TryCreateSelectedActorTurnBoundary(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1ActorTurnExecutionBoundary boundary)
+        {
+            Assert.That(graph, Is.Not.Null);
+            Calls.Add("actor-context");
+            boundary = new FakeActorTurnBoundary(this);
             return true;
         }
         public bool TryCreateSelectedTravelDayContext(
