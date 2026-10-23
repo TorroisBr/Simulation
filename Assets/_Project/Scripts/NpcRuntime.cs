@@ -1915,6 +1915,35 @@ public class NpcRuntime : ICapabilityConditionSource
     internal bool TryInstallPrecommittedCurrentActionRuntime(NpcActionRuntime actionRuntime) =>
         actionRuntime != null && TryInstallCurrentActionRuntime(actionRuntime);
 
+    /// <summary>
+    /// Publishes a Core-committed selected action clear into this Unity object.
+    /// The Core action-slot owner and its revision have already changed; this
+    /// method updates only the existing object projection and P12 notification.
+    /// </summary>
+    internal bool TryInstallPrecommittedCurrentActionClear(
+        NpcActionRuntime expectedActionRuntime,
+        DailyV1NpcActionPayloadOwner expectedPayload)
+    {
+        if (expectedActionRuntime == null || expectedPayload == null
+            || selectedRuntimeOwners == null
+            || !ReferenceEquals(currentActionRuntime, expectedActionRuntime)
+            || !ReferenceEquals(currentAction, expectedActionRuntime.Action)
+            || !ReferenceEquals(expectedActionRuntime.SelectedOwner, expectedPayload)
+            || !expectedActionRuntime.MatchesSelectedOwner()
+            || selectedRuntimeOwners.ActionSlot.CurrentAction != null
+            || selectedRuntimeOwners.ActionSlot.CurrentPayload != null)
+            return false;
+
+        currentActionRuntime = null;
+        currentAction = null;
+        if (p12LifecycleMutationAdmission != null)
+            expectedActionRuntime.UnbindP12Owner(this);
+        expectedActionRuntime.UnbindSelectedOwner();
+        NotifyP12LifecycleMutationCommitted(
+            false, false, true, currentActionRevisionAlreadyCommitted: true);
+        return true;
+    }
+
     private bool TryInstallCurrentActionRuntime(NpcActionRuntime actionRuntime)
     {
         if (actionRuntime == currentActionRuntime

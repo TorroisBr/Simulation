@@ -53,7 +53,9 @@ internal static class DailyV1SelectedActorActionExecutionStage
         // Preserve the legacy no-selection clear and the exact decision-record,
         // origin-id, P12 admission, Core slot and Unity projection ordering.
         if (selected == null)
-            boundary.ClearCurrentAction(actor);
+        {
+            if (!TryClearCurrentAction(graph, actor, boundary)) return false;
+        }
         else if (!TryCommitSelectedActionSlot(
                      graph, actor, selected, decisionBoundary, NpcDecisionOrigin.Autonomous,
                      absoluteDay, boundary))
@@ -66,7 +68,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
         if (action.Values.actionType?.Value == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
             && !boundary.IsActorAtCurrentCityLocation(actor))
         {
-            boundary.ClearCurrentAction(actor);
+            if (!TryClearCurrentAction(graph, actor, boundary)) return false;
             return true;
         }
 
@@ -161,6 +163,41 @@ internal static class DailyV1SelectedActorActionExecutionStage
         return true;
     }
 
+    /// <summary>
+    /// Clears the exact selected Core action slot before its Unity projection.
+    /// The host admits and publishes the compatibility object; it does not own
+    /// the action-slot mutation or revision.
+    /// </summary>
+    internal static bool TryClearCurrentAction(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        IDailyV1SelectedActorActionExecutionBoundary boundary)
+    {
+        DailyV1NpcActionSlotOwner slot = actor?.ActionSlot;
+        if (graph == null || actor == null || boundary == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(graph.Definitions, actor.Definitions)
+            || slot == null)
+            return false;
+
+        if (slot.CurrentAction == null) return slot.CurrentPayload == null;
+        if (slot.CurrentPayload == null
+            || !boundary.TryPrepareCurrentActionClearProjection(actor))
+            return false;
+
+        if (!graph.TryCommitCurrentActionSlot(actor, null, null,
+                () => boundary.CanCommitCurrentActionClear(actor)))
+        {
+            boundary.CancelPreparedCurrentActionClearProjection(actor);
+            return false;
+        }
+
+        if (!boundary.TryPublishCurrentActionClearProjection(actor))
+            throw new InvalidOperationException(
+                "A committed selected Core action clear could not publish its Unity projection.");
+        return true;
+    }
+
     internal static void ProcessScheduledRequestAction(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
@@ -179,7 +216,9 @@ internal static class DailyV1SelectedActorActionExecutionStage
             throw new InvalidOperationException(
                 "The scheduled Daily-v1 action did not target its exact admitted actor owner.");
 
-        boundary.ClearCurrentAction(actor);
+        if (!TryClearCurrentAction(graph, actor, boundary))
+            throw new InvalidOperationException(
+                "The scheduled Daily-v1 action could not clear its exact Core action slot.");
         if (directive.Mode != ScheduledDirectiveMode.RequestAction
             || directive.Operation != ScheduledDirectiveOperation.EscapePrison
             || !graph.Definitions.Actions.TryGetValue(
@@ -249,7 +288,9 @@ internal static class DailyV1SelectedActorActionExecutionStage
             throw new InvalidOperationException(
                 "The scheduled Daily-v1 forced outcome did not target its exact admitted actor owner.");
 
-        boundary.ClearCurrentAction(actor);
+        if (!TryClearCurrentAction(graph, actor, boundary))
+            throw new InvalidOperationException(
+                "The scheduled Daily-v1 outcome could not clear its exact Core action slot.");
         if (directive.Mode != ScheduledDirectiveMode.ForceOutcome
             || directive.Operation != ScheduledDirectiveOperation.EscapePrison
             || graph.JusticeRecordsOwner == null)
@@ -289,12 +330,29 @@ internal static class DailyV1SelectedActorActionExecutionStage
             return;
         }
 
-        if (!boundary.TryInstallForcedOutcomeAction(actor, action))
+        if (!DailyV1NpcActionPayloadOwner.TryCreate(
+                graph.Definitions, action, null, null, null, 0,
+                0f, 1f, NpcTravelReason.None, 0f, null, null, null, null,
+                out DailyV1NpcActionPayloadOwner forcedPayload)
+            || !boundary.TryPrepareForcedOutcomeActionProjection(
+                actor, action, forcedPayload))
         {
             MarkForcedEscapeSkipped(boundary, directive, absoluteDay,
                 "Admitted Escape status effects are unavailable.");
             return;
         }
+
+        if (!graph.TryCommitCurrentActionSlot(actor, action, forcedPayload,
+                () => boundary.CanCommitSelectedActionSlot(actor, forcedPayload)))
+        {
+            boundary.CancelPreparedSelectedActionProjection(actor, forcedPayload);
+            MarkForcedEscapeSkipped(boundary, directive, absoluteDay,
+                "Admitted Escape status effects are unavailable.");
+            return;
+        }
+        if (!boundary.TryPublishSelectedActionProjection(actor, forcedPayload))
+            throw new InvalidOperationException(
+                "A committed forced Escape action could not publish its Unity projection.");
 
         if (!boundary.TryGetForcedEscapeBoundary(actor, action,
                 out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary crimeBoundary)

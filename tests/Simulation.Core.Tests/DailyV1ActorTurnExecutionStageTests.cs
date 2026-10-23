@@ -153,6 +153,60 @@ public sealed class DailyV1ActorTurnExecutionStageTests
     }
 
     [Test]
+    public void CoreBoundaryRefreshesPersonBindingWithoutChangingActorRosterSlots()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            out DailyV1NpcRuntimeOwners actor, out DailyV1NpcRuntimeOwners other);
+        PersonStore people = new PersonStore();
+        PersonId personId = new PersonId("person-core-roster-late-binding");
+        Assert.That(people.TryRegister(new PersonRuntime(personId), out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(graph.TryBindPersonStore(people), Is.True);
+
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
+        Assert.That(state.TryBindSelectedRuntimeOwnerGraph(graph), Is.True);
+        Assert.That(state.TryBindSelectedRuntimeActorRoster(new[]
+        {
+            new DailyV1ActorTurnRosterProjection(actor.RuntimeId, null),
+            null,
+            new DailyV1ActorTurnRosterProjection("npc/unselected", null),
+            new DailyV1ActorTurnRosterProjection(other.RuntimeId, null)
+        }), Is.True);
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> before =
+            state.SelectedRuntimeActorRoster;
+
+        Assert.That(state.TryCreateSelectedRuntimeActorRosterWithPersonBinding(
+                actor.RuntimeId, personId,
+                out IReadOnlyList<DailyV1ActorTurnRosterProjection> expected,
+                out IReadOnlyList<DailyV1ActorTurnRosterProjection> replacement), Is.True);
+        Assert.That(expected, Is.SameAs(before));
+        Assert.That(state.TryCommitSelectedRuntimeActorRoster(expected, replacement), Is.True);
+        Assert.That(before[0].PersonId, Is.Null,
+            "Published roster snapshots are immutable across a PersonId binding.");
+        Assert.That(state.SelectedRuntimeActorRoster, Has.Count.EqualTo(4));
+        Assert.That(state.SelectedRuntimeActorRoster[0].RuntimeId, Is.EqualTo(actor.RuntimeId));
+        Assert.That(state.SelectedRuntimeActorRoster[0].PersonId, Is.SameAs(personId));
+        Assert.That(state.SelectedRuntimeActorRoster[1], Is.Null,
+            "Late binding preserves null slots and actor-turn ordinals.");
+        Assert.That(state.SelectedRuntimeActorRoster[2].RuntimeId, Is.EqualTo("npc/unselected"));
+        Assert.That(state.SelectedRuntimeActorRoster[3].RuntimeId, Is.EqualTo(other.RuntimeId));
+
+        Assert.That(people.TryBindMaterializedNpc(personId, actor.RuntimeId,
+            out PersonStoreFailure bindFailure), Is.True, bindFailure.ToString());
+        Assert.That(DailyV1ActorTurnExecutionStage.TryBuildRoster(
+            graph, state.SelectedRuntimeActorRoster,
+            out IReadOnlyList<DailyV1ActorTurnRosterEntry> entries), Is.True);
+        Assert.That(entries[0].PersonId, Is.SameAs(personId));
+        Assert.That(entries[0].ActorOwner, Is.SameAs(actor));
+        Assert.That(entries[1].RosterOrdinal, Is.EqualTo(1));
+
+        Assert.That(state.TryCreateSelectedRuntimeActorRosterWithPersonBinding(
+            actor.RuntimeId, personId, out _, out _), Is.False,
+            "An already-bound actor cannot publish a second PersonId transition.");
+        Assert.That(state.SelectedRuntimeActorRoster, Is.SameAs(replacement));
+    }
+
+    [Test]
     public void CoreRuntimeRosterRejectsDuplicateIdentityAndPartialSelectedGraphPublication()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
@@ -450,8 +504,10 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         Assert.That(actor.ActionSlot.CurrentAction, Is.Null);
         Assert.That(actor.ActionSlot.CurrentPayload, Is.Null);
         Assert.That(actor.ActionSlot.Revision, Is.EqualTo(actionSlotRevisionBefore + 1L));
-        Assert.That(boundary.Events, Is.Empty,
-            "A disabled admitted Merchant capability rejects before Unity projection or sale dispatch.");
+        Assert.That(boundary.Events, Is.EqualTo(new[]
+        {
+            "clear-prepare", "clear-admission", "clear-projection"
+        }), "Clearing the prior Core slot is projected, while the disabled Merchant action never reaches sale dispatch.");
         Assert.That(choices.TryGet(input.InputId, out ActorChoiceInput rejected), Is.True);
         Assert.That(rejected.Status, Is.EqualTo(ActorChoiceInputStatus.Rejected));
         Assert.That(rejected.Dispositions.Single().Failure,
@@ -503,6 +559,61 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         Assert.That(boundary.Random.Calls, Is.EqualTo(1));
         Assert.That(boundary.Random.LastStreamKey,
             Is.EqualTo("npc-decision|" + actor.RuntimeId + "|12"));
+    }
+
+    [Test]
+    public void SelectedActionClearCommitsCoreRevisionBetweenAdmissionAndProjection()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
+        DailyV1ActionDefinition action = graph.Definitions.Actions.Values.First();
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            graph.Definitions, action, null, null, null, 0,
+            0f, 1f, NpcTravelReason.None, 0f, null, null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, action, payload, () => true), Is.True);
+        long revisionBefore = actor.ActionSlot.Revision;
+
+        CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary();
+        boundary.BindGraph(graph);
+        Assert.That(DailyV1SelectedActorActionExecutionStage.TryClearCurrentAction(
+            graph, actor, boundary), Is.True);
+
+        Assert.That(actor.ActionSlot.CurrentAction, Is.Null);
+        Assert.That(actor.ActionSlot.CurrentPayload, Is.Null);
+        Assert.That(actor.ActionSlot.Revision, Is.EqualTo(revisionBefore + 1L));
+        Assert.That(boundary.Events, Is.EqualTo(new[]
+        {
+            "clear-prepare", "clear-admission", "clear-projection"
+        }));
+    }
+
+    [Test]
+    public void RejectedSelectedActionClearLeavesCoreOwnerAndRevisionUnchanged()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
+        DailyV1ActionDefinition action = graph.Definitions.Actions.Values.First();
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            graph.Definitions, action, null, null, null, 0,
+            0f, 1f, NpcTravelReason.None, 0f, null, null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, action, payload, () => true), Is.True);
+        long revisionBefore = actor.ActionSlot.Revision;
+
+        CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary
+        {
+            RejectNextActionSlotAdmission = true
+        };
+        boundary.BindGraph(graph);
+        Assert.That(DailyV1SelectedActorActionExecutionStage.TryClearCurrentAction(
+            graph, actor, boundary), Is.False);
+
+        Assert.That(actor.ActionSlot.CurrentAction, Is.SameAs(action));
+        Assert.That(actor.ActionSlot.CurrentPayload, Is.SameAs(payload));
+        Assert.That(actor.ActionSlot.Revision, Is.EqualTo(revisionBefore));
+        Assert.That(boundary.Events, Is.EqualTo(new[]
+        {
+            "clear-prepare", "clear-admission", "clear-cancel"
+        }));
     }
 
     [Test]
@@ -988,6 +1099,63 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             if (preparedProjectionPayload != null
                 || !ReferenceEquals(selected?.PreparedPayload, payload)
                 || !decisionBoundary.TryProjectSelectedCandidate(actor, selected))
+                return false;
+            preparedProjectionActor = actor;
+            preparedProjectionPayload = payload;
+            return true;
+        }
+
+        public bool TryPrepareCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor)
+        {
+            if (preparedProjectionPayload != null
+                || !CurrentGraph.ContainsExactNpcOwner(actor)
+                || actor.ActionSlot?.CurrentPayload == null)
+                return false;
+            preparedProjectionActor = actor;
+            preparedProjectionPayload = actor.ActionSlot.CurrentPayload;
+            Events.Add("clear-prepare");
+            return true;
+        }
+
+        public bool CanCommitCurrentActionClear(DailyV1NpcRuntimeOwners actor)
+        {
+            if (!ReferenceEquals(preparedProjectionActor, actor)
+                || preparedProjectionPayload == null)
+                return false;
+            Events.Add("clear-admission");
+            ActionSlotAdmissionCount++;
+            if (!RejectNextActionSlotAdmission) return true;
+            RejectNextActionSlotAdmission = false;
+            return false;
+        }
+
+        public bool TryPublishCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor)
+        {
+            if (!ReferenceEquals(preparedProjectionActor, actor)
+                || preparedProjectionPayload == null
+                || actor.ActionSlot?.CurrentAction != null
+                || actor.ActionSlot?.CurrentPayload != null)
+                return false;
+            ClearPreparedProjection();
+            Events.Add("clear-projection");
+            return true;
+        }
+
+        public void CancelPreparedCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor)
+        {
+            if (!ReferenceEquals(preparedProjectionActor, actor)) return;
+            ClearPreparedProjection();
+            Events.Add("clear-cancel");
+        }
+
+        public bool TryPrepareForcedOutcomeActionProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition action,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            if (preparedProjectionPayload != null
+                || !CurrentGraph.ContainsExactNpcOwner(actor)
+                || !ReferenceEquals(payload?.Action, action))
                 return false;
             preparedProjectionActor = actor;
             preparedProjectionPayload = payload;

@@ -367,6 +367,68 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         return true;
     }
 
+    /// <summary>
+    /// Prepares the same ordered runtime identity roster with one newly
+    /// materialized PersonId. The caller publishes this projection as part of
+    /// the existing PersonStore/NPC bind transaction; runtime ID order and
+    /// holes are unchanged.
+    /// </summary>
+    internal bool TryCreateSelectedRuntimeActorRosterWithPersonBinding(
+        string runtimeId,
+        PersonId personId,
+        out IReadOnlyList<DailyV1ActorTurnRosterProjection> expectedRoster,
+        out IReadOnlyList<DailyV1ActorTurnRosterProjection> replacementRoster)
+    {
+        expectedRoster = selectedRuntimeActorRoster;
+        replacementRoster = null;
+        if (!selectedRuntimeOwnerGraphBound
+            || selectedRuntimeOwnerGraph == null
+            || selectedRuntimeActorRoster == null
+            || string.IsNullOrWhiteSpace(runtimeId)
+            || personId == null)
+            return false;
+
+        List<DailyV1ActorTurnRosterProjection> candidate =
+            new List<DailyV1ActorTurnRosterProjection>(selectedRuntimeActorRoster.Count);
+        bool replaced = false;
+        foreach (DailyV1ActorTurnRosterProjection member in selectedRuntimeActorRoster)
+        {
+            if (member != null
+                && string.Equals(member.RuntimeId, runtimeId, StringComparison.Ordinal))
+            {
+                if (replaced || member.PersonId != null) return false;
+                replaced = true;
+                candidate.Add(new DailyV1ActorTurnRosterProjection(member.RuntimeId, personId));
+            }
+            else
+            {
+                candidate.Add(member);
+            }
+        }
+
+        return replaced && TryCreateValidatedSelectedRuntimeActorRoster(
+            selectedRuntimeOwnerGraph, candidate, out replacementRoster);
+    }
+
+    /// <summary>
+    /// Publishes an already validated roster projection with compare-and-swap
+    /// semantics so a caller can compensate it if its paired owner bind fails.
+    /// </summary>
+    internal bool TryCommitSelectedRuntimeActorRoster(
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> expectedRoster,
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> replacementRoster)
+    {
+        if (!selectedRuntimeOwnerGraphBound
+            || selectedRuntimeOwnerGraph == null
+            || expectedRoster == null
+            || replacementRoster == null
+            || !ReferenceEquals(selectedRuntimeActorRoster, expectedRoster))
+            return false;
+
+        selectedRuntimeActorRoster = replacementRoster;
+        return true;
+    }
+
     internal bool TryCreateSelectedRuntimeActorRosterWithAppendedMember(
         DailyV1ActorTurnRosterProjection member,
         DailyV1SelectedRuntimeOwnerGraph replacementGraph,

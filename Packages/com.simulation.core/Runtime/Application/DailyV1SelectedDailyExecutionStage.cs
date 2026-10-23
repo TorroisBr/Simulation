@@ -145,21 +145,36 @@ internal static class DailyV1SelectedDailyExecutionStage
 
         IDailyV1SelectedActorTurnExecutionContext actorTurnContext = null;
         IReadOnlyList<DailyV1ActorTurnRosterEntry> actorRoster = null;
-        if (executionState != null
-            && (!boundary.TryCreateSelectedActorTurnContext(
-                    graph, out actorTurnContext)
-                || actorTurnContext == null
-                || actorTurnContext.RuntimeRoster == null
-                || actorTurnContext.PersonStore == null
-                || !ReferenceEquals(graph.PersonStore, actorTurnContext.PersonStore)
-                || actorTurnContext.ActorChoiceStore == null
-                || actorTurnContext.Boundary == null
-                || !DailyV1ActorTurnExecutionStage.TryBuildRoster(
-                    graph, actorTurnContext.RuntimeRoster, out actorRoster)
-                || !HasExactSelectedExecutionRoots(
-                    executionState, graph, actorTurnContext, actorRoster)))
-            throw new InvalidOperationException(
-                "The selected Daily-v1 host could not prove the exact actor, choice, random, allocator, sequence, and decision roots before daily mutations.");
+        if (executionState != null)
+        {
+            string executionRootFailure = null;
+            if (!boundary.TryCreateSelectedActorTurnContext(graph, out actorTurnContext))
+                executionRootFailure = "host could not create the selected actor-turn context";
+            else if (actorTurnContext == null)
+                executionRootFailure = "host returned a null selected actor-turn context";
+            else if (actorTurnContext.RuntimeRoster == null)
+                executionRootFailure = "selected actor-turn runtime roster is null";
+            else if (actorTurnContext.PersonStore == null)
+                executionRootFailure = "selected actor-turn PersonStore is null";
+            else if (!ReferenceEquals(graph.PersonStore, actorTurnContext.PersonStore))
+                executionRootFailure = "selected actor-turn PersonStore differs from the owner graph";
+            else if (actorTurnContext.ActorChoiceStore == null)
+                executionRootFailure = "selected actor-turn ActorChoiceStore is null";
+            else if (actorTurnContext.Boundary == null)
+                executionRootFailure = "selected actor-turn action boundary is null";
+            else if (!DailyV1ActorTurnExecutionStage.TryBuildRoster(
+                         graph, actorTurnContext.RuntimeRoster, out actorRoster))
+                executionRootFailure = "selected actor-turn roster does not match exact Core owners";
+            else
+                HasExactSelectedExecutionRoots(
+                    executionState, graph, actorTurnContext, actorRoster,
+                    out executionRootFailure);
+
+            if (executionRootFailure != null)
+                throw new InvalidOperationException(
+                    "The selected Daily-v1 host could not prove the exact actor, choice, random, allocator, sequence, and decision roots before daily mutations: "
+                    + executionRootFailure + ".");
+        }
 
         boundary.BeginLoggerDay(absoluteDay);
 
@@ -320,16 +335,29 @@ internal static class DailyV1SelectedDailyExecutionStage
         DailyV1ExecutionBoundaryState executionState,
         DailyV1SelectedRuntimeOwnerGraph graph,
         IDailyV1SelectedActorTurnExecutionContext actorTurnContext,
-        IReadOnlyList<DailyV1ActorTurnRosterEntry> actorRoster)
+        IReadOnlyList<DailyV1ActorTurnRosterEntry> actorRoster,
+        out string failure)
     {
-        if (!(actorTurnContext.Boundary is IDailyV1SelectedActorActionExecutionBoundary actionBoundary)
-            || !executionState.HasExactSelectedRuntimeActorTurnRoots(
+        failure = null;
+        if (!(actorTurnContext.Boundary is IDailyV1SelectedActorActionExecutionBoundary actionBoundary))
+        {
+            failure = "actor action boundary does not implement the selected Core contract";
+            return false;
+        }
+        if (!executionState.HasExactSelectedRuntimeActorTurnRoots(
                 graph,
                 actorTurnContext.PersonStore,
                 actorTurnContext.ActorChoiceStore,
-                actionBoundary.RandomSource)
-            || !ReferenceEquals(actionBoundary.RandomSource, executionState.SelectedRandomSource))
+                actionBoundary.RandomSource))
+        {
+            failure = "execution-state graph, PersonStore, ActorChoiceStore, or random-source identity differs";
             return false;
+        }
+        if (!ReferenceEquals(actionBoundary.RandomSource, executionState.SelectedRandomSource))
+        {
+            failure = "action-boundary random source differs from the selected execution-state root";
+            return false;
+        }
 
         foreach (DailyV1ActorTurnRosterEntry entry in actorRoster)
         {
@@ -342,11 +370,18 @@ internal static class DailyV1SelectedDailyExecutionStage
                 out RuntimeIdAllocator idAllocator,
                 out SimulationRecordSequence recordSequence,
                 out NpcDecisionStore decisionStore))
+            {
+                failure = "decision-record owners are incomplete for actor " + actor.RuntimeId;
                 return false;
+            }
             if (!ReferenceEquals(idAllocator, executionState.SelectedRuntimeIdAllocator)
                 || !ReferenceEquals(recordSequence, executionState.SelectedRecordSequence)
                 || !ReferenceEquals(decisionStore, executionState.SelectedDecisionStore))
+            {
+                failure = "allocator, record sequence, or decision store identity differs for actor "
+                    + actor.RuntimeId;
                 return false;
+            }
         }
 
         return true;

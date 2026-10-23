@@ -114,7 +114,10 @@ internal interface IDailyV1SelectedActorActionExecutionBoundary
 
     void LogSelectedActionDecisionFailure(DailyV1NpcRuntimeOwners actor, string message);
 
-    void ClearCurrentAction(DailyV1NpcRuntimeOwners actor);
+    bool TryPrepareCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor);
+    bool CanCommitCurrentActionClear(DailyV1NpcRuntimeOwners actor);
+    bool TryPublishCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor);
+    void CancelPreparedCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor);
     bool IsActorAtCurrentCityLocation(DailyV1NpcRuntimeOwners actor);
     void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor);
     bool HasExactCurrentActionProjection(DailyV1NpcRuntimeOwners actor);
@@ -132,9 +135,10 @@ internal interface IDailyV1SelectedActorActionExecutionBoundary
         DailyV1NpcRuntimeOwners target,
         bool reuseExistingOperation,
         out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary boundary);
-    bool TryInstallForcedOutcomeAction(
+    bool TryPrepareForcedOutcomeActionProjection(
         DailyV1NpcRuntimeOwners actor,
-        DailyV1ActionDefinition action);
+        DailyV1ActionDefinition action,
+        DailyV1NpcActionPayloadOwner payload);
     bool TryGetForcedEscapeBoundary(
         DailyV1NpcRuntimeOwners actor,
         DailyV1ActionDefinition action,

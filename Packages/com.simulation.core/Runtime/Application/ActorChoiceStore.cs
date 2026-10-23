@@ -1158,7 +1158,17 @@ internal static class DailyV1ActorChoiceExecutionStage
 
         // A captured choice replaces the actor's ordinary decision slot. Clear
         // a prior action before reading current truth, including rejection paths.
-        boundary.ClearCurrentAction(actor);
+        if (boundary is IDailyV1CoreActorChoiceExecutionBoundary selectedActionBoundary)
+        {
+            if (!DailyV1SelectedActorActionExecutionStage.TryClearCurrentAction(
+                    graph, actor, selectedActionBoundary))
+                throw new InvalidOperationException(
+                    "The selected actor-choice operation could not clear its exact Core action slot.");
+        }
+        else
+        {
+            boundary.ClearCurrentAction(actor);
+        }
 
         if (!actorAtCurrentCityLocation)
         {

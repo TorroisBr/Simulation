@@ -1032,7 +1032,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 DailyV1NpcRuntimeOwners actor,
                 DailyV1NpcActionPayloadOwner payload) { }
             public void LogSelectedActionDecisionFailure(DailyV1NpcRuntimeOwners actor, string message) { }
-            public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor) { }
+            public bool TryPrepareCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor) => false;
+            public bool CanCommitCurrentActionClear(DailyV1NpcRuntimeOwners actor) => false;
+            public bool TryPublishCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor) => false;
+            public void CancelPreparedCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor) { }
             public bool IsActorAtCurrentCityLocation(DailyV1NpcRuntimeOwners actor) => false;
             public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor) { }
             public bool HasExactCurrentActionProjection(DailyV1NpcRuntimeOwners actor) => false;
@@ -1057,9 +1060,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 bool reuseExistingOperation,
                 out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary boundary)
             { boundary = null; return false; }
-            public bool TryInstallForcedOutcomeAction(
+            public bool TryPrepareForcedOutcomeActionProjection(
                 DailyV1NpcRuntimeOwners actor,
-                DailyV1ActionDefinition action) => false;
+                DailyV1ActionDefinition action,
+                DailyV1NpcActionPayloadOwner payload) => false;
             public bool TryGetForcedEscapeBoundary(
                 DailyV1NpcRuntimeOwners actor,
                 DailyV1ActionDefinition action,

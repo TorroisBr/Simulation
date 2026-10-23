@@ -9882,11 +9882,66 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 failure = PersonMaterializationFailure.RuntimeFaulted;
                 return false;
             }
-            return PersonMaterializationSystem.TryBindExistingNpcToPerson(
-                this,
-                personId,
-                npcRuntimeId,
-                out failure);
+
+            IReadOnlyList<DailyV1ActorTurnRosterProjection> expectedRoster = null;
+            IReadOnlyList<DailyV1ActorTurnRosterProjection> replacementRoster = null;
+            DailyV1SelectedRuntimeOwnerGraph selectedGraph = SelectedRuntimeOwnerGraph;
+            if (selectedGraph != null
+                && personId != null
+                && personStore.TryGet(personId, out PersonRuntime registeredPerson)
+                && TryGetNpcRuntime(npcRuntimeId, out NpcRuntime registeredNpc)
+                && registeredNpc.PersonId == null)
+            {
+                if (!dailyExecutionBoundary.TryCreateSelectedRuntimeActorRosterWithPersonBinding(
+                        npcRuntimeId,
+                        registeredPerson.PersonId,
+                        out expectedRoster,
+                        out replacementRoster)
+                    || !dailyExecutionBoundary.TryCommitSelectedRuntimeActorRoster(
+                        expectedRoster, replacementRoster))
+                {
+                    FaultNpcMembershipCensusBoundary();
+                    failure = PersonMaterializationFailure.RuntimeFaulted;
+                    return false;
+                }
+            }
+
+            bool bound;
+            try
+            {
+                bound = PersonMaterializationSystem.TryBindExistingNpcToPerson(
+                    this,
+                    personId,
+                    npcRuntimeId,
+                    out failure);
+            }
+            catch
+            {
+                if (replacementRoster != null)
+                {
+                    // The binder may have thrown after changing one or more
+                    // authoritative owners. Restoring only the derived roster
+                    // projection cannot prove that those owner writes were
+                    // rolled back, so fail closed for both census and mutation.
+                    dailyExecutionBoundary.TryCommitSelectedRuntimeActorRoster(
+                        replacementRoster, expectedRoster);
+                    FaultNpcMembershipCensusBoundary();
+                    mutationGuard.MarkFaulted(
+                        AuthoritativeMutationFaultReason.RollbackRestoreFailed);
+                }
+                throw;
+            }
+
+            if (!bound && replacementRoster != null
+                && !dailyExecutionBoundary.TryCommitSelectedRuntimeActorRoster(
+                    replacementRoster, expectedRoster))
+            {
+                FaultNpcMembershipCensusBoundary();
+                failure = PersonMaterializationFailure.RuntimeFaulted;
+                return false;
+            }
+
+            return bound;
         }
     }
 
@@ -11489,6 +11544,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         private NpcActionRuntime preparedActionRuntime;
         private DailyV1NpcActionPayloadOwner preparedActionPayload;
         private DailyV1NpcRuntimeOwners preparedActionActor;
+        private NpcActionRuntime preparedClearActionRuntime;
+        private DailyV1NpcActionPayloadOwner preparedClearActionPayload;
+        private DailyV1NpcRuntimeOwners preparedClearActionActor;
 
         internal SelectedDailyV1ActorTurnExecutionBoundary(
             SimulationRuntime runtime,
@@ -11862,6 +11920,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
             if (preparedActionRuntime != null || preparedActionPayload != null
+                || preparedClearActionRuntime != null || preparedClearActionPayload != null
                 || selected?.PreparedPayload == null
                 || !ReferenceEquals(selected.PreparedPayload, payload))
                 return false;
@@ -11944,6 +12003,79 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             runtime.logger?.LogError(message);
         }
 
+        public bool TryPrepareCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (preparedActionRuntime != null || preparedActionPayload != null
+                || preparedClearActionRuntime != null || preparedClearActionPayload != null)
+                return false;
+
+            NpcActionRuntime current = exactRuntime.CurrentActionRuntime;
+            DailyV1NpcActionPayloadOwner payload = actor.ActionSlot?.CurrentPayload;
+            if (current == null || payload == null
+                || !ReferenceEquals(actor.ActionSlot.CurrentAction, payload.Action)
+                || !ReferenceEquals(current.SelectedOwner, payload)
+                || !current.MatchesSelectedOwner()
+                || !ReferenceEquals(exactRuntime.CurrentAction, current.Action))
+                return false;
+
+            preparedClearActionRuntime = current;
+            preparedClearActionPayload = payload;
+            preparedClearActionActor = actor;
+            return true;
+        }
+
+        public bool CanCommitCurrentActionClear(DailyV1NpcRuntimeOwners actor)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            return ReferenceEquals(preparedClearActionActor, actor)
+                && preparedClearActionRuntime != null
+                && ReferenceEquals(exactRuntime.CurrentActionRuntime, preparedClearActionRuntime)
+                && ReferenceEquals(actor.ActionSlot?.CurrentAction,
+                    preparedClearActionPayload?.Action)
+                && ReferenceEquals(actor.ActionSlot?.CurrentPayload,
+                    preparedClearActionPayload)
+                && exactRuntime.CanCommitP12LifecycleMutation(false, false, true);
+        }
+
+        public bool TryPublishCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (!ReferenceEquals(preparedClearActionActor, actor)
+                || preparedClearActionRuntime == null
+                || preparedClearActionPayload == null
+                || actor.ActionSlot?.CurrentAction != null
+                || actor.ActionSlot?.CurrentPayload != null)
+                return false;
+
+            try
+            {
+                return exactRuntime.TryInstallPrecommittedCurrentActionClear(
+                    preparedClearActionRuntime, preparedClearActionPayload);
+            }
+            finally
+            {
+                ClearPreparedCurrentActionClearProjection();
+            }
+        }
+
+        public void CancelPreparedCurrentActionClearProjection(
+            DailyV1NpcRuntimeOwners actor)
+        {
+            RequireExactActor(actor);
+            if (ReferenceEquals(preparedClearActionActor, actor))
+                ClearPreparedCurrentActionClearProjection();
+        }
+
+        private void ClearPreparedCurrentActionClearProjection()
+        {
+            preparedClearActionRuntime = null;
+            preparedClearActionPayload = null;
+            preparedClearActionActor = null;
+        }
+
+        // The legacy actor-choice boundary retains this compatibility method;
+        // the admitted selected path uses the Core slot transaction above.
         public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor) =>
             RequireExactActor(actor).SetCurrentActionRuntime(null);
 
@@ -12037,28 +12169,32 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return true;
         }
 
-        public bool TryInstallForcedOutcomeAction(
+        public bool TryPrepareForcedOutcomeActionProjection(
             DailyV1NpcRuntimeOwners actor,
-            DailyV1ActionDefinition action)
+            DailyV1ActionDefinition action,
+            DailyV1NpcActionPayloadOwner payload)
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
-            if (action == null
+            if (preparedActionRuntime != null || preparedActionPayload != null
+                || preparedClearActionRuntime != null || preparedClearActionPayload != null
+                || action == null || payload == null
                 || !graph.Definitions.Actions.TryGetValue(
                     action.DefinitionId, out DailyV1ActionDefinition admittedAction)
                 || !ReferenceEquals(action, admittedAction)
                 || action.Values.actionType?.Value != DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue
+                || !ReferenceEquals(payload.Action, action)
                 || !exactRuntime.TryGetSelectedDailyV1ActionAsset(action, out NpcActionData actionAsset))
                 return false;
 
-            exactRuntime.SetCurrentActionRuntime(new NpcActionRuntime(actionAsset));
-            DailyV1NpcActionPayloadOwner payload = actor.ActionSlot?.CurrentPayload;
-            return ReferenceEquals(actor.ActionSlot?.CurrentAction, action)
-                && payload != null
-                && payload.TargetNpcRuntimeId == null
-                && payload.TargetCityRuntimeId == null
-                && payload.TargetItem == null
-                && payload.Amount == 0
-                && HasExactCurrentActionProjection(actor);
+            NpcActionRuntime actionRuntime = new NpcActionRuntime(actionAsset);
+            if (!actionRuntime.TryUseSelectedPayload(payload, graph.Definitions)
+                || !actionRuntime.MatchesSelectedOwner())
+                return false;
+
+            preparedActionRuntime = actionRuntime;
+            preparedActionPayload = payload;
+            preparedActionActor = actor;
+            return true;
         }
 
         public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor)

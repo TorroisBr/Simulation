@@ -503,6 +503,10 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcActionPayloadOwner payload) { }
         public void LogSelectedActionDecisionFailure(DailyV1NpcRuntimeOwners actor, string message) { }
+        public bool TryPrepareCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor) => false;
+        public bool CanCommitCurrentActionClear(DailyV1NpcRuntimeOwners actor) => false;
+        public bool TryPublishCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor) => false;
+        public void CancelPreparedCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor) { }
         public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor) =>
             graph.TryCommitCurrentActionSlot(actor, null, null, () => true);
         public bool IsActorAtCurrentCityLocation(DailyV1NpcRuntimeOwners actor) => false;
@@ -536,9 +540,10 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
             boundary = null;
             return false;
         }
-        public bool TryInstallForcedOutcomeAction(
+        public bool TryPrepareForcedOutcomeActionProjection(
             DailyV1NpcRuntimeOwners actor,
-            DailyV1ActionDefinition action) => false;
+            DailyV1ActionDefinition action,
+            DailyV1NpcActionPayloadOwner payload) => false;
         public bool TryGetForcedEscapeBoundary(
             DailyV1NpcRuntimeOwners actor,
             DailyV1ActionDefinition action,
