@@ -509,7 +509,6 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
         public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor) =>
             graph.TryCommitCurrentActionSlot(actor, null, null, () => true);
         public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor) { }
-        public bool HasExactCurrentActionProjection(DailyV1NpcRuntimeOwners actor) => false;
         public bool TryGetDispatchBoundary(
             DailyV1NpcRuntimeOwners actor,
             out IDailyV1SelectedActionDispatchBoundary dispatchBoundary)

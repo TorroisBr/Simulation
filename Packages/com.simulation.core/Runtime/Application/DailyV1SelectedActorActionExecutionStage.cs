@@ -437,8 +437,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
             return true;
         }
 
-        if (!boundary.HasExactCurrentActionProjection(actor)
-            || !boundary.TryGetDispatchBoundary(actor,
+        if (!boundary.TryGetDispatchBoundary(actor,
                 out IDailyV1SelectedActionDispatchBoundary dispatchBoundary)
             || dispatchBoundary == null
             || !DailyV1SelectedActionDispatchStage.TryDispatch(

@@ -653,9 +653,11 @@ public sealed class DailyV1ActorTurnExecutionStageTests
     }
 
     [Test]
-    public void CoreSelectedActionStageOwnsDecisionSlotDispatchAndStatusOrder()
+    public void CoreSelectedActionStageUsesHostDispatchWithoutUnityActionProjection()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
+        // This fixture provides the dispatch port directly from Core owners;
+        // it has no Unity NpcRuntime or NpcActionRuntime projection.
         CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary();
         boundary.BindGraph(graph);
         long actionSlotRevision = actor.ActionSlot.Revision;
@@ -1425,8 +1427,6 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         }
 
         public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor) => Events.Add("chosen-target");
-        public bool HasExactCurrentActionProjection(DailyV1NpcRuntimeOwners actor) => true;
-
         public bool TryGetDispatchBoundary(
             DailyV1NpcRuntimeOwners actor,
             out IDailyV1SelectedActionDispatchBoundary dispatchBoundary)

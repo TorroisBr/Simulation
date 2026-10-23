@@ -73,8 +73,10 @@ internal interface IDailyV1SelectedActorChoiceExecutionContext
 
 /// <summary>
 /// Optional selected-profile ports for Core to own the complete autonomous
-/// action sequence. The host supplies only Unity projections, existing P12
-/// admission/effect adapters, and presentation publication.
+/// action sequence. The host supplies effectful owner-operation boundaries,
+/// existing P12 admission adapters, and presentation publication. A Unity
+/// host validates its action projection when it creates its dispatch port;
+/// projection identity is not part of Core's execution contract.
 /// </summary>
 internal interface IDailyV1SelectedActorActionExecutionBoundary
 {
@@ -117,7 +119,6 @@ internal interface IDailyV1SelectedActorActionExecutionBoundary
     bool TryPublishCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor);
     void CancelPreparedCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor);
     void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor);
-    bool HasExactCurrentActionProjection(DailyV1NpcRuntimeOwners actor);
     bool TryGetDispatchBoundary(
         DailyV1NpcRuntimeOwners actor,
         out IDailyV1SelectedActionDispatchBoundary dispatchBoundary);

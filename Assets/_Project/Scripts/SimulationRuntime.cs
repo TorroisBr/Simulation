@@ -12059,7 +12059,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 exactRuntime, exactRuntime.CurrentActionRuntime);
         }
 
-        public bool HasExactCurrentActionProjection(DailyV1NpcRuntimeOwners actor)
+        private bool HasExactCurrentActionProjection(DailyV1NpcRuntimeOwners actor)
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
             NpcActionRuntime actionRuntime = exactRuntime.CurrentActionRuntime;
@@ -12081,6 +12081,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
             dispatchBoundary = null;
+            // Unity keeps its compatibility projection check at the Unity
+            // adapter boundary. Core dispatch itself depends on its exact
+            // action slot and the host operation ports, not NpcActionRuntime.
+            if (!HasExactCurrentActionProjection(actor)) return false;
             NpcActionRuntime actionRuntime = exactRuntime.CurrentActionRuntime;
             NpcActionData action = exactRuntime.CurrentAction;
             if (actionRuntime == null || action == null) return false;
