@@ -6,6 +6,43 @@ using NUnit.Framework;
 public sealed class DailyV1GenesisComposerTests
 {
     [Test]
+    public void SelectedGenesisUsesSuppliedWorldIdentityAndReportsOwnedStagesInOrder()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        WorldId expectedWorldId = new WorldId(Guid.NewGuid());
+        int allocations = 0;
+        var completed = new System.Collections.Generic.List<string>();
+
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            () => { allocations++; return expectedWorldId; },
+            completed.Add,
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(allocations, Is.EqualTo(1));
+        Assert.That(composition.WorldId, Is.SameAs(expectedWorldId));
+        Assert.That(completed, Is.EqualTo(definitions.StageOrder.Take(definitions.StageOrder.Count - 2)));
+    }
+
+    [Test]
+    public void SelectedGenesisPreservesStageCallbackExceptionBoundary()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        var expected = new InvalidOperationException("stage callback sentinel");
+        InvalidOperationException actual = Assert.Throws<InvalidOperationException>(() =>
+            DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions,
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                () => new WorldId(Guid.NewGuid()),
+                stage => { if (stage == "p9.genesis.authored-world/v1") throw expected; },
+                out _, out _));
+
+        Assert.That(actual, Is.SameAs(expected));
+    }
+
+    [Test]
     public void SelectedP9CompositionConsumesP8BeforeNpcAllocationAndRetainsCanonicalOwners()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -40,6 +77,52 @@ public sealed class DailyV1GenesisComposerTests
             Is.SameAs(composition.EffectiveConfiguration));
         Assert.That(composition.ExecutionBoundaryState.CalendarIdentity,
             Is.SameAs(composition.Calendar));
+        Assert.That(composition.ExecutionBoundaryState.SelectedRuntimeExecutionRootsBound, Is.True);
+        Assert.That(composition.ExecutionBoundaryState.HasAdmittedSelectedDailyExecution, Is.True,
+            "Core selects the shared Daily-v1 path from its admitted definition, owner, and execution-root identities.");
+        Assert.That(composition.ExecutionBoundaryState.HasExactSelectedRuntimeExecutionRoots(
+            composition.OwnerGraph,
+            composition.PersonStore,
+            composition.ActorChoiceStore,
+            composition.RandomSource,
+            composition.RuntimeIdAllocator,
+            composition.RecordSequence,
+            composition.DecisionStore), Is.True);
+        Assert.That(composition.ExecutionBoundaryState.HasExactSelectedRuntimeExecutionRoots(
+            composition.OwnerGraph,
+            composition.PersonStore,
+            composition.ActorChoiceStore,
+            new DeterministicRandomSource(),
+            composition.RuntimeIdAllocator,
+            composition.RecordSequence,
+            composition.DecisionStore), Is.False,
+            "A host cannot substitute a random source after Core genesis binds the runtime roots.");
+        Assert.That(composition.ExecutionBoundaryState.TryBindSelectedRuntimeExecutionRoots(
+            composition.RuntimeIdAllocator,
+            composition.RandomSource,
+            composition.RecordSequence,
+            composition.DecisionStore,
+            composition.ActorChoiceStore), Is.True,
+            "Rebinding the exact source identities is idempotent.");
+        Assert.That(composition.ExecutionBoundaryState.TryBindSelectedRuntimeExecutionRoots(
+            composition.RuntimeIdAllocator,
+            new DeterministicRandomSource(),
+            composition.RecordSequence,
+            composition.DecisionStore,
+            composition.ActorChoiceStore), Is.False,
+            "A second random source cannot replace the admitted runtime root.");
+        Assert.That(composition.ExecutionBoundaryState.TryBindSelectedRuntimeExecutionRoots(
+            null, composition.RandomSource, composition.RecordSequence,
+            composition.DecisionStore, composition.ActorChoiceStore), Is.False,
+            "A runtime with no allocator cannot enter selected execution.");
+        Assert.That(composition.ExecutionBoundaryState.TryBindSelectedRuntimeExecutionRoots(
+            composition.RuntimeIdAllocator, composition.RandomSource, null,
+            composition.DecisionStore, composition.ActorChoiceStore), Is.False,
+            "A runtime with no record sequence cannot enter selected execution.");
+        Assert.That(composition.ExecutionBoundaryState.TryBindSelectedRuntimeExecutionRoots(
+            composition.RuntimeIdAllocator, composition.RandomSource, composition.RecordSequence,
+            null, composition.ActorChoiceStore), Is.False,
+            "A runtime with no decision store cannot enter selected execution.");
 
         Assert.That(composition.P9ProfileFingerprint,
             Is.EqualTo(DailyV1DefinitionIdentity.CreateP9Fingerprint(definitions, out _)));
@@ -60,6 +143,8 @@ public sealed class DailyV1GenesisComposerTests
         Assert.That(composition.OwnerGraph.JusticeRecordsOwner.WantedRecords, Is.Empty);
         Assert.That(composition.OwnerGraph.ScheduledDirectives, Is.Not.Null);
         Assert.That(composition.OwnerGraph.ScheduledDirectives.Directives, Is.Empty);
+        Assert.That(composition.OwnerGraph.TravelParties, Is.SameAs(composition.TravelPartyStore));
+        Assert.That(composition.TravelPartyStore.ActiveParties, Is.Empty);
         Assert.That(composition.OwnerGraph.Expeditions, Is.Null,
             "The accepted Daily-v1 profile has no selected P10 expedition content.");
         Assert.That(composition.LegacySpatialAnchorBindings.Count, Is.Zero,

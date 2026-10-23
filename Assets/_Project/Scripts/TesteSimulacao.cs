@@ -500,6 +500,8 @@ public class TesteSimulacao : MonoBehaviour
         CalendarDefinition stagedCalendarDefinition = null;
         DailyV1EffectiveDefinitions stagedSelectedDefinitions = null;
         DailyV1DefinitionAdapter.SelectedBindings stagedSelectedDefinitionBindings = null;
+        DailyV1GenesisComposition selectedCoreGenesis = null;
+        HashSet<string> coreGenesisCompletedStages = new HashSet<string>(System.StringComparer.Ordinal);
         Thread initializeThread = Thread.CurrentThread;
         int initializeThreadId = initializeThread.ManagedThreadId;
         try
@@ -541,6 +543,50 @@ public class TesteSimulacao : MonoBehaviour
                             selectedDefinitions = stagedSelectedDefinitions;
                             selectedDefinitionBindings = stagedSelectedDefinitionBindings;
                             selectedP9ProfileFingerprint = profileFingerprint;
+
+                            effectiveConfiguration = stagedEffectiveConfiguration;
+                            calendarDefinition = stagedCalendarDefinition;
+                            lastEconomySnapshotDay = 0L;
+                            logger = UnitySimulationLoggerAdapter.CreateSelected(
+                                stagedSelectedDefinitions.Configuration.logSettings);
+                            List<SimulationModule> selectedModules = new List<SimulationModule>();
+                            foreach (DailyV1EnumValue module in stagedSelectedDefinitions.Configuration.enabledModules
+                                ?? System.Array.Empty<DailyV1EnumValue>())
+                                if (module != null) selectedModules.Add((SimulationModule)module.Value);
+                            logger.BeginSimulation(stagedSelectedDefinitions.Configuration.simulationName,
+                                selectedModules,
+                                stagedSelectedDefinitions.Configuration.cities?.Count ?? 0,
+                                stagedSelectedDefinitions.Configuration.npcs?.Count ?? 0);
+                            enabledModules = new SimulationModuleSet(
+                                stagedSelectedDefinitions.Configuration.enabledModules);
+                            AppendScenarioDiagnostics(effectiveConfiguration);
+
+                            if (!DailyV1GenesisComposer.TryComposeSelectedOwners(
+                                    stagedSelectedDefinitions,
+                                    runtimeAdmissionContext,
+                                    worldIdentityAllocator,
+                                    completedStage =>
+                                    {
+                                        if (!coreGenesisCompletedStages.Add(completedStage))
+                                            throw new System.InvalidOperationException(
+                                                "Core Daily-v1 genesis completed a stage more than once.");
+                                        stageCompleted?.Invoke(completedStage);
+                                    },
+                                    out selectedCoreGenesis,
+                                    out string coreGenesisDiagnostic))
+                                throw new System.InvalidOperationException(
+                                    "Core Daily-v1 genesis failed: " + coreGenesisDiagnostic);
+
+                            profileFingerprint = selectedCoreGenesis.P9ProfileFingerprint;
+                            selectedP9ProfileFingerprint = profileFingerprint;
+                            profileProvenanceRecords = selectedCoreGenesis.P9ProvenanceRecords;
+                            unpublishedWorldId = selectedCoreGenesis.WorldId;
+                            if (!selectedCoreGenesis.ExecutionBoundaryState.TryBindSelectedRuntimeOwnerGraph(
+                                    selectedCoreGenesis.OwnerGraph))
+                                throw new System.InvalidOperationException(
+                                    "Core Daily-v1 genesis did not retain its exact selected owner graph.");
+                            ProjectSelectedCoreGenesis(selectedCoreGenesis);
+                            break;
                         }
                         unpublishedWorldId = worldIdentityAllocator?.Invoke();
                         if (unpublishedWorldId == null)
@@ -599,6 +645,7 @@ public class TesteSimulacao : MonoBehaviour
                         spatialNetwork = new SpatialNetworkRuntime(runtimeIdentityRegistry, logger);
                         break;
                     case "p9.genesis.authored-world/v1":
+                        if (selectedCoreGenesis != null) break;
                         CityRuntimeList.Clear();
                         cityRuntimesByDefinition.Clear();
                         cityRuntimeByLocation.Clear();
@@ -609,6 +656,7 @@ public class TesteSimulacao : MonoBehaviour
                         CreateSpatialRoutes();
                         break;
                     case SimulationGenesisPipeline.GeographyStageId:
+                        if (selectedCoreGenesis != null) break;
                         ComposeAuthoredGeography();
                         break;
                     case SimulationGenesisPipeline.P10BGeneratedRuinStageId:
@@ -625,6 +673,7 @@ public class TesteSimulacao : MonoBehaviour
                         profileProvenanceRecords = p10BProvenanceRecords;
                         break;
                     case "p9.genesis.authored-actors/v1":
+                        if (selectedCoreGenesis != null) break;
                         NpcRuntimeList.Clear();
                         npcRuntimesByDefinition.Clear();
                         CreateNpcRuntimes(stagedSelectedDefinitions, stagedSelectedDefinitionBindings);
@@ -643,17 +692,29 @@ public class TesteSimulacao : MonoBehaviour
                         profileProvenanceRecords = combinedProvenanceRecords;
                         break;
                     case "p9.genesis.validate-profile/v1":
-                        RebuildSystems(effectiveConfiguration);
-                        BootstrapInitialSpatialKnowledge();
-                        BootstrapInitialExplorableSiteKnowledge();
-                        BootstrapInitialCommercialKnowledge();
-                        InitializeJusticeState();
-                        if (selectedRuntimeOwnerGraphBuilder != null
+                        RebuildSystems(effectiveConfiguration,
+                            selectedCoreGenesis?.OwnerGraph?.JusticeRecordsOwner);
+                        if (selectedCoreGenesis == null)
+                        {
+                            BootstrapInitialSpatialKnowledge();
+                            BootstrapInitialExplorableSiteKnowledge();
+                            BootstrapInitialCommercialKnowledge();
+                            InitializeJusticeState();
+                        }
+                        if (selectedCoreGenesis == null
+                            && selectedRuntimeOwnerGraphBuilder != null
                             && !selectedRuntimeOwnerGraphBuilder.TryBuild(
                                 justiceSystem?.CoreOwner, travelPartyStore, scheduledDirectiveStore,
                                 out selectedInitialRuntimeOwnerGraph))
                             throw new System.InvalidOperationException(
                                 "The selected Core City/NPC/Justice owner graph does not exactly match the admitted Daily-v1 genesis composition.");
+                        if (selectedCoreGenesis != null)
+                        {
+                            selectedInitialRuntimeOwnerGraph = selectedCoreGenesis.OwnerGraph;
+                            if (!selectedInitialRuntimeOwnerGraph.TryBindExpeditionStore(expeditionStore))
+                                throw new System.InvalidOperationException(
+                                    "The Core selected owner graph could not bind the exact empty P10 ExpeditionStore.");
+                        }
                         simulationRuntime = new SimulationRuntime(
                             simulationTime: simulationTime, cities: CityRuntimeList, npcRuntimes: NpcRuntimeList,
                             configuredActions: ConfiguredActions, scheduledDirectiveSystem: scheduledDirectiveSystem,
@@ -663,6 +724,8 @@ public class TesteSimulacao : MonoBehaviour
                             logger: logger, explorableSiteStore: explorableSiteStore,
                             explorableSiteKnowledgeSystem: explorableSiteKnowledgeSystem, expeditionSystem: expeditionSystem,
                             configuration: effectiveConfiguration, randomSource: authoritativeRandomSource,
+                            personStore: selectedCoreGenesis?.PersonStore,
+                            actorChoiceStore: selectedCoreGenesis?.ActorChoiceStore,
                             calendarDefinition: calendarDefinition,
                             spatialAuthorityStore: genesisSpatialAuthority,
                             localTopologyStore: genesisLocalTopologyStore,
@@ -675,7 +738,9 @@ public class TesteSimulacao : MonoBehaviour
                             requireP12ReceiptCensusOwners: runtimeAdmissionContext != null,
                             runtimeIdentityRegistry: runtimeIdentityRegistry,
                             spatialNetworkRuntime: spatialNetwork,
-                            requireP12RuntimeIdentitySpatialCensusOwners: runtimeAdmissionContext != null);
+                            requireP12RuntimeIdentitySpatialCensusOwners: runtimeAdmissionContext != null,
+                            selectedExecutionBoundaryState: selectedCoreGenesis?.ExecutionBoundaryState,
+                            selectedCalendar: selectedCoreGenesis?.Calendar);
                         if (selectedInitialRuntimeOwnerGraph != null
                             && !simulationRuntime.TryAdoptInitialSelectedRuntimeOwnerGraph(
                                 selectedInitialRuntimeOwnerGraph))
@@ -728,7 +793,8 @@ public class TesteSimulacao : MonoBehaviour
                     default:
                         throw new System.InvalidOperationException("Undeclared authored genesis stage: " + stageId);
                 }
-                stageCompleted?.Invoke(stageId);
+                if (!coreGenesisCompletedStages.Contains(stageId))
+                    stageCompleted?.Invoke(stageId);
             }, includeAuthoredGeography, includeP10RuinLocalTopology, includeP10BGeneratedRuin);
 
             if (draftComposition == null)
@@ -2401,6 +2467,138 @@ public class TesteSimulacao : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Creates Unity-facing lookup/serialization views over the exact Core P9
+    /// owners already composed by DailyV1GenesisComposer. This method must not
+    /// allocate runtime identities or reconstruct authoritative owner state.
+    /// </summary>
+    private void ProjectSelectedCoreGenesis(DailyV1GenesisComposition composition)
+    {
+        if (composition == null || selectedDefinitionBindings == null
+            || !ReferenceEquals(selectedDefinitions, composition.Definitions))
+            throw new System.InvalidOperationException(
+                "The selected Unity bootstrap requires the exact admitted Core genesis composition.");
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        if (graph == null || !ReferenceEquals(graph.Definitions, selectedDefinitions)
+            || graph.PersonStore == null
+            || !ReferenceEquals(graph.PersonStore, composition.PersonStore)
+            || !ReferenceEquals(graph.ScheduledDirectives, composition.OwnerGraph.ScheduledDirectives)
+            || !ReferenceEquals(graph.TravelParties, composition.TravelPartyStore))
+            throw new System.InvalidOperationException(
+                "The Core genesis owner graph does not retain its exact admitted runtime roots.");
+
+        runtimeIdAllocator = composition.RuntimeIdAllocator;
+        simulationTime = composition.SimulationTime;
+        authoritativeRandomSource = composition.RandomSource;
+        recordSequence = composition.RecordSequence;
+        decisionStore = composition.DecisionStore;
+        scheduledDirectiveStore = graph.ScheduledDirectives;
+        travelPartyStore = composition.TravelPartyStore;
+        effectiveConfiguration = composition.EffectiveConfiguration;
+        genesisSpatialAuthority = composition.SpatialAuthority;
+        genesisLegacySpatialAnchorBindingStore = composition.LegacySpatialAnchorBindings;
+        selectedInitialRuntimeOwnerGraph = graph;
+        selectedRuntimeOwnerGraphBuilder = null;
+
+        historyStore = new HistoryStore();
+        domainEventStore = new DomainEventStore(historyStore, new HistoryPolicy(), logger);
+        domainEventRecorder = new DomainEventRecorder(
+            runtimeIdAllocator, simulationTime, recordSequence, domainEventStore, logger);
+        decisionRecorder = new NpcDecisionRecorder(
+            runtimeIdAllocator, simulationTime, recordSequence, decisionStore, logger);
+        npcChronicleService = new NpcChronicleService(decisionStore, domainEventStore);
+        explorableSiteStore = new ExplorableSiteStore();
+        explorableSiteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
+        expeditionStore = new ExpeditionStore();
+        economyTransactionService = new EconomyTransactionService();
+
+        runtimeIdentityRegistry = new RuntimeIdentityRegistry(logger, graph.RuntimeIdentityIndex);
+        spatialNetwork = new SpatialNetworkRuntime(runtimeIdentityRegistry, logger, graph.SpatialNetwork);
+        foreach (SpatialLocationRuntime location in graph.SpatialNetwork.Locations)
+            if (location == null || !runtimeIdentityRegistry.BindSelectedLocationProjection(location))
+                throw new System.InvalidOperationException(
+                    "A Core P9 Location could not bind its exact Unity identity projection.");
+        foreach (SpatialRouteRuntime route in graph.SpatialNetwork.Routes)
+            if (route == null || !runtimeIdentityRegistry.BindSelectedRouteProjection(route))
+                throw new System.InvalidOperationException(
+                    "A Core P9 Route could not bind its exact Unity identity projection.");
+
+        CityRuntimeList.Clear();
+        NpcRuntimeList.Clear();
+        cityRuntimesByDefinition.Clear();
+        npcRuntimesByDefinition.Clear();
+        cityRuntimeByLocation.Clear();
+        explorableSiteRuntimesByDefinition.Clear();
+
+        foreach (DailyV1CityRuntimeOwners owners in graph.Cities)
+        {
+            if (owners == null || owners.Definition == null
+                || !graph.SpatialNetwork.TryGetLocation(owners.LocationRuntimeId,
+                    out SpatialLocationRuntime location))
+                throw new System.InvalidOperationException(
+                    "A Core P9 City owner has no exact Core-owned Location.");
+            CityRuntime city = CityRuntime.CreateSelectedDailyV1(
+                owners.RuntimeId, owners.Definition, selectedDefinitions,
+                selectedDefinitionBindings, owners, location, logger);
+            if (!city.TryBindSelectedDailyV1Definition(
+                    owners.Definition, selectedDefinitions, selectedDefinitionBindings)
+                || !runtimeIdentityRegistry.BindSelectedCityProjection(city))
+                throw new System.InvalidOperationException(
+                    "A Core P9 City could not bind its exact Unity/P12 projection.");
+            CityData bridge = city.CityData;
+            if (bridge == null || !string.Equals(bridge.DefinitionId,
+                    owners.Definition.DefinitionId, System.StringComparison.Ordinal))
+                throw new System.InvalidOperationException(
+                    "A Core P9 City did not retain its exact P12 compatibility identity bridge.");
+            CityRuntimeList.Add(city);
+            AddCityRuntimeByDefinition(bridge, city);
+            cityRuntimeByLocation.Add(location, city);
+        }
+
+        Dictionary<string, CityRuntime> selectedCityProjections = new Dictionary<string, CityRuntime>(
+            System.StringComparer.Ordinal);
+        foreach (CityRuntime city in CityRuntimeList)
+            if (city == null || !selectedCityProjections.TryAdd(city.RuntimeId, city))
+                throw new System.InvalidOperationException(
+                    "Core P9 City projections must have unique runtime identities.");
+
+        foreach (DailyV1NpcRuntimeOwners owners in graph.Npcs)
+        {
+            if (owners == null || owners.Definition == null)
+                throw new System.InvalidOperationException("A Core P9 NPC owner is incomplete.");
+            CityRuntime startingCity = null;
+            if (!string.IsNullOrWhiteSpace(owners.Travel.CurrentCityRuntimeId)
+                && !selectedCityProjections.TryGetValue(owners.Travel.CurrentCityRuntimeId,
+                    out startingCity))
+                throw new System.InvalidOperationException(
+                    "A Core P9 NPC has no matching Unity City projection for its admitted presence.");
+
+            NpcRuntime npc = NpcRuntime.CreateSelectedDailyV1(
+                owners.RuntimeId, owners.Definition, selectedDefinitions,
+                selectedDefinitionBindings, owners, startingCity);
+            Func<string, CityRuntime> resolveCity = runtimeId =>
+                !string.IsNullOrWhiteSpace(runtimeId)
+                && selectedCityProjections.TryGetValue(runtimeId, out CityRuntime city)
+                    ? city : null;
+            if (!npc.TryBindSelectedDailyV1Definition(
+                    owners.Definition, selectedDefinitions, selectedDefinitionBindings, resolveCity)
+                || !runtimeIdentityRegistry.BindSelectedNpcProjection(npc))
+                throw new System.InvalidOperationException(
+                    "A Core P9 NPC could not bind its exact Unity/P12 projection.");
+            NpcData bridge = npc.NpcData;
+            if (bridge == null || !string.Equals(bridge.DefinitionId,
+                    owners.Definition.DefinitionId, System.StringComparison.Ordinal))
+                throw new System.InvalidOperationException(
+                    "A Core P9 NPC did not retain its exact P12 compatibility identity bridge.");
+            NpcRuntimeList.Add(npc);
+            AddNpcRuntimeByDefinition(bridge, npc);
+        }
+
+        scheduledDirectiveSystem = new ScheduledDirectiveSystem(
+            scheduledDirectiveStore, runtimeIdentityRegistry, logger);
+    }
+
     private void CreateSpatialRoutes()
     {
         if (selectedRuntimeOwnerGraphBuilder != null)
@@ -2983,7 +3181,9 @@ public class TesteSimulacao : MonoBehaviour
         }
     }
 
-    private void RebuildSystems(EffectiveSimulationConfiguration configuration)
+    private void RebuildSystems(
+        EffectiveSimulationConfiguration configuration,
+        DailyV1JusticeRecordsOwner selectedJusticeOwner = null)
     {
         logger = logger ?? (UsesSelectedDefinitionBindings
             ? UnitySimulationLoggerAdapter.CreateSelected(selectedDefinitions.Configuration?.logSettings)
@@ -2996,7 +3196,9 @@ public class TesteSimulacao : MonoBehaviour
             domainEventRecorder,
             logger,
             economyTransactionService);
-        travelPartyStore = new TravelPartyStore();
+        travelPartyStore = selectedInitialRuntimeOwnerGraph?.TravelParties
+            ?? travelPartyStore
+            ?? new TravelPartyStore();
         travelPartySystem = new TravelPartySystem(
             travelPartyStore,
             runtimeIdAllocator,
@@ -3027,7 +3229,8 @@ public class TesteSimulacao : MonoBehaviour
         NpcStatusData hiddenStatus = ResolveSelectedStatus(selectedDefinitions?.Configuration?.hiddenStatus,
             simulationConfig != null ? simulationConfig.hiddenStatus : null);
         justiceSystem = UsesSelectedDefinitionBindings || simulationConfig != null
-            ? new JusticeSystem(freeStatus, wantedStatus, arrestedStatus, hiddenStatus, domainEventRecorder, logger)
+            ? new JusticeSystem(freeStatus, wantedStatus, arrestedStatus, hiddenStatus,
+                domainEventRecorder, logger, selectedJusticeOwner)
             : null;
         crimeSystem = null;
         merchantSystem = null;

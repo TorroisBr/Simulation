@@ -25,7 +25,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private bool p12DailyProfileReceiptBoundaryBound;
     private bool p12AReceiptStateInstalled;
-    private readonly DailyV1JusticeRecordsOwner justiceRecordsOwner = new DailyV1JusticeRecordsOwner();
+    private readonly DailyV1JusticeRecordsOwner justiceRecordsOwner;
     private readonly Dictionary<DailyV1JusticeWantedRecordOwner, WantedRecordRuntime> wantedRecordViews =
         new Dictionary<DailyV1JusticeWantedRecordOwner, WantedRecordRuntime>();
     private readonly Dictionary<DailyV1JusticeSentenceOwner, PrisonSentenceRuntime> sentenceViews =
@@ -152,6 +152,19 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         NpcStatusData hiddenStatus,
         DomainEventRecorder domainEventRecorder,
         SimulationLogger logger)
+        : this(freeStatus, wantedStatus, arrestedStatus, hiddenStatus,
+            domainEventRecorder, logger, null)
+    {
+    }
+
+    internal JusticeSystem(
+        NpcStatusData freeStatus,
+        NpcStatusData wantedStatus,
+        NpcStatusData arrestedStatus,
+        NpcStatusData hiddenStatus,
+        DomainEventRecorder domainEventRecorder,
+        SimulationLogger logger,
+        DailyV1JusticeRecordsOwner selectedOwner)
     {
         this.freeStatus = freeStatus;
         this.wantedStatus = wantedStatus;
@@ -159,6 +172,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         this.hiddenStatus = hiddenStatus;
         this.domainEventRecorder = domainEventRecorder;
         this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
+        justiceRecordsOwner = selectedOwner ?? new DailyV1JusticeRecordsOwner();
         wantedRecords = new JusticeOwnerProjectionList<DailyV1JusticeWantedRecordOwner, WantedRecordRuntime>(
             () => justiceRecordsOwner.WantedRecords,
             ProjectWantedRecord,

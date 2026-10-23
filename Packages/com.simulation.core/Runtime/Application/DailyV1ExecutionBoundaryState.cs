@@ -28,6 +28,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         new List<DailyV1OperationScopeKind>();
     private readonly DailyV1MutationEpochState mutationEpochState =
         new DailyV1MutationEpochState();
+    private readonly AuthoritativeMutationGuard mutationGuard =
+        new AuthoritativeMutationGuard();
     private bool runtimeIdentityBound;
     private bool runtimeConfigurationBound;
     private DailyV1AdvanceLease advanceLease;
@@ -36,6 +38,12 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private DailyCaptureEligibilityToken currentCaptureToken;
     private bool selectedRuntimeOwnerGraphBound;
     private DailyV1SelectedRuntimeOwnerGraph selectedRuntimeOwnerGraph;
+    private bool selectedRuntimeExecutionRootsBound;
+    private RuntimeIdAllocator selectedRuntimeIdAllocator;
+    private IAuthoritativeRandomSource selectedRandomSource;
+    private SimulationRecordSequence selectedRecordSequence;
+    private NpcDecisionStore selectedDecisionStore;
+    private ActorChoiceStore selectedActorChoiceStore;
 
     internal SimulationTime SimulationTime { get; private set; }
     internal SimulationRuntimeAdmissionContext AdmissionContext { get; private set; }
@@ -43,6 +51,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     internal WorldId WorldId { get; private set; }
     internal EffectiveSimulationConfiguration ConfigurationIdentity { get; private set; }
     internal SimulationCalendar CalendarIdentity { get; private set; }
+    internal AuthoritativeMutationGuard MutationGuard => mutationGuard;
+    internal bool CanMutate => mutationGuard.CanMutate;
 
     internal DailyV1ExecutionBoundaryState() { }
 
@@ -223,6 +233,47 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     /// </summary>
     internal DailyV1MutationEpochState MutationEpochState => mutationEpochState;
     internal DailyV1SelectedRuntimeOwnerGraph SelectedRuntimeOwnerGraph => selectedRuntimeOwnerGraph;
+    internal bool SelectedRuntimeExecutionRootsBound => selectedRuntimeExecutionRootsBound;
+    /// <summary>
+    /// Whether this admitted state has the complete Core owner/configuration
+    /// roots needed by the selected Daily-v1 execution path. Path selection is
+    /// derived from Core-owned identities; a Unity adapter cannot opt the
+    /// authoritative runtime in or out by reporting its own demographic view.
+    /// </summary>
+    internal bool HasAdmittedSelectedDailyExecution
+    {
+        get
+        {
+            DailyV1SelectedRuntimeOwnerGraph graph = selectedRuntimeOwnerGraph;
+            return runtimeIdentityBound
+                && runtimeConfigurationBound
+                && AdmissionContext != null
+                && AdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                && selectedRuntimeOwnerGraphBound
+                && selectedRuntimeExecutionRootsBound
+                && graph != null
+                && graph.Definitions != null
+                && ReferenceEquals(graph.Definitions.EffectiveConfiguration, ConfigurationIdentity)
+                && graph.PersonStore != null
+                && graph.ScheduledDirectives != null
+                && graph.SpatialNetwork != null
+                && graph.JusticeRecordsOwner != null
+                && graph.TravelParties != null
+                && graph.RuntimeIdentityIndex != null
+                && selectedRuntimeIdAllocator != null
+                && selectedRandomSource != null
+                && selectedRecordSequence != null
+                && selectedDecisionStore != null
+                && selectedActorChoiceStore != null
+                && ReferenceEquals(selectedActorChoiceStore.PersonStore, graph.PersonStore)
+                && HasSelectedCityAndNpcOwners(graph);
+        }
+    }
+    internal RuntimeIdAllocator SelectedRuntimeIdAllocator => selectedRuntimeIdAllocator;
+    internal IAuthoritativeRandomSource SelectedRandomSource => selectedRandomSource;
+    internal SimulationRecordSequence SelectedRecordSequence => selectedRecordSequence;
+    internal NpcDecisionStore SelectedDecisionStore => selectedDecisionStore;
+    internal ActorChoiceStore SelectedActorChoiceStore => selectedActorChoiceStore;
 
     internal bool TryBindSelectedRuntimeOwnerGraph(DailyV1SelectedRuntimeOwnerGraph graph)
     {
@@ -247,6 +298,92 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
         selectedRuntimeOwnerGraph = replacement;
         return true;
+    }
+
+    /// <summary>
+    /// Binds the selected runtime's mutable decision roots beside its clock,
+    /// admission, graph and capture state. Unity may project these same
+    /// instances, but it cannot substitute a different RNG, choice store,
+    /// allocator, sequence or decision store at a Core execution boundary.
+    /// </summary>
+    internal bool TryBindSelectedRuntimeExecutionRoots(
+        RuntimeIdAllocator runtimeIdAllocator,
+        IAuthoritativeRandomSource randomSource,
+        SimulationRecordSequence recordSequence,
+        NpcDecisionStore decisionStore,
+        ActorChoiceStore actorChoiceStore)
+    {
+        if (!runtimeIdentityBound || !runtimeConfigurationBound
+            || !selectedRuntimeOwnerGraphBound || selectedRuntimeOwnerGraph == null
+            || runtimeIdAllocator == null || randomSource == null
+            || recordSequence == null || decisionStore == null || actorChoiceStore == null
+            || selectedRuntimeOwnerGraph.PersonStore == null
+            || !ReferenceEquals(actorChoiceStore.PersonStore, selectedRuntimeOwnerGraph.PersonStore))
+            return false;
+
+        if (selectedRuntimeExecutionRootsBound)
+            return ReferenceEquals(selectedRuntimeIdAllocator, runtimeIdAllocator)
+                && ReferenceEquals(selectedRandomSource, randomSource)
+                && ReferenceEquals(selectedRecordSequence, recordSequence)
+                && ReferenceEquals(selectedDecisionStore, decisionStore)
+                && ReferenceEquals(selectedActorChoiceStore, actorChoiceStore);
+
+        selectedRuntimeIdAllocator = runtimeIdAllocator;
+        selectedRandomSource = randomSource;
+        selectedRecordSequence = recordSequence;
+        selectedDecisionStore = decisionStore;
+        selectedActorChoiceStore = actorChoiceStore;
+        selectedRuntimeExecutionRootsBound = true;
+        return true;
+    }
+
+    private static bool HasSelectedCityAndNpcOwners(DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph.Cities == null || graph.Npcs == null)
+            return false;
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            if (city == null || city.Population == null
+                || !ReferenceEquals(city.Definitions, graph.Definitions))
+                return false;
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+            if (npc == null || npc.Lifecycle == null || npc.Travel == null
+                || npc.ActionSlot == null || !ReferenceEquals(npc.Definitions, graph.Definitions))
+                return false;
+        return true;
+    }
+
+    internal bool HasExactSelectedRuntimeExecutionRoots(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore personStore,
+        ActorChoiceStore actorChoiceStore,
+        IAuthoritativeRandomSource randomSource,
+        RuntimeIdAllocator runtimeIdAllocator,
+        SimulationRecordSequence recordSequence,
+        NpcDecisionStore decisionStore)
+    {
+        return selectedRuntimeExecutionRootsBound
+            && ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+            && ReferenceEquals(graph?.PersonStore, personStore)
+            && ReferenceEquals(selectedActorChoiceStore, actorChoiceStore)
+            && ReferenceEquals(actorChoiceStore?.PersonStore, personStore)
+            && ReferenceEquals(selectedRandomSource, randomSource)
+            && ReferenceEquals(selectedRuntimeIdAllocator, runtimeIdAllocator)
+            && ReferenceEquals(selectedRecordSequence, recordSequence)
+            && ReferenceEquals(selectedDecisionStore, decisionStore);
+    }
+
+    internal bool HasExactSelectedRuntimeActorTurnRoots(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore personStore,
+        ActorChoiceStore actorChoiceStore,
+        IAuthoritativeRandomSource randomSource)
+    {
+        return selectedRuntimeExecutionRootsBound
+            && ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+            && ReferenceEquals(graph?.PersonStore, personStore)
+            && ReferenceEquals(selectedActorChoiceStore, actorChoiceStore)
+            && ReferenceEquals(actorChoiceStore?.PersonStore, personStore)
+            && ReferenceEquals(selectedRandomSource, randomSource);
     }
 
     internal bool HasExactSelectedRuntimeOwnerGraph(

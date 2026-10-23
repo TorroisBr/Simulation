@@ -250,6 +250,70 @@ internal static class DailyV1SelectedMerchantTradeStateOperation
                 DailyV1CommercialKnowledgeSource.DirectObservation));
     }
 
+    /// <summary>
+    /// Applies the established post-travel market observation to the exact
+    /// selected owners. Travel transitions and arrival event publication have
+    /// already completed; this preserves the prior party-first, then solo
+    /// roster order while keeping market knowledge writes in Core.
+    /// </summary>
+    internal static bool ObserveCompletedTravelResults(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
+        IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults,
+        long absoluteDay)
+    {
+        if (graph == null || partyArrivals == null || soloResults == null || absoluteDay < 0L)
+            return false;
+
+        if (graph.Definitions?.EffectiveConfiguration?.MerchantTrade?.Enabled != true)
+            return true;
+
+        foreach (DailyV1SelectedTravelPartyArrivalResult arrival in partyArrivals)
+        {
+            if (arrival?.Members == null) return false;
+            foreach (DailyV1NpcRuntimeOwners member in arrival.Members)
+                if (!ObserveCurrentMarketForExactOwner(graph, member, absoluteDay)) return false;
+        }
+
+        foreach (DailyV1SelectedSoloTravelDayResult result in soloResults)
+        {
+            if (result?.Npc == null) return false;
+            if (result.Arrived
+                && !ObserveCurrentMarketForExactOwner(graph, result.Npc, absoluteDay))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool ObserveCurrentMarketForExactOwner(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        long absoluteDay)
+    {
+        if (actor == null || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(actor.Definitions, graph.Definitions))
+            return false;
+        if (actor.Lifecycle?.LifeState != NpcLifeState.Alive
+            || !DailyV1NpcDefinitionRules.HasJobType(
+                actor.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue))
+            return true;
+
+        string cityRuntimeId = actor.Travel?.CurrentCityRuntimeId;
+        if (string.IsNullOrWhiteSpace(cityRuntimeId)) return true;
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            if (!string.Equals(city?.RuntimeId, cityRuntimeId, StringComparison.Ordinal)) continue;
+            ObserveCurrentMarket(actor, city, absoluteDay);
+            return true;
+        }
+
+        // A valid location can be outside the selected City roster. The old
+        // Unity projection had no CurrentCity in that case and observed nothing.
+        return true;
+    }
+
     private static bool HasBestLocalMerchantBuyer(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners seller,

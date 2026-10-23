@@ -104,15 +104,23 @@ public sealed partial class SimulationRuntime
         }
 
         public void ObserveCompletedTravelResults() =>
-            runtime.ObserveTravelArrivals(boundary.Arrivals);
+            runtime.ObserveTravelArrivals(boundary.Arrivals, selectedMarketAlreadyObservedByCore: true);
     }
 
     private void ObserveTravelArrivals(IReadOnlyList<NpcRuntime> arrivedNpcs)
     {
+        ObserveTravelArrivals(arrivedNpcs, selectedMarketAlreadyObservedByCore: false);
+    }
+
+    private void ObserveTravelArrivals(
+        IReadOnlyList<NpcRuntime> arrivedNpcs,
+        bool selectedMarketAlreadyObservedByCore)
+    {
         foreach (NpcRuntime arrivedNpc in arrivedNpcs ?? Array.Empty<NpcRuntime>())
         {
             ObserveArrivedExplorableSites(arrivedNpc);
-            if (arrivedNpc?.CurrentCity != null && configuration.MerchantTrade.Enabled)
+            if (!selectedMarketAlreadyObservedByCore
+                && arrivedNpc?.CurrentCity != null && configuration.MerchantTrade.Enabled)
                 merchantSystem?.ObserveCurrentMarket(arrivedNpc);
         }
 

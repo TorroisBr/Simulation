@@ -96,6 +96,80 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
     }
 
     [Test]
+    public void CompletedTravelPartyArrivalObservesItsExactCurrentCityMarketInCore()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out _);
+        DailyV1NpcRuntimeOwners merchant = graph.Npcs.First(owner =>
+            owner.CommercialKnowledge != null
+            && DailyV1NpcDefinitionRules.HasJobType(owner.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue));
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(owner =>
+            string.Equals(owner.RuntimeId, merchant.Travel.CurrentCityRuntimeId,
+                StringComparison.Ordinal));
+        TravelPartyRuntime party = new TravelPartyRuntime(
+            "party/core-arrival-observation", city.LocationRuntimeId,
+            city.LocationRuntimeId, "route/core-arrival-observation",
+            new[] { merchant.RuntimeId }, Array.Empty<string>(), 1,
+            "decision/core-arrival-observation",
+            new[] { new TravelPartyMemberCost(merchant.RuntimeId, 0f) });
+        long priorRevision = merchant.CommercialKnowledge.Revision;
+        const long arrivalDay = 41L;
+
+        Assert.That(DailyV1SelectedMerchantTradeStateOperation.ObserveCompletedTravelResults(
+            graph,
+            new[] { new DailyV1SelectedTravelPartyArrivalResult(
+                party, new[] { merchant }, eventRecorded: true) },
+            Array.Empty<DailyV1SelectedSoloTravelDayResult>(),
+            arrivalDay), Is.True);
+
+        Assert.That(merchant.CommercialKnowledge.Revision, Is.GreaterThan(priorRevision));
+        foreach (DailyV1MarketItemState row in city.Market.Items)
+        {
+            Assert.That(merchant.CommercialKnowledge.TryGetObservation(
+                city.LocationRuntimeId, row.Item.DefinitionId,
+                out DailyV1CommercialMarketObservation observation), Is.True);
+            Assert.That(observation.ItemDefinition, Is.SameAs(row.Item));
+            Assert.That(observation.ObservedDay, Is.EqualTo(arrivalDay));
+        }
+        Assert.That(merchant.CommercialKnowledge.TryGetLiquidityObservation(
+            city.LocationRuntimeId, out DailyV1CommercialLiquidityObservation liquidity), Is.True);
+        Assert.That(liquidity.ObservedDay, Is.EqualTo(arrivalDay));
+    }
+
+    [Test]
+    public void CompletedSoloArrivalObservesItsExactCurrentCityMarketInCore()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out _);
+        DailyV1NpcRuntimeOwners merchant = graph.Npcs.First(owner =>
+            owner.CommercialKnowledge != null
+            && DailyV1NpcDefinitionRules.HasJobType(owner.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue));
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(owner =>
+            string.Equals(owner.RuntimeId, merchant.Travel.CurrentCityRuntimeId,
+                StringComparison.Ordinal));
+        long priorRevision = merchant.CommercialKnowledge.Revision;
+        const long arrivalDay = 42L;
+
+        Assert.That(DailyV1SelectedMerchantTradeStateOperation.ObserveCompletedTravelResults(
+            graph,
+            Array.Empty<DailyV1SelectedTravelPartyArrivalResult>(),
+            new[] { new DailyV1SelectedSoloTravelDayResult(
+                merchant, null, shouldReport: true, wasCommitted: true,
+                arrived: true, originDecisionId: null) },
+            arrivalDay), Is.True);
+
+        Assert.That(merchant.CommercialKnowledge.Revision, Is.GreaterThan(priorRevision));
+        foreach (DailyV1MarketItemState row in city.Market.Items)
+        {
+            Assert.That(merchant.CommercialKnowledge.TryGetObservation(
+                city.LocationRuntimeId, row.Item.DefinitionId,
+                out DailyV1CommercialMarketObservation observation), Is.True);
+            Assert.That(observation.ItemDefinition, Is.SameAs(row.Item));
+            Assert.That(observation.ObservedDay, Is.EqualTo(arrivalDay));
+        }
+    }
+
+    [Test]
     public void MerchantDailyPassClearsAPlanForLocalMerchantFromTheExactCoreOwner()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out _);

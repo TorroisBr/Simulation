@@ -122,13 +122,6 @@ public sealed class DailyDemographyReport
 /// </summary>
 public static class DailyDemographicSystem
 {
-    internal static bool CanAdvanceSelected(SimulationRuntime world)
-    {
-        return world != null
-            && world.SelectedRuntimeOwnerGraph != null
-            && HasExactCityPopulationBindings(world, world.SelectedRuntimeOwnerGraph);
-    }
-
     /// <summary>
     /// Runs selected Daily-v1 demography through the exact Core owner graph.
     /// Death lifecycle remains delegated to SimulationRuntime's existing

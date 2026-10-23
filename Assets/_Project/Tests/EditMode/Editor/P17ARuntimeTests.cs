@@ -387,9 +387,9 @@ public sealed class P17ARuntimeTests
 
     private static void FaultRuntime(SimulationRuntime runtime)
     {
-        FieldInfo guardField = typeof(SimulationRuntime).GetField("mutationGuard", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.That(guardField, Is.Not.Null);
-        object guard = guardField.GetValue(runtime);
+        PropertyInfo guardProperty = typeof(SimulationRuntime).GetProperty("mutationGuard", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(guardProperty, Is.Not.Null);
+        object guard = guardProperty.GetValue(runtime);
         MethodInfo markFaulted = guard.GetType().GetMethod("MarkFaulted", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(markFaulted, Is.Not.Null);
         markFaulted.Invoke(guard, new object[] { AuthoritativeMutationFaultReason.RollbackRestoreFailed });

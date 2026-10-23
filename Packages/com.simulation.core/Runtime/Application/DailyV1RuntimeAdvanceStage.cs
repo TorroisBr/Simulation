@@ -21,18 +21,7 @@ internal enum DailyV1RuntimeAdvanceFailureCode : byte
 internal interface IDailyV1RuntimeAdvanceBoundary
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
-    bool HasRuntimeAdmission { get; }
-    bool IsAdmissionOwnerThreadCurrent { get; }
-    bool IsDailyCaptureProfile { get; }
-    bool HasCoreSelectedDailyExecution { get; }
-    bool CanMutate { get; }
     bool HasIntradayTimeline { get; }
-
-    bool TryPreflightDailyCoreSequenceCapacity(
-        long requestedBoundaries,
-        out DailyV1RuntimeAdvanceFailureCode failure);
-
-    bool TryValidateClockAdvance(out DailyV1RuntimeAdvanceFailureCode failure);
     bool TryEnterDailyAdvanceOperation(out IDisposable operationScope);
     bool TryCreateSelectedDailyExecutionBoundary(
         out IDailyV1SelectedDailyExecutionBoundary executionBoundary);
@@ -66,24 +55,65 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             return false;
         }
 
-        if (boundary.HasRuntimeAdmission && !boundary.IsAdmissionOwnerThreadCurrent)
+        bool scopeRequired = HasRuntimeAdmission;
+        if (scopeRequired && !TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance))
+        {
+            boundary.FaultRuntimeAdmission();
+            failure = DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted;
+            return false;
+        }
+
+        bool advanced;
+        bool scopeClosed = true;
+        try
+        {
+            advanced = TryAdvanceDayWithinOperationScope(boundary, out failure);
+        }
+        finally
+        {
+            if (scopeRequired)
+            {
+                scopeClosed = TryEndOperation(DailyV1OperationScopeKind.DailyAdvance);
+                if (!scopeClosed)
+                {
+                    InvalidateCurrentCaptureToken();
+                    boundary.FaultRuntimeAdmission();
+                }
+            }
+        }
+
+        if (!scopeClosed)
+        {
+            failure = DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted;
+            return false;
+        }
+        return advanced;
+    }
+
+    private bool TryAdvanceDayWithinOperationScope(
+        IDailyV1RuntimeAdvanceBoundary boundary,
+        out DailyV1RuntimeAdvanceFailureCode failure)
+    {
+        failure = DailyV1RuntimeAdvanceFailureCode.None;
+
+        if (!IsAdmissionOwnerThreadCurrent(boundary))
         {
             failure = DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted;
             return false;
         }
 
-        if (boundary.IsDailyCaptureProfile)
+        if (IsDailyCaptureProfile)
         {
-            if (!boundary.CanMutate)
+            if (!CanMutate)
             {
                 failure = DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted;
                 return false;
             }
-            if (!boundary.TryPreflightDailyCoreSequenceCapacity(1L, out failure)) return false;
-            if (!TryValidateClockAdvance(boundary, out failure)) return false;
+            if (!TryPreflightDailyCoreSequenceCapacity(1L, out failure)) return false;
+            if (!TryValidateClockAdvance(out failure)) return false;
         }
 
-        if (!TryBeginAdvance(boundary.HasRuntimeAdmission, out DailyV1AdvanceLease lease))
+        if (!TryBeginAdvance(HasRuntimeAdmission, out DailyV1AdvanceLease lease))
         {
             failure = DailyV1RuntimeAdvanceFailureCode.AdvanceAlreadyInProgress;
             return false;
@@ -91,16 +121,16 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
         using (lease)
         {
-            if (boundary.HasRuntimeAdmission)
+            if (HasRuntimeAdmission)
             {
-                if (!boundary.CanMutate)
+                if (!CanMutate)
                 {
                     failure = DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted;
                     return false;
                 }
 
-                if (!boundary.IsDailyCaptureProfile
-                    && !TryValidateClockAdvance(boundary, out failure))
+                if (!IsDailyCaptureProfile
+                    && !TryValidateClockAdvance(out failure))
                     return false;
 
                 if (!boundary.TryEnterDailyAdvanceOperation(out IDisposable operationScope))
@@ -128,7 +158,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 }
 
                 if (!advanced) return false;
-                if (boundary.IsDailyCaptureProfile
+                if (IsDailyCaptureProfile
                     && !TryPublishCompletedDailyCaptureToken(boundary, out failure))
                 {
                     return false;
@@ -164,24 +194,69 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
         if (dayCount == 0) return true;
 
-        if (boundary.HasRuntimeAdmission && !boundary.IsAdmissionOwnerThreadCurrent)
+        bool scopeRequired = HasRuntimeAdmission;
+        if (scopeRequired && !TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance))
+        {
+            boundary.FaultRuntimeAdmission();
+            failure = DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted;
+            return false;
+        }
+
+        bool advanced;
+        bool scopeClosed = true;
+        try
+        {
+            advanced = TryAdvanceDaysWithinOperationScope(
+                boundary, dayCount, out daysAdvanced, out failure);
+        }
+        finally
+        {
+            if (scopeRequired)
+            {
+                scopeClosed = TryEndOperation(DailyV1OperationScopeKind.DailyAdvance);
+                if (!scopeClosed)
+                {
+                    InvalidateCurrentCaptureToken();
+                    boundary.FaultRuntimeAdmission();
+                }
+            }
+        }
+
+        if (!scopeClosed)
+        {
+            failure = DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted;
+            return false;
+        }
+        return advanced;
+    }
+
+    private bool TryAdvanceDaysWithinOperationScope(
+        IDailyV1RuntimeAdvanceBoundary boundary,
+        int dayCount,
+        out int daysAdvanced,
+        out DailyV1RuntimeAdvanceFailureCode failure)
+    {
+        daysAdvanced = 0;
+        failure = DailyV1RuntimeAdvanceFailureCode.None;
+
+        if (!IsAdmissionOwnerThreadCurrent(boundary))
         {
             failure = DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted;
             return false;
         }
 
-        if (boundary.IsDailyCaptureProfile)
+        if (IsDailyCaptureProfile)
         {
-            if (!boundary.CanMutate)
+            if (!CanMutate)
             {
                 failure = DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted;
                 return false;
             }
-            if (!boundary.TryPreflightDailyCoreSequenceCapacity(dayCount, out failure)) return false;
-            if (!TryValidateClockAdvance(boundary, out failure)) return false;
+            if (!TryPreflightDailyCoreSequenceCapacity(dayCount, out failure)) return false;
+            if (!TryValidateClockAdvance(out failure)) return false;
         }
 
-        if (!TryBeginAdvance(boundary.HasRuntimeAdmission, out DailyV1AdvanceLease lease))
+        if (!TryBeginAdvance(HasRuntimeAdmission, out DailyV1AdvanceLease lease))
         {
             failure = DailyV1RuntimeAdvanceFailureCode.AdvanceAlreadyInProgress;
             return false;
@@ -189,18 +264,18 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
         using (lease)
         {
-            if (!boundary.CanMutate)
+            if (!CanMutate)
             {
                 failure = DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted;
                 return false;
             }
 
-            if (boundary.HasRuntimeAdmission && !boundary.IsDailyCaptureProfile
-                && !TryValidateClockAdvance(boundary, out failure))
+            if (HasRuntimeAdmission && !IsDailyCaptureProfile
+                && !TryValidateClockAdvance(out failure))
                 return false;
 
             IDisposable operationScope = null;
-            if (boundary.HasRuntimeAdmission
+            if (HasRuntimeAdmission
                 && !boundary.TryEnterDailyAdvanceOperation(out operationScope))
             {
                 failure = DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted;
@@ -222,13 +297,13 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 }
                 catch
                 {
-                    if (boundary.HasRuntimeAdmission)
+                    if (HasRuntimeAdmission)
                         boundary.FaultRuntimeAdmission();
                     throw;
                 }
             }
 
-            if (boundary.IsDailyCaptureProfile
+            if (IsDailyCaptureProfile
                 && !TryPublishCompletedDailyCaptureToken(boundary, out failure))
             {
                 return false;
@@ -247,7 +322,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         if (preferIntradayTimeline && boundary.HasIntradayTimeline)
             return boundary.TryAdvanceIntradayToNextDayBoundary(out failure);
 
-        if (boundary.HasCoreSelectedDailyExecution)
+        if (HasAdmittedSelectedDailyExecution)
         {
             SimulationTime clock = SimulationTime;
             if (clock == null)
@@ -255,7 +330,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 failure = DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted;
                 return false;
             }
-            if (!boundary.CanMutate)
+            if (!CanMutate)
             {
                 failure = DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted;
                 return false;
@@ -279,7 +354,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             }
 
             DailyV1SelectedDailyExecutionStage.Advance(
-                SimulationTime.AbsoluteDay, graph, graph.ScheduledDirectives, executionBoundary);
+                this, SimulationTime.AbsoluteDay, graph, graph.ScheduledDirectives, executionBoundary);
             failure = DailyV1RuntimeAdvanceFailureCode.None;
             return true;
         }
@@ -295,7 +370,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         out DailyV1RuntimeAdvanceFailureCode failure)
     {
         failure = DailyV1RuntimeAdvanceFailureCode.None;
-        if (!boundary.IsDailyCaptureProfile) return true;
+        if (!IsDailyCaptureProfile) return true;
         if (TryRecordCompletedCore()) return true;
 
         boundary.FaultRuntimeAdmission();
@@ -323,13 +398,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         return true;
     }
 
-    private bool TryValidateClockAdvance(
-        IDailyV1RuntimeAdvanceBoundary boundary,
-        out DailyV1RuntimeAdvanceFailureCode failure)
+    private bool TryValidateClockAdvance(out DailyV1RuntimeAdvanceFailureCode failure)
     {
-        if (boundary.HasIntradayTimeline || !boundary.HasCoreSelectedDailyExecution)
-            return boundary.TryValidateClockAdvance(out failure);
-
         SimulationTime clock = SimulationTime;
         if (clock == null)
         {
@@ -342,6 +412,31 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         failure = valid ? DailyV1RuntimeAdvanceFailureCode.None : MapClockFailure(timeFailure);
         return valid;
     }
+
+    private bool IsAdmissionOwnerThreadCurrent(IDailyV1RuntimeAdvanceBoundary boundary)
+    {
+        if (AdmissionContext == null || AdmissionContext.IsOwnedByCurrentThread())
+            return true;
+        boundary.FaultRuntimeAdmission();
+        return false;
+    }
+
+    private bool TryPreflightDailyCoreSequenceCapacity(
+        long requestedBoundaries,
+        out DailyV1RuntimeAdvanceFailureCode failure)
+    {
+        if (CanRecordCompletedCoreCount(requestedBoundaries))
+        {
+            failure = DailyV1RuntimeAdvanceFailureCode.None;
+            return true;
+        }
+        failure = DailyV1RuntimeAdvanceFailureCode.CompletedBoundarySequenceOverflow;
+        return false;
+    }
+
+    private bool HasRuntimeAdmission => AdmissionContext != null;
+    private bool IsDailyCaptureProfile => AdmissionContext?.Profile
+        == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1;
 
     private static DailyV1RuntimeAdvanceFailureCode MapClockFailure(
         SimulationTimeAdvanceFailure failure) =>

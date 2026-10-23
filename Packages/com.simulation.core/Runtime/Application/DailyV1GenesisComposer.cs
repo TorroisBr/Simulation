@@ -19,6 +19,7 @@ internal sealed class DailyV1GenesisComposition
     internal NpcDecisionStore DecisionStore { get; }
     internal PersonStore PersonStore { get; }
     internal ActorChoiceStore ActorChoiceStore { get; }
+    internal TravelPartyStore TravelPartyStore { get; }
     internal SimulationRuntimeAdmissionContext AdmissionContext { get; }
     internal EffectiveSimulationConfiguration EffectiveConfiguration { get; }
     internal SimulationCalendar Calendar { get; }
@@ -39,6 +40,7 @@ internal sealed class DailyV1GenesisComposition
         NpcDecisionStore decisionStore,
         PersonStore personStore,
         ActorChoiceStore actorChoiceStore,
+        TravelPartyStore travelPartyStore,
         SimulationRuntimeAdmissionContext admissionContext,
         EffectiveSimulationConfiguration effectiveConfiguration,
         SimulationCalendar calendar,
@@ -61,6 +63,7 @@ internal sealed class DailyV1GenesisComposition
         DecisionStore = decisionStore ?? throw new ArgumentNullException(nameof(decisionStore));
         PersonStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
         ActorChoiceStore = actorChoiceStore ?? throw new ArgumentNullException(nameof(actorChoiceStore));
+        TravelPartyStore = travelPartyStore ?? throw new ArgumentNullException(nameof(travelPartyStore));
         AdmissionContext = admissionContext ?? throw new ArgumentNullException(nameof(admissionContext));
         EffectiveConfiguration = effectiveConfiguration ?? throw new ArgumentNullException(nameof(effectiveConfiguration));
         Calendar = calendar ?? throw new ArgumentNullException(nameof(calendar));
@@ -96,6 +99,18 @@ internal static class DailyV1GenesisComposer
         out DailyV1GenesisComposition composition,
         out string diagnostic)
     {
+        return TryComposeSelectedOwners(
+            definitions, admissionContext, null, null, out composition, out diagnostic);
+    }
+
+    internal static bool TryComposeSelectedOwners(
+        DailyV1EffectiveDefinitions definitions,
+        SimulationRuntimeAdmissionContext admissionContext,
+        Func<WorldId> allocateWorldId,
+        Action<string> stageCompleted,
+        out DailyV1GenesisComposition composition,
+        out string diagnostic)
+    {
         composition = null;
         diagnostic = null;
         if (!TryValidateInput(definitions, admissionContext, out diagnostic)) return false;
@@ -110,7 +125,11 @@ internal static class DailyV1GenesisComposer
         // only after profile admission and before runtime-ID allocation, as in
         // the existing Unity bootstrap sequence.
         DailyV1SimulationConfigData config = definitions.Configuration;
-        WorldId worldId = new WorldId(Guid.NewGuid());
+        WorldId worldId = allocateWorldId != null
+            ? allocateWorldId()
+            : new WorldId(Guid.NewGuid());
+        if (worldId == null)
+            return Fail("World identity allocation returned no identity.", out diagnostic);
         SimulationTime time = new SimulationTime();
         DeterministicRandomSource randomSource = new DeterministicRandomSource(
             config.useFixedSimulationSeed ? config.simulationSeed : 0);
@@ -136,6 +155,7 @@ internal static class DailyV1GenesisComposer
                 definitions.EffectiveConfiguration, calendar))
             return Fail("The selected Core runtime could not bind its exact effective configuration and calendar.", out diagnostic);
         ScheduledDirectiveStore directives = new ScheduledDirectiveStore(time);
+        TravelPartyStore travelParties = new TravelPartyStore();
         DailyV1JusticeRecordsOwner justice = new DailyV1JusticeRecordsOwner();
         DailyV1SelectedRuntimeOwnerGraphBuilder builder =
             new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
@@ -145,6 +165,24 @@ internal static class DailyV1GenesisComposer
             owner => owner != null
                 && owner.Kind == SpatialAnchorOwnerKind.City
                 && ContainsCity(builder, owner.Value));
+
+        bool invokingStageCallback = false;
+        void CompleteStage(string stageId)
+        {
+            if (stageCompleted == null) return;
+            invokingStageCallback = true;
+            try { stageCompleted(stageId); }
+            finally { invokingStageCallback = false; }
+        }
+
+        try
+        {
+            CompleteStage(ResolveProfileStage);
+        }
+        catch
+        {
+            throw;
+        }
 
         try
         {
@@ -162,6 +200,7 @@ internal static class DailyV1GenesisComposer
                     if (!builder.TryCreateConfiguredCities(runtimeIds)
                         || !builder.TryCreateConfiguredCityRoutes(runtimeIds))
                         return Fail("Core selected City/Route genesis rejected the admitted definition graph.", out diagnostic);
+                    CompleteStage(stage);
                     continue;
                 }
 
@@ -171,6 +210,7 @@ internal static class DailyV1GenesisComposer
                         return false;
                     if (!TryBindSelectedCityAnchors(builder, anchorBindings, out diagnostic))
                         return false;
+                    CompleteStage(stage);
                     continue;
                 }
 
@@ -182,22 +222,29 @@ internal static class DailyV1GenesisComposer
                         || !builder.TryBootstrapInitialCommercialKnowledge(time.AbsoluteDay)
                         || !builder.TryCreateConfiguredInitialJusticeState(justice))
                         return Fail("Core selected NPC/directive/initial-owner genesis rejected the admitted definition graph.", out diagnostic);
+                    CompleteStage(stage);
                     continue;
                 }
 
                 if (string.Equals(stage, ValidateProfileStage, StringComparison.Ordinal))
                 {
-                    if (!builder.TryBuild(justice, null, directives,
+                    if (!builder.TryBuild(justice, travelParties, directives,
                             out DailyV1SelectedRuntimeOwnerGraph graph))
                         return Fail("Core selected owner graph failed exact genesis admission.", out diagnostic);
                     if (!graph.TryBindPersonStore(personStore)
                         || !ReferenceEquals(actorChoiceStore.PersonStore, personStore)
-                        || !executionBoundaryState.TryBindSelectedRuntimeOwnerGraph(graph))
+                        || !executionBoundaryState.TryBindSelectedRuntimeOwnerGraph(graph)
+                        || !executionBoundaryState.TryBindSelectedRuntimeExecutionRoots(
+                            runtimeIds,
+                            randomSource,
+                            recordSequence,
+                            decisionStore,
+                            actorChoiceStore))
                         return Fail("The selected Core runtime could not bind its exact genesis owner graph.", out diagnostic);
                     composition = new DailyV1GenesisComposition(
                         definitions, p9ProfileFingerprint, p9ProvenanceRecords,
                         worldId, runtimeIds, time, randomSource, recordSequence,
-                        decisionStore, personStore, actorChoiceStore,
+                        decisionStore, personStore, actorChoiceStore, travelParties,
                         admissionContext, definitions.EffectiveConfiguration,
                         calendar, executionBoundaryState, spatialAuthority, anchorBindings, graph);
                     continue;
@@ -207,18 +254,22 @@ internal static class DailyV1GenesisComposer
             }
         }
         catch (FormatException exception)
+            when (!invokingStageCallback)
         {
             return Fail("Authored P8 scale value is invalid: " + exception.Message, out diagnostic);
         }
         catch (OverflowException exception)
+            when (!invokingStageCallback)
         {
             return Fail("Selected Core genesis numeric input overflowed: " + exception.Message, out diagnostic);
         }
         catch (ArgumentException exception)
+            when (!invokingStageCallback)
         {
             return Fail("Selected Core genesis input is invalid: " + exception.Message, out diagnostic);
         }
         catch (InvalidOperationException exception)
+            when (!invokingStageCallback)
         {
             return Fail("Selected Core genesis failed: " + exception.Message, out diagnostic);
         }
@@ -247,7 +298,7 @@ internal static class DailyV1GenesisComposer
             || definitions.ExplorableSites.Count != 0
             || !string.IsNullOrWhiteSpace(config.authoredP10RuinSite)
             || !string.IsNullOrWhiteSpace(config.p10bStableSiteKey))
-            return Fail("The selected Core Daily-v1 genesis path requires the admitted exact-empty P10 site/topology profile.", out diagnostic);
+            return Fail("The selected Core Daily-v1 genesis path requires the admitted exact-empty ExplorableSite/P10 topology profile.", out diagnostic);
 
         if (definitions.StageOrder == null || definitions.StageOrder.Count < 5
             || !string.Equals(definitions.StageOrder[0], ResolveProfileStage, StringComparison.Ordinal)

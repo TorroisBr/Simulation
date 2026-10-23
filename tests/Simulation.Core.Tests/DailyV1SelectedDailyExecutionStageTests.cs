@@ -286,13 +286,17 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     [Test]
     public void RuntimeAdvanceStageInvokesSelectedDailyCoreBeforeCompletionAndTokenPublication()
     {
-        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
-            DailyV1CapturedSelectedContentFixture.CreateDefinitions());
-        const long absoluteDay = 23L;
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        long absoluteDay = composition.SimulationTime.AbsoluteDay + 1L;
         ScheduledDirectiveStore directives = CreateDirectiveForFirstNpc(graph, absoluteDay);
-        FakeBoundary dailyBoundary = new FakeBoundary();
-        DailyV1ExecutionBoundaryState state = CreateCaptureState(absoluteDay - 1L);
-        Assert.That(state.TryBindSelectedRuntimeOwnerGraph(graph), Is.True);
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        Assert.That(state.SimulationTime.AbsoluteDay, Is.EqualTo(absoluteDay - 1L));
+        Assert.That(state.HasAdmittedSelectedDailyExecution, Is.True);
+        FakeBoundary dailyBoundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore);
         FakeRuntimeAdvanceBoundary advanceBoundary = new FakeRuntimeAdvanceBoundary(
             state, dailyBoundary);
 
@@ -301,8 +305,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.None));
         Assert.That(advanceBoundary.Calls, Is.EqualTo(new[]
         {
-            "owner", "healthy", "capacity:1", "healthy", "operation",
-            "healthy", "execution-boundary", "capture-evidence"
+            "operation", "execution-boundary", "capture-evidence"
         }));
         Assert.That(dailyBoundary.Calls, Does.Contain("begin-day"));
         Assert.That(dailyBoundary.Calls, Does.Contain("actor-context"));
@@ -315,12 +318,73 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
-    public void SelectedDailyContextFailureAfterClockAdvanceFaultsAndCannotPublishBoundary()
+    public void AdvanceRejectsSelectedActorWithoutExactDecisionRecordRootsBeforeActorDispatch()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
             DailyV1CapturedSelectedContentFixture.CreateDefinitions());
-        DailyV1ExecutionBoundaryState state = CreateCaptureState(22L);
+        DailyV1ExecutionBoundaryState state = CreateCaptureState(22L, graph);
         Assert.That(state.TryBindSelectedRuntimeOwnerGraph(graph), Is.True);
+        RuntimeIdAllocator runtimeIdAllocator = new RuntimeIdAllocator();
+        IAuthoritativeRandomSource randomSource = new DeterministicRandomSource(23);
+        SimulationRecordSequence recordSequence = new SimulationRecordSequence();
+        NpcDecisionStore decisionStore = new NpcDecisionStore();
+        ActorChoiceStore actorChoiceStore = new ActorChoiceStore(graph.PersonStore);
+        Assert.That(state.TryBindSelectedRuntimeExecutionRoots(
+            runtimeIdAllocator, randomSource, recordSequence, decisionStore, actorChoiceStore), Is.True);
+        FakeBoundary boundary = new FakeBoundary(
+            runtimeIdAllocator, randomSource, recordSequence, decisionStore, actorChoiceStore)
+        {
+            UseSelectedActionExecution = true,
+            FailDecisionRecordOwnerResolution = true
+        };
+
+        Assert.Throws<InvalidOperationException>(() =>
+            DailyV1SelectedDailyExecutionStage.Advance(
+                state, 23L, graph, graph.ScheduledDirectives, boundary));
+
+        Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context" }),
+            "The root proof runs before logger output, demography, day-start, economy, directives, or knowledge writes.");
+        Assert.That(boundary.SelectedActionDispatchLookupCount, Is.Zero,
+            "An actor dispatch boundary is never requested after root preflight fails.");
+        Assert.That(boundary.Calls, Does.Not.Contain("travel-context"),
+            "A selected actor cannot begin Core execution when the exact decision roots are unavailable.");
+    }
+
+    [Test]
+    public void RuntimeAdvanceRootRejectionFaultsBeforeDailyWritesAndCapturePublication()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        FakeBoundary dailyBoundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore)
+        {
+            UseSelectedActionExecution = true,
+            FailDecisionRecordOwnerResolution = true
+        };
+        FakeRuntimeAdvanceBoundary advanceBoundary = new FakeRuntimeAdvanceBoundary(state, dailyBoundary);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            state.TryAdvanceDay(advanceBoundary, out _));
+
+        Assert.That(dailyBoundary.Calls, Is.EqualTo(new[] { "actor-context" }));
+        Assert.That(dailyBoundary.SelectedActionDispatchLookupCount, Is.Zero);
+        Assert.That(advanceBoundary.Calls, Does.Contain("fault"));
+        Assert.That(advanceBoundary.Calls, Does.Not.Contain("capture-evidence"));
+        Assert.That(state.CompletedCoreSequence, Is.Zero);
+        Assert.That(state.CurrentCaptureToken, Is.Null);
+        Assert.That(state.AdvanceLeaseHeld, Is.False);
+    }
+
+    [Test]
+    public void SelectedDailyContextFailureAfterClockAdvanceFaultsAndCannotPublishBoundary()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        Assert.That(state.HasAdmittedSelectedDailyExecution, Is.True);
         FakeRuntimeAdvanceBoundary advanceBoundary = new FakeRuntimeAdvanceBoundary(
             state, new FakeBoundary())
         {
@@ -377,7 +441,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         long absoluteDay)
     {
         Assert.That(graph.Npcs, Is.Not.Empty);
-        ScheduledDirectiveStore directives = new ScheduledDirectiveStore(new SimulationTime(absoluteDay));
+        ScheduledDirectiveStore directives = graph.ScheduledDirectives
+            ?? new ScheduledDirectiveStore(new SimulationTime(absoluteDay));
         Assert.That(directives.Add(new ScheduledDirective(
             "directive/daily-stage", absoluteDay,
             ScheduledDirectiveMode.RequestAction,
@@ -389,16 +454,37 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         return directives;
     }
 
-    private static DailyV1ExecutionBoundaryState CreateCaptureState(long absoluteDay)
+    private static DailyV1GenesisComposition CreateSelectedGenesis()
     {
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(),
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition, out string diagnostic), Is.True, diagnostic);
+        return composition;
+    }
+
+    private static DailyV1ExecutionBoundaryState CreateCaptureState(
+        long absoluteDay,
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        Assert.That(graph?.Definitions?.EffectiveConfiguration, Is.Not.Null);
         SimulationRuntimeAdmissionContext admission =
             SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
-        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow();
-        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(1, 1, 1));
+        DailyV1CalendarDefinition calendarDefinition = graph.Definitions.Calendar;
+        CalendarDefinition calendar = calendarDefinition.monthLengths != null
+            && calendarDefinition.monthLengths.Count > 0
+            ? new CalendarDefinition(
+                new List<int>(calendarDefinition.monthLengths), calendarDefinition.daysPerWeek)
+            : new CalendarDefinition(
+                calendarDefinition.monthsPerYear,
+                calendarDefinition.weeksPerMonth,
+                calendarDefinition.daysPerWeek);
+        SimulationCalendar runtimeCalendar = new SimulationCalendar(calendar);
         DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState(
             new SimulationTime(absoluteDay), admission, SimulationRuntimeCompositionProfile.Standard,
             new WorldId(Guid.NewGuid()));
-        Assert.That(state.TryBindRuntimeConfiguration(configuration, calendar), Is.True);
+        Assert.That(state.TryBindRuntimeConfiguration(
+            graph.Definitions.EffectiveConfiguration, runtimeCalendar), Is.True);
         return state;
     }
 
@@ -578,6 +664,28 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
 
     private sealed class FakeBoundary : IDailyV1SelectedDailyExecutionBoundary
     {
+        private readonly RuntimeIdAllocator runtimeIdAllocator;
+        private readonly IAuthoritativeRandomSource randomSource;
+        private readonly SimulationRecordSequence recordSequence;
+        private readonly NpcDecisionStore decisionStore;
+        private readonly ActorChoiceStore actorChoiceStore;
+
+        internal FakeBoundary() { }
+
+        internal FakeBoundary(
+            RuntimeIdAllocator runtimeIdAllocator,
+            IAuthoritativeRandomSource randomSource,
+            SimulationRecordSequence recordSequence,
+            NpcDecisionStore decisionStore,
+            ActorChoiceStore actorChoiceStore)
+        {
+            this.runtimeIdAllocator = runtimeIdAllocator;
+            this.randomSource = randomSource;
+            this.recordSequence = recordSequence;
+            this.decisionStore = decisionStore;
+            this.actorChoiceStore = actorChoiceStore;
+        }
+
         internal List<string> Calls { get; } = new List<string>();
         internal List<DailyV1SelectedCrimeJusticeDailyPhase> DayStartPhases { get; } =
             new List<DailyV1SelectedCrimeJusticeDailyPhase>();
@@ -588,6 +696,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal bool UseSelectedDayStartContext { get; set; }
         internal bool CrimeSystemPresent { get; set; }
         internal bool JusticeSystemPresent { get; set; }
+        internal bool UseSelectedActionExecution { get; set; }
+        internal bool FailDecisionRecordOwnerResolution { get; set; }
+        internal int SelectedActionDispatchLookupCount { get; private set; }
         internal DailyV1JusticeRecordsOwner SubstituteJusticeRecordsOwner { get; set; }
         public void BeginLoggerDay(long absoluteDay) => Calls.Add("logger:" + absoluteDay);
         public bool TryCreateSelectedDemographyContext(
@@ -650,8 +761,11 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             PersonStore people = SubstituteActorPersonStore
                 ? new PersonStore()
                 : graph.PersonStore;
+            ActorChoiceStore choices = !SubstituteActorPersonStore && actorChoiceStore != null
+                ? actorChoiceStore
+                : new ActorChoiceStore(people);
             context = new FakeActorTurnContext(
-                runtimeRoster, people, new ActorChoiceStore(people), new FakeActorTurnBoundary(this));
+                runtimeRoster, people, choices, new FakeActorTurnBoundary(this));
             return true;
         }
         public bool TryCreateSelectedTravelDayContext(
@@ -869,7 +983,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public void LogTrade(string message) { }
         }
 
-        private sealed class FakeActorTurnBoundary : IDailyV1ActorTurnExecutionBoundary
+        private sealed class FakeActorTurnBoundary : IDailyV1ActorTurnExecutionBoundary,
+            IDailyV1SelectedActorActionExecutionBoundary
         {
             private readonly FakeBoundary owner;
             internal FakeActorTurnBoundary(FakeBoundary owner) => this.owner = owner;
@@ -881,6 +996,75 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public void AdvanceMerchantTradeState(DailyV1NpcRuntimeOwners actor) =>
                 owner.Calls.Add("actor-merchant:" + actor.RuntimeId);
             public void EvaluateAndExecuteAction(DailyV1NpcRuntimeOwners actor) { }
+
+            public IAuthoritativeRandomSource RandomSource => owner.randomSource;
+            public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor) =>
+                owner.UseSelectedActionExecution;
+            public void LogSkippedDirective(ScheduledDirective directive, string reason) { }
+            public bool TryCreateDecisionBoundary(
+                DailyV1NpcRuntimeOwners actor,
+                out IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary)
+            { decisionBoundary = null; return false; }
+            public bool TryGetDecisionRecordOwners(
+                DailyV1NpcRuntimeOwners actor,
+                out RuntimeIdAllocator idAllocator,
+                out SimulationRecordSequence recordSequence,
+                out NpcDecisionStore decisionStore)
+            {
+                idAllocator = owner.runtimeIdAllocator;
+                recordSequence = owner.recordSequence;
+                decisionStore = owner.decisionStore;
+                return !owner.FailDecisionRecordOwnerResolution
+                    && idAllocator != null && recordSequence != null && decisionStore != null;
+            }
+            public bool TryPrepareSelectedActionProjection(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1NpcActionCandidate selected,
+                IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
+                DailyV1NpcActionPayloadOwner payload) => false;
+            public bool CanCommitSelectedActionSlot(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1NpcActionPayloadOwner payload) => false;
+            public bool TryPublishSelectedActionProjection(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1NpcActionPayloadOwner payload) => false;
+            public void CancelPreparedSelectedActionProjection(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1NpcActionPayloadOwner payload) { }
+            public void LogSelectedActionDecisionFailure(DailyV1NpcRuntimeOwners actor, string message) { }
+            public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor) { }
+            public bool IsActorAtCurrentCityLocation(DailyV1NpcRuntimeOwners actor) => false;
+            public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor) { }
+            public bool HasExactCurrentActionProjection(DailyV1NpcRuntimeOwners actor) => false;
+            public bool TryGetDispatchBoundary(
+                DailyV1NpcRuntimeOwners actor,
+                out IDailyV1SelectedActionDispatchBoundary dispatchBoundary)
+            {
+                owner.SelectedActionDispatchLookupCount++;
+                dispatchBoundary = null;
+                return false;
+            }
+            public bool TryCompleteDispatch(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1SelectedActionDispatchResult dispatch,
+                out bool actionSucceeded,
+                out NpcActionResultType? resultType,
+                out string resultMessage)
+            { actionSucceeded = false; resultType = null; resultMessage = null; return false; }
+            public bool TryGetActionStatusBoundary(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1NpcRuntimeOwners target,
+                bool reuseExistingOperation,
+                out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary boundary)
+            { boundary = null; return false; }
+            public bool TryInstallForcedOutcomeAction(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1ActionDefinition action) => false;
+            public bool TryGetForcedEscapeBoundary(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1ActionDefinition action,
+                out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary)
+            { boundary = null; return false; }
         }
     }
 
@@ -900,25 +1084,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         }
 
         public DailyV1ExecutionBoundaryState ExecutionState => state;
-        public bool HasRuntimeAdmission => true;
-        public bool IsAdmissionOwnerThreadCurrent { get { Calls.Add("owner"); return true; } }
-        public bool IsDailyCaptureProfile => true;
-        public bool HasCoreSelectedDailyExecution => true;
-        public bool CanMutate { get { Calls.Add("healthy"); return true; } }
         public bool HasIntradayTimeline => false;
-        public bool TryPreflightDailyCoreSequenceCapacity(
-            long requestedBoundaries, out DailyV1RuntimeAdvanceFailureCode failure)
-        {
-            Calls.Add("capacity:" + requestedBoundaries);
-            failure = DailyV1RuntimeAdvanceFailureCode.None;
-            return state.CanRecordCompletedCoreCount(requestedBoundaries);
-        }
-        public bool TryValidateClockAdvance(out DailyV1RuntimeAdvanceFailureCode failure)
-        {
-            Calls.Add("clock-validation");
-            failure = DailyV1RuntimeAdvanceFailureCode.None;
-            return true;
-        }
         public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope)
         {
             Calls.Add("operation");

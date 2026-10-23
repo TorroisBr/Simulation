@@ -384,7 +384,7 @@ public sealed class BattleOutcomeApplicationTests
     {
         DelegateRule rule = UnchangedRule();
         Fixture fixture = CreateFixture(StandardSeeds(), rule);
-        object guard = typeof(SimulationRuntime).GetField("mutationGuard", BindingFlags.Instance | BindingFlags.NonPublic)
+        object guard = typeof(SimulationRuntime).GetProperty("mutationGuard", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(fixture.World);
         MethodInfo markFaulted = guard.GetType().GetMethod("MarkFaulted", BindingFlags.Instance | BindingFlags.NonPublic);
         Type reasonType = markFaulted.GetParameters()[0].ParameterType;
@@ -457,7 +457,7 @@ public sealed class BattleOutcomeApplicationTests
     public void RuntimeComposesWorldBoundServiceAndResolvedOutcomeDiagnosticsAreDeterministic()
     {
         Fixture fixture = CreateFixture(StandardSeeds(), UnchangedRule());
-        object runtimeGuard = typeof(SimulationRuntime).GetField("mutationGuard", BindingFlags.Instance | BindingFlags.NonPublic)
+        object runtimeGuard = typeof(SimulationRuntime).GetProperty("mutationGuard", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(fixture.World);
         object serviceGuard = typeof(BattleOutcomeApplicationService).GetField("mutationGuard", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(fixture.World.BattleOutcomeApplicationService);

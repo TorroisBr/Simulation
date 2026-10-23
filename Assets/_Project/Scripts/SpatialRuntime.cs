@@ -117,7 +117,7 @@ public sealed class SpatialNetworkRuntime
 {
     private readonly RuntimeIdentityRegistry identityRegistry;
     private readonly SimulationLogger logger;
-    private readonly SpatialNetworkOwner owner = new SpatialNetworkOwner();
+    private readonly SpatialNetworkOwner owner;
 
     public IEnumerable<SpatialLocationRuntime> Locations => owner.Locations;
 
@@ -128,9 +128,18 @@ public sealed class SpatialNetworkRuntime
     internal SpatialNetworkOwner SelectedOwner => owner;
 
     public SpatialNetworkRuntime(RuntimeIdentityRegistry identityRegistry, SimulationLogger logger = null)
+        : this(identityRegistry, logger, null)
+    {
+    }
+
+    internal SpatialNetworkRuntime(
+        RuntimeIdentityRegistry identityRegistry,
+        SimulationLogger logger,
+        SpatialNetworkOwner selectedOwner)
     {
         this.identityRegistry = identityRegistry ?? throw new ArgumentNullException(nameof(identityRegistry));
         this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
+        owner = selectedOwner ?? new SpatialNetworkOwner();
     }
 
     internal bool UsesIdentityRegistry(RuntimeIdentityRegistry candidate)

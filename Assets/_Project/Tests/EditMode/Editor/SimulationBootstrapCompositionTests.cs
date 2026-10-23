@@ -1988,6 +1988,9 @@ public sealed class SimulationBootstrapCompositionTests
 
         DailyV1SelectedRuntimeOwnerGraph selectedGraph = runtime.SelectedRuntimeOwnerGraph;
         Assert.That(selectedGraph, Is.Not.Null);
+        Assert.That(runtime.MutationGuard,
+            Is.SameAs(runtime.ExecutionBoundaryState.MutationGuard),
+            "SimulationRuntime must project Core's sole mutation-integrity guard rather than own a second latch.");
         Assert.That(runtime.HasExactSelectedRuntimeOwnerGraph(selectedGraph.Definitions), Is.True);
         Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.True,
             advanceFailure.ToString());
@@ -2168,6 +2171,30 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(admittedGraph.Npcs.TryGetValue(npcDefinitionId, out DailyV1NpcDefinition admittedNpcNode), Is.True);
         CityRuntime selectedCity = simulation.Runtime.Cities.Single(value => value.DefinitionId == cityDefinitionId);
         NpcRuntime selectedNpc = simulation.Runtime.NpcRuntimes.Single(value => value.DefinitionId == npcDefinitionId);
+        DailyV1ExecutionBoundaryState selectedBoundary = simulation.Runtime.ExecutionBoundaryState;
+        Assert.That(selectedBoundary.SelectedRuntimeOwnerGraph,
+            Is.SameAs(simulation.Runtime.SelectedRuntimeOwnerGraph),
+            "Unity must retain the exact Core-composed graph as the single selected runtime authority.");
+        Assert.That(selectedBoundary.SimulationTime, Is.SameAs(simulation.Runtime.SimulationTime));
+        Assert.That(selectedBoundary.ConfigurationIdentity,
+            Is.SameAs(simulation.Bootstrap.Manifest.EffectiveConfiguration));
+        Assert.That(selectedBoundary.SelectedActorChoiceStore,
+            Is.SameAs(simulation.Runtime.ActorChoiceStore),
+            "Selected runtime construction must not clone the Core-bound actor-choice root.");
+        Assert.That(selectedBoundary.SelectedDecisionStore,
+            Is.SameAs(simulation.Bootstrap.Decisions),
+            "Selected runtime construction must retain the Core-bound decision store.");
+        Assert.That(selectedBoundary.HasExactSelectedRuntimeExecutionRoots(
+            selectedBoundary.SelectedRuntimeOwnerGraph,
+            simulation.Runtime.PersonStore,
+            simulation.Runtime.ActorChoiceStore,
+            selectedBoundary.SelectedRandomSource,
+            selectedBoundary.SelectedRuntimeIdAllocator,
+            selectedBoundary.SelectedRecordSequence,
+            simulation.Bootstrap.Decisions), Is.True);
+        Assert.That(selectedBoundary.SelectedRuntimeOwnerGraph.MatchesExactOwnerInstances(
+            simulation.Runtime.Cities.Select(value => value.SelectedRuntimeOwners),
+            simulation.Runtime.NpcRuntimes.Select(value => value.SelectedRuntimeOwners)), Is.True);
         Assert.That(simulation.Bootstrap.SelectedDefinitions, Is.SameAs(admittedGraph));
         Assert.That(selectedCity.SelectedDailyV1Definition, Is.SameAs(admittedCityNode));
         Assert.That(selectedCity.SelectedDailyV1DefinitionGraph, Is.SameAs(admittedGraph),

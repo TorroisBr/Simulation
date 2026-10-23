@@ -98,6 +98,33 @@ internal interface IDailyV1SelectedTravelDayExecutionContext
 internal static class DailyV1SelectedDailyExecutionStage
 {
     internal static void Advance(
+        DailyV1ExecutionBoundaryState executionState,
+        long absoluteDay,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        ScheduledDirectiveStore scheduledDirectives,
+        IDailyV1SelectedDailyExecutionBoundary boundary)
+    {
+        if (executionState == null) throw new ArgumentNullException(nameof(executionState));
+        if (graph == null) throw new ArgumentNullException(nameof(graph));
+        if (!executionState.SelectedRuntimeExecutionRootsBound
+            || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph))
+            throw new InvalidOperationException(
+                "The selected Daily-v1 stage requires the exact runtime execution roots bound to its Core state.");
+
+        AdvanceCore(executionState, absoluteDay, graph, scheduledDirectives, boundary);
+    }
+
+    internal static void Advance(
+        long absoluteDay,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        ScheduledDirectiveStore scheduledDirectives,
+        IDailyV1SelectedDailyExecutionBoundary boundary)
+    {
+        AdvanceCore(null, absoluteDay, graph, scheduledDirectives, boundary);
+    }
+
+    private static void AdvanceCore(
+        DailyV1ExecutionBoundaryState executionState,
         long absoluteDay,
         DailyV1SelectedRuntimeOwnerGraph graph,
         ScheduledDirectiveStore scheduledDirectives,
@@ -110,12 +137,31 @@ internal static class DailyV1SelectedDailyExecutionStage
             throw new InvalidOperationException(
                 "The selected Daily-v1 stage requires the exact directive store bound to its Core owner graph.");
 
-        boundary.BeginLoggerDay(absoluteDay);
         EffectiveSimulationConfiguration selectedConfiguration =
             graph.Definitions?.EffectiveConfiguration;
         if (selectedConfiguration == null)
             throw new InvalidOperationException(
                 "The selected Daily-v1 graph has no admitted effective configuration.");
+
+        IDailyV1SelectedActorTurnExecutionContext actorTurnContext = null;
+        IReadOnlyList<DailyV1ActorTurnRosterEntry> actorRoster = null;
+        if (executionState != null
+            && (!boundary.TryCreateSelectedActorTurnContext(
+                    graph, out actorTurnContext)
+                || actorTurnContext == null
+                || actorTurnContext.RuntimeRoster == null
+                || actorTurnContext.PersonStore == null
+                || !ReferenceEquals(graph.PersonStore, actorTurnContext.PersonStore)
+                || actorTurnContext.ActorChoiceStore == null
+                || actorTurnContext.Boundary == null
+                || !DailyV1ActorTurnExecutionStage.TryBuildRoster(
+                    graph, actorTurnContext.RuntimeRoster, out actorRoster)
+                || !HasExactSelectedExecutionRoots(
+                    executionState, graph, actorTurnContext, actorRoster)))
+            throw new InvalidOperationException(
+                "The selected Daily-v1 host could not prove the exact actor, choice, random, allocator, sequence, and decision roots before daily mutations.");
+
+        boundary.BeginLoggerDay(absoluteDay);
 
         // The accepted Daily-v1 proving profile disables both demographic
         // writers. In that profile the shared Core stage must not require a
@@ -222,19 +268,24 @@ internal static class DailyV1SelectedDailyExecutionStage
             throw new InvalidOperationException(
                 "The selected Core local-knowledge stage could not complete against its exact runtime owner graph.");
 
-        if (!boundary.TryCreateSelectedActorTurnContext(
-                graph, out IDailyV1SelectedActorTurnExecutionContext actorTurnContext)
-            || actorTurnContext == null
-            || actorTurnContext.RuntimeRoster == null
-            || actorTurnContext.PersonStore == null
-            || !ReferenceEquals(graph.PersonStore, actorTurnContext.PersonStore)
-            || actorTurnContext.ActorChoiceStore == null
-            || graph.Definitions.EffectiveConfiguration?.MerchantTrade == null
-            || actorTurnContext.Boundary == null
-            || !DailyV1ActorTurnExecutionStage.TryBuildRoster(
-                graph, actorTurnContext.RuntimeRoster,
-                out IReadOnlyList<DailyV1ActorTurnRosterEntry> actorRoster)
-            || !DailyV1ActorTurnExecutionStage.TryRunOrdered(
+        if (executionState == null
+            && (!boundary.TryCreateSelectedActorTurnContext(
+                    graph, out actorTurnContext)
+                || actorTurnContext == null
+                || actorTurnContext.RuntimeRoster == null
+                || actorTurnContext.PersonStore == null
+                || !ReferenceEquals(graph.PersonStore, actorTurnContext.PersonStore)
+                || actorTurnContext.ActorChoiceStore == null
+                || actorTurnContext.Boundary == null
+                || !DailyV1ActorTurnExecutionStage.TryBuildRoster(
+                    graph, actorTurnContext.RuntimeRoster, out actorRoster)))
+            throw new InvalidOperationException(
+                "The selected Core actor-turn stage could not build the exact admitted graph and runtime roster.");
+        if (graph.Definitions.EffectiveConfiguration?.MerchantTrade == null)
+            throw new InvalidOperationException(
+                "The selected Core actor-turn stage has no admitted Merchant configuration.");
+
+        if (!DailyV1ActorTurnExecutionStage.TryRunOrdered(
                 graph,
                 actorRoster,
                 actorTurnContext.PersonStore,
@@ -258,7 +309,47 @@ internal static class DailyV1SelectedDailyExecutionStage
             throw new InvalidOperationException(
                 "The selected Core TravelParty/solo-travel stages could not advance the exact owner graph.");
         travelContext.PublishCompletedTravelResults(partyArrivals, soloResults);
+        if (!DailyV1SelectedMerchantTradeStateOperation.ObserveCompletedTravelResults(
+                graph, partyArrivals, soloResults, absoluteDay))
+            throw new InvalidOperationException(
+                "The selected Core post-travel market observation could not apply to its exact owner graph.");
         travelContext.ObserveCompletedTravelResults();
+    }
+
+    private static bool HasExactSelectedExecutionRoots(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IDailyV1SelectedActorTurnExecutionContext actorTurnContext,
+        IReadOnlyList<DailyV1ActorTurnRosterEntry> actorRoster)
+    {
+        if (!(actorTurnContext.Boundary is IDailyV1SelectedActorActionExecutionBoundary actionBoundary)
+            || !executionState.HasExactSelectedRuntimeActorTurnRoots(
+                graph,
+                actorTurnContext.PersonStore,
+                actorTurnContext.ActorChoiceStore,
+                actionBoundary.RandomSource)
+            || !ReferenceEquals(actionBoundary.RandomSource, executionState.SelectedRandomSource))
+            return false;
+
+        foreach (DailyV1ActorTurnRosterEntry entry in actorRoster)
+        {
+            DailyV1NpcRuntimeOwners actor = entry?.ActorOwner;
+            if (actor == null || !actionBoundary.UsesSelectedDailyV1ActionExecution(actor))
+                continue;
+
+            if (!actionBoundary.TryGetDecisionRecordOwners(
+                actor,
+                out RuntimeIdAllocator idAllocator,
+                out SimulationRecordSequence recordSequence,
+                out NpcDecisionStore decisionStore))
+                return false;
+            if (!ReferenceEquals(idAllocator, executionState.SelectedRuntimeIdAllocator)
+                || !ReferenceEquals(recordSequence, executionState.SelectedRecordSequence)
+                || !ReferenceEquals(decisionStore, executionState.SelectedDecisionStore))
+                return false;
+        }
+
+        return true;
     }
 
     internal static bool TryAdvanceTravelDay(

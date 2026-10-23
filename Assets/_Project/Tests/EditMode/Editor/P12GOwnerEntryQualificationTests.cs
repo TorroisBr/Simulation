@@ -215,8 +215,8 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             serializedBootstrap.ApplyModifiedPropertiesWithoutUndo();
             InvalidOperationException admissionFailure = Assert.Throws<InvalidOperationException>(() => bootstrap.Start());
             Assert.That(admissionFailure.Message,
-                Does.Contain("selected Core City/NPC/Justice owner graph"),
-                "The accepted Daily-v1 Core owner graph must reject publication when the generic site introduces an excluded root.");
+                Does.Contain("requires the admitted exact-empty ExplorableSite/P10 topology profile"),
+                "The Core genesis composer must reject the excluded site root before publishing the selected Daily-v1 owner graph.");
 
             Assert.That(bootstrap.Bootstrap, Is.Null,
                 "A non-empty generic site profile cannot publish through the selected Daily-v1 admission.");
