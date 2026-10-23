@@ -63,6 +63,10 @@ run to stop rather than produce incomplete source
 evidence. Keep the private source copy and the exact input-identifying manifest
 together during review.
 
+The self-test evaluates a synthetic SDK project whose compile item reaches an
+external source through an in-repository `bin` junction. This verifies that
+generated-output exclusion cannot bypass source-path containment checks.
+
 The cold and warm test gates also retain separate private .NET host-trace files.
 The runner writes SDK-specific host-trace settings into each isolated VSTest
 testhost through a per-gate runsettings file. TRACEFILE names a file inside the

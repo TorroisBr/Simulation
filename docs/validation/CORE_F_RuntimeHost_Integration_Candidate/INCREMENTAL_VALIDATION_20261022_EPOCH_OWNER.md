@@ -109,3 +109,34 @@ The evidence directory ACL check passed. The Unity Library was present during
 this .NET run; no Library-independent execution claim is made. Unity code and
 test inputs were unchanged from the exact-source Unity run recorded above, so
 this runner-only correction did not require a Unity rerun.
+
+## Second exact-tip review correction — generated-output containment — 2026-10-22
+
+The independent review of candidate `f3ea1b36d4aef7f5f3a9e508fdbc52b6af67c62b`
+found that `Get-CoreProjectCompileInputs` excluded SDK `bin`/`obj` items before
+validating their paths. That ordering could bypass the source-containment
+check for a compile input traversing a junction under a generated-output path.
+
+Candidate `3b93196461c3388bf66a386b758216dd9c7f75b9` moves containment and
+existing-component reparse-point checks ahead of generated-output exclusion.
+Missing leaves are tolerated only for recognized generated-output paths; any
+existing junction in those paths is still rejected. The self-test retains a
+direct helper check and now creates a synthetic SDK project with a compile
+item beneath an in-repository `bin` junction, then asserts that the actual
+`Get-CoreProjectCompileInputs` caller rejects it. Self-test output is retained
+in protected evidence (SHA-256
+`600576d2362379c6bddae9ad75d61278aa342c1611fc4291ba1bf8468de8d7bb`).
+
+The official CoreValidation runner passed cold and warm **640/640** on exact
+commit `3b93196461c3388bf66a386b758216dd9c7f75b9`, tree
+`e2755cac3a301a8f0993375956272eef6a26bef7`. Its protected run is
+`b074a1c56a4a4290ae7fb4b134bcdee8`; manifest SHA-256 is
+`c751822e90ccc2c6aa95583720efde953c7f07c4551bbf9c3222297b8d425a21`, and the
+stable input digest is
+`2675e48c4e09ee553400f2a99a9f50300baf71b50c682bd78cb97b178e3232e2`. Cold
+and warm TRX SHA-256 values are
+`fd97091ed0161440870866b64a73772332817052b83642a45a802b45a7ae55cf` and
+`c4ce012a873d09c82e41e31a6341063426c21efbf2921cb067cdcbaeec8b6f34`; the
+protected evidence ACL checks passed. Unity production/test sources and their
+inputs were unchanged, so this runner-only correction does not require
+repeating the retained Unity run.
