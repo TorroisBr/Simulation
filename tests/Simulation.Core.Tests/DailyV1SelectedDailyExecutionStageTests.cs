@@ -1127,7 +1127,6 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public bool CanCommitCurrentActionClear(DailyV1NpcRuntimeOwners actor) => false;
             public bool TryPublishCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor) => false;
             public void CancelPreparedCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor) { }
-            public bool IsActorAtCurrentCityLocation(DailyV1NpcRuntimeOwners actor) => false;
             public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor) { }
             public bool HasExactCurrentActionProjection(DailyV1NpcRuntimeOwners actor) => false;
             public bool TryGetDispatchBoundary(

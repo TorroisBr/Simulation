@@ -59,16 +59,14 @@ internal interface IDailyV1ActorTurnExecutionBoundary
 }
 
 /// <summary>
-/// Selected-profile facts and projection/admission ports for the existing Core
-/// actor-choice stage. The host supplies current spatial truth and the Unity
-/// action projection boundary; Core still owns choice validation, disposition,
-/// decision recording, slot commit, and dispatch ordering.
+/// Selected-profile projection/admission ports for the existing Core
+/// actor-choice stage. Current-city spatial truth comes from the exact Core
+/// owner graph; the host supplies only action projection/admission ports.
 /// </summary>
 internal interface IDailyV1SelectedActorChoiceExecutionContext
 {
     bool TryGetActorChoiceExecutionContext(
         DailyV1NpcRuntimeOwners actor,
-        out bool actorAtCurrentCityLocation,
         out bool decisionSystemAvailable,
         out IDailyV1ActorChoiceExecutionBoundary executionBoundary);
 }
@@ -118,7 +116,6 @@ internal interface IDailyV1SelectedActorActionExecutionBoundary
     bool CanCommitCurrentActionClear(DailyV1NpcRuntimeOwners actor);
     bool TryPublishCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor);
     void CancelPreparedCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor);
-    bool IsActorAtCurrentCityLocation(DailyV1NpcRuntimeOwners actor);
     void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor);
     bool HasExactCurrentActionProjection(DailyV1NpcRuntimeOwners actor);
     bool TryGetDispatchBoundary(
@@ -146,10 +143,9 @@ internal interface IDailyV1SelectedActorActionExecutionBoundary
 }
 
 /// <summary>
-/// Core-owned ordered selected Daily-v1 actor loop. Unity supplies only
-/// current spatial/expedition facts and forwards the existing host operations;
-/// the selected owner graph and choice store remain the authorities for actor
-/// life/travel and queued choice lifecycle.
+/// Core-owned ordered selected Daily-v1 actor loop. The selected owner graph
+/// supplies actor and current-location truth; the host forwards only remaining
+/// compatibility, projection and admission operations.
 /// </summary>
 internal static class DailyV1ActorTurnExecutionStage
 {
@@ -411,7 +407,6 @@ internal static class DailyV1ActorTurnExecutionStage
                 throw new InvalidOperationException(
                     "The selected Daily-v1 actor omitted its required Core actor-choice context.");
             if (!selectedContext.TryGetActorChoiceExecutionContext(actor,
-                    out bool actorAtCurrentCityLocation,
                     out bool decisionSystemAvailable,
                     out IDailyV1ActorChoiceExecutionBoundary executionBoundary))
                 throw new InvalidOperationException(
@@ -426,7 +421,7 @@ internal static class DailyV1ActorTurnExecutionStage
                     "The selected Core actor-choice stage requires admitted Merchant configuration.");
             return DailyV1ActorChoiceExecutionStage.TryProcessPending(
                 graph, actor, personId, store, absoluteDay, rosterOrdinal,
-                actorAtCurrentCityLocation, merchantTrade.Enabled,
+                graph.IsActorAtCurrentCityLocation(actor), merchantTrade.Enabled,
                 decisionSystemAvailable, executionBoundary);
         }
 

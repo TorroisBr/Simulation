@@ -2948,6 +2948,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             throw new InvalidOperationException(
                 "The selected owner graph could not bind the exact P8-C Person-position authority installed by this runtime.");
         if (selectedOwnerGraph != null
+            && !selectedOwnerGraph.TryBindLegacySpatialAnchorBindingStore(this.legacySpatialAnchorBindingStore))
+            throw new InvalidOperationException(
+                "The selected owner graph could not bind the exact P8 City-anchor authority installed by this runtime.");
+        if (selectedOwnerGraph != null
             && !dailyExecutionBoundary.TryBindOrValidateSelectedRuntimeActorRoster(
                 this.npcRuntimes.Select(npc => npc == null
                     ? null
@@ -10275,6 +10279,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         if (!graph.TryBindPersonStore(personStore))
             return false;
+        if (!graph.TryBindPersonSpatialPositionStore(personSpatialPositionStore)
+            || !graph.TryBindLegacySpatialAnchorBindingStore(legacySpatialAnchorBindingStore))
+            return false;
         if (current.Expeditions != null && !graph.TryBindExpeditionStore(current.Expeditions))
             return false;
 
@@ -11617,13 +11624,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         public bool TryGetActorChoiceExecutionContext(
             DailyV1NpcRuntimeOwners actor,
-            out bool actorAtCurrentCityLocation,
             out bool decisionSystemAvailable,
             out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
-            actorAtCurrentCityLocation = exactRuntime.CurrentCity != null
-                && runtime.IsActorAtCurrentCityLocation(exactRuntime);
             decisionSystemAvailable = runtime.npcDecisionSystem != null;
             executionBoundary = this;
             return true;
@@ -12044,13 +12048,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         // the admitted selected path uses the Core slot transaction above.
         public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor) =>
             RequireExactActor(actor).SetCurrentActionRuntime(null);
-
-        public bool IsActorAtCurrentCityLocation(DailyV1NpcRuntimeOwners actor)
-        {
-            NpcRuntime exactRuntime = RequireExactActor(actor);
-            return exactRuntime.CurrentCity != null
-                && runtime.IsActorAtCurrentCityLocation(exactRuntime);
-        }
 
         public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor)
         {

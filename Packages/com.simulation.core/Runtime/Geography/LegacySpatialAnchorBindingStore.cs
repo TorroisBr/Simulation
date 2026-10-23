@@ -80,6 +80,7 @@ public sealed class LegacySpatialAnchorBindingStore : IAuthoritativeMutationGuar
     }
     public long Revision => revision;
     public int Count => byOwner.Count;
+    internal ISpatialLocationLookup SpatialLocationLookup => spatialAuthorityStore;
     public IReadOnlyList<SpatialAnchorBinding> Bindings
     {
         get { List<SpatialAnchorBinding> result = new List<SpatialAnchorBinding>(byOwner.Values); result.Sort((a, b) => a.OwnerId.CompareTo(b.OwnerId)); return new ReadOnlyCollection<SpatialAnchorBinding>(result); }

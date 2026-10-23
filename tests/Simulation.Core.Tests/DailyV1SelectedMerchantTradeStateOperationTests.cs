@@ -508,7 +508,6 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
         public void CancelPreparedCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor) { }
         public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor) =>
             graph.TryCommitCurrentActionSlot(actor, null, null, () => true);
-        public bool IsActorAtCurrentCityLocation(DailyV1NpcRuntimeOwners actor) => false;
         public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor) { }
         public bool HasExactCurrentActionProjection(DailyV1NpcRuntimeOwners actor) => false;
         public bool TryGetDispatchBoundary(
@@ -554,13 +553,11 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
 
         public bool TryGetActorChoiceExecutionContext(
             DailyV1NpcRuntimeOwners actor,
-            out bool actorAtCurrentCityLocation,
             out bool decisionSystemAvailable,
             out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
         {
-            actorAtCurrentCityLocation = graph.ContainsExactNpcOwner(actor);
             decisionSystemAvailable = true;
-            executionBoundary = actorAtCurrentCityLocation ? this : null;
+            executionBoundary = graph.ContainsExactNpcOwner(actor) ? this : null;
             return executionBoundary != null;
         }
         public bool TryPrepareRequestedActionProjection(

@@ -22,6 +22,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal ExpeditionStore Expeditions { get; private set; }
     internal PersonStore PersonStore { get; private set; }
     internal PersonSpatialPositionStore PersonSpatialPositionStore { get; private set; }
+    internal LegacySpatialAnchorBindingStore LegacySpatialAnchors { get; private set; }
     internal ScheduledDirectiveStore ScheduledDirectives { get; private set; }
 
     private DailyV1SelectedRuntimeOwnerGraph(
@@ -63,11 +64,70 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal bool TryBindPersonSpatialPositionStore(PersonSpatialPositionStore store)
     {
         if (store == null || PersonStore == null
-            || !ReferenceEquals(store.PersonStore, PersonStore)) return false;
+            || !ReferenceEquals(store.PersonStore, PersonStore)
+            || (LegacySpatialAnchors != null
+                && !ReferenceEquals(LegacySpatialAnchors.SpatialLocationLookup,
+                    store.SpatialAuthorityStore))) return false;
         if (PersonSpatialPositionStore != null)
             return ReferenceEquals(PersonSpatialPositionStore, store);
         PersonSpatialPositionStore = store;
         return true;
+    }
+
+    /// <summary>
+    /// Binds the exact P8 anchor authority used by the runtime spatial owner.
+    /// Selected action eligibility reads this Core-owned relation instead of
+    /// asking a Unity runtime projection to infer current-city location.
+    /// </summary>
+    internal bool TryBindLegacySpatialAnchorBindingStore(LegacySpatialAnchorBindingStore store)
+    {
+        PersonSpatialPositionStore positions = PersonSpatialPositionStore;
+        if (store == null || positions == null
+            || !ReferenceEquals(store.SpatialLocationLookup, positions.SpatialAuthorityStore))
+            return false;
+        if (LegacySpatialAnchors != null)
+            return ReferenceEquals(LegacySpatialAnchors, store);
+        LegacySpatialAnchors = store;
+        return true;
+    }
+
+    /// <summary>
+    /// Resolves current-city location from the selected Core owner graph and
+    /// its exact P8 position/anchor authorities. An absent Person position
+    /// retains the legacy no-position behavior; transit and unresolved or
+    /// mismatched Location facts fail closed.
+    /// </summary>
+    internal bool IsActorAtCurrentCityLocation(DailyV1NpcRuntimeOwners actor)
+    {
+        if (actor == null || !ContainsExactNpcOwner(actor)
+            || string.IsNullOrWhiteSpace(actor.Travel?.CurrentCityRuntimeId)
+            || !TryFindCity(actor.Travel.CurrentCityRuntimeId,
+                out DailyV1CityRuntimeOwners city))
+            return false;
+
+        PersonSpatialPositionStore positions = PersonSpatialPositionStore;
+        if (positions == null || PersonStore == null
+            || !PersonStore.TryGetByMaterializedNpcRuntimeId(
+                actor.RuntimeId, out PersonRuntime person)
+            || !positions.TryGetPosition(person.PersonId,
+                out PersonSpatialPosition position))
+            return true;
+
+        if (position == null || position.IsInTransit)
+            return false;
+
+        LegacySpatialAnchorBindingStore anchors = LegacySpatialAnchors;
+        if (anchors == null
+            || !anchors.TryGet(new SpatialAnchorOwnerId(
+                SpatialAnchorOwnerKind.City, city.RuntimeId),
+                out LocationId cityLocationId)
+            || cityLocationId == null
+            || !positions.SpatialAuthorityStore.TryGet(cityLocationId, out _))
+            return false;
+
+        return position.Position != null
+            && position.Position.Kind == StablePositionReferenceKind.Location
+            && position.Position.LocationId.Equals(cityLocationId);
     }
 
     internal bool IsPersonInSpatialTransit(PersonId personId)
@@ -924,6 +984,12 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         }
         if (PersonSpatialPositionStore != null
             && !graph.TryBindPersonSpatialPositionStore(PersonSpatialPositionStore))
+        {
+            graph = null;
+            return false;
+        }
+        if (LegacySpatialAnchors != null
+            && !graph.TryBindLegacySpatialAnchorBindingStore(LegacySpatialAnchors))
         {
             graph = null;
             return false;

@@ -260,6 +260,93 @@ public sealed class DailyV1ActorTurnExecutionStageTests
     }
 
     [Test]
+    public void SelectedOwnerGraphDerivesCurrentCityLocationFromExactP8Owners()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateFullGraph();
+        Assert.That(graph.Npcs.Count, Is.GreaterThanOrEqualTo(4));
+        DailyV1NpcRuntimeOwners atCityActor = graph.Npcs[0];
+        DailyV1NpcRuntimeOwners elsewhereActor = graph.Npcs[1];
+        DailyV1NpcRuntimeOwners transitActor = graph.Npcs[2];
+        DailyV1NpcRuntimeOwners noPositionActor = graph.Npcs[3];
+        PersonStore people = new PersonStore();
+        PersonId atCityPerson = RegisterMaterializedPerson(
+            people, atCityActor, "person-at-selected-city");
+        PersonId elsewherePerson = RegisterMaterializedPerson(
+            people, elsewhereActor, "person-away-from-selected-city");
+        PersonId transitPerson = RegisterMaterializedPerson(
+            people, transitActor, "person-in-selected-transit");
+        PersonId noPositionPerson = RegisterMaterializedPerson(
+            people, noPositionActor, "person-without-position");
+
+        SpatialAuthorityStore spatial = new SpatialAuthorityStore();
+        HexId fromHex = new HexId("hex.selected-city.from");
+        HexId toHex = new HexId("hex.selected-city.to");
+        HexBoundaryKey boundary = new HexBoundaryKey(fromHex, toHex);
+        LocationId wrongLocation = new LocationId("location.selected-city.other");
+        List<LocationRecord> locations = new List<LocationRecord>
+        {
+            new LocationRecord(wrongLocation, toHex)
+        };
+        Dictionary<string, LocationId> cityLocations =
+            new Dictionary<string, LocationId>(System.StringComparer.Ordinal);
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            if (cityLocations.ContainsKey(city.RuntimeId)) continue;
+            LocationId cityLocation = new LocationId("location.city." + city.RuntimeId);
+            cityLocations.Add(city.RuntimeId, cityLocation);
+            locations.Add(new LocationRecord(cityLocation, fromHex));
+        }
+        Assert.That(cityLocations.ContainsKey(atCityActor.Travel.CurrentCityRuntimeId), Is.True);
+        Assert.That(spatial.TryComposeGeography(new SpatialGeographyDefinition(
+            new SpatialWorldScaleContext("selected-city.scale", "test", "v1", 1m, "unit"),
+            new[]
+            {
+                new HexRecord(fromHex, new HexCoordinate(0, 0),
+                    new TerrainReference(new TerrainDefinitionId("terrain.selected-city"), "v1")),
+                new HexRecord(toHex, new HexCoordinate(1, 0),
+                    new TerrainReference(new TerrainDefinitionId("terrain.selected-city"), "v1"))
+            }, locations), out SpatialAuthorityFailure geographyFailure),
+            Is.True, geographyFailure?.ToString());
+        CrossingId crossingId = new CrossingId("crossing.selected-city.transit");
+        Assert.That(spatial.TryRegisterCrossing(new CrossingRecord(
+            crossingId, boundary, fromHex, "selected-city-crossing", "v1", null),
+            out SpatialAuthorityFailure crossingFailure), Is.True, crossingFailure?.ToString());
+
+        LegacySpatialAnchorBindingStore anchors = new LegacySpatialAnchorBindingStore(spatial);
+        foreach (KeyValuePair<string, LocationId> binding in cityLocations)
+            Assert.That(anchors.TryBindCity(binding.Key, binding.Value,
+                out SpatialAnchorBindingFailure anchorFailure), Is.True, anchorFailure?.ToString());
+        PersonSpatialPositionStore positions = new PersonSpatialPositionStore(
+            people, spatial, new SpatialPassageTraversalOptionResolver(spatial.PassageAuthority));
+        Assert.That(positions.TrySetAt(atCityPerson,
+            StablePositionReference.ForLocation(cityLocations[atCityActor.Travel.CurrentCityRuntimeId]),
+            out PersonSpatialPositionFailure atCityFailure), Is.True, atCityFailure?.ToString());
+        Assert.That(positions.TrySetAt(elsewherePerson,
+            StablePositionReference.ForLocation(wrongLocation),
+            out PersonSpatialPositionFailure elsewhereFailure), Is.True, elsewhereFailure?.ToString());
+        Assert.That(positions.TrySetAt(transitPerson,
+            StablePositionReference.ForHex(fromHex),
+            out PersonSpatialPositionFailure transitPositionFailure), Is.True,
+            transitPositionFailure?.ToString());
+        Assert.That(positions.TryBeginTransit(transitPerson,
+            TraversalOptionRef.ForCrossing(crossingId), boundary, fromHex, toHex,
+            out PersonSpatialPositionFailure transitFailure), Is.True, transitFailure?.ToString());
+
+        Assert.That(graph.TryBindPersonStore(people), Is.True);
+        Assert.That(graph.TryBindPersonSpatialPositionStore(positions), Is.True);
+        Assert.That(graph.TryBindLegacySpatialAnchorBindingStore(anchors), Is.True);
+
+        Assert.That(graph.IsActorAtCurrentCityLocation(noPositionActor), Is.True,
+            "An absent optional position retains the existing legacy at-city behavior.");
+        Assert.That(graph.IsActorAtCurrentCityLocation(atCityActor), Is.True,
+            "The actor at its exact City LocationId is eligible.");
+        Assert.That(graph.IsActorAtCurrentCityLocation(elsewhereActor), Is.False,
+            "A Location different from the actor's exact City anchor is not at the current City.");
+        Assert.That(graph.IsActorAtCurrentCityLocation(transitActor), Is.False,
+            "An actor with an active P8 transit position is not at the current City.");
+    }
+
+    [Test]
     public void CoreRejectsMismatchedMaterializedPersonBeforeActorTurnDispatch()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
@@ -826,6 +913,23 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         return selectedGraph;
     }
 
+    private static DailyV1SelectedRuntimeOwnerGraph CreateFullGraph()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph completeGraph), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+            completeGraph.Cities, completeGraph.Npcs, completeGraph.SpatialNetwork,
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        return graph;
+    }
+
     private static DailyV1EffectiveDefinitions CopyWithMerchantTradeEnabled(
         DailyV1EffectiveDefinitions definitions,
         bool enabled)
@@ -972,11 +1076,9 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 
         public bool TryGetActorChoiceExecutionContext(
             DailyV1NpcRuntimeOwners actor,
-            out bool actorAtCurrentCityLocation,
             out bool decisionSystemAvailable,
             out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
         {
-            actorAtCurrentCityLocation = false;
             decisionSystemAvailable = true;
             executionBoundary = graph.ContainsExactNpcOwner(actor) ? ChoiceBoundary : null;
             return executionBoundary != null;
@@ -1081,13 +1183,11 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 
         public bool TryGetActorChoiceExecutionContext(
             DailyV1NpcRuntimeOwners actor,
-            out bool actorAtCurrentCityLocation,
             out bool decisionSystemAvailable,
             out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
         {
-            actorAtCurrentCityLocation = CurrentGraph?.ContainsExactNpcOwner(actor) == true;
             decisionSystemAvailable = true;
-            executionBoundary = actorAtCurrentCityLocation ? this : null;
+            executionBoundary = CurrentGraph?.ContainsExactNpcOwner(actor) == true ? this : null;
             return executionBoundary != null;
         }
 
@@ -1292,7 +1392,6 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             CurrentGraph.TryCommitCurrentActionSlot(actor, null, null, () => true);
         }
 
-        public bool IsActorAtCurrentCityLocation(DailyV1NpcRuntimeOwners actor) => true;
         public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor) => Events.Add("chosen-target");
         public bool HasExactCurrentActionProjection(DailyV1NpcRuntimeOwners actor) => true;
 

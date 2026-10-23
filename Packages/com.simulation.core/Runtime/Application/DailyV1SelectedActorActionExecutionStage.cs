@@ -66,7 +66,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
         if (action == null) return true;
 
         if (action.Values.actionType?.Value == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
-            && !boundary.IsActorAtCurrentCityLocation(actor))
+            && !graph.IsActorAtCurrentCityLocation(actor))
         {
             if (!TryClearCurrentAction(graph, actor, boundary)) return false;
             return true;
