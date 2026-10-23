@@ -375,6 +375,7 @@ internal static class DailyV1SelectedDailyExecutionStage
                 scheduledDirectives,
                 absoluteDay,
                 graph.Definitions.EffectiveConfiguration.MerchantTrade.Enabled,
+                requireCoreOwnedSelectedOperations: executionState != null,
                 actorTurnContext.Boundary))
             throw new InvalidOperationException(
                 "The selected Core actor-turn stage could not run with the exact admitted graph and runtime roster.");
@@ -412,6 +413,20 @@ internal static class DailyV1SelectedDailyExecutionStage
             failure = "actor action boundary does not implement the selected Core contract";
             return false;
         }
+        if (!(actorTurnContext.Boundary is IDailyV1SelectedActorChoiceExecutionContext)
+            || !(actorTurnContext.Boundary is IDailyV1CoreActorChoiceExecutionBoundary))
+        {
+            failure = "actor action boundary does not provide the Core-owned selected actor-choice contract";
+            return false;
+        }
+        bool merchantTradeEnabled = graph.Definitions.EffectiveConfiguration?.MerchantTrade?.Enabled == true;
+        if (merchantTradeEnabled
+            && (!(actorTurnContext.Boundary is IDailyV1SelectedMerchantTradeStateBoundary)
+                || !(actorTurnContext.Boundary is IDailyV1SelectedMerchantTradeStateAdmissionBoundary)))
+        {
+            failure = "actor action boundary does not provide the selected Core Merchant operation and P12 admission contracts";
+            return false;
+        }
         if (!executionState.HasExactSelectedRuntimeActorTurnRoots(
                 graph,
                 actorTurnContext.PersonStore,
@@ -430,8 +445,12 @@ internal static class DailyV1SelectedDailyExecutionStage
         foreach (DailyV1ActorTurnRosterEntry entry in actorRoster)
         {
             DailyV1NpcRuntimeOwners actor = entry?.ActorOwner;
-            if (actor == null || !actionBoundary.UsesSelectedDailyV1ActionExecution(actor))
-                continue;
+            if (actor == null) continue;
+            if (!actionBoundary.UsesSelectedDailyV1ActionExecution(actor))
+            {
+                failure = "selected actor " + actor.RuntimeId + " would fall back to host-owned action execution";
+                return false;
+            }
 
             if (!actionBoundary.TryGetDecisionRecordOwners(
                 actor,

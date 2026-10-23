@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
@@ -5,6 +6,36 @@ using NUnit.Framework;
 [TestFixture]
 public sealed class DailyV1ActorTurnExecutionStageTests
 {
+    [Test]
+    public void AdmittedSelectedLoopRejectsHostOwnedActionFallbackBeforeActorCallbacks()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            out DailyV1NpcRuntimeOwners actor);
+        PersonStore people = new PersonStore();
+        ActorChoiceStore choices = new ActorChoiceStore(people);
+        ScheduledDirectiveStore directives = new ScheduledDirectiveStore(new SimulationTime(5L));
+        RecordingBoundary boundary = new RecordingBoundary();
+        long actionRevision = actor.ActionSlot.Revision;
+
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            DailyV1ActorTurnExecutionStage.TryRunOrdered(
+                graph,
+                new[] { new DailyV1ActorTurnRosterEntry(0, null, actor) },
+                people,
+                choices,
+                directives,
+                absoluteDay: 5L,
+                merchantTradeEnabled: false,
+                requireCoreOwnedSelectedOperations: true,
+                boundary));
+
+        Assert.That(failure.Message, Does.Contain("Core-owned action and actor-choice"));
+        Assert.That(boundary.Events, Is.Empty,
+            "The admitted path rejects the legacy host before invoking any actor callback.");
+        Assert.That(actor.ActionSlot.Revision, Is.EqualTo(actionRevision));
+        Assert.That(choices.PendingInputs, Is.Empty);
+    }
+
     [Test]
     public void SelectedRosterPreservesNullHoleOrdinalAndCoreOwnsTurnPrecedence()
     {
@@ -841,7 +872,8 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         boundary.BindGraph(graph);
         Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
             graph, new[] { new DailyV1ActorTurnRosterEntry(0, personId, actor) },
-            people, choices, directives, 12L, false, boundary), Is.True);
+            people, choices, directives, 12L, false,
+            requireCoreOwnedSelectedOperations: true, boundary), Is.True);
 
         Assert.That(directive.State, Is.EqualTo(ScheduledDirectiveState.Succeeded), directive.ResultReason);
         Assert.That(justice.ContainsSentence(sentence), Is.False);

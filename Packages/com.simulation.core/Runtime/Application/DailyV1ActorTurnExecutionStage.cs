@@ -209,6 +209,29 @@ internal static class DailyV1ActorTurnExecutionStage
         bool merchantTradeEnabled,
         IDailyV1ActorTurnExecutionBoundary boundary)
     {
+        return TryRunOrdered(
+            graph,
+            roster,
+            personStore,
+            actorChoiceStore,
+            scheduledDirectiveStore,
+            absoluteDay,
+            merchantTradeEnabled,
+            requireCoreOwnedSelectedOperations: false,
+            boundary);
+    }
+
+    internal static bool TryRunOrdered(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<DailyV1ActorTurnRosterEntry> roster,
+        PersonStore personStore,
+        ActorChoiceStore actorChoiceStore,
+        ScheduledDirectiveStore scheduledDirectiveStore,
+        long absoluteDay,
+        bool merchantTradeEnabled,
+        bool requireCoreOwnedSelectedOperations,
+        IDailyV1ActorTurnExecutionBoundary boundary)
+    {
         if (graph == null || roster == null || personStore == null
             || actorChoiceStore == null || boundary == null)
             throw new ArgumentNullException("Selected actor turns require their exact graph, roster, owners and host boundary.");
@@ -245,6 +268,29 @@ internal static class DailyV1ActorTurnExecutionStage
         // a graph-owned actor omitted from the host roster to miss its turn.
         if (!graph.MatchesExactOwnerInstances(graph.Cities, rosterOwners))
             return false;
+
+        if (requireCoreOwnedSelectedOperations)
+        {
+            if (!(boundary is IDailyV1SelectedActorActionExecutionBoundary selectedActionBoundary)
+                || !(boundary is IDailyV1SelectedActorChoiceExecutionContext)
+                || !(boundary is IDailyV1CoreActorChoiceExecutionBoundary))
+                throw new InvalidOperationException(
+                    "An admitted Daily-v1 actor turn requires Core-owned action and actor-choice execution boundaries.");
+
+            foreach (DailyV1ActorTurnRosterEntry entry in roster)
+            {
+                if (entry.ActorOwner != null
+                    && !selectedActionBoundary.UsesSelectedDailyV1ActionExecution(entry.ActorOwner))
+                    throw new InvalidOperationException(
+                        "An admitted Daily-v1 actor cannot fall back to host-owned action execution.");
+            }
+
+            if (merchantTradeEnabled
+                && (!(boundary is IDailyV1SelectedMerchantTradeStateBoundary)
+                    || !(boundary is IDailyV1SelectedMerchantTradeStateAdmissionBoundary)))
+                throw new InvalidOperationException(
+                    "An admitted Daily-v1 Merchant turn requires Core trade-state execution and its P12 admission boundary.");
+        }
 
         foreach (DailyV1ActorTurnRosterEntry entry in roster)
         {
@@ -309,7 +355,8 @@ internal static class DailyV1ActorTurnExecutionStage
                 }
 
                 if (TryProcessActorChoice(graph, actor, personId, actorChoiceStore,
-                        absoluteDay, rosterOrdinal, boundary))
+                        absoluteDay, rosterOrdinal, boundary,
+                        requireCoreOwnedSelectedOperations))
                     continue;
             }
 
@@ -324,7 +371,8 @@ internal static class DailyV1ActorTurnExecutionStage
             }
 
             if (TryProcessActorChoice(graph, actor, personId, actorChoiceStore,
-                    absoluteDay, rosterOrdinal, boundary))
+                    absoluteDay, rosterOrdinal, boundary,
+                    requireCoreOwnedSelectedOperations))
                 continue;
 
             if (boundary is IDailyV1SelectedActorActionExecutionBoundary selectedActionBoundary
@@ -391,7 +439,8 @@ internal static class DailyV1ActorTurnExecutionStage
         ActorChoiceStore store,
         long absoluteDay,
         int rosterOrdinal,
-        IDailyV1ActorTurnExecutionBoundary boundary)
+        IDailyV1ActorTurnExecutionBoundary boundary,
+        bool requireCoreOwnedSelectedOperations)
     {
         if (boundary is IDailyV1SelectedActorActionExecutionBoundary selectedActionBoundary
             && selectedActionBoundary.UsesSelectedDailyV1ActionExecution(actor))
@@ -414,6 +463,10 @@ internal static class DailyV1ActorTurnExecutionStage
             if (executionBoundary == null)
                 throw new InvalidOperationException(
                     "The selected Core actor-choice context omitted its projection/admission boundary.");
+            if (requireCoreOwnedSelectedOperations
+                && !(executionBoundary is IDailyV1CoreActorChoiceExecutionBoundary))
+                throw new InvalidOperationException(
+                    "The admitted Daily-v1 actor choice cannot dispatch through a host-owned execution callback.");
             EffectiveMerchantTradeConfiguration merchantTrade =
                 graph.Definitions.EffectiveConfiguration?.MerchantTrade;
             if (merchantTrade == null)

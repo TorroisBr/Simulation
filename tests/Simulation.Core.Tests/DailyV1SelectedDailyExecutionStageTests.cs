@@ -109,6 +109,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             composition.RecordSequence, composition.DecisionStore,
             composition.ActorChoiceStore)
         {
+            UseSelectedActionExecution = true,
             UseSelectedDayStartContext = true,
             CrimeSystemPresent = true,
             JusticeSystemPresent = true,
@@ -126,6 +127,36 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             DailyV1SelectedCrimeJusticeDailyPhase.SyncWantedStatuses
         }), "The admitted state-backed day-start stages use the roster already bound to Core state.");
         Assert.That(boundary.Calls, Does.Not.Contain("begin-day"));
+    }
+
+    [Test]
+    public void AdmittedDailyStageRejectsHostOwnedActionFallbackBeforeAnyDailyCallback()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        FakeBoundary boundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore)
+        {
+            UseSelectedActionExecution = false
+        };
+        long marketRevision = composition.OwnerGraph.Cities[0].Market.Revision;
+        long spatialKnowledgeRevision = composition.OwnerGraph.Npcs[0].SpatialKnowledge.Revision;
+        DailyCaptureEligibilityToken captureToken =
+            composition.ExecutionBoundaryState.CurrentCaptureToken;
+
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            DailyV1SelectedDailyExecutionStage.Advance(
+                composition.ExecutionBoundaryState, composition.OwnerGraph, boundary));
+
+        Assert.That(failure.Message, Does.Contain("host-owned action execution"));
+        Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context" }),
+            "The admitted Core-owned action contract is proven before logger, daily, owner, or capture effects.");
+        Assert.That(composition.OwnerGraph.Cities[0].Market.Revision, Is.EqualTo(marketRevision));
+        Assert.That(composition.OwnerGraph.Npcs[0].SpatialKnowledge.Revision,
+            Is.EqualTo(spatialKnowledgeRevision));
+        Assert.That(composition.ExecutionBoundaryState.CurrentCaptureToken, Is.SameAs(captureToken),
+            "A preflight rejection does not invalidate or replace the prior completed-boundary token.");
     }
 
     [Test]
@@ -317,14 +348,16 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
         DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
         long absoluteDay = composition.SimulationTime.AbsoluteDay + 1L;
-        ScheduledDirectiveStore directives = CreateDirectiveForFirstNpc(graph, absoluteDay);
         DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
         Assert.That(state.SimulationTime.AbsoluteDay, Is.EqualTo(absoluteDay - 1L));
         Assert.That(state.HasAdmittedSelectedDailyExecution, Is.True);
         FakeBoundary dailyBoundary = new FakeBoundary(
             composition.RuntimeIdAllocator, composition.RandomSource,
             composition.RecordSequence, composition.DecisionStore,
-            composition.ActorChoiceStore);
+            composition.ActorChoiceStore)
+        {
+            UseSelectedActionExecution = true
+        };
         FakeRuntimeAdvanceBoundary advanceBoundary = new FakeRuntimeAdvanceBoundary(
             state, dailyBoundary);
 
@@ -338,10 +371,6 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(dailyBoundary.Calls, Does.Contain("begin-day"));
         Assert.That(dailyBoundary.Calls, Does.Contain("actor-context"));
         Assert.That(dailyBoundary.Calls, Does.Contain("travel-context"));
-        Assert.That(dailyBoundary.Calls.Count(call => call == "directive"), Is.EqualTo(1),
-            "Core prepares and consumes the exact graph directive for the state-owned post-advance day.");
-        Assert.That(directives.TryTakeDirective(graph.Npcs[0].RuntimeId, out _), Is.False,
-            "The state-backed stage consumes its graph-bound directive rather than a host-supplied substitute.");
         Assert.That(state.CompletedCoreSequence, Is.EqualTo(1L));
         Assert.That(state.SimulationTime.AbsoluteDay, Is.EqualTo(absoluteDay));
         Assert.That(state.CurrentCaptureToken, Is.Not.Null);
@@ -1076,7 +1105,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         }
 
         private sealed class FakeActorTurnBoundary : IDailyV1ActorTurnExecutionBoundary,
-            IDailyV1SelectedActorActionExecutionBoundary
+            IDailyV1SelectedActorChoiceExecutionContext,
+            IDailyV1CoreActorChoiceExecutionBoundary,
+            IDailyV1SelectedMerchantTradeStateBoundary,
+            IDailyV1SelectedMerchantTradeStateAdmissionBoundary
         {
             private readonly FakeBoundary owner;
             internal FakeActorTurnBoundary(FakeBoundary owner) => this.owner = owner;
@@ -1087,6 +1119,61 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public void AdvanceMerchantTradeState(DailyV1NpcRuntimeOwners actor) =>
                 owner.Calls.Add("actor-merchant:" + actor.RuntimeId);
             public void EvaluateAndExecuteAction(DailyV1NpcRuntimeOwners actor) { }
+
+            public bool TryGetActorChoiceExecutionContext(
+                DailyV1NpcRuntimeOwners actor,
+                out bool decisionSystemAvailable,
+                out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
+            {
+                decisionSystemAvailable = false;
+                executionBoundary = this;
+                return true;
+            }
+
+            public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor) { }
+            public bool TryPrepareRequestedActionProjection(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1NpcActionPayloadOwner payload) => false;
+            public bool TryRefreshRequestedActionProjection(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1NpcActionPayloadOwner payload) => false;
+            public bool CanCommitRequestedActionSlot(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1NpcActionPayloadOwner payload) => false;
+            public bool TryPublishRequestedActionProjection(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1NpcActionPayloadOwner payload) => false;
+            public void CancelPreparedRequestedActionProjection(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1NpcActionPayloadOwner payload) { }
+            public void LogRequestedActionDecisionFailure(string message) { }
+            public NpcActionResultType? ExecuteCurrentAction(DailyV1NpcRuntimeOwners actor) => null;
+
+            public bool TryInstallPlanState(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1ItemDefinition item,
+                string originCityRuntimeId,
+                string targetCityRuntimeId,
+                int plannedAmount,
+                int remainingAmount,
+                float purchasePricePerItem,
+                int waitDaysAtDestination,
+                int pendingTravelDays,
+                string originDecisionId) => true;
+            public bool TrySetTradeTravelPlan(
+                DailyV1NpcRuntimeOwners actor,
+                string targetCityRuntimeId,
+                float utility,
+                string originDecisionId) => true;
+            public void ClearTradeTravelPlan(DailyV1NpcRuntimeOwners actor) { }
+            public NpcDecisionRecord RecordTradeRedirect(
+                DailyV1NpcRuntimeOwners actor,
+                string targetLocationRuntimeId,
+                CommercialDecisionEvidence evidence) => null;
+            public void LogTrade(string message) { }
+            public bool ExecuteWithinSelectedMerchantDailyOperation(
+                DailyV1NpcRuntimeOwners actor,
+                Func<bool> operation) => operation != null && operation();
 
             public IAuthoritativeRandomSource RandomSource => owner.randomSource;
             public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor) =>
