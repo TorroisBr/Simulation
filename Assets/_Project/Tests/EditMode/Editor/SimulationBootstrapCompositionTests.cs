@@ -2745,6 +2745,17 @@ public sealed class SimulationBootstrapCompositionTests
             .GetField("npcRuntimeList", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(host);
         Assert.That(cities, Has.Count.EqualTo(1));
         Assert.That(npcs, Has.Count.EqualTo(1));
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(), cities, npcs, economyEnabled: false);
+        Assert.That(runtime.HasExactSelectedRuntimeOwnerGraph(graph), Is.True,
+            "The shared runtime must bind the admitted owner graph before exposing the City presence projection.");
+        Assert.That(runtime.TryGetNpcRuntime(npcs[0].RuntimeId, out NpcRuntime registeredNpc), Is.True);
+        Assert.That(registeredNpc, Is.SameAs(npcs[0]));
+        Assert.That(cities[0].TryCopyOwnerSnapshotMembership(
+            out IReadOnlyList<string> initialPresenceIds,
+            out long initialPresenceRevision), Is.True);
+        Assert.That(initialPresenceIds, Is.EqualTo(new[] { npcs[0].RuntimeId }));
+        Assert.That(initialPresenceRevision, Is.EqualTo(cities[0].SelectedRuntimeOwners.NpcPresence.Revision));
         Assert.That(cities[0].CityName, Is.EqualTo("Admitted City"));
         Assert.That(cities[0].CityData, Is.SameAs(city),
             "The exact asset remains available to the existing P12 bridge without being a selected-constructor input.");
@@ -2765,12 +2776,22 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(cities[0].ImportantNpcs, Is.Empty);
         Assert.That(cities[0].SelectedRuntimeOwners.NpcPresence.OrderedNpcRuntimeIds, Is.Empty);
         Assert.That(cities[0].ImportantNpcRevision, Is.EqualTo(presenceRevision + 1L));
+        Assert.That(cities[0].TryCopyOwnerSnapshotMembership(
+            out IReadOnlyList<string> removedPresenceIds,
+            out long removedPresenceRevision), Is.True);
+        Assert.That(removedPresenceIds, Is.Empty);
+        Assert.That(removedPresenceRevision, Is.EqualTo(presenceRevision + 1L));
         Assert.That(npcs[0].HasConsistentSelectedTravelState, Is.True);
         cities[0].AddImportantNpc(npcs[0]);
         Assert.That(cities[0].ImportantNpcs.Single(), Is.SameAs(npcs[0]));
         Assert.That(cities[0].SelectedRuntimeOwners.NpcPresence.OrderedNpcRuntimeIds,
             Is.EqualTo(new[] { npcs[0].RuntimeId }));
         Assert.That(cities[0].ImportantNpcRevision, Is.EqualTo(presenceRevision + 2L));
+        Assert.That(cities[0].TryCopyOwnerSnapshotMembership(
+            out IReadOnlyList<string> restoredPresenceIds,
+            out long restoredPresenceRevision), Is.True);
+        Assert.That(restoredPresenceIds, Is.EqualTo(new[] { npcs[0].RuntimeId }));
+        Assert.That(restoredPresenceRevision, Is.EqualTo(presenceRevision + 2L));
         Assert.That(npcs[0].HasConsistentSelectedTravelState, Is.True);
         SpatialLocationRuntime destination = new SpatialLocationRuntime("graph-construction-destination");
         long travelRevision = npcs[0].TravelStateRevision;

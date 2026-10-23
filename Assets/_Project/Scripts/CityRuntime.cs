@@ -16,6 +16,7 @@ public class CityRuntime
     [NonSerialized] private DailyV1CityDefinition selectedDailyV1Definition;
     [NonSerialized] private DailyV1EffectiveDefinitions selectedDefinitionGraph;
     [NonSerialized] private DailyV1CityRuntimeOwners selectedRuntimeOwners;
+    [NonSerialized] private Func<string, NpcRuntime> selectedNpcPresenceProjectionResolver;
     [NonSerialized] private SettlementPopulationRuntime population;
     [SerializeField] private MarketRuntime market;
     [NonSerialized] private MarketCounterpartyRuntime marketCounterparty;
@@ -118,8 +119,23 @@ public class CityRuntime
             return populationEconomy;
         }
     }
-    public IReadOnlyList<NpcRuntime> ImportantNpcs => readOnlyImportantNpcs
-        ?? (readOnlyImportantNpcs = EnsureImportantNpcs().AsReadOnly());
+    public IReadOnlyList<NpcRuntime> ImportantNpcs
+    {
+        get
+        {
+            if (selectedRuntimeOwners != null && selectedNpcPresenceProjectionResolver != null)
+            {
+                if (!TryCreateSelectedNpcPresenceProjection(
+                        selectedNpcPresenceProjectionResolver,
+                        out IReadOnlyList<NpcRuntime> projection))
+                    throw new InvalidOperationException(
+                        "The Core City-presence owner could not resolve its exact registered Unity NPC projections.");
+                return projection;
+            }
+
+            return readOnlyImportantNpcs ?? (readOnlyImportantNpcs = EnsureImportantNpcs().AsReadOnly());
+        }
+    }
     public long ImportantNpcRevision => selectedRuntimeOwners?.NpcPresence.Revision ?? importantNpcRevision;
     public string CityName => selectedDailyV1Definition != null
         ? selectedDailyV1Definition.Values.cityName
@@ -210,15 +226,27 @@ public class CityRuntime
     {
         npcRuntimeIds = null;
         membershipRevision = ImportantNpcRevision;
-        if (importantNpcs == null || membershipRevision < 0L || location == null
+        IReadOnlyList<NpcRuntime> projection;
+        if (selectedRuntimeOwners != null && selectedNpcPresenceProjectionResolver != null)
+        {
+            if (!TryCreateSelectedNpcPresenceProjection(
+                    selectedNpcPresenceProjectionResolver,
+                    out projection))
+                return false;
+        }
+        else
+        {
+            projection = ImportantNpcs;
+        }
+        if (membershipRevision < 0L || location == null
             || !HasConsistentSelectedNpcPresence)
         {
             return false;
         }
 
-        List<string> copiedIds = new List<string>(importantNpcs.Count);
+        List<string> copiedIds = new List<string>(projection.Count);
         HashSet<string> uniqueIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (NpcRuntime npc in importantNpcs)
+        foreach (NpcRuntime npc in projection)
         {
             if (npc == null
                 || string.IsNullOrWhiteSpace(npc.RuntimeId)
@@ -242,9 +270,19 @@ public class CityRuntime
         {
             if (selectedRuntimeOwners == null) return true;
             DailyV1CityNpcPresenceOwner owner = selectedRuntimeOwners.NpcPresence;
+            if (!string.Equals(owner.CityRuntimeId, runtimeId, StringComparison.Ordinal))
+                return false;
+
+            if (selectedNpcPresenceProjectionResolver != null)
+            {
+                return TryCreateSelectedNpcPresenceProjection(
+                    selectedNpcPresenceProjectionResolver,
+                    out IReadOnlyList<NpcRuntime> resolved)
+                    && resolved.Count == owner.OrderedNpcRuntimeIds.Count;
+            }
+
             List<NpcRuntime> projection = EnsureImportantNpcs();
-            if (!string.Equals(owner.CityRuntimeId, runtimeId, StringComparison.Ordinal)
-                || owner.OrderedNpcRuntimeIds.Count != projection.Count)
+            if (owner.OrderedNpcRuntimeIds.Count != projection.Count)
                 return false;
             for (int i = 0; i < projection.Count; i++)
             {
@@ -2042,7 +2080,7 @@ public class CityRuntime
 
     internal bool ContainsImportantNpc(NpcRuntime npcRuntime)
     {
-        if (npcRuntime == null || !EnsureImportantNpcs().Contains(npcRuntime)) return false;
+        if (npcRuntime == null || !ImportantNpcs.Contains(npcRuntime)) return false;
         return selectedRuntimeOwners == null
             || selectedRuntimeOwners.NpcPresence.Contains(npcRuntime.RuntimeId);
     }
@@ -2065,6 +2103,13 @@ public class CityRuntime
             || npcRuntime.IsTraveling || !npcRuntime.IsAlive)
             return false;
 
+        if (selectedNpcPresenceProjectionResolver != null)
+            return TryCreateSelectedNpcPresenceProjection(
+                    selectedNpcPresenceProjectionResolver,
+                    out IReadOnlyList<NpcRuntime> projection)
+                && projection.Contains(npcRuntime)
+                && IsExactSelectedNpcProjection(npcRuntime);
+
         List<NpcRuntime> membership = EnsureImportantNpcs();
         if (membership.Contains(npcRuntime)) return true;
         if (ContainsDifferentImportantNpcWithSameRuntimeId(npcRuntime)) return false;
@@ -2086,6 +2131,18 @@ public class CityRuntime
             || string.IsNullOrWhiteSpace(npcRuntime.RuntimeId)
             || cityOwners.NpcPresence.Contains(npcRuntime.RuntimeId) != shouldContain)
             return false;
+
+        if (selectedNpcPresenceProjectionResolver != null)
+        {
+            if (!TryCreateSelectedNpcPresenceProjection(
+                    selectedNpcPresenceProjectionResolver,
+                    out IReadOnlyList<NpcRuntime> projection))
+                return false;
+            return shouldContain
+                ? projection.Contains(npcRuntime) && IsExactSelectedNpcProjection(npcRuntime)
+                : !projection.Any(member => string.Equals(
+                    member?.RuntimeId, npcRuntime.RuntimeId, StringComparison.Ordinal));
+        }
 
         List<NpcRuntime> membership = EnsureImportantNpcs();
         bool containsExactProjection = membership.Contains(npcRuntime);
@@ -2113,6 +2170,21 @@ public class CityRuntime
             || !ReferenceEquals(cityOwners.Definitions, npcOwners.Definitions)
             || string.IsNullOrWhiteSpace(npcRuntime.RuntimeId))
             return false;
+        if (selectedNpcPresenceProjectionResolver != null)
+        {
+            if (!TryCreateSelectedNpcPresenceProjection(
+                    selectedNpcPresenceProjectionResolver,
+                    out IReadOnlyList<NpcRuntime> projection))
+                return false;
+            bool ownerContainsNpc = cityOwners.NpcPresence.Contains(npcRuntime.RuntimeId);
+            bool projectionContainsNpc = projection.Contains(npcRuntime);
+            bool projectionHasRuntimeId = projection.Any(member => string.Equals(
+                member?.RuntimeId, npcRuntime.RuntimeId, StringComparison.Ordinal));
+            return IsExactSelectedNpcProjection(npcRuntime)
+                && (ownerContainsNpc
+                    ? projectionContainsNpc
+                    : !projectionHasRuntimeId);
+        }
         bool containsExactProjection = EnsureImportantNpcs().Contains(npcRuntime);
         if (shouldContain)
             return containsExactProjection || !ContainsDifferentImportantNpcWithSameRuntimeId(npcRuntime);
@@ -2128,6 +2200,9 @@ public class CityRuntime
             || string.IsNullOrWhiteSpace(npcRuntime.RuntimeId)
             || ContainsDifferentImportantNpcWithSameRuntimeId(npcRuntime))
             return false;
+        if (selectedNpcPresenceProjectionResolver != null)
+            return cityOwners.NpcPresence.Contains(npcRuntime.RuntimeId)
+                == ImportantNpcs.Contains(npcRuntime);
         return cityOwners.NpcPresence.Contains(npcRuntime.RuntimeId)
             == EnsureImportantNpcs().Contains(npcRuntime);
     }
@@ -2138,6 +2213,19 @@ public class CityRuntime
         if (selectedRuntimeOwners != null)
         {
             if (string.IsNullOrWhiteSpace(npcRuntime.RuntimeId)) return false;
+            if (selectedNpcPresenceProjectionResolver != null)
+            {
+                if (!TryCreateSelectedNpcPresenceProjection(
+                        selectedNpcPresenceProjectionResolver,
+                        out IReadOnlyList<NpcRuntime> projection))
+                    return false;
+                bool ownerContainsNpc = selectedRuntimeOwners.NpcPresence.Contains(npcRuntime.RuntimeId);
+                return ownerContainsNpc
+                    ? projection.Contains(npcRuntime) && IsExactSelectedNpcProjection(npcRuntime)
+                    : IsExactSelectedNpcProjection(npcRuntime)
+                        && !ContainsDifferentImportantNpcWithSameRuntimeId(npcRuntime)
+                        && CanApplyImportantNpcRevisionIncrements(1L);
+            }
             bool inProjection = EnsureImportantNpcs().Contains(npcRuntime);
             bool inOwner = selectedRuntimeOwners.NpcPresence.Contains(npcRuntime.RuntimeId);
             if (inProjection != inOwner) return false;
@@ -2151,15 +2239,26 @@ public class CityRuntime
     internal bool CanRemoveImportantNpcMembership(NpcRuntime npcRuntime)
     {
         if (npcRuntime == null) return true;
-        bool inProjection = EnsureImportantNpcs().Contains(npcRuntime);
         if (selectedRuntimeOwners != null)
         {
             if (string.IsNullOrWhiteSpace(npcRuntime.RuntimeId)) return false;
+            if (selectedNpcPresenceProjectionResolver != null)
+            {
+                if (!TryCreateSelectedNpcPresenceProjection(
+                        selectedNpcPresenceProjectionResolver,
+                        out IReadOnlyList<NpcRuntime> projection))
+                    return false;
+                bool ownerContainsNpc = selectedRuntimeOwners.NpcPresence.Contains(npcRuntime.RuntimeId);
+                return !ownerContainsNpc || (projection.Contains(npcRuntime)
+                    && IsExactSelectedNpcProjection(npcRuntime)
+                    && CanApplyImportantNpcRevisionIncrements(1L));
+            }
+            bool inProjection = EnsureImportantNpcs().Contains(npcRuntime);
             bool inOwner = selectedRuntimeOwners.NpcPresence.Contains(npcRuntime.RuntimeId);
             if (inProjection != inOwner) return false;
             if (!inProjection) return true;
         }
-        else if (!inProjection) return true;
+        else if (!EnsureImportantNpcs().Contains(npcRuntime)) return true;
         return CanApplyImportantNpcRevisionIncrements(1L);
     }
 
@@ -2175,6 +2274,21 @@ public class CityRuntime
         if (npcRuntime == null)
         {
             return false;
+        }
+
+        if (selectedRuntimeOwners != null && selectedNpcPresenceProjectionResolver != null)
+        {
+            DailyV1CityNpcPresenceOwner selectedPresence = selectedRuntimeOwners.NpcPresence;
+            if (string.IsNullOrWhiteSpace(npcRuntime.RuntimeId)) return false;
+            if (!TryCreateSelectedNpcPresenceProjection(
+                    selectedNpcPresenceProjectionResolver,
+                    out _))
+                return false;
+            if (selectedPresence.Contains(npcRuntime.RuntimeId))
+                return IsExactSelectedNpcProjection(npcRuntime);
+            return IsExactSelectedNpcProjection(npcRuntime)
+                && selectedPresence.CanApplyRevisionIncrements(1L)
+                && selectedPresence.TryAdd(npcRuntime.RuntimeId);
         }
 
         List<NpcRuntime> membership = EnsureImportantNpcs();
@@ -2214,6 +2328,22 @@ public class CityRuntime
         if (npcRuntime == null)
         {
             return true;
+        }
+
+        if (selectedRuntimeOwners != null && selectedNpcPresenceProjectionResolver != null)
+        {
+            DailyV1CityNpcPresenceOwner selectedPresence = selectedRuntimeOwners.NpcPresence;
+            if (string.IsNullOrWhiteSpace(npcRuntime.RuntimeId)) return false;
+            if (!TryCreateSelectedNpcPresenceProjection(
+                    selectedNpcPresenceProjectionResolver,
+                    out IReadOnlyList<NpcRuntime> projection))
+                return false;
+            if (!selectedPresence.Contains(npcRuntime.RuntimeId))
+                return !projection.Any(member => string.Equals(
+                    member?.RuntimeId, npcRuntime.RuntimeId, StringComparison.Ordinal));
+            return IsExactSelectedNpcProjection(npcRuntime)
+                && selectedPresence.CanApplyRevisionIncrements(1L)
+                && selectedPresence.TryRemove(npcRuntime.RuntimeId);
         }
 
         List<NpcRuntime> membership = EnsureImportantNpcs();
@@ -2257,10 +2387,81 @@ public class CityRuntime
         return importantNpcs;
     }
 
+    internal bool CanBindSelectedNpcPresenceProjectionResolver(
+        Func<string, NpcRuntime> resolver)
+    {
+        return resolver != null
+            && selectedRuntimeOwners != null
+            && (selectedNpcPresenceProjectionResolver == null
+                || ReferenceEquals(selectedNpcPresenceProjectionResolver, resolver))
+            && TryCreateSelectedNpcPresenceProjection(resolver, out _);
+    }
+
+    internal bool TryBindSelectedNpcPresenceProjectionResolver(
+        Func<string, NpcRuntime> resolver)
+    {
+        if (!CanBindSelectedNpcPresenceProjectionResolver(resolver)) return false;
+        selectedNpcPresenceProjectionResolver = resolver;
+        importantNpcs = new List<NpcRuntime>();
+        readOnlyImportantNpcs = null;
+        return true;
+    }
+
+    private bool TryCreateSelectedNpcPresenceProjection(
+        Func<string, NpcRuntime> resolver,
+        out IReadOnlyList<NpcRuntime> projection)
+    {
+        projection = null;
+        DailyV1CityNpcPresenceOwner owner = selectedRuntimeOwners?.NpcPresence;
+        if (resolver == null || owner == null
+            || !string.Equals(owner.CityRuntimeId, runtimeId, StringComparison.Ordinal))
+            return false;
+
+        List<NpcRuntime> resolved = new List<NpcRuntime>(owner.OrderedNpcRuntimeIds.Count);
+        HashSet<string> runtimeIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<NpcRuntime> npcInstances = new HashSet<NpcRuntime>();
+        foreach (string npcRuntimeId in owner.OrderedNpcRuntimeIds)
+        {
+            if (string.IsNullOrWhiteSpace(npcRuntimeId) || !runtimeIds.Add(npcRuntimeId))
+                return false;
+            NpcRuntime npc = resolver(npcRuntimeId);
+            if (npc == null
+                || !string.Equals(npc.RuntimeId, npcRuntimeId, StringComparison.Ordinal)
+                || !npcInstances.Add(npc))
+                return false;
+            resolved.Add(npc);
+        }
+
+        projection = new ReadOnlyCollection<NpcRuntime>(resolved);
+        return true;
+    }
+
+    private bool IsExactSelectedNpcProjection(NpcRuntime npcRuntime)
+    {
+        if (npcRuntime == null || string.IsNullOrWhiteSpace(npcRuntime.RuntimeId)
+            || selectedNpcPresenceProjectionResolver == null)
+            return false;
+        NpcRuntime resolved = selectedNpcPresenceProjectionResolver(npcRuntime.RuntimeId);
+        return ReferenceEquals(resolved, npcRuntime)
+            && string.Equals(resolved?.RuntimeId, npcRuntime.RuntimeId, StringComparison.Ordinal);
+    }
+
     private bool ContainsDifferentImportantNpcWithSameRuntimeId(NpcRuntime npcRuntime)
     {
         if (npcRuntime == null || string.IsNullOrWhiteSpace(npcRuntime.RuntimeId)) return false;
-        foreach (NpcRuntime member in EnsureImportantNpcs())
+        IReadOnlyList<NpcRuntime> members;
+        if (selectedRuntimeOwners != null && selectedNpcPresenceProjectionResolver != null)
+        {
+            if (!TryCreateSelectedNpcPresenceProjection(
+                    selectedNpcPresenceProjectionResolver,
+                    out members))
+                return true;
+        }
+        else
+        {
+            members = EnsureImportantNpcs();
+        }
+        foreach (NpcRuntime member in members)
         {
             if (member != null && !ReferenceEquals(member, npcRuntime)
                 && string.Equals(member.RuntimeId, npcRuntime.RuntimeId, StringComparison.Ordinal))
@@ -2414,7 +2615,7 @@ public class CityRuntime
         if (market != null && market.SelectedDailyV1Owner != null
             && !DailyV1CityNpcPresenceOwner.TryCreateBound(
                 runtimeId,
-                EnsureImportantNpcs().Select(npc => npc?.RuntimeId),
+                ImportantNpcs.Select(npc => npc?.RuntimeId),
                 importantNpcRevision,
                 out stagedPresenceOwner))
             return false;

@@ -1164,7 +1164,7 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
-    public void SelectedSoloTravelValidatesUnchangedDestinationProjectionBeforeNonArrivalCommit()
+    public void SelectedSoloTravelUsesCoreDestinationPresenceInsteadOfStaleUnityCache()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
@@ -1204,6 +1204,9 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(destinationProjection.Contains(traveler), Is.False);
         destinationProjection.Add(traveler);
         Assert.That(ReadPrivateField<object>(destination, "selectedRuntimeOwners"), Is.Not.Null);
+        Assert.That(destination.ImportantNpcs.Contains(traveler), Is.False,
+            "Selected City presence is projected from its Core owner, not the legacy Unity membership cache.");
+        Assert.That(destination.SelectedRuntimeOwners.NpcPresence.Contains(traveler.RuntimeId), Is.False);
         Assert.That(traveler.SelectedRuntimeOwners.Travel.DestinationCityRuntimeId,
             Is.EqualTo(destination.RuntimeId));
 
@@ -1214,19 +1217,19 @@ public sealed class SimulationRuntimeAdmissionTests
             epochFailure.ToString());
         arguments = new object[] { runtime.SelectedRuntimeOwnerGraph, runtime.NpcRuntimes.ToList(), null };
         Assert.That((bool)advanceSelectedSoloTravels.Invoke(travelSystem, arguments), Is.True,
-            "A failed per-owner preflight does not fail the surrounding daily pass.");
+            "The stale Unity cache is not an authoritative travel precondition.");
         Assert.That(arguments[2] as IReadOnlyList<NpcRuntime>, Is.Empty,
-            "A non-arrival with inconsistent destination projection must not report arrival.");
-        Assert.That(traveler.TravelDaysRemaining, Is.EqualTo(2),
-            "The unchanged destination is validation-only; its stale reciprocal projection must reject the Core travel commit.");
-        Assert.That(traveler.SelectedRuntimeOwners.Travel.Revision, Is.EqualTo(travelRevision));
+            "A non-arrival must not report an arrival even when the ignored cache contains the traveler.");
+        Assert.That(traveler.TravelDaysRemaining, Is.EqualTo(1),
+            "The Core travel owner advances when the only inconsistency is in the discarded legacy City cache.");
+        Assert.That(traveler.SelectedRuntimeOwners.Travel.Revision, Is.EqualTo(travelRevision + 1L));
         Assert.That(destination.SelectedRuntimeOwners.NpcPresence.Revision,
             Is.EqualTo(destinationPresenceRevision));
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
             out long mutationEpochAfter, out ContinuationCensusFailure epochFailureAfter), Is.True,
             epochFailureAfter.ToString());
-        Assert.That(mutationEpochAfter, Is.EqualTo(mutationEpoch),
-            "A rejected unchanged-destination preflight must not invalidate the P12 census epoch.");
+        Assert.That(mutationEpochAfter, Is.EqualTo(mutationEpoch + 1L),
+            "The accepted travel-state owner mutation invalidates the P12 census epoch once.");
         Assert.That(traveler.CurrentCity, Is.Null);
         Assert.That(traveler.DestinationCity, Is.SameAs(destination));
     }

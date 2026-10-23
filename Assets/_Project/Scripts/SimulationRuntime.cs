@@ -1749,6 +1749,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     private bool coreMutationGuardAuthoritiesBound;
     private readonly DailyV1ExecutionBoundaryState dailyExecutionBoundary;
     private Func<DailyV1SelectedRuntimeOwnerGraph> selectedRuntimeOwnerGraphProvider;
+    private Func<string, NpcRuntime> selectedNpcPresenceProjectionResolver;
     private bool advanceLeaseHeld => dailyExecutionBoundary.AdvanceLeaseHeld;
     private long completedDailyCoreSequence => dailyExecutionBoundary.CompletedCoreSequence;
     private DailyCaptureEligibilityToken currentDailyCaptureToken => dailyExecutionBoundary.CurrentCaptureToken;
@@ -2980,6 +2981,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 throw new ArgumentException(
                     "A selected NPC owner graph is already bound to another runtime.",
                     nameof(npcRuntimes));
+
+        if (selectedOwnerGraph != null)
+        {
+            selectedNpcPresenceProjectionResolver = ResolveRegisteredNpcPresenceProjection;
+            foreach (CityRuntime cityRuntime in this.cities)
+                if (cityRuntime?.SelectedRuntimeOwners != null
+                    && !cityRuntime.CanBindSelectedNpcPresenceProjectionResolver(
+                        selectedNpcPresenceProjectionResolver))
+                    throw new ArgumentException(
+                        "A selected City presence owner could not resolve its exact registered NPC projections.",
+                        nameof(cities));
+            foreach (CityRuntime cityRuntime in this.cities)
+                if (cityRuntime?.SelectedRuntimeOwners != null
+                    && !cityRuntime.TryBindSelectedNpcPresenceProjectionResolver(
+                        selectedNpcPresenceProjectionResolver))
+                    throw new InvalidOperationException(
+                        "A selected City presence owner changed after its runtime projection preflight.");
+        }
 
         this.manpowerSourceConsequencePlanningService = new ManpowerSourceConsequencePlanningService(
             this,
@@ -8024,6 +8043,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         npcRuntime = null;
         return string.IsNullOrWhiteSpace(runtimeId) == false
             && npcRegistryById.TryGetValue(runtimeId, out npcRuntime);
+    }
+
+    private NpcRuntime ResolveRegisteredNpcPresenceProjection(string runtimeId)
+    {
+        return !string.IsNullOrWhiteSpace(runtimeId)
+            && npcRegistryById.TryGetValue(runtimeId, out NpcRuntime npcRuntime)
+                ? npcRuntime
+                : null;
     }
 
     /// <summary>
