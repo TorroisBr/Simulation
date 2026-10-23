@@ -57,8 +57,9 @@ inputs, and verifies the same snapshot afterward. This binds linked Core files
 and transitive project source that are not present in a hand-maintained source
 list. Generated `bin`/`obj` compile outputs are excluded; project files,
 tracked build configuration, locked dependencies and generated asset snapshots
-remain bound separately. A compile input that resolves outside the repository
-or is missing causes the run to stop rather than produce incomplete source
+remain bound separately. A compile input that resolves outside the repository,
+traverses a reparse point below the repository root, or is missing causes the
+run to stop rather than produce incomplete source
 evidence. Keep the private source copy and the exact input-identifying manifest
 together during review.
 

@@ -10,7 +10,26 @@ function Get-CoreRepositoryRelativeIdentity {
     if (-not $full.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
         throw 'A compile input resolved outside the repository root.'
     }
-    return $full.Substring($rootPrefix.Length).Replace('\', '/')
+    $relative = $full.Substring($rootPrefix.Length)
+
+    # Lexical containment is insufficient on Windows: a directory junction or
+    # symbolic link below the checkout can redirect an apparently local source
+    # path to an external file. Fail closed for any reparse-point component.
+    $rootItem = Get-Item -LiteralPath $root -Force -ErrorAction Stop
+    if ($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw 'The repository root is a reparse point and cannot establish source containment.'
+    }
+    $current = $root
+    foreach ($segment in ($relative -split '[\\/]')) {
+        if ([string]::IsNullOrWhiteSpace($segment)) { continue }
+        $current = Join-Path $current $segment
+        $component = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+        if ($component.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            throw 'A compile input traverses a reparse point below the repository root.'
+        }
+    }
+
+    return $relative.Replace('\', '/')
 }
 
 function Get-CoreProjectCompileInputs {

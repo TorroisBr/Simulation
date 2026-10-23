@@ -108,6 +108,23 @@ foreach ($requiredInput in @(
 }
 Assert-True (@($compileInputs | Where-Object { [IO.Path]::IsPathRooted($_) }).Count -eq 0) 'Compile input identities must be repository-relative.'
 
+$reparseTestRoot = Join-Path ([IO.Path]::GetTempPath()) ('core-validation-reparse-' + [Guid]::NewGuid().ToString('N'))
+$repositoryRootUnderTest = Join-Path $reparseTestRoot 'repository'
+$externalSourceRoot = Join-Path $reparseTestRoot 'external'
+$reparseSourcePath = Join-Path $repositoryRootUnderTest 'linked-source'
+New-Item -ItemType Directory -Path $repositoryRootUnderTest -Force | Out-Null
+New-Item -ItemType Directory -Path $externalSourceRoot -Force | Out-Null
+[IO.File]::WriteAllText((Join-Path $externalSourceRoot 'ExternalCompileInput.cs'), 'class ExternalCompileInput {}', [Text.UTF8Encoding]::new($false))
+try {
+    New-Item -ItemType Junction -Path $reparseSourcePath -Target $externalSourceRoot -ErrorAction Stop | Out-Null
+    Assert-Rejected {
+        Get-CoreRepositoryRelativeIdentity -RepositoryRoot $repositoryRootUnderTest -FullPath (Join-Path $reparseSourcePath 'ExternalCompileInput.cs')
+    } 'A compile input reached through an in-repository junction must be rejected.'
+} finally {
+    if (Test-Path -LiteralPath $reparseSourcePath) { [IO.Directory]::Delete($reparseSourcePath) }
+    if (Test-Path -LiteralPath $reparseTestRoot) { Remove-Item -LiteralPath $reparseTestRoot -Recurse -Force }
+}
+
 $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..\..')).Path
 $coreInputs = @(Get-CoreInputSnapshot -ProjectRoot $repositoryRoot | ForEach-Object { [string]$_.path })
 foreach ($requiredInput in @(
@@ -193,4 +210,4 @@ finally {
     }
 }
 
-Write-Output 'Core validation self-tests PASS: populated/parameterized, failed, not-executed, empty discovery, malformed/missing report, run identity/summary outcome, ID/count integrity, input stability, evaluated transitive compile-source closure, SDK-specific testhost trace settings, exact assembly runtime selection, and protected evidence ACL.'
+Write-Output 'Core validation self-tests PASS: populated/parameterized, failed, not-executed, empty discovery, malformed/missing report, run identity/summary outcome, ID/count integrity, input stability, evaluated transitive compile-source closure, reparse-point rejection, SDK-specific testhost trace settings, exact assembly runtime selection, and protected evidence ACL.'
