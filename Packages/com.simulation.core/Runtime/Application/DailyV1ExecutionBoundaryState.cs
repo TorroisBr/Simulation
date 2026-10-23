@@ -32,6 +32,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         new AuthoritativeMutationGuard();
     private bool runtimeIdentityBound;
     private bool runtimeConfigurationBound;
+    private bool exclusiveSessionReplacementInProgress;
     private DailyV1AdvanceLease advanceLease;
     private long advanceLeaseInitialCompletedSequence;
     private long completedCoreSequence;
@@ -141,7 +142,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     {
         lock (operationSyncRoot)
         {
-            if (AdmissionContext != null && !AdmissionContext.IsOwnedByCurrentThread())
+            if (exclusiveSessionReplacementInProgress
+                || (AdmissionContext != null && !AdmissionContext.IsOwnedByCurrentThread()))
                 return false;
             if (kind == DailyV1OperationScopeKind.RuntimeProtocol
                 || !Enum.IsDefined(typeof(DailyV1OperationScopeKind), kind))
@@ -163,11 +165,44 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    /// <summary>
+    /// Prevents both application and direct runtime/P12 operations from
+    /// entering the source session while a detached replacement is staged.
+    /// This flag shares the same lock and operation registry as daily advance
+    /// and P12 census scopes, so same-thread callbacks cannot bypass the app gate.
+    /// </summary>
+    internal bool TryBeginExclusiveSessionReplacement()
+    {
+        lock (operationSyncRoot)
+        {
+            if (exclusiveSessionReplacementInProgress
+                || activeOperationScopes.Count != 0
+                || (AdmissionContext != null && !AdmissionContext.IsOwnedByCurrentThread()))
+                return false;
+            exclusiveSessionReplacementInProgress = true;
+            return true;
+        }
+    }
+
+    internal bool TryEndExclusiveSessionReplacement()
+    {
+        lock (operationSyncRoot)
+        {
+            if (!exclusiveSessionReplacementInProgress
+                || activeOperationScopes.Count != 0
+                || (AdmissionContext != null && !AdmissionContext.IsOwnedByCurrentThread()))
+                return false;
+            exclusiveSessionReplacementInProgress = false;
+            return true;
+        }
+    }
+
     internal bool TryAssessCaptureScope(DailyV1CaptureScopeAllowance allowance)
     {
         lock (operationSyncRoot)
         {
-            if (AdmissionContext != null && !AdmissionContext.IsOwnedByCurrentThread())
+            if (exclusiveSessionReplacementInProgress
+                || (AdmissionContext != null && !AdmissionContext.IsOwnedByCurrentThread()))
                 return false;
             if (allowance == DailyV1CaptureScopeAllowance.None)
                 return activeOperationScopes.Count == 0;
@@ -187,7 +222,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     {
         lock (operationSyncRoot)
         {
-            if (AdmissionContext == null || !AdmissionContext.IsOwnedByCurrentThread())
+            if (exclusiveSessionReplacementInProgress
+                || AdmissionContext == null || !AdmissionContext.IsOwnedByCurrentThread())
                 return false;
             return TryAddOperationScope(DailyV1OperationScopeKind.RuntimeProtocol);
         }

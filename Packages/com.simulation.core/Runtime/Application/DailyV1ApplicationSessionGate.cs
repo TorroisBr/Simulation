@@ -12,6 +12,8 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
     private readonly object syncRoot = new object();
     private readonly Func<TSession, DailyV1ExecutionBoundaryState> executionState;
     private TSession current;
+    private object exclusiveOperationToken;
+    private DailyV1ExecutionBoundaryState activeExclusiveState;
 
     internal DailyV1ApplicationSessionGate(
         Func<TSession, DailyV1ExecutionBoundaryState> executionState)
@@ -40,7 +42,8 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
         lock (syncRoot)
         {
             session = current;
-            if (session == null
+            if (exclusiveOperationToken != null
+                || session == null
                 || (expectedSession != null && !ReferenceEquals(session, expectedSession)))
             {
                 session = null;
@@ -75,9 +78,65 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
         lock (syncRoot)
         {
             DailyV1ExecutionBoundaryState state = GetExecutionState(candidateSession);
-            if (state == null || state.ActiveOperationCount != 0 || current != null) return false;
+            if (exclusiveOperationToken != null
+                || state == null || state.ActiveOperationCount != 0 || current != null) return false;
             return ReferenceEquals(
                 Interlocked.CompareExchange(ref current, candidateSession, null), null);
+        }
+    }
+
+    /// <summary>
+    /// Reserves the current idle session while a detached candidate is loaded,
+    /// validated, and prepared for publication. Unlike holding SyncRoot over
+    /// candidate construction, the reservation rejects same-thread callback
+    /// re-entry as well as callers on other threads.
+    /// </summary>
+    internal bool TryBeginExclusiveOperation(
+        TSession expectedSession,
+        out ExclusiveOperation operation)
+    {
+        operation = null;
+        if (expectedSession == null) return false;
+        lock (syncRoot)
+        {
+            DailyV1ExecutionBoundaryState state = GetExecutionState(current);
+            if (exclusiveOperationToken != null
+                || !ReferenceEquals(current, expectedSession)
+                || state == null
+                || state.ActiveOperationCount != 0
+                || !state.TryBeginExclusiveSessionReplacement())
+                return false;
+
+            object token = new object();
+            exclusiveOperationToken = token;
+            activeExclusiveState = state;
+            operation = new ExclusiveOperation(this, token, expectedSession);
+            return true;
+        }
+    }
+
+    /// <summary>Publishes only through the exclusive reservation that staged this replacement.</summary>
+    internal bool TryPublishReplacement(
+        ExclusiveOperation operation,
+        TSession candidateSession)
+    {
+        if (operation == null || candidateSession == null) return false;
+        lock (syncRoot)
+        {
+            if (!operation.IsOwnedBy(this, exclusiveOperationToken)
+                || !operation.IsOwnedByCurrentThread()
+                || !ReferenceEquals(current, operation.ExpectedSession))
+                return false;
+
+            DailyV1ExecutionBoundaryState currentState = GetExecutionState(current);
+            DailyV1ExecutionBoundaryState candidateState = GetExecutionState(candidateSession);
+            if (currentState == null || candidateState == null
+                || currentState.ActiveOperationCount != 0
+                || candidateState.ActiveOperationCount != 0)
+                return false;
+
+            Interlocked.Exchange(ref current, candidateSession);
+            return true;
         }
     }
 
@@ -86,6 +145,7 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
         if (expectedSession == null || candidateSession == null) return false;
         lock (syncRoot)
         {
+            if (exclusiveOperationToken != null) return false;
             DailyV1ExecutionBoundaryState currentState = GetExecutionState(current);
             DailyV1ExecutionBoundaryState candidateState = GetExecutionState(candidateSession);
             if (currentState == null || candidateState == null
@@ -100,4 +160,60 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
 
     private DailyV1ExecutionBoundaryState GetExecutionState(TSession session) =>
         session == null ? null : executionState(session);
+
+    private void EndExclusiveOperation(object token)
+    {
+        lock (syncRoot)
+        {
+            if (token == null
+                || !ReferenceEquals(exclusiveOperationToken, token)
+                || activeExclusiveState == null
+                || !activeExclusiveState.TryEndExclusiveSessionReplacement())
+                throw new InvalidOperationException("The active-session exclusive operation is no longer current.");
+            exclusiveOperationToken = null;
+            activeExclusiveState = null;
+        }
+    }
+
+    internal sealed class ExclusiveOperation : IDisposable
+    {
+        private DailyV1ApplicationSessionGate<TSession> gate;
+        private readonly object token;
+        private readonly Thread ownerThread;
+        private readonly int ownerThreadId;
+
+        internal TSession ExpectedSession { get; }
+
+        internal ExclusiveOperation(
+            DailyV1ApplicationSessionGate<TSession> gate,
+            object token,
+            TSession expectedSession)
+        {
+            this.gate = gate ?? throw new ArgumentNullException(nameof(gate));
+            this.token = token ?? throw new ArgumentNullException(nameof(token));
+            ExpectedSession = expectedSession ?? throw new ArgumentNullException(nameof(expectedSession));
+            ownerThread = Thread.CurrentThread;
+            ownerThreadId = ownerThread.ManagedThreadId;
+        }
+
+        internal bool IsOwnedBy(
+            DailyV1ApplicationSessionGate<TSession> expectedGate,
+            object expectedToken) =>
+            ReferenceEquals(gate, expectedGate)
+            && ReferenceEquals(token, expectedToken);
+
+        internal bool IsOwnedByCurrentThread() =>
+            ReferenceEquals(ownerThread, Thread.CurrentThread)
+            && ownerThreadId == Thread.CurrentThread.ManagedThreadId;
+
+        public void Dispose()
+        {
+            DailyV1ApplicationSessionGate<TSession> owner = gate;
+            if (owner == null) return;
+            if (!IsOwnedByCurrentThread())
+                throw new InvalidOperationException("The active-session exclusive operation must close on its owner thread.");
+            owner.EndExclusiveOperation(token);
+            gate = null;
+        }
+    }
 }

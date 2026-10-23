@@ -904,6 +904,14 @@ public class TesteSimulacao : MonoBehaviour
         SimulationActiveSession expectedSession,
         SimulationActiveSession candidateSession)
     {
+        return TryPublishRestoredSession(expectedSession, candidateSession, null);
+    }
+
+    private bool TryPublishRestoredSession(
+        SimulationActiveSession expectedSession,
+        SimulationActiveSession candidateSession,
+        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation exclusiveOperation)
+    {
         if (candidateSession == null)
             return false;
 
@@ -916,6 +924,10 @@ public class TesteSimulacao : MonoBehaviour
                 || !ReferenceEquals(candidateSession.Configuration, simulationConfig)
                 || !candidateSession.Runtime.IsHealthyDailyOwnerThreadBoundary()
                 || !candidateSession.Runtime.HasValidRestoredDailyBoundaryAdmission())
+                return false;
+
+            if (exclusiveOperation != null
+                && !ReferenceEquals(exclusiveOperation.ExpectedSession, expectedSession))
                 return false;
 
             if (expectedSession == null)
@@ -936,7 +948,9 @@ public class TesteSimulacao : MonoBehaviour
                 || !expectedSession.Runtime.HasValidCompletedDailyBoundaryAdmission())
                 return false;
 
-            return activeSessionGate.TryPublishReplacement(expectedSession, candidateSession);
+            return exclusiveOperation != null
+                ? activeSessionGate.TryPublishReplacement(exclusiveOperation, candidateSession)
+                : activeSessionGate.TryPublishReplacement(expectedSession, candidateSession);
         }
     }
 
@@ -961,10 +975,16 @@ public class TesteSimulacao : MonoBehaviour
     private bool TryLoadDailyV1ContinuationAtPath(string persistentDataPath, out string resultCode)
     {
         resultCode = P12AResultCode.Busy.ToString();
-        lock (activeSessionGate.SyncRoot)
+        SimulationActiveSession expectedSession = activeSessionGate.Current;
+        if (expectedSession == null
+            || !activeSessionGate.TryBeginExclusiveOperation(
+                expectedSession,
+                out DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation exclusiveOperation))
+            return false;
+
+        using (exclusiveOperation)
         {
-            SimulationActiveSession expectedSession = activeSessionGate.Current;
-            if (expectedSession == null || activeSessionGate.ActiveOperationCount != 0
+            if (activeSessionGate.ActiveOperationCount != 0
                 || expectedSession.AdmissionContext == null
                 || expectedSession.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
                 || runtimeAdmissionContext == null || runtimeAdmissionContext.IsRestoredContinuation
@@ -1001,7 +1021,7 @@ public class TesteSimulacao : MonoBehaviour
                 return false;
             }
 
-            if (!TryPublishRestoredSession(expectedSession, candidate))
+            if (!TryPublishRestoredSession(expectedSession, candidate, exclusiveOperation))
             {
                 resultCode = P12AResultCode.AdmissionRejected.ToString();
                 expectedSession.Logger.LogError("P12-A detached load passed private validation but publication failed.");
@@ -1103,11 +1123,20 @@ public class TesteSimulacao : MonoBehaviour
         System.Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null,
         System.Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null)
     {
-        lock (activeSessionGate.SyncRoot)
+        SimulationActiveSession expectedSession = activeSessionGate.Current;
+        if (expectedSession == null
+            || !activeSessionGate.TryBeginExclusiveOperation(
+                expectedSession,
+                out DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation exclusiveOperation))
         {
-            SimulationActiveSession expectedSession = activeSessionGate.Current;
-            if (expectedSession == null
-                || activeSessionGate.ActiveOperationCount != 0
+            failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
+            diagnostic = "Daily-v1 restore requires the current healthy completed-boundary session while idle on its owner thread.";
+            return false;
+        }
+
+        using (exclusiveOperation)
+        {
+            if (activeSessionGate.ActiveOperationCount != 0
                 || expectedSession.AdmissionContext == null
                 || expectedSession.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
                 || !expectedSession.AdmissionContext.IsOwnedByCurrentThread()
@@ -1148,7 +1177,7 @@ public class TesteSimulacao : MonoBehaviour
                 return false;
             }
 
-            if (!TryPublishRestoredSession(expectedSession, candidateSession))
+            if (!TryPublishRestoredSession(expectedSession, candidateSession, exclusiveOperation))
             {
                 failure = P12GDailyV1RestoreFailure.PublicationFailed;
                 diagnostic = "The restored session failed the existing single-reference publication gate.";

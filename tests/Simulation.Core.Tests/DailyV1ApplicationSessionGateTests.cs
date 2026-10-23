@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using NUnit.Framework;
 
 public sealed class DailyV1ApplicationSessionGateTests
@@ -59,6 +60,82 @@ public sealed class DailyV1ApplicationSessionGateTests
             "A stale restore candidate cannot replace a different active session.");
         Assert.That(gate.Current, Is.SameAs(first));
         Assert.That(gate.TryPublishReplacement(first, replacement), Is.True);
+        Assert.That(gate.Current, Is.SameAs(replacement));
+    }
+
+    [Test]
+    public void ExclusiveRestoreReservationRejectsReentrantOperationsAndPublishesOnce()
+    {
+        DailyV1ApplicationSessionGate<TestSession> gate = CreateGate();
+        TestSession current = CreateAdmittedTestSession();
+        TestSession replacement = new TestSession();
+        TestSession competingReplacement = new TestSession();
+        Assert.That(gate.TryPublishInitial(current), Is.True);
+
+        Assert.That(gate.TryBeginExclusiveOperation(current, out var exclusive), Is.True);
+        using (exclusive)
+        {
+            Assert.That(gate.TryBeginOperation(current, out TestSession reentrant), Is.False,
+                "A callback on the restore thread must not enter the old active session during detached staging.");
+            Assert.That(reentrant, Is.Null);
+            Assert.That(current.ExecutionState.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.False,
+                "Direct runtime advance must observe the same exclusive replacement boundary.");
+            Assert.That(current.ExecutionState.TryBeginRuntimeProtocolOperation(), Is.False,
+                "Direct P12 owner census operations must not enter while the source session is being replaced.");
+            Assert.That(current.ExecutionState.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.False,
+                "The source session cannot become capture-eligible during detached replacement.");
+            Assert.That(gate.TryPublishReplacement(current, competingReplacement), Is.False,
+                "The ordinary replacement path cannot bypass the active exclusive reservation.");
+            Assert.That(gate.Current, Is.SameAs(current));
+            Assert.That(gate.TryPublishReplacement(exclusive, replacement), Is.True);
+            Assert.That(gate.Current, Is.SameAs(replacement));
+            Assert.That(gate.TryBeginOperation(replacement, out _), Is.False,
+                "The publication window remains closed until restore staging exits.");
+        }
+
+        Assert.That(gate.TryBeginOperation(replacement, out TestSession published), Is.True);
+        Assert.That(published, Is.SameAs(replacement));
+        gate.EndOperation();
+        Assert.That(current.ExecutionState.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.True,
+            "Disposing the reservation releases the old private session boundary after commit.");
+    }
+
+    [Test]
+    public void DisposingUncommittedExclusiveRestoreReservationReopensCurrentSession()
+    {
+        DailyV1ApplicationSessionGate<TestSession> gate = CreateGate();
+        TestSession current = new TestSession();
+        Assert.That(gate.TryPublishInitial(current), Is.True);
+
+        Assert.That(gate.TryBeginExclusiveOperation(current, out var exclusive), Is.True);
+        exclusive.Dispose();
+
+        Assert.That(gate.Current, Is.SameAs(current));
+        Assert.That(gate.TryBeginOperation(current, out TestSession operation), Is.True);
+        Assert.That(operation, Is.SameAs(current));
+        gate.EndOperation();
+        Assert.That(gate.TryPublishReplacement(current, new TestSession()), Is.True);
+    }
+
+    [Test]
+    public void ExclusiveRestoreReservationCannotPublishFromAnotherThread()
+    {
+        DailyV1ApplicationSessionGate<TestSession> gate = CreateGate();
+        TestSession current = new TestSession();
+        TestSession replacement = new TestSession();
+        Assert.That(gate.TryPublishInitial(current), Is.True);
+        Assert.That(gate.TryBeginExclusiveOperation(current, out var exclusive), Is.True);
+
+        bool publishedOffThread = true;
+        Thread caller = new Thread(() =>
+            publishedOffThread = gate.TryPublishReplacement(exclusive, replacement));
+        caller.Start();
+        caller.Join();
+
+        Assert.That(publishedOffThread, Is.False);
+        Assert.That(gate.Current, Is.SameAs(current));
+        using (exclusive)
+            Assert.That(gate.TryPublishReplacement(exclusive, replacement), Is.True);
         Assert.That(gate.Current, Is.SameAs(replacement));
     }
 
