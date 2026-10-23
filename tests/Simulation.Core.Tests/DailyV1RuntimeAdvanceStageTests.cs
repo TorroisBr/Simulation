@@ -7,13 +7,26 @@ using NUnit.Framework;
 public sealed class DailyV1RuntimeAdvanceStageTests
 {
     [Test]
+    public void SharedAdvanceFailureContractPreservesUnityPublicValues()
+    {
+        Assert.That(Enum.GetUnderlyingType(typeof(SimulationRuntimeAdvanceFailure)), Is.EqualTo(typeof(int)));
+        Assert.That((int)SimulationRuntimeAdvanceFailure.None, Is.EqualTo(0));
+        Assert.That((int)SimulationRuntimeAdvanceFailure.RuntimeFaulted, Is.EqualTo(1));
+        Assert.That((int)SimulationRuntimeAdvanceFailure.InvalidDayCount, Is.EqualTo(2));
+        Assert.That((int)SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow, Is.EqualTo(3));
+        Assert.That((int)SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress, Is.EqualTo(4));
+        Assert.That((int)SimulationRuntimeAdvanceFailure.TemporalAdvanceFailed, Is.EqualTo(5));
+        Assert.That((int)SimulationRuntimeAdvanceFailure.CompletedBoundarySequenceOverflow, Is.EqualTo(6));
+    }
+
+    [Test]
     public void SingleAdvanceOwnsLeaseOperationCompletionAndCapturePublicationOrder()
     {
         DailyV1ExecutionBoundaryState state = CreateCaptureState();
         FakeBoundary boundary = new FakeBoundary(state);
 
         Assert.That(state.TryAdvanceDay(boundary, out var failure), Is.True);
-        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.None));
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.None));
         Assert.That(state.AdvanceLeaseHeld, Is.False);
         Assert.That(boundary.Calls, Is.EqualTo(new[]
         {
@@ -67,7 +80,7 @@ public sealed class DailyV1RuntimeAdvanceStageTests
         FakeBoundary boundary = new FakeBoundary(state);
 
         Assert.That(state.TryAdvanceDay(boundary, out var failure), Is.False);
-        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.AbsoluteDayOverflow));
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow));
         Assert.That(boundary.Calls, Is.Empty);
         Assert.That(state.AdvanceLeaseHeld, Is.False);
         Assert.That(state.ActiveOperationCount, Is.Zero,
@@ -87,8 +100,8 @@ public sealed class DailyV1RuntimeAdvanceStageTests
         DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
         FakeBoundary boundary = new FakeBoundary(state);
 
-        Assert.That(state.TryAdvanceDay(boundary, out DailyV1RuntimeAdvanceFailureCode failure), Is.False);
-        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted));
+        Assert.That(state.TryAdvanceDay(boundary, out SimulationRuntimeAdvanceFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(composition.SimulationTime.AbsoluteDay, Is.Zero,
             "A rejected selected-stage adapter must be discovered before the Core clock mutates.");
         Assert.That(state.CompletedCoreSequence, Is.Zero);
@@ -113,7 +126,7 @@ public sealed class DailyV1RuntimeAdvanceStageTests
         };
 
         Assert.That(state.TryAdvanceDay(boundary, out var failure), Is.False);
-        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted));
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(state.MutationGuard.CanMutate, Is.False);
         Assert.That(boundary.Calls, Is.Empty);
         Assert.That(state.AdvanceLeaseHeld, Is.False);
@@ -127,7 +140,7 @@ public sealed class DailyV1RuntimeAdvanceStageTests
         FakeBoundary boundary = new FakeBoundary(state);
 
         Assert.That(state.TryAdvanceDay(boundary, out var failure), Is.False);
-        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.AdvanceAlreadyInProgress));
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress));
         Assert.That(boundary.Calls, Is.Empty);
         outerLease.Dispose();
         Assert.That(state.AdvanceLeaseHeld, Is.False);
@@ -141,7 +154,7 @@ public sealed class DailyV1RuntimeAdvanceStageTests
         FakeBoundary boundary = new FakeBoundary(boundaryState);
 
         Assert.That(requestedState.TryAdvanceDay(boundary, out var failure), Is.False);
-        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted));
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(boundary.Calls, Is.Empty);
         Assert.That(requestedState.AdvanceLeaseHeld, Is.False);
         Assert.That(boundaryState.AdvanceLeaseHeld, Is.False);
@@ -156,7 +169,7 @@ public sealed class DailyV1RuntimeAdvanceStageTests
 
         Assert.That(requestedState.TryAdvanceDays(boundary, 2, out int daysAdvanced, out var failure), Is.False);
         Assert.That(daysAdvanced, Is.Zero);
-        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted));
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(boundary.Calls, Is.Empty);
         Assert.That(requestedState.AdvanceLeaseHeld, Is.False);
         Assert.That(boundaryState.AdvanceLeaseHeld, Is.False);
@@ -197,9 +210,9 @@ public sealed class DailyV1RuntimeAdvanceStageTests
         };
 
         Assert.That(state.TryAdvanceDays(
-            boundary, 1, out int advanced, out DailyV1RuntimeAdvanceFailureCode failure), Is.True);
+            boundary, 1, out int advanced, out SimulationRuntimeAdvanceFailure failure), Is.True);
         Assert.That(advanced, Is.EqualTo(1));
-        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.None));
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.None));
         Assert.That(boundary.Calls, Is.EqualTo(new[] { "intraday" }));
         Assert.That(state.CompletedCoreSequence, Is.Zero,
             "Unadmitted legacy timelines do not publish selected Daily-v1 capture sequence.");
@@ -217,11 +230,11 @@ public sealed class DailyV1RuntimeAdvanceStageTests
         Assert.That(state.TryAdvanceDays(
             boundary, -1, out int negativeAdvanced, out var negativeFailure), Is.False);
         Assert.That(negativeAdvanced, Is.Zero);
-        Assert.That(negativeFailure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.InvalidDayCount));
+        Assert.That(negativeFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.InvalidDayCount));
         Assert.That(state.TryAdvanceDays(
             boundary, 0, out int zeroAdvanced, out var zeroFailure), Is.True);
         Assert.That(zeroAdvanced, Is.Zero);
-        Assert.That(zeroFailure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.None));
+        Assert.That(zeroFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.None));
         Assert.That(boundary.Calls, Is.Empty);
     }
 
@@ -234,7 +247,7 @@ public sealed class DailyV1RuntimeAdvanceStageTests
         Assert.That(state.TryAdvanceDays(
             boundary, 3, out int advanced, out var failure), Is.True);
         Assert.That(advanced, Is.EqualTo(3));
-        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.None));
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.None));
         Assert.That(boundary.Calls, Is.EqualTo(new[]
         {
             "operation",
@@ -261,7 +274,7 @@ public sealed class DailyV1RuntimeAdvanceStageTests
         };
 
         Assert.That(state.TryAdvanceDay(boundary, out var failure), Is.False);
-        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted));
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(boundary.Calls, Does.Contain("fault"));
         Assert.That(state.ActiveOperationCount, Is.Zero);
         Assert.That(state.CurrentCaptureToken, Is.Null,
@@ -277,7 +290,7 @@ public sealed class DailyV1RuntimeAdvanceStageTests
         Assert.That(state.TryAdvanceDays(
             boundary, 3, out int advanced, out var failure), Is.False);
         Assert.That(advanced, Is.EqualTo(1));
-        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.TemporalAdvanceFailed));
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.TemporalAdvanceFailed));
         Assert.That(state.CompletedCoreSequence, Is.EqualTo(1L));
         Assert.That(boundary.Calls, Does.Not.Contain("capture-evidence"));
         Assert.That(boundary.SequenceObservedAtEvidenceCapture, Is.EqualTo(-1L));
@@ -307,16 +320,16 @@ public sealed class DailyV1RuntimeAdvanceStageTests
         DailyV1ExecutionBoundaryState state = CreateCaptureState();
         FakeBoundary boundary = new FakeBoundary(state);
 
-        (bool advanced, DailyV1RuntimeAdvanceFailureCode failure) result =
+        (bool advanced, SimulationRuntimeAdvanceFailure failure) result =
             await Task.Run(() =>
             {
                 bool advanced = state.TryAdvanceDay(
-                    boundary, out DailyV1RuntimeAdvanceFailureCode failure);
+                    boundary, out SimulationRuntimeAdvanceFailure failure);
                 return (advanced, failure);
             });
 
         Assert.That(result.advanced, Is.False);
-        Assert.That(result.failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted));
+        Assert.That(result.failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(boundary.Calls, Is.EqualTo(new[] { "fault" }));
         Assert.That(state.AdvanceLeaseHeld, Is.False);
     }
@@ -362,9 +375,9 @@ public sealed class DailyV1RuntimeAdvanceStageTests
             return false;
         }
 
-        public bool TryAdvanceDayCore(out DailyV1RuntimeAdvanceFailureCode failure) => Advance("advance", out failure);
+        public bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure) => Advance("advance", out failure);
 
-        public bool TryAdvanceIntradayToNextDayBoundary(out DailyV1RuntimeAdvanceFailureCode failure) =>
+        public bool TryAdvanceIntradayToNextDayBoundary(out SimulationRuntimeAdvanceFailure failure) =>
             Advance("intraday", out failure);
 
         public bool TryCaptureCompletedDailyCaptureEvidence(
@@ -386,15 +399,15 @@ public sealed class DailyV1RuntimeAdvanceStageTests
 
         public void FaultRuntimeAdmission() => Calls.Add("fault");
 
-        private bool Advance(string call, out DailyV1RuntimeAdvanceFailureCode failure)
+        private bool Advance(string call, out SimulationRuntimeAdvanceFailure failure)
         {
             Calls.Add(call);
             if (ThrowDuringAdvance) throw new InvalidOperationException("fixture advance failure");
             int advances = Calls.FindAll(value => value == call).Count;
             failure = FailAdvanceNumber > 0 && advances == FailAdvanceNumber
-                ? DailyV1RuntimeAdvanceFailureCode.TemporalAdvanceFailed
-                : DailyV1RuntimeAdvanceFailureCode.None;
-            return failure == DailyV1RuntimeAdvanceFailureCode.None;
+                ? SimulationRuntimeAdvanceFailure.TemporalAdvanceFailed
+                : SimulationRuntimeAdvanceFailure.None;
+            return failure == SimulationRuntimeAdvanceFailure.None;
         }
     }
 

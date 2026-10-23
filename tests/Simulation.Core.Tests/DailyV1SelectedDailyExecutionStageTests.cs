@@ -363,8 +363,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             state, dailyBoundary);
 
         Assert.That(state.TryAdvanceDay(
-            advanceBoundary, out DailyV1RuntimeAdvanceFailureCode failure), Is.True);
-        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.None));
+            advanceBoundary, out SimulationRuntimeAdvanceFailure failure), Is.True);
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.None));
         Assert.That(advanceBoundary.Calls, Is.EqualTo(new[]
         {
             "operation", "execution-boundary", "capture-evidence"
@@ -492,8 +492,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         };
 
         Assert.That(state.TryAdvanceDay(
-            advanceBoundary, out DailyV1RuntimeAdvanceFailureCode failure), Is.False);
-        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted));
+            advanceBoundary, out SimulationRuntimeAdvanceFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(advanceBoundary.Calls, Does.Contain("fault"));
         Assert.That(advanceBoundary.Calls, Does.Not.Contain("completed"));
         Assert.That(advanceBoundary.Calls, Does.Not.Contain("capture-evidence"));
@@ -1328,14 +1328,14 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             boundary = FailSelectedContext ? null : executionBoundary;
             return !FailSelectedContext;
         }
-        public bool TryAdvanceDayCore(out DailyV1RuntimeAdvanceFailureCode failure)
+        public bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
         {
-            failure = DailyV1RuntimeAdvanceFailureCode.TemporalAdvanceFailed;
+            failure = SimulationRuntimeAdvanceFailure.TemporalAdvanceFailed;
             return false;
         }
-        public bool TryAdvanceIntradayToNextDayBoundary(out DailyV1RuntimeAdvanceFailureCode failure)
+        public bool TryAdvanceIntradayToNextDayBoundary(out SimulationRuntimeAdvanceFailure failure)
         {
-            failure = DailyV1RuntimeAdvanceFailureCode.TemporalAdvanceFailed;
+            failure = SimulationRuntimeAdvanceFailure.TemporalAdvanceFailed;
             return false;
         }
         public bool TryCaptureCompletedDailyCaptureEvidence(

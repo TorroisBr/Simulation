@@ -4,17 +4,6 @@ using System.Linq;
 using System.Threading;
 using UnityEngine;
 
-public enum SimulationRuntimeAdvanceFailure
-{
-    None = 0,
-    RuntimeFaulted = 1,
-    InvalidDayCount = 2,
-    AbsoluteDayOverflow = 3,
-    AdvanceAlreadyInProgress = 4,
-    TemporalAdvanceFailed = 5,
-    CompletedBoundarySequenceOverflow = 6
-}
-
 /// <summary>Stable host-supplied identity used by the bounded P17-A trusted scenario input path.</summary>
 public sealed class P17AScenarioAuthorityCapability
 {
@@ -10890,10 +10879,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
     public bool TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure)
     {
-        bool advanced = dailyExecutionBoundary.TryAdvanceDay(
-            this, out DailyV1RuntimeAdvanceFailureCode coreFailure);
-        failure = (SimulationRuntimeAdvanceFailure)(byte)coreFailure;
-        return advanced;
+        return dailyExecutionBoundary.TryAdvanceDay(this, out failure);
     }
 
     private bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
@@ -10956,15 +10942,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     }
 
     bool IDailyV1RuntimeAdvanceBoundary.TryAdvanceDayCore(
-        out DailyV1RuntimeAdvanceFailureCode failure)
+        out SimulationRuntimeAdvanceFailure failure)
     {
         bool advanced = TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure hostFailure);
-        failure = (DailyV1RuntimeAdvanceFailureCode)(byte)hostFailure;
+        failure = hostFailure;
         return advanced;
     }
 
     bool IDailyV1RuntimeAdvanceBoundary.TryAdvanceIntradayToNextDayBoundary(
-        out DailyV1RuntimeAdvanceFailureCode failure)
+        out SimulationRuntimeAdvanceFailure failure)
     {
         LogicalTick target;
         try
@@ -10973,13 +10959,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         }
         catch (OverflowException)
         {
-            failure = DailyV1RuntimeAdvanceFailureCode.AbsoluteDayOverflow;
+            failure = SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow;
             return false;
         }
 
         bool advanced = TryAdvanceP18DIntradayToCore(
             target, out SimulationRuntimeAdvanceFailure hostFailure);
-        failure = (DailyV1RuntimeAdvanceFailureCode)(byte)hostFailure;
+        failure = hostFailure;
         return advanced;
     }
 
@@ -13864,10 +13850,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         out int daysAdvanced,
         out SimulationRuntimeAdvanceFailure failure)
     {
-        bool advanced = dailyExecutionBoundary.TryAdvanceDays(
-            this, dayCount, out daysAdvanced, out DailyV1RuntimeAdvanceFailureCode coreFailure);
-        failure = (SimulationRuntimeAdvanceFailure)(byte)coreFailure;
-        return advanced;
+        return dailyExecutionBoundary.TryAdvanceDays(this, dayCount, out daysAdvanced, out failure);
     }
 
     private void BeginSimulationDay()
