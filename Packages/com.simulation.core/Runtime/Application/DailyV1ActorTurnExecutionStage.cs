@@ -50,7 +50,6 @@ internal sealed class DailyV1ActorTurnRosterProjection
 /// </summary>
 internal interface IDailyV1ActorTurnExecutionBoundary
 {
-    bool IsInSpatialTransit(DailyV1NpcRuntimeOwners actor, PersonId personId);
     bool IsReservedToday(DailyV1NpcRuntimeOwners actor);
     void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive);
     bool TryProcessActorChoice(DailyV1NpcRuntimeOwners actor, int rosterOrdinal);
@@ -272,7 +271,7 @@ internal static class DailyV1ActorTurnExecutionStage
                 continue;
             }
 
-            if (hasPendingChoice && boundary.IsInSpatialTransit(actor, personId))
+            if (hasPendingChoice && graph.IsPersonInSpatialTransit(personId))
             {
                 TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary);
                 DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,

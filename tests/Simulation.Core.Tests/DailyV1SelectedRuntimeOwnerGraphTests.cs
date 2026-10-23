@@ -2301,7 +2301,6 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
 
         private sealed class NoOpActorTurnBoundary : IDailyV1ActorTurnExecutionBoundary
         {
-            public bool IsInSpatialTransit(DailyV1NpcRuntimeOwners actor, PersonId personId) => false;
             public bool IsReservedToday(DailyV1NpcRuntimeOwners actor) => false;
             public void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive) { }
             public bool TryProcessActorChoice(DailyV1NpcRuntimeOwners actor, int rosterOrdinal) => false;

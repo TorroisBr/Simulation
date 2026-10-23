@@ -294,8 +294,10 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             WorldCommandOrigin.LocalPlayer, WorldCommandAuthorityMode.Request, 4L,
             out ActorChoiceInput input, out ActorChoiceStoreFailureCode captureFailure),
             Is.True, captureFailure.ToString());
+        Assert.That(graph.TryBindPersonStore(people), Is.True);
+        AssertSpatialTransit(graph, people, personId);
         ScheduledDirectiveStore directives = CreatePreparedDirectiveStore(actor, 5L);
-        RecordingBoundary boundary = new RecordingBoundary { IsSpatialTransit = true };
+        RecordingBoundary boundary = new RecordingBoundary();
         IReadOnlyList<DailyV1ActorTurnRosterEntry> roster = new[]
         {
             new DailyV1ActorTurnRosterEntry(0, personId, actor)
@@ -883,6 +885,48 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         return personId;
     }
 
+    private static void AssertSpatialTransit(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore people,
+        PersonId personId)
+    {
+        SpatialAuthorityStore spatial = new SpatialAuthorityStore();
+        HexId from = new HexId("hex.actor-turn.from");
+        HexId to = new HexId("hex.actor-turn.to");
+        HexBoundaryKey boundary = new HexBoundaryKey(from, to);
+        CrossingId crossingId = new CrossingId("crossing.actor-turn.transit");
+        SpatialGeographyDefinition geography = new SpatialGeographyDefinition(
+            new SpatialWorldScaleContext("actor-turn.scale", "test", "v1", 1m, "unit"),
+            new[]
+            {
+                new HexRecord(from, new HexCoordinate(0, 0),
+                    new TerrainReference(new TerrainDefinitionId("terrain.actor-turn"), "v1")),
+                new HexRecord(to, new HexCoordinate(1, 0),
+                    new TerrainReference(new TerrainDefinitionId("terrain.actor-turn"), "v1"))
+            },
+            new[]
+            {
+                new LocationRecord(new LocationId("location.actor-turn.from"), from),
+                new LocationRecord(new LocationId("location.actor-turn.to"), to)
+            });
+        Assert.That(spatial.TryComposeGeography(geography,
+            out SpatialAuthorityFailure geographyFailure), Is.True, geographyFailure?.ToString());
+        Assert.That(spatial.TryRegisterCrossing(new CrossingRecord(
+            crossingId, boundary, from, "actor-turn-crossing", "v1", null),
+            out SpatialAuthorityFailure crossingFailure), Is.True, crossingFailure?.ToString());
+
+        PersonSpatialPositionStore positions = new PersonSpatialPositionStore(
+            people, spatial, new SpatialPassageTraversalOptionResolver(spatial.PassageAuthority));
+        Assert.That(positions.TrySetAt(personId, StablePositionReference.ForHex(from),
+            out PersonSpatialPositionFailure positionFailure), Is.True, positionFailure?.ToString());
+        Assert.That(positions.TryBeginTransit(personId, TraversalOptionRef.ForCrossing(crossingId),
+            boundary, from, to, out PersonSpatialPositionFailure transitFailure),
+            Is.True, transitFailure?.ToString());
+        Assert.That(graph.TryBindPersonSpatialPositionStore(positions), Is.True,
+            "The Core owner graph must read the position owner tied to its exact PersonStore.");
+        Assert.That(graph.IsPersonInSpatialTransit(personId), Is.True);
+    }
+
     private static ScheduledDirectiveStore CreatePreparedDirectiveStore(
         DailyV1NpcRuntimeOwners actor,
         long absoluteDay)
@@ -904,9 +948,6 @@ public sealed class DailyV1ActorTurnExecutionStageTests
     private class RecordingBoundary : IDailyV1ActorTurnExecutionBoundary
     {
         internal readonly List<string> Events = new List<string>();
-        internal bool IsSpatialTransit;
-
-        public bool IsInSpatialTransit(DailyV1NpcRuntimeOwners actor, PersonId personId) => IsSpatialTransit;
         public bool IsReservedToday(DailyV1NpcRuntimeOwners actor) => false;
         public void EvaluateStatus(DailyV1NpcRuntimeOwners actor) => Events.Add("status:" + actor.RuntimeId);
         public void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive) =>
@@ -1311,7 +1352,6 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             return CurrentGraph.TryCommitCurrentActionSlot(actor, action, payload, () => true);
         }
 
-        public bool IsInSpatialTransit(DailyV1NpcRuntimeOwners actor, PersonId personId) => false;
         public bool IsReservedToday(DailyV1NpcRuntimeOwners actor)
         {
             Events.Add("reserved-query");

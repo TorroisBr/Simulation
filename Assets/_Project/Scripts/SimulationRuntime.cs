@@ -11532,12 +11532,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             this.runtimeByOwner = runtimeByOwner ?? throw new ArgumentNullException(nameof(runtimeByOwner));
         }
 
-        public bool IsInSpatialTransit(DailyV1NpcRuntimeOwners actor, PersonId personId)
-        {
-            return ReferenceEquals(runtime.SelectedRuntimeOwnerGraph, graph)
-                && graph.IsPersonInSpatialTransit(personId);
-        }
-
         public bool IsReservedToday(DailyV1NpcRuntimeOwners actor)
         {
             RequireExactActor(actor);

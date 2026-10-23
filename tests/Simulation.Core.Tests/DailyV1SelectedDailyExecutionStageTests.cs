@@ -1080,7 +1080,6 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             private readonly FakeBoundary owner;
             internal FakeActorTurnBoundary(FakeBoundary owner) => this.owner = owner;
-            public bool IsInSpatialTransit(DailyV1NpcRuntimeOwners actor, PersonId personId) => false;
             public bool IsReservedToday(DailyV1NpcRuntimeOwners actor) => false;
             public void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive) =>
                 owner.Calls.Add("directive");
