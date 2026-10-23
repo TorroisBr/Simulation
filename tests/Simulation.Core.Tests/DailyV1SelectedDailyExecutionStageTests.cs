@@ -20,7 +20,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
 
         List<string> expectedCalls = new List<string>
         {
-            "logger:23", "demography", "begin-day",
+            "logger:23", "begin-day",
             "economy-preflight", "knowledge-preflight", "actor-context"
         };
         foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
@@ -189,7 +189,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         DailyV1SelectedDailyExecutionStage.Advance(0L, graph, null, boundary);
 
         Assert.That(boundary.Calls, Does.Not.Contain("economy-preflight"));
-        Assert.That(boundary.Calls[3], Is.EqualTo("knowledge-preflight"));
+        Assert.That(boundary.Calls.IndexOf("knowledge-preflight"), Is.EqualTo(
+            boundary.Calls.IndexOf("begin-day") + 1),
+            "The selected local-knowledge stage remains immediately after day start when Economy is disabled.");
         int actorContext = boundary.Calls.IndexOf("actor-context");
         int merchantPass = boundary.Calls.FindIndex(call =>
             call.StartsWith("actor-merchant:", StringComparison.Ordinal));
@@ -210,8 +212,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             ThrowOnDemography = true
         };
-        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
-            DailyV1CapturedSelectedContentFixture.CreateDefinitions());
+        DailyV1EffectiveDefinitions definitions = CopyWithNaturalMortalityEnabled(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(), true);
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(definitions);
 
         Assert.Throws<InvalidOperationException>(() =>
             DailyV1SelectedDailyExecutionStage.Advance(
@@ -221,6 +224,63 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             "logger:9", "demography"
         }));
+    }
+
+    [Test]
+    public void AdvanceStopsAtDayStartFailureAfterDisabledDemography()
+    {
+        FakeBoundary boundary = new FakeBoundary { ThrowOnBeginDay = true };
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions());
+
+        Assert.Throws<InvalidOperationException>(() =>
+            DailyV1SelectedDailyExecutionStage.Advance(
+                9L, graph, null, boundary));
+
+        Assert.That(boundary.Calls, Is.EqualTo(new[]
+        {
+            "logger:9", "begin-day"
+        }));
+        Assert.That(boundary.PublishedDemographyResult.AbsoluteDay, Is.EqualTo(9L));
+    }
+
+    [Test]
+    public void AdvanceDoesNotRequestDisabledDemographyWriterFromTheHost()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(definitions.EffectiveConfiguration.NaturalMortality.Enabled, Is.False);
+        Assert.That(definitions.EffectiveConfiguration.AggregateDemography.Enabled, Is.False);
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(definitions);
+        FakeBoundary boundary = new FakeBoundary { ThrowOnDemography = true };
+
+        Assert.DoesNotThrow(() => DailyV1SelectedDailyExecutionStage.Advance(
+            23L, graph, null, boundary));
+
+        Assert.That(boundary.Calls, Does.Not.Contain("demography"),
+            "The exact admitted profile has no demographic writer or resident-floor operation to perform.");
+        Assert.That(boundary.Calls[0], Is.EqualTo("logger:23"));
+        Assert.That(boundary.Calls, Does.Contain("actor-context"));
+        Assert.That(boundary.Calls, Does.Contain("travel-context"));
+        Assert.That(boundary.PublishedDemographyResult.AbsoluteDay, Is.EqualTo(23L));
+        Assert.That(boundary.PublishedDemographyResult.NamedDeathsApplied, Is.Zero);
+        Assert.That(boundary.PublishedDemographyResult.AggregateBirthsApplied, Is.Zero);
+    }
+
+    [Test]
+    public void AdvanceRequestsDemographyContextWhenNaturalMortalityIsEnabled()
+    {
+        DailyV1EffectiveDefinitions definitions = CopyWithNaturalMortalityEnabled(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(), true);
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(definitions);
+        FakeBoundary boundary = new FakeBoundary();
+
+        DailyV1SelectedDailyExecutionStage.Advance(23L, graph, null, boundary);
+
+        Assert.That(boundary.Calls, Does.Contain("demography"),
+            "An enabled policy still uses the established host writer context.");
+        Assert.That(boundary.PublishedDemographyResult.AbsoluteDay, Is.EqualTo(23L));
+        Assert.That(boundary.PublishedDemographyResult.NamedPersonsEvaluated, Is.Zero,
+            "The empty fixture requests the enabled-policy boundary without inventing Persons.");
     }
 
     [Test]
@@ -384,6 +444,45 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             definitions.ExplorableSites.Values);
     }
 
+    private static DailyV1EffectiveDefinitions CopyWithNaturalMortalityEnabled(
+        DailyV1EffectiveDefinitions definitions,
+        bool enabled)
+    {
+        EffectiveSimulationConfiguration current = definitions.EffectiveConfiguration;
+        EffectiveSimulationConfiguration configuration = new EffectiveSimulationConfiguration(
+            current.Population,
+            current.Economy,
+            current.Travel,
+            current.Crime,
+            current.GuardCrime,
+            new EffectiveNaturalMortalityConfiguration(enabled, 0d),
+            current.AggregateDemography,
+            current.MerchantTrade,
+            current.CommercialKnowledge);
+        return new DailyV1EffectiveDefinitions(
+            definitions.Configuration,
+            configuration,
+            definitions.Calendar,
+            null,
+            definitions.Cities.Values,
+            definitions.Items.Values,
+            definitions.Npcs.Values,
+            definitions.Jobs.Values,
+            definitions.Actions.Values,
+            definitions.Statuses.Values,
+            null,
+            definitions.StageOrder,
+            definitions.ProfileContractIdentity,
+            definitions.GeographyProfileContractIdentity,
+            definitions.GeographyStageIdentity,
+            definitions.HexCoordinateConvention,
+            definitions.HexCoordinateCanonicalOrder,
+            null,
+            definitions.Traits.Values,
+            definitions.CapabilityAttributes.Values,
+            definitions.ExplorableSites.Values);
+    }
+
     private static DailyV1EffectiveDefinitions CopyWithMerchantTradeEnabled(
         DailyV1EffectiveDefinitions definitions,
         bool enabled)
@@ -464,7 +563,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal List<string> Calls { get; } = new List<string>();
         internal List<DailyV1SelectedCrimeJusticeDailyPhase> DayStartPhases { get; } =
             new List<DailyV1SelectedCrimeJusticeDailyPhase>();
+        internal DailyV1SelectedDemographyResult PublishedDemographyResult { get; private set; }
         internal bool ThrowOnDemography { get; set; }
+        internal bool ThrowOnBeginDay { get; set; }
         internal bool SubstituteActorPersonStore { get; set; }
         internal bool UseSelectedDayStartContext { get; set; }
         internal bool CrimeSystemPresent { get; set; }
@@ -480,6 +581,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             context = new FakeDemographyContext(graph);
             return true;
         }
+        public void PublishSelectedDemographyResult(DailyV1SelectedDemographyResult result)
+        {
+            PublishedDemographyResult = result ?? throw new ArgumentNullException(nameof(result));
+        }
         public bool TryCreateSelectedDayStartContext(
             DailyV1SelectedRuntimeOwnerGraph graph,
             out IDailyV1SelectedDayStartExecutionContext context)
@@ -493,7 +598,11 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             context = new FakeDayStartContext(this, graph);
             return true;
         }
-        public void BeginSimulationDay() => Calls.Add("begin-day");
+        public void BeginSimulationDay()
+        {
+            Calls.Add("begin-day");
+            if (ThrowOnBeginDay) throw new InvalidOperationException("day start failed");
+        }
         public void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph)
         {
             Assert.That(graph, Is.Not.Null);
@@ -554,7 +663,6 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public IPersonNaturalMortalitySampleProvider MortalitySamples => null;
             public IAggregateDemographyProvider AggregateProvider => null;
             public IDailyV1SelectedDemographyBoundary Boundary { get; }
-            public void PublishResult(DailyV1SelectedDemographyResult result) { }
         }
 
         private sealed class FakeDemographyBoundary : IDailyV1SelectedDemographyBoundary

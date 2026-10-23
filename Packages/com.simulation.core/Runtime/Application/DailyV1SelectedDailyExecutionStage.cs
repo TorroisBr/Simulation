@@ -16,6 +16,7 @@ internal interface IDailyV1SelectedDailyExecutionBoundary
     bool TryCreateSelectedDemographyContext(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedDemographyExecutionContext context);
+    void PublishSelectedDemographyResult(DailyV1SelectedDemographyResult result);
     bool TryCreateSelectedDayStartContext(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedDayStartExecutionContext context);
@@ -56,7 +57,6 @@ internal interface IDailyV1SelectedDemographyExecutionContext
     IPersonNaturalMortalitySampleProvider MortalitySamples { get; }
     IAggregateDemographyProvider AggregateProvider { get; }
     IDailyV1SelectedDemographyBoundary Boundary { get; }
-    void PublishResult(DailyV1SelectedDemographyResult result);
 }
 
 /// <summary>
@@ -111,30 +111,47 @@ internal static class DailyV1SelectedDailyExecutionStage
                 "The selected Daily-v1 stage requires the exact directive store bound to its Core owner graph.");
 
         boundary.BeginLoggerDay(absoluteDay);
-        if (!boundary.TryCreateSelectedDemographyContext(
-                graph, out IDailyV1SelectedDemographyExecutionContext demographyContext)
-            || demographyContext == null
-            || demographyContext.PersonStore == null
-            || !ReferenceEquals(graph.PersonStore, demographyContext.PersonStore)
-            || demographyContext.Calendar == null
-            || demographyContext.Boundary == null
-            || graph.Definitions?.EffectiveConfiguration == null)
-            throw new InvalidOperationException(
-                "The selected Daily-v1 host could not provide the exact demographic owners and writer boundary.");
-
         EffectiveSimulationConfiguration selectedConfiguration =
-            graph.Definitions.EffectiveConfiguration;
-        DailyV1SelectedDemographyResult demographyResult = DailyV1SelectedDemographyStage.Advance(
-            graph,
-            demographyContext.PersonStore,
-            absoluteDay,
-            demographyContext.Calendar,
-            selectedConfiguration.NaturalMortality,
-            selectedConfiguration.AggregateDemography,
-            demographyContext.MortalitySamples,
-            demographyContext.AggregateProvider,
-            demographyContext.Boundary);
-        demographyContext.PublishResult(demographyResult);
+            graph.Definitions?.EffectiveConfiguration;
+        if (selectedConfiguration == null)
+            throw new InvalidOperationException(
+                "The selected Daily-v1 graph has no admitted effective configuration.");
+
+        // The accepted Daily-v1 proving profile disables both demographic
+        // writers. In that profile the shared Core stage must not require a
+        // Unity person-death writer or represented-resident projection simply
+        // to perform an empty phase. Enabled demographic policies continue
+        // through the exact existing owner/admission boundary below.
+        DailyV1SelectedDemographyResult demographyResult;
+        if (selectedConfiguration.NaturalMortality.Enabled
+            || selectedConfiguration.AggregateDemography.Enabled)
+        {
+            if (!boundary.TryCreateSelectedDemographyContext(
+                    graph, out IDailyV1SelectedDemographyExecutionContext demographyContext)
+                || demographyContext == null
+                || demographyContext.PersonStore == null
+                || !ReferenceEquals(graph.PersonStore, demographyContext.PersonStore)
+                || demographyContext.Calendar == null
+                || demographyContext.Boundary == null)
+                throw new InvalidOperationException(
+                    "The selected Daily-v1 host could not provide the exact demographic owners and writer boundary.");
+
+            demographyResult = DailyV1SelectedDemographyStage.Advance(
+                graph,
+                demographyContext.PersonStore,
+                absoluteDay,
+                demographyContext.Calendar,
+                selectedConfiguration.NaturalMortality,
+                selectedConfiguration.AggregateDemography,
+                demographyContext.MortalitySamples,
+                demographyContext.AggregateProvider,
+                demographyContext.Boundary);
+        }
+        else
+        {
+            demographyResult = new DailyV1SelectedDemographyResult(absoluteDay);
+        }
+        boundary.PublishSelectedDemographyResult(demographyResult);
         if (boundary.TryCreateSelectedDayStartContext(
                 graph, out IDailyV1SelectedDayStartExecutionContext dayStartContext))
         {

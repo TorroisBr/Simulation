@@ -2168,16 +2168,10 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             DailyV1SelectedRuntimeOwnerGraph graph,
             out IDailyV1SelectedDemographyExecutionContext context)
         {
-            order.Add("demography");
-            DailyV1CalendarDefinition definition = graph.Definitions.Calendar;
-            SimulationCalendar calendar = definition.monthLengths != null && definition.monthLengths.Count > 0
-                ? new SimulationCalendar(new CalendarDefinition(
-                    new List<int>(definition.monthLengths), definition.daysPerWeek))
-                : new SimulationCalendar(new CalendarDefinition(
-                    definition.monthsPerYear, definition.weeksPerMonth, definition.daysPerWeek));
-            context = new RecordingDemographyContext(graph.PersonStore, calendar, graph.Cities);
-            return true;
+            context = null;
+            return false;
         }
+        public void PublishSelectedDemographyResult(DailyV1SelectedDemographyResult result) { }
         public bool TryCreateSelectedDayStartContext(
             DailyV1SelectedRuntimeOwnerGraph graph,
             out IDailyV1SelectedDayStartExecutionContext context)
@@ -2233,47 +2227,6 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             public PersonStore PersonStore { get; }
             public ActorChoiceStore ActorChoiceStore { get; }
             public IDailyV1ActorTurnExecutionBoundary Boundary { get; }
-        }
-
-        private sealed class RecordingDemographyContext : IDailyV1SelectedDemographyExecutionContext
-        {
-            internal RecordingDemographyContext(
-                PersonStore personStore,
-                SimulationCalendar calendar,
-                IReadOnlyList<DailyV1CityRuntimeOwners> cities)
-            {
-                PersonStore = personStore;
-                Calendar = calendar;
-                Boundary = new NoOpDemographyBoundary(cities);
-            }
-
-            public PersonStore PersonStore { get; }
-            public SimulationCalendar Calendar { get; }
-            public IPersonNaturalMortalitySampleProvider MortalitySamples => null;
-            public IAggregateDemographyProvider AggregateProvider => null;
-            public IDailyV1SelectedDemographyBoundary Boundary { get; }
-            public void PublishResult(DailyV1SelectedDemographyResult result) { }
-        }
-
-        private sealed class NoOpDemographyBoundary : IDailyV1SelectedDemographyBoundary
-        {
-            private readonly IReadOnlyDictionary<string, int> floors;
-
-            internal NoOpDemographyBoundary(IReadOnlyList<DailyV1CityRuntimeOwners> cities)
-            {
-                Dictionary<string, int> values = new Dictionary<string, int>(StringComparer.Ordinal);
-                foreach (DailyV1CityRuntimeOwners city in cities)
-                    values[city.RuntimeId] = city.Population.CurrentPopulation;
-                floors = values;
-            }
-
-            public bool TryApplyPersonDeath(PersonId personId, out string failure)
-            {
-                failure = "No mortality is expected in this fixture.";
-                return false;
-            }
-
-            public IReadOnlyDictionary<string, int> BuildRepresentedResidentFloors() => floors;
         }
 
         private sealed class NoOpActorTurnBoundary : IDailyV1ActorTurnExecutionBoundary

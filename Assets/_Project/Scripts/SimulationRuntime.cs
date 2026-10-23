@@ -10771,6 +10771,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return true;
         }
 
+        public void PublishSelectedDemographyResult(DailyV1SelectedDemographyResult result)
+        {
+            runtime.lastDailyDemographyReport = DailyDemographicSystem.CreateSelectedDemographyReport(result);
+        }
+
         public bool TryCreateSelectedDayStartContext(
             DailyV1SelectedRuntimeOwnerGraph graph,
             out IDailyV1SelectedDayStartExecutionContext context) =>
@@ -10813,10 +10818,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         public IAggregateDemographyProvider AggregateProvider => runtime.aggregateDemographyProvider;
         public IDailyV1SelectedDemographyBoundary Boundary { get; }
 
-        public void PublishResult(DailyV1SelectedDemographyResult result)
-        {
-            runtime.lastDailyDemographyReport = DailyDemographicSystem.CreateSelectedDemographyReport(result);
-        }
     }
 
     private void StartAutonomousExpeditions()
