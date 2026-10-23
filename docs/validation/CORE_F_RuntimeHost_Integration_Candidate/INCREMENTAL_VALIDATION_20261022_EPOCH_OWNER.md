@@ -85,3 +85,27 @@ record changes.
 This change does not implement the shared application/session, move P12
 capture or detached restoration, add an executable .NET host, or establish
 T/T+1/T+2 parity. The complete CORE-F integration remains open and unpromoted.
+
+## Exact-tip review correction — 2026-10-22
+
+The independent review of candidate `e1c6c57ee5c1ae54531ef4148b9bab6d0c226fa9`
+verified the referenced Core and Unity evidence, and identified a containment
+gap in the CoreValidation source-identity helper: lexical path containment did
+not reject an in-repository junction or symbolic link that targets an external
+source. The reviewed 337-input run contained no reparse-point paths, so its
+result remains valid for that exact input set.
+
+Candidate `6a7b80fdf3be70673af61e72a7916bdfd67681c1` now fails closed when the
+repository root or any path component below it is a filesystem reparse point.
+The CoreValidation self-test creates a temporary in-root junction to an
+external source and asserts rejection. The normal CoreValidation runner passed
+cold and warm **640/640** on this exact commit. Its protected manifest SHA-256
+is `353d562300b895b88b91f3ea2c5a9701218c5d1a0c7d00125a104255515cc94b`; the
+stable 337-input digest is
+`a5280ddc791c5cfa2c4f9f57df38b998ae27f16dd42a66d6e224a98a6148d5be`. The
+private cold and warm report hashes are `39c682a37449a0c3555a14cd79f8176a64e249736d340ba58b0b51e43f41f072`
+and `b4974558fb14460bc8022473268aaa56310d31e76c9fdf118a4672512666d435`.
+The evidence directory ACL check passed. The Unity Library was present during
+this .NET run; no Library-independent execution claim is made. Unity code and
+test inputs were unchanged from the exact-source Unity run recorded above, so
+this runner-only correction did not require a Unity rerun.
