@@ -26,6 +26,69 @@ public sealed class DailyV1ApplicationSessionGateTests
             new WorldId(Guid.NewGuid())));
     }
 
+    private static DailyV1GenesisComposition CreateSelectedGenesisComposition()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+        return composition;
+    }
+
+    [Test]
+    public void ActiveSessionRetainsExactAdmittedGenesisOwnerAndExecutionRoots()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesisComposition();
+        DailyV1SessionReportState reportState = new DailyV1SessionReportState(
+            composition.SimulationTime.AbsoluteDay);
+
+        Assert.That(DailyV1ActiveSession.TryCreate(
+            composition, reportState, out DailyV1ActiveSession session, out string diagnostic),
+            Is.True, diagnostic);
+        Assert.That(session.Composition, Is.SameAs(composition));
+        Assert.That(session.Definitions, Is.SameAs(composition.Definitions));
+        Assert.That(session.OwnerGraph, Is.SameAs(composition.OwnerGraph));
+        Assert.That(session.ExecutionState, Is.SameAs(composition.ExecutionBoundaryState));
+        Assert.That(session.ReportState, Is.SameAs(reportState));
+        Assert.That(session.ExecutionState.HasExactSelectedRuntimeExecutionRoots(
+            session.OwnerGraph,
+            composition.PersonStore,
+            composition.ActorChoiceStore,
+            composition.RandomSource,
+            composition.RuntimeIdAllocator,
+            composition.RecordSequence,
+            composition.DecisionStore), Is.True);
+
+        reportState.MarkEconomySnapshotDay(4);
+        Assert.That(session.ReportState.LastEconomySnapshotDay, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void ActiveSessionCreationRequiresTheCapturedOwnerThread()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesisComposition();
+        DailyV1ActiveSession createdOffThread = null;
+        string diagnostic = null;
+        bool succeededOffThread = true;
+        Thread caller = new Thread(() =>
+        {
+            succeededOffThread = DailyV1ActiveSession.TryCreate(
+                composition,
+                new DailyV1SessionReportState(composition.SimulationTime.AbsoluteDay),
+                out createdOffThread,
+                out diagnostic);
+        });
+
+        caller.Start();
+        caller.Join();
+
+        Assert.That(succeededOffThread, Is.False);
+        Assert.That(createdOffThread, Is.Null);
+        Assert.That(diagnostic, Does.Contain("owner thread"));
+    }
+
     [Test]
     public void InitialPublicationIsSingleAndCannotReplaceAnExistingSession()
     {
