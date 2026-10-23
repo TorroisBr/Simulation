@@ -145,6 +145,107 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void ProjectionIndependentNormalActionDoesNotLogStaleUnityTarget()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+
+        GameObject hostObject = new GameObject("P12 projection-independent Normal action logging");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
+        NpcRuntime actor = null;
+        NpcRuntime target = null;
+        DailyV1ActionDefinition normalAction = null;
+        DailyV1NpcActionPayloadOwner payload = null;
+
+        foreach (NpcRuntime candidate in runtime.NpcRuntimes)
+        {
+            if (candidate?.SelectedRuntimeOwners == null
+                || candidate.SelectedRuntimeOwnerGraph == null)
+                continue;
+
+            foreach (NpcActionData actionAsset in config.Actions.Where(value =>
+                         value != null && value.actionType == NpcActionType.Normal))
+            {
+                if (!candidate.TryGetSelectedDailyV1ActionNode(
+                        actionAsset, out DailyV1ActionDefinition actionNode)
+                    || !DailyV1NpcActionPayloadOwner.TryCreate(
+                        candidate.SelectedDailyV1DefinitionGraph,
+                        actionNode,
+                        null,
+                        null,
+                        null,
+                        0,
+                        0f,
+                        1f,
+                        NpcTravelReason.None,
+                        0f,
+                        "stale-projection-normal-action",
+                        null,
+                        null,
+                        null,
+                        out DailyV1NpcActionPayloadOwner candidatePayload))
+                    continue;
+
+                actor = candidate;
+                normalAction = actionNode;
+                payload = candidatePayload;
+                break;
+            }
+
+            if (actor != null) break;
+        }
+
+        Assert.That(actor, Is.Not.Null,
+            "The admitted Daily-v1 fixture must provide a selected actor for the Normal action regression.");
+        Assert.That(normalAction, Is.Not.Null);
+        Assert.That(payload, Is.Not.Null);
+        target = runtime.NpcRuntimes.FirstOrDefault(candidate =>
+            candidate != null && !ReferenceEquals(candidate, actor));
+        Assert.That(target, Is.Not.Null,
+            "The stale Unity projection must reference a distinct target runtime.");
+
+        Assert.That(actor.SelectedRuntimeOwnerGraph.TryCommitCurrentActionSlot(
+            actor.SelectedRuntimeOwners, normalAction, payload, () => true), Is.True);
+        Assert.That(actor.SelectedRuntimeOwners.ActionSlot.CurrentAction,
+            Is.SameAs(normalAction));
+        Assert.That(DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
+            actor.SelectedRuntimeOwnerGraph, actor.SelectedRuntimeOwners, normalAction), Is.True);
+
+        NpcActionData staleActionAsset = config.Actions.First(value =>
+            value != null && value.actionType != NpcActionType.Normal);
+        NpcActionRuntime staleProjection = new NpcActionRuntime(staleActionAsset, target);
+        WritePrivateField(actor, "currentActionRuntime", staleProjection);
+        WritePrivateField(actor, "currentAction", staleActionAsset);
+
+        List<string> output = new List<string>();
+        SimulationLogger logger = new SimulationLogger(
+            new SimulationLogSettings(), Path.GetTempPath(), (_, message) => output.Add(message));
+        WritePrivateField(runtime, "logger", logger);
+
+        MethodInfo execute = typeof(SimulationRuntime).GetMethod(
+            "TryExecuteSelectedCurrentAction", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(execute, Is.Not.Null);
+        NpcActionResult result = (NpcActionResult)execute.Invoke(runtime, new object[] { actor });
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Success, Is.True,
+            "The action must execute from the exact Core slot despite the stale Unity projection.");
+        Assert.That(actor.SelectedRuntimeOwners.ActionSlot.CurrentAction,
+            Is.SameAs(normalAction));
+        Assert.That(output.Any(message => message.Contains("escolheu")
+            && message.Contains(target.NpcName)), Is.False,
+            "A stale Unity action projection must not contribute target text to the Core action log.");
+    }
+
+    [Test]
     public void PartialPlannedNpcTradeDispatchFaultsP12Admission()
     {
         EconomyTransactionService transactionService = new EconomyTransactionService();

@@ -12068,6 +12068,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor)
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
+                    graph, actor, actor.ActionSlot?.CurrentAction)
+                && !HasExactCurrentActionProjection(actor))
+            {
+                // A selected Normal action can execute from its exact Core
+                // slot without a Unity action projection. Never let a stale
+                // projection contribute target text to that Core-owned turn.
+                return;
+            }
+
             runtime.LogChosenTargetAction(
                 exactRuntime, exactRuntime.CurrentActionRuntime);
         }
