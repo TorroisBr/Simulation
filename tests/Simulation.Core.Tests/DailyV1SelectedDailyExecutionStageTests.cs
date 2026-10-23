@@ -535,7 +535,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             DailyV1CapturedSelectedContentFixture.CreateDefinitions(),
             SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
             out DailyV1GenesisComposition composition, out string diagnostic), Is.True, diagnostic);
-        Assert.That(composition.ExecutionBoundaryState.TryBindSelectedRuntimeActorRoster(
+        Assert.That(composition.ExecutionBoundaryState.TryBindOrValidateSelectedRuntimeActorRoster(
             composition.OwnerGraph.Npcs.Select(owner =>
                 new DailyV1ActorTurnRosterProjection(owner.RuntimeId, null))), Is.True);
         return composition;
