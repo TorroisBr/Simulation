@@ -10921,7 +10921,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     bool IDailyV1RuntimeAdvanceBoundary.TryCreateSelectedDailyExecutionBoundary(
         out IDailyV1SelectedDailyExecutionBoundary executionBoundary)
     {
-        activeDailyGameplayExecutionProbeForTest?.RecordAdvanceDayAfterClockAdvanceInvocation();
         DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
         executionBoundary = graph == null || graph.Definitions == null
             ? null
@@ -11039,7 +11038,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         }
 
-        public void BeginLoggerDay(long absoluteDay) => runtime.logger?.BeginDay(absoluteDay);
+        public void BeginLoggerDay(long absoluteDay)
+        {
+            activeDailyGameplayExecutionProbeForTest?.RecordAdvanceDayAfterClockAdvanceInvocation();
+            runtime.logger?.BeginDay(absoluteDay);
+        }
 
         public bool TryCreateSelectedDemographyContext(
             DailyV1SelectedRuntimeOwnerGraph graph,

@@ -75,6 +75,35 @@ public sealed class DailyV1RuntimeAdvanceStageTests
     }
 
     [Test]
+    public void SelectedBoundaryConstructionFailureDoesNotAdvanceAdmittedClock()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        FakeBoundary boundary = new FakeBoundary(state);
+
+        Assert.That(state.TryAdvanceDay(boundary, out DailyV1RuntimeAdvanceFailureCode failure), Is.False);
+        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted));
+        Assert.That(composition.SimulationTime.AbsoluteDay, Is.Zero,
+            "A rejected selected-stage adapter must be discovered before the Core clock mutates.");
+        Assert.That(state.CompletedCoreSequence, Is.Zero);
+        Assert.That(state.CurrentCaptureToken, Is.Null);
+        Assert.That(state.AdvanceLeaseHeld, Is.False);
+        Assert.That(state.ActiveOperationCount, Is.Zero);
+        Assert.That(boundary.Calls, Is.EqualTo(new[]
+        {
+            "operation", "execution-boundary", "fault", "operation-end"
+        }));
+        Assert.That(boundary.Calls, Does.Not.Contain("advance"));
+        Assert.That(boundary.Calls, Does.Not.Contain("capture-evidence"));
+    }
+
+    [Test]
     public void DailyCaptureAdvanceReadsCoreOwnedMutationGuardBeforeHostWork()
     {
         DailyV1ExecutionBoundaryState state = CreateCaptureState();

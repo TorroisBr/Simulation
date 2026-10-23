@@ -23,6 +23,11 @@ internal interface IDailyV1RuntimeAdvanceBoundary
     DailyV1ExecutionBoundaryState ExecutionState { get; }
     bool HasIntradayTimeline { get; }
     bool TryEnterDailyAdvanceOperation(out IDisposable operationScope);
+    /// <summary>
+    /// Builds and validates the exact selected stage adapters without mutating
+    /// runtime state. Core calls this before advancing the admitted clock so a
+    /// missing adapter cannot leave a rejected advance at a later day.
+    /// </summary>
     bool TryCreateSelectedDailyExecutionBoundary(
         out IDailyV1SelectedDailyExecutionBoundary executionBoundary);
     bool TryAdvanceDayCore(out DailyV1RuntimeAdvanceFailureCode failure);
@@ -335,12 +340,6 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 failure = DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted;
                 return false;
             }
-            if (!SimulationTimeOwnerBridge.TryAdvanceDayFromRuntime(
-                    clock, out SimulationTimeAdvanceFailure timeFailure))
-            {
-                failure = MapClockFailure(timeFailure);
-                return false;
-            }
             DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
             if (!boundary.TryCreateSelectedDailyExecutionBoundary(
                     out IDailyV1SelectedDailyExecutionBoundary executionBoundary)
@@ -350,6 +349,12 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             {
                 failure = DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted;
                 boundary.FaultRuntimeAdmission();
+                return false;
+            }
+            if (!SimulationTimeOwnerBridge.TryAdvanceDayFromRuntime(
+                    clock, out SimulationTimeAdvanceFailure timeFailure))
+            {
+                failure = MapClockFailure(timeFailure);
                 return false;
             }
 
