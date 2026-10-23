@@ -1977,11 +1977,13 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         DailyV1SelectedRuntimeOwnerGraphBuilder builder =
             new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
         RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        TravelPartyStore store = new TravelPartyStore();
         Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
         Assert.That(builder.TryCreateConfiguredNpcs(
             allocator,
             cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
-        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        Assert.That(builder.TryBuild(null, store,
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
         Assert.That(graph.Npcs.Count, Is.GreaterThanOrEqualTo(2));
 
         DailyV1NpcRuntimeOwners partyMember = graph.Npcs[0];
@@ -2001,7 +2003,6 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             "ordered-party-1", partyOrigin.LocationRuntimeId, partyDestination.LocationRuntimeId,
             "ordered-party-route", new[] { partyMember.RuntimeId }, Array.Empty<string>(), 1,
             "ordered-party", new[] { new TravelPartyMemberCost(partyMember.RuntimeId, 1f) });
-        TravelPartyStore store = new TravelPartyStore();
         Assert.That(store.Add(party), Is.True);
         Assert.That(DailyV1SelectedTravelTransitionPlan.TrySetActiveTravelParty(
             partyMember, party.TravelPartyId, out DailyV1SelectedTravelTransitionPlan setParty), Is.True);
@@ -2030,7 +2031,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         long partyTravelRevisionBefore = partyMember.Travel.Revision;
         long soloTravelRevisionBefore = solo.Travel.Revision;
         RecordingTravelExecutionContext context = new RecordingTravelExecutionContext(
-            order, store, new[] { partyMember.RuntimeId }, boundary, advanceSoloTravel: true);
+            order, boundary, advanceSoloTravel: true);
         RecordingDailyExecutionBoundary dailyBoundary = new RecordingDailyExecutionBoundary(
             order, context, graph, partyMember, solo);
         Assert.That(graph.TryBindPersonStore(new PersonStore()), Is.True);
@@ -2196,7 +2197,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             SoloSpatialKnowledgeRevisionBeforeTravel = solo.SpatialKnowledge.Revision;
             PartyKnewDestinationBeforeTravel = partyMember.SpatialKnowledge.KnownLocationRuntimeIds
                 .Contains(partyMember.Travel.DestinationLocationRuntimeId);
-            PartyStoreRevisionBeforeTravel = travelContext.PartyStore.Revision;
+            PartyStoreRevisionBeforeTravel = graph.TravelParties.Revision;
             foreach (DailyV1CityRuntimeOwners city in graph.Cities)
                 CityPresenceRevisionsBeforeTravel.Add(city.RuntimeId, city.NpcPresence.Revision);
             order.Add("actor-context");
@@ -2212,8 +2213,10 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         }
 
         public bool TryCreateSelectedTravelDayContext(
+            DailyV1SelectedRuntimeOwnerGraph graph,
             out IDailyV1SelectedTravelDayExecutionContext context)
         {
+            Assert.That(graph, Is.SameAs(this.graph));
             order.Add("travel-context");
             context = travelContext;
             return true;
@@ -2251,8 +2254,6 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         : IDailyV1SelectedTravelDayExecutionContext
     {
         private readonly List<string> order;
-        private readonly TravelPartyStore partyStore;
-        private readonly IReadOnlyCollection<string> managedPartyMembers;
         private readonly RecordingTravelStageBoundary boundary;
 
         internal int PartyOperationCount { get; private set; }
@@ -2261,20 +2262,14 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
 
         internal RecordingTravelExecutionContext(
             List<string> order,
-            TravelPartyStore partyStore,
-            IReadOnlyCollection<string> managedPartyMembers,
             RecordingTravelStageBoundary boundary,
             bool advanceSoloTravel)
         {
             this.order = order;
-            this.partyStore = partyStore;
-            this.managedPartyMembers = managedPartyMembers;
             this.boundary = boundary;
             AdvanceSoloTravel = advanceSoloTravel;
         }
 
-        public TravelPartyStore PartyStore => partyStore;
-        public IReadOnlyCollection<string> ManagedTravelPartyNpcRuntimeIds => managedPartyMembers;
         public IDailyV1SelectedTravelDayBoundary Boundary => boundary;
         public bool AdvanceSoloTravel { get; }
 

@@ -4,6 +4,27 @@ using System.Collections.Generic;
 public sealed partial class SimulationRuntime
 {
     private bool TryCreateSelectedTravelDayExecutionContext(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedTravelDayExecutionContext context)
+    {
+        if (graph == null || !ReferenceEquals(graph, SelectedRuntimeOwnerGraph))
+        {
+            context = null;
+            return false;
+        }
+        if (runtimeAdmissionContext != null
+            && (!ReferenceEquals(graph.TravelParties, travelPartySystem?.Store)
+                || (travelSystem != null
+                    && !ReferenceEquals(graph.TravelParties,
+                        travelSystem.SelectedTravelPartyStore))))
+        {
+            context = null;
+            return false;
+        }
+        return TryCreateSelectedTravelDayExecutionContext(out context);
+    }
+
+    private bool TryCreateSelectedTravelDayExecutionContext(
         out IDailyV1SelectedTravelDayExecutionContext context)
     {
         context = null;
@@ -16,12 +37,8 @@ public sealed partial class SimulationRuntime
                 out SelectedTravelDayBoundary boundary))
             return false;
 
-        IReadOnlyCollection<string> managedPartyMembers = travelSystem != null
-            ? travelSystem.GetManagedTravelPartyNpcRuntimeIds()
-            : Array.Empty<string>();
-
         context = new SelectedDailyV1TravelDayExecutionContext(
-            this, travelPartySystem?.Store, managedPartyMembers, boundary,
+            this, boundary,
             advanceSoloTravel: travelSystem != null);
         return true;
     }
@@ -51,21 +68,14 @@ public sealed partial class SimulationRuntime
 
         internal SelectedDailyV1TravelDayExecutionContext(
             SimulationRuntime runtime,
-            TravelPartyStore partyStore,
-            IReadOnlyCollection<string> managedTravelPartyNpcRuntimeIds,
             SelectedTravelDayBoundary boundary,
             bool advanceSoloTravel)
         {
             this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
-            PartyStore = partyStore;
-            ManagedTravelPartyNpcRuntimeIds = managedTravelPartyNpcRuntimeIds
-                ?? throw new ArgumentNullException(nameof(managedTravelPartyNpcRuntimeIds));
             this.boundary = boundary ?? throw new ArgumentNullException(nameof(boundary));
             AdvanceSoloTravel = advanceSoloTravel;
         }
 
-        public TravelPartyStore PartyStore { get; }
-        public IReadOnlyCollection<string> ManagedTravelPartyNpcRuntimeIds { get; }
         public IDailyV1SelectedTravelDayBoundary Boundary => boundary;
         internal IReadOnlyList<NpcRuntime> Arrivals => boundary.Arrivals;
         public bool AdvanceSoloTravel { get; }

@@ -35,14 +35,16 @@ internal interface IDailyV1SelectedDailyExecutionBoundary
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1ActorTurnExecutionBoundary boundary);
     bool TryCreateSelectedTravelDayContext(
+        DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedTravelDayExecutionContext context);
 }
 
 /// <summary>
-/// Exact selected runtime roster and compatibility ports for the established
-/// start-of-day Crime/Justice and Merchant-plan operations. Core owns invoking
-/// these operations; Unity supplies only their existing admission and
-/// projection boundaries. A mixed roster uses the legacy whole-stage path.
+/// Compatibility ports for the established start-of-day Crime/Justice and
+/// Merchant-plan operations. Core owns invoking these operations; Unity
+/// supplies only their existing admission and projection boundaries. The
+/// admitted state-backed path takes its roster from Core state; a mixed roster
+/// uses the legacy whole-stage path.
 /// </summary>
 internal interface IDailyV1SelectedDayStartExecutionContext
 {
@@ -55,7 +57,6 @@ internal interface IDailyV1SelectedDayStartExecutionContext
 
 internal interface IDailyV1SelectedDemographyExecutionContext
 {
-    PersonStore PersonStore { get; }
     SimulationCalendar Calendar { get; }
     IPersonNaturalMortalitySampleProvider MortalitySamples { get; }
     IAggregateDemographyProvider AggregateProvider { get; }
@@ -132,14 +133,12 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
 }
 
 /// <summary>
-/// Host facts and P12/projection ports for the existing Core-selected travel
-/// operation. Core invokes the travel algorithm and owns party-before-solo
-/// ordering; the host only supplies exact adapters and publishes its results.
+/// Host P12/projection ports for the existing Core-selected travel operation.
+/// Core takes the party store and managed membership from its admitted graph,
+/// invokes the travel algorithm, and owns party-before-solo ordering.
 /// </summary>
 internal interface IDailyV1SelectedTravelDayExecutionContext
 {
-    TravelPartyStore PartyStore { get; }
-    IReadOnlyCollection<string> ManagedTravelPartyNpcRuntimeIds { get; }
     IDailyV1SelectedTravelDayBoundary Boundary { get; }
     bool AdvanceSoloTravel { get; }
     bool ExecuteWithinPartyOwnerOperation(Func<bool> operation);
@@ -158,9 +157,7 @@ internal static class DailyV1SelectedDailyExecutionStage
 {
     internal static void Advance(
         DailyV1ExecutionBoundaryState executionState,
-        long absoluteDay,
         DailyV1SelectedRuntimeOwnerGraph graph,
-        ScheduledDirectiveStore scheduledDirectives,
         IDailyV1SelectedDailyExecutionBoundary boundary)
     {
         if (executionState == null) throw new ArgumentNullException(nameof(executionState));
@@ -169,8 +166,13 @@ internal static class DailyV1SelectedDailyExecutionStage
             || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph))
             throw new InvalidOperationException(
                 "The selected Daily-v1 stage requires the exact runtime execution roots bound to its Core state.");
+        SimulationTime simulationTime = executionState.SimulationTime;
+        if (simulationTime == null)
+            throw new InvalidOperationException(
+                "The selected Daily-v1 stage requires the clock bound to its Core execution state.");
 
-        AdvanceCore(executionState, absoluteDay, graph, scheduledDirectives, boundary);
+        AdvanceCore(executionState, simulationTime.AbsoluteDay, graph,
+            graph.ScheduledDirectives, boundary);
     }
 
     internal static void Advance(
@@ -247,21 +249,24 @@ internal static class DailyV1SelectedDailyExecutionStage
         if (selectedConfiguration.NaturalMortality.Enabled
             || selectedConfiguration.AggregateDemography.Enabled)
         {
-            if (!boundary.TryCreateSelectedDemographyContext(
-                    graph, out IDailyV1SelectedDemographyExecutionContext demographyContext)
+            bool hasDemographyContext = boundary.TryCreateSelectedDemographyContext(
+                graph, out IDailyV1SelectedDemographyExecutionContext demographyContext);
+            SimulationCalendar demographyCalendar = executionState == null
+                ? demographyContext?.Calendar
+                : executionState.CalendarIdentity;
+            if (!hasDemographyContext
                 || demographyContext == null
-                || demographyContext.PersonStore == null
-                || !ReferenceEquals(graph.PersonStore, demographyContext.PersonStore)
-                || demographyContext.Calendar == null
+                || graph.PersonStore == null
+                || demographyCalendar == null
                 || demographyContext.Boundary == null)
                 throw new InvalidOperationException(
                     "The selected Daily-v1 host could not provide the exact demographic owners and writer boundary.");
 
             demographyResult = DailyV1SelectedDemographyStage.Advance(
                 graph,
-                demographyContext.PersonStore,
+                graph.PersonStore,
                 absoluteDay,
-                demographyContext.Calendar,
+                demographyCalendar,
                 selectedConfiguration.NaturalMortality,
                 selectedConfiguration.AggregateDemography,
                 demographyContext.MortalitySamples,
@@ -276,15 +281,17 @@ internal static class DailyV1SelectedDailyExecutionStage
         if (boundary.TryCreateSelectedDayStartContext(
                 graph, out IDailyV1SelectedDayStartExecutionContext dayStartContext))
         {
+            IReadOnlyList<DailyV1ActorTurnRosterProjection> dayStartRuntimeRoster =
+                executionState?.SelectedRuntimeActorRoster ?? dayStartContext?.RuntimeRoster;
             if (dayStartContext == null
-                || dayStartContext.RuntimeRoster == null
+                || dayStartRuntimeRoster == null
                 || dayStartContext.CrimeJusticeBoundary == null
                 || dayStartContext.MerchantTradeBoundary == null
                 || !ReferenceEquals(graph.JusticeRecordsOwner,
                     dayStartContext.CrimeJusticeBoundary.JusticeRecordsOwner)
                 || graph.Definitions.EffectiveConfiguration?.MerchantTrade == null
                 || !DailyV1ActorTurnExecutionStage.TryBuildRoster(
-                    graph, dayStartContext.RuntimeRoster,
+                    graph, dayStartRuntimeRoster,
                     out IReadOnlyList<DailyV1ActorTurnRosterEntry> dayStartRoster))
                 throw new InvalidOperationException(
                     "The selected Daily-v1 host could not provide its exact day-start owner roster and boundaries.");
@@ -371,16 +378,17 @@ internal static class DailyV1SelectedDailyExecutionStage
                 actorTurnContext.Boundary))
             throw new InvalidOperationException(
                 "The selected Core actor-turn stage could not run with the exact admitted graph and runtime roster.");
-        if (!boundary.TryCreateSelectedTravelDayContext(
+        if (!boundary.TryCreateSelectedTravelDayContext(graph,
                 out IDailyV1SelectedTravelDayExecutionContext travelContext)
             || travelContext == null
-            || travelContext.Boundary == null
-            || travelContext.ManagedTravelPartyNpcRuntimeIds == null)
+            || travelContext.Boundary == null)
             throw new InvalidOperationException(
                 "The selected Daily-v1 host could not provide its exact travel projection and P12 context.");
-        if (!TryAdvanceTravelDay(graph, travelContext,
-                out IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
-                out IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults))
+        bool travelAdvanced = TryAdvanceTravelDay(
+            graph, travelContext,
+            out IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
+            out IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults);
+        if (!travelAdvanced)
             throw new InvalidOperationException(
                 "The selected Core TravelParty/solo-travel stages could not advance the exact owner graph.");
         travelContext.PublishCompletedTravelResults(partyArrivals, soloResults);
@@ -455,15 +463,12 @@ internal static class DailyV1SelectedDailyExecutionStage
     {
         partyArrivals = Array.Empty<DailyV1SelectedTravelPartyArrivalResult>();
         soloResults = Array.Empty<DailyV1SelectedSoloTravelDayResult>();
-        if (graph == null || context == null
-            || context.Boundary == null
-            || context.ManagedTravelPartyNpcRuntimeIds == null)
+        if (graph == null || context == null) return false;
+        if (context.Boundary == null)
             return false;
 
         return DailyV1SelectedTravelDayStage.TryAdvance(
             graph,
-            context.PartyStore,
-            context.ManagedTravelPartyNpcRuntimeIds,
             context.Boundary,
             context.ExecuteWithinPartyOwnerOperation,
             context.AdvanceSoloTravel,

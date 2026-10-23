@@ -353,8 +353,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 return false;
             }
 
-            DailyV1SelectedDailyExecutionStage.Advance(
-                this, SimulationTime.AbsoluteDay, graph, graph.ScheduledDirectives, executionBoundary);
+            DailyV1SelectedDailyExecutionStage.Advance(this, graph, executionBoundary);
             failure = DailyV1RuntimeAdvanceFailureCode.None;
             return true;
         }

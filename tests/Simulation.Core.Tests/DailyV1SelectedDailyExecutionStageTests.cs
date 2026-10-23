@@ -101,6 +101,34 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
+    public void StateBackedDayStartUsesCoreBoundRosterInsteadOfHostProjection()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        FakeBoundary boundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore)
+        {
+            UseSelectedDayStartContext = true,
+            CrimeSystemPresent = true,
+            JusticeSystemPresent = true,
+            DayStartRuntimeRosterOverride = Array.Empty<DailyV1ActorTurnRosterProjection>()
+        };
+
+        DailyV1SelectedDailyExecutionStage.Advance(
+            composition.ExecutionBoundaryState, composition.OwnerGraph, boundary);
+
+        Assert.That(boundary.DayStartPhases, Is.EqualTo(new[]
+        {
+            DailyV1SelectedCrimeJusticeDailyPhase.ClearArrestedToday,
+            DailyV1SelectedCrimeJusticeDailyPhase.AdvanceHiddenStatuses,
+            DailyV1SelectedCrimeJusticeDailyPhase.AdvanceSentences,
+            DailyV1SelectedCrimeJusticeDailyPhase.SyncWantedStatuses
+        }), "The admitted state-backed day-start stages use the roster already bound to Core state.");
+        Assert.That(boundary.Calls, Does.Not.Contain("begin-day"));
+    }
+
+    [Test]
     public void AdvanceRejectsDayStartBoundaryBoundToAnotherJusticeOwner()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
@@ -310,6 +338,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(dailyBoundary.Calls, Does.Contain("begin-day"));
         Assert.That(dailyBoundary.Calls, Does.Contain("actor-context"));
         Assert.That(dailyBoundary.Calls, Does.Contain("travel-context"));
+        Assert.That(dailyBoundary.Calls.Count(call => call == "directive"), Is.EqualTo(1),
+            "Core prepares and consumes the exact graph directive for the state-owned post-advance day.");
+        Assert.That(directives.TryTakeDirective(graph.Npcs[0].RuntimeId, out _), Is.False,
+            "The state-backed stage consumes its graph-bound directive rather than a host-supplied substitute.");
         Assert.That(state.CompletedCoreSequence, Is.EqualTo(1L));
         Assert.That(state.SimulationTime.AbsoluteDay, Is.EqualTo(absoluteDay));
         Assert.That(state.CurrentCaptureToken, Is.Not.Null);
@@ -340,7 +372,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
 
         Assert.Throws<InvalidOperationException>(() =>
             DailyV1SelectedDailyExecutionStage.Advance(
-                state, 23L, graph, graph.ScheduledDirectives, boundary));
+                state, graph, boundary));
 
         Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context" }),
             "The root proof runs before logger output, demography, day-start, economy, directives, or knowledge writes.");
@@ -745,6 +777,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal bool UseSelectedDayStartContext { get; set; }
         internal bool CrimeSystemPresent { get; set; }
         internal bool JusticeSystemPresent { get; set; }
+        internal IReadOnlyList<DailyV1ActorTurnRosterProjection> DayStartRuntimeRosterOverride { get; set; }
         internal bool UseSelectedActionExecution { get; set; }
         internal bool FailDecisionRecordOwnerResolution { get; set; }
         internal int SelectedActionDispatchLookupCount { get; private set; }
@@ -773,7 +806,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 return false;
             }
             Calls.Add("day-start-context");
-            context = new FakeDayStartContext(this, graph);
+            context = new FakeDayStartContext(this, graph, DayStartRuntimeRosterOverride);
             return true;
         }
         public void BeginSimulationDay()
@@ -802,6 +835,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             DailyV1SelectedRuntimeOwnerGraph graph,
             out IDailyV1SelectedActorTurnExecutionContext context)
         {
+            CurrentGraph = graph;
             Calls.Add("actor-context");
             List<DailyV1ActorTurnRosterProjection> runtimeRoster = graph.Npcs
                 .Select(npc => new DailyV1ActorTurnRosterProjection(
@@ -822,13 +856,17 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             out IDailyV1ActorTurnExecutionBoundary boundary)
         {
             Assert.That(graph, Is.Not.Null);
+            CurrentGraph = graph;
             Calls.Add("actor-context");
             boundary = new FakeActorTurnBoundary(this);
             return true;
         }
+        internal DailyV1SelectedRuntimeOwnerGraph CurrentGraph { get; private set; }
         public bool TryCreateSelectedTravelDayContext(
+            DailyV1SelectedRuntimeOwnerGraph graph,
             out IDailyV1SelectedTravelDayExecutionContext context)
         {
+            Assert.That(graph, Is.SameAs(CurrentGraph));
             Calls.Add("travel-context");
             context = new FakeTravelContext(this);
             return true;
@@ -838,7 +876,6 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             internal FakeDemographyContext(DailyV1SelectedRuntimeOwnerGraph graph)
             {
-                PersonStore = graph.PersonStore;
                 DailyV1CalendarDefinition definition = graph.Definitions.Calendar;
                 Calendar = definition.monthLengths != null && definition.monthLengths.Count > 0
                     ? new SimulationCalendar(new CalendarDefinition(
@@ -848,7 +885,6 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 Boundary = new FakeDemographyBoundary(graph);
             }
 
-            public PersonStore PersonStore { get; }
             public SimulationCalendar Calendar { get; }
             public IPersonNaturalMortalitySampleProvider MortalitySamples => null;
             public IAggregateDemographyProvider AggregateProvider => null;
@@ -880,8 +916,6 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             private readonly FakeBoundary owner;
             internal FakeTravelContext(FakeBoundary owner) => this.owner = owner;
-            public TravelPartyStore PartyStore => null;
-            public IReadOnlyCollection<string> ManagedTravelPartyNpcRuntimeIds => Array.Empty<string>();
             public IDailyV1SelectedTravelDayBoundary Boundary => EmptyTravelBoundary.Instance;
             public bool AdvanceSoloTravel => false;
             public bool ExecuteWithinPartyOwnerOperation(Func<bool> operation) => operation?.Invoke() == true;
@@ -934,11 +968,11 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             internal FakeDayStartContext(
                 FakeBoundary owner,
-                DailyV1SelectedRuntimeOwnerGraph graph)
+                DailyV1SelectedRuntimeOwnerGraph graph,
+                IReadOnlyList<DailyV1ActorTurnRosterProjection> runtimeRosterOverride)
             {
-                RuntimeRoster = graph.Npcs.Select(npc =>
-                    new DailyV1ActorTurnRosterProjection(
-                        npc.RuntimeId, null)).ToList();
+                RuntimeRoster = runtimeRosterOverride ?? graph.Npcs.Select(npc =>
+                    new DailyV1ActorTurnRosterProjection(npc.RuntimeId, null)).ToList();
                 CrimeSystemPresent = owner.CrimeSystemPresent;
                 JusticeSystemPresent = owner.JusticeSystemPresent;
                 FakeDayStartOperationBoundary operationBoundary =

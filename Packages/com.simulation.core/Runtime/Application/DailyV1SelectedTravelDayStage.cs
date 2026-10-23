@@ -36,8 +36,6 @@ internal static class DailyV1SelectedTravelDayStage
 {
     internal static bool TryAdvance(
         DailyV1SelectedRuntimeOwnerGraph graph,
-        TravelPartyStore partyStore,
-        IReadOnlyCollection<string> managedTravelPartyNpcRuntimeIds,
         IDailyV1SelectedTravelDayBoundary boundary,
         Func<Func<bool>, bool> runPartyOwnerOperation,
         bool advanceSoloTravel,
@@ -46,8 +44,15 @@ internal static class DailyV1SelectedTravelDayStage
     {
         partyArrivals = Array.Empty<DailyV1SelectedTravelPartyArrivalResult>();
         soloResults = Array.Empty<DailyV1SelectedSoloTravelDayResult>();
-        if (graph == null || boundary == null || managedTravelPartyNpcRuntimeIds == null)
+        if (graph == null || boundary == null)
             return false;
+
+        // The graph is the sole authority for both the party store and the
+        // members managed by active parties. Snapshot before party advancement
+        // to preserve the established party-before-solo selection semantics.
+        TravelPartyStore partyStore = graph.TravelParties;
+        HashSet<string> managedTravelPartyNpcRuntimeIds =
+            SnapshotManagedTravelPartyNpcRuntimeIds(partyStore);
 
         Dictionary<DailyV1SelectedTravelTransitionPlan, object> projectionReceipts =
             new Dictionary<DailyV1SelectedTravelTransitionPlan, object>();
@@ -106,5 +111,23 @@ internal static class DailyV1SelectedTravelDayStage
             PublishCommittedTransition,
             boundary.PublishSoloTravelResult,
             out soloResults);
+    }
+
+    private static HashSet<string> SnapshotManagedTravelPartyNpcRuntimeIds(
+        TravelPartyStore partyStore)
+    {
+        HashSet<string> ids = new HashSet<string>(StringComparer.Ordinal);
+        if (partyStore == null) return ids;
+        using (partyStore.EnterReadWindow())
+        {
+            foreach (TravelPartyRuntime party in partyStore.ActiveParties)
+            {
+                if (party == null || !party.IsActive || party.MemberRuntimeIds == null) continue;
+                foreach (string memberRuntimeId in party.MemberRuntimeIds)
+                    if (!string.IsNullOrWhiteSpace(memberRuntimeId))
+                        ids.Add(memberRuntimeId);
+            }
+        }
+        return ids;
     }
 }

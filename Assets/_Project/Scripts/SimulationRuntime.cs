@@ -11014,9 +11014,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 throw new InvalidOperationException(
                     "The selected Daily-v1 runtime has no admitted effective definitions for its daily execution.");
             DailyV1SelectedDailyExecutionStage.Advance(
-                CurrentDay,
+                dailyExecutionBoundary,
                 graph,
-                scheduledDirectiveSystem?.Store,
                 new SelectedDailyV1ExecutionBoundary(this));
             return;
         }
@@ -11120,8 +11119,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return true;
         }
         public bool TryCreateSelectedTravelDayContext(
+            DailyV1SelectedRuntimeOwnerGraph graph,
             out IDailyV1SelectedTravelDayExecutionContext context) =>
-            runtime.TryCreateSelectedTravelDayExecutionContext(out context);
+            runtime.TryCreateSelectedTravelDayExecutionContext(graph, out context);
     }
 
     private sealed class SelectedDemographyExecutionContext
@@ -11137,7 +11137,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             Boundary = boundary ?? throw new ArgumentNullException(nameof(boundary));
         }
 
-        public PersonStore PersonStore => runtime.PersonStore;
         public SimulationCalendar Calendar => runtime.Calendar;
         public IPersonNaturalMortalitySampleProvider MortalitySamples => runtime.naturalMortalitySamples;
         public IAggregateDemographyProvider AggregateProvider => runtime.aggregateDemographyProvider;
