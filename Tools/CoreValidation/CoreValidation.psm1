@@ -3,6 +3,16 @@ Set-StrictMode -Version Latest
 function Get-CoreRepositoryRelativeIdentity {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$RepositoryRoot, [Parameter(Mandatory)][string]$FullPath)
+    return Test-CoreRepositoryPathContainment -RepositoryRoot $RepositoryRoot -FullPath $FullPath
+}
+
+function Test-CoreRepositoryPathContainment {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepositoryRoot,
+        [Parameter(Mandatory)][string]$FullPath,
+        [switch]$AllowMissingPath
+    )
 
     $root = [IO.Path]::GetFullPath($RepositoryRoot).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
     $rootPrefix = $root + [IO.Path]::DirectorySeparatorChar
@@ -10,25 +20,29 @@ function Get-CoreRepositoryRelativeIdentity {
     if (-not $full.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
         throw 'A compile input resolved outside the repository root.'
     }
-    $relative = $full.Substring($rootPrefix.Length)
 
-    # Lexical containment is insufficient on Windows: a directory junction or
-    # symbolic link below the checkout can redirect an apparently local source
-    # path to an external file. Fail closed for any reparse-point component.
     $rootItem = Get-Item -LiteralPath $root -Force -ErrorAction Stop
     if ($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) {
         throw 'The repository root is a reparse point and cannot establish source containment.'
     }
+
+    $relative = $full.Substring($rootPrefix.Length)
     $current = $root
     foreach ($segment in ($relative -split '[\\/]')) {
         if ([string]::IsNullOrWhiteSpace($segment)) { continue }
         $current = Join-Path $current $segment
-        $component = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+        try {
+            $component = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+        } catch {
+            if ($AllowMissingPath -and $_.CategoryInfo.Category -eq [Management.Automation.ErrorCategory]::ObjectNotFound) {
+                break
+            }
+            throw
+        }
         if ($component.Attributes -band [IO.FileAttributes]::ReparsePoint) {
             throw 'A compile input traverses a reparse point below the repository root.'
         }
     }
-
     return $relative.Replace('\', '/')
 }
 
@@ -75,10 +89,14 @@ function Get-CoreProjectCompileInputs {
             }
             if ([string]::IsNullOrWhiteSpace($itemPath)) { throw "MSBuild returned a Compile item without a path for $projectRelative." }
             $itemFullPath = [IO.Path]::GetFullPath($itemPath)
+            # Validate root containment and every existing path component before
+            # excluding SDK-generated outputs. Their final leaves may not exist
+            # yet, but an existing junction anywhere in the path must be rejected.
+            $isGeneratedOutput = $itemFullPath -match '(?i)[\\/](?:obj|bin)[\\/]'
+            $itemRelative = Test-CoreRepositoryPathContainment -RepositoryRoot $root -FullPath $itemFullPath -AllowMissingPath:$isGeneratedOutput
             # SDK-generated compilation inputs are derived from tracked source,
             # project, SDK and package inputs; they are not source identities.
-            if ($itemFullPath -match '(?i)[\\/](?:obj|bin)[\\/]') { continue }
-            $itemRelative = Get-CoreRepositoryRelativeIdentity -RepositoryRoot $root -FullPath $itemFullPath
+            if ($isGeneratedOutput) { continue }
             if (-not (Test-Path -LiteralPath $itemFullPath -PathType Leaf)) { throw "Declared compile input is missing: $itemRelative" }
             [void]$inputPaths.Add($itemRelative)
         }

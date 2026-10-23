@@ -111,17 +111,34 @@ Assert-True (@($compileInputs | Where-Object { [IO.Path]::IsPathRooted($_) }).Co
 $reparseTestRoot = Join-Path ([IO.Path]::GetTempPath()) ('core-validation-reparse-' + [Guid]::NewGuid().ToString('N'))
 $repositoryRootUnderTest = Join-Path $reparseTestRoot 'repository'
 $externalSourceRoot = Join-Path $reparseTestRoot 'external'
-$reparseSourcePath = Join-Path $repositoryRootUnderTest 'linked-source'
 New-Item -ItemType Directory -Path $repositoryRootUnderTest -Force | Out-Null
 New-Item -ItemType Directory -Path $externalSourceRoot -Force | Out-Null
 [IO.File]::WriteAllText((Join-Path $externalSourceRoot 'ExternalCompileInput.cs'), 'class ExternalCompileInput {}', [Text.UTF8Encoding]::new($false))
 try {
-    New-Item -ItemType Junction -Path $reparseSourcePath -Target $externalSourceRoot -ErrorAction Stop | Out-Null
+    $generatedJunctionPath = Join-Path $repositoryRootUnderTest 'bin'
+    New-Item -ItemType Junction -Path $generatedJunctionPath -Target $externalSourceRoot -ErrorAction Stop | Out-Null
     Assert-Rejected {
-        Get-CoreRepositoryRelativeIdentity -RepositoryRoot $repositoryRootUnderTest -FullPath (Join-Path $reparseSourcePath 'ExternalCompileInput.cs')
+        Get-CoreRepositoryRelativeIdentity -RepositoryRoot $repositoryRootUnderTest -FullPath (Join-Path $generatedJunctionPath 'ExternalCompileInput.cs')
     } 'A compile input reached through an in-repository junction must be rejected.'
+
+    $syntheticProject = Join-Path $repositoryRootUnderTest 'Synthetic.csproj'
+    $syntheticProjectXml = @'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="bin\ExternalCompileInput.cs" />
+  </ItemGroup>
+</Project>
+'@
+    [IO.File]::WriteAllText($syntheticProject, $syntheticProjectXml, [Text.UTF8Encoding]::new($false))
+    Assert-Rejected {
+        Get-CoreProjectCompileInputs -ProjectRoot $repositoryRootUnderTest -ProjectPaths @('Synthetic.csproj')
+    } 'Generated-output exclusion must not allow an in-repository bin junction to bypass compile-input containment.'
 } finally {
-    if (Test-Path -LiteralPath $reparseSourcePath) { [IO.Directory]::Delete($reparseSourcePath) }
+    if (Test-Path -LiteralPath (Join-Path $repositoryRootUnderTest 'bin')) { [IO.Directory]::Delete((Join-Path $repositoryRootUnderTest 'bin')) }
     if (Test-Path -LiteralPath $reparseTestRoot) { Remove-Item -LiteralPath $reparseTestRoot -Recurse -Force }
 }
 
