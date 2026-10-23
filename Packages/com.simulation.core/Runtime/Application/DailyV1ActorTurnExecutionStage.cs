@@ -43,10 +43,11 @@ internal sealed class DailyV1ActorTurnRosterProjection
 }
 
 /// <summary>
-/// Host supplies exact current P8 spatial truth, P12 admission/notification,
-/// Unity action projection, and presentation ports. For selected Daily-v1
-/// owners, Core executes the admitted actor-turn operations; legacy gameplay
-/// callbacks remain only for hosts outside that selected boundary.
+/// Core reads spatial-transit truth from the exact P8-C owner bound to its
+/// selected owner graph. The host supplies P12 admission/notification, Unity
+/// action projection, and presentation ports. For selected Daily-v1 owners,
+/// Core executes the admitted actor-turn operations; legacy gameplay callbacks
+/// remain only for hosts outside that selected boundary.
 /// </summary>
 internal interface IDailyV1ActorTurnExecutionBoundary
 {
