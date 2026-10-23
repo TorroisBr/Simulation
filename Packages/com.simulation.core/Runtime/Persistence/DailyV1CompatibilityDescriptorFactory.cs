@@ -32,9 +32,13 @@ internal static class DailyV1CompatibilityDescriptorFactory
 
         try
         {
-            if (!IsExactSelectedProfile(definitions, out diagnostic)
-                || !TryComputeP8Fingerprint(definitions, out string p8Fingerprint))
+            if (!IsExactSelectedProfile(definitions, out diagnostic))
                 return false;
+            if (!TryComputeP8Fingerprint(definitions, out string p8Fingerprint))
+            {
+                diagnostic = "The selected Daily-v1 authored P8 geography scale is invalid.";
+                return false;
+            }
 
             string p9Fingerprint = DailyV1DefinitionIdentity.CreateP9Fingerprint(
                 definitions, out _);

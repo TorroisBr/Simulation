@@ -89,7 +89,7 @@ public sealed class DailyV1CompatibilityDescriptorFactoryTests
             definitions, HostIdentity(), out P12ACompatibilityDescriptorV2 descriptor,
             out string diagnostic), Is.False);
         Assert.That(descriptor, Is.Null);
-        Assert.That(diagnostic, Is.Not.Empty);
+        Assert.That(string.IsNullOrWhiteSpace(diagnostic), Is.False);
     }
 
     private static DailyV1EffectiveDefinitions WithAuthoredDistance(
