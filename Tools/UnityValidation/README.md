@@ -147,6 +147,10 @@ the recovered directory to fixed relative project arguments, original
 `project.assets.json` restore paths, retained build/test logs, and TRX assembly
 targets. Runtime traces must bind both the test assembly's `.runtimeconfig.json`
 and `.runtimeconfig.dev.json` paths before the selected CLR block is accepted.
+The adapter also verifies each cold/warm `--settings` command argument against
+the runner-recorded settings-file hash and exact trace-file target; public command
+records project both private settings and results paths into the run-local
+`<EVIDENCE>` form.
 Every captured dirty or untracked source influence must also match a byte/hash
 record in the original source or generated-dependency inventory.
 Original TRX timestamp offsets are converted to UTC only for chronology checks;
