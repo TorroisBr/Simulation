@@ -413,7 +413,7 @@ internal static class DailyV1SelectedDailyExecutionStage
             failure = "actor action boundary does not implement the selected Core contract";
             return false;
         }
-        if (!(actorTurnContext.Boundary is IDailyV1SelectedActorChoiceExecutionContext)
+        if (!(actorTurnContext.Boundary is IDailyV1SelectedActorChoiceExecutionContext choiceContext)
             || !(actorTurnContext.Boundary is IDailyV1CoreActorChoiceExecutionBoundary))
         {
             failure = "actor action boundary does not provide the Core-owned selected actor-choice contract";
@@ -449,6 +449,43 @@ internal static class DailyV1SelectedDailyExecutionStage
             if (!actionBoundary.UsesSelectedDailyV1ActionExecution(actor))
             {
                 failure = "selected actor " + actor.RuntimeId + " would fall back to host-owned action execution";
+                return false;
+            }
+
+            if (!choiceContext.TryGetActorChoiceExecutionContext(
+                    actor,
+                    out _,
+                    out IDailyV1ActorChoiceExecutionBoundary actorChoiceBoundary)
+                || !(actorChoiceBoundary is IDailyV1CoreActorChoiceExecutionBoundary coreActorChoiceBoundary))
+            {
+                failure = "actor-choice boundary is unavailable or is not Core-owned for actor "
+                    + actor.RuntimeId;
+                return false;
+            }
+            if (!coreActorChoiceBoundary.UsesSelectedDailyV1ActionExecution(actor))
+            {
+                failure = "actor-choice boundary would fall back to host-owned action execution for actor "
+                    + actor.RuntimeId;
+                return false;
+            }
+            IDailyV1ActorChoiceExecutionBoundary selectedChoiceBoundary =
+                coreActorChoiceBoundary;
+            if (!ReferenceEquals(coreActorChoiceBoundary.RandomSource,
+                    executionState.SelectedRandomSource)
+                || !selectedChoiceBoundary.TryGetDecisionRecordOwners(
+                    actor,
+                    out RuntimeIdAllocator actorChoiceIdAllocator,
+                    out SimulationRecordSequence actorChoiceRecordSequence,
+                    out NpcDecisionStore actorChoiceDecisionStore)
+                || !ReferenceEquals(actorChoiceIdAllocator,
+                    executionState.SelectedRuntimeIdAllocator)
+                || !ReferenceEquals(actorChoiceRecordSequence,
+                    executionState.SelectedRecordSequence)
+                || !ReferenceEquals(actorChoiceDecisionStore,
+                    executionState.SelectedDecisionStore))
+            {
+                failure = "actor-choice boundary does not use the exact selected random and decision-record roots for actor "
+                    + actor.RuntimeId;
                 return false;
             }
 

@@ -351,6 +351,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
         Assert.That(state.SimulationTime.AbsoluteDay, Is.EqualTo(absoluteDay - 1L));
         Assert.That(state.HasAdmittedSelectedDailyExecution, Is.True);
+        ScheduledDirectiveStore directives = CreateDirectiveForFirstNpc(graph, absoluteDay);
         FakeBoundary dailyBoundary = new FakeBoundary(
             composition.RuntimeIdAllocator, composition.RandomSource,
             composition.RecordSequence, composition.DecisionStore,
@@ -368,6 +369,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             "operation", "execution-boundary", "capture-evidence"
         }));
+        Assert.That(directives.TryTakeDirective(graph.Npcs[0].RuntimeId, out _), Is.False,
+            "The state-backed Core actor-turn stage consumes its exact graph-bound directive.");
+        Assert.That(dailyBoundary.Calls, Does.Not.Contain("directive"),
+            "Selected directives execute through Core rather than the legacy host callback.");
         Assert.That(dailyBoundary.Calls, Does.Contain("begin-day"));
         Assert.That(dailyBoundary.Calls, Does.Contain("actor-context"));
         Assert.That(dailyBoundary.Calls, Does.Contain("travel-context"));
@@ -409,6 +414,40 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "An actor dispatch boundary is never requested after root preflight fails.");
         Assert.That(boundary.Calls, Does.Not.Contain("travel-context"),
             "A selected actor cannot begin Core execution when the exact decision roots are unavailable.");
+    }
+
+    [Test]
+    public void RuntimeAdvanceRejectsPerActorChoiceBoundaryThatFallsBackBeforeDailyWritesAndCapturePublication()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        long initialDay = state.SimulationTime.AbsoluteDay;
+        FakeBoundary dailyBoundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore)
+        {
+            UseSelectedActionExecution = true,
+            ActorChoiceSelectedActionExecutionOverride = false
+        };
+        // The returned per-actor boundary has the same exact roots and Core
+        // contract type, but it would use the legacy host action callback.
+        FakeRuntimeAdvanceBoundary advanceBoundary = new FakeRuntimeAdvanceBoundary(state, dailyBoundary);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            state.TryAdvanceDay(advanceBoundary, out _));
+
+        Assert.That(dailyBoundary.Calls, Is.EqualTo(new[] { "actor-context" }),
+            "Per-actor action-mode proof completes before logger, daily-stage, owner, or capture callbacks.");
+        Assert.That(dailyBoundary.SelectedActionDispatchLookupCount, Is.Zero);
+        Assert.That(advanceBoundary.Calls, Does.Contain("fault"));
+        Assert.That(advanceBoundary.Calls, Does.Not.Contain("capture-evidence"));
+        Assert.That(state.SimulationTime.AbsoluteDay, Is.EqualTo(initialDay + 1L),
+            "The failed admission is detected after the existing temporal advance, then faults before any daily owner write.");
+        Assert.That(state.CompletedCoreSequence, Is.Zero);
+        Assert.That(state.CurrentCaptureToken, Is.Null);
+        Assert.That(state.AdvanceLeaseHeld, Is.False);
     }
 
     [Test]
@@ -808,6 +847,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal bool JusticeSystemPresent { get; set; }
         internal IReadOnlyList<DailyV1ActorTurnRosterProjection> DayStartRuntimeRosterOverride { get; set; }
         internal bool UseSelectedActionExecution { get; set; }
+        internal bool? ActorChoiceSelectedActionExecutionOverride { get; set; }
         internal bool FailDecisionRecordOwnerResolution { get; set; }
         internal int SelectedActionDispatchLookupCount { get; private set; }
         internal DailyV1JusticeRecordsOwner SubstituteJusticeRecordsOwner { get; set; }
@@ -1111,7 +1151,14 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             IDailyV1SelectedMerchantTradeStateAdmissionBoundary
         {
             private readonly FakeBoundary owner;
-            internal FakeActorTurnBoundary(FakeBoundary owner) => this.owner = owner;
+            private readonly bool? selectedActionExecution;
+            internal FakeActorTurnBoundary(
+                FakeBoundary owner,
+                bool? selectedActionExecution = null)
+            {
+                this.owner = owner;
+                this.selectedActionExecution = selectedActionExecution;
+            }
             public bool IsReservedToday(DailyV1NpcRuntimeOwners actor) => false;
             public void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive) =>
                 owner.Calls.Add("directive");
@@ -1126,7 +1173,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
             {
                 decisionSystemAvailable = false;
-                executionBoundary = this;
+                executionBoundary = owner.ActorChoiceSelectedActionExecutionOverride.HasValue
+                    ? new FakeActorTurnBoundary(
+                        owner, owner.ActorChoiceSelectedActionExecutionOverride.Value)
+                    : this;
                 return true;
             }
 
@@ -1177,7 +1227,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
 
             public IAuthoritativeRandomSource RandomSource => owner.randomSource;
             public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor) =>
-                owner.UseSelectedActionExecution;
+                selectedActionExecution ?? owner.UseSelectedActionExecution;
             public void LogSkippedDirective(ScheduledDirective directive, string reason) { }
             public bool TryCreateDecisionBoundary(
                 DailyV1NpcRuntimeOwners actor,

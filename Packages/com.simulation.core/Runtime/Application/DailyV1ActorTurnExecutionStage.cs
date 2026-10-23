@@ -464,9 +464,10 @@ internal static class DailyV1ActorTurnExecutionStage
                 throw new InvalidOperationException(
                     "The selected Core actor-choice context omitted its projection/admission boundary.");
             if (requireCoreOwnedSelectedOperations
-                && !(executionBoundary is IDailyV1CoreActorChoiceExecutionBoundary))
+                && (!(executionBoundary is IDailyV1CoreActorChoiceExecutionBoundary coreChoiceBoundary)
+                    || !coreChoiceBoundary.UsesSelectedDailyV1ActionExecution(actor)))
                 throw new InvalidOperationException(
-                    "The admitted Daily-v1 actor choice cannot dispatch through a host-owned execution callback.");
+                    "The admitted Daily-v1 actor choice cannot dispatch through host-owned action execution.");
             EffectiveMerchantTradeConfiguration merchantTrade =
                 graph.Definitions.EffectiveConfiguration?.MerchantTrade;
             if (merchantTrade == null)
