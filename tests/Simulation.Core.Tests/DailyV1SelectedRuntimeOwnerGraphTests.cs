@@ -36,6 +36,66 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
     }
 
     [Test]
+    public void SelectedGraphTransitReadUsesItsExactCorePersonPositionOwner()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1SelectedRuntimeOwnerGraphBuilder.TryBuildConfigured(
+            definitions, new RuntimeIdAllocator(), out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        PersonStore people = new PersonStore();
+        PersonId traveler = new PersonId("person.core-position-owner");
+        Assert.That(people.TryRegister(new PersonRuntime(traveler), out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(graph.TryBindPersonStore(people), Is.True);
+
+        SpatialAuthorityStore spatial = new SpatialAuthorityStore();
+        SpatialGeographyDefinition geography = new SpatialGeographyDefinition(
+            new SpatialWorldScaleContext("fixture.scale", "fixture", "v1", 1m, "unit"),
+            new[]
+            {
+                new HexRecord(new HexId("hex.position.a"), new HexCoordinate(0, 0),
+                    new TerrainReference(new TerrainDefinitionId("terrain.position"), "v1")),
+                new HexRecord(new HexId("hex.position.b"), new HexCoordinate(1, 0),
+                    new TerrainReference(new TerrainDefinitionId("terrain.position"), "v1"))
+            },
+            new[]
+            {
+                new LocationRecord(new LocationId("location.position.a"), new HexId("hex.position.a")),
+                new LocationRecord(new LocationId("location.position.b"), new HexId("hex.position.b"))
+            });
+        Assert.That(spatial.TryComposeGeography(geography, out SpatialAuthorityFailure geographyFailure),
+            Is.True, geographyFailure.ToString());
+        HexBoundaryKey boundary = new HexBoundaryKey(
+            new HexId("hex.position.a"), new HexId("hex.position.b"));
+        CrossingId crossingId = new CrossingId("crossing.position");
+        Assert.That(spatial.TryRegisterCrossing(new CrossingRecord(
+            crossingId, boundary, new HexId("hex.position.a"), "content.position", "v1", null),
+            out SpatialAuthorityFailure crossingFailure), Is.True, crossingFailure.ToString());
+
+        PersonSpatialPositionStore positions = new PersonSpatialPositionStore(
+            people, spatial, new SpatialPassageTraversalOptionResolver(spatial.PassageAuthority));
+        Assert.That(positions.TrySetAt(traveler,
+            StablePositionReference.ForHex(new HexId("hex.position.a")), out _), Is.True);
+        Assert.That(graph.TryBindPersonSpatialPositionStore(positions), Is.True);
+        Assert.That(graph.PersonSpatialPositionStore, Is.SameAs(positions));
+        Assert.That(graph.IsPersonInSpatialTransit(traveler), Is.False);
+
+        Assert.That(positions.TryBeginTransit(traveler, TraversalOptionRef.ForCrossing(crossingId),
+            boundary, new HexId("hex.position.a"), new HexId("hex.position.b"), out _), Is.True);
+        Assert.That(graph.IsPersonInSpatialTransit(traveler), Is.True,
+            "The Core graph reads the exact P8-C owner installed by the runtime.");
+        Assert.That(positions.TryAdvanceTransit(traveler, TraversalProgress.CompleteProgressTicks, out _), Is.True);
+        Assert.That(positions.TryArrive(traveler,
+            StablePositionReference.ForHex(new HexId("hex.position.b")), out _), Is.True);
+        Assert.That(graph.IsPersonInSpatialTransit(traveler), Is.False);
+
+        PersonSpatialPositionStore unrelatedPositions = new PersonSpatialPositionStore(
+            new PersonStore(), spatial, new SpatialPassageTraversalOptionResolver(spatial.PassageAuthority));
+        Assert.That(graph.TryBindPersonSpatialPositionStore(unrelatedPositions), Is.False,
+            "The Core graph cannot substitute a position owner bound to another PersonStore.");
+    }
+
+    [Test]
     public void ConfiguredGenesisComposesDirectiveJusticeSpatialAndCommercialOwnersInCore()
     {
         DailyV1EffectiveDefinitions baseline = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

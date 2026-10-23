@@ -78,47 +78,6 @@ public sealed class P17AWarObservation
     }
 }
 
-/// <summary>Adapts the spatial authority's passage child to the P8-C transit resolver seam.</summary>
-internal sealed class SpatialPassageTraversalOptionResolver : ISpatialTraversalOptionResolver
-{
-    private readonly SpatialPassageAuthority passageAuthority;
-
-    public SpatialPassageTraversalOptionResolver(SpatialPassageAuthority passageAuthority)
-    {
-        this.passageAuthority = passageAuthority ?? throw new ArgumentNullException(nameof(passageAuthority));
-    }
-
-    public bool TryResolveTraversalOption(TraversalOptionRef option, HexBoundaryKey boundary, out string failure)
-    {
-        if (option == null || boundary == null)
-        {
-            failure = "Traversal option and boundary are required.";
-            return false;
-        }
-
-        if (!passageAuthority.TryGetTraversalOptions(
-                boundary,
-                out IReadOnlyList<TraversalOptionRef> options,
-                out SpatialAuthorityFailure authorityFailure))
-        {
-            failure = authorityFailure?.Message ?? "Traversal boundary is not registered.";
-            return false;
-        }
-
-        foreach (TraversalOptionRef candidate in options)
-        {
-            if (option.Equals(candidate))
-            {
-                failure = string.Empty;
-                return true;
-            }
-        }
-
-        failure = "Traversal option is not registered on the supplied boundary.";
-        return false;
-    }
-}
-
 public sealed class SimulationRuntimeSpatialInvariantReport
 {
     public IReadOnlyList<string> Violations { get; }
@@ -2984,6 +2943,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         {
             throw new InvalidOperationException("The selected owner graph could not be bound to this runtime boundary.");
         }
+        if (selectedOwnerGraph != null
+            && !selectedOwnerGraph.TryBindPersonSpatialPositionStore(resolvedPersonSpatialPositionStore))
+            throw new InvalidOperationException(
+                "The selected owner graph could not bind the exact P8-C Person-position authority installed by this runtime.");
         if (selectedOwnerGraph != null
             && !dailyExecutionBoundary.TryBindSelectedRuntimeActorRoster(
                 this.npcRuntimes.Select(npc => npc == null
@@ -11571,10 +11534,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         public bool IsInSpatialTransit(DailyV1NpcRuntimeOwners actor, PersonId personId)
         {
-            return personId != null
-                && runtime.personSpatialPositionStore != null
-                && runtime.personSpatialPositionStore.TryGetPosition(personId, out PersonSpatialPosition position)
-                && position.IsInTransit;
+            return ReferenceEquals(runtime.SelectedRuntimeOwnerGraph, graph)
+                && graph.IsPersonInSpatialTransit(personId);
         }
 
         public bool IsReservedToday(DailyV1NpcRuntimeOwners actor)

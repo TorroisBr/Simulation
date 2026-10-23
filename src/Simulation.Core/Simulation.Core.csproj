@@ -52,6 +52,9 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialAuthority.cs" Link="Geography/SpatialAuthority.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialPassageAuthority.cs" Link="Geography/SpatialPassageAuthority.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/LegacySpatialAnchorBindingStore.cs" Link="Geography/LegacySpatialAnchorBindingStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/PersonSpatialPositionStore.cs" Link="Geography/PersonSpatialPositionStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialPassageTraversalOptionResolver.cs" Link="Geography/SpatialPassageTraversalOptionResolver.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/P12P8CCensusProviders.cs" Link="Geography/P12P8CCensusProviders.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationHost.cs" Link="Application/DailyV1ApplicationHost.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationSessionGate.cs" Link="Application/DailyV1ApplicationSessionGate.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1GenesisComposer.cs" Link="Application/DailyV1GenesisComposer.cs" />

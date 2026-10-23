@@ -113,6 +113,7 @@ public sealed class PersonSpatialPositionStore : IAuthoritativeMutationGuardBind
     }
 
     public long Revision => revision;
+    internal PersonStore PersonStore => personStore;
     internal bool TryPrepareBeginTransit(PersonId id, TraversalOptionRef option, HexBoundaryKey boundary,
         HexId from, HexId to, long expectedRevision, out PreparedPersonSpatialPositionChange prepared,
         out PersonSpatialPositionFailure failure) => TryPrepareOperation(id, expectedRevision,
@@ -201,7 +202,7 @@ public sealed class PersonSpatialPositionStore : IAuthoritativeMutationGuardBind
             return Fail(PersonSpatialPositionFailureCode.PositionMismatch, "Person must have an At position before departure.", out failure);
         if (current.Position.Kind != StablePositionReferenceKind.Hex)
             return Fail(PersonSpatialPositionFailureCode.PositionMismatch, "Regional transit requires a Hex At position; Location and Crossing require an explicit local connector capability.", out failure);
-        if (!TryResolve(current.Position, out SpatialResolution resolution, out failure)) return false;
+        if (!TryResolve(current.Position, out SpatialAuthorityResolution resolution, out failure)) return false;
         if (resolution.Hex == null || resolution.Hex.Id != from)
             return Fail(PersonSpatialPositionFailureCode.PositionMismatch, "Current position does not resolve to the directed origin Hex.", out failure);
         if (!CanAdvanceRevision(out failure)) return false;
@@ -232,7 +233,7 @@ public sealed class PersonSpatialPositionStore : IAuthoritativeMutationGuardBind
             return Fail(PersonSpatialPositionFailureCode.ArrivalNotReady, "Transit must reach its explicit completion tick before arrival.", out failure);
         if (destination == null || destination.Kind != StablePositionReferenceKind.Hex)
             return Fail(PersonSpatialPositionFailureCode.PositionMismatch, "Regional transit arrival requires a Hex reference; Location and Crossing require an explicit local connector capability.", out failure);
-        if (!TryValidateTransit(current.Transit, out failure) || !TryResolve(destination, out SpatialResolution resolution, out failure)) return false;
+        if (!TryValidateTransit(current.Transit, out failure) || !TryResolve(destination, out SpatialAuthorityResolution resolution, out failure)) return false;
         if (resolution.Hex == null || resolution.Hex.Id != current.Transit.ToHexId)
             return Fail(PersonSpatialPositionFailureCode.PositionMismatch, "Arrival reference does not resolve to the directed destination Hex.", out failure);
         if (!CanAdvanceRevision(out failure)) return false;
@@ -279,7 +280,7 @@ public sealed class PersonSpatialPositionStore : IAuthoritativeMutationGuardBind
             || transit.LastFullyReachedReference == null || transit.LastFullyReachedReference.Kind != StablePositionReferenceKind.Hex
             || !transit.Boundary.Equals(new HexBoundaryKey(transit.FromHexId, transit.ToHexId)))
             return Fail(PersonSpatialPositionFailureCode.InvalidTransit, "Transit state is structurally invalid.", out failure);
-        if (!TryResolve(transit.LastFullyReachedReference, out SpatialResolution last, out failure)) return false;
+        if (!TryResolve(transit.LastFullyReachedReference, out SpatialAuthorityResolution last, out failure)) return false;
         if (last.Hex == null || last.Hex.Id != transit.FromHexId) return Fail(PersonSpatialPositionFailureCode.PositionMismatch, "Last fully reached reference must resolve to the directed origin Hex.", out failure);
         if (!spatialAuthorityStore.TryGetGeometricBoundary(transit.FromHexId, transit.ToHexId, out _, out SpatialAuthorityFailure boundaryFailure))
             return Fail(PersonSpatialPositionFailureCode.BoundaryNotRegistered, boundaryFailure?.Message, out failure);
@@ -290,12 +291,16 @@ public sealed class PersonSpatialPositionStore : IAuthoritativeMutationGuardBind
 
     private StablePositionReference CloneReference(StablePositionReference value) => value.Kind == StablePositionReferenceKind.Hex ? StablePositionReference.ForHex(new HexId(value.HexId.Value))
         : value.Kind == StablePositionReferenceKind.Location ? StablePositionReference.ForLocation(new LocationId(value.LocationId.Value)) : StablePositionReference.ForCrossing(new CrossingId(value.CrossingId.Value));
-    private bool TryResolve(StablePositionReference reference, out SpatialResolution resolution, out PersonSpatialPositionFailure failure)
+    private bool TryResolve(StablePositionReference reference, out SpatialAuthorityResolution resolution, out PersonSpatialPositionFailure failure)
     {
         resolution = null;
         if (reference == null || !Enum.IsDefined(typeof(StablePositionReferenceKind), reference.Kind)) return Fail(PersonSpatialPositionFailureCode.InvalidReference, "Stable position reference is required.", out failure);
-        if (!spatialAuthorityStore.TryResolve(reference.ToSpatialReference(), null, out resolution, out SpatialAuthorityFailure authorityFailure))
+        if (!spatialAuthorityStore.TryResolveReference(
+                reference.ToSpatialReference(),
+                out SpatialAuthorityResolution coreResolution,
+                out SpatialAuthorityFailure authorityFailure))
             return Fail(PersonSpatialPositionFailureCode.SpatialReferenceNotRegistered, authorityFailure?.Message, out failure);
+        resolution = coreResolution;
         failure = PersonSpatialPositionFailure.None; return true;
     }
     private bool TryPerson(PersonId id, out PersonSpatialPositionFailure failure)

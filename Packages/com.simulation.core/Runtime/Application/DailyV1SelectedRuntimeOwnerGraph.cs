@@ -21,6 +21,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal DailyV1RuntimeIdentityIndex RuntimeIdentityIndex { get; }
     internal ExpeditionStore Expeditions { get; private set; }
     internal PersonStore PersonStore { get; private set; }
+    internal PersonSpatialPositionStore PersonSpatialPositionStore { get; private set; }
     internal ScheduledDirectiveStore ScheduledDirectives { get; private set; }
 
     private DailyV1SelectedRuntimeOwnerGraph(
@@ -56,6 +57,26 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         if (!MatchesPersonStore(personStore, npcs)) return false;
         PersonStore = personStore;
         return true;
+    }
+
+    /// <summary>Binds the exact P8-C position owner installed by the runtime.</summary>
+    internal bool TryBindPersonSpatialPositionStore(PersonSpatialPositionStore store)
+    {
+        if (store == null || PersonStore == null
+            || !ReferenceEquals(store.PersonStore, PersonStore)) return false;
+        if (PersonSpatialPositionStore != null)
+            return ReferenceEquals(PersonSpatialPositionStore, store);
+        PersonSpatialPositionStore = store;
+        return true;
+    }
+
+    internal bool IsPersonInSpatialTransit(PersonId personId)
+    {
+        PersonSpatialPositionStore store = PersonSpatialPositionStore;
+        return personId != null
+            && store != null
+            && store.TryGetPosition(personId, out PersonSpatialPosition position)
+            && position.IsInTransit;
     }
 
     /// <summary>
@@ -897,6 +918,12 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
 
         if ((ScheduledDirectives != null && !graph.TryBindScheduledDirectives(ScheduledDirectives))
             || (Expeditions != null && !graph.TryBindExpeditionStore(Expeditions)))
+        {
+            graph = null;
+            return false;
+        }
+        if (PersonSpatialPositionStore != null
+            && !graph.TryBindPersonSpatialPositionStore(PersonSpatialPositionStore))
         {
             graph = null;
             return false;
