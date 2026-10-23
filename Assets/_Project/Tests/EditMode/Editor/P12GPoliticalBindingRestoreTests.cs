@@ -972,7 +972,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             config,
             admissionContext,
             stagedC.DeterministicRandom,
-            new SimulationSessionReportState(anchor.Token.AbsoluteDay));
+            new DailyV1SessionReportState(anchor.Token.AbsoluteDay));
     }
 
     private static void BuildDefinitions(

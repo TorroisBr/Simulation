@@ -7,21 +7,6 @@ using System.Threading;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-internal sealed class SimulationSessionReportState
-{
-    public long LastEconomySnapshotDay { get; private set; }
-
-    public SimulationSessionReportState(long lastEconomySnapshotDay)
-    {
-        LastEconomySnapshotDay = lastEconomySnapshotDay;
-    }
-
-    public void MarkEconomySnapshotDay(long day)
-    {
-        LastEconomySnapshotDay = day;
-    }
-}
-
 /// <summary>Immutable reference set for the currently published TesteSimulacao session.</summary>
 internal sealed class SimulationActiveSession
 {
@@ -37,7 +22,7 @@ internal sealed class SimulationActiveSession
     public SimulationConfigData Configuration { get; }
     public SimulationRuntimeAdmissionContext AdmissionContext { get; }
     public IAuthoritativeRandomSource RandomSource { get; }
-    public SimulationSessionReportState ReportState { get; }
+    public DailyV1SessionReportState ReportState { get; }
 
     public SimulationActiveSession(
         SimulationBootstrapComposition composition,
@@ -49,7 +34,7 @@ internal sealed class SimulationActiveSession
         SimulationConfigData configuration,
         SimulationRuntimeAdmissionContext admissionContext,
         IAuthoritativeRandomSource randomSource,
-        SimulationSessionReportState reportState)
+        DailyV1SessionReportState reportState)
     {
         Composition = composition ?? throw new System.ArgumentNullException(nameof(composition));
         Logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
@@ -830,7 +815,7 @@ public class TesteSimulacao : MonoBehaviour
                 simulationConfig,
                 runtimeAdmissionContext,
                 authoritativeRandomSource,
-                new SimulationSessionReportState(lastEconomySnapshotDay));
+                new DailyV1SessionReportState(lastEconomySnapshotDay));
 
             unpublishedWorldId = null;
             draftComposition = null;
