@@ -13,7 +13,8 @@ internal enum DailyV1CaptureScopeAllowance : byte
 {
     None = 0,
     ContinuationSave = 1,
-    DailyAdvance = 2
+    DailyAdvance = 2,
+    SessionReplacementValidation = 3
 }
 
 /// <summary>
@@ -201,10 +202,12 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     {
         lock (operationSyncRoot)
         {
-            if (exclusiveSessionReplacementInProgress
+            if ((exclusiveSessionReplacementInProgress
+                    && allowance != DailyV1CaptureScopeAllowance.SessionReplacementValidation)
                 || (AdmissionContext != null && !AdmissionContext.IsOwnedByCurrentThread()))
                 return false;
-            if (allowance == DailyV1CaptureScopeAllowance.None)
+            if (allowance == DailyV1CaptureScopeAllowance.None
+                || allowance == DailyV1CaptureScopeAllowance.SessionReplacementValidation)
                 return activeOperationScopes.Count == 0;
             if (activeOperationScopes.Count != 1)
                 return false;

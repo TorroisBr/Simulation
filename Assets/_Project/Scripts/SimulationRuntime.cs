@@ -10601,7 +10601,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     {
         if (!TryReadDailyCaptureEvidence(
                 finalizingHeldAdvance: false,
-                DailyV1CaptureScopeAllowance.None,
+                requiredProvenance.HasValue
+                    ? DailyV1CaptureScopeAllowance.None
+                    : DailyV1CaptureScopeAllowance.SessionReplacementValidation,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
                 out long mutationEpoch,
                 out _))

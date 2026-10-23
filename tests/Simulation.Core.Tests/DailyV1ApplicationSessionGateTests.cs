@@ -84,6 +84,9 @@ public sealed class DailyV1ApplicationSessionGateTests
                 "Direct P12 owner census operations must not enter while the source session is being replaced.");
             Assert.That(current.ExecutionState.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.False,
                 "The source session cannot become capture-eligible during detached replacement.");
+            Assert.That(current.ExecutionState.TryAssessCaptureScope(
+                DailyV1CaptureScopeAllowance.SessionReplacementValidation), Is.True,
+                "Read-only completed-boundary validation remains possible without enabling capture publication.");
             Assert.That(gate.TryPublishReplacement(current, competingReplacement), Is.False,
                 "The ordinary replacement path cannot bypass the active exclusive reservation.");
             Assert.That(gate.Current, Is.SameAs(current));
