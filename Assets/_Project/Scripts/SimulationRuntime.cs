@@ -12114,6 +12114,22 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             out string resultMessage)
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (dispatch?.Kind == DailyV1SelectedActionDispatchKind.Normal)
+            {
+                // Normal actions with no status effects are completed from the
+                // exact Core action slot. Their Unity action object is only a
+                // presentation projection and is not required for execution.
+                NpcActionResult normalResult = runtime.CompleteSelectedActionDispatch(
+                    exactRuntime, null, null, dispatch);
+                if (normalResult != null && !string.IsNullOrEmpty(normalResult.Message))
+                    runtime.logger?.Log(SimulationLogCategory.NpcAction,
+                        normalResult.Message);
+                actionSucceeded = normalResult?.Success == true;
+                resultType = normalResult?.ResultType;
+                resultMessage = normalResult?.Message;
+                return true;
+            }
+
             NpcActionRuntime actionRuntime = exactRuntime.CurrentActionRuntime;
             NpcActionData action = exactRuntime.CurrentAction;
             NpcActionResult actionResult = runtime.CompleteSelectedActionDispatch(
@@ -12142,8 +12158,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 return false;
 
             NpcActionRuntime actionRuntime = exactRuntime.CurrentActionRuntime;
-            if (actionRuntime == null
-                || !ReferenceEquals(actionRuntime.TargetNpc, targetRuntime))
+            bool exactProjectedAction = actionRuntime != null
+                && ReferenceEquals(actionRuntime.TargetNpc, targetRuntime);
+            bool projectionIndependentNormal = target == null
+                && DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
+                    graph, actor, actor.ActionSlot?.CurrentAction);
+            if (!exactProjectedAction && !projectionIndependentNormal)
                 return false;
 
             boundary = new SelectedActionStatusOperationBoundaryAdapter(

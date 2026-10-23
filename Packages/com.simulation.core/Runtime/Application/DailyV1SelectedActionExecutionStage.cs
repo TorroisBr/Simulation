@@ -1504,6 +1504,17 @@ internal static class DailyV1SelectedActionDispatchStage
             return false;
         }
 
+        if (actionType == DailyV1NpcDefinitionRules.NormalActionTypeValue)
+        {
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.Normal,
+                true,
+                true,
+                normalActionName: DailyV1NpcDefinitionRules.GetActionName(graph.Definitions, action),
+                normalActionLogText: DailyV1NpcDefinitionRules.GetNormalActionLogText(graph.Definitions, action));
+            return true;
+        }
+
         if (randomSource == null || boundary == null)
         {
             if (actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue)
@@ -1517,17 +1528,6 @@ internal static class DailyV1SelectedActionDispatchStage
                 return true;
             }
             return false;
-        }
-
-        if (actionType == DailyV1NpcDefinitionRules.NormalActionTypeValue)
-        {
-            result = new DailyV1SelectedActionDispatchResult(
-                DailyV1SelectedActionDispatchKind.Normal,
-                true,
-                true,
-                normalActionName: DailyV1NpcDefinitionRules.GetActionName(graph.Definitions, action),
-                normalActionLogText: DailyV1NpcDefinitionRules.GetNormalActionLogText(graph.Definitions, action));
-            return true;
         }
 
         if (actionType == DailyV1NpcDefinitionRules.TravelActionTypeValue)

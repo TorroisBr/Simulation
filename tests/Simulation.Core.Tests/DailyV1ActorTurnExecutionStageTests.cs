@@ -684,6 +684,57 @@ public sealed class DailyV1ActorTurnExecutionStageTests
     }
 
     [Test]
+    public void CoreCompletesEffectFreeNormalActionWithoutHostActionProjection()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
+        DailyV1ActionDefinition normal = graph.Definitions.Actions["DESCANSAR"];
+        Assert.That(normal.Values.actionType?.Value,
+            Is.EqualTo(DailyV1NpcDefinitionRules.NormalActionTypeValue));
+        Assert.That(DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
+            graph.Definitions, normal,
+            out IReadOnlyList<DailyV1StatusDefinition> actorRemove,
+            out IReadOnlyList<DailyV1StatusDefinition> actorAdd,
+            out IReadOnlyList<DailyV1StatusDefinition> targetRemove,
+            out IReadOnlyList<DailyV1StatusDefinition> targetAdd), Is.True);
+        Assert.That(actorRemove, Is.Empty);
+        Assert.That(actorAdd, Is.Empty);
+        Assert.That(targetRemove, Is.Empty);
+        Assert.That(targetAdd, Is.Empty);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            graph.Definitions, normal, null, null, null, 0,
+            0f, 1f, NpcTravelReason.None, 0f, "decision/normal-core",
+            null, null, null, out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, normal, payload, null), Is.True);
+
+        CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary
+        {
+            RejectDispatchBoundary = true
+        };
+        boundary.BindGraph(graph);
+        long actionRevision = actor.ActionSlot.Revision;
+        DailyV1StatusDefinition[] statusBefore = actor.Status.Statuses.ToArray();
+
+        Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+            graph, actor, boundary.RandomSource, 12L, boundary,
+            out bool succeeded, out NpcActionResultType? resultType,
+            out string resultMessage), Is.True);
+
+        Assert.That(succeeded, Is.True);
+        Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+        Assert.That(resultMessage, Is.Null);
+        Assert.That(boundary.DispatchBoundaryRequests, Is.Zero);
+        Assert.That(boundary.ActionStatusBoundaryRequests, Is.EqualTo(1));
+        Assert.That(boundary.ChosenActionTargetLogCalls, Is.EqualTo(1));
+        Assert.That(boundary.Events, Is.EqualTo(new[]
+        {
+            "chosen-target", "complete-dispatch", "status-operation"
+        }));
+        Assert.That(boundary.Random.Calls, Is.Zero);
+        Assert.That(actor.ActionSlot.Revision, Is.EqualTo(actionRevision));
+        Assert.That(actor.Status.Statuses, Is.EqualTo(statusBefore));
+    }
+
+    [Test]
     public void SelectedActionClearCommitsCoreRevisionBetweenAdmissionAndProjection()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
@@ -1173,6 +1224,11 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         private DailyV1NpcActionPayloadOwner preparedProjectionPayload;
         internal bool RejectNextActionSlotAdmission;
         internal bool CanProjectSelectedAction = true;
+        internal bool RejectDispatchBoundary;
+        internal bool RejectActionStatusBoundary;
+        internal int DispatchBoundaryRequests;
+        internal int ActionStatusBoundaryRequests;
+        internal int ChosenActionTargetLogCalls;
         internal int SaleAdmissionCount;
         internal int ActionSlotAdmissionCount;
         internal int SaleReceiptCount;
@@ -1426,13 +1482,18 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             CurrentGraph.TryCommitCurrentActionSlot(actor, null, null, () => true);
         }
 
-        public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor) => Events.Add("chosen-target");
+        public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor)
+        {
+            ChosenActionTargetLogCalls++;
+            Events.Add("chosen-target");
+        }
         public bool TryGetDispatchBoundary(
             DailyV1NpcRuntimeOwners actor,
             out IDailyV1SelectedActionDispatchBoundary dispatchBoundary)
         {
-            dispatchBoundary = this;
-            return true;
+            DispatchBoundaryRequests++;
+            dispatchBoundary = RejectDispatchBoundary ? null : this;
+            return !RejectDispatchBoundary;
         }
 
         public bool TryCompleteDispatch(
@@ -1457,8 +1518,9 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             bool reuseExistingOperation,
             out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary boundary)
         {
-            boundary = this;
-            return true;
+            ActionStatusBoundaryRequests++;
+            boundary = RejectActionStatusBoundary ? null : this;
+            return !RejectActionStatusBoundary;
         }
 
         public bool TryGetForcedEscapeBoundary(

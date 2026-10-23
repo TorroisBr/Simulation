@@ -9,6 +9,53 @@ using System.Collections.Generic;
 /// </summary>
 internal static class DailyV1SelectedActorActionExecutionStage
 {
+    /// <summary>
+    /// Identifies the narrow Normal-action shape whose dispatch has no Core
+    /// status write, target, or operation payload and therefore does not need
+    /// a Unity NpcActionRuntime projection.
+    /// </summary>
+    internal static bool IsProjectionIndependentNormalAction(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action)
+    {
+        if (graph == null || actor == null || action == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(actor.Definitions, graph.Definitions)
+            || actor.ActionSlot == null
+            || !ReferenceEquals(actor.ActionSlot.CurrentAction, action)
+            || !graph.Definitions.Actions.TryGetValue(
+                action.DefinitionId, out DailyV1ActionDefinition admittedAction)
+            || !ReferenceEquals(action, admittedAction)
+            || action.Values.actionType?.Value != DailyV1NpcDefinitionRules.NormalActionTypeValue
+            || !DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
+                graph.Definitions, action)
+            || !DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
+                graph.Definitions, action,
+                out IReadOnlyList<DailyV1StatusDefinition> actorStatusToRemove,
+                out IReadOnlyList<DailyV1StatusDefinition> actorStatusToAdd,
+                out IReadOnlyList<DailyV1StatusDefinition> targetStatusToRemove,
+                out IReadOnlyList<DailyV1StatusDefinition> targetStatusToAdd))
+            return false;
+
+        DailyV1NpcActionPayloadOwner payload = actor.ActionSlot.CurrentPayload;
+        return payload != null
+            && ReferenceEquals(payload.Action, action)
+            && payload.TargetNpcRuntimeId == null
+            && payload.TargetCityRuntimeId == null
+            && payload.TargetItem == null
+            && payload.Amount == 0
+            && payload.ExpectedUnitPrice == 0f
+            && payload.TravelReason == NpcTravelReason.None
+            && payload.ExpectedNetValue == 0f
+            && payload.CommercialDecisionEvidence == null
+            && payload.CommercialScoutingEvidence == null
+            && actorStatusToRemove.Count == 0
+            && actorStatusToAdd.Count == 0
+            && targetStatusToRemove.Count == 0
+            && targetStatusToAdd.Count == 0;
+    }
+
     internal static bool TryExecuteAutonomousAction(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
@@ -427,7 +474,6 @@ internal static class DailyV1SelectedActorActionExecutionStage
         DailyV1ActionDefinition action = actor.ActionSlot.CurrentAction;
         if (action == null) return true;
 
-        boundary.LogChosenActionTarget(actor);
         if (!DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
                 graph.Definitions, action)
             || !DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
@@ -437,10 +483,25 @@ internal static class DailyV1SelectedActorActionExecutionStage
             return true;
         }
 
-        if (!boundary.TryGetDispatchBoundary(actor,
-                out IDailyV1SelectedActionDispatchBoundary dispatchBoundary)
-            || dispatchBoundary == null
-            || !DailyV1SelectedActionDispatchStage.TryDispatch(
+        // Keep the established host logging callback order. For a targetless
+        // Normal action the Unity adapter's implementation is a no-op when
+        // its optional action projection is absent.
+        boundary.LogChosenActionTarget(actor);
+
+        DailyV1NpcActionPayloadOwner payload = actor.ActionSlot.CurrentPayload;
+        bool coreOwnedNormalAction = IsProjectionIndependentNormalAction(
+            graph, actor, action);
+
+        IDailyV1SelectedActionDispatchBoundary dispatchBoundary = null;
+        if (!coreOwnedNormalAction)
+        {
+            if (!boundary.TryGetDispatchBoundary(actor, out dispatchBoundary)
+                || dispatchBoundary == null)
+                throw new InvalidOperationException(
+                    "The exact selected Daily-v1 action could not execute through its Core owner operation.");
+        }
+
+        if (!DailyV1SelectedActionDispatchStage.TryDispatch(
                 graph, actor, randomSource, absoluteDay, dispatchBoundary,
                 out DailyV1SelectedActionDispatchResult dispatch)
             || dispatch == null)
@@ -456,7 +517,6 @@ internal static class DailyV1SelectedActorActionExecutionStage
         if (!actionSucceeded) return true;
 
         DailyV1NpcRuntimeOwners target = null;
-        DailyV1NpcActionPayloadOwner payload = actor.ActionSlot.CurrentPayload;
         bool targetExpected = !string.IsNullOrWhiteSpace(payload?.TargetNpcRuntimeId);
         if (targetExpected
             && (!graph.TryGetNpcOwner(payload.TargetNpcRuntimeId, out target)
