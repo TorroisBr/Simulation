@@ -8,28 +8,32 @@ public sealed class DailyV1RuntimeAdvanceStageTests
     [Test]
     public void SingleAdvanceOwnsLeaseOperationCompletionAndCapturePublicationOrder()
     {
-        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
-        FakeBoundary boundary = new FakeBoundary
+        DailyV1ExecutionBoundaryState state = CreateCaptureState();
+        FakeBoundary boundary = new FakeBoundary(state)
         {
             HasRuntimeAdmission = true,
             IsDailyCaptureProfile = true
         };
 
-        Assert.That(DailyV1RuntimeAdvanceStage.TryAdvanceDay(state, boundary, out var failure), Is.True);
+        Assert.That(state.TryAdvanceDay(boundary, out var failure), Is.True);
         Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.None));
         Assert.That(state.AdvanceLeaseHeld, Is.False);
         Assert.That(boundary.Calls, Is.EqualTo(new[]
         {
             "owner", "healthy", "capacity:1", "clock", "healthy", "operation",
-            "advance", "completed", "operation-end", "publish"
+            "advance", "operation-end", "capture-evidence"
         }));
+        Assert.That(state.CompletedCoreSequence, Is.EqualTo(1L));
+        Assert.That(boundary.SequenceObservedAtEvidenceCapture, Is.EqualTo(1L));
+        Assert.That(state.CurrentCaptureToken, Is.Not.Null);
+        Assert.That(state.CurrentCaptureToken.OwnerSections, Is.SameAs(boundary.CapturedOwnerSections));
     }
 
     [Test]
     public void SingleAdvanceExceptionInvalidatesCaptureAndFaultsAdmission()
     {
-        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
-        FakeBoundary boundary = new FakeBoundary
+        DailyV1ExecutionBoundaryState state = CreateCaptureState();
+        FakeBoundary boundary = new FakeBoundary(state)
         {
             HasRuntimeAdmission = true,
             IsDailyCaptureProfile = true,
@@ -37,28 +41,28 @@ public sealed class DailyV1RuntimeAdvanceStageTests
         };
 
         Assert.Throws<InvalidOperationException>(() =>
-            DailyV1RuntimeAdvanceStage.TryAdvanceDay(state, boundary, out _));
+            state.TryAdvanceDay(boundary, out _));
         Assert.That(state.AdvanceLeaseHeld, Is.False);
         Assert.That(state.CurrentCaptureToken, Is.Null);
         Assert.That(boundary.Calls, Does.Contain("fault"));
-        Assert.That(boundary.Calls, Does.Not.Contain("publish"));
+        Assert.That(boundary.Calls, Does.Not.Contain("capture-evidence"));
     }
 
     [Test]
     public void SingleLegacyAdvanceDoesNotEnterDailyAdmissionOrPublishCaptureToken()
     {
         DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
-        FakeBoundary boundary = new FakeBoundary();
+        FakeBoundary boundary = new FakeBoundary(state);
 
-        Assert.That(DailyV1RuntimeAdvanceStage.TryAdvanceDay(state, boundary, out _), Is.True);
+        Assert.That(state.TryAdvanceDay(boundary, out _), Is.True);
         Assert.That(boundary.Calls, Is.EqualTo(new[] { "advance" }));
     }
 
     [Test]
     public void SingleCapturePreflightFailureDoesNotAcquireLeaseOrAdvance()
     {
-        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
-        FakeBoundary boundary = new FakeBoundary
+        DailyV1ExecutionBoundaryState state = CreateCaptureState();
+        FakeBoundary boundary = new FakeBoundary(state)
         {
             HasRuntimeAdmission = true,
             IsDailyCaptureProfile = true,
@@ -66,7 +70,7 @@ public sealed class DailyV1RuntimeAdvanceStageTests
             ClockFailure = DailyV1RuntimeAdvanceFailureCode.AbsoluteDayOverflow
         };
 
-        Assert.That(DailyV1RuntimeAdvanceStage.TryAdvanceDay(state, boundary, out var failure), Is.False);
+        Assert.That(state.TryAdvanceDay(boundary, out var failure), Is.False);
         Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.AbsoluteDayOverflow));
         Assert.That(boundary.Calls, Is.EqualTo(new[] { "owner", "healthy", "capacity:1", "clock" }));
         Assert.That(state.AdvanceLeaseHeld, Is.False);
@@ -77,9 +81,9 @@ public sealed class DailyV1RuntimeAdvanceStageTests
     {
         DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
         Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease outerLease), Is.True);
-        FakeBoundary boundary = new FakeBoundary();
+        FakeBoundary boundary = new FakeBoundary(state);
 
-        Assert.That(DailyV1RuntimeAdvanceStage.TryAdvanceDay(state, boundary, out var failure), Is.False);
+        Assert.That(state.TryAdvanceDay(boundary, out var failure), Is.False);
         Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.AdvanceAlreadyInProgress));
         Assert.That(boundary.Calls, Is.Empty);
         outerLease.Dispose();
@@ -87,12 +91,49 @@ public sealed class DailyV1RuntimeAdvanceStageTests
     }
 
     [Test]
+    public void RuntimeBoundaryMustBelongToTheCoreExecutionStateThatAdvancesIt()
+    {
+        DailyV1ExecutionBoundaryState requestedState = new DailyV1ExecutionBoundaryState();
+        DailyV1ExecutionBoundaryState boundaryState = new DailyV1ExecutionBoundaryState();
+        FakeBoundary boundary = new FakeBoundary(boundaryState)
+        {
+            HasRuntimeAdmission = true,
+            IsDailyCaptureProfile = true
+        };
+
+        Assert.That(requestedState.TryAdvanceDay(boundary, out var failure), Is.False);
+        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted));
+        Assert.That(boundary.Calls, Is.Empty);
+        Assert.That(requestedState.AdvanceLeaseHeld, Is.False);
+        Assert.That(boundaryState.AdvanceLeaseHeld, Is.False);
+    }
+
+    [Test]
+    public void BatchRuntimeBoundaryMustBelongToTheCoreExecutionStateThatAdvancesIt()
+    {
+        DailyV1ExecutionBoundaryState requestedState = new DailyV1ExecutionBoundaryState();
+        DailyV1ExecutionBoundaryState boundaryState = new DailyV1ExecutionBoundaryState();
+        FakeBoundary boundary = new FakeBoundary(boundaryState)
+        {
+            HasRuntimeAdmission = true,
+            IsDailyCaptureProfile = true
+        };
+
+        Assert.That(requestedState.TryAdvanceDays(boundary, 2, out int daysAdvanced, out var failure), Is.False);
+        Assert.That(daysAdvanced, Is.Zero);
+        Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted));
+        Assert.That(boundary.Calls, Is.Empty);
+        Assert.That(requestedState.AdvanceLeaseHeld, Is.False);
+        Assert.That(boundaryState.AdvanceLeaseHeld, Is.False);
+    }
+
+    [Test]
     public void LegacyIntradayAdvanceUsesTheTimelineBoundary()
     {
         DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
-        FakeBoundary boundary = new FakeBoundary { HasIntradayTimeline = true };
+        FakeBoundary boundary = new FakeBoundary(state) { HasIntradayTimeline = true };
 
-        Assert.That(DailyV1RuntimeAdvanceStage.TryAdvanceDay(state, boundary, out _), Is.True);
+        Assert.That(state.TryAdvanceDay(boundary, out _), Is.True);
         Assert.That(boundary.Calls, Is.EqualTo(new[] { "intraday" }));
     }
 
@@ -100,15 +141,15 @@ public sealed class DailyV1RuntimeAdvanceStageTests
     public void NonAdmittedSingleAdvanceKeepsIntradayTimelinePrecedence()
     {
         DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
-        FakeBoundary boundary = new FakeBoundary
+        FakeBoundary boundary = new FakeBoundary(state)
         {
             HasIntradayTimeline = true,
             HasCoreSelectedDailyExecution = true
         };
 
-        Assert.That(DailyV1RuntimeAdvanceStage.TryAdvanceDay(state, boundary, out _), Is.True);
+        Assert.That(state.TryAdvanceDay(boundary, out _), Is.True);
         Assert.That(boundary.Calls, Is.EqualTo(new[] { "intraday" }));
-        Assert.That(boundary.Calls, Does.Not.Contain("selected-context"));
+        Assert.That(boundary.Calls, Does.Not.Contain("execution-boundary"));
         Assert.That(boundary.Calls, Does.Not.Contain("advance"));
     }
 
@@ -116,22 +157,24 @@ public sealed class DailyV1RuntimeAdvanceStageTests
     public void BatchAdvanceKeepsIntradayTimelinePrecedenceAndHostPreflight()
     {
         DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
-        FakeBoundary boundary = new FakeBoundary
+        FakeBoundary boundary = new FakeBoundary(state)
         {
             HasRuntimeAdmission = true,
             HasIntradayTimeline = true,
             HasCoreSelectedDailyExecution = true
         };
 
-        Assert.That(DailyV1RuntimeAdvanceStage.TryAdvanceDays(
-            state, boundary, 1, out int advanced, out DailyV1RuntimeAdvanceFailureCode failure), Is.True);
+        Assert.That(state.TryAdvanceDays(
+            boundary, 1, out int advanced, out DailyV1RuntimeAdvanceFailureCode failure), Is.True);
         Assert.That(advanced, Is.EqualTo(1));
         Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.None));
         Assert.That(boundary.Calls, Is.EqualTo(new[]
         {
-            "owner", "healthy", "clock", "operation", "intraday", "completed", "operation-end"
+            "owner", "healthy", "clock", "operation", "intraday", "operation-end"
         }));
-        Assert.That(boundary.Calls, Does.Not.Contain("selected-context"));
+        Assert.That(state.CompletedCoreSequence, Is.Zero,
+            "Non-capture runtime admissions do not advance the selected Daily-v1 capture sequence.");
+        Assert.That(boundary.Calls, Does.Not.Contain("execution-boundary"));
         Assert.That(boundary.Calls, Does.Not.Contain("selected-clock"));
         Assert.That(boundary.Calls, Does.Not.Contain("advance"));
     }
@@ -140,14 +183,14 @@ public sealed class DailyV1RuntimeAdvanceStageTests
     public void BatchRejectsNegativeCountAndLeavesZeroCountWithoutLeaseWork()
     {
         DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
-        FakeBoundary boundary = new FakeBoundary();
+        FakeBoundary boundary = new FakeBoundary(state);
 
-        Assert.That(DailyV1RuntimeAdvanceStage.TryAdvanceDays(
-            state, boundary, -1, out int negativeAdvanced, out var negativeFailure), Is.False);
+        Assert.That(state.TryAdvanceDays(
+            boundary, -1, out int negativeAdvanced, out var negativeFailure), Is.False);
         Assert.That(negativeAdvanced, Is.Zero);
         Assert.That(negativeFailure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.InvalidDayCount));
-        Assert.That(DailyV1RuntimeAdvanceStage.TryAdvanceDays(
-            state, boundary, 0, out int zeroAdvanced, out var zeroFailure), Is.True);
+        Assert.That(state.TryAdvanceDays(
+            boundary, 0, out int zeroAdvanced, out var zeroFailure), Is.True);
         Assert.That(zeroAdvanced, Is.Zero);
         Assert.That(zeroFailure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.None));
         Assert.That(boundary.Calls, Is.Empty);
@@ -156,43 +199,48 @@ public sealed class DailyV1RuntimeAdvanceStageTests
     [Test]
     public void BatchRecordsEachCompletedBoundaryAndPublishesOnlyAfterAllDays()
     {
-        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
-        FakeBoundary boundary = new FakeBoundary
+        DailyV1ExecutionBoundaryState state = CreateCaptureState();
+        FakeBoundary boundary = new FakeBoundary(state)
         {
             HasRuntimeAdmission = true,
             IsDailyCaptureProfile = true
         };
 
-        Assert.That(DailyV1RuntimeAdvanceStage.TryAdvanceDays(
-            state, boundary, 3, out int advanced, out var failure), Is.True);
+        Assert.That(state.TryAdvanceDays(
+            boundary, 3, out int advanced, out var failure), Is.True);
         Assert.That(advanced, Is.EqualTo(3));
         Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.None));
         Assert.That(boundary.Calls, Is.EqualTo(new[]
         {
             "owner", "healthy", "capacity:3", "clock", "healthy", "operation",
-            "advance", "completed", "advance", "completed", "advance", "completed", "operation-end", "publish"
+            "advance", "advance", "advance", "operation-end", "capture-evidence"
         }));
-        Assert.That(boundary.Calls.FindIndex(value => value == "publish"),
-            Is.GreaterThan(boundary.Calls.FindLastIndex(value => value == "completed")));
+        Assert.That(state.CompletedCoreSequence, Is.EqualTo(3L));
+        Assert.That(boundary.SequenceObservedAtEvidenceCapture, Is.EqualTo(3L));
+        Assert.That(state.CurrentCaptureToken, Is.Not.Null);
+        Assert.That(state.CurrentCaptureToken.OwnerSections, Is.SameAs(boundary.CapturedOwnerSections));
         Assert.That(state.AdvanceLeaseHeld, Is.False);
     }
 
     [Test]
     public void BatchReportsPartialProgressWithoutPublishingAfterLaterAdvanceFailure()
     {
-        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
-        FakeBoundary boundary = new FakeBoundary
+        DailyV1ExecutionBoundaryState state = CreateCaptureState();
+        FakeBoundary boundary = new FakeBoundary(state)
         {
             HasRuntimeAdmission = true,
             IsDailyCaptureProfile = true,
             FailAdvanceNumber = 2
         };
 
-        Assert.That(DailyV1RuntimeAdvanceStage.TryAdvanceDays(
-            state, boundary, 3, out int advanced, out var failure), Is.False);
+        Assert.That(state.TryAdvanceDays(
+            boundary, 3, out int advanced, out var failure), Is.False);
         Assert.That(advanced, Is.EqualTo(1));
         Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.TemporalAdvanceFailed));
-        Assert.That(boundary.Calls, Does.Not.Contain("publish"));
+        Assert.That(state.CompletedCoreSequence, Is.EqualTo(1L));
+        Assert.That(boundary.Calls, Does.Not.Contain("capture-evidence"));
+        Assert.That(boundary.SequenceObservedAtEvidenceCapture, Is.EqualTo(-1L));
+        Assert.That(state.CurrentCaptureToken, Is.Null);
         Assert.That(state.AdvanceLeaseHeld, Is.False);
     }
 
@@ -200,20 +248,22 @@ public sealed class DailyV1RuntimeAdvanceStageTests
     public void BatchExceptionFaultsOnlyAnAdmittedRuntime()
     {
         DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
-        FakeBoundary boundary = new FakeBoundary
+        FakeBoundary boundary = new FakeBoundary(state)
         {
             HasRuntimeAdmission = false,
             ThrowDuringAdvance = true
         };
 
         Assert.Throws<InvalidOperationException>(() =>
-            DailyV1RuntimeAdvanceStage.TryAdvanceDays(state, boundary, 1, out _, out _));
+            state.TryAdvanceDays(boundary, 1, out _, out _));
         Assert.That(boundary.Calls, Does.Not.Contain("fault"));
         Assert.That(state.AdvanceLeaseHeld, Is.False);
     }
 
     private sealed class FakeBoundary : IDailyV1RuntimeAdvanceBoundary
     {
+        private readonly DailyV1ExecutionBoundaryState state;
+        internal FakeBoundary(DailyV1ExecutionBoundaryState state) => this.state = state;
         internal List<string> Calls { get; } = new List<string>();
         internal int FailAdvanceNumber { get; set; }
         internal bool ThrowDuringAdvance { get; set; }
@@ -225,10 +275,12 @@ public sealed class DailyV1RuntimeAdvanceStageTests
         internal bool HasIntradayTimeline { get; set; }
         internal bool ClockValidationSucceeds { get; set; } = true;
         internal DailyV1RuntimeAdvanceFailureCode ClockFailure { get; set; }
+        internal long SequenceObservedAtEvidenceCapture { get; private set; } = -1L;
+        internal IReadOnlyList<OwnerSectionCensusSnapshot> CapturedOwnerSections { get; private set; }
+        DailyV1ExecutionBoundaryState IDailyV1RuntimeAdvanceBoundary.ExecutionState => state;
         bool IDailyV1RuntimeAdvanceBoundary.HasRuntimeAdmission => HasRuntimeAdmission;
         bool IDailyV1RuntimeAdvanceBoundary.IsDailyCaptureProfile => IsDailyCaptureProfile;
         bool IDailyV1RuntimeAdvanceBoundary.HasCoreSelectedDailyExecution => HasCoreSelectedDailyExecution;
-        SimulationTime IDailyV1RuntimeAdvanceBoundary.SelectedDailyClock => null;
         bool IDailyV1RuntimeAdvanceBoundary.IsAdmissionOwnerThreadCurrent
         {
             get { Calls.Add("owner"); return IsAdmissionOwnerThreadCurrent; }
@@ -262,16 +314,10 @@ public sealed class DailyV1RuntimeAdvanceStageTests
             return true;
         }
 
-        public bool TryCreateSelectedDailyExecutionContext(
-            out long absoluteDay,
-            out DailyV1SelectedRuntimeOwnerGraph graph,
-            out ScheduledDirectiveStore scheduledDirectives,
+        public bool TryCreateSelectedDailyExecutionBoundary(
             out IDailyV1SelectedDailyExecutionBoundary executionBoundary)
         {
-            Calls.Add("selected-context");
-            absoluteDay = 0L;
-            graph = null;
-            scheduledDirectives = null;
+            Calls.Add("execution-boundary");
             executionBoundary = null;
             return false;
         }
@@ -281,16 +327,17 @@ public sealed class DailyV1RuntimeAdvanceStageTests
         public bool TryAdvanceIntradayToNextDayBoundary(out DailyV1RuntimeAdvanceFailureCode failure) =>
             Advance("intraday", out failure);
 
-        public bool TryRecordCompletedDailyCore(out DailyV1RuntimeAdvanceFailureCode failure)
+        public bool TryCaptureCompletedDailyCaptureEvidence(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
         {
-            Calls.Add("completed");
-            failure = DailyV1RuntimeAdvanceFailureCode.None;
-            return true;
-        }
-
-        public bool TryPublishCompletedDailyCaptureToken()
-        {
-            Calls.Add("publish");
+            Calls.Add("capture-evidence");
+            SequenceObservedAtEvidenceCapture = state.CompletedCoreSequence;
+            ownerSections = DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+            CapturedOwnerSections = ownerSections;
+            mutationEpoch = 1L;
+            failure = DailyCaptureEligibilityFailure.None;
             return true;
         }
 
@@ -316,4 +363,18 @@ public sealed class DailyV1RuntimeAdvanceStageTests
 
         public void Dispose() => onDispose?.Invoke();
     }
+
+    private static DailyV1ExecutionBoundaryState CreateCaptureState()
+    {
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow();
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(1, 1, 1));
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(), admission, SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(Guid.NewGuid()));
+        Assert.That(state.TryBindRuntimeConfiguration(configuration, calendar), Is.True);
+        return state;
+    }
+
 }

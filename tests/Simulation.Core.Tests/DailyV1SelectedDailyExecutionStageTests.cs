@@ -291,22 +291,26 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         const long absoluteDay = 23L;
         ScheduledDirectiveStore directives = CreateDirectiveForFirstNpc(graph, absoluteDay);
         FakeBoundary dailyBoundary = new FakeBoundary();
-        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
+        DailyV1ExecutionBoundaryState state = CreateCaptureState(absoluteDay - 1L);
+        Assert.That(state.TryBindSelectedRuntimeOwnerGraph(graph), Is.True);
         FakeRuntimeAdvanceBoundary advanceBoundary = new FakeRuntimeAdvanceBoundary(
-            state, absoluteDay, graph, directives, dailyBoundary);
+            state, dailyBoundary);
 
-        Assert.That(DailyV1RuntimeAdvanceStage.TryAdvanceDay(
-            state, advanceBoundary, out DailyV1RuntimeAdvanceFailureCode failure), Is.True);
+        Assert.That(state.TryAdvanceDay(
+            advanceBoundary, out DailyV1RuntimeAdvanceFailureCode failure), Is.True);
         Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.None));
         Assert.That(advanceBoundary.Calls, Is.EqualTo(new[]
         {
-            "owner", "healthy", "capacity:1", "selected-clock", "healthy", "operation",
-            "selected-clock", "healthy", "selected-context", "completed", "token"
+            "owner", "healthy", "capacity:1", "healthy", "operation",
+            "healthy", "execution-boundary", "capture-evidence"
         }));
         Assert.That(dailyBoundary.Calls, Does.Contain("begin-day"));
         Assert.That(dailyBoundary.Calls, Does.Contain("actor-context"));
         Assert.That(dailyBoundary.Calls, Does.Contain("travel-context"));
         Assert.That(state.CompletedCoreSequence, Is.EqualTo(1L));
+        Assert.That(state.SimulationTime.AbsoluteDay, Is.EqualTo(absoluteDay));
+        Assert.That(state.CurrentCaptureToken, Is.Not.Null);
+        Assert.That(state.CurrentCaptureToken.AbsoluteDay, Is.EqualTo(absoluteDay));
         Assert.That(state.AdvanceLeaseHeld, Is.False);
     }
 
@@ -315,19 +319,20 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
             DailyV1CapturedSelectedContentFixture.CreateDefinitions());
-        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
+        DailyV1ExecutionBoundaryState state = CreateCaptureState(22L);
+        Assert.That(state.TryBindSelectedRuntimeOwnerGraph(graph), Is.True);
         FakeRuntimeAdvanceBoundary advanceBoundary = new FakeRuntimeAdvanceBoundary(
-            state, 23L, graph, null, new FakeBoundary())
+            state, new FakeBoundary())
         {
             FailSelectedContext = true
         };
 
-        Assert.That(DailyV1RuntimeAdvanceStage.TryAdvanceDay(
-            state, advanceBoundary, out DailyV1RuntimeAdvanceFailureCode failure), Is.False);
+        Assert.That(state.TryAdvanceDay(
+            advanceBoundary, out DailyV1RuntimeAdvanceFailureCode failure), Is.False);
         Assert.That(failure, Is.EqualTo(DailyV1RuntimeAdvanceFailureCode.RuntimeFaulted));
         Assert.That(advanceBoundary.Calls, Does.Contain("fault"));
         Assert.That(advanceBoundary.Calls, Does.Not.Contain("completed"));
-        Assert.That(advanceBoundary.Calls, Does.Not.Contain("token"));
+        Assert.That(advanceBoundary.Calls, Does.Not.Contain("capture-evidence"));
         Assert.That(state.CompletedCoreSequence, Is.Zero);
         Assert.That(state.AdvanceLeaseHeld, Is.False);
     }
@@ -382,6 +387,19 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue)), Is.True);
         Assert.That(graph.TryBindScheduledDirectives(directives), Is.True);
         return directives;
+    }
+
+    private static DailyV1ExecutionBoundaryState CreateCaptureState(long absoluteDay)
+    {
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow();
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(1, 1, 1));
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(absoluteDay), admission, SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(Guid.NewGuid()));
+        Assert.That(state.TryBindRuntimeConfiguration(configuration, calendar), Is.True);
+        return state;
     }
 
     private static DailyV1SelectedRuntimeOwnerGraph CreateGraph(
@@ -869,37 +887,23 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     private sealed class FakeRuntimeAdvanceBoundary : IDailyV1RuntimeAdvanceBoundary
     {
         private readonly DailyV1ExecutionBoundaryState state;
-        private readonly long absoluteDay;
-        private readonly SimulationTime selectedClock;
-        private readonly DailyV1SelectedRuntimeOwnerGraph graph;
-        private readonly ScheduledDirectiveStore directives;
         private readonly IDailyV1SelectedDailyExecutionBoundary executionBoundary;
         internal List<string> Calls { get; } = new List<string>();
         internal bool FailSelectedContext { get; set; }
 
         internal FakeRuntimeAdvanceBoundary(
             DailyV1ExecutionBoundaryState state,
-            long absoluteDay,
-            DailyV1SelectedRuntimeOwnerGraph graph,
-            ScheduledDirectiveStore directives,
             IDailyV1SelectedDailyExecutionBoundary executionBoundary)
         {
             this.state = state;
-            this.absoluteDay = absoluteDay;
-            selectedClock = new SimulationTime(absoluteDay - 1L);
-            this.graph = graph;
-            this.directives = directives;
             this.executionBoundary = executionBoundary;
         }
 
+        public DailyV1ExecutionBoundaryState ExecutionState => state;
         public bool HasRuntimeAdmission => true;
         public bool IsAdmissionOwnerThreadCurrent { get { Calls.Add("owner"); return true; } }
         public bool IsDailyCaptureProfile => true;
         public bool HasCoreSelectedDailyExecution => true;
-        public SimulationTime SelectedDailyClock
-        {
-            get { Calls.Add("selected-clock"); return selectedClock; }
-        }
         public bool CanMutate { get { Calls.Add("healthy"); return true; } }
         public bool HasIntradayTimeline => false;
         public bool TryPreflightDailyCoreSequenceCapacity(
@@ -921,16 +925,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             operationScope = new FakeOperationScope();
             return true;
         }
-        public bool TryCreateSelectedDailyExecutionContext(
-            out long day,
-            out DailyV1SelectedRuntimeOwnerGraph selectedGraph,
-            out ScheduledDirectiveStore scheduledDirectives,
+        public bool TryCreateSelectedDailyExecutionBoundary(
             out IDailyV1SelectedDailyExecutionBoundary boundary)
         {
-            Calls.Add("selected-context");
-            day = absoluteDay;
-            selectedGraph = FailSelectedContext ? null : graph;
-            scheduledDirectives = directives;
+            Calls.Add("execution-boundary");
             boundary = FailSelectedContext ? null : executionBoundary;
             return !FailSelectedContext;
         }
@@ -944,17 +942,15 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             failure = DailyV1RuntimeAdvanceFailureCode.TemporalAdvanceFailed;
             return false;
         }
-        public bool TryRecordCompletedDailyCore(out DailyV1RuntimeAdvanceFailureCode failure)
+        public bool TryCaptureCompletedDailyCaptureEvidence(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
         {
-            Calls.Add("completed");
-            failure = state.TryRecordCompletedCore()
-                ? DailyV1RuntimeAdvanceFailureCode.None
-                : DailyV1RuntimeAdvanceFailureCode.CompletedBoundarySequenceOverflow;
-            return failure == DailyV1RuntimeAdvanceFailureCode.None;
-        }
-        public bool TryPublishCompletedDailyCaptureToken()
-        {
-            Calls.Add("token");
+            Calls.Add("capture-evidence");
+            ownerSections = DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+            mutationEpoch = 1L;
+            failure = DailyCaptureEligibilityFailure.None;
             return true;
         }
         public void FaultRuntimeAdmission() => Calls.Add("fault");

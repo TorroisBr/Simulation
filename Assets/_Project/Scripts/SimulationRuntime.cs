@@ -2833,9 +2833,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             }
             // A P18-D timeline is the admitted clock authority. Its projected
             // SimulationTime intentionally rejects independent runtime-clock
-            // dispatch, while DailyV1RuntimeAdvanceStage advances the timeline
-            // boundary directly. Bind the legacy runtime dispatcher only when
-            // no timeline projection owns this clock.
+            // dispatch, while Core's execution-boundary state advances the
+            // timeline boundary directly. Bind the legacy runtime dispatcher
+            // only when no timeline projection owns this clock.
             if (p18dTimeline == null
                 && !SimulationTimeOwnerBridge.TryBindRuntimeAdvanceDispatcher(
                     simulationTime, TryAdvanceFromRuntimeOwnedClock))
@@ -9994,19 +9994,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         return true;
     }
 
-    private bool TryRecordCompletedDailyCore(out SimulationRuntimeAdvanceFailure failure)
-    {
-        failure = SimulationRuntimeAdvanceFailure.None;
-        if (!IsDailyCaptureProfile) return true;
-        if (!dailyExecutionBoundary.TryRecordCompletedCore())
-        {
-            FaultRuntimeAdmission();
-            failure = SimulationRuntimeAdvanceFailure.CompletedBoundarySequenceOverflow;
-            return false;
-        }
-        return true;
-    }
-
     private bool TryReadDailyCaptureEvidence(
         bool finalizingHeldAdvance,
         DailyV1CaptureScopeAllowance allowedOuterScope,
@@ -10101,39 +10088,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             currentMutationEpoch);
     }
 
-    private bool TryPublishCompletedDailyCaptureToken(
-        out DailyCaptureEligibilityFailure failure)
-    {
-        failure = DailyCaptureEligibilityFailure.None;
-        if (completedDailyCoreSequence <= 0L
-            || !TryReadDailyCaptureEvidence(
-                finalizingHeldAdvance: true,
-                DailyV1CaptureScopeAllowance.DailyAdvance,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
-                out long mutationEpoch,
-                out failure))
-        {
-            FaultRuntimeAdmission();
-            return false;
-        }
-        if (!dailyExecutionBoundary.TryCreateCompletedAdvanceToken(
-                runtimeAdmissionContext,
-                configuration,
-                calendar,
-                compositionProfile,
-                WorldId,
-                CurrentDay,
-                mutationEpoch,
-                ownerSections,
-                out _))
-        {
-            FaultRuntimeAdmission();
-            failure = DailyCaptureEligibilityFailure.NoCompletedBoundary;
-            return false;
-        }
-
-        return true;
-    }
+    private bool TryCaptureCompletedDailyCaptureEvidence(
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure) =>
+        TryReadDailyCaptureEvidence(
+            finalizingHeldAdvance: true,
+            DailyV1CaptureScopeAllowance.DailyAdvance,
+            out ownerSections,
+            out mutationEpoch,
+            out failure);
 
     internal bool TryAdmitRestoredDailyBoundary(
         WorldId expectedWorldId,
@@ -10522,8 +10486,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         bool scopeClosed = true;
         try
         {
-            advanced = DailyV1RuntimeAdvanceStage.TryAdvanceDay(
-                dailyExecutionBoundary, this, out DailyV1RuntimeAdvanceFailureCode coreFailure);
+            advanced = dailyExecutionBoundary.TryAdvanceDay(
+                this, out DailyV1RuntimeAdvanceFailureCode coreFailure);
             failure = (SimulationRuntimeAdvanceFailure)(byte)coreFailure;
         }
         finally
@@ -10577,16 +10541,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         return true;
     }
 
+    DailyV1ExecutionBoundaryState IDailyV1RuntimeAdvanceBoundary.ExecutionState => dailyExecutionBoundary;
     bool IDailyV1RuntimeAdvanceBoundary.HasRuntimeAdmission => runtimeAdmissionContext != null;
     bool IDailyV1RuntimeAdvanceBoundary.IsAdmissionOwnerThreadCurrent =>
         IsRuntimeAdmissionOwnerThreadCurrent();
     bool IDailyV1RuntimeAdvanceBoundary.IsDailyCaptureProfile => IsDailyCaptureProfile;
     bool IDailyV1RuntimeAdvanceBoundary.HasCoreSelectedDailyExecution =>
         runtimeAdmissionContext != null && DailyDemographicSystem.CanAdvanceSelected(this);
-    SimulationTime IDailyV1RuntimeAdvanceBoundary.SelectedDailyClock =>
-        (runtimeAdmissionContext != null && DailyDemographicSystem.CanAdvanceSelected(this))
-            ? simulationTime
-            : null;
     bool IDailyV1RuntimeAdvanceBoundary.CanMutate => mutationGuard.CanMutate;
     bool IDailyV1RuntimeAdvanceBoundary.HasIntradayTimeline => p18dTimeline != null;
 
@@ -10624,16 +10585,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         return true;
     }
 
-    bool IDailyV1RuntimeAdvanceBoundary.TryCreateSelectedDailyExecutionContext(
-        out long absoluteDay,
-        out DailyV1SelectedRuntimeOwnerGraph graph,
-        out ScheduledDirectiveStore scheduledDirectives,
+    bool IDailyV1RuntimeAdvanceBoundary.TryCreateSelectedDailyExecutionBoundary(
         out IDailyV1SelectedDailyExecutionBoundary executionBoundary)
     {
         activeDailyGameplayExecutionProbeForTest?.RecordAdvanceDayAfterClockAdvanceInvocation();
-        absoluteDay = CurrentDay;
-        graph = SelectedRuntimeOwnerGraph;
-        scheduledDirectives = scheduledDirectiveSystem?.Store;
+        DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
         executionBoundary = graph == null || graph.Definitions == null
             ? null
             : new SelectedDailyV1ExecutionBoundary(this);
@@ -10668,17 +10624,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         return advanced;
     }
 
-    bool IDailyV1RuntimeAdvanceBoundary.TryRecordCompletedDailyCore(
-        out DailyV1RuntimeAdvanceFailureCode failure)
-    {
-        bool recorded = TryRecordCompletedDailyCore(
-            out SimulationRuntimeAdvanceFailure hostFailure);
-        failure = (DailyV1RuntimeAdvanceFailureCode)(byte)hostFailure;
-        return recorded;
-    }
-
-    bool IDailyV1RuntimeAdvanceBoundary.TryPublishCompletedDailyCaptureToken() =>
-        TryPublishCompletedDailyCaptureToken(out _);
+    bool IDailyV1RuntimeAdvanceBoundary.TryCaptureCompletedDailyCaptureEvidence(
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure) =>
+        TryCaptureCompletedDailyCaptureEvidence(out ownerSections, out mutationEpoch, out failure);
 
     void IDailyV1RuntimeAdvanceBoundary.FaultRuntimeAdmission() => FaultRuntimeAdmission();
 
@@ -13449,9 +13399,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         bool scopeClosed = true;
         try
         {
-            advanced = DailyV1RuntimeAdvanceStage.TryAdvanceDays(
-                dailyExecutionBoundary, this, dayCount, out daysAdvanced,
-                out DailyV1RuntimeAdvanceFailureCode coreFailure);
+            advanced = dailyExecutionBoundary.TryAdvanceDays(
+                this, dayCount, out daysAdvanced, out DailyV1RuntimeAdvanceFailureCode coreFailure);
             failure = (SimulationRuntimeAdvanceFailure)(byte)coreFailure;
         }
         finally

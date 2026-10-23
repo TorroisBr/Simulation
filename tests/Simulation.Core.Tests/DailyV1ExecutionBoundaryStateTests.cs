@@ -206,6 +206,39 @@ public sealed class DailyV1ExecutionBoundaryStateTests
     }
 
     [Test]
+    public void CompletedAdvanceIssuanceRequiresACompletedBoundaryInTheHeldLease()
+    {
+        SimulationTime clock = new SimulationTime(5L);
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow();
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(1, 1, 1));
+        WorldId world = new WorldId(Guid.NewGuid());
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState(
+            clock, admission, SimulationRuntimeCompositionProfile.Standard, world);
+        Assert.That(state.TryBindRuntimeConfiguration(configuration, calendar), Is.True);
+
+        // A prior count does not authorize reissuing the previous boundary from
+        // a later lease. The current advance must complete one new boundary.
+        Assert.That(state.TryRecordCompletedCore(), Is.True);
+        OwnerSectionCensusSnapshot[] sections = CreateCompleteSnapshot();
+        Assert.That(state.TryIssueCompletedAdvanceCaptureToken(9L, sections, out _), Is.False);
+        Assert.That(state.TryBeginAdvance(true, out DailyV1AdvanceLease lease), Is.True);
+        Assert.That(state.TryIssueCompletedAdvanceCaptureToken(9L, sections, out _), Is.False);
+
+        Assert.That(state.TryRecordCompletedCore(), Is.True);
+        Assert.That(state.TryIssueCompletedAdvanceCaptureToken(
+            9L, sections, out DailyCaptureEligibilityToken token), Is.True);
+        Assert.That(token, Is.SameAs(state.CurrentCaptureToken));
+        Assert.That(token.CompletedCoreSequence, Is.EqualTo(2L));
+        Assert.That(token.AbsoluteDay, Is.EqualTo(5L));
+        Assert.That(token.OwnerSections, Is.SameAs(sections));
+
+        lease.Dispose();
+        Assert.That(state.AdvanceLeaseHeld, Is.False);
+    }
+
+    [Test]
     public void RestoredTokenKeepsRestoredBoundaryProvenanceAndSequenceAtomicity()
     {
         DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
@@ -280,7 +313,7 @@ public sealed class DailyV1ExecutionBoundaryStateTests
         Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(sections), Is.False);
     }
 
-    private static OwnerSectionCensusSnapshot[] CreateCompleteSnapshot()
+    internal static OwnerSectionCensusSnapshot[] CreateCompleteSnapshot()
     {
         const string npc = "npc-1";
         const string city = "city-1";

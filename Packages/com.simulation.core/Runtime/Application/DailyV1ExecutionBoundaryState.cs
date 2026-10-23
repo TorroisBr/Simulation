@@ -20,7 +20,7 @@ internal enum DailyV1CaptureScopeAllowance : byte
 /// Owns the per-runtime single-writer advance lease and completed Daily-v1
 /// core sequence. This is execution state, not a thread lock or persisted data.
 /// </summary>
-internal sealed class DailyV1ExecutionBoundaryState
+internal sealed partial class DailyV1ExecutionBoundaryState
 {
     private readonly object runtimeInstanceIdentity = new object();
     private readonly object operationSyncRoot = new object();
@@ -31,6 +31,7 @@ internal sealed class DailyV1ExecutionBoundaryState
     private bool runtimeIdentityBound;
     private bool runtimeConfigurationBound;
     private DailyV1AdvanceLease advanceLease;
+    private long advanceLeaseInitialCompletedSequence;
     private long completedCoreSequence;
     private DailyCaptureEligibilityToken currentCaptureToken;
     private bool selectedRuntimeOwnerGraphBound;
@@ -101,6 +102,7 @@ internal sealed class DailyV1ExecutionBoundaryState
     }
 
     internal bool AdvanceLeaseHeld => advanceLease != null;
+
     /// <summary>
     /// The single operation count shared by application admission and the P12
     /// census protocol for this runtime. It is deliberately stored beside the
@@ -335,6 +337,7 @@ internal sealed class DailyV1ExecutionBoundaryState
 
         DailyV1AdvanceLease candidate = new DailyV1AdvanceLease(this);
         advanceLease = candidate;
+        advanceLeaseInitialCompletedSequence = completedCoreSequence;
         lease = candidate;
         return true;
     }
@@ -394,6 +397,42 @@ internal sealed class DailyV1ExecutionBoundaryState
             ownerSections);
         currentCaptureToken = token;
         return true;
+    }
+
+    /// <summary>
+    /// Issues a completed-advance token only for a positive boundary recorded
+    /// during this exact held runtime lease. The P12 census remains the source
+    /// of owner snapshots and mutation epoch; this state owns the publication
+    /// decision and binds the token to its own admitted runtime identities.
+    /// </summary>
+    internal bool TryIssueCompletedAdvanceCaptureToken(
+        long mutationEpoch,
+        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out DailyCaptureEligibilityToken token)
+    {
+        token = null;
+        if (!runtimeIdentityBound
+            || !runtimeConfigurationBound
+            || AdmissionContext == null
+            || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !AdvanceLeaseHeld
+            || currentCaptureToken != null
+            || completedCoreSequence <= advanceLeaseInitialCompletedSequence
+            || SimulationTime == null
+            || mutationEpoch < 0L
+            || !DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(ownerSections))
+            return false;
+
+        return TryCreateCompletedAdvanceToken(
+            AdmissionContext,
+            ConfigurationIdentity,
+            CalendarIdentity,
+            CompositionProfile,
+            WorldId,
+            SimulationTime.AbsoluteDay,
+            mutationEpoch,
+            ownerSections,
+            out token);
     }
 
     internal bool TryCreateRestoredContinuationToken(
