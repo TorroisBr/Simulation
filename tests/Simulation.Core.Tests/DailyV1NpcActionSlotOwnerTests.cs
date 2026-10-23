@@ -146,6 +146,70 @@ public sealed class DailyV1NpcActionSlotOwnerTests
     }
 
     [Test]
+    public void SelectedActionPersistenceSnapshotReadsTheExactCorePayload()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ActionDefinition action = definitions.Actions.Values.First();
+        DailyV1ItemDefinition item = definitions.Items.Values.First();
+        CommercialDecisionEvidence decisionEvidence = new CommercialDecisionEvidence(
+            item.DefinitionId, "location/current", "location/origin", "location/destination", null,
+            null, null, 5, 7f, 8f, 2f, 3f, 1.5f, 0.75f);
+        CommercialScoutingEvidence scoutingEvidence = new CommercialScoutingEvidence(
+            "location/target", "route/known", 2, 1, true, 3L, 5f, 2, 6f);
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-runtime", definitions, definitions.Npcs.Values.First(), 0f,
+            out DailyV1NpcRuntimeOwners owners), Is.True);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            definitions, action, "target-npc", "target-city", item,
+            3, 5.25f, 1.5f, NpcTravelReason.CommercialScout, -2.75f,
+            "decision-origin", "occurrence-stable", decisionEvidence, scoutingEvidence,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(owners.ActionSlot.TrySetCurrentAction(action, payload), Is.True);
+
+        Assert.That(owners.ActionSlot.TryCapturePayload(
+            out DailyV1NpcActionPayloadSnapshot snapshot), Is.True);
+        Assert.That(snapshot, Is.Not.Null);
+        Assert.That(snapshot.Owner, Is.SameAs(payload));
+        Assert.That(snapshot.ActionDefinitionId, Is.EqualTo(action.DefinitionId));
+        Assert.That(snapshot.TargetNpcRuntimeId, Is.EqualTo("target-npc"));
+        Assert.That(snapshot.TargetCityRuntimeId, Is.EqualTo("target-city"));
+        Assert.That(snapshot.TargetItemDefinitionId, Is.EqualTo(item.DefinitionId));
+        Assert.That(snapshot.Amount, Is.EqualTo(3));
+        Assert.That(snapshot.ExpectedUnitPrice, Is.EqualTo(5.25f));
+        Assert.That(snapshot.SuccessChanceMultiplier, Is.EqualTo(1.5f));
+        Assert.That(snapshot.TravelReason, Is.EqualTo(NpcTravelReason.CommercialScout));
+        Assert.That(snapshot.ExpectedNetValue, Is.EqualTo(-2.75f));
+        Assert.That(snapshot.OriginDecisionId, Is.EqualTo("decision-origin"));
+        Assert.That(snapshot.StableOccurrenceKey, Is.EqualTo("occurrence-stable"));
+        Assert.That(snapshot.CommercialDecisionEvidence, Is.SameAs(decisionEvidence));
+        Assert.That(snapshot.CommercialScoutingEvidence, Is.SameAs(scoutingEvidence));
+
+        payload.SetOriginDecisionId("decision-updated");
+        Assert.That(owners.ActionSlot.TryCapturePayload(out DailyV1NpcActionPayloadSnapshot updated), Is.True);
+        Assert.That(updated.OriginDecisionId, Is.EqualTo("decision-updated"),
+            "A later persistence view must read the current canonical owner payload.");
+        Assert.That(updated.Owner, Is.SameAs(payload));
+    }
+
+    [Test]
+    public void SelectedActionPersistenceSnapshotRejectsIncompleteSlotAndPreservesEmptySlot()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-runtime", definitions, definitions.Npcs.Values.First(), 0f,
+            out DailyV1NpcRuntimeOwners owners), Is.True);
+        DailyV1NpcActionSlotOwner slot = owners.ActionSlot;
+
+        Assert.That(slot.TryCapturePayload(out DailyV1NpcActionPayloadSnapshot empty), Is.True);
+        Assert.That(empty, Is.Null);
+
+        Assert.That(slot.TrySetCurrentAction(definitions.Actions.Values.First()), Is.True);
+        Assert.That(slot.TryCapturePayload(out DailyV1NpcActionPayloadSnapshot incomplete), Is.False,
+            "A selected slot with an action identity but no canonical payload is not persistable.");
+        Assert.That(incomplete, Is.Null);
+    }
+
+    [Test]
     public void SelectedNpcTravelOwnerPreservesRuntimeIdentitiesAndExactRevision()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

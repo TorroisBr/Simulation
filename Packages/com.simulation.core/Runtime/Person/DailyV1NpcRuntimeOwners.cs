@@ -299,6 +299,82 @@ internal sealed class DailyV1NpcActionSlotOwner
     {
         if (Revision < long.MaxValue) Revision++;
     }
+
+    /// <summary>
+    /// Captures the selected action payload from its authoritative Core slot
+    /// for persistence. Unity adapters may validate their object projection,
+    /// but persisted action identity and values come from this owner.
+    /// </summary>
+    internal bool TryCapturePayload(out DailyV1NpcActionPayloadSnapshot snapshot)
+    {
+        snapshot = null;
+        if (CurrentAction == null) return CurrentPayload == null;
+
+        DailyV1NpcActionPayloadOwner payload = CurrentPayload;
+        if (payload == null || !ReferenceEquals(payload.Action, CurrentAction)
+            || !definitions.Actions.TryGetValue(CurrentAction.DefinitionId,
+                out DailyV1ActionDefinition admittedAction)
+            || !ReferenceEquals(admittedAction, CurrentAction)
+            || (payload.TargetItem != null
+                && (!definitions.Items.TryGetValue(payload.TargetItem.DefinitionId,
+                        out DailyV1ItemDefinition admittedItem)
+                    || !ReferenceEquals(admittedItem, payload.TargetItem)))
+            || string.IsNullOrWhiteSpace(CurrentAction.DefinitionId)
+            || payload.Amount < 0
+            || !IsFiniteNonNegative(payload.ExpectedUnitPrice)
+            || !IsFiniteNonNegative(payload.SuccessChanceMultiplier)
+            || !Enum.IsDefined(typeof(NpcTravelReason), payload.TravelReason)
+            || float.IsNaN(payload.ExpectedNetValue)
+            || float.IsInfinity(payload.ExpectedNetValue))
+            return false;
+
+        snapshot = new DailyV1NpcActionPayloadSnapshot(payload);
+        return true;
+    }
+
+    private static bool IsFiniteNonNegative(float value) =>
+        value >= 0f && !float.IsNaN(value) && !float.IsInfinity(value);
+}
+
+/// <summary>
+/// Ephemeral, immutable persistence view of one Core-owned NPC action
+/// payload. It preserves the exact payload-owner identity for alias checks;
+/// it does not become a second runtime owner or a new wire format.
+/// </summary>
+internal sealed class DailyV1NpcActionPayloadSnapshot
+{
+    internal DailyV1NpcActionPayloadOwner Owner { get; }
+    internal string ActionDefinitionId { get; }
+    internal string TargetNpcRuntimeId { get; }
+    internal string TargetCityRuntimeId { get; }
+    internal string TargetItemDefinitionId { get; }
+    internal int Amount { get; }
+    internal float ExpectedUnitPrice { get; }
+    internal float SuccessChanceMultiplier { get; }
+    internal NpcTravelReason TravelReason { get; }
+    internal float ExpectedNetValue { get; }
+    internal string OriginDecisionId { get; }
+    internal string StableOccurrenceKey { get; }
+    internal CommercialDecisionEvidence CommercialDecisionEvidence { get; }
+    internal CommercialScoutingEvidence CommercialScoutingEvidence { get; }
+
+    internal DailyV1NpcActionPayloadSnapshot(DailyV1NpcActionPayloadOwner owner)
+    {
+        Owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        ActionDefinitionId = owner.Action.DefinitionId;
+        TargetNpcRuntimeId = owner.TargetNpcRuntimeId;
+        TargetCityRuntimeId = owner.TargetCityRuntimeId;
+        TargetItemDefinitionId = owner.TargetItem?.DefinitionId;
+        Amount = owner.Amount;
+        ExpectedUnitPrice = owner.ExpectedUnitPrice;
+        SuccessChanceMultiplier = owner.SuccessChanceMultiplier;
+        TravelReason = owner.TravelReason;
+        ExpectedNetValue = owner.ExpectedNetValue;
+        OriginDecisionId = owner.OriginDecisionId;
+        StableOccurrenceKey = owner.StableOccurrenceKey;
+        CommercialDecisionEvidence = owner.CommercialDecisionEvidence;
+        CommercialScoutingEvidence = owner.CommercialScoutingEvidence;
+    }
 }
 
 /// <summary>

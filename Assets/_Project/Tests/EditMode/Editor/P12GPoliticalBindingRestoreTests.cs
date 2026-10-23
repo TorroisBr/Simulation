@@ -1630,6 +1630,43 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                 "The unchanged P12-D row must preserve typed status identity, order, and multiplicity.");
             Assert.That(npc.CurrentStatus.Select(status => status?.DefinitionId), Is.EqualTo(selectedStatusIds),
                 "The selected Unity compatibility projection must match the exact Core status owner.");
+
+            if (npc.UsesSelectedDailyV1Definitions)
+            {
+                DailyV1NpcActionSlotOwner actionSlot = npc.SelectedRuntimeOwners?.ActionSlot;
+                Assert.That(actionSlot, Is.Not.Null);
+                Assert.That(actionSlot.TryCapturePayload(
+                    out DailyV1NpcActionPayloadSnapshot payload), Is.True,
+                    "Selected P12 action facts must be capturable from the exact Core action slot.");
+                P12DNpcFRow fRow = npcF.Rows.Single(value => value.RuntimeId == row.RuntimeId);
+                if (payload == null)
+                {
+                    Assert.That(npc.CurrentActionRuntime, Is.Null,
+                        "An empty Core action slot cannot retain an independent Unity action projection.");
+                    Assert.That(fRow.Action, Is.Null);
+                }
+                else
+                {
+                    Assert.That(payload.Owner, Is.SameAs(actionSlot.CurrentPayload));
+                    Assert.That(npc.CurrentActionRuntime.SelectedOwner, Is.SameAs(payload.Owner));
+                    Assert.That(npc.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+                    Assert.That(fRow.Action.ActionDefinitionId, Is.EqualTo(payload.ActionDefinitionId));
+                    Assert.That(fRow.Action.TargetNpcRuntimeId, Is.EqualTo(payload.TargetNpcRuntimeId));
+                    Assert.That(fRow.Action.TargetCityRuntimeId, Is.EqualTo(payload.TargetCityRuntimeId));
+                    Assert.That(fRow.Action.TargetItemDefinitionId, Is.EqualTo(payload.TargetItemDefinitionId));
+                    Assert.That(fRow.Action.Amount, Is.EqualTo(payload.Amount));
+                    Assert.That(fRow.Action.ExpectedUnitPrice, Is.EqualTo(payload.ExpectedUnitPrice));
+                    Assert.That(fRow.Action.SuccessChanceMultiplier, Is.EqualTo(payload.SuccessChanceMultiplier));
+                    Assert.That(fRow.Action.TravelReason, Is.EqualTo(payload.TravelReason));
+                    Assert.That(fRow.Action.ExpectedNetValue, Is.EqualTo(payload.ExpectedNetValue));
+                    Assert.That(fRow.Action.OriginDecisionId, Is.EqualTo(payload.OriginDecisionId));
+                    Assert.That(fRow.Action.StableOccurrenceKey, Is.EqualTo(payload.StableOccurrenceKey));
+                    Assert.That(fRow.Action.CommercialDecisionEvidence,
+                        Is.SameAs(payload.CommercialDecisionEvidence));
+                    Assert.That(fRow.Action.CommercialScoutingEvidence,
+                        Is.SameAs(payload.CommercialScoutingEvidence));
+                }
+            }
         }
 
         for (int index = 0; index < runtime.Cities.Count; index++)

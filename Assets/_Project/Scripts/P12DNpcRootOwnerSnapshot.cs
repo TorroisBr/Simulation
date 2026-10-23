@@ -492,6 +492,8 @@ internal static class P12DNpcRootOwnerSnapshot
         HashSet<object> siteKnowledgeOwners = new HashSet<object>();
         HashSet<object> adventureOwners = new HashSet<object>();
         HashSet<NpcActionRuntime> actionOwners = new HashSet<NpcActionRuntime>();
+        HashSet<DailyV1NpcActionPayloadOwner> selectedActionPayloadOwners =
+            new HashSet<DailyV1NpcActionPayloadOwner>();
         HashSet<CityRuntime> cityOwners = new HashSet<CityRuntime>();
         HashSet<string> npcIds = new HashSet<string>(StringComparer.Ordinal);
 
@@ -509,7 +511,8 @@ internal static class P12DNpcRootOwnerSnapshot
             if (!TryCaptureNpc(npc, token, evidence,
                     inventoryOwners, accountOwners, merchantPlanOwners, travelPlanOwners,
                     commercialOwners, spatialOwners, siteKnowledgeOwners, adventureOwners,
-                    actionOwners, cityOwners, out P12DNpcDRow dRow, out P12DNpcFRow fRow, out failure))
+                    actionOwners, selectedActionPayloadOwners, cityOwners,
+                    out P12DNpcDRow dRow, out P12DNpcFRow fRow, out failure))
                 return false;
             dRows.Add(dRow);
             fRows.Add(fRow);
@@ -542,6 +545,7 @@ internal static class P12DNpcRootOwnerSnapshot
         HashSet<object> siteKnowledgeOwners,
         HashSet<object> adventureOwners,
         HashSet<NpcActionRuntime> actionOwners,
+        HashSet<DailyV1NpcActionPayloadOwner> selectedActionPayloadOwners,
         HashSet<CityRuntime> cityOwners,
         out P12DNpcDRow dRow,
         out P12DNpcFRow fRow,
@@ -618,9 +622,13 @@ internal static class P12DNpcRootOwnerSnapshot
             return false;
         }
 
+        int currentActionCardinality = npc.UsesSelectedDailyV1Definitions
+            ? (npc.SelectedRuntimeOwners?.ActionSlot?.CurrentAction == null ? 0 : 1)
+            : npc.CurrentActionRuntime == null ? 0 : 1;
         if (!TryRequireNpcSections(npc, token, inventory, account, merchantPlanAuthority,
                 merchantPlan.Revision,
                 travelPlan, commercial, spatial, siteKnowledge, localTopology, adventure,
+                currentActionCardinality,
                 out failure))
             return false;
 
@@ -737,33 +745,78 @@ internal static class P12DNpcRootOwnerSnapshot
         }
 
         P12DNpcActionValue actionValue = null;
-        NpcActionRuntime action = npc.CurrentActionRuntime;
-        if (action != null)
+        if (npc.UsesSelectedDailyV1Definitions)
         {
-            if (action.Action == null || string.IsNullOrWhiteSpace(action.Action.DefinitionId)
-                || !actionOwners.Add(action) || action.Amount < 0
-                || !IsFiniteNonNegative(action.ExpectedUnitPrice)
-                || !IsFiniteNonNegative(action.SuccessChanceMultiplier)
-                || float.IsNaN(action.ExpectedNetValue) || float.IsInfinity(action.ExpectedNetValue)
-                || !Enum.IsDefined(typeof(NpcTravelReason), action.TravelReason))
+            DailyV1NpcActionSlotOwner actionSlot = npc.SelectedRuntimeOwners?.ActionSlot;
+            if (actionSlot == null
+                || !actionSlot.TryCapturePayload(out DailyV1NpcActionPayloadSnapshot snapshot))
             {
                 failure = P12DNpcRootOwnerSnapshotFailure.UnsupportedValue;
                 return false;
             }
-            actionValue = new P12DNpcActionValue(
-                action.Action.DefinitionId,
-                action.TargetNpc?.RuntimeId,
-                action.TargetCity?.RuntimeId,
-                action.TargetItem?.DefinitionId,
-                action.Amount,
-                action.ExpectedUnitPrice,
-                action.SuccessChanceMultiplier,
-                action.TravelReason,
-                action.ExpectedNetValue,
-                action.OriginDecisionId,
-                action.StableOccurrenceKey,
-                action.CommercialDecisionEvidence,
-                action.CommercialScoutingEvidence);
+            if (snapshot != null)
+            {
+                NpcActionRuntime projection = npc.CurrentActionRuntime;
+                if (projection == null
+                    || !ReferenceEquals(projection.SelectedOwner, snapshot.Owner)
+                    || !projection.MatchesSelectedOwner()
+                    || !actionOwners.Add(projection)
+                    || !selectedActionPayloadOwners.Add(snapshot.Owner))
+                {
+                    failure = P12DNpcRootOwnerSnapshotFailure.UnsupportedValue;
+                    return false;
+                }
+                actionValue = new P12DNpcActionValue(
+                    snapshot.ActionDefinitionId,
+                    snapshot.TargetNpcRuntimeId,
+                    snapshot.TargetCityRuntimeId,
+                    snapshot.TargetItemDefinitionId,
+                    snapshot.Amount,
+                    snapshot.ExpectedUnitPrice,
+                    snapshot.SuccessChanceMultiplier,
+                    snapshot.TravelReason,
+                    snapshot.ExpectedNetValue,
+                    snapshot.OriginDecisionId,
+                    snapshot.StableOccurrenceKey,
+                    snapshot.CommercialDecisionEvidence,
+                    snapshot.CommercialScoutingEvidence);
+            }
+            else if (npc.CurrentActionRuntime != null)
+            {
+                failure = P12DNpcRootOwnerSnapshotFailure.UnsupportedValue;
+                return false;
+            }
+        }
+        else
+        {
+            NpcActionRuntime action = npc.CurrentActionRuntime;
+            if (action != null)
+            {
+                if (action.Action == null || string.IsNullOrWhiteSpace(action.Action.DefinitionId)
+                    || !actionOwners.Add(action) || action.Amount < 0
+                    || !IsFiniteNonNegative(action.ExpectedUnitPrice)
+                    || !IsFiniteNonNegative(action.SuccessChanceMultiplier)
+                    || float.IsNaN(action.ExpectedNetValue) || float.IsInfinity(action.ExpectedNetValue)
+                    || !Enum.IsDefined(typeof(NpcTravelReason), action.TravelReason))
+                {
+                    failure = P12DNpcRootOwnerSnapshotFailure.UnsupportedValue;
+                    return false;
+                }
+                actionValue = new P12DNpcActionValue(
+                    action.Action.DefinitionId,
+                    action.TargetNpc?.RuntimeId,
+                    action.TargetCity?.RuntimeId,
+                    action.TargetItem?.DefinitionId,
+                    action.Amount,
+                    action.ExpectedUnitPrice,
+                    action.SuccessChanceMultiplier,
+                    action.TravelReason,
+                    action.ExpectedNetValue,
+                    action.OriginDecisionId,
+                    action.StableOccurrenceKey,
+                    action.CommercialDecisionEvidence,
+                    action.CommercialScoutingEvidence);
+            }
         }
 
         NpcTravelPlanState travelPlanState = travelPlan.CaptureOwnerState();
@@ -820,7 +873,10 @@ internal static class P12DNpcRootOwnerSnapshot
         dRow = new P12DNpcDRow(
             npc.RuntimeId, npc.NpcData.DefinitionId, personId?.Value,
             npc.ResidenceSettlementRuntimeId, npc.LifeState, npc.InjurySeverity,
-            statusIds, npc.HiddenDaysRemaining, npc.CurrentAction?.DefinitionId,
+            statusIds, npc.HiddenDaysRemaining,
+            npc.UsesSelectedDailyV1Definitions
+                ? npc.SelectedRuntimeOwners.ActionSlot.CurrentAction?.DefinitionId
+                : npc.CurrentAction?.DefinitionId,
             npc.CurrentCity?.RuntimeId, npc.CurrentLocation?.RuntimeId,
             npc.DestinationCity?.RuntimeId, npc.DestinationLocation?.RuntimeId,
             inventoryRows, inventory.Revision, account.Balance, account.Revision,
@@ -1492,6 +1548,7 @@ internal static class P12DNpcRootOwnerSnapshot
         CommercialKnowledgeRuntime commercial, SpatialKnowledgeRuntime spatial,
         ExplorableSiteKnowledgeRuntime siteKnowledge, LocalTopologyKnowledgeRuntime local,
         AdventureSiteIntelKnowledgeRuntime adventure,
+        int currentActionCardinality,
         out P12DNpcRootOwnerSnapshotFailure failure)
     {
         failure = P12DNpcRootOwnerSnapshotFailure.InvalidOwnerSection;
@@ -1503,7 +1560,7 @@ internal static class P12DNpcRootOwnerSnapshot
                 npc, 1, npc.P12CrimeJusticeRevision)
             || !TryRequireSection(token, NpcCurrentActionCensusProvider.SectionIdFor(npc.RuntimeId),
                 NpcCurrentActionCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                npc, npc.CurrentActionRuntime == null ? 0 : 1, npc.CurrentActionRevision)
+                npc, currentActionCardinality, npc.CurrentActionRevision)
             || !TryRequireSection(token, NpcTravelStateCensusProvider.SectionIdFor(npc.RuntimeId),
                 NpcTravelStateCensusProvider.SchemaVersion, OwnerSectionRole.Required,
                 npc, 1, npc.TravelStateRevision)
