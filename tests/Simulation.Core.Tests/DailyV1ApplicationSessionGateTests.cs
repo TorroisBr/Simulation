@@ -75,6 +75,10 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(gate.TryBeginExclusiveOperation(current, out var exclusive), Is.True);
         using (exclusive)
         {
+            Assert.That(exclusive.AuthorizesSessionReplacementCapture(current.ExecutionState), Is.True,
+                "Only the exact active replacement lease can authorize source-boundary reads for P12-G staging.");
+            Assert.That(exclusive.AuthorizesSessionReplacementCapture(replacement.ExecutionState), Is.False,
+                "A replacement lease cannot authorize a different runtime's source capture.");
             Assert.That(gate.TryBeginOperation(current, out TestSession reentrant), Is.False,
                 "A callback on the restore thread must not enter the old active session during detached staging.");
             Assert.That(reentrant, Is.Null);
@@ -91,6 +95,8 @@ public sealed class DailyV1ApplicationSessionGateTests
                 "The ordinary replacement path cannot bypass the active exclusive reservation.");
             Assert.That(gate.Current, Is.SameAs(current));
             Assert.That(gate.TryPublishReplacement(exclusive, replacement), Is.True);
+            Assert.That(exclusive.AuthorizesSessionReplacementCapture(current.ExecutionState), Is.False,
+                "After publication the old source is no longer the current runtime authorized by this lease.");
             Assert.That(gate.Current, Is.SameAs(replacement));
             Assert.That(gate.TryBeginOperation(replacement, out _), Is.False,
                 "The publication window remains closed until restore staging exits.");
@@ -130,12 +136,18 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(gate.TryBeginExclusiveOperation(current, out var exclusive), Is.True);
 
         bool publishedOffThread = true;
+        bool authorizedOffThread = true;
         Thread caller = new Thread(() =>
-            publishedOffThread = gate.TryPublishReplacement(exclusive, replacement));
+        {
+            publishedOffThread = gate.TryPublishReplacement(exclusive, replacement);
+            authorizedOffThread = exclusive.AuthorizesSessionReplacementCapture(current.ExecutionState);
+        });
         caller.Start();
         caller.Join();
 
         Assert.That(publishedOffThread, Is.False);
+        Assert.That(authorizedOffThread, Is.False,
+            "A replacement lease cannot grant source capture authority from another thread.");
         Assert.That(gate.Current, Is.SameAs(current));
         using (exclusive)
             Assert.That(gate.TryPublishReplacement(exclusive, replacement), Is.True);

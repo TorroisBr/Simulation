@@ -40,6 +40,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private DailyCaptureEligibilityToken currentCaptureToken;
     private bool selectedRuntimeOwnerGraphBound;
     private DailyV1SelectedRuntimeOwnerGraph selectedRuntimeOwnerGraph;
+    private IReadOnlyList<DailyV1ActorTurnRosterProjection> selectedRuntimeActorRoster;
     private bool selectedRuntimeExecutionRootsBound;
     private RuntimeIdAllocator selectedRuntimeIdAllocator;
     private IAuthoritativeRandomSource selectedRandomSource;
@@ -272,6 +273,13 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     /// </summary>
     internal DailyV1MutationEpochState MutationEpochState => mutationEpochState;
     internal DailyV1SelectedRuntimeOwnerGraph SelectedRuntimeOwnerGraph => selectedRuntimeOwnerGraph;
+    /// <summary>
+    /// Core-owned ordered runtime identity slots used by selected Daily-v1
+    /// turns. Null holes and unselected host identities remain in this exact
+    /// sequence because actor-choice dispositions persist their ordinals.
+    /// </summary>
+    internal IReadOnlyList<DailyV1ActorTurnRosterProjection> SelectedRuntimeActorRoster =>
+        selectedRuntimeActorRoster;
     internal bool SelectedRuntimeExecutionRootsBound => selectedRuntimeExecutionRootsBound;
     /// <summary>
     /// Whether this admitted state has the complete Core owner/configuration
@@ -336,6 +344,135 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             return false;
 
         selectedRuntimeOwnerGraph = replacement;
+        return true;
+    }
+
+    /// <summary>
+    /// Binds the runtime's exact actor identity/ordinal projection after
+    /// constructor membership has been composed. Domain owner state remains
+    /// in the selected graph; this ordered identity roster is the single Core
+    /// source for actor-turn ordinals and preserves unselected runtime slots.
+    /// </summary>
+    internal bool TryBindSelectedRuntimeActorRoster(
+        IEnumerable<DailyV1ActorTurnRosterProjection> runtimeRoster)
+    {
+        if (!selectedRuntimeOwnerGraphBound || selectedRuntimeOwnerGraph == null
+            || selectedRuntimeActorRoster != null
+            || !TryCreateValidatedSelectedRuntimeActorRoster(
+                selectedRuntimeOwnerGraph, runtimeRoster,
+                out IReadOnlyList<DailyV1ActorTurnRosterProjection> candidate))
+            return false;
+
+        selectedRuntimeActorRoster = candidate;
+        return true;
+    }
+
+    internal bool TryCreateSelectedRuntimeActorRosterWithAppendedMember(
+        DailyV1ActorTurnRosterProjection member,
+        DailyV1SelectedRuntimeOwnerGraph replacementGraph,
+        out IReadOnlyList<DailyV1ActorTurnRosterProjection> replacementRoster)
+    {
+        replacementRoster = null;
+        if (selectedRuntimeActorRoster == null || member == null
+            || replacementGraph == null)
+            return false;
+
+        List<DailyV1ActorTurnRosterProjection> candidate =
+            new List<DailyV1ActorTurnRosterProjection>(selectedRuntimeActorRoster.Count + 1);
+        candidate.AddRange(selectedRuntimeActorRoster);
+        candidate.Add(member);
+        return TryCreateValidatedSelectedRuntimeActorRoster(
+            replacementGraph, candidate, out replacementRoster);
+    }
+
+    internal bool TryCreateSelectedRuntimeActorRosterWithoutMember(
+        string runtimeId,
+        DailyV1SelectedRuntimeOwnerGraph replacementGraph,
+        out IReadOnlyList<DailyV1ActorTurnRosterProjection> replacementRoster)
+    {
+        replacementRoster = null;
+        if (selectedRuntimeActorRoster == null
+            || string.IsNullOrWhiteSpace(runtimeId)
+            || replacementGraph == null)
+            return false;
+
+        List<DailyV1ActorTurnRosterProjection> candidate =
+            new List<DailyV1ActorTurnRosterProjection>(selectedRuntimeActorRoster.Count);
+        bool removed = false;
+        foreach (DailyV1ActorTurnRosterProjection member in selectedRuntimeActorRoster)
+        {
+            if (member != null && string.Equals(member.RuntimeId, runtimeId, StringComparison.Ordinal))
+            {
+                if (removed) return false;
+                removed = true;
+                continue;
+            }
+            candidate.Add(member);
+        }
+
+        return removed && TryCreateValidatedSelectedRuntimeActorRoster(
+            replacementGraph, candidate, out replacementRoster);
+    }
+
+    /// <summary>
+    /// Atomically publishes a new selected graph together with its exact
+    /// ordered actor identity roster. Membership callers prepare and validate
+    /// both snapshots before invoking this single validation-and-publication point.
+    /// </summary>
+    internal bool TryReplaceSelectedRuntimeMembership(
+        DailyV1SelectedRuntimeOwnerGraph expectedGraph,
+        DailyV1SelectedRuntimeOwnerGraph replacementGraph,
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> expectedRoster,
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> replacementRoster)
+    {
+        if (!selectedRuntimeOwnerGraphBound
+            || expectedGraph == null
+            || replacementGraph == null
+            || !ReferenceEquals(selectedRuntimeOwnerGraph, expectedGraph)
+            || !ReferenceEquals(selectedRuntimeActorRoster, expectedRoster)
+            || !ReferenceEquals(expectedGraph.Definitions, replacementGraph.Definitions)
+            || !TryCreateValidatedSelectedRuntimeActorRoster(
+                replacementGraph, replacementRoster,
+                out IReadOnlyList<DailyV1ActorTurnRosterProjection> validatedRoster))
+            return false;
+
+        selectedRuntimeOwnerGraph = replacementGraph;
+        selectedRuntimeActorRoster = validatedRoster;
+        return true;
+    }
+
+    private static bool TryCreateValidatedSelectedRuntimeActorRoster(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IEnumerable<DailyV1ActorTurnRosterProjection> runtimeRoster,
+        out IReadOnlyList<DailyV1ActorTurnRosterProjection> roster)
+    {
+        roster = null;
+        if (graph == null || runtimeRoster == null) return false;
+
+        List<DailyV1ActorTurnRosterProjection> candidate =
+            new List<DailyV1ActorTurnRosterProjection>();
+        HashSet<string> runtimeIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1ActorTurnRosterProjection member in runtimeRoster)
+        {
+            if (member != null
+                && (string.IsNullOrWhiteSpace(member.RuntimeId)
+                    || !runtimeIds.Add(member.RuntimeId)))
+                return false;
+            candidate.Add(member);
+        }
+
+        if (!DailyV1ActorTurnExecutionStage.TryBuildRoster(
+                graph, candidate, out IReadOnlyList<DailyV1ActorTurnRosterEntry> entries))
+            return false;
+        List<DailyV1NpcRuntimeOwners> selectedOwners =
+            new List<DailyV1NpcRuntimeOwners>(graph.Npcs.Count);
+        foreach (DailyV1ActorTurnRosterEntry entry in entries)
+            if (entry?.ActorOwner != null)
+                selectedOwners.Add(entry.ActorOwner);
+        if (!graph.MatchesExactOwnerInstances(graph.Cities, selectedOwners))
+            return false;
+
+        roster = candidate.AsReadOnly();
         return true;
     }
 

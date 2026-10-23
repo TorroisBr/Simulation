@@ -1161,7 +1161,8 @@ public class TesteSimulacao : MonoBehaviour
                     politicalClaimSnapshotOverrideForTest,
                     politicalSupportSnapshotOverrideForTest,
                     factionSnapshotOverrideForTest,
-                    actorChoiceSnapshotOverrideForTest))
+                    actorChoiceSnapshotOverrideForTest,
+                    replacementOperation: exclusiveOperation))
                 return false;
 
             try

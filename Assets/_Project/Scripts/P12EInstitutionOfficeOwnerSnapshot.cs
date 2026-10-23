@@ -202,7 +202,8 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
         DailyCaptureEligibilityToken token,
         IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
         out P12EInstitutionOfficeOwnerSnapshot snapshot,
-        out P12EInstitutionOfficeSnapshotFailure failure)
+        out P12EInstitutionOfficeSnapshotFailure failure,
+        DailyCaptureStagingAttempt stagingAttempt = null)
     {
         snapshot = null;
         failure = P12EInstitutionOfficeSnapshotFailure.Create(
@@ -310,7 +311,8 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
                 officeOwner, incumbencyCount, officeRevision)
             || !Matches(sharedOwnerSectionVector, InstitutionOfficeCensusProvider.TenuresSectionId,
                 officeOwner, tenureCount, officeRevision)
-            || !runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
+            || !DailyCaptureStagingAttempt.IsCaptureCurrent(
+                runtime, token, sharedOwnerSectionVector, stagingAttempt))
         {
             snapshot = null;
             if (failure.Code == P12EInstitutionOfficeSnapshotFailureCode.None)

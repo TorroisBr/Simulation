@@ -13,22 +13,26 @@ internal sealed class DailyCaptureStagingAttempt
     private readonly SimulationRuntime sourceRuntime;
     private readonly DailyCaptureEligibilityToken token;
     private readonly IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections;
+    private readonly DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation;
 
     private DailyCaptureStagingAttempt(
         SimulationRuntime sourceRuntime,
         DailyCaptureEligibilityToken token,
-        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections)
+        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation)
     {
         this.sourceRuntime = sourceRuntime;
         this.token = token;
         this.ownerSections = ownerSections;
+        this.replacementOperation = replacementOperation;
     }
 
     internal static bool TryBegin(
         SimulationRuntime sourceRuntime,
         DailyCaptureEligibilityToken token,
         IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
-        out DailyCaptureStagingAttempt attempt)
+        out DailyCaptureStagingAttempt attempt,
+        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation = null)
     {
         attempt = null;
         if (sourceRuntime == null || token == null || ownerSections == null
@@ -37,10 +41,12 @@ internal sealed class DailyCaptureStagingAttempt
             || token.AdmissionContext == null
             || token.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || token.CompletedCoreSequence <= 0L
-            || !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
+            || !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(
+                token, replacementOperation, out _))
             return false;
 
-        attempt = new DailyCaptureStagingAttempt(sourceRuntime, token, ownerSections);
+        attempt = new DailyCaptureStagingAttempt(
+            sourceRuntime, token, ownerSections, replacementOperation);
         return true;
     }
 
@@ -53,10 +59,24 @@ internal sealed class DailyCaptureStagingAttempt
             && ReferenceEquals(token, candidateToken)
             && ReferenceEquals(ownerSections, candidateOwnerSections)
             && candidateRuntime != null
-            && candidateRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(candidateToken, out _);
+            && candidateRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(
+                candidateToken, replacementOperation, out _);
     }
 
     internal bool IsCurrent => IsCurrentFor(sourceRuntime, token, ownerSections);
+
+    internal static bool IsCaptureCurrent(
+        SimulationRuntime candidateRuntime,
+        DailyCaptureEligibilityToken candidateToken,
+        IReadOnlyList<OwnerSectionCensusSnapshot> candidateOwnerSections,
+        DailyCaptureStagingAttempt stagingAttempt = null)
+    {
+        if (stagingAttempt != null)
+            return stagingAttempt.IsCurrentFor(candidateRuntime, candidateToken, candidateOwnerSections);
+        return candidateRuntime != null
+            && candidateRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(
+                candidateToken, out _);
+    }
 }
 
 /// <summary>

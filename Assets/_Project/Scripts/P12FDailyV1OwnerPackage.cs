@@ -71,7 +71,8 @@ internal sealed class P12FDailyV1OwnerCapture
         IReadOnlyList<OwnerSectionCensusSnapshot> exactOwnerSectionVector,
         out P12FDailyV1OwnerCapture capture,
         out P12FDailyV1OwnerPackageFailure failure,
-        Action<P12GDailyV1RestoreStage> stageObserver = null)
+        Action<P12GDailyV1RestoreStage> stageObserver = null,
+        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation = null)
     {
         capture = null;
         failure = P12FDailyV1OwnerPackageFailure.InvalidCaptureContext;
@@ -84,7 +85,8 @@ internal sealed class P12FDailyV1OwnerCapture
             || token.CompletedCoreSequence <= 0L || token.AbsoluteDay < 0L
             || token.MutationEpoch < 0L
             || !ReferenceEquals(token.WorldId, sourceRuntime.WorldId)
-            || !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
+            || !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(
+                token, replacementOperation, out _))
             return false;
 
         try
@@ -119,7 +121,8 @@ internal sealed class P12FDailyV1OwnerCapture
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.FOwnerSnapshotsCaptured);
 
-            if (!sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
+            if (!sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(
+                token, replacementOperation, out _))
             {
                 failure = P12FDailyV1OwnerPackageFailure.StaleBoundary;
                 return false;
@@ -177,7 +180,8 @@ internal sealed class P12FDailyV1OwnerCapture
             || context.StagedSimulationTime.AbsoluteDay != exactCompletedToken.AbsoluteDay
             || stagedE.WorldId == null
             || !string.Equals(stagedE.WorldId.Value, exactCompletedToken.WorldId?.Value, StringComparison.Ordinal)
-            || !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(exactCompletedToken, out _))
+            || !context.StagingAttempt.IsCurrentFor(
+                sourceRuntime, exactCompletedToken, exactOwnerSectionVector))
             return false;
 
         if (!TryBuildActionMap(admittedActionDefinitions,

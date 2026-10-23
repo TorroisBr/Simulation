@@ -438,7 +438,8 @@ internal static class P12DNpcRootOwnerSnapshot
         IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionVector,
         out P12DNpcDProjection dProjection,
         out P12DNpcFProjection fProjection,
-        out P12DNpcRootOwnerSnapshotFailure failure)
+        out P12DNpcRootOwnerSnapshotFailure failure,
+        DailyCaptureStagingAttempt stagingAttempt = null)
     {
         dProjection = null;
         fProjection = null;
@@ -450,7 +451,8 @@ internal static class P12DNpcRootOwnerSnapshot
             || token.CompletedCoreSequence <= 0L || token.AbsoluteDay < 0L || token.MutationEpoch < 0L)
             return false;
 
-        if (!runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
+        if (!DailyCaptureStagingAttempt.IsCaptureCurrent(
+                runtime, token, ownerSectionVector, stagingAttempt))
         {
             failure = P12DNpcRootOwnerSnapshotFailure.StaleCapture;
             return false;
@@ -513,7 +515,8 @@ internal static class P12DNpcRootOwnerSnapshot
             fRows.Add(fRow);
         }
 
-        if (!runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _)
+        if (!DailyCaptureStagingAttempt.IsCaptureCurrent(
+                runtime, token, ownerSectionVector, stagingAttempt)
             || !evidence.AreReceiptOwnersStillExactZero())
         {
             failure = P12DNpcRootOwnerSnapshotFailure.StaleCapture;
@@ -855,11 +858,12 @@ internal static class P12DNpcRootOwnerSnapshot
         IReadOnlyList<string> stagedTravelPartyIds,
         out IReadOnlyList<NpcRuntime> stagedNpcRoster,
         out P12DNpcRootOwnerSnapshotFailure failure,
-        DailyV1EffectiveDefinitions selectedDefinitions = null)
+        DailyV1EffectiveDefinitions selectedDefinitions = null,
+        DailyCaptureStagingAttempt stagingAttempt = null)
         => TryStageCore(sourceRuntime, token, dProjection, fProjection,
             cityMembershipLinkers, stagedPersonStore, npcDefinitions, actionDefinitions,
             statusDefinitions, itemDefinitions, stagedLocations, stagedRouteRuntimeIds,
-            stagedTravelPartyIds, true, out stagedNpcRoster, out failure, selectedDefinitions);
+            stagedTravelPartyIds, true, out stagedNpcRoster, out failure, selectedDefinitions, stagingAttempt);
 
     internal static bool TryStageForImage(
         IReadOnlyList<P12DNpcDRow> dRows,
@@ -901,7 +905,7 @@ internal static class P12DNpcRootOwnerSnapshot
             new P12DNpcFProjection(null, null, null, null, fRows),
             cityMembershipLinkers, stagedPersonStore, npcDefinitions, actionDefinitions,
             statusDefinitions, itemDefinitions, stagedLocations, stagedRouteRuntimeIds,
-            stagedTravelPartyIds, false, out stagedNpcRoster, out failure, selectedDefinitions);
+            stagedTravelPartyIds, false, out stagedNpcRoster, out failure, selectedDefinitions, null);
     }
 
     private static bool TryStageCore(
@@ -921,7 +925,8 @@ internal static class P12DNpcRootOwnerSnapshot
         bool requireCaptureEvidence,
         out IReadOnlyList<NpcRuntime> stagedNpcRoster,
         out P12DNpcRootOwnerSnapshotFailure failure,
-        DailyV1EffectiveDefinitions selectedDefinitions = null)
+        DailyV1EffectiveDefinitions selectedDefinitions = null,
+        DailyCaptureStagingAttempt stagingAttempt = null)
     {
         stagedNpcRoster = null;
         failure = P12DNpcRootOwnerSnapshotFailure.InvalidCaptureEvidence;
@@ -943,7 +948,8 @@ internal static class P12DNpcRootOwnerSnapshot
                 || dProjection.Evidence != null || fProjection.Evidence != null))
             || dProjection.Rows == null || fProjection.Rows == null
             || dProjection.Rows.Count != fProjection.Rows.Count
-            || (requireCaptureEvidence && !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _)))
+            || (requireCaptureEvidence && !DailyCaptureStagingAttempt.IsCaptureCurrent(
+                sourceRuntime, token, token?.OwnerSections, stagingAttempt)))
         {
             failure = P12DNpcRootOwnerSnapshotFailure.StaleCapture;
             return false;
@@ -1315,7 +1321,8 @@ internal static class P12DNpcRootOwnerSnapshot
             }
         }
 
-        if (requireCaptureEvidence && (!sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _)
+        if (requireCaptureEvidence && (!DailyCaptureStagingAttempt.IsCaptureCurrent(
+                sourceRuntime, token, token?.OwnerSections, stagingAttempt)
             || !dProjection.Evidence.AreReceiptOwnersStillExactZero()))
         {
             failure = P12DNpcRootOwnerSnapshotFailure.StaleCapture;
@@ -1338,7 +1345,8 @@ internal static class P12DNpcRootOwnerSnapshot
             return false;
         }
 
-        if (requireCaptureEvidence && !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
+        if (requireCaptureEvidence && !DailyCaptureStagingAttempt.IsCaptureCurrent(
+                sourceRuntime, token, token?.OwnerSections, stagingAttempt))
         {
             failure = P12DNpcRootOwnerSnapshotFailure.StaleCapture;
             return false;

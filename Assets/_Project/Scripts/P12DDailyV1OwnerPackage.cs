@@ -122,7 +122,6 @@ internal sealed class P12DDailyV1OwnerPackage
             || !stagingAttempt.IsCurrentFor(sourceRuntime, token, exactOwnerSectionVector)
             || !ReferenceEquals(token.WorldId, sourceRuntime.WorldId)
             || !token.WorldId.Equals(stagedWorldId)
-            || !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _)
             || !sourceRuntime.HasSameP12RuntimeIdentitySpatialOwners(
                 sourceRuntimeIdentities, sourceSpatialNetwork, sourceExplorableSites))
         {
@@ -164,7 +163,7 @@ internal sealed class P12DDailyV1OwnerPackage
                 sourceRuntime, token, sharedStamp, vector,
                 out P12DNpcDProjection dProjection,
                 out P12DNpcFProjection fProjection,
-                out _)
+                out _, stagingAttempt)
             || dProjection == null || fProjection == null
             || dProjection.Rows.Count != sourceRuntime.NpcRuntimes.Count
             || fProjection.Rows.Count != sourceRuntime.NpcRuntimes.Count)
@@ -187,7 +186,7 @@ internal sealed class P12DDailyV1OwnerPackage
             return false;
         }
 
-        if (!sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _)
+        if (!stagingAttempt.IsCurrentFor(sourceRuntime, token, exactOwnerSectionVector)
             || !TryValidateCapturedOwnerCardinalities(
                 token, sourcePersons, personSnapshot, sourceGenealogy, genealogySnapshot,
                 sourceSpatialNetwork, spatialSnapshot, sourceExplorableSites, siteSnapshot))
@@ -293,7 +292,8 @@ internal sealed class P12DDailyV1OwnerPackage
                 stagedLocations, stagedRouteIds, stagedTravelPartyIds,
                 out IReadOnlyList<NpcRuntime> stagedNpcRoster,
                 out P12DNpcRootOwnerSnapshotFailure npcStageFailure,
-                selectedDefinitions);
+                selectedDefinitions,
+                stagingAttempt);
         if (!npcStageSucceeded || stagedNpcRoster == null)
         {
             npcStageFailureObserver?.Invoke(npcStageFailure);
@@ -317,7 +317,7 @@ internal sealed class P12DDailyV1OwnerPackage
             || stagedSites == null || stagedSites.Count != 0 || stagedSites.Revision != 0L
             || !TryValidateStagedIdentityCardinalities(
                 token, stagedRuntimeIdentities, sourceRuntimeIdentities)
-            || !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _)
+            || !stagingAttempt.IsCurrentFor(sourceRuntime, token, exactOwnerSectionVector)
             || !TryValidateFinalGraph(
                 stagedCities, stagedNpcRoster, stagedPersons, stagedGenealogy,
                 stagedLocations, stagedSpatialNetwork,

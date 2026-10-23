@@ -226,7 +226,8 @@ internal sealed class P12ECrimeSocialAppraisalOwnerSnapshot
         DailyCaptureEligibilityToken token,
         IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
         out P12ECrimeSocialAppraisalOwnerSnapshot snapshot,
-        out P12ECrimeSocialAppraisalSnapshotFailure failure)
+        out P12ECrimeSocialAppraisalSnapshotFailure failure,
+        DailyCaptureStagingAttempt stagingAttempt = null)
     {
         snapshot = null;
         failure = P12ECrimeSocialAppraisalSnapshotFailure.Create(
@@ -234,7 +235,8 @@ internal sealed class P12ECrimeSocialAppraisalOwnerSnapshot
             "Capture requires the exact completed P12-B token and owner-section vector.");
         if (runtime == null || token == null || sharedOwnerSectionVector == null
             || !ReferenceEquals(token.OwnerSections, sharedOwnerSectionVector)
-            || !runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _)
+            || !DailyCaptureStagingAttempt.IsCaptureCurrent(
+                runtime, token, sharedOwnerSectionVector, stagingAttempt)
             || token.AdmissionContext == null
             || token.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || token.CompletedCoreSequence <= 0L || token.AbsoluteDay < 0L || token.MutationEpoch < 0L)
@@ -299,7 +301,8 @@ internal sealed class P12ECrimeSocialAppraisalOwnerSnapshot
                 || world.TheftOutcomes.Count != outcomeCount || world.TheftOutcomes.P12CensusRevision != outcomeRevision
                 || world.CrimeKnowledge.Count != knowledgeCount || world.CrimeKnowledge.P12CensusRevision != knowledgeRevision
                 || world.SocialReactions.Count != reactionCount || world.SocialReactions.P12CensusRevision != reactionRevision
-                || !runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
+                || !DailyCaptureStagingAttempt.IsCaptureCurrent(
+                    runtime, token, sharedOwnerSectionVector, stagingAttempt))
             {
                 return Fail(P12ECrimeSocialAppraisalSnapshotFailureCode.InvalidOwnerSectionVector,
                     "The completed token or one of its exact owner stamps changed while values were copied.", out failure);
@@ -325,7 +328,8 @@ internal sealed class P12ECrimeSocialAppraisalOwnerSnapshot
             {
                 return false;
             }
-            if (!runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
+            if (!DailyCaptureStagingAttempt.IsCaptureCurrent(
+                    runtime, token, sharedOwnerSectionVector, stagingAttempt))
             {
                 return Fail(P12ECrimeSocialAppraisalSnapshotFailureCode.InvalidOwnerSectionVector,
                     "The completed token became stale before capture finished.", out failure);

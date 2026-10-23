@@ -2984,6 +2984,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         {
             throw new InvalidOperationException("The selected owner graph could not be bound to this runtime boundary.");
         }
+        if (selectedOwnerGraph != null
+            && !dailyExecutionBoundary.TryBindSelectedRuntimeActorRoster(
+                this.npcRuntimes.Select(npc => npc == null
+                    ? null
+                    : new DailyV1ActorTurnRosterProjection(npc.RuntimeId, npc.PersonId))))
+            throw new InvalidOperationException(
+                "The Core runtime boundary could not bind the exact ordered NPC identity roster.");
         bool hasCompleteSelectedRuntimeExecutionRoots = this.runtimeIdAllocator != null
             && this.randomSource != null
             && simulationRecordSequence != null
@@ -7770,10 +7777,21 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         DailyV1SelectedRuntimeOwnerGraph selectedGraphBeforeMembership = null;
         DailyV1SelectedRuntimeOwnerGraph selectedGraphAfterMembership = null;
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> selectedRosterBeforeMembership = null;
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> selectedRosterAfterMembership = null;
+        DailyV1SelectedRuntimeOwnerGraph selectedGraphForMembership = null;
         bool replaceSelectedOwnerGraph = false;
         if (!isComposingNpcRoster)
         {
             selectedGraphBeforeMembership = SelectedRuntimeOwnerGraph;
+            selectedRosterBeforeMembership = dailyExecutionBoundary.SelectedRuntimeActorRoster;
+            selectedGraphForMembership = selectedGraphBeforeMembership;
+            if (selectedGraphBeforeMembership != null && selectedRosterBeforeMembership == null)
+            {
+                FaultNpcMembershipCensusBoundary();
+                failure = WorldNpcRegistryFailure.RuntimeFaulted;
+                return false;
+            }
             if (npcRuntime.UsesSelectedDailyV1Definitions)
             {
                 if (selectedGraphBeforeMembership == null
@@ -7786,6 +7804,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 }
                 replaceSelectedOwnerGraph = true;
             }
+            if (selectedGraphAfterMembership != null)
+                selectedGraphForMembership = selectedGraphAfterMembership;
+            if (selectedRosterBeforeMembership != null
+                && !dailyExecutionBoundary.TryCreateSelectedRuntimeActorRosterWithAppendedMember(
+                    new DailyV1ActorTurnRosterProjection(npcRuntime.RuntimeId, npcRuntime.PersonId),
+                    selectedGraphForMembership,
+                    out selectedRosterAfterMembership))
+            {
+                failure = WorldNpcRegistryFailure.InvalidNpc;
+                return false;
+            }
         }
 
         if (!isComposingNpcRoster && !npcRuntime.TryBindRuntimeMutationGuard(mutationGuard))
@@ -7794,15 +7823,30 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return false;
         }
 
-        if (replaceSelectedOwnerGraph
-            && !dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(
+        bool selectedMembershipPublished = false;
+        if (selectedRosterBeforeMembership != null)
+        {
+            selectedMembershipPublished = dailyExecutionBoundary.TryReplaceSelectedRuntimeMembership(
                 selectedGraphBeforeMembership,
-                selectedGraphAfterMembership))
+                selectedGraphForMembership,
+                selectedRosterBeforeMembership,
+                selectedRosterAfterMembership);
+        }
+        else if (replaceSelectedOwnerGraph)
+        {
+            selectedMembershipPublished = dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(
+                selectedGraphBeforeMembership,
+                selectedGraphAfterMembership);
+        }
+        if ((selectedRosterBeforeMembership != null || replaceSelectedOwnerGraph)
+            && !selectedMembershipPublished)
         {
             FaultNpcMembershipCensusBoundary();
             failure = WorldNpcRegistryFailure.RuntimeFaulted;
             return false;
         }
+        if (selectedMembershipPublished && selectedRosterBeforeMembership != null)
+            selectedRosterAfterMembership = dailyExecutionBoundary.SelectedRuntimeActorRoster;
 
         bool boundSelectedOwnerGraphProvider = false;
         if (!isComposingNpcRoster
@@ -7811,9 +7855,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         {
             if (!npcRuntime.TryBindSelectedRuntimeOwnerGraphProvider(selectedRuntimeOwnerGraphProvider))
             {
-                if (!dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(
+                bool restored = selectedRosterBeforeMembership != null
+                    ? dailyExecutionBoundary.TryReplaceSelectedRuntimeMembership(
+                        selectedGraphForMembership,
+                        selectedGraphBeforeMembership,
+                        selectedRosterAfterMembership,
+                        selectedRosterBeforeMembership)
+                    : dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(
                         selectedGraphAfterMembership,
-                        selectedGraphBeforeMembership))
+                        selectedGraphBeforeMembership);
+                if (!restored)
                     mutationGuard.MarkFaulted(AuthoritativeMutationFaultReason.RollbackRestoreFailed);
                 failure = WorldNpcRegistryFailure.AlreadyOwnedByAnotherRuntime;
                 return false;
@@ -7827,10 +7878,18 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         {
             if (boundSelectedOwnerGraphProvider)
                 npcRuntime.UnbindSelectedRuntimeOwnerGraphProvider(selectedRuntimeOwnerGraphProvider);
-            if (replaceSelectedOwnerGraph
-                && !dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(
-                    selectedGraphAfterMembership,
-                    selectedGraphBeforeMembership))
+            bool restored = selectedRosterBeforeMembership != null
+                ? dailyExecutionBoundary.TryReplaceSelectedRuntimeMembership(
+                    selectedGraphForMembership,
+                    selectedGraphBeforeMembership,
+                    selectedRosterAfterMembership,
+                    selectedRosterBeforeMembership)
+                : replaceSelectedOwnerGraph
+                    ? dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(
+                        selectedGraphAfterMembership,
+                        selectedGraphBeforeMembership)
+                    : true;
+            if (!restored)
                 mutationGuard.MarkFaulted(AuthoritativeMutationFaultReason.RollbackRestoreFailed);
             FaultNpcMembershipCensusBoundary();
             failure = WorldNpcRegistryFailure.RuntimeFaulted;
@@ -7905,10 +7964,21 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         DailyV1SelectedRuntimeOwnerGraph selectedGraphBeforeMembership = null;
         DailyV1SelectedRuntimeOwnerGraph selectedGraphAfterMembership = null;
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> selectedRosterBeforeMembership = null;
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> selectedRosterAfterMembership = null;
+        DailyV1SelectedRuntimeOwnerGraph selectedGraphForMembership = null;
         bool replaceSelectedOwnerGraph = false;
+        selectedGraphBeforeMembership = SelectedRuntimeOwnerGraph;
+        selectedRosterBeforeMembership = dailyExecutionBoundary.SelectedRuntimeActorRoster;
+        selectedGraphForMembership = selectedGraphBeforeMembership;
+        if (selectedGraphBeforeMembership != null && selectedRosterBeforeMembership == null)
+        {
+            FaultNpcMembershipCensusBoundary();
+            failure = WorldNpcRegistryFailure.RuntimeFaulted;
+            return false;
+        }
         if (npcRuntime.UsesSelectedDailyV1Definitions)
         {
-            selectedGraphBeforeMembership = SelectedRuntimeOwnerGraph;
             if (selectedGraphBeforeMembership == null
                 || !selectedGraphBeforeMembership.TryCreateWithoutNpc(
                     npcRuntime.SelectedRuntimeOwners,
@@ -7918,25 +7988,59 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 return false;
             }
             replaceSelectedOwnerGraph = true;
+            selectedGraphForMembership = selectedGraphAfterMembership;
         }
-
-        if (replaceSelectedOwnerGraph
-            && !dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(
-                selectedGraphBeforeMembership,
-                selectedGraphAfterMembership))
+        if (selectedRosterBeforeMembership != null
+            && !dailyExecutionBoundary.TryCreateSelectedRuntimeActorRosterWithoutMember(
+                runtimeId,
+                selectedGraphForMembership,
+                out selectedRosterAfterMembership))
         {
             FaultNpcMembershipCensusBoundary();
             failure = WorldNpcRegistryFailure.RuntimeFaulted;
             return false;
         }
 
+        bool selectedMembershipPublished = false;
+        if (selectedRosterBeforeMembership != null)
+        {
+            selectedMembershipPublished = dailyExecutionBoundary.TryReplaceSelectedRuntimeMembership(
+                selectedGraphBeforeMembership,
+                selectedGraphForMembership,
+                selectedRosterBeforeMembership,
+                selectedRosterAfterMembership);
+        }
+        else if (replaceSelectedOwnerGraph)
+        {
+            selectedMembershipPublished = dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(
+                selectedGraphBeforeMembership,
+                selectedGraphAfterMembership);
+        }
+        if ((selectedRosterBeforeMembership != null || replaceSelectedOwnerGraph)
+            && !selectedMembershipPublished)
+        {
+            FaultNpcMembershipCensusBoundary();
+            failure = WorldNpcRegistryFailure.RuntimeFaulted;
+            return false;
+        }
+        if (selectedMembershipPublished && selectedRosterBeforeMembership != null)
+            selectedRosterAfterMembership = dailyExecutionBoundary.SelectedRuntimeActorRoster;
+
         if (npcRuntime.CurrentCity != null
             && !npcRuntime.SetCurrentPresence(null, null))
         {
-            if (replaceSelectedOwnerGraph
-                && !dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(
-                    selectedGraphAfterMembership,
-                    selectedGraphBeforeMembership))
+            bool restored = selectedRosterBeforeMembership != null
+                ? dailyExecutionBoundary.TryReplaceSelectedRuntimeMembership(
+                    selectedGraphForMembership,
+                    selectedGraphBeforeMembership,
+                    selectedRosterAfterMembership,
+                    selectedRosterBeforeMembership)
+                : replaceSelectedOwnerGraph
+                    ? dailyExecutionBoundary.TryReplaceSelectedRuntimeOwnerGraph(
+                        selectedGraphAfterMembership,
+                        selectedGraphBeforeMembership)
+                    : true;
+            if (!restored)
                 mutationGuard.MarkFaulted(AuthoritativeMutationFaultReason.RollbackRestoreFailed);
             failure = WorldNpcRegistryFailure.RuntimeFaulted;
             return false;
@@ -10470,6 +10574,25 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             out token,
             out failure);
 
+    internal bool TryGetCompletedDailyCaptureTokenForSessionReplacement(
+        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation,
+        out DailyCaptureEligibilityToken token,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        if (replacementOperation == null
+            || !replacementOperation.AuthorizesSessionReplacementCapture(dailyExecutionBoundary))
+        {
+            token = null;
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        return TryGetCompletedDailyCaptureTokenCore(
+            DailyV1CaptureScopeAllowance.SessionReplacementValidation,
+            out token,
+            out failure);
+    }
+
     private bool TryGetCompletedDailyCaptureTokenCore(
         DailyV1CaptureScopeAllowance allowedOuterScope,
         out DailyCaptureEligibilityToken token,
@@ -10631,6 +10754,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             DailyV1CaptureScopeAllowance.ContinuationSave,
             out failure);
 
+    internal bool TryValidateCompletedDailyCaptureTokenForSessionReplacement(
+        DailyCaptureEligibilityToken token,
+        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        if (replacementOperation == null
+            || !replacementOperation.AuthorizesSessionReplacementCapture(dailyExecutionBoundary))
+        {
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        return TryValidateCompletedDailyCaptureTokenCore(
+            token,
+            DailyV1CaptureScopeAllowance.SessionReplacementValidation,
+            out failure);
+    }
+
     /// <summary>
     /// Validates source evidence for P12 owner capture at an idle boundary or
     /// under the one explicitly admitted outer continuation-save scope.
@@ -10644,6 +10785,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 DailyV1CaptureScopeAllowance.ContinuationSave)
             ? TryValidateCompletedDailyCaptureTokenForContinuationSave(token, out failure)
             : TryValidateCompletedDailyCaptureToken(token, out failure);
+    }
+
+    internal bool TryValidateCompletedDailyCaptureTokenForP12Capture(
+        DailyCaptureEligibilityToken token,
+        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        if (replacementOperation == null)
+            return TryValidateCompletedDailyCaptureTokenForP12Capture(token, out failure);
+        return TryValidateCompletedDailyCaptureTokenForSessionReplacement(
+            token, replacementOperation, out failure);
     }
 
     private bool TryValidateCompletedDailyCaptureTokenCore(
@@ -11098,16 +11250,18 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             throw new InvalidOperationException(
                 "The selected actor-turn stage requires the admitted Core Merchant configuration.");
 
-        List<DailyV1ActorTurnRosterProjection> runtimeRoster =
-            new List<DailyV1ActorTurnRosterProjection>(npcRuntimes.Count);
+        if (!TryReadCoreSelectedRuntimeActorRoster(
+                out IReadOnlyList<DailyV1ActorTurnRosterProjection> runtimeRoster))
+            return false;
         Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime> runtimeByOwner =
             new Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime>();
         for (int rosterOrdinal = 0; rosterOrdinal < npcRuntimes.Count; rosterOrdinal++)
         {
             NpcRuntime runtime = npcRuntimes[rosterOrdinal];
+            DailyV1ActorTurnRosterProjection rosterMember = runtimeRoster[rosterOrdinal];
             if (runtime == null)
             {
-                runtimeRoster.Add(null);
+                if (rosterMember != null) return false;
                 continue;
             }
 
@@ -11116,8 +11270,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 // P12 permits an unbound dynamic NPC for owner-census purposes.
                 // It has no admitted Daily-v1 actor owner, so preserve its roster
                 // ordinal while excluding it from shared domain execution.
-                runtimeRoster.Add(new DailyV1ActorTurnRosterProjection(
-                    runtime.RuntimeId, runtime.PersonId));
                 continue;
             }
 
@@ -11131,15 +11283,51 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 return false;
 
             runtimeByOwner.Add(owner, runtime);
-            runtimeRoster.Add(new DailyV1ActorTurnRosterProjection(
-                runtime.RuntimeId, runtime.PersonId));
         }
 
         context = new SelectedDailyV1ActorTurnExecutionContext(
-            runtimeRoster.AsReadOnly(),
+            runtimeRoster,
             personStore,
             actorChoiceStore,
             new SelectedDailyV1ActorTurnExecutionBoundary(this, graph, runtimeByOwner));
+        return true;
+    }
+
+    /// <summary>
+    /// Core owns actor ordering and slot identities. Unity reads this immutable
+    /// snapshot only to bind existing projections and reject a divergent host
+    /// roster before selected execution.
+    /// </summary>
+    private bool TryReadCoreSelectedRuntimeActorRoster(
+        out IReadOnlyList<DailyV1ActorTurnRosterProjection> runtimeRoster)
+    {
+        runtimeRoster = dailyExecutionBoundary.SelectedRuntimeActorRoster;
+        if (runtimeRoster == null || npcRuntimes == null
+            || runtimeRoster.Count != npcRuntimes.Count)
+        {
+            runtimeRoster = null;
+            return false;
+        }
+
+        for (int ordinal = 0; ordinal < runtimeRoster.Count; ordinal++)
+        {
+            NpcRuntime runtime = npcRuntimes[ordinal];
+            DailyV1ActorTurnRosterProjection member = runtimeRoster[ordinal];
+            if (runtime == null)
+            {
+                if (member != null) { runtimeRoster = null; return false; }
+                continue;
+            }
+
+            if (member == null
+                || !string.Equals(member.RuntimeId, runtime.RuntimeId, StringComparison.Ordinal)
+                || !ReferenceEquals(member.PersonId, runtime.PersonId))
+            {
+                runtimeRoster = null;
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -11149,21 +11337,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     {
         context = null;
         if (graph == null) return false;
+        if (!TryReadCoreSelectedRuntimeActorRoster(
+                out IReadOnlyList<DailyV1ActorTurnRosterProjection> runtimeRoster))
+            return false;
 
         // Keep the established whole-stage Unity behavior for dynamic or
         // otherwise unselected roster members. The selected path is available
         // only when every live runtime member has an exact Core graph owner.
-        List<DailyV1ActorTurnRosterProjection> runtimeRoster =
-            new List<DailyV1ActorTurnRosterProjection>(npcRuntimes.Count);
         List<DailyV1NpcRuntimeOwners> exactNpcOwners =
             new List<DailyV1NpcRuntimeOwners>(npcRuntimes.Count);
         Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime> runtimeByOwner =
             new Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime>();
-        foreach (NpcRuntime runtime in npcRuntimes)
+        for (int rosterOrdinal = 0; rosterOrdinal < npcRuntimes.Count; rosterOrdinal++)
         {
+            NpcRuntime runtime = npcRuntimes[rosterOrdinal];
+            DailyV1ActorTurnRosterProjection rosterMember = runtimeRoster[rosterOrdinal];
             if (runtime == null)
             {
-                runtimeRoster.Add(null);
+                if (rosterMember != null) return false;
                 continue;
             }
             if (!runtime.UsesSelectedDailyV1Definitions)
@@ -11180,8 +11371,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     "The selected Daily-v1 day-start stage requires each exact Core NPC owner instance.");
 
             exactNpcOwners.Add(owner);
-            runtimeRoster.Add(new DailyV1ActorTurnRosterProjection(
-                runtime.RuntimeId, runtime.PersonId));
         }
         if (!graph.MatchesExactOwnerInstances(graph.Cities, exactNpcOwners))
             throw new InvalidOperationException(
@@ -11212,7 +11401,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 "Selected daily Crime execution requires the exact Justice owner from the admitted Core graph.");
 
         context = new SelectedDailyV1DayStartExecutionContext(
-            runtimeRoster.AsReadOnly(),
+            runtimeRoster,
             crimeSystemPresent,
             justiceSystemPresent,
             selectedBoundary);

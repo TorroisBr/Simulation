@@ -175,6 +175,27 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
         }
     }
 
+    private bool AuthorizesSessionReplacementCapture(
+        ExclusiveOperation operation,
+        object token,
+        TSession expectedSession,
+        DailyV1ExecutionBoundaryState expectedState)
+    {
+        if (operation == null || expectedSession == null || expectedState == null
+            || !operation.IsOwnedBy(this, token)
+            || !ReferenceEquals(operation.ExpectedSession, expectedSession)
+            || !operation.IsOwnedByCurrentThread())
+            return false;
+
+        lock (syncRoot)
+        {
+            return ReferenceEquals(exclusiveOperationToken, token)
+                && ReferenceEquals(current, expectedSession)
+                && ReferenceEquals(activeExclusiveState, expectedState)
+                && ReferenceEquals(GetExecutionState(expectedSession), expectedState);
+        }
+    }
+
     internal sealed class ExclusiveOperation : IDisposable
     {
         private DailyV1ApplicationSessionGate<TSession> gate;
@@ -205,6 +226,20 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
         internal bool IsOwnedByCurrentThread() =>
             ReferenceEquals(ownerThread, Thread.CurrentThread)
             && ownerThreadId == Thread.CurrentThread.ManagedThreadId;
+
+        /// <summary>
+        /// Grants read-only completed-boundary validation to P12-G staging
+        /// only while this exact replacement reservation is active on its
+        /// owner thread. It does not grant ordinary P12 capture eligibility.
+        /// </summary>
+        internal bool AuthorizesSessionReplacementCapture(DailyV1ExecutionBoundaryState expectedState)
+        {
+            DailyV1ApplicationSessionGate<TSession> owner = gate;
+            return owner != null
+                && IsOwnedByCurrentThread()
+                && owner.AuthorizesSessionReplacementCapture(
+                    this, token, ExpectedSession, expectedState);
+        }
 
         public void Dispose()
         {

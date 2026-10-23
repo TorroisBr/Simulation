@@ -124,14 +124,16 @@ internal sealed class P12EPoliticalClaimOwnerSnapshot
 
     internal static bool TryCapture(SimulationRuntime runtime, DailyCaptureEligibilityToken token,
         IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
-        out P12EPoliticalClaimOwnerSnapshot snapshot, out P12EPoliticalClaimSnapshotFailure failure)
+        out P12EPoliticalClaimOwnerSnapshot snapshot, out P12EPoliticalClaimSnapshotFailure failure,
+        DailyCaptureStagingAttempt stagingAttempt = null)
     {
         snapshot = null;
         failure = P12EPoliticalClaimSnapshotFailure.Create(P12EPoliticalClaimSnapshotFailureCode.InvalidCaptureContext,
             "Capture requires the exact live P12-B token and its owner-section vector.");
         if (runtime == null || token == null || sharedOwnerSectionVector == null
             || !ReferenceEquals(token.OwnerSections, sharedOwnerSectionVector)
-            || !runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _)) return false;
+            || !DailyCaptureStagingAttempt.IsCaptureCurrent(
+                runtime, token, sharedOwnerSectionVector, stagingAttempt)) return false;
         if (token.AdmissionContext == null
             || token.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || token.CompletedCoreSequence <= 0L || token.AbsoluteDay < 0L || token.MutationEpoch < 0L)
@@ -185,7 +187,8 @@ internal sealed class P12EPoliticalClaimOwnerSnapshot
             || owner.Count != claimCount || owner.RecognitionCount != recognitionCount || owner.Revision != revision
             || !Matches(claimWitness, PoliticalClaimStoreCensusProvider.ClaimsSectionId, owner, claimCount, revision)
             || !Matches(recognitionWitness, PoliticalClaimStoreCensusProvider.RecognitionsSectionId, owner, recognitionCount, revision)
-            || !runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
+            || !DailyCaptureStagingAttempt.IsCaptureCurrent(
+                runtime, token, sharedOwnerSectionVector, stagingAttempt))
         {
             snapshot = null;
             if (failure.Code == P12EPoliticalClaimSnapshotFailureCode.None)

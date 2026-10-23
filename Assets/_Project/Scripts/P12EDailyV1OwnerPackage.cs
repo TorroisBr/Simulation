@@ -273,22 +273,22 @@ internal sealed class P12EDailyV1OwnerPackage
 
             if (!P12EInstitutionOfficeOwnerSnapshot.TryCapture(
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
-                    out P12EInstitutionOfficeOwnerSnapshot institutionOfficeSnapshot, out _)
+                    out P12EInstitutionOfficeOwnerSnapshot institutionOfficeSnapshot, out _, context.StagingAttempt)
                 || !PropertyEstateOwnerSnapshot.TryCapture(
                     propertyOwner, estateOwner, exactCompletedToken, exactTokenOwnerSections,
                     out PropertyEstateOwnerSnapshot propertyEstateSnapshot, out _)
                 || !P12EFactionOwnerSnapshot.TryCapture(
                     sourceRuntime, factionOwner, exactCompletedToken, exactTokenOwnerSections,
-                    out P12EFactionOwnerSnapshot factionSnapshot, out _)
+                    out P12EFactionOwnerSnapshot factionSnapshot, out _, context.StagingAttempt)
                 || !P12EPoliticalClaimOwnerSnapshot.TryCapture(
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
-                    out P12EPoliticalClaimOwnerSnapshot claimSnapshot, out _)
+                    out P12EPoliticalClaimOwnerSnapshot claimSnapshot, out _, context.StagingAttempt)
                 || !P12EPoliticalSupportOwnerSnapshot.TryCapture(
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
-                    out P12EPoliticalSupportOwnerSnapshot supportSnapshot, out _)
+                    out P12EPoliticalSupportOwnerSnapshot supportSnapshot, out _, context.StagingAttempt)
                 || !P12EPoliticalDecisionOwnerSnapshot.TryCapture(
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
-                    out P12EPoliticalDecisionOwnerSnapshot decisionSnapshot, out _)
+                    out P12EPoliticalDecisionOwnerSnapshot decisionSnapshot, out _, context.StagingAttempt)
                 || !P12EMilitaryOwnerSnapshot.TryCapture(
                     armedForceOwner, manpowerOwner, positionOwner,
                     exactCompletedToken, exactTokenOwnerSections,
@@ -304,12 +304,12 @@ internal sealed class P12EDailyV1OwnerPackage
                     out PersistentBattleOwnerSnapshot battleSnapshot, out _)
                 || !P12EJusticeRecordsOwnerSnapshot.TryCapture(
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
-                    out P12EJusticeRecordsOwnerSnapshot justiceSnapshot, out _)
+                    out P12EJusticeRecordsOwnerSnapshot justiceSnapshot, out _, context.StagingAttempt)
                 || !justiceOwner.TryCaptureP12AReceiptOwnerSnapshot(
                     out P12AJusticeReceiptOwnerSnapshot justiceReceiptSnapshot)
                 || !P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
-                    out P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialSnapshot, out _))
+                    out P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialSnapshot, out _, context.StagingAttempt))
             {
                 failure = P12EDailyV1OwnerPackageFailure.CaptureFailed;
                 return false;
@@ -693,7 +693,7 @@ internal sealed class P12EDailyV1OwnerPackage
             || !string.Equals(context.P12DPackage.WorldId.Value, token.WorldId?.Value, StringComparison.Ordinal)
             || context.StagedSimulationTime.AbsoluteDay != token.AbsoluteDay
             || sourceRuntime.LocalTopologyStore != null
-            || !sourceRuntime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
+            || !context.StagingAttempt.IsCurrentFor(sourceRuntime, token, ownerSections))
             return false;
 
         return true;

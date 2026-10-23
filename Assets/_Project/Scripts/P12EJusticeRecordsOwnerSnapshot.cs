@@ -189,7 +189,8 @@ internal sealed class P12EJusticeRecordsOwnerSnapshot
         DailyCaptureEligibilityToken token,
         IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
         out P12EJusticeRecordsOwnerSnapshot snapshot,
-        out P12EJusticeSnapshotFailure failure)
+        out P12EJusticeSnapshotFailure failure,
+        DailyCaptureStagingAttempt stagingAttempt = null)
     {
         snapshot = null;
         failure = P12EJusticeSnapshotFailure.Create(
@@ -197,7 +198,8 @@ internal sealed class P12EJusticeRecordsOwnerSnapshot
             "Capture requires the exact live P12-B token and its owner-section vector.");
         if (runtime == null || token == null || sharedOwnerSectionVector == null
             || !ReferenceEquals(token.OwnerSections, sharedOwnerSectionVector)
-            || !runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
+            || !DailyCaptureStagingAttempt.IsCaptureCurrent(
+                runtime, token, sharedOwnerSectionVector, stagingAttempt))
             return false;
         if (token.AdmissionContext == null
             || token.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
@@ -281,7 +283,8 @@ internal sealed class P12EJusticeRecordsOwnerSnapshot
             || finalWantedCount != wantedCount || finalSentenceCount != sentenceCount || finalRevision != revision
             || !Matches(justiceWitness, owner, recordCount, revision)
             || !TryMatchesReceiptWitness(receiptWitness, owner)
-            || !runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
+            || !DailyCaptureStagingAttempt.IsCaptureCurrent(
+                runtime, token, sharedOwnerSectionVector, stagingAttempt))
         {
             snapshot = null;
             if (failure.Code == P12EJusticeSnapshotFailureCode.None)

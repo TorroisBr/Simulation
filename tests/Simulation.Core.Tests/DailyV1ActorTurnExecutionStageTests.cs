@@ -95,6 +95,92 @@ public sealed class DailyV1ActorTurnExecutionStageTests
     }
 
     [Test]
+    public void CoreBoundaryOwnsOrderedRosterAcrossAppendAndRemoval()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            out DailyV1NpcRuntimeOwners first, out DailyV1NpcRuntimeOwners second);
+        PersonId firstPerson = new PersonId("person-core-roster-first");
+        PersonId unselectedPerson = new PersonId("person-core-roster-unselected");
+        PersonId secondPerson = new PersonId("person-core-roster-second");
+        PersonId appendedPerson = new PersonId("person-core-roster-appended");
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
+        Assert.That(state.TryBindSelectedRuntimeOwnerGraph(graph), Is.True);
+
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> initial = new[]
+        {
+            new DailyV1ActorTurnRosterProjection(first.RuntimeId, firstPerson),
+            new DailyV1ActorTurnRosterProjection("npc/unbound-middle", unselectedPerson),
+            null,
+            new DailyV1ActorTurnRosterProjection(second.RuntimeId, secondPerson)
+        };
+        Assert.That(state.TryBindSelectedRuntimeActorRoster(initial), Is.True);
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> initialSnapshot =
+            state.SelectedRuntimeActorRoster;
+
+        Assert.That(state.TryCreateSelectedRuntimeActorRosterWithAppendedMember(
+            new DailyV1ActorTurnRosterProjection("npc/unbound-appended", appendedPerson),
+            graph,
+            out IReadOnlyList<DailyV1ActorTurnRosterProjection> afterAppend), Is.True);
+        Assert.That(state.TryReplaceSelectedRuntimeMembership(
+            graph, graph, initialSnapshot, afterAppend), Is.True);
+        Assert.That(initialSnapshot, Has.Count.EqualTo(4),
+            "A previously published Core roster snapshot remains immutable after membership changes.");
+        Assert.That(state.SelectedRuntimeActorRoster, Has.Count.EqualTo(5));
+
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> beforeRemoval =
+            state.SelectedRuntimeActorRoster;
+        Assert.That(state.TryCreateSelectedRuntimeActorRosterWithoutMember(
+            "npc/unbound-middle", graph,
+            out IReadOnlyList<DailyV1ActorTurnRosterProjection> afterRemoval), Is.True);
+        Assert.That(state.TryReplaceSelectedRuntimeMembership(
+            graph, graph, beforeRemoval, afterRemoval), Is.True);
+
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> current =
+            state.SelectedRuntimeActorRoster;
+        Assert.That(current, Has.Count.EqualTo(4));
+        Assert.That(current[0].PersonId, Is.SameAs(firstPerson));
+        Assert.That(current[1], Is.Null,
+            "Removing an earlier member shifts later ordinals without compacting a null slot.");
+        Assert.That(current[2].PersonId, Is.SameAs(secondPerson));
+        Assert.That(current[3].PersonId, Is.SameAs(appendedPerson));
+        Assert.That(DailyV1ActorTurnExecutionStage.TryBuildRoster(
+            graph, current, out IReadOnlyList<DailyV1ActorTurnRosterEntry> entries), Is.True);
+        Assert.That(entries.Select(entry => entry.RosterOrdinal), Is.EqualTo(new[] { 0, 1, 2, 3 }));
+        Assert.That(entries[0].ActorOwner, Is.SameAs(first));
+        Assert.That(entries[1].ActorOwner, Is.Null);
+        Assert.That(entries[2].ActorOwner, Is.SameAs(second));
+        Assert.That(entries[3].ActorOwner, Is.Null);
+    }
+
+    [Test]
+    public void CoreRuntimeRosterRejectsDuplicateIdentityAndPartialSelectedGraphPublication()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
+            out DailyV1NpcRuntimeOwners first, out DailyV1NpcRuntimeOwners second);
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
+        Assert.That(state.TryBindSelectedRuntimeOwnerGraph(graph), Is.True);
+        PersonId firstPerson = new PersonId("person-core-roster-atomic-first");
+        PersonId secondPerson = new PersonId("person-core-roster-atomic-second");
+        Assert.That(state.TryBindSelectedRuntimeActorRoster(new[]
+        {
+            new DailyV1ActorTurnRosterProjection(first.RuntimeId, firstPerson),
+            new DailyV1ActorTurnRosterProjection(second.RuntimeId, secondPerson)
+        }), Is.True);
+
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> prior = state.SelectedRuntimeActorRoster;
+        Assert.That(state.TryCreateSelectedRuntimeActorRosterWithAppendedMember(
+            new DailyV1ActorTurnRosterProjection(first.RuntimeId, firstPerson), graph, out _), Is.False);
+        Assert.That(state.TryReplaceSelectedRuntimeMembership(graph, graph, prior,
+            new[] { new DailyV1ActorTurnRosterProjection(first.RuntimeId, firstPerson) }), Is.False,
+            "A new roster cannot be published while omitting a selected Core owner.");
+        Assert.That(state.SelectedRuntimeOwnerGraph, Is.SameAs(graph));
+        Assert.That(state.SelectedRuntimeActorRoster, Is.SameAs(prior),
+            "Rejected identity changes leave graph and roster publication unchanged.");
+        Assert.That(state.SelectedRuntimeActorRoster[0].PersonId, Is.SameAs(firstPerson));
+        Assert.That(state.SelectedRuntimeActorRoster[1].PersonId, Is.SameAs(secondPerson));
+    }
+
+    [Test]
     public void CoreRejectsSelectedRosterPersonThatDiffersFromMaterializedStoreBinding()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(

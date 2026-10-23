@@ -87,7 +87,7 @@ internal sealed class P12EFactionOwnerSnapshot
 
     internal static bool TryCapture(SimulationRuntime runtime, FactionStore owner, DailyCaptureEligibilityToken token,
         IReadOnlyList<OwnerSectionCensusSnapshot> vector, out P12EFactionOwnerSnapshot snapshot,
-        out P12EFactionSnapshotFailure failure)
+        out P12EFactionSnapshotFailure failure, DailyCaptureStagingAttempt stagingAttempt = null)
     {
         snapshot = null; failure = P12EFactionSnapshotFailure.Create(P12EFactionSnapshotFailureCode.InvalidCaptureContext,
             "Capture requires the exact completed-boundary token and section vector.");
@@ -127,7 +127,7 @@ internal sealed class P12EFactionOwnerSnapshot
             || owner.Revision != revision || owner.Count != factionCount || owner.AffiliationCount != affiliationCount
             || !Matches(vector, FactionStoreCensusProvider.FactionsSectionId, owner, factionCount, revision)
             || !Matches(vector, FactionStoreCensusProvider.AffiliationsSectionId, owner, affiliationCount, revision)
-            || !runtime.TryValidateCompletedDailyCaptureTokenForP12Capture(token, out _))
+            || !DailyCaptureStagingAttempt.IsCaptureCurrent(runtime, token, vector, stagingAttempt))
         {
             snapshot = null;
             if (failure.Code == P12EFactionSnapshotFailureCode.None) failure = P12EFactionSnapshotFailure.Create(

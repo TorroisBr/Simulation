@@ -87,6 +87,22 @@ internal enum P12GDailyV1RestoreStage
 /// </summary>
 internal static partial class P12GDailyV1RestoreCoordinator
 {
+    private static bool IsSourceTokenCurrent(
+        SimulationRuntime sourceRuntime,
+        DailyCaptureEligibilityToken sourceToken,
+        bool captureContinuationImage,
+        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation)
+    {
+        if (sourceRuntime == null || sourceToken == null) return false;
+        if (replacementOperation != null)
+            return !captureContinuationImage
+                && sourceRuntime.TryValidateCompletedDailyCaptureTokenForSessionReplacement(
+                    sourceToken, replacementOperation, out _);
+        return captureContinuationImage
+            ? sourceRuntime.TryValidateCompletedDailyCaptureTokenForContinuationSave(sourceToken, out _)
+            : sourceRuntime.TryValidateCompletedDailyCaptureToken(sourceToken, out _);
+    }
+
     internal static bool TryCreateRestoredSession(
         SimulationActiveSession sourceSession,
         out SimulationActiveSession restoredSession,
@@ -100,7 +116,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest = null,
         Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null,
         Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null,
-        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest = null)
+        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest = null,
+        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation = null)
     {
         return TryCreateRestoredSession(
             sourceSession,
@@ -116,7 +133,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
             politicalSupportSnapshotOverrideForTest,
             factionSnapshotOverrideForTest,
             actorChoiceSnapshotOverrideForTest,
-            restoredAdmissionContextFactoryForTest);
+            restoredAdmissionContextFactoryForTest,
+            replacementOperation);
     }
 
     internal static bool TryCreateRestoredSession(
@@ -133,14 +151,16 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest = null,
         Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null,
         Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null,
-        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest = null)
+        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest = null,
+        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation = null)
     {
         return TryCreateRestoredSessionCore(sourceSession, bootstrapAdmissionContext, false, null, out _, out restoredSession,
             out failure, out diagnostic, stageObserver, privateCandidateObserver,
             genealogySnapshotOverrideForTest, propertyEstateSnapshotOverrideForTest,
             politicalClaimSnapshotOverrideForTest, politicalSupportSnapshotOverrideForTest,
             factionSnapshotOverrideForTest, actorChoiceSnapshotOverrideForTest,
-            restoredAdmissionContextFactoryForTest);
+            restoredAdmissionContextFactoryForTest,
+            replacementOperation);
     }
 
     internal static bool TryCreateRestoredSessionAndCaptureImage(
@@ -210,7 +230,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest,
         Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest,
         Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest,
-        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest)
+        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest,
+        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation = null)
     {
         continuationImage = null;
         restoredSession = null;
@@ -222,17 +243,21 @@ internal static partial class P12GDailyV1RestoreCoordinator
         SimulationRuntime sourceRuntime = sourceSession.Runtime;
         SimulationBootstrapComposition sourceComposition = sourceSession.Composition;
         DailyCaptureEligibilityToken sourceToken;
-        DailyCaptureEligibilityFailure tokenFailure;
-        bool sourceTokenAvailable = captureContinuationImage
-            ? sourceRuntime.TryGetCompletedDailyCaptureTokenForContinuationSave(
-                out sourceToken, out tokenFailure)
-            : sourceRuntime.TryGetCompletedDailyCaptureToken(
-                out sourceToken, out tokenFailure);
+        DailyCaptureEligibilityFailure tokenFailure = DailyCaptureEligibilityFailure.OperationInProgress;
+        sourceToken = null;
+        bool sourceTokenAvailable = replacementOperation != null
+            ? (!captureContinuationImage
+                && sourceRuntime.TryGetCompletedDailyCaptureTokenForSessionReplacement(
+                    replacementOperation, out sourceToken, out tokenFailure))
+            : captureContinuationImage
+                ? sourceRuntime.TryGetCompletedDailyCaptureTokenForContinuationSave(
+                    out sourceToken, out tokenFailure)
+                : sourceRuntime.TryGetCompletedDailyCaptureToken(
+                    out sourceToken, out tokenFailure);
         bool sourceTokenCurrent = sourceTokenAvailable
             && sourceToken != null
-            && (captureContinuationImage
-                ? sourceRuntime.TryValidateCompletedDailyCaptureTokenForContinuationSave(sourceToken, out _)
-                : sourceRuntime.TryValidateCompletedDailyCaptureToken(sourceToken, out _));
+            && IsSourceTokenCurrent(
+                sourceRuntime, sourceToken, captureContinuationImage, replacementOperation);
         if (!sourceTokenCurrent)
         {
             failure = P12GDailyV1RestoreFailure.SourceBoundaryUnavailable;
@@ -255,7 +280,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 sourceRuntime,
                 sourceToken,
                 sourceOwnerSections,
-                out DailyCaptureStagingAttempt stagingAttempt))
+                out DailyCaptureStagingAttempt stagingAttempt,
+                replacementOperation))
         {
             failure = P12GDailyV1RestoreFailure.SourceBoundaryUnavailable;
             diagnostic = "The exact source completed-boundary owner vector could not begin a staging attempt.";
@@ -274,7 +300,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     sourceOwnerSections,
                     out P12FDailyV1OwnerCapture capturedF,
                     out P12FDailyV1OwnerPackageFailure fCaptureFailure,
-                    stageObserver))
+                    stageObserver,
+                    replacementOperation))
             {
                 failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
                 diagnostic = "P12-F source capture rejected the completed boundary: " + fCaptureFailure + ".";
@@ -457,9 +484,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
             stageObserver?.Invoke(P12GDailyV1RestoreStage.OwnersStaged);
 
             if (!stagingAttempt.IsCurrentFor(sourceRuntime, sourceToken, sourceOwnerSections)
-                || !(captureContinuationImage
-                    ? sourceRuntime.TryValidateCompletedDailyCaptureTokenForContinuationSave(sourceToken, out _)
-                    : sourceRuntime.TryValidateCompletedDailyCaptureToken(sourceToken, out _)))
+                || !IsSourceTokenCurrent(
+                    sourceRuntime, sourceToken, captureContinuationImage, replacementOperation))
             {
                 failure = P12GDailyV1RestoreFailure.SourceBoundaryUnavailable;
                 diagnostic = "The source completed boundary changed during private staging.";
@@ -609,9 +635,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
             stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetTravelPartyBindingsValidated);
 
             if (!stagingAttempt.IsCurrentFor(sourceRuntime, sourceToken, sourceOwnerSections)
-                || !(captureContinuationImage
-                    ? sourceRuntime.TryValidateCompletedDailyCaptureTokenForContinuationSave(sourceToken, out _)
-                    : sourceRuntime.TryValidateCompletedDailyCaptureToken(sourceToken, out _)))
+                || !IsSourceTokenCurrent(
+                    sourceRuntime, sourceToken, captureContinuationImage, replacementOperation))
             {
                 failure = P12GDailyV1RestoreFailure.SourceBoundaryUnavailable;
                 diagnostic = "The source completed boundary changed during final target graph validation.";
@@ -671,9 +696,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
 
             if (!targetRuntime.HasValidRestoredDailyBoundaryAdmission()
                 || !targetRuntime.IsHealthyDailyOwnerThreadBoundary()
-                || !(captureContinuationImage
-                    ? sourceRuntime.TryValidateCompletedDailyCaptureTokenForContinuationSave(sourceToken, out _)
-                    : sourceRuntime.TryValidateCompletedDailyCaptureToken(sourceToken, out _)))
+                || !IsSourceTokenCurrent(
+                    sourceRuntime, sourceToken, captureContinuationImage, replacementOperation))
             {
                 failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
                 diagnostic = "The admitted target or source boundary changed before the publication handoff.";
