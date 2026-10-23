@@ -171,6 +171,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/AtomicFileSlot.cs" Link="Persistence/AtomicFileSlot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/NumericProfileIdentity.cs" Link="Persistence/NumericProfileIdentity.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1CompatibilityFingerprint.cs" Link="Persistence/DailyV1CompatibilityFingerprint.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1CompatibilityDescriptorFactory.cs" Link="Persistence/DailyV1CompatibilityDescriptorFactory.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P18DCommercialSharingCodec.cs" Link="Persistence/P18DCommercialSharingCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Numerics/UnityMathfCompatibility.cs" Link="Numerics/UnityMathfCompatibility.cs" />
   </ItemGroup>

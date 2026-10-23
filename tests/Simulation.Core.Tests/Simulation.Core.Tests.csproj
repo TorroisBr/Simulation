@@ -89,6 +89,7 @@
     <Compile Include="SpatialKnowledgeRuntimeCoreTests.cs" Link="Knowledge/SpatialKnowledgeRuntimeCoreTests.cs" />
     <Compile Include="ActionExecutionTests.cs" Link="Application/ActionExecutionTests.cs" />
       <Compile Include="DailyV1ApplicationHostTests.cs" Link="Application/DailyV1ApplicationHostTests.cs" />
+      <Compile Include="DailyV1CompatibilityDescriptorFactoryTests.cs" Link="Persistence/DailyV1CompatibilityDescriptorFactoryTests.cs" />
     <Compile Include="DailyV1ApplicationSessionGateTests.cs" Link="Application/DailyV1ApplicationSessionGateTests.cs" />
     <Compile Include="DailyV1GenesisComposerTests.cs" Link="Application/DailyV1GenesisComposerTests.cs" />
       <Compile Include="DailyV1DotNetHostEnvironmentIdentityFactoryTests.cs" Link="Application/DailyV1DotNetHostEnvironmentIdentityFactoryTests.cs" />
