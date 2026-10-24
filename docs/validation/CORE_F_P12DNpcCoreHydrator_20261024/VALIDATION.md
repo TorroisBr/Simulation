@@ -78,7 +78,10 @@ gates above then passed on the corrected exact source.
 
 ## Review and limitations
 
-Independent exact-tip implementation review is pending. Core canonical remains
+Independent exact-tip implementation review passed with no actionable findings.
+The durable review is
+[`CORE_F_P12D_NPC_CORE_OWNER_HYDRATION_REVIEW_F2F366BD.md`](../../reviews/CORE_F_P12D_NPC_CORE_OWNER_HYDRATION_REVIEW_F2F366BD.md).
+Core canonical remains
 unchanged at `a07402faa4739d0bb276d3bc4aa24e6ed7bd6cea`; no canonical promotion
 or Phase closure is claimed. The broader shared runtime/application, P12
 restore publication, detached .NET host and T/T+1/T+2 continuation remain
