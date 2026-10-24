@@ -20,6 +20,54 @@ internal static class DailyV1SelectedActorActionExecutionStage
         DailyV1NpcRuntimeOwners actor,
         DailyV1ActionDefinition action)
     {
+        if (!TryGetProjectionIndependentNormalAction(
+                graph, actor, action, out DailyV1NpcActionPayloadOwner payload,
+                out _, out IReadOnlyList<DailyV1StatusDefinition> targetStatusToRemove,
+                out IReadOnlyList<DailyV1StatusDefinition> targetStatusToAdd))
+            return false;
+
+        return payload.TargetNpcRuntimeId == null
+            && targetStatusToRemove.Count == 0
+            && targetStatusToAdd.Count == 0;
+    }
+
+    /// <summary>
+    /// Identifies a Normal action whose target is the exact admitted Core NPC
+    /// owner named by its slot payload. This permits the existing Core target
+    /// status plan to execute without requiring a Unity action projection.
+    /// </summary>
+    internal static bool IsProjectionIndependentNormalActionForExactTarget(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        DailyV1NpcRuntimeOwners target)
+    {
+        if (target == null
+            || !TryGetProjectionIndependentNormalAction(
+                graph, actor, action, out DailyV1NpcActionPayloadOwner payload,
+                out _, out IReadOnlyList<DailyV1StatusDefinition> targetStatusToRemove,
+                out IReadOnlyList<DailyV1StatusDefinition> targetStatusToAdd))
+            return false;
+
+        return graph.ContainsExactNpcOwner(target)
+            && ReferenceEquals(target.Definitions, graph.Definitions)
+            && string.Equals(payload.TargetNpcRuntimeId, target.RuntimeId, StringComparison.Ordinal)
+            && (targetStatusToRemove.Count > 0 || targetStatusToAdd.Count > 0);
+    }
+
+    private static bool TryGetProjectionIndependentNormalAction(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        out DailyV1NpcActionPayloadOwner payload,
+        out IReadOnlyList<DailyV1StatusDefinition> actorStatusToRemove,
+        out IReadOnlyList<DailyV1StatusDefinition> targetStatusToRemove,
+        out IReadOnlyList<DailyV1StatusDefinition> targetStatusToAdd)
+    {
+        payload = null;
+        actorStatusToRemove = null;
+        targetStatusToRemove = null;
+        targetStatusToAdd = null;
         if (graph == null || actor == null || action == null
             || !graph.ContainsExactNpcOwner(actor)
             || !ReferenceEquals(actor.Definitions, graph.Definitions)
@@ -34,15 +82,14 @@ internal static class DailyV1SelectedActorActionExecutionStage
             || !DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
                 graph.Definitions, action,
                 out _,
-                out _,
-                out IReadOnlyList<DailyV1StatusDefinition> targetStatusToRemove,
-                out IReadOnlyList<DailyV1StatusDefinition> targetStatusToAdd))
+                out actorStatusToRemove,
+                out targetStatusToRemove,
+                out targetStatusToAdd))
             return false;
 
-        DailyV1NpcActionPayloadOwner payload = actor.ActionSlot.CurrentPayload;
+        payload = actor.ActionSlot.CurrentPayload;
         return payload != null
             && ReferenceEquals(payload.Action, action)
-            && payload.TargetNpcRuntimeId == null
             && payload.TargetCityRuntimeId == null
             && payload.TargetItem == null
             && payload.Amount == 0
@@ -50,9 +97,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
             && payload.TravelReason == NpcTravelReason.None
             && payload.ExpectedNetValue == 0f
             && payload.CommercialDecisionEvidence == null
-            && payload.CommercialScoutingEvidence == null
-            && targetStatusToRemove.Count == 0
-            && targetStatusToAdd.Count == 0;
+            && payload.CommercialScoutingEvidence == null;
     }
 
     internal static bool TryExecuteAutonomousAction(
@@ -490,6 +535,12 @@ internal static class DailyV1SelectedActorActionExecutionStage
         DailyV1NpcActionPayloadOwner payload = actor.ActionSlot.CurrentPayload;
         bool coreOwnedNormalAction = IsProjectionIndependentNormalAction(
             graph, actor, action);
+        if (!coreOwnedNormalAction
+            && !string.IsNullOrWhiteSpace(payload?.TargetNpcRuntimeId)
+            && graph.TryGetNpcOwner(payload.TargetNpcRuntimeId,
+                out DailyV1NpcRuntimeOwners selectedTarget))
+            coreOwnedNormalAction = IsProjectionIndependentNormalActionForExactTarget(
+                graph, actor, action, selectedTarget);
 
         IDailyV1SelectedActionDispatchBoundary dispatchBoundary = null;
         if (!coreOwnedNormalAction)

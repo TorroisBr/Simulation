@@ -341,6 +341,104 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void ProjectionIndependentTargetedNormalActionCommitsTargetStatusFromCoreSlot()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        NpcActionData sourceNormal = sourceConfig.Actions.First(value =>
+            value != null && value.actionType == NpcActionType.Normal);
+        NpcActionData normalWithTargetEffect = UnityEngine.Object.Instantiate(sourceNormal);
+        normalWithTargetEffect.id = "core-normal-target-status-projection-independent";
+        normalWithTargetEffect.actionName = "Core targeted status action";
+        normalWithTargetEffect.normalActionLogText = "completed a Core targeted status action.";
+        normalWithTargetEffect.statusToAdd.Clear();
+        normalWithTargetEffect.statusToRemove.Clear();
+        normalWithTargetEffect.targetStatusToAdd.Clear();
+        normalWithTargetEffect.targetStatusToRemove.Clear();
+        NpcStatusData effectStatus = SimulationTestFactory.CreateStatus(
+            "core-normal-target-status-projection-independent-effect");
+        normalWithTargetEffect.targetStatusToAdd.Add(effectStatus);
+        config.actions = new List<NpcActionData>(sourceConfig.Actions)
+        { normalWithTargetEffect };
+        config.statuses = new List<NpcStatusData>(sourceConfig.Statuses)
+        { effectStatus };
+
+        GameObject hostObject = new GameObject("Core-slot targeted Normal status action without Unity projection");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        try
+        {
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            NpcRuntime[] selectedActors = runtime.NpcRuntimes.Where(value =>
+                value?.SelectedRuntimeOwners?.Status != null
+                && value.SelectedRuntimeOwnerGraph != null).ToArray();
+            Assert.That(selectedActors.Length, Is.GreaterThanOrEqualTo(2),
+                "The Daily-v1 proving profile must provide an exact actor and target owner.");
+            NpcRuntime actor = selectedActors[0];
+            NpcRuntime target = selectedActors.First(value => !ReferenceEquals(value, actor));
+            Assert.That(actor.TryGetSelectedDailyV1ActionNode(
+                normalWithTargetEffect, out DailyV1ActionDefinition selectedAction), Is.True);
+            Assert.That(actor.SelectedDailyV1DefinitionGraph.Statuses.TryGetValue(
+                effectStatus.DefinitionId, out DailyV1StatusDefinition selectedEffect), Is.True);
+            Assert.That(target.SelectedDailyV1StatusOwner.Statuses.Any(status =>
+                ReferenceEquals(status, selectedEffect)), Is.False);
+
+            Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+                actor.SelectedDailyV1DefinitionGraph,
+                selectedAction,
+                target.RuntimeId, null, null, 0, 0f, 1f, NpcTravelReason.None, 0f,
+                "normal-target-status-without-projection",
+                null, null, null,
+                out DailyV1NpcActionPayloadOwner payload), Is.True);
+            Assert.That(actor.SelectedRuntimeOwnerGraph.TryCommitCurrentActionSlot(
+                actor.SelectedRuntimeOwners, selectedAction, payload, () => true), Is.True);
+            Assert.That(DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalActionForExactTarget(
+                actor.SelectedRuntimeOwnerGraph, actor.SelectedRuntimeOwners, selectedAction,
+                target.SelectedRuntimeOwners), Is.True);
+
+            long mutationEpochBefore = runtime.ExecutionBoundaryState
+                .MutationEpochState.CurrentEpoch;
+            WritePrivateField<NpcActionRuntime>(actor, "currentActionRuntime", null);
+            WritePrivateField<NpcActionData>(actor, "currentAction", null);
+            Assert.That(actor.CurrentActionRuntime, Is.Null,
+                "The selected action must execute without its Unity NpcActionRuntime projection.");
+
+            MethodInfo execute = typeof(SimulationRuntime).GetMethod(
+                "TryExecuteSelectedCurrentAction", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(execute, Is.Not.Null);
+            NpcActionResult result = (NpcActionResult)execute.Invoke(runtime, new object[] { actor });
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Success, Is.True);
+            Assert.That(target.SelectedDailyV1StatusOwner.Statuses.Any(status =>
+                ReferenceEquals(status, selectedEffect)), Is.True,
+                "The target effect must be committed to the exact Core owner named by the slot payload.");
+            Assert.That(actor.SelectedDailyV1StatusOwner.Statuses.Any(status =>
+                ReferenceEquals(status, selectedEffect)), Is.False,
+                "The target effect must not be redirected to the actor owner.");
+            Assert.That(target.SelectedDailyV1StatusOwner.Statuses.Single(value =>
+                value.DefinitionId == effectStatus.DefinitionId), Is.SameAs(selectedEffect));
+            Assert.That(runtime.ExecutionBoundaryState.MutationEpochState.CurrentEpoch,
+                Is.EqualTo(mutationEpochBefore + 1L),
+                "The successful Core target-status write must invalidate the runtime capture epoch once.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(config);
+            UnityEngine.Object.DestroyImmediate(normalWithTargetEffect);
+            UnityEngine.Object.DestroyImmediate(effectStatus);
+        }
+    }
+
+    [Test]
     public void PartialPlannedNpcTradeDispatchFaultsP12Admission()
     {
         EconomyTransactionService transactionService = new EconomyTransactionService();

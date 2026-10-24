@@ -12068,8 +12068,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor)
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
-            if (DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
-                    graph, actor, actor.ActionSlot?.CurrentAction)
+            if (IsProjectionIndependentNormalActionSlot(actor)
                 && !HasExactCurrentActionProjection(actor))
             {
                 // A selected Normal action can execute from its exact Core
@@ -12096,6 +12095,21 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 && ReferenceEquals(actor.ActionSlot?.CurrentAction, actionNode)
                 && ReferenceEquals(actor.ActionSlot?.CurrentPayload,
                     actionRuntime.SelectedOwner);
+        }
+
+        private bool IsProjectionIndependentNormalActionSlot(DailyV1NpcRuntimeOwners actor)
+        {
+            DailyV1ActionDefinition action = actor?.ActionSlot?.CurrentAction;
+            if (DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
+                    graph, actor, action))
+                return true;
+
+            DailyV1NpcActionPayloadOwner payload = actor?.ActionSlot?.CurrentPayload;
+            return !string.IsNullOrWhiteSpace(payload?.TargetNpcRuntimeId)
+                && graph.TryGetNpcOwner(payload.TargetNpcRuntimeId,
+                    out DailyV1NpcRuntimeOwners exactTarget)
+                && DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalActionForExactTarget(
+                    graph, actor, action, exactTarget);
         }
 
         public bool TryGetDispatchBoundary(
@@ -12126,9 +12140,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             NpcRuntime exactRuntime = RequireExactActor(actor);
             if (dispatch?.Kind == DailyV1SelectedActionDispatchKind.Normal)
             {
-                // Normal actions with no status effects are completed from the
-                // exact Core action slot. Their Unity action object is only a
-                // presentation projection and is not required for execution.
+                // Normal dispatch reports success from the exact Core slot.
+                // Any actor/target status effects are committed by the later
+                // Core status plan; Unity action objects are presentation only.
                 NpcActionResult normalResult = runtime.CompleteSelectedActionDispatch(
                     exactRuntime, null, null, dispatch);
                 if (normalResult != null && !string.IsNullOrEmpty(normalResult.Message))
@@ -12171,8 +12185,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             bool exactProjectedAction = actionRuntime != null
                 && ReferenceEquals(actionRuntime.TargetNpc, targetRuntime);
             bool projectionIndependentNormal = target == null
-                && DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
-                    graph, actor, actor.ActionSlot?.CurrentAction);
+                ? DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
+                    graph, actor, actor.ActionSlot?.CurrentAction)
+                : DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalActionForExactTarget(
+                    graph, actor, actor.ActionSlot?.CurrentAction, target);
             if (!exactProjectedAction && !projectionIndependentNormal)
                 return false;
 
