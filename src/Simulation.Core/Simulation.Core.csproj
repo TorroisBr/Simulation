@@ -188,6 +188,8 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12DRelationshipValidator.cs" Link="Persistence/DailyV1P12DRelationshipValidator.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12DSelectedOwnerGraphStager.cs" Link="Persistence/DailyV1P12DSelectedOwnerGraphStager.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12DSelectedOwnerRows.cs" Link="Persistence/P12DSelectedOwnerRows.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ActorChoiceCensusProviders.cs" Link="Persistence/ActorChoiceCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12FActorChoiceSnapshot.cs" Link="Persistence/P12FActorChoiceSnapshot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ContinuationDescriptorV2.cs" Link="Persistence/ContinuationDescriptorV2.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/AtomicFileSlot.cs" Link="Persistence/AtomicFileSlot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/NumericProfileIdentity.cs" Link="Persistence/NumericProfileIdentity.cs" />
