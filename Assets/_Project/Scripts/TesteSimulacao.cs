@@ -2705,7 +2705,7 @@ public class TesteSimulacao : MonoBehaviour
         npcChronicleService = new NpcChronicleService(decisionStore, domainEventStore);
         explorableSiteStore = new ExplorableSiteStore();
         explorableSiteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
-        expeditionStore = new ExpeditionStore();
+        expeditionStore = composition.Expeditions;
         economyTransactionService = new EconomyTransactionService();
 
         runtimeIdentityRegistry = new RuntimeIdentityRegistry(logger, graph.RuntimeIdentityIndex);

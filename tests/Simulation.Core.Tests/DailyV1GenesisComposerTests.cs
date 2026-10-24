@@ -67,6 +67,11 @@ public sealed class DailyV1GenesisComposerTests
         Assert.That(composition.DecisionStore.Decisions, Is.Empty);
         Assert.That(composition.OwnerGraph.PersonStore, Is.SameAs(composition.PersonStore));
         Assert.That(composition.ActorChoiceStore.PersonStore, Is.SameAs(composition.PersonStore));
+        Assert.That(composition.Expeditions, Is.Not.Null);
+        Assert.That(composition.Expeditions.ActiveExpeditions, Is.Empty);
+        Assert.That(composition.Expeditions.Revision, Is.Zero);
+        Assert.That(composition.OwnerGraph.Expeditions, Is.Null,
+            "P9 genesis retains the P12 exact-empty owner without admitting P10 expedition participation into the selected profile graph.");
         Assert.That(composition.ExecutionBoundaryState.SelectedRuntimeOwnerGraph,
             Is.SameAs(composition.OwnerGraph));
         IReadOnlyList<DailyV1ActorTurnRosterProjection> actorRoster =

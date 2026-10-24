@@ -1883,6 +1883,8 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(repeatedTravelPartyWitness.Cardinality, Is.Zero);
         Assert.That(repeatedTravelPartyWitness.Revision, Is.Zero);
         Assert.That(simulation.Bootstrap.Expeditions.ActiveExpeditions, Is.Empty);
+        Assert.That(simulation.Expeditions, Is.SameAs(simulation.Bootstrap.Expeditions),
+            "Unity projects and persists the exact ExpeditionStore composed by Core genesis.");
         OwnerSectionCensusWitness expeditionWitness = simulation.Bootstrap.ExpeditionCensusProvider.GetCurrentCensus();
         Assert.That(expeditionWitness.SectionId, Is.EqualTo(ExpeditionCensusProvider.SectionId));
         Assert.That(expeditionWitness.SchemaVersion, Is.EqualTo(ExpeditionCensusProvider.SchemaVersion));

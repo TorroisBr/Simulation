@@ -20,6 +20,7 @@ internal sealed class DailyV1GenesisComposition
     internal PersonStore PersonStore { get; }
     internal ActorChoiceStore ActorChoiceStore { get; }
     internal TravelPartyStore TravelPartyStore { get; }
+    internal ExpeditionStore Expeditions { get; }
     internal SimulationRuntimeAdmissionContext AdmissionContext { get; }
     internal EffectiveSimulationConfiguration EffectiveConfiguration { get; }
     internal SimulationCalendar Calendar { get; }
@@ -41,6 +42,7 @@ internal sealed class DailyV1GenesisComposition
         PersonStore personStore,
         ActorChoiceStore actorChoiceStore,
         TravelPartyStore travelPartyStore,
+        ExpeditionStore expeditions,
         SimulationRuntimeAdmissionContext admissionContext,
         EffectiveSimulationConfiguration effectiveConfiguration,
         SimulationCalendar calendar,
@@ -64,6 +66,7 @@ internal sealed class DailyV1GenesisComposition
         PersonStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
         ActorChoiceStore = actorChoiceStore ?? throw new ArgumentNullException(nameof(actorChoiceStore));
         TravelPartyStore = travelPartyStore ?? throw new ArgumentNullException(nameof(travelPartyStore));
+        Expeditions = expeditions ?? throw new ArgumentNullException(nameof(expeditions));
         AdmissionContext = admissionContext ?? throw new ArgumentNullException(nameof(admissionContext));
         EffectiveConfiguration = effectiveConfiguration ?? throw new ArgumentNullException(nameof(effectiveConfiguration));
         Calendar = calendar ?? throw new ArgumentNullException(nameof(calendar));
@@ -156,6 +159,7 @@ internal static class DailyV1GenesisComposer
             return Fail("The selected Core runtime could not bind its exact effective configuration and calendar.", out diagnostic);
         ScheduledDirectiveStore directives = new ScheduledDirectiveStore(time);
         TravelPartyStore travelParties = new TravelPartyStore();
+        ExpeditionStore expeditions = new ExpeditionStore();
         DailyV1JusticeRecordsOwner justice = new DailyV1JusticeRecordsOwner();
         DailyV1SelectedRuntimeOwnerGraphBuilder builder =
             new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
@@ -245,7 +249,7 @@ internal static class DailyV1GenesisComposer
                     composition = new DailyV1GenesisComposition(
                         definitions, p9ProfileFingerprint, p9ProvenanceRecords,
                         worldId, runtimeIds, time, randomSource, recordSequence,
-                        decisionStore, personStore, actorChoiceStore, travelParties,
+                        decisionStore, personStore, actorChoiceStore, travelParties, expeditions,
                         admissionContext, definitions.EffectiveConfiguration,
                         calendar, executionBoundaryState, spatialAuthority, anchorBindings, graph);
                     continue;
