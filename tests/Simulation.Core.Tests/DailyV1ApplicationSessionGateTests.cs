@@ -36,6 +36,72 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void ApplicationCapturesBootstrapThreadOnceAndRejectsAnotherApplicationsInitialSession()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        DailyV1Application otherApplication = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext admission), Is.True);
+        Assert.That(admission.Profile,
+            Is.EqualTo(SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1));
+        Assert.That(admission.ExpectedOwnerThread, Is.SameAs(Thread.CurrentThread));
+        Assert.That(admission.ExpectedOwnerThreadId,
+            Is.EqualTo(Thread.CurrentThread.ManagedThreadId));
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.False);
+        Assert.That(otherApplication.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext otherAdmission), Is.True);
+        Assert.That(otherAdmission, Is.Not.SameAs(admission));
+
+        SimulationRuntimeAdmissionContext otherRestoredAdmission =
+            otherAdmission.CreateRestoredContinuationContext();
+        Assert.That(otherRestoredAdmission.IsRestoredContinuationOf(admission), Is.False,
+            "A restored context from another application must not inherit this application's bootstrap lineage.");
+
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions, admission,
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            CreateBoundaryWithAdmission(composition, otherRestoredAdmission),
+            definitions, 0L,
+            out DailyV1ActiveRuntimeSession foreignRestoredSession, out diagnostic),
+            Is.True, diagnostic);
+        Assert.That(application.TryPublishInitial(foreignRestoredSession), Is.False,
+            "An application cannot publish a restored session admitted by a different bootstrap context on the same thread.");
+
+        SimulationRuntimeAdmissionContext restoredAdmission =
+            admission.CreateRestoredContinuationContext();
+        Assert.That(restoredAdmission.IsRestoredContinuationOf(admission), Is.True);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            CreateBoundaryWithAdmission(composition, restoredAdmission), definitions, 0L,
+            out DailyV1ActiveRuntimeSession session, out diagnostic), Is.True, diagnostic);
+        Assert.That(application.TryPublishInitial(session), Is.True);
+        Assert.That(application.ActiveSession, Is.SameAs(session));
+    }
+
+    private static DailyV1ExecutionBoundaryState CreateBoundaryWithAdmission(
+        DailyV1GenesisComposition composition,
+        SimulationRuntimeAdmissionContext admissionContext)
+    {
+        DailyV1ExecutionBoundaryState source = composition.ExecutionBoundaryState;
+        DailyV1ExecutionBoundaryState boundary = new DailyV1ExecutionBoundaryState(
+            source.SimulationTime, admissionContext, source.CompositionProfile, source.WorldId);
+        Assert.That(boundary.TryBindRuntimeConfiguration(
+            source.ConfigurationIdentity, source.CalendarIdentity), Is.True);
+        Assert.That(boundary.TryBindSelectedRuntimeOwnerGraph(composition.OwnerGraph), Is.True);
+        Assert.That(boundary.TryBindInitialSelectedRuntimeActorRosterFromOwnerGraph(), Is.True);
+        Assert.That(boundary.TryBindSelectedRuntimeExecutionRoots(
+            composition.RuntimeIdAllocator,
+            composition.RandomSource,
+            composition.RecordSequence,
+            composition.DecisionStore,
+            composition.ActorChoiceStore), Is.True);
+        return boundary;
+    }
+
+    [Test]
     public void ActiveRuntimeSessionBindsTheExactGenesisBoundaryAndOwnerGraph()
     {
         DailyV1EffectiveDefinitions definitions =

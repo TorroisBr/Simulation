@@ -288,12 +288,15 @@ public class TesteSimulacao : MonoBehaviour
         if (runtimeAdmissionProfile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
         {
             bootstrapStartAttempted = true;
-            bootstrapStartThread = Thread.CurrentThread;
-            bootstrapStartThreadId = bootstrapStartThread.ManagedThreadId;
-            runtimeAdmissionContext = new SimulationRuntimeAdmissionContext(
-                runtimeAdmissionProfile,
-                bootstrapStartThread,
-                bootstrapStartThreadId);
+            if (!dailyV1Application.TryCaptureBootstrapAdmissionContext(
+                    out runtimeAdmissionContext))
+            {
+                bootstrapFailed = true;
+                throw new System.InvalidOperationException(
+                    "The Core Daily-v1 application could not capture its one-time bootstrap admission context.");
+            }
+            bootstrapStartThread = runtimeAdmissionContext.ExpectedOwnerThread;
+            bootstrapStartThreadId = runtimeAdmissionContext.ExpectedOwnerThreadId;
         }
 
         if (runtimeAdmissionProfile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1

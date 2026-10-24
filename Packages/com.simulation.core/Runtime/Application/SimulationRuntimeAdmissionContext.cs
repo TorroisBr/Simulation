@@ -16,6 +16,8 @@ public enum SimulationRuntimeAdmissionProfile
 /// <summary>Explicit profile and owner-thread identity for the bounded P12 daily adapter.</summary>
 public sealed class SimulationRuntimeAdmissionContext
 {
+    private readonly object bootstrapLineageIdentity;
+
     public SimulationRuntimeAdmissionProfile Profile { get; }
     internal bool IsRestoredContinuation { get; }
     internal Thread ExpectedOwnerThread { get; }
@@ -25,7 +27,7 @@ public sealed class SimulationRuntimeAdmissionContext
         SimulationRuntimeAdmissionProfile profile,
         Thread expectedOwnerThread,
         int expectedOwnerThreadId)
-        : this(profile, expectedOwnerThread, expectedOwnerThreadId, false)
+        : this(profile, expectedOwnerThread, expectedOwnerThreadId, false, null)
     {
     }
 
@@ -33,7 +35,8 @@ public sealed class SimulationRuntimeAdmissionContext
         SimulationRuntimeAdmissionProfile profile,
         Thread expectedOwnerThread,
         int expectedOwnerThreadId,
-        bool isRestoredContinuation)
+        bool isRestoredContinuation,
+        object bootstrapLineageIdentity)
     {
         if (profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
             throw new ArgumentOutOfRangeException(nameof(profile));
@@ -49,6 +52,7 @@ public sealed class SimulationRuntimeAdmissionContext
         IsRestoredContinuation = isRestoredContinuation;
         ExpectedOwnerThread = expectedOwnerThread;
         ExpectedOwnerThreadId = expectedOwnerThreadId;
+        this.bootstrapLineageIdentity = bootstrapLineageIdentity ?? new object();
     }
 
     internal SimulationRuntimeAdmissionContext CreateRestoredContinuationContext()
@@ -60,7 +64,19 @@ public sealed class SimulationRuntimeAdmissionContext
             Profile,
             ExpectedOwnerThread,
             ExpectedOwnerThreadId,
-            true);
+            true,
+            bootstrapLineageIdentity);
+    }
+
+    internal bool IsRestoredContinuationOf(
+        SimulationRuntimeAdmissionContext bootstrapContext)
+    {
+        return IsRestoredContinuation
+            && bootstrapContext != null
+            && !bootstrapContext.IsRestoredContinuation
+            && Profile == bootstrapContext.Profile
+            && ReferenceEquals(bootstrapLineageIdentity,
+                bootstrapContext.bootstrapLineageIdentity);
     }
 
     public static SimulationRuntimeAdmissionContext CaptureUnityBootstrapDailyV1()

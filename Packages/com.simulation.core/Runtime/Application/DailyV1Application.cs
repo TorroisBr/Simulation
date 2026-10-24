@@ -10,10 +10,33 @@ internal sealed class DailyV1Application
     private readonly DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession> activeSessionGate =
         new DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>(
             session => session.ExecutionBoundaryState);
+    private SimulationRuntimeAdmissionContext bootstrapAdmissionContext;
 
     // Construction remains internal until the complete TryStart path can
     // create and return the application only after genesis or restore commits.
     internal DailyV1Application() { }
+
+    /// <summary>
+    /// Captures the selected bootstrap owner-thread identity once, inside the
+    /// Core application that will own the resulting active session.
+    /// </summary>
+    internal bool TryCaptureBootstrapAdmissionContext(
+        out SimulationRuntimeAdmissionContext admissionContext)
+    {
+        lock (activeSessionGate.SyncRoot)
+        {
+            admissionContext = null;
+            if (bootstrapAdmissionContext != null
+                || activeSessionGate.Current != null
+                || activeSessionGate.ActiveOperationCount != 0)
+                return false;
+
+            bootstrapAdmissionContext =
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+            admissionContext = bootstrapAdmissionContext;
+            return true;
+        }
+    }
 
     internal object ActiveSessionSyncRoot => activeSessionGate.SyncRoot;
     internal DailyV1ActiveRuntimeSession ActiveSession => activeSessionGate.Current;
@@ -28,8 +51,17 @@ internal sealed class DailyV1Application
     internal void EndOperation(DailyV1OperationScopeKind scopeKind) =>
         activeSessionGate.EndOperation(scopeKind);
 
-    internal bool TryPublishInitial(DailyV1ActiveRuntimeSession candidate) =>
-        activeSessionGate.TryPublishInitial(candidate);
+    internal bool TryPublishInitial(DailyV1ActiveRuntimeSession candidate)
+    {
+        if (candidate == null) return false;
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (bootstrapAdmissionContext != null
+                && !IsBootstrapOrRestoredDescendant(candidate.AdmissionContext))
+                return false;
+            return activeSessionGate.TryPublishInitial(candidate);
+        }
+    }
 
     internal bool TryBeginExclusiveOperation(
         DailyV1ActiveRuntimeSession expectedSession,
@@ -45,4 +77,12 @@ internal sealed class DailyV1Application
         DailyV1ActiveRuntimeSession expectedSession,
         DailyV1ActiveRuntimeSession candidate) =>
         activeSessionGate.TryPublishReplacement(expectedSession, candidate);
+
+    private bool IsBootstrapOrRestoredDescendant(
+        SimulationRuntimeAdmissionContext candidate)
+    {
+        if (ReferenceEquals(candidate, bootstrapAdmissionContext)) return true;
+        return candidate != null
+            && candidate.IsRestoredContinuationOf(bootstrapAdmissionContext);
+    }
 }
