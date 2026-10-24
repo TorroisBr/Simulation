@@ -12241,14 +12241,12 @@ public sealed class SimulationRuntimeAdmissionTests
 
     private static void ConfigureSelectedBootstrap(TesteSimulacao bootstrap, SimulationConfigData config)
     {
-        Thread ownerThread = Thread.CurrentThread;
         WritePrivateField(bootstrap, "simulationConfig", config);
         WritePrivateField(bootstrap, "runtimeAdmissionProfile", SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
-        WritePrivateField(bootstrap, "runtimeAdmissionContext",
-            new SimulationRuntimeAdmissionContext(
-                SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
-                ownerThread,
-                ownerThread.ManagedThreadId));
+        DailyV1Application application = ReadPrivateField<DailyV1Application>(bootstrap, "dailyV1Application");
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext admissionContext), Is.True);
+        WritePrivateField(bootstrap, "runtimeAdmissionContext", admissionContext);
         WritePrivateField(bootstrap, "bootstrapStartAttempted", true);
     }
 

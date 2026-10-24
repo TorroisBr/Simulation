@@ -81,6 +81,51 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.ActiveSession, Is.SameAs(session));
     }
 
+    [Test]
+    public void ApplicationRejectsInitialOrReplacementSessionsWithoutItsBootstrapLineage()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        DailyV1Application foreignApplication = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext admission), Is.True);
+        Assert.That(foreignApplication.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext foreignAdmission), Is.True);
+
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions, admission,
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions, foreignAdmission,
+            out DailyV1GenesisComposition foreignComposition,
+            out diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            composition.ExecutionBoundaryState, definitions, 0L,
+            out DailyV1ActiveRuntimeSession session, out diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            foreignComposition.ExecutionBoundaryState, definitions, 0L,
+            out DailyV1ActiveRuntimeSession foreignSession, out diagnostic), Is.True, diagnostic);
+        Assert.That(session.IsProfileCompatibleWith(foreignSession), Is.True,
+            "Profile compatibility remains independent of application ownership lineage.");
+
+        DailyV1Application unstartedApplication = new DailyV1Application();
+        Assert.That(unstartedApplication.TryPublishInitial(session), Is.False,
+            "An application must capture its bootstrap lineage before publishing a selected session.");
+        Assert.That(application.TryPublishInitial(foreignSession), Is.False,
+            "Initial publication must reject another application's session.");
+        Assert.That(application.TryPublishInitial(session), Is.True);
+        Assert.That(application.TryPublishReplacement(session, foreignSession), Is.False,
+            "Replacement publication must reject another application's session even when the profile matches.");
+
+        Assert.That(application.TryBeginExclusiveOperation(session, out var exclusive), Is.True);
+        using (exclusive)
+            Assert.That(application.TryPublishReplacement(exclusive, foreignSession), Is.False,
+                "Exclusive replacement publication must enforce the same application lineage.");
+        Assert.That(application.ActiveSession, Is.SameAs(session));
+    }
+
     private static DailyV1ExecutionBoundaryState CreateBoundaryWithAdmission(
         DailyV1GenesisComposition composition,
         SimulationRuntimeAdmissionContext admissionContext)
@@ -202,14 +247,17 @@ public sealed class DailyV1ApplicationSessionGateTests
     {
         DailyV1EffectiveDefinitions definitions =
             DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext admission), Is.True);
         Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
             definitions,
-            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            admission,
             out DailyV1GenesisComposition firstComposition,
             out string diagnostic), Is.True, diagnostic);
         Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
             definitions,
-            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            admission,
             out DailyV1GenesisComposition replacementComposition,
             out diagnostic), Is.True, diagnostic);
         Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
@@ -219,7 +267,6 @@ public sealed class DailyV1ApplicationSessionGateTests
             replacementComposition.ExecutionBoundaryState, definitions, 0L,
             out DailyV1ActiveRuntimeSession replacement, out diagnostic), Is.True, diagnostic);
 
-        DailyV1Application application = new DailyV1Application();
         Assert.That(application.TryPublishInitial(first), Is.True);
         Assert.That(application.ActiveSession, Is.SameAs(first));
         Assert.That(application.TryBeginOperation(

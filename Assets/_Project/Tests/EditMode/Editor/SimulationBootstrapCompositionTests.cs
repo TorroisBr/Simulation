@@ -350,11 +350,13 @@ public sealed class SimulationBootstrapCompositionTests
         typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
 
-        System.Threading.Thread ownerThread = System.Threading.Thread.CurrentThread;
+        DailyV1Application application = (DailyV1Application)typeof(TesteSimulacao)
+            .GetField("dailyV1Application", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(simulation);
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext admissionContext), Is.True);
         typeof(TesteSimulacao).GetField("runtimeAdmissionContext", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(simulation, new SimulationRuntimeAdmissionContext(
-                SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
-                ownerThread, ownerThread.ManagedThreadId));
+            .SetValue(simulation, admissionContext);
 
         int identityAllocationCount = 0;
         WorldId identity = new WorldId(new System.Guid("fedcba98-7654-3210-fedc-ba9876543210"));
@@ -430,12 +432,13 @@ public sealed class SimulationBootstrapCompositionTests
             .SetValue(simulation, config);
         typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
-        System.Threading.Thread ownerThread = System.Threading.Thread.CurrentThread;
+        DailyV1Application application = (DailyV1Application)typeof(TesteSimulacao)
+            .GetField("dailyV1Application", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(simulation);
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext admissionContext), Is.True);
         typeof(TesteSimulacao).GetField("runtimeAdmissionContext", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(simulation, new SimulationRuntimeAdmissionContext(
-                SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
-                ownerThread,
-                ownerThread.ManagedThreadId));
+            .SetValue(simulation, admissionContext);
 
         FactualReadCoordinator draftReads = null;
         InvokeBootstrapInitialize(simulation, stageId =>
@@ -2116,12 +2119,13 @@ public sealed class SimulationBootstrapCompositionTests
             .SetValue(simulation, config);
         typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
-        System.Threading.Thread ownerThread = System.Threading.Thread.CurrentThread;
+        DailyV1Application application = (DailyV1Application)typeof(TesteSimulacao)
+            .GetField("dailyV1Application", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(simulation);
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext admissionContext), Is.True);
         typeof(TesteSimulacao).GetField("runtimeAdmissionContext", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(simulation, new SimulationRuntimeAdmissionContext(
-                SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
-                ownerThread,
-                ownerThread.ManagedThreadId));
+            .SetValue(simulation, admissionContext);
 
         InvokeBootstrapInitialize(simulation, stageId =>
         {

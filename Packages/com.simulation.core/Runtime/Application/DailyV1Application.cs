@@ -56,8 +56,8 @@ internal sealed class DailyV1Application
         if (candidate == null) return false;
         lock (activeSessionGate.SyncRoot)
         {
-            if (bootstrapAdmissionContext != null
-                && !IsBootstrapOrRestoredDescendant(candidate.AdmissionContext))
+            if (bootstrapAdmissionContext == null
+                || !IsBootstrapOrRestoredDescendant(candidate.AdmissionContext))
                 return false;
             return activeSessionGate.TryPublishInitial(candidate);
         }
@@ -70,13 +70,29 @@ internal sealed class DailyV1Application
 
     internal bool TryPublishReplacement(
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation operation,
-        DailyV1ActiveRuntimeSession candidate) =>
-        activeSessionGate.TryPublishReplacement(operation, candidate);
+        DailyV1ActiveRuntimeSession candidate)
+    {
+        if (candidate == null) return false;
+        lock (activeSessionGate.SyncRoot)
+        {
+            return bootstrapAdmissionContext != null
+                && IsBootstrapOrRestoredDescendant(candidate.AdmissionContext)
+                && activeSessionGate.TryPublishReplacement(operation, candidate);
+        }
+    }
 
     internal bool TryPublishReplacement(
         DailyV1ActiveRuntimeSession expectedSession,
-        DailyV1ActiveRuntimeSession candidate) =>
-        activeSessionGate.TryPublishReplacement(expectedSession, candidate);
+        DailyV1ActiveRuntimeSession candidate)
+    {
+        if (candidate == null) return false;
+        lock (activeSessionGate.SyncRoot)
+        {
+            return bootstrapAdmissionContext != null
+                && IsBootstrapOrRestoredDescendant(candidate.AdmissionContext)
+                && activeSessionGate.TryPublishReplacement(expectedSession, candidate);
+        }
+    }
 
     private bool IsBootstrapOrRestoredDescendant(
         SimulationRuntimeAdmissionContext candidate)
