@@ -42,7 +42,7 @@ internal sealed class SimulationActiveSession
         SimulationConfigData configuration,
         SimulationRuntimeAdmissionContext admissionContext,
         IAuthoritativeRandomSource randomSource,
-        DailyV1SessionReportState reportState)
+        long lastEconomySnapshotDay)
     {
         Composition = composition ?? throw new System.ArgumentNullException(nameof(composition));
         Logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
@@ -51,15 +51,13 @@ internal sealed class SimulationActiveSession
         SpatialNetwork = spatialNetwork ?? throw new System.ArgumentNullException(nameof(spatialNetwork));
         Configuration = configuration;
         RandomSource = randomSource ?? throw new System.ArgumentNullException(nameof(randomSource));
-        reportState = reportState ?? throw new System.ArgumentNullException(nameof(reportState));
-
         DailyV1ExecutionBoundaryState executionBoundaryState = Runtime.ExecutionBoundaryState;
         if (executionBoundaryState.HasAdmittedSelectedDailyExecution)
         {
             if (!DailyV1ActiveRuntimeSession.TryCreate(
                     executionBoundaryState,
                     Composition.SelectedDefinitions,
-                    reportState,
+                    lastEconomySnapshotDay,
                     out DailyV1ActiveRuntimeSession coreRuntimeSession,
                     out string activeSessionDiagnostic))
                 throw new System.ArgumentException(activeSessionDiagnostic, nameof(composition));
@@ -70,7 +68,8 @@ internal sealed class SimulationActiveSession
         // admission. They retain their existing host session behavior; only a
         // fully admitted selected runtime receives the Core active-session binding.
 
-        ReportState = CoreRuntimeSession?.ReportState ?? reportState;
+        ReportState = CoreRuntimeSession?.ReportState
+            ?? new DailyV1SessionReportState(lastEconomySnapshotDay);
 
         AdmissionContext = CoreRuntimeSession?.AdmissionContext ?? admissionContext;
 
@@ -846,7 +845,7 @@ public class TesteSimulacao : MonoBehaviour
                 simulationConfig,
                 runtimeAdmissionContext,
                 authoritativeRandomSource,
-                new DailyV1SessionReportState(lastEconomySnapshotDay));
+                lastEconomySnapshotDay);
 
             unpublishedWorldId = null;
             draftComposition = null;

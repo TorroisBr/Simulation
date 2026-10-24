@@ -1352,7 +1352,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
             config,
             restoredAdmissionContext,
             stagedC.DeterministicRandom,
-            new DailyV1SessionReportState(lastEconomySnapshotDay));
+            lastEconomySnapshotDay);
         return true;
     }
 

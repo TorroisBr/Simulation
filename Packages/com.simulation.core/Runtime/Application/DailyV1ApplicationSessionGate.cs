@@ -34,12 +34,12 @@ internal sealed class DailyV1ActiveRuntimeSession
         DailyV1ExecutionBoundaryState executionBoundaryState,
         DailyV1EffectiveDefinitions definitions,
         string profileFingerprint,
-        DailyV1SessionReportState reportState)
+        long lastEconomySnapshotDay)
     {
         ExecutionBoundaryState = executionBoundaryState;
         Definitions = definitions;
         ProfileFingerprint = profileFingerprint;
-        ReportState = reportState;
+        ReportState = new DailyV1SessionReportState(lastEconomySnapshotDay);
     }
 
     internal DailyV1ExecutionBoundaryState ExecutionBoundaryState { get; }
@@ -57,15 +57,15 @@ internal sealed class DailyV1ActiveRuntimeSession
     internal static bool TryCreate(
         DailyV1ExecutionBoundaryState executionBoundaryState,
         DailyV1EffectiveDefinitions expectedDefinitions,
-        DailyV1SessionReportState reportState,
+        long lastEconomySnapshotDay,
         out DailyV1ActiveRuntimeSession session,
         out string diagnostic)
     {
         session = null;
         diagnostic = null;
-        if (executionBoundaryState == null || expectedDefinitions == null || reportState == null)
+        if (executionBoundaryState == null || expectedDefinitions == null)
         {
-            diagnostic = "The active Core session requires its exact execution boundary, effective definitions, and report state.";
+            diagnostic = "The active Core session requires its exact execution boundary and effective definitions.";
             return false;
         }
 
@@ -94,7 +94,7 @@ internal sealed class DailyV1ActiveRuntimeSession
         }
 
         session = new DailyV1ActiveRuntimeSession(
-            executionBoundaryState, expectedDefinitions, profileFingerprint, reportState);
+            executionBoundaryState, expectedDefinitions, profileFingerprint, lastEconomySnapshotDay);
         return true;
     }
 
