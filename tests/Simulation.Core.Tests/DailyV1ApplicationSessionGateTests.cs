@@ -82,6 +82,29 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void ApplicationCapturesItsCallingHostThreadWithoutUnityThreadFactory()
+    {
+        DailyV1Application application = new DailyV1Application();
+        SimulationRuntimeAdmissionContext captured = null;
+        bool captureSucceeded = false;
+        Thread startThread = new Thread(() =>
+        {
+            captureSucceeded = application.TryCaptureBootstrapAdmissionContext(out captured);
+        });
+
+        startThread.Start();
+        Assert.That(startThread.Join(TimeSpan.FromSeconds(5)), Is.True,
+            "The selected application bootstrap thread did not complete capture.");
+        Assert.That(captureSucceeded, Is.True);
+        Assert.That(captured.Profile,
+            Is.EqualTo(SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1));
+        Assert.That(captured.ExpectedOwnerThread, Is.SameAs(startThread));
+        Assert.That(captured.ExpectedOwnerThreadId, Is.EqualTo(startThread.ManagedThreadId));
+        Assert.That(captured.IsOwnedByCurrentThread(), Is.False,
+            "The calling host thread remains the owner after bootstrap capture returns.");
+    }
+
+    [Test]
     public void ApplicationRejectsInitialOrReplacementSessionsWithoutItsBootstrapLineage()
     {
         DailyV1EffectiveDefinitions definitions =

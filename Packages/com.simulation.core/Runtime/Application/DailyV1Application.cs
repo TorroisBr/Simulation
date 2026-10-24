@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 
 /// <summary>
 /// Core-owned lifetime and operation gate for one selected Daily-v1
@@ -31,8 +32,10 @@ internal sealed class DailyV1Application
                 || activeSessionGate.ActiveOperationCount != 0)
                 return false;
 
-            bootstrapAdmissionContext =
-                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+            bootstrapAdmissionContext = new SimulationRuntimeAdmissionContext(
+                SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
+                Thread.CurrentThread,
+                Thread.CurrentThread.ManagedThreadId);
             admissionContext = bootstrapAdmissionContext;
             return true;
         }
