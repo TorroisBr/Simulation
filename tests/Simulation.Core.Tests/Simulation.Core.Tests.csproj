@@ -35,6 +35,7 @@
     <Compile Include="DailyV1P12DRelationshipValidatorTests.cs" />
     <Compile Include="DailyV1P12DSelectedOwnerGraphStagerTests.cs" />
     <Compile Include="DailyV1P12DNpcCoreOwnerHydratorTests.cs" />
+    <Compile Include="DailyV1P12DCityCoreOwnerHydratorTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12FActorChoiceSnapshotTests.cs" Link="Persistence/P12FActorChoiceSnapshotTests.cs" />
     <Compile Include="DailyV1PopulationConsumptionOperationTests.cs" />
     <Compile Include="DailyV1SelectedTravelTransitionPlanTests.cs" />
