@@ -43,4 +43,4 @@ The original full-suite XML and log remain in private evidence retention; the 23
 
 ## Review status and limitations
 
-Independent exact-tip implementation review is pending. Core canonical remains unchanged. No canonical promotion, P12-D completion, full restore-graph publication, P12-G completion, detached .NET host, or T/T+1/T+2 parity is claimed.
+Independent exact-tip implementation review passed with no actionable findings. See [the durable review record](../../../reviews/CORE_F_P12D_CITY_CORE_OWNER_HYDRATION_REVIEW_05316BB.md), commit `b715fbad4a4871709b7827d1fdfd877f748dd485`. Core canonical remains unchanged. No canonical promotion, P12-D completion, full restore-graph publication, P12-G completion, detached .NET host, or T/T+1/T+2 parity is claimed.
