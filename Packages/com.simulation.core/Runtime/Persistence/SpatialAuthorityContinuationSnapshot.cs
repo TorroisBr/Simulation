@@ -166,7 +166,7 @@ internal sealed class P12CSpatialAuthoritySnapshot
                 out failure);
         }
 
-        if (!string.Equals(p9ProfileContractIdentity, SimulationGenesisPipeline.GeographyProfileContractIdentity, StringComparison.Ordinal)
+        if (!string.Equals(p9ProfileContractIdentity, P12CP9GenesisContract.GeographyProfileContractIdentity, StringComparison.Ordinal)
             || p9ProfileSchemaVersion != 2)
         {
             return Fail(
@@ -275,7 +275,7 @@ internal sealed class P12CSpatialAuthoritySnapshot
             return Fail(P12CSpatialAuthoritySnapshotFailureCode.UnsupportedAdmissionProfile, "P8-A geography snapshot is bound to an unsupported P12 admission profile.", out failure);
         }
 
-        if (!string.Equals(snapshot.P9ProfileContractIdentity, SimulationGenesisPipeline.GeographyProfileContractIdentity, StringComparison.Ordinal)
+        if (!string.Equals(snapshot.P9ProfileContractIdentity, P12CP9GenesisContract.GeographyProfileContractIdentity, StringComparison.Ordinal)
             || snapshot.P9ProfileSchemaVersion != 2)
         {
             return Fail(P12CSpatialAuthoritySnapshotFailureCode.UnsupportedGenesisProfile, "P8-A geography snapshot is bound to an unsupported P9 genesis profile.", out failure);

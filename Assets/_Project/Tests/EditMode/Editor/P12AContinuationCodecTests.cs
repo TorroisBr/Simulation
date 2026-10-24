@@ -1010,9 +1010,9 @@ public sealed class P12AContinuationCodecTests
         Assert.That(P12CP9GenesisManifestSnapshot.TryCapture(
             SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1, simulation.Bootstrap.Manifest,
             out P12CP9GenesisManifestSnapshot original, out string captureError), Is.True, captureError);
-        Assert.That(P12ACP9ManifestCodec.TryEncode(original, out byte[] bytes, out P12AResult encodeError),
+        Assert.That(P12ACP9ManifestCodec.TryEncode(original.CoreValue, out byte[] bytes, out P12AResult encodeError),
             Is.True, encodeError?.Code.ToString());
-        Assert.That(P12ACP9ManifestCodec.TryDecode(bytes, out P12CP9GenesisManifestSnapshot decoded,
+        Assert.That(P12ACP9ManifestCodec.TryDecode(bytes, out P12CP9GenesisManifestCoreSnapshot decoded,
             out P12AResult decodeError), Is.True, decodeError?.Code.ToString());
 
         Assert.That(decoded.SnapshotContract, Is.EqualTo(original.SnapshotContract));
@@ -1042,7 +1042,7 @@ public sealed class P12AContinuationCodecTests
 
         byte[] trailing = new byte[bytes.Length + 1];
         Array.Copy(bytes, trailing, bytes.Length);
-        Assert.That(P12ACP9ManifestCodec.TryDecode(trailing, out P12CP9GenesisManifestSnapshot rejected,
+        Assert.That(P12ACP9ManifestCodec.TryDecode(trailing, out P12CP9GenesisManifestCoreSnapshot rejected,
             out _), Is.False);
         Assert.That(rejected, Is.Null);
     }
@@ -1451,7 +1451,7 @@ public sealed class P12AContinuationCodecTests
     private P12ACausalRootPayload CausalRoots()
     {
         P12CP9GenesisManifestSnapshot manifest = GetP9Manifest();
-        return new P12ACausalRootPayload(manifest,
+        return new P12ACausalRootPayload(manifest.CoreValue,
             new DeterministicRandomSource(manifest.Seed).CaptureSnapshot());
     }
 

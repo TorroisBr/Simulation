@@ -6,7 +6,7 @@ using System.Text;
 /// <summary>Explicit v1 codec for the immutable P9 genesis lineage snapshot.</summary>
 internal static class P12ACP9ManifestCodec
 {
-    internal static bool TryEncode(P12CP9GenesisManifestSnapshot snapshot, out byte[] bytes, out P12AResult result)
+    internal static bool TryEncode(P12CP9GenesisManifestCoreSnapshot snapshot, out byte[] bytes, out P12AResult result)
     {
         bytes = null; result = new P12AResult(P12AResultCode.InvalidOwnerValue, "p9.genesis-manifest");
         if (snapshot == null || !snapshot.TryValidate(out _)) return false;
@@ -38,7 +38,7 @@ internal static class P12ACP9ManifestCodec
         { result = new P12AResult(P12AResultCode.InvalidOwnerValue, "p9.genesis-manifest"); return false; }
     }
 
-    internal static bool TryDecode(byte[] bytes, out P12CP9GenesisManifestSnapshot snapshot, out P12AResult result)
+    internal static bool TryDecode(byte[] bytes, out P12CP9GenesisManifestCoreSnapshot snapshot, out P12AResult result)
     {
         snapshot = null; result = new P12AResult(P12AResultCode.InvalidOwnerValue, "p9.genesis-manifest");
         if (bytes == null) return false;
@@ -62,7 +62,7 @@ internal static class P12ACP9ManifestCodec
                 string seedSource = RequiredString(reader); List<string> stages = ReadStrings(reader);
                 string firstBoundary = RequiredString(reader);
                 if (stream.Position != stream.Length) return false;
-                snapshot = new P12CP9GenesisManifestSnapshot(snapshotContract, snapshotVersion, profile,
+                snapshot = new P12CP9GenesisManifestCoreSnapshot(snapshotContract, snapshotVersion, profile,
                     contract, schemaVersion, fingerprint, selectedFingerprint, selectedContract, selectedVersion,
                     configuration, provenance, definitions, outputOwners, dependencies,
                     months, weeks, days, monthLengths, seed, seedSource, stages, firstBoundary);

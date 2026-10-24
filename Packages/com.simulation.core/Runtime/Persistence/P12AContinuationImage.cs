@@ -98,11 +98,11 @@ internal sealed class P12ACausalRootPayload
     internal const string OwnerKey = "p12c-continuation-roots";
     internal const int SchemaVersion = 1;
 
-    internal P12ACausalRootPayload(P12CP9GenesisManifestSnapshot p9Manifest,
+    internal P12ACausalRootPayload(P12CP9GenesisManifestCoreSnapshot p9Manifest,
         DeterministicRandomRootSnapshot randomRoot)
     { P9Manifest = p9Manifest; RandomRoot = randomRoot; }
 
-    internal P12CP9GenesisManifestSnapshot P9Manifest { get; }
+    internal P12CP9GenesisManifestCoreSnapshot P9Manifest { get; }
     internal DeterministicRandomRootSnapshot RandomRoot { get; }
 
     internal bool IsValidFor(P12AContinuationHeader header) => header != null

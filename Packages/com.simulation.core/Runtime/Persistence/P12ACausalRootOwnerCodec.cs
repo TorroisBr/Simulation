@@ -115,7 +115,7 @@ internal static class P12ACausalRootOwnerCodec
                     || !ReadNestedValue(reader, stream, out byte[] randomBytes)
                     || stream.Position != stream.Length
                     || !P12ACP9ManifestCodec.TryDecode(p9Bytes,
-                        out P12CP9GenesisManifestSnapshot p9Manifest, out _)
+                        out P12CP9GenesisManifestCoreSnapshot p9Manifest, out _)
                     || !TryDecodeRandomRoot(randomBytes,
                         out DeterministicRandomRootSnapshot randomRoot, out _)) return false;
                 P12ACausalRootPayload candidate = new P12ACausalRootPayload(p9Manifest, randomRoot);

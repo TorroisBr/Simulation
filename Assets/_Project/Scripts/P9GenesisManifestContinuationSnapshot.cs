@@ -7,8 +7,8 @@ using System.Collections.Generic;
 /// </summary>
 public sealed class P12CP9GenesisManifestSnapshot
 {
-    public const string SnapshotContractIdentity = "p12c.p9-genesis-manifest-snapshot/v1";
-    public const int CurrentSchemaVersion = 1;
+    public const string SnapshotContractIdentity = P12CP9GenesisManifestCoreSnapshot.SnapshotContractIdentity;
+    public const int CurrentSchemaVersion = P12CP9GenesisManifestCoreSnapshot.CurrentSchemaVersion;
 
     private readonly P12CP9GenesisManifestCoreSnapshot coreValue;
 
@@ -61,6 +61,16 @@ public sealed class P12CP9GenesisManifestSnapshot
             firstSimulatedBoundary);
     }
 
+    internal P12CP9GenesisManifestSnapshot(P12CP9GenesisManifestCoreSnapshot coreValue)
+    {
+        this.coreValue = coreValue ?? throw new ArgumentNullException(nameof(coreValue));
+    }
+
+    internal P12CP9GenesisManifestCoreSnapshot CoreValue => coreValue;
+
+    internal static P12CP9GenesisManifestSnapshot FromCore(
+        P12CP9GenesisManifestCoreSnapshot coreValue) =>
+        coreValue == null ? null : new P12CP9GenesisManifestSnapshot(coreValue);
     public string SnapshotContract => coreValue.SnapshotContract;
     public int SnapshotSchemaVersion => coreValue.SnapshotSchemaVersion;
     public SimulationRuntimeAdmissionProfile P12AdmissionProfile => coreValue.P12AdmissionProfile;

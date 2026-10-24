@@ -54,7 +54,7 @@ internal static class P12ACausalRootImageAdapter
             || stagedWorldId.Value != header.WorldId)
             return false;
 
-        P12ACausalRootPayload roots = new P12ACausalRootPayload(p9Manifest, randomRoot);
+        P12ACausalRootPayload roots = new P12ACausalRootPayload(p9Manifest == null ? null : p9Manifest.CoreValue, randomRoot);
         if (!roots.IsValidFor(header)
             || !P12ACSpatialAuthorityCodec.TryComputeFingerprint(spatialAuthority, out string spatialFingerprint)
             || !string.Equals(spatialFingerprint, header.P8GeographyFingerprint, StringComparison.Ordinal))
@@ -151,7 +151,7 @@ internal static class P12ACausalRootImageAdapter
         }
 
         snapshots = new P12ACausalRootImageSnapshots(identity, eventAllocator, recordSequence,
-            spatialAuthority, image.CausalRoots.P9Manifest, image.CausalRoots.RandomRoot);
+            spatialAuthority, P12CP9GenesisManifestSnapshot.FromCore(image.CausalRoots.P9Manifest), image.CausalRoots.RandomRoot);
         result = null;
         return true;
     }

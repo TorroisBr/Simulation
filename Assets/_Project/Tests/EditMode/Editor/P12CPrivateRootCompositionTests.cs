@@ -1294,7 +1294,8 @@ public sealed class P12CPrivateRootCompositionTests
 
     private static Type InnerType(string name)
     {
-        Type type = typeof(SimulationBootstrapComposition).Assembly.GetType(name);
+        Type type = typeof(P12CP9GenesisManifestCoreSnapshot).Assembly.GetType(name, false)
+            ?? typeof(SimulationBootstrapComposition).Assembly.GetType(name, false);
         Assert.That(type, Is.Not.Null, "Missing production type " + name);
         return type;
     }

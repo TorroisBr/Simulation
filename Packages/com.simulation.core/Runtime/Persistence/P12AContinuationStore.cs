@@ -13,21 +13,6 @@ internal static class P12AContinuationStore
         return Path.Combine(persistentDataPath, DirectoryName, FileName);
     }
 
-    internal static bool TrySaveCurrent(byte[] bytes, P12ADailyV1SectionManifest manifest,
-        P12ACompatibilityDescriptor compatibility, out P12AResult result) =>
-        TrySave(bytes, manifest, compatibility, UnityEngine.Application.persistentDataPath, out result);
-
-    internal static bool TryLoadCurrent(P12ADailyV1SectionManifest manifest,
-        P12ACompatibilityDescriptor compatibility, out P12AContinuationImage image, out P12AResult result) =>
-        TryLoad(manifest, compatibility, UnityEngine.Application.persistentDataPath, out image, out result);
-
-    internal static bool TryLoadCurrent(P12ACompatibilityDescriptor compatibility,
-        out P12AContinuationImage image, out P12AResult result) =>
-        TryLoad(null, compatibility, UnityEngine.Application.persistentDataPath, out image, out result);
-
-    internal static bool TryHasCurrentSlot(out bool exists, out P12AResult result) =>
-        TryHasSlot(UnityEngine.Application.persistentDataPath, out exists, out result);
-
     internal static bool TryHasSlot(string persistentDataPath, out bool exists, out P12AResult result) =>
         TryHasSlot(persistentDataPath, SystemAtomicFileSlotOperations.Instance, out exists, out result);
 
