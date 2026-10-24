@@ -92,4 +92,60 @@ public sealed class DailyV1P12DSelectedOwnerGraphStagerTests
         Assert.That(foreignGraph, Is.Null);
         Assert.That(foreignFailure, Is.EqualTo(DailyV1P12DSelectedOwnerGraphFailure.InvalidNpcOwner));
     }
+
+    [Test]
+    public void AllowsNpcOnlyOwnerVectorButRejectsCompletelyEmptyOwnerVector()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
+            "npc/without-city", definitions, definitions.Npcs.Values.First(), 0f,
+            out DailyV1NpcRuntimeOwners npc), Is.True);
+
+        SpatialNetworkOwner spatialNetwork = new SpatialNetworkOwner();
+        DailyV1JusticeRecordsOwner justiceRecords = new DailyV1JusticeRecordsOwner();
+        TravelPartyStore travelParties = new TravelPartyStore();
+        DailyV1RuntimeIdentityIndex identities = new DailyV1RuntimeIdentityIndex();
+        Assert.That(identities.TryStageRegister(npc.RuntimeId, DailyV1RuntimeIdentityKind.Npc), Is.True);
+        PersonStore persons = new PersonStore();
+        ScheduledDirectiveStore directives = new ScheduledDirectiveStore(new SimulationTime(8L));
+        ExpeditionStore expeditions = new ExpeditionStore();
+
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+            System.Array.Empty<DailyV1CityRuntimeOwners>(), new[] { npc }, spatialNetwork,
+            justiceRecords, travelParties, identities, persons,
+            out DailyV1SelectedRuntimeOwnerGraph priorBoundaryGraph), Is.True);
+
+        Assert.That(DailyV1P12DSelectedOwnerGraphStager.TryCreate(
+            definitions,
+            System.Array.Empty<DailyV1CityRuntimeOwners>(),
+            new[] { npc },
+            spatialNetwork,
+            justiceRecords,
+            travelParties,
+            identities,
+            persons,
+            directives,
+            expeditions,
+            out DailyV1SelectedRuntimeOwnerGraph restored,
+            out DailyV1P12DSelectedOwnerGraphFailure failure), Is.True, failure.ToString());
+        Assert.That(restored.Cities, Is.Empty);
+        Assert.That(restored.Npcs.Count, Is.EqualTo(1));
+        Assert.That(restored.Npcs[0], Is.SameAs(npc));
+
+        Assert.That(DailyV1P12DSelectedOwnerGraphStager.TryCreate(
+            definitions,
+            System.Array.Empty<DailyV1CityRuntimeOwners>(),
+            System.Array.Empty<DailyV1NpcRuntimeOwners>(),
+            spatialNetwork,
+            justiceRecords,
+            travelParties,
+            new DailyV1RuntimeIdentityIndex(),
+            new PersonStore(),
+            new ScheduledDirectiveStore(new SimulationTime(8L)),
+            new ExpeditionStore(),
+            out DailyV1SelectedRuntimeOwnerGraph emptyGraph,
+            out DailyV1P12DSelectedOwnerGraphFailure emptyFailure), Is.False);
+        Assert.That(emptyGraph, Is.Null);
+        Assert.That(emptyFailure, Is.EqualTo(DailyV1P12DSelectedOwnerGraphFailure.InvalidInput));
+    }
 }

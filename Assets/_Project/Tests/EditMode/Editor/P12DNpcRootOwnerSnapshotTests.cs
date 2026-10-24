@@ -1059,6 +1059,47 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         Assert.That(stagedCities.Select(value => value.ImportantNpcs.Count), Is.All.EqualTo(0));
         Assert.That(stagedCities.Select(value => value.ImportantNpcRevision), Is.EqualTo(revisions));
     }
+
+    [Test]
+    public void SelectedOwnerCollection_AllowsNonemptyNpcRosterWithoutCityOwners()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition npcDefinition = definitions.Npcs.Values.First();
+        NpcRuntime npc = NpcRuntime.CreateSelectedDailyV1(
+            "p12d-selected-npc-without-city", npcDefinition, definitions, (CityRuntime)null, 0f);
+        MethodInfo collect = typeof(P12DDailyV1OwnerPackage).GetMethod(
+            "TryCollectSelectedOwners", BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.That(collect, Is.Not.Null);
+
+        object[] arguments =
+        {
+            definitions,
+            System.Array.Empty<CityRuntime>(),
+            new[] { npc },
+            null,
+            null
+        };
+        Assert.That((bool)collect.Invoke(null, arguments), Is.True);
+        IReadOnlyList<DailyV1CityRuntimeOwners> cityOwners =
+            (IReadOnlyList<DailyV1CityRuntimeOwners>)arguments[3];
+        IReadOnlyList<DailyV1NpcRuntimeOwners> npcOwners =
+            (IReadOnlyList<DailyV1NpcRuntimeOwners>)arguments[4];
+        Assert.That(cityOwners, Is.Empty);
+        Assert.That(npcOwners.Count, Is.EqualTo(1));
+        Assert.That(npcOwners[0], Is.SameAs(npc.SelectedRuntimeOwners));
+
+        object[] emptyArguments =
+        {
+            definitions,
+            System.Array.Empty<CityRuntime>(),
+            System.Array.Empty<NpcRuntime>(),
+            null,
+            null
+        };
+        Assert.That((bool)collect.Invoke(null, emptyArguments), Is.False,
+            "A completely empty selected owner vector cannot establish its definition identity.");
+    }
+
     [Test]
     public void Capture_ProducesDetachedValuesWhenSourceOwnersChangeAfterCapture()
     {

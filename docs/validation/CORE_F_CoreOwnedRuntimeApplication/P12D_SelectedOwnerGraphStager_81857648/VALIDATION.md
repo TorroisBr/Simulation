@@ -25,7 +25,7 @@ Official wrapper, Unity `6000.3.9f1`, full EditMode run `8a5ce6416ff94e77bfdfd71
 
 The privacy-safe package is retained here:
 
-- `editmode.manifest.json`, SHA-256 `a97592b64ece7959747645feea3f358b03b7fbfee454fd9230c58a7c8a32f498` (443,069 bytes).
+- `editmode.manifest.json`, committed Git blob SHA-256 `35e100fc5fb83777a99ac19f41855c4b14d72b4c91102fb1416bb958d7148f70` (433,601 bytes). A Windows checkout with CRLF line endings projects the same JSON as SHA-256 `a97592b64ece7959747645feea3f358b03b7fbfee454fd9230c58a7c8a32f498` (443,069 bytes).
 - `editmode.zip`, SHA-256 `e63f92eeb401835cc0b448f03568d5e148b6b33cf8f8c6331b64a01b487b598e` (172,557 bytes).
 - Bundle: `coref-p12d-editmode-full-81857648`.
 - Package verification against the protected source run manifest: **PASS**.
@@ -39,5 +39,5 @@ The separate filtered Smoke run returned **5/5 Passed** (private run `d451eb7abe
 
 - Focused stager tests: **2/2 PASS**.
 - `git diff --check`: **PASS** before implementation commit; rerun on this documentation/package delta before commit.
-- Independent exact-tip implementation review: pending.
+- Independent review of documentation/evidence candidate `425ea732cee2831860955d4446b57396526eaf65`: **NEEDS_CHANGES**. It identified that the 81857648 implementation rejected an NPC-only owner vector previously admitted by the exact-owner graph contract. The review also verified the Unity package and requested the manifest line-ending convention be recorded; this entry corrects that size/hash distinction. The implementation correction and its validation are tracked separately; this historical result does not validate that later source.
 - Canonical promotion: not performed.

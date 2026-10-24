@@ -35,7 +35,8 @@ internal static class DailyV1P12DSelectedOwnerGraphStager
     {
         graph = null;
         failure = DailyV1P12DSelectedOwnerGraphFailure.InvalidInput;
-        if (definitions == null || cityOwners == null || cityOwners.Count == 0 || npcOwners == null
+        if (definitions == null || cityOwners == null || npcOwners == null
+            || (cityOwners.Count == 0 && npcOwners.Count == 0)
             || spatialNetwork == null || justiceRecords == null || travelParties == null
             || runtimeIdentityIndex == null || persons == null || directives == null || expeditions == null)
             return false;

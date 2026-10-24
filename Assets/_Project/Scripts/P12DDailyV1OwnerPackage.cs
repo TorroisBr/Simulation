@@ -486,7 +486,7 @@ internal sealed class P12DDailyV1OwnerPackage
         selectedCityOwners = Array.Empty<DailyV1CityRuntimeOwners>();
         selectedNpcOwners = Array.Empty<DailyV1NpcRuntimeOwners>();
         if (selectedDefinitions == null) return true;
-        if (cities == null || cities.Count == 0 || npcs == null) return false;
+        if (cities == null || npcs == null || (cities.Count == 0 && npcs.Count == 0)) return false;
 
         List<DailyV1CityRuntimeOwners> cityOwners = new List<DailyV1CityRuntimeOwners>(cities.Count);
         foreach (CityRuntime city in cities)
