@@ -70,4 +70,27 @@ Routine read/search, Git, and relevant Unity validation operations may be perfor
 
 For Windows GitHub HTTPS authentication with multiple saved accounts, follow `docs/operations/GIT_AUTHENTICATION_WINDOWS.md`. Never inspect or print credential values.
 
+## Simulation storage defaults
+
+The preferred development clone is `E:\GitHub\GeneralSimulation\MainSimulation`. The root checkout has its own user-owned branch, edits, and untracked files; preserve them. Create new Simulation linked worktrees only below its `.worktrees` directory using Git worktree commands from that E: clone. Do not create new Simulation clones, worktrees, Unity validation projects, build outputs, or project temporary files on C:. The repository `.codex/config.toml` currently configures agent concurrency only; it has no supported worktree-root setting, so follow this explicit path policy.
+
+For a worktree under E:, keep process-local temporary and .NET cache state on that same worktree. Set these in the PowerShell process that launches the official runner; do not change machine-wide environment variables:
+
+```powershell
+$repoRoot = (Resolve-Path .).Path
+$allowedRoot = 'E:\GitHub\GeneralSimulation\MainSimulation'
+if ($repoRoot -ne $allowedRoot -and -not $repoRoot.StartsWith($allowedRoot + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Use an E: Simulation worktree.' }
+$runRoot = Join-Path $repoRoot '.codex-work'
+$tmp = Join-Path $runRoot 'tmp'
+New-Item -ItemType Directory -Force -Path $tmp, (Join-Path $runRoot 'dotnet-home'), (Join-Path $runRoot 'nuget-packages') | Out-Null
+$env:TEMP = $tmp
+$env:TMP = $tmp
+$env:DOTNET_CLI_HOME = Join-Path $runRoot 'dotnet-home'
+$env:NUGET_PACKAGES = Join-Path $runRoot 'nuget-packages'
+```
+
+.NET `bin`/`obj` outputs and Unity `Library` caches should remain inside the E: worktree. Use a separate Unity worktree and Library per validation run. Pass an E:-local protected evidence root to the supported runners: `-EvidenceRoot (Join-Path $repoRoot '.private-core-validation')` for `Tools/CoreValidation/Invoke-CoreValidation.ps1`, and `-EvidenceRoot (Join-Path $repoRoot '.private-unity-validation')` for `Tools/UnityValidation/Invoke-UnityValidationWithEvidence.ps1`. Those runners create and verify the required owner-only evidence ACLs. Do not relocate SDKs, Unity installations, or machine-wide caches.
+
+Existing C: checkouts, worktrees, private evidence, and user changes remain preservation-only until a complete destination copy is verified for Git identity, file hashes, ignored/untracked data, and ACL boundaries. Never relax ACLs or guess mappings for unresolved security principals. If ACL-safe migration is unavailable, retain the source and report the exact blocker. The current E: root checkout is not a migration target; use a new child worktree.
+
 The lifecycle and dependency vocabulary is in `docs/EXECUTION_MODEL.md`; it does not grant permission to execute the roadmap.
