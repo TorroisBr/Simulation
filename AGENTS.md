@@ -74,22 +74,24 @@ For Windows GitHub HTTPS authentication with multiple saved accounts, follow `do
 
 The preferred development clone is `E:\GitHub\GeneralSimulation\MainSimulation`. The root checkout has its own user-owned branch, edits, and untracked files; preserve them. Create new Simulation linked worktrees only below its `.worktrees` directory using Git worktree commands from that E: clone. Do not create new Simulation clones, worktrees, Unity validation projects, build outputs, or project temporary files on C:. The repository `.codex/config.toml` currently configures agent concurrency only; it has no supported worktree-root setting, so follow this explicit path policy.
 
-For a worktree under E:, keep process-local temporary and .NET cache state on that same worktree. Set these in the PowerShell process that launches the official runner; do not change machine-wide environment variables:
+For a worktree under E:, keep process-local temporary and .NET cache state on E:. Set these in the PowerShell process that launches the official runner; do not change machine-wide environment variables. Deep linked worktree paths can exceed Windows' legacy path limit when test names, XML files, or logs are appended, so use a unique short run directory directly on E: rather than nesting TEMP or validation evidence below the worktree:
 
 ```powershell
 $repoRoot = (Resolve-Path .).Path
 $allowedRoot = 'E:\GitHub\GeneralSimulation\MainSimulation'
 if ($repoRoot -ne $allowedRoot -and -not $repoRoot.StartsWith($allowedRoot + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Use an E: Simulation worktree.' }
-$runRoot = Join-Path $repoRoot '.codex-work'
+$runId = [guid]::NewGuid().ToString('N')
+$runRoot = "E:\t\$runId"
 $tmp = Join-Path $runRoot 'tmp'
-New-Item -ItemType Directory -Force -Path $tmp, (Join-Path $runRoot 'dotnet-home'), (Join-Path $runRoot 'nuget-packages') | Out-Null
+$evidenceRoot = "E:\ev\$runId"
+New-Item -ItemType Directory -Force -Path $tmp, (Join-Path $runRoot 'dotnet-home'), (Join-Path $runRoot 'nuget-packages'), $evidenceRoot | Out-Null
 $env:TEMP = $tmp
 $env:TMP = $tmp
 $env:DOTNET_CLI_HOME = Join-Path $runRoot 'dotnet-home'
 $env:NUGET_PACKAGES = Join-Path $runRoot 'nuget-packages'
 ```
 
-.NET `bin`/`obj` outputs and Unity `Library` caches should remain inside the E: worktree. Use a separate Unity worktree and Library per validation run. Pass an E:-local protected evidence root to the supported runners: `-EvidenceRoot (Join-Path $repoRoot '.private-core-validation')` for `Tools/CoreValidation/Invoke-CoreValidation.ps1`, and `-EvidenceRoot (Join-Path $repoRoot '.private-unity-validation')` for `Tools/UnityValidation/Invoke-UnityValidationWithEvidence.ps1`. Those runners create and verify the required owner-only evidence ACLs. Do not relocate SDKs, Unity installations, or machine-wide caches.
+Keep .NET `bin`/`obj` outputs and each Unity `Library` cache inside its E: worktree. Use a separate Unity worktree and Library per concurrent validation run. Pass the unique short `$evidenceRoot` to the supported runners (`-EvidenceRoot $evidenceRoot`); `Tools/CoreValidation/Invoke-CoreValidation.ps1` and `Tools/UnityValidation/Invoke-UnityValidationWithEvidence.ps1` create and verify the required owner-only evidence ACLs. Before a run, account for the full generated XML, log, and test temporary-file names and keep resulting paths comfortably below 260 characters (preferably at most 240); shorten the E: run roots further if needed. Do not change Windows long-path settings, relocate SDKs or Unity installations, or change machine-wide caches. Keep run directories isolated; do not share a mutable TEMP directory or Unity Library concurrently.
 
 Existing C: checkouts, worktrees, private evidence, and user changes remain preservation-only until a complete destination copy is verified for Git identity, file hashes, ignored/untracked data, and ACL boundaries. Never relax ACLs or guess mappings for unresolved security principals. If ACL-safe migration is unavailable, retain the source and report the exact blocker. The current E: root checkout is not a migration target; use a new child worktree.
 
