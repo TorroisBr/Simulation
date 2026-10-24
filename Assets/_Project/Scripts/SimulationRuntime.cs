@@ -10616,7 +10616,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             out failure);
 
     internal bool TryGetCompletedDailyCaptureTokenForSessionReplacement(
-        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
         out DailyCaptureEligibilityToken token,
         out DailyCaptureEligibilityFailure failure)
     {
@@ -10797,7 +10797,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
     internal bool TryValidateCompletedDailyCaptureTokenForSessionReplacement(
         DailyCaptureEligibilityToken token,
-        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
         out DailyCaptureEligibilityFailure failure)
     {
         if (replacementOperation == null
@@ -10830,7 +10830,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
     internal bool TryValidateCompletedDailyCaptureTokenForP12Capture(
         DailyCaptureEligibilityToken token,
-        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
         out DailyCaptureEligibilityFailure failure)
     {
         if (replacementOperation == null)

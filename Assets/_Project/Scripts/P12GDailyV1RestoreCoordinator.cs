@@ -91,7 +91,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
         SimulationRuntime sourceRuntime,
         DailyCaptureEligibilityToken sourceToken,
         bool captureContinuationImage,
-        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation)
     {
         if (sourceRuntime == null || sourceToken == null) return false;
         if (replacementOperation != null)
@@ -117,7 +117,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null,
         Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null,
         Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest = null,
-        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation = null)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
     {
         return TryCreateRestoredSession(
             sourceSession,
@@ -152,7 +152,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null,
         Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null,
         Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest = null,
-        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation = null)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
     {
         return TryCreateRestoredSessionCore(sourceSession, bootstrapAdmissionContext, false, null, out _, out restoredSession,
             out failure, out diagnostic, stageObserver, privateCandidateObserver,
@@ -231,7 +231,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest,
         Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest,
         Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest,
-        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation = null)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
     {
         continuationImage = null;
         restoredSession = null;

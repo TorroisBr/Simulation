@@ -13,13 +13,13 @@ internal sealed class DailyCaptureStagingAttempt
     private readonly SimulationRuntime sourceRuntime;
     private readonly DailyCaptureEligibilityToken token;
     private readonly IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections;
-    private readonly DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation;
+    private readonly DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation;
 
     private DailyCaptureStagingAttempt(
         SimulationRuntime sourceRuntime,
         DailyCaptureEligibilityToken token,
         IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
-        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation)
     {
         this.sourceRuntime = sourceRuntime;
         this.token = token;
@@ -32,7 +32,7 @@ internal sealed class DailyCaptureStagingAttempt
         DailyCaptureEligibilityToken token,
         IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out DailyCaptureStagingAttempt attempt,
-        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation = null)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
     {
         attempt = null;
         if (sourceRuntime == null || token == null || ownerSections == null

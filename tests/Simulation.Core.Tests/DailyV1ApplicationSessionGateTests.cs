@@ -132,6 +132,57 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void SelectedPublicationGateOwnsTheExactCoreSessionAndBoundaryAcrossReplacement()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition firstComposition,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition replacementComposition,
+            out diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            firstComposition.ExecutionBoundaryState, definitions, 0L,
+            out DailyV1ActiveRuntimeSession first, out diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            replacementComposition.ExecutionBoundaryState, definitions, 0L,
+            out DailyV1ActiveRuntimeSession replacement, out diagnostic), Is.True, diagnostic);
+
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession> gate =
+            new DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>(
+                session => session.ExecutionBoundaryState);
+        Assert.That(gate.TryPublishInitial(first), Is.True);
+        Assert.That(gate.Current, Is.SameAs(first));
+        Assert.That(gate.TryBeginOperation(first, out DailyV1ActiveRuntimeSession admitted), Is.True);
+        Assert.That(admitted, Is.SameAs(first));
+        Assert.That(first.ExecutionBoundaryState.ActiveOperationCount, Is.EqualTo(1));
+        Assert.That(gate.TryPublishReplacement(first, replacement), Is.False);
+        gate.EndOperation();
+
+        Assert.That(gate.TryBeginExclusiveOperation(first, out var exclusive), Is.True);
+        using (exclusive)
+        {
+            Assert.That(gate.Current, Is.SameAs(first));
+            Assert.That(gate.TryBeginOperation(first, out admitted), Is.False);
+            Assert.That(first.ExecutionBoundaryState.TryBeginOperation(
+                DailyV1OperationScopeKind.Application), Is.False);
+            Assert.That(gate.TryPublishReplacement(exclusive, replacement), Is.True);
+            Assert.That(gate.Current, Is.SameAs(replacement));
+            Assert.That(gate.TryBeginOperation(replacement, out admitted), Is.False,
+                "The replacement cannot be entered before the exclusive restore reservation closes.");
+        }
+
+        Assert.That(gate.TryBeginOperation(replacement, out admitted), Is.True);
+        Assert.That(admitted, Is.SameAs(replacement));
+        gate.EndOperation();
+    }
+
+    [Test]
     public void InitialPublicationIsSingleAndCannotReplaceAnExistingSession()
     {
         DailyV1ApplicationSessionGate<TestSession> gate = CreateGate();

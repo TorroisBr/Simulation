@@ -182,10 +182,19 @@ public class TesteSimulacao : MonoBehaviour
     [System.NonSerialized] private DailyV1SelectedRuntimeOwnerGraphBuilder selectedRuntimeOwnerGraphBuilder;
     [System.NonSerialized] private DailyV1SelectedRuntimeOwnerGraph selectedInitialRuntimeOwnerGraph;
     private bool UsesSelectedDefinitionBindings => selectedDefinitions != null && selectedDefinitionBindings != null;
-    private readonly DailyV1ApplicationSessionGate<SimulationActiveSession> activeSessionGate =
+    // The selected runtime session reference is Core-owned. Unity wrappers are
+    // projections keyed by that exact session and are never the selected
+    // publication authority. The separate compatibility gate is used only for
+    // legacy, unadmitted bootstrap sessions; both paths are mutually exclusive.
+    private readonly DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession> activeCoreSessionGate =
+        new DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>(
+            session => session.ExecutionBoundaryState);
+    private readonly DailyV1ApplicationSessionGate<SimulationActiveSession> compatibilitySessionGate =
         new DailyV1ApplicationSessionGate<SimulationActiveSession>(
             session => session.ExecutionBoundaryState);
-    private SimulationActiveSession activeSession => activeSessionGate.Current;
+    private readonly Dictionary<DailyV1ActiveRuntimeSession, SimulationActiveSession> activeSessionProjections =
+        new Dictionary<DailyV1ActiveRuntimeSession, SimulationActiveSession>();
+    private SimulationActiveSession activeSession => CaptureActiveSession();
     private Thread bootstrapStartThread;
     private int bootstrapStartThreadId;
     private SimulationRuntimeAdmissionContext runtimeAdmissionContext;
@@ -849,7 +858,7 @@ public class TesteSimulacao : MonoBehaviour
 
             unpublishedWorldId = null;
             draftComposition = null;
-            if (!activeSessionGate.TryPublishInitial(candidateSession))
+            if (!TryPublishInitialActiveSession(candidateSession))
                 throw new System.InvalidOperationException("A simulation session was already published for this bootstrap owner.");
             ReleaseBootstrapAliases();
         }
@@ -882,7 +891,16 @@ public class TesteSimulacao : MonoBehaviour
 
     private SimulationActiveSession CaptureActiveSession()
     {
-        return activeSessionGate.Current;
+        lock (activeCoreSessionGate.SyncRoot)
+        {
+            DailyV1ActiveRuntimeSession coreSession = activeCoreSessionGate.Current;
+            if (coreSession != null)
+                return activeSessionProjections.TryGetValue(coreSession, out SimulationActiveSession projection)
+                    ? projection
+                    : null;
+
+            return compatibilitySessionGate.Current;
+        }
     }
 
     private bool TryBeginActiveSessionOperation(out SimulationActiveSession session) =>
@@ -907,12 +925,75 @@ public class TesteSimulacao : MonoBehaviour
     private bool TryBeginActiveSessionOperation(
         SimulationActiveSession expectedSession,
         DailyV1OperationScopeKind scopeKind,
-        out SimulationActiveSession session) =>
-        activeSessionGate.TryBeginOperation(expectedSession, scopeKind, out session);
+        out SimulationActiveSession session)
+    {
+        lock (activeCoreSessionGate.SyncRoot)
+        {
+            session = null;
+            DailyV1ActiveRuntimeSession currentCoreSession = activeCoreSessionGate.Current;
+            DailyV1ActiveRuntimeSession expectedCoreSession = expectedSession?.CoreRuntimeSession;
+            if (currentCoreSession != null || expectedCoreSession != null)
+            {
+                if (expectedSession != null && expectedCoreSession == null
+                    || currentCoreSession == null
+                    || !activeSessionProjections.TryGetValue(currentCoreSession, out session)
+                    || !activeCoreSessionGate.TryBeginOperation(
+                        expectedCoreSession, scopeKind, out DailyV1ActiveRuntimeSession admittedCoreSession))
+                {
+                    session = null;
+                    return false;
+                }
+                if (!ReferenceEquals(admittedCoreSession, currentCoreSession))
+                {
+                    activeCoreSessionGate.EndOperation(scopeKind);
+                    session = null;
+                    return false;
+                }
+                return true;
+            }
+
+            if (activeCoreSessionGate.Current != null
+                || !compatibilitySessionGate.TryBeginOperation(expectedSession, scopeKind, out session))
+            {
+                session = null;
+                return false;
+            }
+            return true;
+        }
+    }
 
     private void EndActiveSessionOperation(
-        DailyV1OperationScopeKind scopeKind = DailyV1OperationScopeKind.Application) =>
-        activeSessionGate.EndOperation(scopeKind);
+        DailyV1OperationScopeKind scopeKind = DailyV1OperationScopeKind.Application)
+    {
+        lock (activeCoreSessionGate.SyncRoot)
+        {
+            if (activeCoreSessionGate.Current != null)
+                activeCoreSessionGate.EndOperation(scopeKind);
+            else
+                compatibilitySessionGate.EndOperation(scopeKind);
+        }
+    }
+
+    private bool TryPublishInitialActiveSession(SimulationActiveSession candidateSession)
+    {
+        if (candidateSession == null) return false;
+        lock (activeCoreSessionGate.SyncRoot)
+        {
+            if (activeCoreSessionGate.Current != null || compatibilitySessionGate.Current != null)
+                return false;
+
+            DailyV1ActiveRuntimeSession coreSession = candidateSession.CoreRuntimeSession;
+            if (coreSession == null)
+                return compatibilitySessionGate.TryPublishInitial(candidateSession);
+
+            if (activeSessionProjections.ContainsKey(coreSession)) return false;
+            activeSessionProjections.Add(coreSession, candidateSession);
+            if (activeCoreSessionGate.TryPublishInitial(coreSession)) return true;
+
+            activeSessionProjections.Remove(coreSession);
+            return false;
+        }
+    }
 
     /// <summary>Single-reference exchange seam for a privately built, restored Daily-v1 session.</summary>
     internal bool TryPublishRestoredSession(
@@ -925,37 +1006,67 @@ public class TesteSimulacao : MonoBehaviour
     private bool TryPublishRestoredSession(
         SimulationActiveSession expectedSession,
         SimulationActiveSession candidateSession,
-        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation exclusiveOperation)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation)
     {
         if (candidateSession == null)
             return false;
+        if (candidateSession.AdmissionContext == null
+            || !candidateSession.AdmissionContext.IsOwnedByCurrentThread()
+            || !candidateSession.AdmissionContext.IsRestoredContinuation
+            || !ReferenceEquals(candidateSession.Configuration, simulationConfig)
+            || !candidateSession.Runtime.IsHealthyDailyOwnerThreadBoundary()
+            || !candidateSession.Runtime.HasValidRestoredDailyBoundaryAdmission())
+            return false;
 
-        lock (activeSessionGate.SyncRoot)
+        lock (activeCoreSessionGate.SyncRoot)
         {
-            if (activeSessionGate.ActiveOperationCount != 0
-                || candidateSession.AdmissionContext == null
-                || !candidateSession.AdmissionContext.IsOwnedByCurrentThread()
-                || !candidateSession.AdmissionContext.IsRestoredContinuation
-                || !ReferenceEquals(candidateSession.Configuration, simulationConfig)
-                || !candidateSession.Runtime.IsHealthyDailyOwnerThreadBoundary()
-                || !candidateSession.Runtime.HasValidRestoredDailyBoundaryAdmission())
+            if (candidateSession.CoreRuntimeSession == null)
+            {
+                if (exclusiveOperation != null || activeCoreSessionGate.Current != null
+                    || compatibilitySessionGate.ActiveOperationCount != 0)
+                    return false;
+
+                if (expectedSession == null)
+                {
+                    if (compatibilitySessionGate.Current != null || runtimeAdmissionContext == null
+                        || runtimeAdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                        || runtimeAdmissionContext.IsRestoredContinuation
+                        || !runtimeAdmissionContext.IsOwnedByCurrentThread())
+                        return false;
+                    return compatibilitySessionGate.TryPublishInitial(candidateSession);
+                }
+
+                return ReferenceEquals(compatibilitySessionGate.Current, expectedSession)
+                    && expectedSession.AdmissionContext != null
+                    && expectedSession.AdmissionContext.IsOwnedByCurrentThread()
+                    && expectedSession.IsProfileCompatibleWith(candidateSession)
+                    && expectedSession.Runtime.IsHealthyDailyOwnerThreadBoundary()
+                    && expectedSession.Runtime.HasValidCompletedDailyBoundaryAdmission()
+                    && compatibilitySessionGate.TryPublishReplacement(expectedSession, candidateSession);
+            }
+
+            DailyV1ActiveRuntimeSession candidateCoreSession = candidateSession.CoreRuntimeSession;
+            DailyV1ActiveRuntimeSession expectedCoreSession = expectedSession?.CoreRuntimeSession;
+            if (compatibilitySessionGate.Current != null
+                || activeCoreSessionGate.ActiveOperationCount != 0)
                 return false;
 
             if (exclusiveOperation != null
-                && !ReferenceEquals(exclusiveOperation.ExpectedSession, expectedSession))
+                && !ReferenceEquals(exclusiveOperation.ExpectedSession, expectedCoreSession))
                 return false;
 
             if (expectedSession == null)
             {
-                if (activeSessionGate.Current != null || runtimeAdmissionContext == null
+                if (activeCoreSessionGate.Current != null || runtimeAdmissionContext == null
                     || runtimeAdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
                     || runtimeAdmissionContext.IsRestoredContinuation
                     || !runtimeAdmissionContext.IsOwnedByCurrentThread())
                     return false;
-                return activeSessionGate.TryPublishInitial(candidateSession);
+                return TryPublishCoreInitialWithProjection(candidateCoreSession, candidateSession);
             }
 
-            if (!ReferenceEquals(activeSessionGate.Current, expectedSession)
+            if (expectedCoreSession == null
+                || !ReferenceEquals(activeCoreSessionGate.Current, expectedCoreSession)
                 || expectedSession.AdmissionContext == null
                 || !expectedSession.AdmissionContext.IsOwnedByCurrentThread()
                 || !expectedSession.IsProfileCompatibleWith(candidateSession)
@@ -963,10 +1074,51 @@ public class TesteSimulacao : MonoBehaviour
                 || !expectedSession.Runtime.HasValidCompletedDailyBoundaryAdmission())
                 return false;
 
-            return exclusiveOperation != null
-                ? activeSessionGate.TryPublishReplacement(exclusiveOperation, candidateSession)
-                : activeSessionGate.TryPublishReplacement(expectedSession, candidateSession);
+            return TryPublishCoreReplacementWithProjection(
+                expectedCoreSession, candidateCoreSession, expectedSession, candidateSession, exclusiveOperation);
         }
+    }
+
+    private bool TryPublishCoreInitialWithProjection(
+        DailyV1ActiveRuntimeSession coreSession,
+        SimulationActiveSession projection)
+    {
+        if (coreSession == null || projection == null || activeSessionProjections.ContainsKey(coreSession))
+            return false;
+        activeSessionProjections.Add(coreSession, projection);
+        if (activeCoreSessionGate.TryPublishInitial(coreSession)) return true;
+        activeSessionProjections.Remove(coreSession);
+        return false;
+    }
+
+    private bool TryPublishCoreReplacementWithProjection(
+        DailyV1ActiveRuntimeSession expectedCoreSession,
+        DailyV1ActiveRuntimeSession candidateCoreSession,
+        SimulationActiveSession expectedProjection,
+        SimulationActiveSession candidateProjection,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation)
+    {
+        if (expectedCoreSession == null || candidateCoreSession == null || candidateProjection == null
+            || !activeSessionProjections.TryGetValue(expectedCoreSession, out SimulationActiveSession currentProjection)
+            || !ReferenceEquals(currentProjection, expectedProjection)
+            || activeSessionProjections.ContainsKey(candidateCoreSession))
+            return false;
+
+        // Register the host projection before the Core exchange. Both writes
+        // are under the same gate lock, so readers can observe neither a
+        // published Core session without its adapter nor a stale projection.
+        activeSessionProjections.Add(candidateCoreSession, candidateProjection);
+        bool published = exclusiveOperation != null
+            ? activeCoreSessionGate.TryPublishReplacement(exclusiveOperation, candidateCoreSession)
+            : activeCoreSessionGate.TryPublishReplacement(expectedCoreSession, candidateCoreSession);
+        if (!published)
+        {
+            activeSessionProjections.Remove(candidateCoreSession);
+            return false;
+        }
+
+        activeSessionProjections.Remove(expectedCoreSession);
+        return true;
     }
 
     /// <summary>
@@ -990,16 +1142,17 @@ public class TesteSimulacao : MonoBehaviour
     private bool TryLoadDailyV1ContinuationAtPath(string persistentDataPath, out string resultCode)
     {
         resultCode = P12AResultCode.Busy.ToString();
-        SimulationActiveSession expectedSession = activeSessionGate.Current;
+        SimulationActiveSession expectedSession = CaptureActiveSession();
         if (expectedSession == null
-            || !activeSessionGate.TryBeginExclusiveOperation(
-                expectedSession,
-                out DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation exclusiveOperation))
+            || expectedSession.CoreRuntimeSession == null
+            || !activeCoreSessionGate.TryBeginExclusiveOperation(
+                expectedSession.CoreRuntimeSession,
+                out DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation))
             return false;
 
         using (exclusiveOperation)
         {
-            if (activeSessionGate.ActiveOperationCount != 0
+            if (activeCoreSessionGate.ActiveOperationCount != 0
                 || expectedSession.AdmissionContext == null
                 || expectedSession.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
                 || runtimeAdmissionContext == null || runtimeAdmissionContext.IsRestoredContinuation
@@ -1138,11 +1291,12 @@ public class TesteSimulacao : MonoBehaviour
         System.Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null,
         System.Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null)
     {
-        SimulationActiveSession expectedSession = activeSessionGate.Current;
+        SimulationActiveSession expectedSession = CaptureActiveSession();
         if (expectedSession == null
-            || !activeSessionGate.TryBeginExclusiveOperation(
-                expectedSession,
-                out DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation exclusiveOperation))
+            || expectedSession.CoreRuntimeSession == null
+            || !activeCoreSessionGate.TryBeginExclusiveOperation(
+                expectedSession.CoreRuntimeSession,
+                out DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation))
         {
             failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
             diagnostic = "Daily-v1 restore requires the current healthy completed-boundary session while idle on its owner thread.";
@@ -1151,7 +1305,7 @@ public class TesteSimulacao : MonoBehaviour
 
         using (exclusiveOperation)
         {
-            if (activeSessionGate.ActiveOperationCount != 0
+            if (activeCoreSessionGate.ActiveOperationCount != 0
                 || expectedSession.AdmissionContext == null
                 || expectedSession.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
                 || !expectedSession.AdmissionContext.IsOwnedByCurrentThread()
@@ -2042,7 +2196,7 @@ public class TesteSimulacao : MonoBehaviour
     {
         for (int i = 0; i < daysToSimulate; i++)
         {
-            if (!ReferenceEquals(activeSessionGate.Current, expectedSession)) return;
+            if (!ReferenceEquals(CaptureActiveSession(), expectedSession)) return;
             expectedSession.Runtime.AdvanceDay();
 
             SimulationActiveSession session;

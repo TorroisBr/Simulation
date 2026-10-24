@@ -72,7 +72,7 @@ internal sealed class P12FDailyV1OwnerCapture
         out P12FDailyV1OwnerCapture capture,
         out P12FDailyV1OwnerPackageFailure failure,
         Action<P12GDailyV1RestoreStage> stageObserver = null,
-        DailyV1ApplicationSessionGate<SimulationActiveSession>.ExclusiveOperation replacementOperation = null)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
     {
         capture = null;
         failure = P12FDailyV1OwnerPackageFailure.InvalidCaptureContext;
