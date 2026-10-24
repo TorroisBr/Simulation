@@ -184,6 +184,18 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(activeSession.ExecutionBoundaryState,
             Is.SameAs(activeSession.CoreRuntimeSession.ExecutionBoundaryState),
             "Active-session operations must be gated by Core state, not a Unity-owned duplicate.");
+        Assert.Throws<System.ArgumentException>(() => new SimulationActiveSession(
+                activeSession.Composition,
+                activeSession.Logger,
+                activeSession.Justice,
+                activeSession.IdentityRegistry,
+                activeSession.SpatialNetwork,
+                null,
+                activeSession.Configuration,
+                activeSession.AdmissionContext,
+                activeSession.RandomSource,
+                activeSession.ReportState.LastEconomySnapshotDay),
+            "The Unity projection must not synthesize a Core active session implicitly.");
         Assert.That(initialOwnerGraph.JusticeRecordsOwner,
             Is.SameAs(simulation.Runtime.JusticeSystemForWorldBoundary.CoreOwner),
             "The Core-composed graph must bind the exact Justice owner used by the selected runtime.");

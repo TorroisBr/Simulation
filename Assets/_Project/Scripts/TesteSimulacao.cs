@@ -65,14 +65,9 @@ internal sealed class SimulationActiveSession
         }
         else if (executionBoundaryState.HasAdmittedSelectedDailyExecution)
         {
-            if (!DailyV1ActiveRuntimeSession.TryCreate(
-                    executionBoundaryState,
-                    Composition.SelectedDefinitions,
-                    lastEconomySnapshotDay,
-                    out DailyV1ActiveRuntimeSession createdCoreRuntimeSession,
-                    out string activeSessionDiagnostic))
-                throw new System.ArgumentException(activeSessionDiagnostic, nameof(composition));
-            CoreRuntimeSession = createdCoreRuntimeSession;
+            throw new System.ArgumentException(
+                "A selected Daily-v1 Unity projection must receive an explicit Core active-runtime session.",
+                nameof(coreRuntimeSession));
         }
         // Compatibility bootstrap paths may use selected definitions for
         // fingerprinting while deliberately running without selected Daily-v1

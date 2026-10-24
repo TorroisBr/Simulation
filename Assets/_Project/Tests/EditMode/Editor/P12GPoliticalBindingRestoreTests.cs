@@ -962,6 +962,12 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             stagedF.Expeditions,
             expeditions,
             anchor.Composition.SelectedDefinitions);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            runtime.ExecutionBoundaryState,
+            composition.SelectedDefinitions,
+            anchor.Token.AbsoluteDay,
+            out DailyV1ActiveRuntimeSession coreRuntimeSession,
+            out string activeSessionDiagnostic), Is.True, activeSessionDiagnostic);
         return new SimulationActiveSession(
             composition,
             logger,
@@ -972,7 +978,8 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             config,
             admissionContext,
             stagedC.DeterministicRandom,
-            anchor.Token.AbsoluteDay);
+            anchor.Token.AbsoluteDay,
+            coreRuntimeSession);
     }
 
     private static void BuildDefinitions(

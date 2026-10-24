@@ -1342,6 +1342,16 @@ internal static partial class P12GDailyV1RestoreCoordinator
             expeditions,
             selectedDefinitions);
 
+        DailyV1ActiveRuntimeSession coreRuntimeSession = null;
+        if (runtime.ExecutionBoundaryState.HasAdmittedSelectedDailyExecution
+            && !DailyV1ActiveRuntimeSession.TryCreate(
+                runtime.ExecutionBoundaryState,
+                selectedDefinitions,
+                lastEconomySnapshotDay,
+                out coreRuntimeSession,
+                out diagnostic))
+            return false;
+
         candidate = new SimulationActiveSession(
             composition,
             logger,
@@ -1352,7 +1362,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
             config,
             restoredAdmissionContext,
             stagedC.DeterministicRandom,
-            lastEconomySnapshotDay);
+            lastEconomySnapshotDay,
+            coreRuntimeSession);
         return true;
     }
 
