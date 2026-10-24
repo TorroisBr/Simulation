@@ -1389,6 +1389,24 @@ internal static class P12DNpcRootOwnerSnapshot
         failure = P12DNpcRootOwnerSnapshotFailure.None;
         return true;
     }
+
+    private static bool MatchesSelectedInventoryRows(
+        DailyV1InventoryOwner owner,
+        IReadOnlyList<DailyV1InventoryItemState> expectedRows)
+    {
+        if (owner == null || expectedRows == null || owner.Items.Count != expectedRows.Count) return false;
+        for (int i = 0; i < expectedRows.Count; i++)
+        {
+            DailyV1InventoryItemState actual = owner.Items[i];
+            DailyV1InventoryItemState expected = expectedRows[i];
+            if (actual == null || expected == null
+                || !ReferenceEquals(actual.Item, expected.Item)
+                || actual.Amount != expected.Amount
+                || !actual.AverageUnitCost.Equals(expected.AverageUnitCost)) return false;
+        }
+        return true;
+    }
+
     private static bool TryCreateCommercialKnowledge(
         P12DNpcFRow row,
         IReadOnlyDictionary<string, ItemData> itemsByDefinition,
