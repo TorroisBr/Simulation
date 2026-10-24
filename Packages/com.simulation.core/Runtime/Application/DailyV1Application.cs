@@ -41,6 +41,57 @@ internal sealed class DailyV1Application
         }
     }
 
+    /// <summary>
+    /// Composes and publishes the Core-owned initial session after the caller
+    /// has established that no continuation slot exists. This is the genesis
+    /// fallback used by the eventual public TryStart path; it intentionally
+    /// does not inspect host storage or construct a Unity runtime projection.
+    /// </summary>
+    internal bool TryCreateAndPublishInitialGenesis(
+        DailyV1EffectiveDefinitions definitions,
+        Action<string> stageCompleted,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (definitions == null)
+        {
+            diagnostic = "The selected Daily-v1 effective definitions are required.";
+            return false;
+        }
+
+        if (!TryCaptureBootstrapAdmissionContext(
+                out SimulationRuntimeAdmissionContext admissionContext))
+        {
+            diagnostic = "The Core application cannot capture a second bootstrap admission context.";
+            return false;
+        }
+
+        if (!DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions,
+                admissionContext,
+                allocateWorldId: null,
+                stageCompleted: stageCompleted,
+                out DailyV1GenesisComposition composition,
+                out diagnostic))
+            return false;
+
+        if (!DailyV1ActiveRuntimeSession.TryCreate(
+                composition.ExecutionBoundaryState,
+                definitions,
+                composition.SimulationTime.AbsoluteDay,
+                out DailyV1ActiveRuntimeSession candidate,
+                out diagnostic))
+            return false;
+
+        if (!TryPublishInitial(candidate))
+        {
+            diagnostic = "The Core application rejected its exact initial genesis session.";
+            return false;
+        }
+
+        return true;
+    }
+
     internal object ActiveSessionSyncRoot => activeSessionGate.SyncRoot;
     internal DailyV1ActiveRuntimeSession ActiveSession => activeSessionGate.Current;
     internal int ActiveOperationCount => activeSessionGate.ActiveOperationCount;

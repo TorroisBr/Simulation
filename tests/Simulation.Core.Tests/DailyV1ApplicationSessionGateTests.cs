@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using NUnit.Framework;
 
@@ -102,6 +103,45 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(captured.ExpectedOwnerThreadId, Is.EqualTo(startThread.ManagedThreadId));
         Assert.That(captured.IsOwnedByCurrentThread(), Is.False,
             "The calling host thread remains the owner after bootstrap capture returns.");
+    }
+
+    [Test]
+    public void ApplicationPublishesTheExactCoreGenesisOwnerGraph()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        var completedStages = new System.Collections.Generic.List<string>();
+
+        Assert.That(application.TryCreateAndPublishInitialGenesis(
+            definitions, completedStages.Add, out string diagnostic), Is.True, diagnostic);
+
+        DailyV1ActiveRuntimeSession session = application.ActiveSession;
+        Assert.That(session, Is.Not.Null);
+        Assert.That(session.Definitions, Is.SameAs(definitions));
+        Assert.That(session.OwnerGraph, Is.SameAs(
+            session.ExecutionBoundaryState.SelectedRuntimeOwnerGraph));
+        Assert.That(session.OwnerGraph.Definitions, Is.SameAs(definitions));
+        Assert.That(session.WorldId, Is.SameAs(session.ExecutionBoundaryState.WorldId));
+        Assert.That(session.SimulationTime.AbsoluteDay, Is.Zero);
+        Assert.That(session.AdmissionContext.IsOwnedByCurrentThread(), Is.True);
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+        Assert.That(completedStages, Is.EqualTo(
+            definitions.StageOrder.Take(definitions.StageOrder.Count - 2)));
+    }
+
+    [Test]
+    public void ApplicationRejectsAnotherGenesisAfterPublishingItsInitialSession()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCreateAndPublishInitialGenesis(definitions, null, out _), Is.True);
+        DailyV1ActiveRuntimeSession published = application.ActiveSession;
+
+        Assert.That(application.TryCreateAndPublishInitialGenesis(definitions, null, out string diagnostic), Is.False);
+
+        Assert.That(diagnostic, Does.Contain("second bootstrap admission context"));
+        Assert.That(application.ActiveSession, Is.SameAs(published));
+        Assert.That(application.ActiveOperationCount, Is.Zero);
     }
 
     [Test]
