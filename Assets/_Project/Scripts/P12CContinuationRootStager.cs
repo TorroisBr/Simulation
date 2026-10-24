@@ -258,8 +258,7 @@ internal static class P12CContinuationRootStager
                             ?? "P12-C Unity manifest projection could not be staged.");
                 }
 
-                if (!Enum.TryParse(stageName, ignoreCase: false, out P12GDailyV1RestoreStage stage)
-                    || !string.Equals(stage.ToString(), stageName, StringComparison.Ordinal))
+                if (!TryMapRestoreStageName(stageName, out P12GDailyV1RestoreStage stage))
                 {
                     throw new InvalidOperationException(
                         "P12-C Core staging emitted an unknown restore stage: " + stageName);
@@ -309,4 +308,19 @@ internal static class P12CContinuationRootStager
         }
     }
 
+    internal static bool TryMapRestoreStageName(
+        string stageName,
+        out P12GDailyV1RestoreStage stage)
+    {
+        if (string.IsNullOrEmpty(stageName)
+            || !Enum.TryParse(stageName, ignoreCase: false, out stage)
+            || !Enum.IsDefined(typeof(P12GDailyV1RestoreStage), stage)
+            || !string.Equals(stage.ToString(), stageName, StringComparison.Ordinal))
+        {
+            stage = default;
+            return false;
+        }
+
+        return true;
+    }
 }

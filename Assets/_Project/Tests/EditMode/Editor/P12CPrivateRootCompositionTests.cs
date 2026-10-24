@@ -94,6 +94,24 @@ public sealed class P12CPrivateRootCompositionTests
     }
 
     [Test]
+    public void RestoreStageNameMappingRejectsUndefinedNumericValues()
+    {
+        Assert.That(P12CContinuationRootStager.TryMapRestoreStageName(
+            nameof(P12GDailyV1RestoreStage.CSpatialAuthorityStaged),
+            out P12GDailyV1RestoreStage knownStage), Is.True);
+        Assert.That(knownStage, Is.EqualTo(P12GDailyV1RestoreStage.CSpatialAuthorityStaged));
+
+        Assert.That(P12CContinuationRootStager.TryMapRestoreStageName(
+            "999", out P12GDailyV1RestoreStage undefinedNumericStage), Is.False);
+        Assert.That(undefinedNumericStage, Is.EqualTo(default(P12GDailyV1RestoreStage)));
+
+        Assert.That(P12CContinuationRootStager.TryMapRestoreStageName(
+            "cSpatialAuthorityStaged", out _), Is.False);
+        Assert.That(P12CContinuationRootStager.TryMapRestoreStageName(
+            "NotAStage", out _), Is.False);
+    }
+
+    [Test]
     public void CoherentDailyV1OwnerSnapshotsStageTogetherWithoutLiveBootstrapOrAssetAccess()
     {
         Assert.That(manifestSnapshot.TryStageManifest(out SimulationGenesisManifest independentlyStagedManifest,
