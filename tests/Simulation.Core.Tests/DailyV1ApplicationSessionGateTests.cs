@@ -265,6 +265,52 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void ApplicationRejectsReentrantPublicationWhileGenesisPreparationIsInProgress()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext admission), Is.True);
+        bool callbackInvoked = false;
+        bool reentrantPublicationAccepted = false;
+        DailyV1ActiveRuntimeSession reentrantCandidate = null;
+
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions,
+            allocateWorldId: () => new WorldId(Guid.Parse("d20e3757-9ed0-42ef-bade-3c628f7059bb")),
+            stageCompleted: _ =>
+            {
+                if (callbackInvoked) return;
+                callbackInvoked = true;
+
+                Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+                    definitions, admission,
+                    out DailyV1GenesisComposition reentrantComposition,
+                    out string reentrantDiagnostic), Is.True, reentrantDiagnostic);
+                Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+                    reentrantComposition.ExecutionBoundaryState, definitions, 0L,
+                    out reentrantCandidate, out reentrantDiagnostic), Is.True, reentrantDiagnostic);
+
+                reentrantPublicationAccepted = application.TryPublishInitial(reentrantCandidate);
+                Assert.That(application.ActiveSession, Is.Null,
+                    "A callback cannot publish an unrelated session while the matching host projection is still being prepared.");
+            },
+            out DailyV1GenesisComposition composition,
+            out DailyV1ActiveRuntimeSession prepared,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(callbackInvoked, Is.True);
+        Assert.That(reentrantCandidate, Is.Not.Null);
+        Assert.That(reentrantPublicationAccepted, Is.False,
+            "Initial publication is reserved as soon as genesis preparation begins.");
+        Assert.That(application.ActiveSession, Is.Null,
+            "Only the exact candidate returned by preparation may publish after the host projection checks.");
+        Assert.That(application.TryPublishInitial(prepared), Is.True);
+        Assert.That(application.ActiveSession, Is.SameAs(prepared));
+        Assert.That(application.ActiveSession.OwnerGraph, Is.SameAs(composition.OwnerGraph));
+    }
+
+    [Test]
     public void ApplicationDoesNotPublishGenesisWhenItsPreparationCallbackThrows()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

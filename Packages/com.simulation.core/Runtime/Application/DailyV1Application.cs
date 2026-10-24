@@ -202,7 +202,8 @@ internal sealed class DailyV1Application
                 return true;
             }
 
-            if (bootstrapAdmissionContext == null
+            if (initialGenesisPreparationAttempted
+                || bootstrapAdmissionContext == null
                 || !IsBootstrapOrRestoredDescendant(candidate.AdmissionContext))
                 return false;
             return activeSessionGate.TryPublishInitial(candidate);
