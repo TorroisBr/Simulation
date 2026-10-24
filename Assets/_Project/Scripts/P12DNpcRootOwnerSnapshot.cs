@@ -29,173 +29,6 @@ internal enum P12DNpcRootOwnerSnapshotFailure
     InvalidSelectedInventoryItem
 }
 
-internal sealed class P12DNpcActionValue
-{
-    internal string ActionDefinitionId { get; }
-    internal string TargetNpcRuntimeId { get; }
-    internal string TargetCityRuntimeId { get; }
-    internal string TargetItemDefinitionId { get; }
-    internal int Amount { get; }
-    internal float ExpectedUnitPrice { get; }
-    internal float SuccessChanceMultiplier { get; }
-    internal NpcTravelReason TravelReason { get; }
-    internal float ExpectedNetValue { get; }
-    internal string OriginDecisionId { get; }
-    internal string StableOccurrenceKey { get; }
-    internal CommercialDecisionEvidence CommercialDecisionEvidence { get; }
-    internal CommercialScoutingEvidence CommercialScoutingEvidence { get; }
-
-    internal P12DNpcActionValue(
-        string actionDefinitionId, string targetNpcRuntimeId, string targetCityRuntimeId,
-        string targetItemDefinitionId, int amount, float expectedUnitPrice,
-        float successChanceMultiplier, NpcTravelReason travelReason, float expectedNetValue,
-        string originDecisionId, string stableOccurrenceKey,
-        CommercialDecisionEvidence commercialDecisionEvidence,
-        CommercialScoutingEvidence commercialScoutingEvidence)
-    {
-        ActionDefinitionId = actionDefinitionId;
-        TargetNpcRuntimeId = targetNpcRuntimeId;
-        TargetCityRuntimeId = targetCityRuntimeId;
-        TargetItemDefinitionId = targetItemDefinitionId;
-        Amount = amount;
-        ExpectedUnitPrice = expectedUnitPrice;
-        SuccessChanceMultiplier = successChanceMultiplier;
-        TravelReason = travelReason;
-        ExpectedNetValue = expectedNetValue;
-        OriginDecisionId = originDecisionId;
-        StableOccurrenceKey = stableOccurrenceKey;
-        CommercialDecisionEvidence = commercialDecisionEvidence;
-        CommercialScoutingEvidence = commercialScoutingEvidence;
-    }
-}
-
-internal sealed class P12DNpcTravelPlanValue
-{
-    internal string TargetLocationRuntimeId { get; }
-    internal string TargetCityRuntimeId { get; }
-    internal NpcTravelReason Reason { get; }
-    internal float Utility { get; }
-    internal float ExpectedCost { get; }
-    internal string OriginDecisionId { get; }
-    internal long Revision { get; }
-
-    internal P12DNpcTravelPlanValue(string targetLocationRuntimeId, string targetCityRuntimeId,
-        NpcTravelReason reason, float utility, float expectedCost, string originDecisionId, long revision)
-    {
-        TargetLocationRuntimeId = targetLocationRuntimeId;
-        TargetCityRuntimeId = targetCityRuntimeId;
-        Reason = reason;
-        Utility = utility;
-        ExpectedCost = expectedCost;
-        OriginDecisionId = originDecisionId;
-        Revision = revision;
-    }
-}
-
-internal sealed class P12DNpcMerchantPlanValue
-{
-    internal string ItemDefinitionId { get; }
-    internal string OriginCityRuntimeId { get; }
-    internal string TargetCityRuntimeId { get; }
-    internal int PlannedAmount { get; }
-    internal int RawRemainingAmount { get; }
-    internal float PurchasePricePerItem { get; }
-    internal int WaitDaysAtDestination { get; }
-    internal int PendingTravelDays { get; }
-    internal string OriginDecisionId { get; }
-    internal long Revision { get; }
-
-    internal P12DNpcMerchantPlanValue(string itemDefinitionId, string originCityRuntimeId,
-        string targetCityRuntimeId, int plannedAmount, int rawRemainingAmount,
-        float purchasePricePerItem, int waitDaysAtDestination, int pendingTravelDays,
-        string originDecisionId, long revision)
-    {
-        ItemDefinitionId = itemDefinitionId;
-        OriginCityRuntimeId = originCityRuntimeId;
-        TargetCityRuntimeId = targetCityRuntimeId;
-        PlannedAmount = plannedAmount;
-        RawRemainingAmount = rawRemainingAmount;
-        PurchasePricePerItem = purchasePricePerItem;
-        WaitDaysAtDestination = waitDaysAtDestination;
-        PendingTravelDays = pendingTravelDays;
-        OriginDecisionId = originDecisionId;
-        Revision = revision;
-    }
-}
-
-internal sealed class P12DNpcCommercialMarketValue
-{
-    internal string LocationRuntimeId { get; }
-    internal string ItemDefinitionId { get; }
-    internal float ObservedPrice { get; }
-    internal int ObservedStock { get; }
-    internal long ObservedDay { get; }
-    internal long ReceivedDay { get; }
-    internal CommercialKnowledgeSource Source { get; }
-    internal string SourceRuntimeId { get; }
-
-    internal P12DNpcCommercialMarketValue(CommercialMarketObservation value)
-    {
-        LocationRuntimeId = value.LocationRuntimeId;
-        ItemDefinitionId = value.ItemDefinitionId;
-        ObservedPrice = value.ObservedPrice;
-        ObservedStock = value.ObservedStock;
-        ObservedDay = value.ObservedDay;
-        ReceivedDay = value.ReceivedDay;
-        Source = value.Source;
-        SourceRuntimeId = value.SourceRuntimeId;
-    }
-
-    internal P12DNpcCommercialMarketValue(string locationRuntimeId, string itemDefinitionId,
-        float observedPrice, int observedStock, long observedDay, long receivedDay,
-        CommercialKnowledgeSource source, string sourceRuntimeId)
-    {
-        LocationRuntimeId = locationRuntimeId;
-        ItemDefinitionId = itemDefinitionId;
-        ObservedPrice = observedPrice;
-        ObservedStock = observedStock;
-        ObservedDay = observedDay;
-        ReceivedDay = receivedDay;
-        Source = source;
-        SourceRuntimeId = sourceRuntimeId;
-    }
-}
-
-internal sealed class P12DNpcCommercialLiquidityValue
-{
-    internal string LocationRuntimeId { get; }
-    internal MarketLiquidityMode Mode { get; }
-    internal float PurchasingPower { get; }
-    internal long ObservedDay { get; }
-    internal long ReceivedDay { get; }
-    internal CommercialKnowledgeSource Source { get; }
-    internal string SourceRuntimeId { get; }
-
-    internal P12DNpcCommercialLiquidityValue(CommercialLiquidityObservation value)
-    {
-        LocationRuntimeId = value.LocationRuntimeId;
-        Mode = value.LiquidityMode;
-        PurchasingPower = value.ObservedPurchasingPower;
-        ObservedDay = value.ObservedDay;
-        ReceivedDay = value.ReceivedDay;
-        Source = value.Source;
-        SourceRuntimeId = value.SourceRuntimeId;
-    }
-
-    internal P12DNpcCommercialLiquidityValue(string locationRuntimeId, MarketLiquidityMode mode,
-        float purchasingPower, long observedDay, long receivedDay,
-        CommercialKnowledgeSource source, string sourceRuntimeId)
-    {
-        LocationRuntimeId = locationRuntimeId;
-        Mode = mode;
-        PurchasingPower = purchasingPower;
-        ObservedDay = observedDay;
-        ReceivedDay = receivedDay;
-        Source = source;
-        SourceRuntimeId = sourceRuntimeId;
-    }
-}
-
 internal sealed class P12DNpcFRow
 {
     internal string RuntimeId { get; }
@@ -667,7 +500,11 @@ internal static class P12DNpcRootOwnerSnapshot
                 failure = P12DNpcRootOwnerSnapshotFailure.InvalidDefinition;
                 return false;
             }
-            marketValues.Add(new P12DNpcCommercialMarketValue(observation));
+            marketValues.Add(new P12DNpcCommercialMarketValue(
+                observation.LocationRuntimeId, observation.ItemDefinitionId,
+                observation.ObservedPrice, observation.ObservedStock,
+                observation.ObservedDay, observation.ReceivedDay,
+                observation.Source, observation.SourceRuntimeId));
         }
 
         List<P12DNpcCommercialLiquidityValue> liquidityValues =
@@ -679,7 +516,10 @@ internal static class P12DNpcRootOwnerSnapshot
                 failure = P12DNpcRootOwnerSnapshotFailure.UnsupportedValue;
                 return false;
             }
-            liquidityValues.Add(new P12DNpcCommercialLiquidityValue(observation));
+            liquidityValues.Add(new P12DNpcCommercialLiquidityValue(
+                observation.LocationRuntimeId, observation.LiquidityMode,
+                observation.ObservedPurchasingPower, observation.ObservedDay,
+                observation.ReceivedDay, observation.Source, observation.SourceRuntimeId));
         }
 
         P12DNpcActionValue actionValue = null;
@@ -1020,8 +860,7 @@ internal static class P12DNpcRootOwnerSnapshot
                 P12DNpcDRow d = dProjection.Rows[i];
                 P12DNpcFRow f = fProjection.Rows[i];
                 if (!TryPrepareSelectedCoreOwner(d, f, selectedDefinitions,
-                        actionsByDefinition, statusesByDefinition, itemsByDefinition,
-                        locationsById, citiesById, routeIds, stagedNpcRuntimeIds,
+                        locationsById, citiesById, routeIds, partyIds, stagedNpcRuntimeIds,
                         selectedItemBindings,
                         out P12DNpcPreparedSelectedCoreOwner prepared, out failure)
                     || prepared == null
@@ -1465,12 +1304,10 @@ internal static class P12DNpcRootOwnerSnapshot
         P12DNpcDRow d,
         P12DNpcFRow f,
         DailyV1EffectiveDefinitions definitions,
-        IReadOnlyDictionary<string, NpcActionData> actionsByDefinition,
-        IReadOnlyDictionary<string, NpcStatusData> statusesByDefinition,
-        IReadOnlyDictionary<string, ItemData> itemsByDefinition,
         IReadOnlyDictionary<string, SpatialLocationRuntime> locationsById,
         IReadOnlyDictionary<string, CityRuntime> citiesById,
         HashSet<string> routeIds,
+        HashSet<string> travelPartyIds,
         HashSet<string> npcRuntimeIds,
         DailyV1DefinitionAdapter.SelectedBindings selectedItemBindings,
         out P12DNpcPreparedSelectedCoreOwner prepared,
@@ -1479,179 +1316,64 @@ internal static class P12DNpcRootOwnerSnapshot
         prepared = null;
         failure = P12DNpcRootOwnerSnapshotFailure.InvalidSelectedNpcDefinition;
         if (d == null || f == null || definitions == null
+            || selectedItemBindings == null
             || !definitions.Npcs.TryGetValue(d.NpcDefinitionId,
                 out DailyV1NpcDefinition selectedNpcDefinition)
             || selectedNpcDefinition == null
             || !string.Equals(selectedNpcDefinition.DefinitionId, d.NpcDefinitionId, StringComparison.Ordinal))
             return false;
 
-        List<DailyV1StatusDefinition> selectedStatuses =
-            new List<DailyV1StatusDefinition>(d.CurrentStatusDefinitionIds.Count);
-        foreach (string statusId in d.CurrentStatusDefinitionIds)
+        List<DailyV1CommercialKnowledgeShareReceipt> receipts =
+            new List<DailyV1CommercialKnowledgeShareReceipt>(f.CommercialShareReceipts.Count);
+        foreach (CommercialKnowledgeShareReceipt receipt in f.CommercialShareReceipts)
         {
-            if (string.IsNullOrWhiteSpace(statusId)
-                || !statusesByDefinition.TryGetValue(statusId, out NpcStatusData statusAsset)
-                || statusAsset == null
-                || !definitions.Statuses.TryGetValue(statusId, out DailyV1StatusDefinition statusNode)
-                || statusNode == null
-                || !string.Equals(statusNode.DefinitionId, statusAsset.DefinitionId, StringComparison.Ordinal))
-            {
-                failure = P12DNpcRootOwnerSnapshotFailure.InvalidSelectedStatusDefinition;
-                return false;
-            }
-            selectedStatuses.Add(statusNode);
+            receipts.Add(receipt == null ? null : new DailyV1CommercialKnowledgeShareReceipt(
+                receipt.OperationIdentity, receipt.Fingerprint, receipt.BoundaryOccurrenceId,
+                receipt.SenderRuntimeId, receipt.SenderPersonId, receipt.ReceiverRuntimeId,
+                receipt.ReceiverPersonId, receipt.SourceSnapshotFingerprint,
+                receipt.AppliedObservationCount));
         }
 
-        List<DailyV1InventoryItemState> inventoryRows =
-            new List<DailyV1InventoryItemState>(d.InventoryRows.Count);
-        foreach (P12DNpcInventoryRowValue row in d.InventoryRows)
-        {
-            if (row == null || string.IsNullOrWhiteSpace(row.ItemDefinitionId)
-                || !itemsByDefinition.TryGetValue(row.ItemDefinitionId, out ItemData itemAsset)
-                || itemAsset == null
-                || !definitions.Items.TryGetValue(row.ItemDefinitionId, out DailyV1ItemDefinition itemNode)
-                || itemNode == null
-                || !string.Equals(itemNode.DefinitionId, itemAsset.DefinitionId, StringComparison.Ordinal)
-                || row.Amount < 0 || float.IsNaN(row.AverageUnitCost)
-                || float.IsInfinity(row.AverageUnitCost) || row.AverageUnitCost < 0f)
-            {
-                failure = P12DNpcRootOwnerSnapshotFailure.InvalidSelectedInventoryItem;
-                return false;
-            }
-            inventoryRows.Add(new DailyV1InventoryItemState(
-                itemNode, row.Amount, row.AverageUnitCost));
-        }
+        DailyV1P12DNpcCoreOwnerHydrationInput input =
+            new DailyV1P12DNpcCoreOwnerHydrationInput(
+                d, f.Action, f.TravelDaysRemaining, f.TravelDaysTotal,
+                f.TravelRouteRuntimeId, f.TravelStartedToday, f.TravelOriginDecisionId,
+                f.ActiveTravelPartyId, f.TravelStateRevision, f.MerchantPlan, f.TravelPlan,
+                f.KnownLocationRuntimeIds, f.KnownRouteRuntimeIds, f.SpatialKnowledgeRevision,
+                f.CommercialMarkets, f.CommercialLiquidity, receipts,
+                f.CommercialKnowledgeRevision);
 
-        DailyV1InventoryOwner inventoryCandidate = new DailyV1InventoryOwner(definitions);
-        if (!inventoryCandidate.TryCreatePreparedFromOwnerSnapshot(
-                inventoryRows, d.InventoryRevision, out DailyV1InventoryOwner inventoryOwner)
-            || !MoneyAccountOwnerBridge.TryCreateFromOwnerSnapshot(
-                d.MoneyBalance, d.MoneyRevision, out MoneyAccountRuntime moneyAccount))
+        if (!DailyV1P12DNpcCoreOwnerHydrator.TryCreate(
+                input, definitions, citiesById.Keys,
+                locationsById.Keys, routeIds, travelPartyIds, npcRuntimeIds,
+                out DailyV1NpcRuntimeOwners runtimeOwners,
+                out DailyV1P12DNpcCoreOwnerHydrationFailure hydrationFailure)
+            || runtimeOwners == null)
         {
-            failure = P12DNpcRootOwnerSnapshotFailure.UnsupportedValue;
+            failure = hydrationFailure switch
+            {
+                DailyV1P12DNpcCoreOwnerHydrationFailure.InvalidNpcIdentity =>
+                    P12DNpcRootOwnerSnapshotFailure.InvalidNpcIdentity,
+                DailyV1P12DNpcCoreOwnerHydrationFailure.InvalidNpcDefinition =>
+                    P12DNpcRootOwnerSnapshotFailure.InvalidSelectedNpcDefinition,
+                DailyV1P12DNpcCoreOwnerHydrationFailure.InvalidStatusDefinition =>
+                    P12DNpcRootOwnerSnapshotFailure.InvalidSelectedStatusDefinition,
+                DailyV1P12DNpcCoreOwnerHydrationFailure.InvalidInventoryItem =>
+                    P12DNpcRootOwnerSnapshotFailure.InvalidSelectedInventoryItem,
+                DailyV1P12DNpcCoreOwnerHydrationFailure.InvalidReference =>
+                    P12DNpcRootOwnerSnapshotFailure.InvalidReference,
+                DailyV1P12DNpcCoreOwnerHydrationFailure.UnsupportedValue =>
+                    P12DNpcRootOwnerSnapshotFailure.UnsupportedValue,
+                _ => P12DNpcRootOwnerSnapshotFailure.InvalidDefinition
+            };
             return false;
         }
 
-        P12DNpcMerchantPlanValue merchant = f.MerchantPlan;
-        DailyV1ItemDefinition merchantItem = null;
-        if (merchant == null
-            || (merchant.ItemDefinitionId != null
-                && (!itemsByDefinition.TryGetValue(merchant.ItemDefinitionId, out ItemData merchantAsset)
-                    || merchantAsset == null
-                    || !definitions.Items.TryGetValue(merchant.ItemDefinitionId, out merchantItem)
-                    || merchantItem == null
-                    || !string.Equals(merchantItem.DefinitionId, merchantAsset.DefinitionId, StringComparison.Ordinal)))
-            || !ResolveNullable(merchant.OriginCityRuntimeId, citiesById, out _)
-            || !ResolveNullable(merchant.TargetCityRuntimeId, citiesById, out _)
-            || !DailyV1NpcMerchantTradePlanOwner.TryCreateFromOwnerSnapshot(
-                definitions, merchantItem, merchant.OriginCityRuntimeId, merchant.TargetCityRuntimeId,
-                merchant.PlannedAmount, merchant.RawRemainingAmount,
-                merchant.PurchasePricePerItem, merchant.WaitDaysAtDestination,
-                merchant.PendingTravelDays, merchant.OriginDecisionId,
-                merchant.Revision, out DailyV1NpcMerchantTradePlanOwner merchantPlanOwner))
+        CommercialKnowledgeRuntime commercialProjection = new CommercialKnowledgeRuntime();
+        if (!commercialProjection.TryBindSelectedDailyV1Owner(
+                runtimeOwners.CommercialKnowledge, selectedItemBindings))
         {
             failure = P12DNpcRootOwnerSnapshotFailure.InvalidReference;
-            return false;
-        }
-
-        if (!TryCreateCommercialKnowledge(f, itemsByDefinition, definitions,
-                selectedItemBindings, out CommercialKnowledgeRuntime commercialProjection)
-            || commercialProjection?.SelectedOwner == null
-            || !SpatialKnowledgeRuntime.TryCreateFromOwnerSnapshot(
-                d.RuntimeId, f.KnownLocationRuntimeIds, f.KnownRouteRuntimeIds,
-                f.SpatialKnowledgeRevision, out SpatialKnowledgeRuntime spatialKnowledge)
-            || f.KnownLocationRuntimeIds.Any(id => !locationsById.ContainsKey(id))
-            || f.KnownRouteRuntimeIds.Any(id => !routeIds.Contains(id)))
-        {
-            failure = P12DNpcRootOwnerSnapshotFailure.InvalidReference;
-            return false;
-        }
-
-        DailyV1ActionDefinition selectedAction = null;
-        DailyV1NpcActionPayloadOwner actionPayload = null;
-        if (f.Action != null)
-        {
-            P12DNpcActionValue action = f.Action;
-            DailyV1ItemDefinition targetItem = null;
-            if (!actionsByDefinition.TryGetValue(action.ActionDefinitionId, out NpcActionData actionAsset)
-                || actionAsset == null
-                || !definitions.Actions.TryGetValue(action.ActionDefinitionId, out selectedAction)
-                || selectedAction == null
-                || !string.Equals(selectedAction.DefinitionId, actionAsset.DefinitionId, StringComparison.Ordinal)
-                || (action.TargetNpcRuntimeId != null && !npcRuntimeIds.Contains(action.TargetNpcRuntimeId))
-                || !ResolveNullable(action.TargetCityRuntimeId, citiesById, out _)
-                || (action.TargetItemDefinitionId != null
-                    && (!itemsByDefinition.TryGetValue(action.TargetItemDefinitionId, out ItemData targetItemAsset)
-                        || targetItemAsset == null
-                        || !definitions.Items.TryGetValue(action.TargetItemDefinitionId, out targetItem)
-                        || targetItem == null
-                        || !string.Equals(targetItem.DefinitionId, targetItemAsset.DefinitionId, StringComparison.Ordinal)))
-                || !TryValidateActionEvidence(action, locationsById, routeIds, itemsByDefinition)
-                || !DailyV1NpcActionPayloadOwner.TryCreate(
-                    definitions, selectedAction, action.TargetNpcRuntimeId,
-                    action.TargetCityRuntimeId, targetItem, action.Amount,
-                    action.ExpectedUnitPrice, action.SuccessChanceMultiplier,
-                    action.TravelReason, action.ExpectedNetValue,
-                    action.OriginDecisionId, action.StableOccurrenceKey,
-                    action.CommercialDecisionEvidence, action.CommercialScoutingEvidence,
-                    out actionPayload))
-            {
-                failure = P12DNpcRootOwnerSnapshotFailure.InvalidReference;
-                return false;
-            }
-        }
-
-        P12DNpcTravelPlanValue travelPlan = f.TravelPlan;
-        if (travelPlan == null
-            || !ResolveNullable(travelPlan.TargetLocationRuntimeId, locationsById, out _)
-            || !ResolveNullable(travelPlan.TargetCityRuntimeId, citiesById, out _))
-        {
-            failure = P12DNpcRootOwnerSnapshotFailure.InvalidReference;
-            return false;
-        }
-
-        DailyV1NpcRuntimeRestoreState restoreState = new DailyV1NpcRuntimeRestoreState
-        {
-            RuntimeId = d.RuntimeId,
-            Definitions = definitions,
-            Definition = selectedNpcDefinition,
-            Statuses = selectedStatuses,
-            Inventory = inventoryOwner,
-            MoneyAccount = moneyAccount,
-            CommercialKnowledge = commercialProjection.SelectedOwner,
-            MerchantTradePlan = merchantPlanOwner,
-            SpatialKnowledge = spatialKnowledge,
-            CurrentAction = selectedAction,
-            CurrentActionPayload = actionPayload,
-            ActionRevision = d.CurrentActionRevision,
-            LifeState = d.LifeState,
-            InjurySeverity = d.InjurySeverity,
-            LifeStateRevision = d.LifeStateRevision,
-            CrimeJusticeRevision = d.CrimeJusticeRevision,
-            HiddenDaysRemaining = d.HiddenDaysRemaining,
-            CurrentLocationRuntimeId = d.CurrentLocationRuntimeId,
-            CurrentCityRuntimeId = d.CurrentCityRuntimeId,
-            DestinationLocationRuntimeId = d.DestinationLocationRuntimeId,
-            DestinationCityRuntimeId = d.DestinationCityRuntimeId,
-            TravelDaysRemaining = f.TravelDaysRemaining,
-            TravelDaysTotal = f.TravelDaysTotal,
-            TravelRouteRuntimeId = f.TravelRouteRuntimeId,
-            TravelStartedToday = f.TravelStartedToday,
-            TravelOriginDecisionId = f.TravelOriginDecisionId,
-            ActiveTravelPartyId = f.ActiveTravelPartyId,
-            TravelRevision = f.TravelStateRevision,
-            TravelPlanTargetLocationRuntimeId = travelPlan.TargetLocationRuntimeId,
-            TravelPlanTargetCityRuntimeId = travelPlan.TargetCityRuntimeId,
-            TravelPlanReason = travelPlan.Reason,
-            TravelPlanUtility = travelPlan.Utility,
-            TravelPlanExpectedCost = travelPlan.ExpectedCost,
-            TravelPlanOriginDecisionId = travelPlan.OriginDecisionId,
-            TravelPlanRevision = travelPlan.Revision
-        };
-        if (!DailyV1NpcRuntimeOwners.TryCreateRestoredP12DOwner(
-                restoreState, out DailyV1NpcRuntimeOwners runtimeOwners))
-        {
-            failure = P12DNpcRootOwnerSnapshotFailure.UnsupportedValue;
             return false;
         }
 
@@ -1661,30 +1383,12 @@ internal static class P12DNpcRootOwnerSnapshot
             InventoryProjection = new InventoryRuntime(runtimeOwners.Inventory),
             CommercialKnowledgeProjection = commercialProjection,
             SpatialKnowledge = runtimeOwners.SpatialKnowledge,
-            StatusDefinitions = selectedStatuses,
-            CurrentActionPayload = actionPayload
+            StatusDefinitions = new List<DailyV1StatusDefinition>(runtimeOwners.Status.Statuses),
+            CurrentActionPayload = runtimeOwners.ActionSlot.CurrentPayload
         };
         failure = P12DNpcRootOwnerSnapshotFailure.None;
         return true;
     }
-
-    private static bool MatchesSelectedInventoryRows(
-        DailyV1InventoryOwner owner,
-        IReadOnlyList<DailyV1InventoryItemState> expectedRows)
-    {
-        if (owner == null || expectedRows == null || owner.Items.Count != expectedRows.Count) return false;
-        for (int i = 0; i < expectedRows.Count; i++)
-        {
-            DailyV1InventoryItemState actual = owner.Items[i];
-            DailyV1InventoryItemState expected = expectedRows[i];
-            if (actual == null || expected == null
-                || !ReferenceEquals(actual.Item, expected.Item)
-                || actual.Amount != expected.Amount
-                || !actual.AverageUnitCost.Equals(expected.AverageUnitCost)) return false;
-        }
-        return true;
-    }
-
     private static bool TryCreateCommercialKnowledge(
         P12DNpcFRow row,
         IReadOnlyDictionary<string, ItemData> itemsByDefinition,
