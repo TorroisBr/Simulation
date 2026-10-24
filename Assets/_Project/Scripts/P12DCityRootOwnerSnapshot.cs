@@ -758,26 +758,6 @@ internal sealed class P12DCityRootOwnerSnapshot
     }
 }
 
-internal sealed class P12DCityMarketItemSnapshot
-{
-    internal string ItemDefinitionId { get; }
-    internal int Amount { get; }
-    internal int DesiredAmount { get; }
-    internal float CurrentPrice { get; }
-
-    internal P12DCityMarketItemSnapshot(
-        string itemDefinitionId,
-        int amount,
-        int desiredAmount,
-        float currentPrice)
-    {
-        ItemDefinitionId = itemDefinitionId;
-        Amount = amount;
-        DesiredAmount = desiredAmount;
-        CurrentPrice = currentPrice;
-    }
-}
-
 /// <summary>
 /// Transient identity evidence for a City snapshot capture. It is carried only
 /// by the unpublished relation linker and is never stored in a domain owner.
