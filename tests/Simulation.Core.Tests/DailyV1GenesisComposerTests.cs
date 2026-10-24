@@ -28,6 +28,59 @@ public sealed class DailyV1GenesisComposerTests
     }
 
     [Test]
+    public void RestoredExecutionBoundaryIsCoreComposedFromExactStagedOwnersAndRoots()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext bootstrapAdmission), Is.True);
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            bootstrapAdmission,
+            out DailyV1GenesisComposition source,
+            out string sourceDiagnostic), Is.True, sourceDiagnostic);
+
+        Assert.That(source.OwnerGraph.TryBindExpeditionStore(new ExpeditionStore()), Is.True);
+        SimulationRuntimeAdmissionContext restoredAdmission =
+            source.AdmissionContext.CreateRestoredContinuationContext();
+        SimulationTime restoredTime = new SimulationTime(source.SimulationTime.AbsoluteDay);
+
+        Assert.That(DailyV1RestoredExecutionBoundaryComposer.TryCreate(
+            definitions, source.EffectiveConfiguration, source.Calendar, restoredTime,
+            restoredAdmission, source.WorldId, source.OwnerGraph,
+            source.RuntimeIdAllocator, source.RandomSource, source.RecordSequence,
+            source.DecisionStore, new ActorChoiceStore(new PersonStore()),
+            out _, out string rejectedDiagnostic), Is.False);
+        Assert.That(rejectedDiagnostic, Does.Contain("exact admitted definitions"));
+
+        Assert.That(DailyV1RestoredExecutionBoundaryComposer.TryCreate(
+            definitions, source.EffectiveConfiguration, source.Calendar, restoredTime,
+            restoredAdmission, source.WorldId, source.OwnerGraph,
+            source.RuntimeIdAllocator, source.RandomSource, source.RecordSequence,
+            source.DecisionStore, source.ActorChoiceStore,
+            out DailyV1ExecutionBoundaryState restoredBoundary,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph, Is.SameAs(source.OwnerGraph));
+        Assert.That(restoredBoundary.SimulationTime, Is.SameAs(restoredTime));
+        Assert.That(restoredBoundary.AdmissionContext, Is.SameAs(restoredAdmission));
+        Assert.That(restoredBoundary.WorldId, Is.SameAs(source.WorldId));
+        Assert.That(restoredBoundary.SelectedRuntimeActorRoster.Select(member => member.RuntimeId),
+            Is.EqualTo(source.OwnerGraph.Npcs.Select(owner => owner.RuntimeId)));
+        Assert.That(restoredBoundary.HasAdmittedSelectedDailyExecution, Is.True);
+        Assert.That(restoredBoundary.HasExactSelectedRuntimeExecutionRoots(
+            source.OwnerGraph, source.PersonStore, source.ActorChoiceStore, source.RandomSource,
+            source.RuntimeIdAllocator, source.RecordSequence, source.DecisionStore), Is.True);
+
+        Assert.That(application.TryCreateRestoredActiveRuntimeSession(
+            restoredBoundary, definitions, restoredTime.AbsoluteDay, null,
+            out DailyV1ActiveRuntimeSession restoredSession, out diagnostic), Is.True, diagnostic);
+        Assert.That(restoredSession.ExecutionBoundaryState, Is.SameAs(restoredBoundary));
+        Assert.That(restoredSession.Definitions, Is.SameAs(definitions));
+        Assert.That(restoredSession.RuntimeAdvanceBoundary, Is.Null);
+    }
+
+    [Test]
     public void SelectedGenesisPreservesStageCallbackExceptionBoundary()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

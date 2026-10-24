@@ -1265,7 +1265,36 @@ internal static partial class P12GDailyV1RestoreCoordinator
             }
         }
 
+        if (!TryCreateRestoredCoreExecutionBoundary(
+                selectedDefinitions, effective, calendar, time, restoredAdmissionContext,
+                stagedC, stagedD, stagedE, stagedF, decisions,
+                out DailyV1ExecutionBoundaryState restoredExecutionBoundary,
+                out SimulationCalendar restoredCalendar, out diagnostic))
+            return false;
+
+        DailyV1ActiveRuntimeSession coreRuntimeSession = null;
+        if (restoredExecutionBoundary.HasAdmittedSelectedDailyExecution)
+        {
+            bool coreSessionCreated = application == null
+                ? DailyV1ActiveRuntimeSession.TryCreate(
+                    restoredExecutionBoundary,
+                    selectedDefinitions,
+                    lastEconomySnapshotDay,
+                    out coreRuntimeSession,
+                    out diagnostic)
+                : application.TryCreateRestoredActiveRuntimeSession(
+                    restoredExecutionBoundary,
+                    selectedDefinitions,
+                    lastEconomySnapshotDay,
+                    replacementOperation,
+                    out coreRuntimeSession,
+                    out diagnostic);
+            if (!coreSessionCreated) return false;
+        }
+
         SimulationRuntime runtime = new SimulationRuntime(
+            selectedExecutionBoundaryState: restoredExecutionBoundary,
+            selectedCalendar: restoredCalendar,
             simulationTime: time,
             cities: stagedD.Cities,
             npcRuntimes: stagedD.Npcs,
@@ -1350,26 +1379,6 @@ internal static partial class P12GDailyV1RestoreCoordinator
             stagedF.Expeditions,
             expeditions,
             selectedDefinitions);
-
-        DailyV1ActiveRuntimeSession coreRuntimeSession = null;
-        if (runtime.ExecutionBoundaryState.HasAdmittedSelectedDailyExecution)
-        {
-            bool coreSessionCreated = application == null
-                ? DailyV1ActiveRuntimeSession.TryCreate(
-                    runtime.ExecutionBoundaryState,
-                    selectedDefinitions,
-                    lastEconomySnapshotDay,
-                    out coreRuntimeSession,
-                    out diagnostic)
-                : application.TryCreateRestoredActiveRuntimeSession(
-                    runtime.ExecutionBoundaryState,
-                    selectedDefinitions,
-                    lastEconomySnapshotDay,
-                    replacementOperation,
-                    out coreRuntimeSession,
-                    out diagnostic);
-            if (!coreSessionCreated) return false;
-        }
 
         candidate = new SimulationActiveSession(
             composition,

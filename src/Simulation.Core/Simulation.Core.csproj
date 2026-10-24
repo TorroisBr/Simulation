@@ -60,6 +60,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationSessionGate.cs" Link="Application/DailyV1ApplicationSessionGate.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1P12CrimeJusticeMutationCoordinator.cs" Link="Application/DailyV1P12CrimeJusticeMutationCoordinator.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1GenesisComposer.cs" Link="Application/DailyV1GenesisComposer.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1RestoredExecutionBoundaryComposer.cs" Link="Application/DailyV1RestoredExecutionBoundaryComposer.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedOwnerSectionCensusContract.cs" Link="Application/DailyV1SelectedOwnerSectionCensusContract.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/ActorChoiceContracts.cs" Link="Application/ActorChoiceContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/ActorChoiceStore.cs" Link="Application/ActorChoiceStore.cs" />

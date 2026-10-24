@@ -316,6 +316,76 @@ internal static partial class P12GDailyV1RestoreCoordinator
         }
     }
 
+
+    private static bool TryCreateRestoredCoreExecutionBoundary(
+        DailyV1EffectiveDefinitions selectedDefinitions,
+        EffectiveSimulationConfiguration effectiveConfiguration,
+        CalendarDefinition calendarDefinition,
+        SimulationTime stagedTime,
+        SimulationRuntimeAdmissionContext restoredAdmissionContext,
+        P12CStagedContinuationRoot stagedC,
+        P12DDailyV1OwnerPackage stagedD,
+        P12EDailyV1OwnerPackage stagedE,
+        P12FDailyV1OwnerPackage stagedF,
+        NpcDecisionStore decisionStore,
+        out DailyV1ExecutionBoundaryState executionBoundaryState,
+        out SimulationCalendar selectedCalendar,
+        out string diagnostic)
+    {
+        executionBoundaryState = null;
+        selectedCalendar = null;
+        diagnostic = null;
+        if (selectedDefinitions == null || stagedC == null || stagedD == null
+            || stagedE == null || stagedF == null || stagedD.SpatialNetwork == null
+            || stagedD.RuntimeIdentities == null || stagedD.Persons == null
+            || stagedE.Justice == null || stagedF.TravelParties == null
+            || stagedF.ScheduledDirectives == null || stagedF.Expeditions == null
+            || stagedF.ActorChoices == null)
+        {
+            diagnostic = "The P12-C/D/E/F staged roots required by the Core boundary are incomplete.";
+            return false;
+        }
+
+        DailyV1CityRuntimeOwners[] cities = stagedD.Cities
+            .Select(city => city?.SelectedRuntimeOwners)
+            .OrderBy(owner => owner?.RuntimeId ?? string.Empty, StringComparer.Ordinal)
+            .ToArray();
+        DailyV1NpcRuntimeOwners[] npcs = stagedD.Npcs
+            .Select(npc => npc?.SelectedRuntimeOwners)
+            .OrderBy(owner => owner?.RuntimeId ?? string.Empty, StringComparer.Ordinal)
+            .ToArray();
+        if (cities.Any(owner => owner == null) || npcs.Any(owner => owner == null)
+            || !DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+                cities, npcs,
+                stagedD.SpatialNetwork.SelectedOwner,
+                stagedE.Justice.CoreOwner,
+                stagedF.TravelParties,
+                stagedD.RuntimeIdentities.CoreIdentityIndex,
+                stagedD.Persons,
+                out DailyV1SelectedRuntimeOwnerGraph ownerGraph)
+            || ownerGraph == null
+            || !ownerGraph.TryBindScheduledDirectives(stagedF.ScheduledDirectives)
+            || !ownerGraph.TryBindExpeditionStore(stagedF.Expeditions))
+        {
+            diagnostic = "Core rejected the exact staged P12 City/NPC owners or their cross-owner relationships.";
+            return false;
+        }
+
+        selectedCalendar = new SimulationCalendar(calendarDefinition);
+        if (!DailyV1RestoredExecutionBoundaryComposer.TryCreate(
+                selectedDefinitions, effectiveConfiguration, selectedCalendar, stagedTime,
+                restoredAdmissionContext, stagedC.WorldIdentity, ownerGraph,
+                stagedC.RuntimeIdAllocator, stagedC.DeterministicRandom,
+                stagedC.RecordSequence, decisionStore, stagedF.ActorChoices,
+                out executionBoundaryState, out diagnostic))
+        {
+            selectedCalendar = null;
+            return false;
+        }
+
+        return true;
+    }
+
     private static bool TryBuildDailyV1Definitions(
         SimulationConfigData configuration,
         out List<CityData> cityDefinitions,
