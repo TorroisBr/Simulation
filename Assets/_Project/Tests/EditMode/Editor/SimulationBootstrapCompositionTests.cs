@@ -166,6 +166,21 @@ public sealed class SimulationBootstrapCompositionTests
             "Core genesis must construct the selected City/NPC authorities before SimulationRuntime composition.");
         Assert.That(simulation.Runtime.SelectedRuntimeOwnerGraph, Is.SameAs(initialOwnerGraph),
             "SimulationRuntime must bind the same Core-composed graph rather than rebuild another authority join.");
+        SimulationActiveSession activeSession =
+            ReadPrivateField<SimulationActiveSession>(simulation, "activeSession");
+        Assert.That(activeSession.CoreRuntimeSession, Is.Not.Null,
+            "A published selected Daily-v1 host session must bind to its Core-owned active runtime session.");
+        Assert.That(activeSession.CoreRuntimeSession.ExecutionBoundaryState,
+            Is.SameAs(simulation.Runtime.ExecutionBoundaryState),
+            "The Core active session and Unity runtime adapter must use the same operation, lease, epoch, and capture-token state.");
+        Assert.That(activeSession.CoreRuntimeSession.OwnerGraph, Is.SameAs(initialOwnerGraph),
+            "The Core active session must retain the exact owner graph composed before Unity projection construction.");
+        Assert.That(activeSession.CoreRuntimeSession.Definitions,
+            Is.SameAs(simulation.Bootstrap.SelectedDefinitions),
+            "The Core active session must retain the exact admitted effective-definition graph.");
+        Assert.That(activeSession.ExecutionBoundaryState,
+            Is.SameAs(activeSession.CoreRuntimeSession.ExecutionBoundaryState),
+            "Active-session operations must be gated by Core state, not a Unity-owned duplicate.");
         Assert.That(initialOwnerGraph.JusticeRecordsOwner,
             Is.SameAs(simulation.Runtime.JusticeSystemForWorldBoundary.CoreOwner),
             "The Core-composed graph must bind the exact Justice owner used by the selected runtime.");

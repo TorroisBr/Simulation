@@ -36,6 +36,94 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void ActiveRuntimeSessionBindsTheExactGenesisBoundaryAndOwnerGraph()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            composition.ExecutionBoundaryState,
+            definitions,
+            out DailyV1ActiveRuntimeSession session,
+            out diagnostic), Is.True, diagnostic);
+
+        Assert.That(session.ExecutionBoundaryState, Is.SameAs(composition.ExecutionBoundaryState));
+        Assert.That(session.OwnerGraph, Is.SameAs(composition.OwnerGraph));
+        Assert.That(session.Definitions, Is.SameAs(composition.Definitions));
+        Assert.That(session.AdmissionContext, Is.SameAs(composition.AdmissionContext));
+        Assert.That(session.WorldId, Is.SameAs(composition.WorldId));
+        Assert.That(session.SimulationTime, Is.SameAs(composition.SimulationTime));
+        Assert.That(session.EffectiveConfiguration, Is.SameAs(composition.EffectiveConfiguration));
+        Assert.That(session.Calendar, Is.SameAs(composition.Calendar));
+    }
+
+    [Test]
+    public void ActiveRuntimeSessionRejectsOtherDefinitionGraphsAndUnadmittedBoundaries()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1EffectiveDefinitions differentDefinitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            composition.ExecutionBoundaryState,
+            differentDefinitions,
+            out DailyV1ActiveRuntimeSession mismatched,
+            out diagnostic), Is.False);
+        Assert.That(mismatched, Is.Null);
+        Assert.That(diagnostic, Does.Contain("exact admitted selected Daily-v1 runtime"));
+
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            new DailyV1ExecutionBoundaryState(),
+            definitions,
+            out DailyV1ActiveRuntimeSession unadmitted,
+            out diagnostic), Is.False);
+        Assert.That(unadmitted, Is.Null);
+    }
+
+    [Test]
+    public void ActiveRuntimeSessionsRetainSelectedProfileCompatibilityAcrossGenesisInstances()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition firstComposition,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition secondComposition,
+            out diagnostic), Is.True, diagnostic);
+
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            firstComposition.ExecutionBoundaryState,
+            definitions,
+            out DailyV1ActiveRuntimeSession first,
+            out diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            secondComposition.ExecutionBoundaryState,
+            definitions,
+            out DailyV1ActiveRuntimeSession second,
+            out diagnostic), Is.True, diagnostic);
+
+        Assert.That(first.WorldId, Is.Not.SameAs(second.WorldId));
+        Assert.That(first.IsProfileCompatibleWith(second), Is.True,
+            "Restore compatibility follows the selected effective profile, while each session keeps its own world and owner identities.");
+    }
+
+    [Test]
     public void InitialPublicationIsSingleAndCannotReplaceAnExistingSession()
     {
         DailyV1ApplicationSessionGate<TestSession> gate = CreateGate();

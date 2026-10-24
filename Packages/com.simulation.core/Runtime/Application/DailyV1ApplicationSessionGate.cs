@@ -22,6 +22,90 @@ internal sealed class DailyV1SessionReportState
 }
 
 /// <summary>
+/// Core-owned binding for one published selected Daily-v1 runtime session.
+/// It retains the exact execution boundary and owner graph already created by
+/// genesis or staged restoration; it does not rebuild or mirror their state.
+/// Unity host sessions may keep presentation/projection references separately,
+/// but their operation gate must resolve through this exact Core boundary.
+/// </summary>
+internal sealed class DailyV1ActiveRuntimeSession
+{
+    private DailyV1ActiveRuntimeSession(
+        DailyV1ExecutionBoundaryState executionBoundaryState,
+        DailyV1EffectiveDefinitions definitions,
+        string profileFingerprint)
+    {
+        ExecutionBoundaryState = executionBoundaryState;
+        Definitions = definitions;
+        ProfileFingerprint = profileFingerprint;
+    }
+
+    internal DailyV1ExecutionBoundaryState ExecutionBoundaryState { get; }
+    internal DailyV1SelectedRuntimeOwnerGraph OwnerGraph =>
+        ExecutionBoundaryState.SelectedRuntimeOwnerGraph;
+    internal DailyV1EffectiveDefinitions Definitions { get; }
+    internal SimulationRuntimeAdmissionContext AdmissionContext => ExecutionBoundaryState.AdmissionContext;
+    internal WorldId WorldId => ExecutionBoundaryState.WorldId;
+    internal SimulationTime SimulationTime => ExecutionBoundaryState.SimulationTime;
+    internal EffectiveSimulationConfiguration EffectiveConfiguration => ExecutionBoundaryState.ConfigurationIdentity;
+    internal SimulationCalendar Calendar => ExecutionBoundaryState.CalendarIdentity;
+    internal string ProfileFingerprint { get; }
+
+    internal static bool TryCreate(
+        DailyV1ExecutionBoundaryState executionBoundaryState,
+        DailyV1EffectiveDefinitions expectedDefinitions,
+        out DailyV1ActiveRuntimeSession session,
+        out string diagnostic)
+    {
+        session = null;
+        diagnostic = null;
+        if (executionBoundaryState == null || expectedDefinitions == null)
+        {
+            diagnostic = "The active Core session requires its exact execution boundary and effective definitions.";
+            return false;
+        }
+
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph = executionBoundaryState.SelectedRuntimeOwnerGraph;
+        SimulationRuntimeAdmissionContext admissionContext = executionBoundaryState.AdmissionContext;
+        if (!executionBoundaryState.HasAdmittedSelectedDailyExecution
+            || ownerGraph == null
+            || !ReferenceEquals(ownerGraph.Definitions, expectedDefinitions)
+            || admissionContext == null
+            || admissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || executionBoundaryState.WorldId == null
+            || executionBoundaryState.SimulationTime == null
+            || executionBoundaryState.ConfigurationIdentity == null
+            || executionBoundaryState.CalendarIdentity == null)
+        {
+            diagnostic = "The Core execution boundary is not the exact admitted selected Daily-v1 runtime for these definitions.";
+            return false;
+        }
+
+        string profileFingerprint = DailyV1DefinitionIdentity.CreateP9Fingerprint(
+            expectedDefinitions, out _);
+        if (string.IsNullOrWhiteSpace(profileFingerprint))
+        {
+            diagnostic = "The Core active session has no selected profile fingerprint.";
+            return false;
+        }
+
+        session = new DailyV1ActiveRuntimeSession(
+            executionBoundaryState, expectedDefinitions, profileFingerprint);
+        return true;
+    }
+
+    internal bool IsProfileCompatibleWith(DailyV1ActiveRuntimeSession candidate)
+    {
+        return candidate != null
+            && AdmissionContext != null
+            && candidate.AdmissionContext != null
+            && AdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            && candidate.AdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            && string.Equals(ProfileFingerprint, candidate.ProfileFingerprint, StringComparison.Ordinal);
+    }
+}
+
+/// <summary>
 /// Owns the active-session reference and operation serialization shared by the
 /// Unity and detached hosts. The session type stays internal to the owning
 /// application assembly; this gate owns its publication lifecycle only.

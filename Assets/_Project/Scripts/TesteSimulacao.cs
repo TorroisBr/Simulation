@@ -23,6 +23,14 @@ internal sealed class SimulationActiveSession
     public SimulationRuntimeAdmissionContext AdmissionContext { get; }
     public IAuthoritativeRandomSource RandomSource { get; }
     public DailyV1SessionReportState ReportState { get; }
+    /// <summary>
+    /// Exact Core-owned selected runtime/session binding. Unity references in
+    /// this object are host projections; selected operation scopes resolve to
+    /// the Core execution boundary retained here.
+    /// </summary>
+    internal DailyV1ActiveRuntimeSession CoreRuntimeSession { get; }
+    internal DailyV1ExecutionBoundaryState ExecutionBoundaryState =>
+        CoreRuntimeSession?.ExecutionBoundaryState ?? Runtime.ExecutionBoundaryState;
 
     public SimulationActiveSession(
         SimulationBootstrapComposition composition,
@@ -42,9 +50,26 @@ internal sealed class SimulationActiveSession
         IdentityRegistry = identityRegistry ?? throw new System.ArgumentNullException(nameof(identityRegistry));
         SpatialNetwork = spatialNetwork ?? throw new System.ArgumentNullException(nameof(spatialNetwork));
         Configuration = configuration;
-        AdmissionContext = admissionContext;
         RandomSource = randomSource ?? throw new System.ArgumentNullException(nameof(randomSource));
         ReportState = reportState ?? throw new System.ArgumentNullException(nameof(reportState));
+
+        DailyV1ExecutionBoundaryState executionBoundaryState = Runtime.ExecutionBoundaryState;
+        if (executionBoundaryState.HasAdmittedSelectedDailyExecution)
+        {
+            if (!DailyV1ActiveRuntimeSession.TryCreate(
+                    executionBoundaryState,
+                    Composition.SelectedDefinitions,
+                    out DailyV1ActiveRuntimeSession coreRuntimeSession,
+                    out string activeSessionDiagnostic))
+                throw new System.ArgumentException(activeSessionDiagnostic, nameof(composition));
+            CoreRuntimeSession = coreRuntimeSession;
+        }
+        // Compatibility bootstrap paths may use selected definitions for
+        // fingerprinting while deliberately running without selected Daily-v1
+        // admission. They retain their existing host session behavior; only a
+        // fully admitted selected runtime receives the Core active-session binding.
+
+        AdmissionContext = CoreRuntimeSession?.AdmissionContext ?? admissionContext;
 
         if (!ReferenceEquals(Composition.SpatialNetwork, SpatialNetwork)
             || !ReferenceEquals(Composition.ExplorableSites, ExplorableSites)
@@ -86,7 +111,10 @@ internal sealed class SimulationActiveSession
             && AdmissionContext != null
             && candidate.AdmissionContext != null
             && AdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
-            && candidate.AdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1;
+            && candidate.AdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            && (CoreRuntimeSession == null
+                ? candidate.CoreRuntimeSession == null
+                : CoreRuntimeSession.IsProfileCompatibleWith(candidate.CoreRuntimeSession));
     }
 }
 
@@ -154,7 +182,7 @@ public class TesteSimulacao : MonoBehaviour
     private bool UsesSelectedDefinitionBindings => selectedDefinitions != null && selectedDefinitionBindings != null;
     private readonly DailyV1ApplicationSessionGate<SimulationActiveSession> activeSessionGate =
         new DailyV1ApplicationSessionGate<SimulationActiveSession>(
-            session => session.Runtime.ExecutionBoundaryState);
+            session => session.ExecutionBoundaryState);
     private SimulationActiveSession activeSession => activeSessionGate.Current;
     private Thread bootstrapStartThread;
     private int bootstrapStartThreadId;
