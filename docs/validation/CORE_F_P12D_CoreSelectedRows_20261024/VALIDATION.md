@@ -30,4 +30,4 @@ This does not move P12-D capture, image staging, City/NPC runtime hydration, or 
 
 ## Review and limitations
 
-Independent exact-tip implementation review is pending. Do not treat this record or code commit as canonical promotion or CORE-F completion.
+Independent exact-tip review: PASS at candidate `7aeec2eb3d9e2c360be9bd13a6176c25b61d027c`, recorded in [INDEPENDENT_REVIEW.md](INDEPENDENT_REVIEW.md). The review applies to this docs-only evidence successor because the implementation source and test tree are unchanged. This remains a candidate record only; it is not Core canonical promotion or CORE-F completion.
