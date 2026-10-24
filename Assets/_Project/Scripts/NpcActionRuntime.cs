@@ -770,10 +770,30 @@ public class MerchantTradePlanRuntime
         if (selectedOwner != null)
         {
             if (!ReferenceEquals(selectedOwner, owner)
-                || !ReferenceEquals(selectedBindings, bindings)) return false;
+                || selectedBindings == null
+                || !ReferenceEquals(selectedBindings.Definitions, bindings.Definitions)) return false;
+
+            // P12 staging may bind this projection with the exact item subset
+            // available to the owner section. When the complete selected asset
+            // inventory becomes available, permit that binding to grow only if
+            // it preserves the same item asset and City projection instances.
+            if (owner.ItemDefinition != null
+                && (!selectedBindings.TryGetAsset(owner.ItemDefinition, out ItemData previousItem)
+                    || !bindings.TryGetAsset(owner.ItemDefinition, out ItemData nextItem)
+                    || !ReferenceEquals(previousItem, nextItem))) return false;
+            if ((owner.OriginCityRuntimeId != null
+                    && !ReferenceEquals(selectedCityResolver?.Invoke(owner.OriginCityRuntimeId),
+                        cityResolver(owner.OriginCityRuntimeId)))
+                || (owner.TargetCityRuntimeId != null
+                    && !ReferenceEquals(selectedCityResolver?.Invoke(owner.TargetCityRuntimeId),
+                        cityResolver(owner.TargetCityRuntimeId)))) return false;
+
+            DailyV1DefinitionAdapter.SelectedBindings previousBindings = selectedBindings;
             Func<string, CityRuntime> previousResolver = selectedCityResolver;
+            selectedBindings = bindings;
             selectedCityResolver = cityResolver;
             if (CanProjectSelectedOwner()) return true;
+            selectedBindings = previousBindings;
             selectedCityResolver = previousResolver;
             return false;
         }

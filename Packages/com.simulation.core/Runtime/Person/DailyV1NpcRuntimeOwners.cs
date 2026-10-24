@@ -263,6 +263,59 @@ internal sealed class DailyV1NpcRuntimeOwners
         return true;
     }
 
+    /// <summary>
+    /// Confirms that an already hydrated owner vector still represents the
+    /// exact detached P12-D values before a host projection binds to it. This
+    /// intentionally compares the existing instances and never rebuilds an
+    /// owner as a validation side effect.
+    /// </summary>
+    internal bool MatchesRestoredP12DOwner(DailyV1NpcRuntimeRestoreState state)
+    {
+        if (state == null
+            || !string.Equals(RuntimeId, state.RuntimeId, StringComparison.Ordinal)
+            || !ReferenceEquals(Definitions, state.Definitions)
+            || !ReferenceEquals(Definition, state.Definition)
+            || !ReferenceEquals(Inventory, state.Inventory)
+            || !ReferenceEquals(MoneyAccount, state.MoneyAccount)
+            || !ReferenceEquals(CommercialKnowledge, state.CommercialKnowledge)
+            || !ReferenceEquals(MerchantTradePlan, state.MerchantTradePlan)
+            || !ReferenceEquals(SpatialKnowledge, state.SpatialKnowledge)
+            || Status == null || state.Statuses == null
+            || Status.Statuses.Count != state.Statuses.Count
+            || ActionSlot == null
+            || !ReferenceEquals(ActionSlot.CurrentAction, state.CurrentAction)
+            || !ReferenceEquals(ActionSlot.CurrentPayload, state.CurrentActionPayload)
+            || ActionSlot.Revision != state.ActionRevision
+            || Lifecycle == null || Lifecycle.LifeState != state.LifeState
+            || Lifecycle.InjurySeverity != state.InjurySeverity
+            || Lifecycle.LifeStateRevision != state.LifeStateRevision
+            || CrimeJusticeRevision != state.CrimeJusticeRevision
+            || HiddenState == null || HiddenState.RemainingDays != state.HiddenDaysRemaining
+            || Travel == null
+            || !string.Equals(Travel.CurrentLocationRuntimeId, state.CurrentLocationRuntimeId, StringComparison.Ordinal)
+            || !string.Equals(Travel.CurrentCityRuntimeId, state.CurrentCityRuntimeId, StringComparison.Ordinal)
+            || !string.Equals(Travel.DestinationLocationRuntimeId, state.DestinationLocationRuntimeId, StringComparison.Ordinal)
+            || !string.Equals(Travel.DestinationCityRuntimeId, state.DestinationCityRuntimeId, StringComparison.Ordinal)
+            || Travel.TravelDaysRemaining != state.TravelDaysRemaining
+            || Travel.TravelDaysTotal != state.TravelDaysTotal
+            || !string.Equals(Travel.TravelRouteRuntimeId, state.TravelRouteRuntimeId, StringComparison.Ordinal)
+            || Travel.TravelStartedToday != state.TravelStartedToday
+            || !string.Equals(Travel.TravelOriginDecisionId, state.TravelOriginDecisionId, StringComparison.Ordinal)
+            || !string.Equals(Travel.ActiveTravelPartyId, state.ActiveTravelPartyId, StringComparison.Ordinal)
+            || Travel.Revision != state.TravelRevision
+            || TravelPlan == null
+            || !TravelPlan.Matches(state.TravelPlanTargetLocationRuntimeId,
+                state.TravelPlanTargetCityRuntimeId, state.TravelPlanReason,
+                state.TravelPlanUtility, state.TravelPlanExpectedCost,
+                state.TravelPlanOriginDecisionId)
+            || TravelPlan.Revision != state.TravelPlanRevision)
+            return false;
+
+        for (int i = 0; i < state.Statuses.Count; i++)
+            if (!ReferenceEquals(Status.Statuses[i], state.Statuses[i])) return false;
+        return true;
+    }
+
     private static bool IsAdmitted(
         DailyV1EffectiveDefinitions definitions,
         DailyV1NpcDefinition definition) =>

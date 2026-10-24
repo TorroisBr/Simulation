@@ -81,6 +81,97 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         Assert.That(providers[1].GetCurrentCensus().Revision, Is.EqualTo(4L));
     }
 
+    [Test]
+    public void SelectedImageStageHydratesCoreNpcOwnerBeforeBindingUnityProjection()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition npcNode = definitions.Npcs.Values.First();
+        DailyV1ActionDefinition actionNode = definitions.Actions.Values.First();
+        DailyV1ItemDefinition itemNode = definitions.Items.Values.First();
+        string runtimeId = "p12d-core-first-npc";
+
+        NpcData npcAsset = SimulationTestFactory.CreateNpc(npcNode.DefinitionId);
+        NpcActionData actionAsset = SimulationTestFactory.CreateAction(
+            actionNode.DefinitionId, NpcActionType.Normal);
+        ItemData itemAsset = SimulationTestFactory.CreateItem(itemNode.DefinitionId, 1f);
+        List<string> statusIds = (npcNode.Values.statusPadrao ?? Array.Empty<string>()).ToList();
+        List<NpcStatusData> statusAssets = statusIds
+            .Select(SimulationTestFactory.CreateStatus).ToList();
+
+        P12DNpcDRow d = new P12DNpcDRow(runtimeId, npcNode.DefinitionId,
+            null, null, NpcLifeState.Alive, NpcInjurySeverity.None, statusIds,
+            0, actionNode.DefinitionId, null, null, null, null,
+            new[] { new P12DNpcInventoryRowValue(itemNode.DefinitionId, 3, 2.5f) },
+            4L, 17.5f, 6L, 2L, 0L, 3L, 5L);
+        P12DNpcFRow f = new P12DNpcFRow(runtimeId,
+            new P12DNpcActionValue(actionNode.DefinitionId, null, null, itemNode.DefinitionId,
+                2, 1.25f, 0.75f, NpcTravelReason.None, 0f,
+                "p12d-core-first-decision", "p12d-core-first-occurrence", null, null),
+            0, 0, null, false, null, null, 7L,
+            new P12DNpcMerchantPlanValue(itemNode.DefinitionId, null, null, 0, 0, 0f, 0, 0, null, 0L),
+            new P12DNpcTravelPlanValue(null, null, NpcTravelReason.None, 0f, 0f, null, 8L),
+            Array.Empty<ExplorableSiteKnowledgeObservation>(), 0L,
+            Array.Empty<string>(), Array.Empty<string>(), 0L,
+            Array.Empty<AdventureOppositionObservation>(),
+            Array.Empty<AdventureNotableItemObservation>(),
+            Array.Empty<AdventureCommonResourceObservation>(),
+            Array.Empty<AdventureAccessObservation>(), 0L,
+            Array.Empty<P12DNpcCommercialMarketValue>(),
+            Array.Empty<P12DNpcCommercialLiquidityValue>(),
+            Array.Empty<CommercialKnowledgeShareReceipt>(), 0L);
+        P12AOwnerSection[] receiptSections =
+        {
+            new P12AOwnerSection(
+                P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(runtimeId),
+                P12DNpcReceiptOwnerCensusProvider.SchemaVersion, 0,
+                OwnerSectionRole.Required, null, 0L, Array.Empty<P12AOwnerRow>()),
+            new P12AOwnerSection(
+                P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(runtimeId),
+                P12DNpcReceiptOwnerCensusProvider.SchemaVersion, 0,
+                OwnerSectionRole.Required, null, 0L, Array.Empty<P12AOwnerRow>())
+        };
+
+        Assert.That(P12DNpcRootOwnerSnapshot.TryStageForImage(
+            new[] { d }, new[] { f }, Array.Empty<P12DCityMembershipLinker>(),
+            new PersonStore(), new[] { npcAsset }, new[] { actionAsset }, statusAssets,
+            new[] { itemAsset }, Array.Empty<SpatialLocationRuntime>(),
+            Array.Empty<string>(), Array.Empty<string>(), receiptSections,
+            out IReadOnlyList<NpcRuntime> staged, out P12DNpcRootOwnerSnapshotFailure failure,
+            definitions), Is.True, failure.ToString());
+
+        NpcRuntime restored = staged.Single();
+        DailyV1NpcRuntimeOwners owners = restored.SelectedRuntimeOwners;
+        Assert.That(owners, Is.Not.Null);
+        Assert.That(restored.NpcData, Is.SameAs(npcAsset));
+        Assert.That(owners.Definitions, Is.SameAs(definitions));
+        Assert.That(owners.Definition, Is.SameAs(npcNode));
+        Assert.That(owners.Inventory.Revision, Is.EqualTo(4L));
+        Assert.That(restored.Inventory.SelectedDailyV1Owner, Is.SameAs(owners.Inventory));
+        Assert.That(restored.MoneyAccount, Is.SameAs(owners.MoneyAccount));
+        Assert.That(restored.CommercialKnowledge.SelectedOwner, Is.SameAs(owners.CommercialKnowledge));
+        Assert.That(restored.MerchantTradePlan.SelectedOwner, Is.SameAs(owners.MerchantTradePlan));
+        Assert.That(restored.MerchantTradePlan.Item, Is.SameAs(itemAsset));
+        Assert.That(restored.SpatialKnowledge, Is.SameAs(owners.SpatialKnowledge));
+        Assert.That(owners.ActionSlot.Revision, Is.EqualTo(5L));
+        Assert.That(restored.CurrentActionRuntime.SelectedOwner,
+            Is.SameAs(owners.ActionSlot.CurrentPayload));
+        Assert.That(owners.ActionSlot.CurrentPayload.Amount, Is.EqualTo(2));
+        Assert.That(owners.ActionSlot.CurrentPayload.TargetItem, Is.SameAs(itemNode));
+        Assert.That(owners.Travel.Revision, Is.EqualTo(7L));
+        Assert.That(owners.TravelPlan.Revision, Is.EqualTo(8L));
+
+        UnityEngine.ScriptableObject[] selectedAssets = new UnityEngine.ScriptableObject[] { npcAsset, actionAsset, itemAsset }
+            .Concat(statusAssets).ToArray();
+        Assert.That(DailyV1DefinitionAdapter.SelectedBindings.TryCreate(
+            selectedAssets, definitions,
+            out DailyV1DefinitionAdapter.SelectedBindings fullBindings, out string diagnostic),
+            Is.True, diagnostic);
+        Assert.That(restored.TryBindSelectedDailyV1Definition(
+            npcNode, definitions, fullBindings), Is.True);
+        Assert.That(restored.NpcData, Is.SameAs(npcAsset));
+        Assert.That(restored.MerchantTradePlan.SelectedOwner, Is.SameAs(owners.MerchantTradePlan));
+    }
+
     [TestCase("")]
     [TestCase("npc-spatial-owner-other")]
     public void CaptureRejectsBlankOrMismatchedSerializedSpatialOwnerIdentity(string serializedOwnerRuntimeId)
