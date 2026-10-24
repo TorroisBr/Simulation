@@ -80,6 +80,8 @@ original bytes were not changed.
 
 ## Limits
 
-This candidate repairs only detached owner-instance separation. It does not
-complete P12-G, the shared runtime/restore package, or CORE-F, and does not
-claim canonical promotion.
+This candidate repairs only detached owner-instance separation. The numbered
+Phase 12 is formally closed, and P12-G remains promoted within its accepted
+scope; this CORE-F implementation candidate adds no numbered-phase
+capability. It does not complete the shared runtime/restore package or CORE-F,
+and it is not canonically promoted.
