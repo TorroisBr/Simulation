@@ -178,6 +178,9 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(activeSession.CoreRuntimeSession.Definitions,
             Is.SameAs(simulation.Bootstrap.SelectedDefinitions),
             "The Core active session must retain the exact admitted effective-definition graph.");
+        Assert.That(activeSession.ReportState,
+            Is.SameAs(activeSession.CoreRuntimeSession.ReportState),
+            "Selected session report progress must be the same Core-owned state exposed to the Unity host.");
         Assert.That(activeSession.ExecutionBoundaryState,
             Is.SameAs(activeSession.CoreRuntimeSession.ExecutionBoundaryState),
             "Active-session operations must be gated by Core state, not a Unity-owned duplicate.");

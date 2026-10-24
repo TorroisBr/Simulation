@@ -51,7 +51,7 @@ internal sealed class SimulationActiveSession
         SpatialNetwork = spatialNetwork ?? throw new System.ArgumentNullException(nameof(spatialNetwork));
         Configuration = configuration;
         RandomSource = randomSource ?? throw new System.ArgumentNullException(nameof(randomSource));
-        ReportState = reportState ?? throw new System.ArgumentNullException(nameof(reportState));
+        reportState = reportState ?? throw new System.ArgumentNullException(nameof(reportState));
 
         DailyV1ExecutionBoundaryState executionBoundaryState = Runtime.ExecutionBoundaryState;
         if (executionBoundaryState.HasAdmittedSelectedDailyExecution)
@@ -59,6 +59,7 @@ internal sealed class SimulationActiveSession
             if (!DailyV1ActiveRuntimeSession.TryCreate(
                     executionBoundaryState,
                     Composition.SelectedDefinitions,
+                    reportState,
                     out DailyV1ActiveRuntimeSession coreRuntimeSession,
                     out string activeSessionDiagnostic))
                 throw new System.ArgumentException(activeSessionDiagnostic, nameof(composition));
@@ -68,6 +69,8 @@ internal sealed class SimulationActiveSession
         // fingerprinting while deliberately running without selected Daily-v1
         // admission. They retain their existing host session behavior; only a
         // fully admitted selected runtime receives the Core active-session binding.
+
+        ReportState = CoreRuntimeSession?.ReportState ?? reportState;
 
         AdmissionContext = CoreRuntimeSession?.AdmissionContext ?? admissionContext;
 

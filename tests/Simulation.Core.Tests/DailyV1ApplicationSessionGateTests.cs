@@ -40,6 +40,7 @@ public sealed class DailyV1ApplicationSessionGateTests
     {
         DailyV1EffectiveDefinitions definitions =
             DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SessionReportState reportState = new DailyV1SessionReportState(6L);
         Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
             definitions,
             SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
@@ -49,6 +50,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
             composition.ExecutionBoundaryState,
             definitions,
+            reportState,
             out DailyV1ActiveRuntimeSession session,
             out diagnostic), Is.True, diagnostic);
 
@@ -60,6 +62,9 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(session.SimulationTime, Is.SameAs(composition.SimulationTime));
         Assert.That(session.EffectiveConfiguration, Is.SameAs(composition.EffectiveConfiguration));
         Assert.That(session.Calendar, Is.SameAs(composition.Calendar));
+        Assert.That(session.ReportState, Is.SameAs(reportState));
+        session.ReportState.MarkEconomySnapshotDay(7L);
+        Assert.That(reportState.LastEconomySnapshotDay, Is.EqualTo(7L));
     }
 
     [Test]
@@ -75,9 +80,11 @@ public sealed class DailyV1ApplicationSessionGateTests
 
         DailyV1EffectiveDefinitions differentDefinitions =
             DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SessionReportState reportState = new DailyV1SessionReportState(0L);
         Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
             composition.ExecutionBoundaryState,
             differentDefinitions,
+            reportState,
             out DailyV1ActiveRuntimeSession mismatched,
             out diagnostic), Is.False);
         Assert.That(mismatched, Is.Null);
@@ -86,6 +93,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
             new DailyV1ExecutionBoundaryState(),
             definitions,
+            reportState,
             out DailyV1ActiveRuntimeSession unadmitted,
             out diagnostic), Is.False);
         Assert.That(unadmitted, Is.Null);
@@ -96,6 +104,8 @@ public sealed class DailyV1ApplicationSessionGateTests
     {
         DailyV1EffectiveDefinitions definitions =
             DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SessionReportState firstReportState = new DailyV1SessionReportState(0L);
+        DailyV1SessionReportState secondReportState = new DailyV1SessionReportState(0L);
         Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
             definitions,
             SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
@@ -110,11 +120,13 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
             firstComposition.ExecutionBoundaryState,
             definitions,
+            firstReportState,
             out DailyV1ActiveRuntimeSession first,
             out diagnostic), Is.True, diagnostic);
         Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
             secondComposition.ExecutionBoundaryState,
             definitions,
+            secondReportState,
             out DailyV1ActiveRuntimeSession second,
             out diagnostic), Is.True, diagnostic);
 

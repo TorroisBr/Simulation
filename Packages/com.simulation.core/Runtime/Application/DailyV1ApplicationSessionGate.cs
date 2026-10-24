@@ -33,14 +33,17 @@ internal sealed class DailyV1ActiveRuntimeSession
     private DailyV1ActiveRuntimeSession(
         DailyV1ExecutionBoundaryState executionBoundaryState,
         DailyV1EffectiveDefinitions definitions,
-        string profileFingerprint)
+        string profileFingerprint,
+        DailyV1SessionReportState reportState)
     {
         ExecutionBoundaryState = executionBoundaryState;
         Definitions = definitions;
         ProfileFingerprint = profileFingerprint;
+        ReportState = reportState;
     }
 
     internal DailyV1ExecutionBoundaryState ExecutionBoundaryState { get; }
+    internal DailyV1SessionReportState ReportState { get; }
     internal DailyV1SelectedRuntimeOwnerGraph OwnerGraph =>
         ExecutionBoundaryState.SelectedRuntimeOwnerGraph;
     internal DailyV1EffectiveDefinitions Definitions { get; }
@@ -54,14 +57,15 @@ internal sealed class DailyV1ActiveRuntimeSession
     internal static bool TryCreate(
         DailyV1ExecutionBoundaryState executionBoundaryState,
         DailyV1EffectiveDefinitions expectedDefinitions,
+        DailyV1SessionReportState reportState,
         out DailyV1ActiveRuntimeSession session,
         out string diagnostic)
     {
         session = null;
         diagnostic = null;
-        if (executionBoundaryState == null || expectedDefinitions == null)
+        if (executionBoundaryState == null || expectedDefinitions == null || reportState == null)
         {
-            diagnostic = "The active Core session requires its exact execution boundary and effective definitions.";
+            diagnostic = "The active Core session requires its exact execution boundary, effective definitions, and report state.";
             return false;
         }
 
@@ -90,7 +94,7 @@ internal sealed class DailyV1ActiveRuntimeSession
         }
 
         session = new DailyV1ActiveRuntimeSession(
-            executionBoundaryState, expectedDefinitions, profileFingerprint);
+            executionBoundaryState, expectedDefinitions, profileFingerprint, reportState);
         return true;
     }
 
