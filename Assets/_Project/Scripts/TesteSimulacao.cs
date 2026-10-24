@@ -42,7 +42,8 @@ internal sealed class SimulationActiveSession
         SimulationConfigData configuration,
         SimulationRuntimeAdmissionContext admissionContext,
         IAuthoritativeRandomSource randomSource,
-        long lastEconomySnapshotDay)
+        long lastEconomySnapshotDay,
+        DailyV1ActiveRuntimeSession coreRuntimeSession = null)
     {
         Composition = composition ?? throw new System.ArgumentNullException(nameof(composition));
         Logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
@@ -52,16 +53,26 @@ internal sealed class SimulationActiveSession
         Configuration = configuration;
         RandomSource = randomSource ?? throw new System.ArgumentNullException(nameof(randomSource));
         DailyV1ExecutionBoundaryState executionBoundaryState = Runtime.ExecutionBoundaryState;
-        if (executionBoundaryState.HasAdmittedSelectedDailyExecution)
+        if (coreRuntimeSession != null)
+        {
+            if (!executionBoundaryState.HasAdmittedSelectedDailyExecution
+                || !ReferenceEquals(coreRuntimeSession.ExecutionBoundaryState, executionBoundaryState)
+                || !ReferenceEquals(coreRuntimeSession.Definitions, Composition.SelectedDefinitions))
+                throw new System.ArgumentException(
+                    "The Unity session projection must retain the exact Core-prepared genesis session.",
+                    nameof(coreRuntimeSession));
+            CoreRuntimeSession = coreRuntimeSession;
+        }
+        else if (executionBoundaryState.HasAdmittedSelectedDailyExecution)
         {
             if (!DailyV1ActiveRuntimeSession.TryCreate(
                     executionBoundaryState,
                     Composition.SelectedDefinitions,
                     lastEconomySnapshotDay,
-                    out DailyV1ActiveRuntimeSession coreRuntimeSession,
+                    out DailyV1ActiveRuntimeSession createdCoreRuntimeSession,
                     out string activeSessionDiagnostic))
                 throw new System.ArgumentException(activeSessionDiagnostic, nameof(composition));
-            CoreRuntimeSession = coreRuntimeSession;
+            CoreRuntimeSession = createdCoreRuntimeSession;
         }
         // Compatibility bootstrap paths may use selected definitions for
         // fingerprinting while deliberately running without selected Daily-v1
@@ -522,6 +533,7 @@ public class TesteSimulacao : MonoBehaviour
         DailyV1EffectiveDefinitions stagedSelectedDefinitions = null;
         DailyV1DefinitionAdapter.SelectedBindings stagedSelectedDefinitionBindings = null;
         DailyV1GenesisComposition selectedCoreGenesis = null;
+        DailyV1ActiveRuntimeSession selectedCoreRuntimeSession = null;
         HashSet<string> coreGenesisCompletedStages = new HashSet<string>(System.StringComparer.Ordinal);
         Thread initializeThread = Thread.CurrentThread;
         int initializeThreadId = initializeThread.ManagedThreadId;
@@ -582,9 +594,8 @@ public class TesteSimulacao : MonoBehaviour
                                 stagedSelectedDefinitions.Configuration.enabledModules);
                             AppendScenarioDiagnostics(effectiveConfiguration);
 
-                            if (!DailyV1GenesisComposer.TryComposeSelectedOwners(
+                            if (!dailyV1Application.TryPrepareInitialGenesis(
                                     stagedSelectedDefinitions,
-                                    runtimeAdmissionContext,
                                     worldIdentityAllocator,
                                     completedStage =>
                                     {
@@ -594,9 +605,18 @@ public class TesteSimulacao : MonoBehaviour
                                         stageCompleted?.Invoke(completedStage);
                                     },
                                     out selectedCoreGenesis,
+                                    out selectedCoreRuntimeSession,
                                     out string coreGenesisDiagnostic))
                                 throw new System.InvalidOperationException(
-                                    "Core Daily-v1 genesis failed: " + coreGenesisDiagnostic);
+                                    "The Core Daily-v1 application could not prepare its unpublished genesis session: "
+                                    + coreGenesisDiagnostic);
+
+                            if (!ReferenceEquals(selectedCoreGenesis.AdmissionContext,
+                                    runtimeAdmissionContext)
+                                || !ReferenceEquals(selectedCoreRuntimeSession.Definitions,
+                                    stagedSelectedDefinitions))
+                                throw new System.InvalidOperationException(
+                                    "The Core application prepared genesis under a different admission context or definition graph.");
 
                             profileFingerprint = selectedCoreGenesis.P9ProfileFingerprint;
                             selectedP9ProfileFingerprint = profileFingerprint;
@@ -851,7 +871,8 @@ public class TesteSimulacao : MonoBehaviour
                 simulationConfig,
                 runtimeAdmissionContext,
                 authoritativeRandomSource,
-                lastEconomySnapshotDay);
+                lastEconomySnapshotDay,
+                selectedCoreRuntimeSession);
 
             unpublishedWorldId = null;
             draftComposition = null;

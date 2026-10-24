@@ -220,6 +220,71 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void ApplicationKeepsPreparedGenesisPrivateUntilTheExactCoreCandidateIsPublished()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext admission), Is.True);
+
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions,
+            allocateWorldId: () => new WorldId(Guid.Parse("6b4d50cc-66d6-4b4c-a0f6-d0f2d9f16a19")),
+            stageCompleted: null,
+            out DailyV1GenesisComposition composition,
+            out DailyV1ActiveRuntimeSession prepared,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(application.ActiveSession, Is.Null,
+            "Preparing the Core owner graph must not publish an active application before the host finishes its projection checks.");
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+        Assert.That(composition.AdmissionContext, Is.SameAs(admission));
+        Assert.That(prepared.Definitions, Is.SameAs(definitions));
+        Assert.That(prepared.ExecutionBoundaryState, Is.SameAs(composition.ExecutionBoundaryState));
+        Assert.That(prepared.OwnerGraph, Is.SameAs(composition.OwnerGraph));
+        Assert.That(prepared.WorldId, Is.SameAs(composition.WorldId));
+
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions, admission,
+            out DailyV1GenesisComposition unrelatedComposition,
+            out diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            unrelatedComposition.ExecutionBoundaryState,
+            definitions,
+            0L,
+            out DailyV1ActiveRuntimeSession unrelatedSession,
+            out diagnostic), Is.True, diagnostic);
+
+        Assert.That(application.TryPublishInitial(unrelatedSession), Is.False,
+            "A host cannot publish a different Core candidate after preparing this application's genesis.");
+        Assert.That(application.ActiveSession, Is.Null);
+        Assert.That(application.TryPublishInitial(prepared), Is.True,
+            "The exact Core candidate may publish once its host projection is ready.");
+        Assert.That(application.ActiveSession, Is.SameAs(prepared));
+        Assert.That(application.ActiveSession.OwnerGraph, Is.SameAs(composition.OwnerGraph));
+    }
+
+    [Test]
+    public void ApplicationDoesNotPublishGenesisWhenItsPreparationCallbackThrows()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+
+        Assert.Throws<System.InvalidOperationException>(() => application.TryPrepareInitialGenesis(
+            definitions,
+            allocateWorldId: () => new WorldId(Guid.Parse("d74685dd-9cfd-4f4e-967b-307b3622182f")),
+            stageCompleted: _ => throw new System.InvalidOperationException("host stage observer failed"),
+            out _,
+            out _,
+            out _));
+
+        Assert.That(application.ActiveSession, Is.Null,
+            "A callback failure before application publication must leave the active session empty.");
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
     public void ApplicationAdvanceReservesItsExactSessionAndReleasesAfterRejectedStageConstruction()
     {
         DailyV1EffectiveDefinitions definitions =

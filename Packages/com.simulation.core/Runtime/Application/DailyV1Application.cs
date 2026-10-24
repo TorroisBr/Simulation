@@ -12,6 +12,9 @@ internal sealed class DailyV1Application
         new DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>(
             session => session.ExecutionBoundaryState);
     private SimulationRuntimeAdmissionContext bootstrapAdmissionContext;
+    private bool initialGenesisPreparationAttempted;
+    private DailyV1GenesisComposition preparedInitialGenesis;
+    private DailyV1ActiveRuntimeSession preparedInitialSession;
 
     // Construction remains internal until the complete TryStart path can
     // create and return the application only after genesis or restore commits.
@@ -52,33 +55,11 @@ internal sealed class DailyV1Application
         Action<string> stageCompleted,
         out string diagnostic)
     {
-        diagnostic = null;
-        if (definitions == null)
-        {
-            diagnostic = "The selected Daily-v1 effective definitions are required.";
-            return false;
-        }
-
-        if (!TryCaptureBootstrapAdmissionContext(
-                out SimulationRuntimeAdmissionContext admissionContext))
-        {
-            diagnostic = "The Core application cannot capture a second bootstrap admission context.";
-            return false;
-        }
-
-        if (!DailyV1GenesisComposer.TryComposeSelectedOwners(
+        if (!TryPrepareInitialGenesis(
                 definitions,
-                admissionContext,
                 allocateWorldId: null,
-                stageCompleted: stageCompleted,
-                out DailyV1GenesisComposition composition,
-                out diagnostic))
-            return false;
-
-        if (!DailyV1ActiveRuntimeSession.TryCreate(
-                composition.ExecutionBoundaryState,
-                definitions,
-                composition.SimulationTime.AbsoluteDay,
+                stageCompleted,
+                out _,
                 out DailyV1ActiveRuntimeSession candidate,
                 out diagnostic))
             return false;
@@ -87,6 +68,98 @@ internal sealed class DailyV1Application
         {
             diagnostic = "The Core application rejected its exact initial genesis session.";
             return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Builds one unpublished selected Daily-v1 genesis candidate under the
+    /// application-captured bootstrap context. A host may finish creating its
+    /// projections and validate its publication boundary before calling
+    /// TryPublishInitial with the returned exact Core session.
+    /// </summary>
+    internal bool TryPrepareInitialGenesis(
+        DailyV1EffectiveDefinitions definitions,
+        Func<WorldId> allocateWorldId,
+        Action<string> stageCompleted,
+        out DailyV1GenesisComposition composition,
+        out DailyV1ActiveRuntimeSession candidate,
+        out string diagnostic)
+    {
+        composition = null;
+        candidate = null;
+        diagnostic = null;
+        if (definitions == null)
+        {
+            diagnostic = "The selected Daily-v1 effective definitions are required.";
+            return false;
+        }
+
+        SimulationRuntimeAdmissionContext admissionContext;
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (initialGenesisPreparationAttempted
+                || preparedInitialGenesis != null
+                || preparedInitialSession != null
+                || activeSessionGate.Current != null
+                || activeSessionGate.ActiveOperationCount != 0)
+            {
+                diagnostic = "The Core application cannot capture a second bootstrap admission context or attempt another initial genesis session.";
+                return false;
+            }
+
+            admissionContext = bootstrapAdmissionContext;
+            if (admissionContext == null)
+            {
+                admissionContext = new SimulationRuntimeAdmissionContext(
+                    SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
+                    Thread.CurrentThread,
+                    Thread.CurrentThread.ManagedThreadId);
+                bootstrapAdmissionContext = admissionContext;
+            }
+
+            initialGenesisPreparationAttempted = true;
+        }
+
+        if (!DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions,
+                admissionContext,
+                allocateWorldId,
+                stageCompleted,
+                out composition,
+                out diagnostic))
+        {
+            composition = null;
+            return false;
+        }
+
+        if (!DailyV1ActiveRuntimeSession.TryCreate(
+                composition.ExecutionBoundaryState,
+                definitions,
+                composition.SimulationTime.AbsoluteDay,
+                out candidate,
+                out diagnostic))
+        {
+            composition = null;
+            candidate = null;
+            return false;
+        }
+
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (activeSessionGate.Current != null
+                || preparedInitialGenesis != null
+                || preparedInitialSession != null)
+            {
+                composition = null;
+                candidate = null;
+                diagnostic = "The Core application changed while its initial genesis candidate was being composed.";
+                return false;
+            }
+
+            preparedInitialGenesis = composition;
+            preparedInitialSession = candidate;
         }
 
         return true;
@@ -110,6 +183,25 @@ internal sealed class DailyV1Application
         if (candidate == null) return false;
         lock (activeSessionGate.SyncRoot)
         {
+            if (preparedInitialSession != null)
+            {
+                if (!ReferenceEquals(preparedInitialSession, candidate)
+                    || preparedInitialGenesis == null
+                    || !ReferenceEquals(preparedInitialGenesis.ExecutionBoundaryState,
+                        candidate.ExecutionBoundaryState)
+                    || !ReferenceEquals(preparedInitialGenesis.Definitions,
+                        candidate.Definitions))
+                    return false;
+
+                if (!IsBootstrapOrRestoredDescendant(candidate.AdmissionContext)
+                    || !activeSessionGate.TryPublishInitial(candidate))
+                    return false;
+
+                preparedInitialGenesis = null;
+                preparedInitialSession = null;
+                return true;
+            }
+
             if (bootstrapAdmissionContext == null
                 || !IsBootstrapOrRestoredDescendant(candidate.AdmissionContext))
                 return false;
