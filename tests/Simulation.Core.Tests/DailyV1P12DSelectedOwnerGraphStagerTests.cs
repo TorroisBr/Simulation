@@ -7,9 +7,8 @@ public sealed class DailyV1P12DSelectedOwnerGraphStagerTests
     [Test]
     public void RestoredGraphUsesExactOwnersAndDeterministicIdentityOrder()
     {
-        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
-        Assert.That(DailyV1SelectedRuntimeOwnerGraphBuilder.TryBuildConfigured(
-            definitions, new RuntimeIdAllocator(), out DailyV1SelectedRuntimeOwnerGraph source), Is.True);
+        DailyV1SelectedRuntimeOwnerGraph source = CreateSourceGraph(
+            out DailyV1EffectiveDefinitions definitions);
         PersonStore persons = new PersonStore();
         ScheduledDirectiveStore directives = new ScheduledDirectiveStore(new SimulationTime(8L));
         ExpeditionStore expeditions = new ExpeditionStore();
@@ -47,11 +46,93 @@ public sealed class DailyV1P12DSelectedOwnerGraphStagerTests
     }
 
     [Test]
+    public void RestoredMembershipPreservesCityOrderIndependentOfRosterOrder()
+    {
+        DailyV1SelectedRuntimeOwnerGraph source = CreateSourceGraph(
+            out DailyV1EffectiveDefinitions definitions);
+        DailyV1CityRuntimeOwners city = source.Cities.First(candidate =>
+            candidate.NpcPresence.OrderedNpcRuntimeIds.Count > 1);
+        string[] initialMembership = city.NpcPresence.OrderedNpcRuntimeIds.ToArray();
+        string[] reorderedMembership = initialMembership.Reverse().ToArray();
+        string[] configuredRosterOrder = source.Npcs
+            .Where(npc => npc.Travel.CurrentCityRuntimeId == city.RuntimeId)
+            .Select(npc => npc.RuntimeId).ToArray();
+        Assert.That(reorderedMembership, Is.Not.EqualTo(configuredRosterOrder));
+
+        foreach (string npcRuntimeId in initialMembership)
+            Assert.That(city.NpcPresence.TryRemove(npcRuntimeId), Is.True);
+        foreach (string npcRuntimeId in reorderedMembership)
+            Assert.That(city.NpcPresence.TryAdd(npcRuntimeId), Is.True);
+
+        Assert.That(TryStage(source, definitions,
+            out DailyV1SelectedRuntimeOwnerGraph restored,
+            out DailyV1P12DSelectedOwnerGraphFailure failure), Is.True, failure.ToString());
+        DailyV1CityRuntimeOwners restoredCity = restored.Cities.Single(candidate =>
+            ReferenceEquals(candidate, city));
+        Assert.That(restoredCity.NpcPresence.OrderedNpcRuntimeIds, Is.EqualTo(reorderedMembership));
+    }
+
+    [Test]
+    public void RejectsRestoredGraphWithMissingCityMember()
+    {
+        DailyV1SelectedRuntimeOwnerGraph source = CreateSourceGraph(
+            out DailyV1EffectiveDefinitions definitions);
+        DailyV1CityRuntimeOwners city = source.Cities.First(candidate =>
+            candidate.NpcPresence.OrderedNpcRuntimeIds.Count > 0);
+        Assert.That(city.NpcPresence.TryRemove(city.NpcPresence.OrderedNpcRuntimeIds[0]), Is.True);
+
+        AssertRejectedMembership(source, definitions);
+    }
+
+    [Test]
+    public void RejectsRestoredGraphWithDanglingCityMember()
+    {
+        DailyV1SelectedRuntimeOwnerGraph source = CreateSourceGraph(
+            out DailyV1EffectiveDefinitions definitions);
+        Assert.That(source.Cities[0].NpcPresence.TryAdd("npc/missing"), Is.True);
+
+        AssertRejectedMembership(source, definitions);
+    }
+
+    [Test]
+    public void RejectsNpcListedByMoreThanOneRestoredCity()
+    {
+        DailyV1SelectedRuntimeOwnerGraph source = CreateSourceGraph(
+            out DailyV1EffectiveDefinitions definitions);
+        Assert.That(source.Cities.Count, Is.GreaterThan(1));
+        string npcRuntimeId = source.Cities[0].NpcPresence.OrderedNpcRuntimeIds[0];
+        Assert.That(source.Cities[1].NpcPresence.TryAdd(npcRuntimeId), Is.True);
+
+        AssertRejectedMembership(source, definitions);
+    }
+
+    [Test]
+    public void RejectsNonreciprocalRestoredCurrentCityLink()
+    {
+        DailyV1SelectedRuntimeOwnerGraph source = CreateSourceGraph(
+            out DailyV1EffectiveDefinitions definitions);
+        DailyV1CityRuntimeOwners originalCity = source.Cities[0];
+        string npcRuntimeId = originalCity.NpcPresence.OrderedNpcRuntimeIds[0];
+        DailyV1NpcRuntimeOwners npc = source.Npcs.Single(candidate =>
+            candidate.RuntimeId == npcRuntimeId);
+        DailyV1CityRuntimeOwners otherCity = source.Cities.Single(candidate =>
+            !ReferenceEquals(candidate, originalCity));
+        DailyV1NpcTravelOwner travel = npc.Travel;
+        Assert.That(travel.TryInstallState(
+            otherCity.LocationRuntimeId, otherCity.RuntimeId,
+            travel.DestinationLocationRuntimeId, travel.DestinationCityRuntimeId,
+            travel.TravelDaysRemaining, travel.TravelDaysTotal,
+            travel.TravelRouteRuntimeId, travel.TravelStartedToday,
+            travel.TravelOriginDecisionId, travel.ActiveTravelPartyId, travel.Revision), Is.True);
+
+        AssertRejectedMembership(source, definitions);
+    }
+
+    [Test]
     public void RejectsDuplicateOrForeignOwnerWithoutReturningPartialGraph()
     {
-        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
-        Assert.That(DailyV1SelectedRuntimeOwnerGraphBuilder.TryBuildConfigured(
-            definitions, new RuntimeIdAllocator(), out DailyV1SelectedRuntimeOwnerGraph source), Is.True);
+        DailyV1SelectedRuntimeOwnerGraph source = CreateSourceGraph(
+            out DailyV1EffectiveDefinitions definitions);
         ScheduledDirectiveStore directives = new ScheduledDirectiveStore(new SimulationTime(8L));
         ExpeditionStore expeditions = new ExpeditionStore();
         TravelPartyStore parties = new TravelPartyStore();
@@ -147,5 +228,38 @@ public sealed class DailyV1P12DSelectedOwnerGraphStagerTests
             out DailyV1P12DSelectedOwnerGraphFailure emptyFailure), Is.False);
         Assert.That(emptyGraph, Is.Null);
         Assert.That(emptyFailure, Is.EqualTo(DailyV1P12DSelectedOwnerGraphFailure.InvalidInput));
+    }
+
+    private static DailyV1SelectedRuntimeOwnerGraph CreateSourceGraph(
+        out DailyV1EffectiveDefinitions definitions)
+    {
+        definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1SelectedRuntimeOwnerGraphBuilder.TryBuildConfigured(
+            definitions, new RuntimeIdAllocator(), out DailyV1SelectedRuntimeOwnerGraph source), Is.True);
+        return source;
+    }
+
+    private static bool TryStage(
+        DailyV1SelectedRuntimeOwnerGraph source,
+        DailyV1EffectiveDefinitions definitions,
+        out DailyV1SelectedRuntimeOwnerGraph restored,
+        out DailyV1P12DSelectedOwnerGraphFailure failure)
+    {
+        return DailyV1P12DSelectedOwnerGraphStager.TryCreate(
+            definitions, source.Cities, source.Npcs, source.SpatialNetwork,
+            source.JusticeRecordsOwner, new TravelPartyStore(), source.RuntimeIdentityIndex,
+            new PersonStore(), new ScheduledDirectiveStore(new SimulationTime(8L)),
+            new ExpeditionStore(), out restored, out failure);
+    }
+
+    private static void AssertRejectedMembership(
+        DailyV1SelectedRuntimeOwnerGraph source,
+        DailyV1EffectiveDefinitions definitions)
+    {
+        Assert.That(TryStage(source, definitions,
+            out DailyV1SelectedRuntimeOwnerGraph restored,
+            out DailyV1P12DSelectedOwnerGraphFailure failure), Is.False);
+        Assert.That(restored, Is.Null);
+        Assert.That(failure, Is.EqualTo(DailyV1P12DSelectedOwnerGraphFailure.InvalidCityMembership));
     }
 }
