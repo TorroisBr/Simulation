@@ -8,11 +8,11 @@ using System.Text;
 public static class SimulationGenesisPipeline
 {
     public const string ProfileContractIdentity = "unity-authored-bootstrap/genesis-v1";
-    public const string GeographyProfileContractIdentity = "unity-authored-bootstrap/authored-geography-v1";
-    public const string GeographyStageId = "p9.genesis.authored-geography/v1";
+    public const string GeographyProfileContractIdentity = P12CP9GenesisContract.GeographyProfileContractIdentity;
+    public const string GeographyStageId = P12CP9GenesisContract.GeographyStageId;
     public const string P10RuinProfileContractIdentity = P10RuinLocalTopologyGenesis.ContractIdentity;
     public const string P10BGeneratedRuinProfileContractIdentity = "unity-authored-bootstrap/ruin-topology-v1";
-    public const string P10BGeneratedRuinStageId = "p10b.genesis.ruin-topology/v1";
+    public const string P10BGeneratedRuinStageId = P12CP9GenesisContract.P10BGeneratedRuinStageId;
 
     [ThreadStatic]
     private static ExecutionProbeForTest activeExecutionProbeForTest;

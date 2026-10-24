@@ -170,6 +170,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/FiniteSourceScenarioRuntime.cs" Link="Economy/FiniteSourceScenarioRuntime.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ContinuationWire.cs" Link="Persistence/ContinuationWire.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ACompatibilityDescriptor.cs" Link="Persistence/P12ACompatibilityDescriptor.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12CP9GenesisManifestCoreSnapshot.cs" Link="Persistence/P12CP9GenesisManifestCoreSnapshot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1RestoredOwnerVectorContract.cs" Link="Persistence/DailyV1RestoredOwnerVectorContract.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ContinuationDescriptorV2.cs" Link="Persistence/ContinuationDescriptorV2.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/AtomicFileSlot.cs" Link="Persistence/AtomicFileSlot.cs" />

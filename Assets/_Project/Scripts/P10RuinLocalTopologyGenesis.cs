@@ -4,7 +4,7 @@ using System.Collections.Generic;
 /// <summary>Bounded P10-A profile adapter for the first authored Ruin layout.</summary>
 public static class P10RuinLocalTopologyGenesis
 {
-    public const string StageId = "p10.genesis.ruin-local-topology/v1";
+    public const string StageId = P12CP9GenesisContract.P10LocalTopologyStageId;
     public const string ContractIdentity = "unity-authored-bootstrap/p10-ruin-local-topology-v1";
     public const int ContractSchemaVersion = 3;
     public const string CandidateOutputSchema = "P10LocalTopologyCandidate/v1";
