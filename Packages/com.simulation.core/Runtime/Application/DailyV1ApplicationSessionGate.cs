@@ -122,6 +122,7 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
     private TSession current;
     private object exclusiveOperationToken;
     private DailyV1ExecutionBoundaryState activeExclusiveState;
+    private object runtimeAdvanceToken;
 
     internal DailyV1ApplicationSessionGate(
         Func<TSession, DailyV1ExecutionBoundaryState> executionState)
@@ -151,6 +152,7 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
         {
             session = current;
             if (exclusiveOperationToken != null
+                || runtimeAdvanceToken != null
                 || session == null
                 || (expectedSession != null && !ReferenceEquals(session, expectedSession)))
             {
@@ -187,6 +189,7 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
         {
             DailyV1ExecutionBoundaryState state = GetExecutionState(candidateSession);
             if (exclusiveOperationToken != null
+                || runtimeAdvanceToken != null
                 || state == null || state.ActiveOperationCount != 0 || current != null) return false;
             return ReferenceEquals(
                 Interlocked.CompareExchange(ref current, candidateSession, null), null);
@@ -209,6 +212,7 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
         {
             DailyV1ExecutionBoundaryState state = GetExecutionState(current);
             if (exclusiveOperationToken != null
+                || runtimeAdvanceToken != null
                 || !ReferenceEquals(current, expectedSession)
                 || state == null
                 || state.ActiveOperationCount != 0
@@ -232,6 +236,7 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
         lock (syncRoot)
         {
             if (!operation.IsOwnedBy(this, exclusiveOperationToken)
+                || runtimeAdvanceToken != null
                 || !operation.IsOwnedByCurrentThread()
                 || !ReferenceEquals(current, operation.ExpectedSession))
                 return false;
@@ -253,7 +258,7 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
         if (expectedSession == null || candidateSession == null) return false;
         lock (syncRoot)
         {
-            if (exclusiveOperationToken != null) return false;
+            if (exclusiveOperationToken != null || runtimeAdvanceToken != null) return false;
             DailyV1ExecutionBoundaryState currentState = GetExecutionState(current);
             DailyV1ExecutionBoundaryState candidateState = GetExecutionState(candidateSession);
             if (currentState == null || candidateState == null
@@ -263,6 +268,49 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
                 return false;
             Interlocked.Exchange(ref current, candidateSession);
             return true;
+        }
+    }
+
+    /// <summary>
+    /// Reserves the exact active session for one Core-owned daily advance
+    /// without adding another P12 operation scope. The runtime advance stage
+    /// owns the single DailyAdvance scope used by capture eligibility.
+    /// </summary>
+    internal bool TryBeginRuntimeAdvance(
+        TSession expectedSession,
+        out RuntimeAdvanceOperation operation)
+    {
+        operation = null;
+        if (expectedSession == null) return false;
+        lock (syncRoot)
+        {
+            DailyV1ExecutionBoundaryState state = GetExecutionState(current);
+            if (exclusiveOperationToken != null
+                || runtimeAdvanceToken != null
+                || !ReferenceEquals(current, expectedSession)
+                || state == null
+                || state.ActiveOperationCount != 0
+                || state.AdvanceLeaseHeld
+                || (state.AdmissionContext != null
+                    && !state.AdmissionContext.IsOwnedByCurrentThread()))
+                return false;
+
+            object token = new object();
+            runtimeAdvanceToken = token;
+            operation = new RuntimeAdvanceOperation(this, token, expectedSession);
+            return true;
+        }
+    }
+
+    private void EndRuntimeAdvance(object token, TSession expectedSession)
+    {
+        lock (syncRoot)
+        {
+            if (token == null
+                || !ReferenceEquals(runtimeAdvanceToken, token)
+                || !ReferenceEquals(current, expectedSession))
+                throw new InvalidOperationException("The active-session runtime advance reservation is no longer current.");
+            runtimeAdvanceToken = null;
         }
     }
 
@@ -356,6 +404,44 @@ internal sealed class DailyV1ApplicationSessionGate<TSession>
             if (!IsOwnedByCurrentThread())
                 throw new InvalidOperationException("The active-session exclusive operation must close on its owner thread.");
             owner.EndExclusiveOperation(token);
+            gate = null;
+        }
+    }
+
+    internal sealed class RuntimeAdvanceOperation : IDisposable
+    {
+        private DailyV1ApplicationSessionGate<TSession> gate;
+        private readonly object token;
+        private readonly Thread ownerThread;
+        private readonly int ownerThreadId;
+        private readonly TSession expectedSession;
+
+        internal RuntimeAdvanceOperation(
+            DailyV1ApplicationSessionGate<TSession> gate,
+            object token,
+            TSession expectedSession)
+        {
+            this.gate = gate ?? throw new ArgumentNullException(nameof(gate));
+            this.token = token ?? throw new ArgumentNullException(nameof(token));
+            this.expectedSession = expectedSession
+                ?? throw new ArgumentNullException(nameof(expectedSession));
+            ownerThread = Thread.CurrentThread;
+            ownerThreadId = Thread.CurrentThread.ManagedThreadId;
+        }
+
+        internal TSession ExpectedSession => expectedSession;
+
+        internal bool IsOwnedByCurrentThread() =>
+            ReferenceEquals(ownerThread, Thread.CurrentThread)
+            && ownerThreadId == Thread.CurrentThread.ManagedThreadId;
+
+        public void Dispose()
+        {
+            DailyV1ApplicationSessionGate<TSession> owner = gate;
+            if (owner == null) return;
+            if (!IsOwnedByCurrentThread())
+                throw new InvalidOperationException("The active-session runtime advance must close on its owner thread.");
+            owner.EndRuntimeAdvance(token, expectedSession);
             gate = null;
         }
     }

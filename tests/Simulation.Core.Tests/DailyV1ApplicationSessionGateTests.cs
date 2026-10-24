@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using NUnit.Framework;
@@ -12,6 +13,95 @@ public sealed class DailyV1ApplicationSessionGateTests
         internal TestSession(DailyV1ExecutionBoundaryState executionState = null)
         {
             ExecutionState = executionState ?? new DailyV1ExecutionBoundaryState();
+        }
+    }
+
+    private sealed class ApplicationAdvanceBoundary : IDailyV1RuntimeAdvanceBoundary
+    {
+        private readonly DailyV1ExecutionBoundaryState state;
+        private readonly Action onOperationEntry;
+
+        internal ApplicationAdvanceBoundary(
+            DailyV1ExecutionBoundaryState state,
+            Action onOperationEntry)
+        {
+            this.state = state;
+            this.onOperationEntry = onOperationEntry;
+        }
+
+        internal bool OperationEntered { get; private set; }
+        internal bool SelectedBoundaryRequested { get; private set; }
+        internal bool Faulted { get; private set; }
+        public DailyV1ExecutionBoundaryState ExecutionState => state;
+        public bool HasIntradayTimeline => false;
+
+        public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope)
+        {
+            OperationEntered = true;
+            onOperationEntry?.Invoke();
+            if (!state.TryBeginRuntimeProtocolOperation())
+            {
+                operationScope = null;
+                return false;
+            }
+
+            operationScope = new RuntimeProtocolScope(state);
+            return true;
+        }
+
+        public bool TryCreateSelectedDailyExecutionBoundary(
+            out IDailyV1SelectedDailyExecutionBoundary executionBoundary)
+        {
+            SelectedBoundaryRequested = true;
+            executionBoundary = null;
+            return false;
+        }
+
+        public bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
+        {
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
+
+        public bool TryAdvanceIntradayToNextDayBoundary(out SimulationRuntimeAdvanceFailure failure)
+        {
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
+
+        public bool TryCaptureCompletedDailyCaptureEvidence(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        public void FaultRuntimeAdmission()
+        {
+            Faulted = true;
+            state.MutationGuard.MarkFaulted(
+                AuthoritativeMutationFaultReason.RollbackRestoreFailed);
+        }
+
+        private sealed class RuntimeProtocolScope : IDisposable
+        {
+            private DailyV1ExecutionBoundaryState state;
+
+            internal RuntimeProtocolScope(DailyV1ExecutionBoundaryState state) =>
+                this.state = state;
+
+            public void Dispose()
+            {
+                DailyV1ExecutionBoundaryState owner = state;
+                if (owner == null) return;
+                if (!owner.TryEndRuntimeProtocolOperation())
+                    throw new InvalidOperationException("The test runtime-protocol scope did not close.");
+                state = null;
+            }
         }
     }
 
@@ -127,6 +217,46 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.ActiveOperationCount, Is.Zero);
         Assert.That(completedStages, Is.EqualTo(
             definitions.StageOrder.Take(definitions.StageOrder.Count - 2)));
+    }
+
+    [Test]
+    public void ApplicationAdvanceReservesItsExactSessionAndReleasesAfterRejectedStageConstruction()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCreateAndPublishInitialGenesis(
+            definitions, null, out string diagnostic), Is.True, diagnostic);
+        DailyV1ActiveRuntimeSession session = application.ActiveSession;
+        bool applicationReentryAccepted = false;
+        ApplicationAdvanceBoundary boundary = new ApplicationAdvanceBoundary(
+            session.ExecutionBoundaryState,
+            () =>
+            {
+                applicationReentryAccepted = application.TryBeginOperation(
+                    session, DailyV1OperationScopeKind.Application, out _);
+                if (applicationReentryAccepted)
+                    application.EndOperation(DailyV1OperationScopeKind.Application);
+            });
+
+        Assert.That(application.TryAdvanceDay(
+            session, boundary, out SimulationRuntimeAdvanceFailure failure), Is.False);
+
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
+        Assert.That(boundary.OperationEntered, Is.True);
+        Assert.That(boundary.SelectedBoundaryRequested, Is.True);
+        Assert.That(boundary.Faulted, Is.True);
+        Assert.That(applicationReentryAccepted, Is.False,
+            "Application queries cannot reenter the active session while Core owns its daily advance reservation.");
+        Assert.That(session.SimulationTime.AbsoluteDay, Is.Zero,
+            "A missing selected execution boundary is rejected before the admitted clock changes.");
+        Assert.That(session.ExecutionBoundaryState.AdvanceLeaseHeld, Is.False);
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+        Assert.That(application.TryBeginOperation(
+            session, DailyV1OperationScopeKind.Application, out DailyV1ActiveRuntimeSession admitted), Is.True,
+            "The application reservation must release after a rejected stage construction.");
+        Assert.That(admitted, Is.SameAs(session));
+        application.EndOperation(DailyV1OperationScopeKind.Application);
     }
 
     [Test]

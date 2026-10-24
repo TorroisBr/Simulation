@@ -2193,7 +2193,12 @@ public class TesteSimulacao : MonoBehaviour
         for (int i = 0; i < daysToSimulate; i++)
         {
             if (!ReferenceEquals(CaptureActiveSession(), expectedSession)) return;
-            expectedSession.Runtime.AdvanceDay();
+            DailyV1ActiveRuntimeSession coreSession = expectedSession.CoreRuntimeSession;
+            if (coreSession == null)
+                expectedSession.Runtime.AdvanceDay();
+            else
+                expectedSession.Runtime.AdvanceDayThroughApplication(
+                    dailyV1Application, coreSession);
 
             SimulationActiveSession session;
             if (!TryBeginActiveSessionOperation(expectedSession, out session)) return;

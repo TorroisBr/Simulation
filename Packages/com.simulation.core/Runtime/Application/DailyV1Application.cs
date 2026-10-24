@@ -122,6 +122,44 @@ internal sealed class DailyV1Application
         out DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation operation) =>
         activeSessionGate.TryBeginExclusiveOperation(expectedSession, out operation);
 
+    /// <summary>
+    /// Advances only the exact published Core session. The application gate
+    /// reserves that session against queries, saves, and replacement while
+    /// the existing Core runtime protocol owns its single DailyAdvance scope,
+    /// lease, completed-boundary accounting, and P12 token publication.
+    /// </summary>
+    internal bool TryAdvanceDay(
+        DailyV1ActiveRuntimeSession expectedSession,
+        IDailyV1RuntimeAdvanceBoundary runtimeBoundary,
+        out SimulationRuntimeAdvanceFailure failure)
+    {
+        failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+        if (expectedSession == null || runtimeBoundary == null
+            || !ReferenceEquals(activeSessionGate.Current, expectedSession)
+            || !ReferenceEquals(runtimeBoundary.ExecutionState,
+                expectedSession.ExecutionBoundaryState))
+            return false;
+
+        if (!activeSessionGate.TryBeginRuntimeAdvance(
+                expectedSession,
+                out DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.RuntimeAdvanceOperation operation))
+        {
+            failure = SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress;
+            return false;
+        }
+
+        using (operation)
+        {
+            if (!ReferenceEquals(operation.ExpectedSession, expectedSession)
+                || !operation.IsOwnedByCurrentThread()
+                || !ReferenceEquals(activeSessionGate.Current, expectedSession))
+                return false;
+
+            return expectedSession.ExecutionBoundaryState.TryAdvanceDay(
+                runtimeBoundary, out failure);
+        }
+    }
+
     internal bool TryPublishReplacement(
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation operation,
         DailyV1ActiveRuntimeSession candidate)

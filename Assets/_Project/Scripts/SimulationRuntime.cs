@@ -10882,6 +10882,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         return dailyExecutionBoundary.TryAdvanceDay(this, out failure);
     }
 
+    /// <summary>
+    /// Unity's selected-session loop forwards through the exact Core
+    /// application session. The application owns reentry/replacement
+    /// exclusion; this runtime remains the host boundary for currently
+    /// unextracted Unity projections and P12 providers.
+    /// </summary>
+    internal void AdvanceDayThroughApplication(
+        DailyV1Application application,
+        DailyV1ActiveRuntimeSession expectedSession)
+    {
+        if (application == null || expectedSession == null
+            || !ReferenceEquals(expectedSession.ExecutionBoundaryState, dailyExecutionBoundary))
+            throw CreateAdvanceFailureException(SimulationRuntimeAdvanceFailure.RuntimeFaulted);
+        if (!application.TryAdvanceDay(
+                expectedSession, this, out SimulationRuntimeAdvanceFailure failure))
+            throw CreateAdvanceFailureException(failure);
+    }
+
     private bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
     {
         if (!TryAdvanceSimulationClockCore(out failure)) return false;
