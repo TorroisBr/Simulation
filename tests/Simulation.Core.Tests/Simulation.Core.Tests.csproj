@@ -33,6 +33,7 @@
     <Compile Include="DailyV1MoneyTransferOperationTests.cs" Link="Economy/DailyV1MoneyTransferOperationTests.cs" />
     <Compile Include="DailyV1CityEconomicOwnerCoreTests.cs" />
     <Compile Include="DailyV1P12DRelationshipValidatorTests.cs" />
+    <Compile Include="DailyV1P12DSelectedOwnerGraphStagerTests.cs" />
     <Compile Include="DailyV1PopulationConsumptionOperationTests.cs" />
     <Compile Include="DailyV1SelectedTravelTransitionPlanTests.cs" />
     <Compile Include="DailyV1SelectedOpenMarketSaleTests.cs" />

@@ -346,26 +346,21 @@ internal static partial class P12GDailyV1RestoreCoordinator
             return false;
         }
 
-        DailyV1CityRuntimeOwners[] cities = stagedD.Cities
-            .Select(city => city?.SelectedRuntimeOwners)
-            .OrderBy(owner => owner?.RuntimeId ?? string.Empty, StringComparer.Ordinal)
-            .ToArray();
-        DailyV1NpcRuntimeOwners[] npcs = stagedD.Npcs
-            .Select(npc => npc?.SelectedRuntimeOwners)
-            .OrderBy(owner => owner?.RuntimeId ?? string.Empty, StringComparer.Ordinal)
-            .ToArray();
-        if (cities.Any(owner => owner == null) || npcs.Any(owner => owner == null)
-            || !DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
-                cities, npcs,
+        if (!DailyV1P12DSelectedOwnerGraphStager.TryCreate(
+                selectedDefinitions,
+                stagedD.SelectedCityOwners,
+                stagedD.SelectedNpcOwners,
                 stagedD.SpatialNetwork.SelectedOwner,
                 stagedE.Justice.CoreOwner,
                 stagedF.TravelParties,
                 stagedD.RuntimeIdentities.CoreIdentityIndex,
                 stagedD.Persons,
-                out DailyV1SelectedRuntimeOwnerGraph ownerGraph)
+                stagedF.ScheduledDirectives,
+                stagedF.Expeditions,
+                out DailyV1SelectedRuntimeOwnerGraph ownerGraph,
+                out DailyV1P12DSelectedOwnerGraphFailure ownerGraphFailure)
             || ownerGraph == null
-            || !ownerGraph.TryBindScheduledDirectives(stagedF.ScheduledDirectives)
-            || !ownerGraph.TryBindExpeditionStore(stagedF.Expeditions))
+            || ownerGraphFailure != DailyV1P12DSelectedOwnerGraphFailure.None)
         {
             diagnostic = "Core rejected the exact staged P12 City/NPC owners or their cross-owner relationships.";
             return false;
