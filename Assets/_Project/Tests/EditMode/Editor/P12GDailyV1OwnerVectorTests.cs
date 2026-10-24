@@ -141,6 +141,27 @@ public sealed class P12GDailyV1OwnerVectorTests
     }
 
     [Test]
+    public void RestoredCandidateVectorRejectsSourceOwnerReusedAcrossDifferentSections()
+    {
+        object sourceOwnerA = new object();
+        object sourceOwnerB = new object();
+        object targetOwnerC = new object();
+        OwnerSectionCensusSnapshot[] source =
+        {
+            Row("owner.a", OwnerSectionRole.Required, sourceOwnerA, 0, 0L),
+            Row("owner.b", OwnerSectionRole.Required, sourceOwnerB, 0, 0L)
+        };
+        OwnerSectionCensusSnapshot[] target =
+        {
+            Row("owner.a", OwnerSectionRole.Required, targetOwnerC, 0, 0L),
+            Row("owner.b", OwnerSectionRole.Required, sourceOwnerA, 0, 0L)
+        };
+
+        AssertFailure(source, target,
+            P12GDailyV1OwnerVectorFailure.ReusedSourceOwnerIdentity);
+    }
+
+    [Test]
     public void RestoredAdmissionSnapshotMustRemainIdenticalThroughFinalAdmission()
     {
         object owner = new object();

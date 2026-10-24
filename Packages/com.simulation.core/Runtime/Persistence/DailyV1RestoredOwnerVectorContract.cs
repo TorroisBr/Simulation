@@ -99,6 +99,20 @@ internal static class DailyV1RestoredOwnerVectorContract
             orderedTarget.Add(target);
         }
 
+        for (int sourceIndex = 0; sourceIndex < orderedSource.Count; sourceIndex++)
+        {
+            for (int targetIndex = 0; targetIndex < orderedTarget.Count; targetIndex++)
+            {
+                if (ReferenceEquals(orderedSource[sourceIndex].OwnerInstanceIdentity,
+                    orderedTarget[targetIndex].OwnerInstanceIdentity))
+                    return Fail(P12GDailyV1OwnerVectorFailure.ReusedSourceOwnerIdentity,
+                        "The target owner for section '" + orderedTarget[targetIndex].SectionId
+                            + "' reuses a source owner identity from section '"
+                            + orderedSource[sourceIndex].SectionId + "'.",
+                        out failure, out diagnostic);
+            }
+        }
+
         for (int left = 0; left < orderedSource.Count; left++)
         {
             for (int right = left + 1; right < orderedSource.Count; right++)
