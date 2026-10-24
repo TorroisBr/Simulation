@@ -260,6 +260,79 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void ApplicationBatchAdvanceReservesExactSessionAndReleasesAfterRejectedStageConstruction()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCreateAndPublishInitialGenesis(
+            definitions, null, out string diagnostic), Is.True, diagnostic);
+        DailyV1ActiveRuntimeSession session = application.ActiveSession;
+        bool applicationReentryAccepted = false;
+        ApplicationAdvanceBoundary boundary = new ApplicationAdvanceBoundary(
+            session.ExecutionBoundaryState,
+            () =>
+            {
+                applicationReentryAccepted = application.TryBeginOperation(
+                    session, DailyV1OperationScopeKind.Application, out _);
+                if (applicationReentryAccepted)
+                    application.EndOperation(DailyV1OperationScopeKind.Application);
+            });
+
+        Assert.That(application.TryAdvanceDays(
+            session, boundary, 3, out int daysAdvanced,
+            out SimulationRuntimeAdvanceFailure failure), Is.False);
+
+        Assert.That(daysAdvanced, Is.Zero,
+            "A failed first Core stage cannot claim any completed days.");
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
+        Assert.That(boundary.OperationEntered, Is.True);
+        Assert.That(boundary.SelectedBoundaryRequested, Is.True);
+        Assert.That(boundary.Faulted, Is.True);
+        Assert.That(applicationReentryAccepted, Is.False,
+            "Application queries cannot reenter the active session during a batch reservation.");
+        Assert.That(session.SimulationTime.AbsoluteDay, Is.Zero,
+            "A missing selected execution boundary is rejected before the admitted clock changes.");
+        Assert.That(session.ExecutionBoundaryState.AdvanceLeaseHeld, Is.False);
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+        Assert.That(application.TryBeginOperation(
+            session, DailyV1OperationScopeKind.Application,
+            out DailyV1ActiveRuntimeSession admitted), Is.True,
+            "The application reservation must release after a rejected batch stage.");
+        Assert.That(admitted, Is.SameAs(session));
+        application.EndOperation(DailyV1OperationScopeKind.Application);
+    }
+
+    [Test]
+    public void ApplicationBatchAdvanceDelegatesInvalidCountWithoutOpeningDailyScope()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCreateAndPublishInitialGenesis(
+            definitions, null, out string diagnostic), Is.True, diagnostic);
+        DailyV1ActiveRuntimeSession session = application.ActiveSession;
+        ApplicationAdvanceBoundary boundary = new ApplicationAdvanceBoundary(
+            session.ExecutionBoundaryState, null);
+
+        Assert.That(application.TryAdvanceDays(
+            session, boundary, -1, out int daysAdvanced,
+            out SimulationRuntimeAdvanceFailure failure), Is.False);
+
+        Assert.That(daysAdvanced, Is.Zero);
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.InvalidDayCount));
+        Assert.That(boundary.OperationEntered, Is.False,
+            "A negative count is rejected before any DailyAdvance owner operation begins.");
+        Assert.That(session.SimulationTime.AbsoluteDay, Is.Zero);
+        Assert.That(session.ExecutionBoundaryState.AdvanceLeaseHeld, Is.False);
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+        Assert.That(application.TryBeginOperation(
+            session, DailyV1OperationScopeKind.Application,
+            out DailyV1ActiveRuntimeSession admitted), Is.True);
+        Assert.That(admitted, Is.SameAs(session));
+        application.EndOperation(DailyV1OperationScopeKind.Application);
+    }
+    [Test]
     public void ApplicationRejectsAnotherGenesisAfterPublishingItsInitialSession()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

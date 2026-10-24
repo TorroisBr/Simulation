@@ -160,6 +160,47 @@ internal sealed class DailyV1Application
         }
     }
 
+    /// <summary>
+    /// Advances the exact published session for one serialized multi-day
+    /// operation. The execution boundary owns one DailyAdvance scope and lease
+    /// for the entire span, including completed-boundary accounting and its
+    /// final P12 capture-token publication.
+    /// </summary>
+    internal bool TryAdvanceDays(
+        DailyV1ActiveRuntimeSession expectedSession,
+        IDailyV1RuntimeAdvanceBoundary runtimeBoundary,
+        int dayCount,
+        out int daysAdvanced,
+        out SimulationRuntimeAdvanceFailure failure)
+    {
+        daysAdvanced = 0;
+        failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+        if (expectedSession == null || runtimeBoundary == null
+            || !ReferenceEquals(activeSessionGate.Current, expectedSession)
+            || !ReferenceEquals(runtimeBoundary.ExecutionState,
+                expectedSession.ExecutionBoundaryState))
+            return false;
+
+        if (!activeSessionGate.TryBeginRuntimeAdvance(
+                expectedSession,
+                out DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.RuntimeAdvanceOperation operation))
+        {
+            failure = SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress;
+            return false;
+        }
+
+        using (operation)
+        {
+            if (!ReferenceEquals(operation.ExpectedSession, expectedSession)
+                || !operation.IsOwnedByCurrentThread()
+                || !ReferenceEquals(activeSessionGate.Current, expectedSession))
+                return false;
+
+            return expectedSession.ExecutionBoundaryState.TryAdvanceDays(
+                runtimeBoundary, dayCount, out daysAdvanced, out failure);
+        }
+    }
+
     internal bool TryPublishReplacement(
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation operation,
         DailyV1ActiveRuntimeSession candidate)

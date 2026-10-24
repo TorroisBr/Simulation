@@ -49,6 +49,7 @@ internal interface IDailyV1SelectedDailyExecutionBoundary
 internal interface IDailyV1SelectedDayStartExecutionContext
 {
     IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
+    bool HasUnselectedLiveRuntimeMember { get; }
     bool CrimeSystemPresent { get; }
     bool JusticeSystemPresent { get; }
     IDailyV1SelectedCrimeJusticeDailyBoundary CrimeJusticeBoundary { get; }
@@ -281,43 +282,56 @@ internal static class DailyV1SelectedDailyExecutionStage
         if (boundary.TryCreateSelectedDayStartContext(
                 graph, out IDailyV1SelectedDayStartExecutionContext dayStartContext))
         {
-            IReadOnlyList<DailyV1ActorTurnRosterProjection> dayStartRuntimeRoster =
-                executionState?.SelectedRuntimeActorRoster ?? dayStartContext?.RuntimeRoster;
-            if (dayStartContext == null
-                || dayStartRuntimeRoster == null
-                || dayStartContext.CrimeJusticeBoundary == null
-                || dayStartContext.MerchantTradeBoundary == null
-                || !ReferenceEquals(graph.JusticeRecordsOwner,
-                    dayStartContext.CrimeJusticeBoundary.JusticeRecordsOwner)
-                || graph.Definitions.EffectiveConfiguration?.MerchantTrade == null
-                || !DailyV1ActorTurnExecutionStage.TryBuildRoster(
-                    graph, dayStartRuntimeRoster,
-                    out IReadOnlyList<DailyV1ActorTurnRosterEntry> dayStartRoster))
+            if (dayStartContext == null)
                 throw new InvalidOperationException(
-                    "The selected Daily-v1 host could not provide its exact day-start owner roster and boundaries.");
+                    "The selected Daily-v1 host returned a null day-start context.");
 
-            List<DailyV1NpcRuntimeOwners> exactNpcOwners = new List<DailyV1NpcRuntimeOwners>();
-            foreach (DailyV1ActorTurnRosterEntry entry in dayStartRoster)
-                if (entry?.ActorOwner != null)
-                    exactNpcOwners.Add(entry.ActorOwner);
-            if (!graph.MatchesExactOwnerInstances(graph.Cities, exactNpcOwners))
-                throw new InvalidOperationException(
-                    "The selected Daily-v1 day-start roster does not match the exact Core NPC owners.");
+            if (dayStartContext.HasUnselectedLiveRuntimeMember)
+            {
+                // Core selects the established Unity compatibility path from
+                // the host's factual capability signal. It does not let the
+                // host choose the Core roster or selected operation owners.
+                boundary.BeginSimulationDay();
+            }
+            else
+            {
+                IReadOnlyList<DailyV1ActorTurnRosterProjection> dayStartRuntimeRoster =
+                    executionState?.SelectedRuntimeActorRoster ?? dayStartContext.RuntimeRoster;
+                if (dayStartRuntimeRoster == null
+                    || dayStartContext.CrimeJusticeBoundary == null
+                    || dayStartContext.MerchantTradeBoundary == null
+                    || !ReferenceEquals(graph.JusticeRecordsOwner,
+                        dayStartContext.CrimeJusticeBoundary.JusticeRecordsOwner)
+                    || graph.Definitions.EffectiveConfiguration?.MerchantTrade == null
+                    || !DailyV1ActorTurnExecutionStage.TryBuildRoster(
+                        graph, dayStartRuntimeRoster,
+                        out IReadOnlyList<DailyV1ActorTurnRosterEntry> dayStartRoster))
+                    throw new InvalidOperationException(
+                        "The selected Daily-v1 host could not provide its exact day-start owner roster and boundaries.");
 
-            if (!DailyV1SelectedCrimeJusticeDailyStage.TryRun(
-                    graph,
-                    dayStartRoster,
-                    dayStartContext.CrimeSystemPresent,
-                    dayStartContext.JusticeSystemPresent,
-                    dayStartContext.CrimeJusticeBoundary))
-                throw new InvalidOperationException(
-                    "The selected Core Crime/Justice day-start stage rejected its exact owner graph.");
+                List<DailyV1NpcRuntimeOwners> exactNpcOwners = new List<DailyV1NpcRuntimeOwners>();
+                foreach (DailyV1ActorTurnRosterEntry entry in dayStartRoster)
+                    if (entry?.ActorOwner != null)
+                        exactNpcOwners.Add(entry.ActorOwner);
+                if (!graph.MatchesExactOwnerInstances(graph.Cities, exactNpcOwners))
+                    throw new InvalidOperationException(
+                        "The selected Daily-v1 day-start roster does not match the exact Core NPC owners.");
 
-            if (graph.Definitions.EffectiveConfiguration.MerchantTrade.Enabled
-                && !DailyV1SelectedMerchantTradeStateOperation.TryAdvancePendingTravelDays(
-                    graph, exactNpcOwners, dayStartContext.MerchantTradeBoundary))
-                throw new InvalidOperationException(
-                    "The selected Core Merchant plan-urgency stage rejected its exact owner graph.");
+                if (!DailyV1SelectedCrimeJusticeDailyStage.TryRun(
+                        graph,
+                        dayStartRoster,
+                        dayStartContext.CrimeSystemPresent,
+                        dayStartContext.JusticeSystemPresent,
+                        dayStartContext.CrimeJusticeBoundary))
+                    throw new InvalidOperationException(
+                        "The selected Core Crime/Justice day-start stage rejected its exact owner graph.");
+
+                if (graph.Definitions.EffectiveConfiguration.MerchantTrade.Enabled
+                    && !DailyV1SelectedMerchantTradeStateOperation.TryAdvancePendingTravelDays(
+                        graph, exactNpcOwners, dayStartContext.MerchantTradeBoundary))
+                    throw new InvalidOperationException(
+                        "The selected Core Merchant plan-urgency stage rejected its exact owner graph.");
+            }
         }
         else
         {

@@ -11407,9 +11407,26 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     {
         context = null;
         if (graph == null) return false;
+        bool hasUnselectedLiveRuntimeMember = npcRuntimes != null
+            && npcRuntimes.Any(runtime => runtime != null
+                && !runtime.UsesSelectedDailyV1Definitions);
+        if (hasUnselectedLiveRuntimeMember)
+        {
+            // Report only the compatibility fact. Core owns the choice to
+            // delegate this day-start to the established Unity lifecycle.
+            context = new SelectedDailyV1DayStartExecutionContext(
+                null,
+                true,
+                false,
+                false,
+                null);
+            return true;
+        }
+
         if (!TryReadCoreSelectedRuntimeActorRoster(
                 out IReadOnlyList<DailyV1ActorTurnRosterProjection> runtimeRoster))
-            return false;
+            throw new InvalidOperationException(
+                "The selected Daily-v1 day-start roster differs from the exact Core owner state.");
 
         // Keep the established whole-stage Unity behavior for dynamic or
         // otherwise unselected roster members. The selected path is available
@@ -11428,7 +11445,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 continue;
             }
             if (!runtime.UsesSelectedDailyV1Definitions)
-                return false;
+                throw new InvalidOperationException(
+                    "The selected Daily-v1 day-start roster changed during owner binding.");
 
             DailyV1NpcRuntimeOwners owner = runtime.SelectedRuntimeOwners;
             if (owner == null
@@ -11472,6 +11490,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         context = new SelectedDailyV1DayStartExecutionContext(
             runtimeRoster,
+            false,
             crimeSystemPresent,
             justiceSystemPresent,
             selectedBoundary);
@@ -11483,18 +11502,21 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     {
         internal SelectedDailyV1DayStartExecutionContext(
             IReadOnlyList<DailyV1ActorTurnRosterProjection> runtimeRoster,
+            bool hasUnselectedLiveRuntimeMember,
             bool crimeSystemPresent,
             bool justiceSystemPresent,
             SelectedDailyV1ActorTurnExecutionBoundary boundary)
         {
-            RuntimeRoster = runtimeRoster ?? throw new ArgumentNullException(nameof(runtimeRoster));
+            RuntimeRoster = runtimeRoster;
+            HasUnselectedLiveRuntimeMember = hasUnselectedLiveRuntimeMember;
             CrimeSystemPresent = crimeSystemPresent;
             JusticeSystemPresent = justiceSystemPresent;
-            CrimeJusticeBoundary = boundary ?? throw new ArgumentNullException(nameof(boundary));
+            CrimeJusticeBoundary = boundary;
             MerchantTradeBoundary = boundary;
         }
 
         public IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
+        public bool HasUnselectedLiveRuntimeMember { get; }
         public bool CrimeSystemPresent { get; }
         public bool JusticeSystemPresent { get; }
         public IDailyV1SelectedCrimeJusticeDailyBoundary CrimeJusticeBoundary { get; }

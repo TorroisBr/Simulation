@@ -130,6 +130,33 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
+    public void StateBackedDayStartLetsCoreSelectCompatibilityForUnselectedLiveMember()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        FakeBoundary boundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore)
+        {
+            UseSelectedActionExecution = true,
+            UseSelectedDayStartContext = true,
+            HasUnselectedLiveRuntimeMember = true,
+            CrimeSystemPresent = true,
+            JusticeSystemPresent = true,
+            DayStartRuntimeRosterOverride = Array.Empty<DailyV1ActorTurnRosterProjection>()
+        };
+
+        DailyV1SelectedDailyExecutionStage.Advance(
+            composition.ExecutionBoundaryState, composition.OwnerGraph, boundary);
+
+        Assert.That(boundary.Calls.Count(call => call == "begin-day"), Is.EqualTo(1),
+            "Core selects the single whole-stage compatibility callback from the host fact.");
+        Assert.That(boundary.DayStartPhases, Is.Empty,
+            "The Core-selected day-start scopes do not run alongside the whole-stage fallback.");
+        Assert.That(boundary.Calls, Does.Not.Contain("merchant-plan"));
+    }
+
+    [Test]
     public void AdmittedDailyStageRejectsHostOwnedActionFallbackBeforeAnyDailyCallback()
     {
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
@@ -843,6 +870,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal bool ThrowOnBeginDay { get; set; }
         internal bool SubstituteActorPersonStore { get; set; }
         internal bool UseSelectedDayStartContext { get; set; }
+        internal bool HasUnselectedLiveRuntimeMember { get; set; }
         internal bool CrimeSystemPresent { get; set; }
         internal bool JusticeSystemPresent { get; set; }
         internal IReadOnlyList<DailyV1ActorTurnRosterProjection> DayStartRuntimeRosterOverride { get; set; }
@@ -1044,6 +1072,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                     new DailyV1ActorTurnRosterProjection(npc.RuntimeId, null)).ToList();
                 CrimeSystemPresent = owner.CrimeSystemPresent;
                 JusticeSystemPresent = owner.JusticeSystemPresent;
+                HasUnselectedLiveRuntimeMember = owner.HasUnselectedLiveRuntimeMember;
                 FakeDayStartOperationBoundary operationBoundary =
                     new FakeDayStartOperationBoundary(owner, graph);
                 CrimeJusticeBoundary = operationBoundary;
@@ -1051,6 +1080,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             }
 
             public IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
+            public bool HasUnselectedLiveRuntimeMember { get; }
             public bool CrimeSystemPresent { get; }
             public bool JusticeSystemPresent { get; }
             public IDailyV1SelectedCrimeJusticeDailyBoundary CrimeJusticeBoundary { get; }
