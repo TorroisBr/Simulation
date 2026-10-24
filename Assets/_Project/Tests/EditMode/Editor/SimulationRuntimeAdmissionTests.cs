@@ -3403,8 +3403,11 @@ public sealed class SimulationRuntimeAdmissionTests
             bootstrap.Start();
 
             Assert.That(bootstrap.Bootstrap, Is.Not.Null);
-            Assert.That(ReadPrivateField<Thread>(bootstrap, "bootstrapStartThread"), Is.SameAs(Thread.CurrentThread));
-            Assert.That(ReadPrivateField<int>(bootstrap, "bootstrapStartThreadId"), Is.EqualTo(Thread.CurrentThread.ManagedThreadId));
+            SimulationRuntimeAdmissionContext admissionContext =
+                ReadPrivateField<SimulationRuntimeAdmissionContext>(bootstrap, "runtimeAdmissionContext");
+            Assert.That(admissionContext, Is.Not.Null);
+            Assert.That(admissionContext.ExpectedOwnerThread, Is.SameAs(Thread.CurrentThread));
+            Assert.That(admissionContext.ExpectedOwnerThreadId, Is.EqualTo(Thread.CurrentThread.ManagedThreadId));
             Assert.That(bootstrap.Runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.True,
                 failure.ToString());
 
@@ -12241,8 +12244,6 @@ public sealed class SimulationRuntimeAdmissionTests
         Thread ownerThread = Thread.CurrentThread;
         WritePrivateField(bootstrap, "simulationConfig", config);
         WritePrivateField(bootstrap, "runtimeAdmissionProfile", SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
-        WritePrivateField(bootstrap, "bootstrapStartThread", ownerThread);
-        WritePrivateField(bootstrap, "bootstrapStartThreadId", ownerThread.ManagedThreadId);
         WritePrivateField(bootstrap, "runtimeAdmissionContext",
             new SimulationRuntimeAdmissionContext(
                 SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,

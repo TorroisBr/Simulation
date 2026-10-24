@@ -193,8 +193,6 @@ public class TesteSimulacao : MonoBehaviour
     private readonly Dictionary<DailyV1ActiveRuntimeSession, SimulationActiveSession> activeSessionProjections =
         new Dictionary<DailyV1ActiveRuntimeSession, SimulationActiveSession>();
     private SimulationActiveSession activeSession => CaptureActiveSession();
-    private Thread bootstrapStartThread;
-    private int bootstrapStartThreadId;
     private SimulationRuntimeAdmissionContext runtimeAdmissionContext;
     private SimulationOperationScope bootstrapPublicationScope;
     private bool bootstrapStartAttempted;
@@ -295,8 +293,6 @@ public class TesteSimulacao : MonoBehaviour
                 throw new System.InvalidOperationException(
                     "The Core Daily-v1 application could not capture its one-time bootstrap admission context.");
             }
-            bootstrapStartThread = runtimeAdmissionContext.ExpectedOwnerThread;
-            bootstrapStartThreadId = runtimeAdmissionContext.ExpectedOwnerThreadId;
         }
 
         if (runtimeAdmissionProfile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
@@ -885,9 +881,8 @@ public class TesteSimulacao : MonoBehaviour
 
     private bool IsBootstrapStartThreadCurrent()
     {
-        return bootstrapStartThread != null
-            && ReferenceEquals(bootstrapStartThread, Thread.CurrentThread)
-            && bootstrapStartThreadId == Thread.CurrentThread.ManagedThreadId;
+        return runtimeAdmissionContext != null
+            && runtimeAdmissionContext.IsOwnedByCurrentThread();
     }
 
     private SimulationActiveSession CaptureActiveSession()

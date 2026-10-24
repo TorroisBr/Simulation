@@ -351,10 +351,6 @@ public sealed class SimulationBootstrapCompositionTests
             .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
 
         System.Threading.Thread ownerThread = System.Threading.Thread.CurrentThread;
-        typeof(TesteSimulacao).GetField("bootstrapStartThread", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(simulation, ownerThread);
-        typeof(TesteSimulacao).GetField("bootstrapStartThreadId", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(simulation, ownerThread.ManagedThreadId);
         typeof(TesteSimulacao).GetField("runtimeAdmissionContext", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(simulation, new SimulationRuntimeAdmissionContext(
                 SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
@@ -435,10 +431,6 @@ public sealed class SimulationBootstrapCompositionTests
         typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
         System.Threading.Thread ownerThread = System.Threading.Thread.CurrentThread;
-        typeof(TesteSimulacao).GetField("bootstrapStartThread", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(simulation, ownerThread);
-        typeof(TesteSimulacao).GetField("bootstrapStartThreadId", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(simulation, ownerThread.ManagedThreadId);
         typeof(TesteSimulacao).GetField("runtimeAdmissionContext", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(simulation, new SimulationRuntimeAdmissionContext(
                 SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
@@ -2125,10 +2117,6 @@ public sealed class SimulationBootstrapCompositionTests
         typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
         System.Threading.Thread ownerThread = System.Threading.Thread.CurrentThread;
-        typeof(TesteSimulacao).GetField("bootstrapStartThread", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(simulation, ownerThread);
-        typeof(TesteSimulacao).GetField("bootstrapStartThreadId", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(simulation, ownerThread.ManagedThreadId);
         typeof(TesteSimulacao).GetField("runtimeAdmissionContext", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(simulation, new SimulationRuntimeAdmissionContext(
                 SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
