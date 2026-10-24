@@ -138,6 +138,8 @@ try {
     $acl = [System.IO.FileSystemAclExtensions]::GetAccessControl([System.IO.DirectoryInfo]::new($aclPath))
     Assert-True $acl.AreAccessRulesProtected 'local evidence directory disables inherited ACLs'
     $currentSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $aclOwnerSid = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+    Assert-True ($aclOwnerSid -eq $currentSid) 'already-current owner is preserved while the protected DACL is replaced'
     $aclRules = @($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))
     Assert-True ($aclRules.Count -eq 1 -and $aclRules[0].IdentityReference.Value -eq $currentSid) 'local evidence directory grants only the current account'
 

@@ -131,8 +131,10 @@ function Set-ProtectedEvidenceDirectory {
     if ($env:OS -ne 'Windows_NT') { throw 'Protected local evidence capture currently requires Windows ACL support.' }
     $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
     $sid = $identity.User
+    # Preserve an already-correct owner: SetOwner marks OWNER_SECURITY_INFORMATION and requires WRITE_OWNER even when the value is unchanged.
+    $currentOwnerSid = (Get-Acl -LiteralPath $full).GetOwner([System.Security.Principal.SecurityIdentifier]).Value
     $acl = [System.Security.AccessControl.DirectorySecurity]::new()
-    $acl.SetOwner($sid)
+    if ($currentOwnerSid -ne $sid.Value) { $acl.SetOwner($sid) }
     $acl.SetAccessRuleProtection($true, $false)
     $rule = [System.Security.AccessControl.FileSystemAccessRule]::new($sid, [System.Security.AccessControl.FileSystemRights]::FullControl, ([System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit), [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow)
     [void]$acl.AddAccessRule($rule)
