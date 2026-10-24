@@ -56,6 +56,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialPassageTraversalOptionResolver.cs" Link="Geography/SpatialPassageTraversalOptionResolver.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/P12P8CCensusProviders.cs" Link="Geography/P12P8CCensusProviders.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationHost.cs" Link="Application/DailyV1ApplicationHost.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1Application.cs" Link="Application/DailyV1Application.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationSessionGate.cs" Link="Application/DailyV1ApplicationSessionGate.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1GenesisComposer.cs" Link="Application/DailyV1GenesisComposer.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedOwnerSectionCensusContract.cs" Link="Application/DailyV1SelectedOwnerSectionCensusContract.cs" />

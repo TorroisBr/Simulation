@@ -186,9 +186,7 @@ public class TesteSimulacao : MonoBehaviour
     // projections keyed by that exact session and are never the selected
     // publication authority. The separate compatibility gate is used only for
     // legacy, unadmitted bootstrap sessions; both paths are mutually exclusive.
-    private readonly DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession> activeCoreSessionGate =
-        new DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>(
-            session => session.ExecutionBoundaryState);
+    private readonly DailyV1Application dailyV1Application = new DailyV1Application();
     private readonly DailyV1ApplicationSessionGate<SimulationActiveSession> compatibilitySessionGate =
         new DailyV1ApplicationSessionGate<SimulationActiveSession>(
             session => session.ExecutionBoundaryState);
@@ -891,9 +889,9 @@ public class TesteSimulacao : MonoBehaviour
 
     private SimulationActiveSession CaptureActiveSession()
     {
-        lock (activeCoreSessionGate.SyncRoot)
+        lock (dailyV1Application.ActiveSessionSyncRoot)
         {
-            DailyV1ActiveRuntimeSession coreSession = activeCoreSessionGate.Current;
+            DailyV1ActiveRuntimeSession coreSession = dailyV1Application.ActiveSession;
             if (coreSession != null)
                 return activeSessionProjections.TryGetValue(coreSession, out SimulationActiveSession projection)
                     ? projection
@@ -927,17 +925,17 @@ public class TesteSimulacao : MonoBehaviour
         DailyV1OperationScopeKind scopeKind,
         out SimulationActiveSession session)
     {
-        lock (activeCoreSessionGate.SyncRoot)
+        lock (dailyV1Application.ActiveSessionSyncRoot)
         {
             session = null;
-            DailyV1ActiveRuntimeSession currentCoreSession = activeCoreSessionGate.Current;
+            DailyV1ActiveRuntimeSession currentCoreSession = dailyV1Application.ActiveSession;
             DailyV1ActiveRuntimeSession expectedCoreSession = expectedSession?.CoreRuntimeSession;
             if (currentCoreSession != null || expectedCoreSession != null)
             {
                 if (expectedSession != null && expectedCoreSession == null
                     || currentCoreSession == null
                     || !activeSessionProjections.TryGetValue(currentCoreSession, out session)
-                    || !activeCoreSessionGate.TryBeginOperation(
+                    || !dailyV1Application.TryBeginOperation(
                         expectedCoreSession, scopeKind, out DailyV1ActiveRuntimeSession admittedCoreSession))
                 {
                     session = null;
@@ -945,14 +943,14 @@ public class TesteSimulacao : MonoBehaviour
                 }
                 if (!ReferenceEquals(admittedCoreSession, currentCoreSession))
                 {
-                    activeCoreSessionGate.EndOperation(scopeKind);
+                    dailyV1Application.EndOperation(scopeKind);
                     session = null;
                     return false;
                 }
                 return true;
             }
 
-            if (activeCoreSessionGate.Current != null
+            if (dailyV1Application.ActiveSession != null
                 || !compatibilitySessionGate.TryBeginOperation(expectedSession, scopeKind, out session))
             {
                 session = null;
@@ -965,10 +963,10 @@ public class TesteSimulacao : MonoBehaviour
     private void EndActiveSessionOperation(
         DailyV1OperationScopeKind scopeKind = DailyV1OperationScopeKind.Application)
     {
-        lock (activeCoreSessionGate.SyncRoot)
+        lock (dailyV1Application.ActiveSessionSyncRoot)
         {
-            if (activeCoreSessionGate.Current != null)
-                activeCoreSessionGate.EndOperation(scopeKind);
+            if (dailyV1Application.ActiveSession != null)
+                dailyV1Application.EndOperation(scopeKind);
             else
                 compatibilitySessionGate.EndOperation(scopeKind);
         }
@@ -977,9 +975,9 @@ public class TesteSimulacao : MonoBehaviour
     private bool TryPublishInitialActiveSession(SimulationActiveSession candidateSession)
     {
         if (candidateSession == null) return false;
-        lock (activeCoreSessionGate.SyncRoot)
+        lock (dailyV1Application.ActiveSessionSyncRoot)
         {
-            if (activeCoreSessionGate.Current != null || compatibilitySessionGate.Current != null)
+            if (dailyV1Application.ActiveSession != null || compatibilitySessionGate.Current != null)
                 return false;
 
             DailyV1ActiveRuntimeSession coreSession = candidateSession.CoreRuntimeSession;
@@ -988,7 +986,7 @@ public class TesteSimulacao : MonoBehaviour
 
             if (activeSessionProjections.ContainsKey(coreSession)) return false;
             activeSessionProjections.Add(coreSession, candidateSession);
-            if (activeCoreSessionGate.TryPublishInitial(coreSession)) return true;
+            if (dailyV1Application.TryPublishInitial(coreSession)) return true;
 
             activeSessionProjections.Remove(coreSession);
             return false;
@@ -1018,11 +1016,11 @@ public class TesteSimulacao : MonoBehaviour
             || !candidateSession.Runtime.HasValidRestoredDailyBoundaryAdmission())
             return false;
 
-        lock (activeCoreSessionGate.SyncRoot)
+        lock (dailyV1Application.ActiveSessionSyncRoot)
         {
             if (candidateSession.CoreRuntimeSession == null)
             {
-                if (exclusiveOperation != null || activeCoreSessionGate.Current != null
+                if (exclusiveOperation != null || dailyV1Application.ActiveSession != null
                     || compatibilitySessionGate.ActiveOperationCount != 0)
                     return false;
 
@@ -1048,7 +1046,7 @@ public class TesteSimulacao : MonoBehaviour
             DailyV1ActiveRuntimeSession candidateCoreSession = candidateSession.CoreRuntimeSession;
             DailyV1ActiveRuntimeSession expectedCoreSession = expectedSession?.CoreRuntimeSession;
             if (compatibilitySessionGate.Current != null
-                || activeCoreSessionGate.ActiveOperationCount != 0)
+                || dailyV1Application.ActiveOperationCount != 0)
                 return false;
 
             if (exclusiveOperation != null
@@ -1057,7 +1055,7 @@ public class TesteSimulacao : MonoBehaviour
 
             if (expectedSession == null)
             {
-                if (activeCoreSessionGate.Current != null || runtimeAdmissionContext == null
+                if (dailyV1Application.ActiveSession != null || runtimeAdmissionContext == null
                     || runtimeAdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
                     || runtimeAdmissionContext.IsRestoredContinuation
                     || !runtimeAdmissionContext.IsOwnedByCurrentThread())
@@ -1066,7 +1064,7 @@ public class TesteSimulacao : MonoBehaviour
             }
 
             if (expectedCoreSession == null
-                || !ReferenceEquals(activeCoreSessionGate.Current, expectedCoreSession)
+                || !ReferenceEquals(dailyV1Application.ActiveSession, expectedCoreSession)
                 || expectedSession.AdmissionContext == null
                 || !expectedSession.AdmissionContext.IsOwnedByCurrentThread()
                 || !expectedSession.IsProfileCompatibleWith(candidateSession)
@@ -1086,7 +1084,7 @@ public class TesteSimulacao : MonoBehaviour
         if (coreSession == null || projection == null || activeSessionProjections.ContainsKey(coreSession))
             return false;
         activeSessionProjections.Add(coreSession, projection);
-        if (activeCoreSessionGate.TryPublishInitial(coreSession)) return true;
+        if (dailyV1Application.TryPublishInitial(coreSession)) return true;
         activeSessionProjections.Remove(coreSession);
         return false;
     }
@@ -1109,8 +1107,8 @@ public class TesteSimulacao : MonoBehaviour
         // published Core session without its adapter nor a stale projection.
         activeSessionProjections.Add(candidateCoreSession, candidateProjection);
         bool published = exclusiveOperation != null
-            ? activeCoreSessionGate.TryPublishReplacement(exclusiveOperation, candidateCoreSession)
-            : activeCoreSessionGate.TryPublishReplacement(expectedCoreSession, candidateCoreSession);
+            ? dailyV1Application.TryPublishReplacement(exclusiveOperation, candidateCoreSession)
+            : dailyV1Application.TryPublishReplacement(expectedCoreSession, candidateCoreSession);
         if (!published)
         {
             activeSessionProjections.Remove(candidateCoreSession);
@@ -1145,14 +1143,14 @@ public class TesteSimulacao : MonoBehaviour
         SimulationActiveSession expectedSession = CaptureActiveSession();
         if (expectedSession == null
             || expectedSession.CoreRuntimeSession == null
-            || !activeCoreSessionGate.TryBeginExclusiveOperation(
+            || !dailyV1Application.TryBeginExclusiveOperation(
                 expectedSession.CoreRuntimeSession,
                 out DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation))
             return false;
 
         using (exclusiveOperation)
         {
-            if (activeCoreSessionGate.ActiveOperationCount != 0
+            if (dailyV1Application.ActiveOperationCount != 0
                 || expectedSession.AdmissionContext == null
                 || expectedSession.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
                 || runtimeAdmissionContext == null || runtimeAdmissionContext.IsRestoredContinuation
@@ -1294,7 +1292,7 @@ public class TesteSimulacao : MonoBehaviour
         SimulationActiveSession expectedSession = CaptureActiveSession();
         if (expectedSession == null
             || expectedSession.CoreRuntimeSession == null
-            || !activeCoreSessionGate.TryBeginExclusiveOperation(
+            || !dailyV1Application.TryBeginExclusiveOperation(
                 expectedSession.CoreRuntimeSession,
                 out DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation))
         {
@@ -1305,7 +1303,7 @@ public class TesteSimulacao : MonoBehaviour
 
         using (exclusiveOperation)
         {
-            if (activeCoreSessionGate.ActiveOperationCount != 0
+            if (dailyV1Application.ActiveOperationCount != 0
                 || expectedSession.AdmissionContext == null
                 || expectedSession.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
                 || !expectedSession.AdmissionContext.IsOwnedByCurrentThread()
