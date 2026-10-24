@@ -192,6 +192,77 @@ internal sealed class DailyV1NpcRuntimeOwners
             merchantTradePlan, out owners);
     }
 
+    /// <summary>
+    /// Rebuilds the selected Core owner vector and its P12-restored mutable
+    /// values from a detached restore record. Unity may bind compatibility
+    /// objects to the returned owners, but the selected action, lifecycle,
+    /// travel and plan state are installed here exactly once.
+    /// </summary>
+    internal static bool TryCreateRestoredP12DOwner(
+        DailyV1NpcRuntimeRestoreState state,
+        out DailyV1NpcRuntimeOwners owners)
+    {
+        owners = null;
+        if (state == null
+            || string.IsNullOrWhiteSpace(state.RuntimeId)
+            || state.Definitions == null
+            || state.Definition == null
+            || state.Statuses == null
+            || state.Inventory == null
+            || state.MoneyAccount == null
+            || state.CommercialKnowledge == null
+            || state.MerchantTradePlan == null
+            || state.SpatialKnowledge == null
+            || state.ActionRevision < 0L
+            || state.LifeStateRevision < 0L
+            || state.CrimeJusticeRevision < 0L
+            || state.HiddenDaysRemaining < 0
+            || !Enum.IsDefined(typeof(NpcLifeState), state.LifeState)
+            || !NpcInjuryRules.IsValid(state.InjurySeverity)
+            || !DailyV1SelectedRuntimeOwnerGraph.TryCreateBoundNpcOwner(
+                state.RuntimeId,
+                state.Definitions,
+                state.Definition,
+                state.Statuses,
+                state.Inventory,
+                state.MoneyAccount,
+                state.CommercialKnowledge,
+                state.MerchantTradePlan,
+                state.SpatialKnowledge,
+                out DailyV1NpcRuntimeOwners candidate)
+            || candidate == null
+            || !candidate.ActionSlot.TrySetCurrentAction(state.CurrentAction, state.CurrentActionPayload)
+            || !candidate.ActionSlot.TryInstallRevision(state.ActionRevision)
+            || !candidate.Lifecycle.TryInstallState(state.LifeState, state.InjurySeverity,
+                state.LifeStateRevision)
+            || !candidate.TryInstallCrimeJusticeRevision(state.CrimeJusticeRevision)
+            || !candidate.HiddenState.TryInstallExact(state.HiddenDaysRemaining)
+            || !candidate.Travel.TryInstallState(
+                state.CurrentLocationRuntimeId,
+                state.CurrentCityRuntimeId,
+                state.DestinationLocationRuntimeId,
+                state.DestinationCityRuntimeId,
+                state.TravelDaysRemaining,
+                state.TravelDaysTotal,
+                state.TravelRouteRuntimeId,
+                state.TravelStartedToday,
+                state.TravelOriginDecisionId,
+                state.ActiveTravelPartyId,
+                state.TravelRevision)
+            || !candidate.TravelPlan.TryInstallExact(
+                state.TravelPlanTargetLocationRuntimeId,
+                state.TravelPlanTargetCityRuntimeId,
+                state.TravelPlanReason,
+                state.TravelPlanUtility,
+                state.TravelPlanExpectedCost,
+                state.TravelPlanOriginDecisionId,
+                state.TravelPlanRevision))
+            return false;
+
+        owners = candidate;
+        return true;
+    }
+
     private static bool IsAdmitted(
         DailyV1EffectiveDefinitions definitions,
         DailyV1NpcDefinition definition) =>
@@ -213,6 +284,49 @@ internal sealed class DailyV1NpcRuntimeOwners
     }
 
     internal void NotifyCrimeJusticeMutationCommitted() => CrimeJusticeRevision++;
+}
+
+/// <summary>
+/// Pure selected-owner values for one detached P12-D NPC restore. This is a
+/// staging input, not a second persisted schema or a live owner.
+/// </summary>
+internal sealed class DailyV1NpcRuntimeRestoreState
+{
+    internal string RuntimeId { get; set; }
+    internal DailyV1EffectiveDefinitions Definitions { get; set; }
+    internal DailyV1NpcDefinition Definition { get; set; }
+    internal IReadOnlyList<DailyV1StatusDefinition> Statuses { get; set; }
+    internal DailyV1InventoryOwner Inventory { get; set; }
+    internal MoneyAccountRuntime MoneyAccount { get; set; }
+    internal DailyV1CommercialKnowledgeOwner CommercialKnowledge { get; set; }
+    internal DailyV1NpcMerchantTradePlanOwner MerchantTradePlan { get; set; }
+    internal SpatialKnowledgeRuntime SpatialKnowledge { get; set; }
+    internal DailyV1ActionDefinition CurrentAction { get; set; }
+    internal DailyV1NpcActionPayloadOwner CurrentActionPayload { get; set; }
+    internal long ActionRevision { get; set; }
+    internal NpcLifeState LifeState { get; set; }
+    internal NpcInjurySeverity InjurySeverity { get; set; }
+    internal long LifeStateRevision { get; set; }
+    internal long CrimeJusticeRevision { get; set; }
+    internal int HiddenDaysRemaining { get; set; }
+    internal string CurrentLocationRuntimeId { get; set; }
+    internal string CurrentCityRuntimeId { get; set; }
+    internal string DestinationLocationRuntimeId { get; set; }
+    internal string DestinationCityRuntimeId { get; set; }
+    internal int TravelDaysRemaining { get; set; }
+    internal int TravelDaysTotal { get; set; }
+    internal string TravelRouteRuntimeId { get; set; }
+    internal bool TravelStartedToday { get; set; }
+    internal string TravelOriginDecisionId { get; set; }
+    internal string ActiveTravelPartyId { get; set; }
+    internal long TravelRevision { get; set; }
+    internal string TravelPlanTargetLocationRuntimeId { get; set; }
+    internal string TravelPlanTargetCityRuntimeId { get; set; }
+    internal NpcTravelReason TravelPlanReason { get; set; }
+    internal float TravelPlanUtility { get; set; }
+    internal float TravelPlanExpectedCost { get; set; }
+    internal string TravelPlanOriginDecisionId { get; set; }
+    internal long TravelPlanRevision { get; set; }
 }
 
 /// <summary>

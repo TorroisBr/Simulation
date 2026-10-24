@@ -6,6 +6,149 @@ using NUnit.Framework;
 public sealed class DailyV1NpcActionSlotOwnerTests
 {
     [Test]
+    public void P12RestoreFactoryBuildsExactCoreNpcOwnerVectorAndRevisions()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition npcDefinition = definitions.Npcs.Values.First();
+        DailyV1ActionDefinition action = definitions.Actions.Values.First();
+        DailyV1ItemDefinition item = definitions.Items.Values.First();
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            definitions, action, "target-npc", "target-city", item,
+            3, 6.25f, 1.5f, NpcTravelReason.Trade, -2f,
+            "decision/restore", "occurrence/restore", null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(DailyV1NpcMerchantTradePlanOwner.TryCreateInitial(
+            definitions, out DailyV1NpcMerchantTradePlanOwner merchantPlan), Is.True);
+
+        DailyV1InventoryOwner inventory = new DailyV1InventoryOwner(definitions);
+        MoneyAccountRuntime money = new MoneyAccountRuntime(17.5f);
+        DailyV1CommercialKnowledgeOwner commercial = new DailyV1CommercialKnowledgeOwner(definitions);
+        SpatialKnowledgeRuntime spatial = new SpatialKnowledgeRuntime("npc/restored");
+        DailyV1StatusDefinition[] statuses = definitions.Statuses.Values.Take(1).ToArray();
+        DailyV1NpcRuntimeRestoreState state = new DailyV1NpcRuntimeRestoreState
+        {
+            RuntimeId = "npc/restored",
+            Definitions = definitions,
+            Definition = npcDefinition,
+            Statuses = statuses,
+            Inventory = inventory,
+            MoneyAccount = money,
+            CommercialKnowledge = commercial,
+            MerchantTradePlan = merchantPlan,
+            SpatialKnowledge = spatial,
+            CurrentAction = action,
+            CurrentActionPayload = payload,
+            ActionRevision = 17L,
+            LifeState = NpcLifeState.Alive,
+            InjurySeverity = NpcInjurySeverity.Injured,
+            LifeStateRevision = 11L,
+            CrimeJusticeRevision = 13L,
+            HiddenDaysRemaining = 2,
+            CurrentLocationRuntimeId = "location/current",
+            CurrentCityRuntimeId = "city/current",
+            DestinationLocationRuntimeId = "location/destination",
+            DestinationCityRuntimeId = "city/destination",
+            TravelDaysRemaining = 3,
+            TravelDaysTotal = 5,
+            TravelRouteRuntimeId = "route/travel",
+            TravelStartedToday = true,
+            TravelOriginDecisionId = "decision/travel",
+            ActiveTravelPartyId = "party/travel",
+            TravelRevision = 19L,
+            TravelPlanTargetLocationRuntimeId = "location/plan",
+            TravelPlanTargetCityRuntimeId = "city/plan",
+            TravelPlanReason = NpcTravelReason.CommercialScout,
+            TravelPlanUtility = 0.75f,
+            TravelPlanExpectedCost = 8.5f,
+            TravelPlanOriginDecisionId = "decision/plan",
+            TravelPlanRevision = 23L
+        };
+
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateRestoredP12DOwner(
+            state, out DailyV1NpcRuntimeOwners owners), Is.True);
+        Assert.That(owners.RuntimeId, Is.EqualTo("npc/restored"));
+        Assert.That(owners.Definitions, Is.SameAs(definitions));
+        Assert.That(owners.Definition, Is.SameAs(npcDefinition));
+        Assert.That(owners.Inventory, Is.SameAs(inventory));
+        Assert.That(owners.MoneyAccount, Is.SameAs(money));
+        Assert.That(owners.CommercialKnowledge, Is.SameAs(commercial));
+        Assert.That(owners.MerchantTradePlan, Is.SameAs(merchantPlan));
+        Assert.That(owners.SpatialKnowledge, Is.SameAs(spatial));
+        Assert.That(owners.ActionSlot.CurrentAction, Is.SameAs(action));
+        Assert.That(owners.ActionSlot.CurrentPayload, Is.SameAs(payload));
+        Assert.That(owners.ActionSlot.Revision, Is.EqualTo(17L));
+        Assert.That(owners.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Alive));
+        Assert.That(owners.Lifecycle.InjurySeverity, Is.EqualTo(NpcInjurySeverity.Injured));
+        Assert.That(owners.Lifecycle.LifeStateRevision, Is.EqualTo(11L));
+        Assert.That(owners.CrimeJusticeRevision, Is.EqualTo(13L));
+        Assert.That(owners.HiddenState.RemainingDays, Is.EqualTo(2));
+        Assert.That(owners.Travel.CurrentLocationRuntimeId, Is.EqualTo("location/current"));
+        Assert.That(owners.Travel.CurrentCityRuntimeId, Is.EqualTo("city/current"));
+        Assert.That(owners.Travel.DestinationLocationRuntimeId, Is.EqualTo("location/destination"));
+        Assert.That(owners.Travel.DestinationCityRuntimeId, Is.EqualTo("city/destination"));
+        Assert.That(owners.Travel.TravelDaysRemaining, Is.EqualTo(3));
+        Assert.That(owners.Travel.TravelDaysTotal, Is.EqualTo(5));
+        Assert.That(owners.Travel.TravelRouteRuntimeId, Is.EqualTo("route/travel"));
+        Assert.That(owners.Travel.TravelStartedToday, Is.True);
+        Assert.That(owners.Travel.TravelOriginDecisionId, Is.EqualTo("decision/travel"));
+        Assert.That(owners.Travel.ActiveTravelPartyId, Is.EqualTo("party/travel"));
+        Assert.That(owners.Travel.Revision, Is.EqualTo(19L));
+        Assert.That(owners.TravelPlan.TargetLocationRuntimeId, Is.EqualTo("location/plan"));
+        Assert.That(owners.TravelPlan.TargetCityRuntimeId, Is.EqualTo("city/plan"));
+        Assert.That(owners.TravelPlan.Reason, Is.EqualTo(NpcTravelReason.CommercialScout));
+        Assert.That(owners.TravelPlan.Utility, Is.EqualTo(0.75f));
+        Assert.That(owners.TravelPlan.ExpectedCost, Is.EqualTo(8.5f));
+        Assert.That(owners.TravelPlan.OriginDecisionId, Is.EqualTo("decision/plan"));
+        Assert.That(owners.TravelPlan.Revision, Is.EqualTo(23L));
+    }
+
+    [Test]
+    public void P12RestoreFactoryRejectsInvalidOrForeignOwnerInputWithoutPublishing()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1EffectiveDefinitions foreign = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition npcDefinition = definitions.Npcs.Values.First();
+        DailyV1ActionDefinition foreignAction = foreign.Actions.Values.First();
+        DailyV1ItemDefinition foreignItem = foreign.Items.Values.First();
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            foreign, foreignAction, null, null, foreignItem, 0, 0f, 1f,
+            NpcTravelReason.None, 0f, null, null, null, null,
+            out DailyV1NpcActionPayloadOwner foreignPayload), Is.True);
+        Assert.That(DailyV1NpcMerchantTradePlanOwner.TryCreateInitial(
+            definitions, out DailyV1NpcMerchantTradePlanOwner merchantPlan), Is.True);
+
+        DailyV1NpcRuntimeRestoreState state = new DailyV1NpcRuntimeRestoreState
+        {
+            RuntimeId = "npc/restored",
+            Definitions = definitions,
+            Definition = npcDefinition,
+            Statuses = Array.Empty<DailyV1StatusDefinition>(),
+            Inventory = new DailyV1InventoryOwner(definitions),
+            MoneyAccount = new MoneyAccountRuntime(0f),
+            CommercialKnowledge = new DailyV1CommercialKnowledgeOwner(definitions),
+            MerchantTradePlan = merchantPlan,
+            SpatialKnowledge = new SpatialKnowledgeRuntime("npc/restored"),
+            CurrentAction = foreignAction,
+            CurrentActionPayload = foreignPayload,
+            ActionRevision = 4L,
+            LifeState = NpcLifeState.Alive,
+            InjurySeverity = NpcInjurySeverity.None,
+            TravelRevision = -1L,
+            TravelPlanReason = NpcTravelReason.None
+        };
+
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateRestoredP12DOwner(state, out _), Is.False,
+            "A same-ID foreign action graph must not be admitted to the restored selected owner set.");
+        state.CurrentAction = null;
+        state.CurrentActionPayload = null;
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateRestoredP12DOwner(
+            state, out DailyV1NpcRuntimeOwners rejected), Is.False,
+            "A negative travel revision must reject the private owner candidate.");
+        Assert.That(rejected, Is.Null,
+            "A failed restore never publishes a partially initialized owner graph.");
+    }
+
+    [Test]
     public void SelectedNpcLifecycleOwnerOwnsLifeInjuryAndP12RevisionValues()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

@@ -1787,19 +1787,6 @@ public class NpcRuntime : ICapabilityConditionSource
                     return false;
             }
 
-            if (!DailyV1SelectedRuntimeOwnerGraph.TryCreateBoundNpcOwner(
-                    runtimeId,
-                    state.SelectedDefinitions,
-                    state.SelectedNpcDefinition,
-                    state.SelectedCurrentStatusDefinitions,
-                    state.Inventory.SelectedDailyV1Owner,
-                    state.MoneyAccount,
-                    state.CommercialKnowledge.SelectedOwner,
-                    state.SelectedMerchantTradePlanOwner,
-                    state.SpatialKnowledge,
-                    out stagedSelectedOwners))
-                return false;
-
             DailyV1ActionDefinition stagedCurrentAction = null;
             if (state.CurrentActionDefinitionId != null
                 && (!state.SelectedDefinitions.Actions.TryGetValue(
@@ -1813,19 +1800,47 @@ public class NpcRuntime : ICapabilityConditionSource
                 && !state.CurrentActionRuntime.TryCreateSelectedOwner(
                     state.SelectedDefinitions, stagedCurrentAction, out stagedCurrentActionPayload))
                 return false;
-            if (!stagedSelectedOwners.ActionSlot.TrySetCurrentAction(
-                    stagedCurrentAction, stagedCurrentActionPayload)
-                || !stagedSelectedOwners.ActionSlot.TryInstallRevision(state.CurrentActionRevision)
-                || !stagedSelectedOwners.Lifecycle.TryInstallState(
-                    state.LifeState, state.InjurySeverity, state.LifeStateRevision)
-                || !stagedSelectedOwners.TryInstallCrimeJusticeRevision(state.CrimeJusticeRevision)
-                || !stagedSelectedOwners.HiddenState.TryInstallExact(state.HiddenDaysRemaining)
-                || !stagedSelectedOwners.TravelPlan.TryInstallExact(
-                    stagedTravelPlanState.TargetLocation?.RuntimeId,
-                    stagedTravelPlanState.TargetCity?.RuntimeId,
-                    stagedTravelPlanState.Reason, stagedTravelPlanState.Utility,
-                    stagedTravelPlanState.ExpectedCost, stagedTravelPlanState.OriginDecisionId,
-                    state.TravelPlan.Revision)
+
+            DailyV1NpcRuntimeRestoreState restoreState = new DailyV1NpcRuntimeRestoreState
+            {
+                RuntimeId = runtimeId,
+                Definitions = state.SelectedDefinitions,
+                Definition = state.SelectedNpcDefinition,
+                Statuses = state.SelectedCurrentStatusDefinitions,
+                Inventory = state.Inventory.SelectedDailyV1Owner,
+                MoneyAccount = state.MoneyAccount,
+                CommercialKnowledge = state.CommercialKnowledge.SelectedOwner,
+                MerchantTradePlan = state.SelectedMerchantTradePlanOwner,
+                SpatialKnowledge = state.SpatialKnowledge,
+                CurrentAction = stagedCurrentAction,
+                CurrentActionPayload = stagedCurrentActionPayload,
+                ActionRevision = state.CurrentActionRevision,
+                LifeState = state.LifeState,
+                InjurySeverity = state.InjurySeverity,
+                LifeStateRevision = state.LifeStateRevision,
+                CrimeJusticeRevision = state.CrimeJusticeRevision,
+                HiddenDaysRemaining = state.HiddenDaysRemaining,
+                CurrentLocationRuntimeId = state.CurrentLocation?.RuntimeId,
+                CurrentCityRuntimeId = state.CurrentCity?.RuntimeId,
+                DestinationLocationRuntimeId = state.DestinationLocation?.RuntimeId,
+                DestinationCityRuntimeId = state.DestinationCity?.RuntimeId,
+                TravelDaysRemaining = state.TravelDaysRemaining,
+                TravelDaysTotal = state.TravelDaysTotal,
+                TravelRouteRuntimeId = state.TravelRouteRuntimeId,
+                TravelStartedToday = state.TravelStartedToday,
+                TravelOriginDecisionId = state.TravelOriginDecisionId,
+                ActiveTravelPartyId = state.ActiveTravelPartyId,
+                TravelRevision = state.TravelStateRevision,
+                TravelPlanTargetLocationRuntimeId = stagedTravelPlanState.TargetLocation?.RuntimeId,
+                TravelPlanTargetCityRuntimeId = stagedTravelPlanState.TargetCity?.RuntimeId,
+                TravelPlanReason = stagedTravelPlanState.Reason,
+                TravelPlanUtility = stagedTravelPlanState.Utility,
+                TravelPlanExpectedCost = stagedTravelPlanState.ExpectedCost,
+                TravelPlanOriginDecisionId = stagedTravelPlanState.OriginDecisionId,
+                TravelPlanRevision = state.TravelPlan.Revision
+            };
+            if (!DailyV1NpcRuntimeOwners.TryCreateRestoredP12DOwner(
+                    restoreState, out stagedSelectedOwners)
                 || !state.TravelPlan.TryBindSelectedOwner(stagedSelectedOwners.TravelPlan)
                 || (state.CurrentActionRuntime != null
                     && !state.CurrentActionRuntime.TryBindSelectedOwner(
