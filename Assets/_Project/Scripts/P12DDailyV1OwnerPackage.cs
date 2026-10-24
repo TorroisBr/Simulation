@@ -582,103 +582,36 @@ internal sealed class P12DDailyV1OwnerPackage
             || npcRows == null || locationsById == null || cityLocationIds == null)
             return false;
 
-        HashSet<string> personIds = new HashSet<string>(StringComparer.Ordinal);
-        Dictionary<string, PersonStoreOwnerSnapshotRow> personsById =
-            new Dictionary<string, PersonStoreOwnerSnapshotRow>(StringComparer.Ordinal);
-        Dictionary<string, string> personByNpcId = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (PersonStoreOwnerSnapshotRow person in persons.Rows)
-        {
-            if (person == null || string.IsNullOrWhiteSpace(person.PersonIdValue)
-                || !personIds.Add(person.PersonIdValue)
-                || (person.ResidenceSettlementRuntimeId != null
-                    && !cityLocationIds.ContainsKey(person.ResidenceSettlementRuntimeId)))
-                return false;
-            personsById.Add(person.PersonIdValue, person);
-            if (!string.IsNullOrWhiteSpace(person.MaterializedNpcRuntimeId)
-                && !personByNpcId.TryAdd(person.MaterializedNpcRuntimeId, person.PersonIdValue))
-                return false;
-        }
+        DailyV1P12DPersonRelation[] personRelations = persons.Rows
+            .Select(person => person == null
+                ? null
+                : new DailyV1P12DPersonRelation(
+                    person.PersonIdValue, person.ResidenceSettlementRuntimeId, person.MaterializedNpcRuntimeId))
+            .ToArray();
+        DailyV1P12DParentageRelation[] genealogyRelations = genealogy.Records
+            .Select(edge => edge == null
+                ? null
+                : new DailyV1P12DParentageRelation(edge.ParentId?.Value, edge.ChildId?.Value))
+            .ToArray();
+        DailyV1P12DCityRelation[] cityRelations = citySnapshots
+            .Select(city => city == null
+                ? null
+                : new DailyV1P12DCityRelation(
+                    city.CityRuntimeId, city.LegacyLocationRuntimeId, city.ImportantNpcRuntimeIds))
+            .ToArray();
+        DailyV1P12DNpcRelation[] npcRelations = npcRows
+            .Select(npc => npc == null
+                ? null
+                : new DailyV1P12DNpcRelation(
+                    npc.RuntimeId, npc.PersonIdValue, npc.ResidenceSettlementRuntimeId,
+                    npc.CurrentCityRuntimeId, npc.CurrentLocationRuntimeId,
+                    npc.DestinationCityRuntimeId, npc.DestinationLocationRuntimeId))
+            .ToArray();
 
-        foreach (ParentageRecord edge in genealogy.Records)
-        {
-            if (edge?.ParentId == null || edge.ChildId == null
-                || !personIds.Contains(edge.ParentId.Value)
-                || !personIds.Contains(edge.ChildId.Value))
-                return false;
-        }
-
-        Dictionary<string, P12DNpcDRow> npcsById =
-            new Dictionary<string, P12DNpcDRow>(StringComparer.Ordinal);
-        foreach (P12DNpcDRow npc in npcRows)
-        {
-            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
-                || !npcsById.TryAdd(npc.RuntimeId, npc)
-                || (npc.CurrentLocationRuntimeId != null && !locationsById.ContainsKey(npc.CurrentLocationRuntimeId))
-                || (npc.DestinationLocationRuntimeId != null && !locationsById.ContainsKey(npc.DestinationLocationRuntimeId))
-                || (npc.CurrentCityRuntimeId != null && !cityLocationIds.ContainsKey(npc.CurrentCityRuntimeId))
-                || (npc.DestinationCityRuntimeId != null && !cityLocationIds.ContainsKey(npc.DestinationCityRuntimeId))
-                || (npc.ResidenceSettlementRuntimeId != null && !cityLocationIds.ContainsKey(npc.ResidenceSettlementRuntimeId)))
-                return false;
-            if (npc.CurrentCityRuntimeId != null
-                && (!string.Equals(npc.CurrentLocationRuntimeId,
-                    cityLocationIds[npc.CurrentCityRuntimeId], StringComparison.Ordinal)))
-                return false;
-            if (npc.DestinationCityRuntimeId != null
-                && (!string.Equals(npc.DestinationLocationRuntimeId,
-                    cityLocationIds[npc.DestinationCityRuntimeId], StringComparison.Ordinal)))
-                return false;
-
-            if (npc.PersonIdValue != null)
-            {
-                if (!personsById.TryGetValue(npc.PersonIdValue, out PersonStoreOwnerSnapshotRow person)
-                    || !string.Equals(person.MaterializedNpcRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
-                    || !string.Equals(person.ResidenceSettlementRuntimeId,
-                        npc.ResidenceSettlementRuntimeId, StringComparison.Ordinal))
-                    return false;
-            }
-            else if (personByNpcId.ContainsKey(npc.RuntimeId))
-            {
-                return false;
-            }
-        }
-
-        foreach (KeyValuePair<string, string> binding in personByNpcId)
-        {
-            if (!npcsById.TryGetValue(binding.Key, out P12DNpcDRow npc)
-                || !string.Equals(npc.PersonIdValue, binding.Value, StringComparison.Ordinal))
-                return false;
-        }
-
-        Dictionary<string, int> expectedMemberships = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (P12DCityRootOwnerSnapshot city in citySnapshots)
-        {
-            if (city?.ImportantNpcRuntimeIds == null
-                || !cityLocationIds.TryGetValue(city.CityRuntimeId, out string locationId)
-                || !string.Equals(city.LegacyLocationRuntimeId, locationId, StringComparison.Ordinal)
-                || !locationsById.ContainsKey(locationId))
-                return false;
-            HashSet<string> cityMemberIds = new HashSet<string>(StringComparer.Ordinal);
-            foreach (string npcId in city.ImportantNpcRuntimeIds)
-            {
-                if (string.IsNullOrWhiteSpace(npcId) || !cityMemberIds.Add(npcId)
-                    || !expectedMemberships.TryAdd(npcId, 1)
-                    || !npcsById.TryGetValue(npcId, out P12DNpcDRow npc)
-                    || !string.Equals(npc.CurrentCityRuntimeId, city.CityRuntimeId, StringComparison.Ordinal)
-                    || !string.Equals(npc.CurrentLocationRuntimeId, locationId, StringComparison.Ordinal))
-                    return false;
-            }
-        }
-
-        foreach (P12DNpcDRow npc in npcRows)
-        {
-            int count = expectedMemberships.TryGetValue(npc.RuntimeId, out int memberCount) ? memberCount : 0;
-            if ((npc.CurrentCityRuntimeId == null && count != 0)
-                || (npc.CurrentCityRuntimeId != null && count != 1))
-                return false;
-        }
-        return true;
+        return DailyV1P12DRelationshipValidator.TryValidate(
+            personRelations, genealogyRelations, cityRelations, npcRelations,
+            locationsById.Keys.ToArray(), cityLocationIds);
     }
-
     private static bool TryValidateFinalGraph(
         IReadOnlyList<CityRuntime> cities,
         IReadOnlyList<NpcRuntime> npcs,
