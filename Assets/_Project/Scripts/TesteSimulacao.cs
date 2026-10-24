@@ -1025,18 +1025,20 @@ public class TesteSimulacao : MonoBehaviour
     {
         if (candidateSession == null)
             return false;
-        if (candidateSession.AdmissionContext == null
-            || !candidateSession.AdmissionContext.IsOwnedByCurrentThread()
-            || !candidateSession.AdmissionContext.IsRestoredContinuation
-            || !ReferenceEquals(candidateSession.Configuration, simulationConfig)
-            || !candidateSession.Runtime.IsHealthyDailyOwnerThreadBoundary()
-            || !candidateSession.Runtime.HasValidRestoredDailyBoundaryAdmission())
+        if (!ReferenceEquals(candidateSession.Configuration, simulationConfig))
             return false;
 
         lock (dailyV1Application.ActiveSessionSyncRoot)
         {
             if (candidateSession.CoreRuntimeSession == null)
             {
+                if (candidateSession.AdmissionContext == null
+                    || !candidateSession.AdmissionContext.IsOwnedByCurrentThread()
+                    || !candidateSession.AdmissionContext.IsRestoredContinuation
+                    || !candidateSession.Runtime.IsHealthyDailyOwnerThreadBoundary()
+                    || !candidateSession.Runtime.HasValidRestoredDailyBoundaryAdmission())
+                    return false;
+
                 if (exclusiveOperation != null || dailyV1Application.ActiveSession != null
                     || compatibilitySessionGate.ActiveOperationCount != 0)
                     return false;
@@ -1062,8 +1064,7 @@ public class TesteSimulacao : MonoBehaviour
 
             DailyV1ActiveRuntimeSession candidateCoreSession = candidateSession.CoreRuntimeSession;
             DailyV1ActiveRuntimeSession expectedCoreSession = expectedSession?.CoreRuntimeSession;
-            if (compatibilitySessionGate.Current != null
-                || dailyV1Application.ActiveOperationCount != 0)
+            if (compatibilitySessionGate.Current != null)
                 return false;
 
             if (exclusiveOperation != null
@@ -1072,53 +1073,41 @@ public class TesteSimulacao : MonoBehaviour
 
             if (expectedSession == null)
             {
-                if (dailyV1Application.ActiveSession != null || runtimeAdmissionContext == null
-                    || runtimeAdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
-                    || runtimeAdmissionContext.IsRestoredContinuation
-                    || !runtimeAdmissionContext.IsOwnedByCurrentThread())
-                    return false;
-                return TryPublishCoreInitialWithProjection(candidateCoreSession, candidateSession);
+                if (dailyV1Application.ActiveSession != null) return false;
+                return TryCommitCoreRestoredCandidateWithProjection(
+                    null, candidateCoreSession, null, candidateSession, exclusiveOperation);
             }
 
             if (expectedCoreSession == null
-                || !ReferenceEquals(dailyV1Application.ActiveSession, expectedCoreSession)
-                || expectedSession.AdmissionContext == null
-                || !expectedSession.AdmissionContext.IsOwnedByCurrentThread()
                 || !expectedSession.IsProfileCompatibleWith(candidateSession)
-                || !expectedSession.Runtime.IsHealthyDailyOwnerThreadBoundary()
-                || !expectedSession.Runtime.HasValidCompletedDailyBoundaryAdmission())
+                || !ReferenceEquals(dailyV1Application.ActiveSession, expectedCoreSession))
                 return false;
 
-            return TryPublishCoreReplacementWithProjection(
+            return TryCommitCoreRestoredCandidateWithProjection(
                 expectedCoreSession, candidateCoreSession, expectedSession, candidateSession, exclusiveOperation);
         }
     }
 
-    private bool TryPublishCoreInitialWithProjection(
-        DailyV1ActiveRuntimeSession coreSession,
-        SimulationActiveSession projection)
-    {
-        if (coreSession == null || projection == null || activeSessionProjections.ContainsKey(coreSession))
-            return false;
-        if (!dailyV1Application.TryBindRuntimeAdvanceBoundary(coreSession, projection.Runtime))
-            return false;
-        activeSessionProjections.Add(coreSession, projection);
-        if (dailyV1Application.TryPublishInitial(coreSession)) return true;
-        activeSessionProjections.Remove(coreSession);
-        return false;
-    }
-
-    private bool TryPublishCoreReplacementWithProjection(
+    private bool TryCommitCoreRestoredCandidateWithProjection(
         DailyV1ActiveRuntimeSession expectedCoreSession,
         DailyV1ActiveRuntimeSession candidateCoreSession,
         SimulationActiveSession expectedProjection,
         SimulationActiveSession candidateProjection,
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation)
     {
-        if (expectedCoreSession == null || candidateCoreSession == null || candidateProjection == null
-            || !activeSessionProjections.TryGetValue(expectedCoreSession, out SimulationActiveSession currentProjection)
-            || !ReferenceEquals(currentProjection, expectedProjection)
+        if (candidateCoreSession == null || candidateProjection == null
             || activeSessionProjections.ContainsKey(candidateCoreSession))
+            return false;
+
+        if (expectedCoreSession == null)
+        {
+            if (expectedProjection != null || exclusiveOperation != null)
+                return false;
+        }
+        else if (expectedProjection == null
+            || !activeSessionProjections.TryGetValue(
+                expectedCoreSession, out SimulationActiveSession currentProjection)
+            || !ReferenceEquals(currentProjection, expectedProjection))
             return false;
 
         if (!dailyV1Application.TryBindRuntimeAdvanceBoundary(
@@ -1129,16 +1118,16 @@ public class TesteSimulacao : MonoBehaviour
         // are under the same gate lock, so readers can observe neither a
         // published Core session without its adapter nor a stale projection.
         activeSessionProjections.Add(candidateCoreSession, candidateProjection);
-        bool published = exclusiveOperation != null
-            ? dailyV1Application.TryPublishReplacement(exclusiveOperation, candidateCoreSession)
-            : dailyV1Application.TryPublishReplacement(expectedCoreSession, candidateCoreSession);
+        bool published = dailyV1Application.TryCommitRestoredCandidate(
+            expectedCoreSession, candidateCoreSession, exclusiveOperation, out _);
         if (!published)
         {
             activeSessionProjections.Remove(candidateCoreSession);
             return false;
         }
 
-        activeSessionProjections.Remove(expectedCoreSession);
+        if (expectedCoreSession != null)
+            activeSessionProjections.Remove(expectedCoreSession);
         return true;
     }
 

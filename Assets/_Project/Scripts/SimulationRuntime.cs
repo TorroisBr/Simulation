@@ -80,7 +80,8 @@ public sealed class SimulationRuntimeSpatialInvariantReport
     }
 }
 
-public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDailyV1RuntimeAdvanceBoundary
+public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDailyV1RuntimeAdvanceBoundary,
+    IDailyV1RestoredSessionCommitBoundary
 {
     [ThreadStatic]
     private static DailyGameplayExecutionProbeForTest activeDailyGameplayExecutionProbeForTest;
@@ -10918,6 +10919,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
     DailyV1ExecutionBoundaryState IDailyV1RuntimeAdvanceBoundary.ExecutionState => dailyExecutionBoundary;
     bool IDailyV1RuntimeAdvanceBoundary.HasIntradayTimeline => p18dTimeline != null;
+    DailyV1ExecutionBoundaryState IDailyV1RestoredSessionCommitBoundary.ExecutionState => dailyExecutionBoundary;
+    bool IDailyV1RestoredSessionCommitBoundary.IsHealthyDailyOwnerThreadBoundary() =>
+        IsHealthyDailyOwnerThreadBoundary();
+    bool IDailyV1RestoredSessionCommitBoundary.HasValidCompletedDailyBoundaryAdmission() =>
+        HasValidCompletedDailyBoundaryAdmission();
+    bool IDailyV1RestoredSessionCommitBoundary.HasValidRestoredDailyBoundaryAdmission() =>
+        HasValidRestoredDailyBoundaryAdmission();
 
     bool IDailyV1RuntimeAdvanceBoundary.TryEnterDailyAdvanceOperation(
         out IDisposable operationScope)

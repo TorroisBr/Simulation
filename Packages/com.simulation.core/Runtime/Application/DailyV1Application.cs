@@ -433,6 +433,93 @@ internal sealed class DailyV1Application
         }
     }
 
+    /// <summary>
+    /// Commits one already staged P12 restored candidate. All admission,
+    /// provenance, owner-thread, source-boundary, profile, and reservation
+    /// checks are made against the exact Core sessions under the same lock as
+    /// the sole active-session exchange. The runtime boundary supplies only
+    /// read-only attestations over its exact execution state; it does not
+    /// choose or publish the replacement.
+    /// </summary>
+    internal bool TryCommitRestoredCandidate(
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ActiveRuntimeSession candidate,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (candidate == null)
+        {
+            diagnostic = "The Core application cannot commit a null restored session.";
+            return false;
+        }
+
+        lock (activeSessionGate.SyncRoot)
+        {
+            SimulationRuntimeAdmissionContext candidateAdmission = candidate.AdmissionContext;
+            IDailyV1RestoredSessionCommitBoundary candidateBoundary =
+                candidate.RuntimeAdvanceBoundary as IDailyV1RestoredSessionCommitBoundary;
+            if (bootstrapAdmissionContext == null
+                || !bootstrapAdmissionContext.IsOwnedByCurrentThread()
+                || candidateAdmission == null
+                || !candidateAdmission.IsRestoredContinuation
+                || !candidateAdmission.IsOwnedByCurrentThread()
+                || !IsBootstrapOrRestoredDescendant(candidateAdmission)
+                || candidateBoundary == null
+                || !ReferenceEquals(candidateBoundary.ExecutionState,
+                    candidate.ExecutionBoundaryState)
+                || !candidateBoundary.IsHealthyDailyOwnerThreadBoundary()
+                || !candidateBoundary.HasValidRestoredDailyBoundaryAdmission()
+                || candidate.ExecutionBoundaryState.ActiveOperationCount != 0)
+            {
+                diagnostic = "The restored candidate is not a healthy, idle, exact Core continuation admitted on this application's owner thread.";
+                return false;
+            }
+
+            DailyV1ActiveRuntimeSession current = activeSessionGate.Current;
+            if (current == null)
+            {
+                if (expectedSession != null
+                    || replacementOperation != null
+                    || activeSessionGate.ActiveOperationCount != 0
+                    || initialGenesisPreparationAttempted
+                    || preparedInitialGenesis != null
+                    || preparedInitialSession != null
+                    || !activeSessionGate.TryPublishInitial(candidate))
+                {
+                    diagnostic = "Initial restore requires an unused Core application and a candidate with no replacement reservation.";
+                    return false;
+                }
+
+                return true;
+            }
+
+            IDailyV1RestoredSessionCommitBoundary currentBoundary =
+                current.RuntimeAdvanceBoundary as IDailyV1RestoredSessionCommitBoundary;
+            if (expectedSession == null
+                || !ReferenceEquals(expectedSession, current)
+                || replacementOperation == null
+                || !ReferenceEquals(replacementOperation.ExpectedSession, current)
+                || !replacementOperation.AuthorizesSessionReplacementCapture(
+                    current.ExecutionBoundaryState)
+                || activeSessionGate.ActiveOperationCount != 0
+                || currentBoundary == null
+                || !ReferenceEquals(currentBoundary.ExecutionState,
+                    current.ExecutionBoundaryState)
+                || !currentBoundary.IsHealthyDailyOwnerThreadBoundary()
+                || !currentBoundary.HasValidCompletedDailyBoundaryAdmission()
+                || !current.IsProfileCompatibleWith(candidate)
+                || !activeSessionGate.TryPublishReplacement(
+                    replacementOperation, candidate))
+            {
+                diagnostic = "Restored replacement requires the exact healthy current Core session, its owner-thread reservation, and a compatible admitted candidate.";
+                return false;
+            }
+
+            return true;
+        }
+    }
+
     private bool IsBootstrapOrRestoredDescendant(
         SimulationRuntimeAdmissionContext candidate)
     {

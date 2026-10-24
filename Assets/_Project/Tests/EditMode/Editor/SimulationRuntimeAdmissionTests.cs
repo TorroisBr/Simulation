@@ -3522,8 +3522,35 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(sourceSession.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True,
                 "Rejected exchange must preserve the source completed boundary after the operation closes.");
 
-            Assert.That(activeOwner.TryPublishRestoredSession(sourceSession, candidateSession), Is.True,
-                "An admitted restored candidate may publish at an idle owner-thread boundary.");
+            Assert.That(activeOwner.TryPublishRestoredSession(sourceSession, candidateSession), Is.False,
+                "A Core restored replacement cannot publish without its exclusive owner-thread reservation.");
+
+            object application = ReadPrivateField<object>(activeOwner, "dailyV1Application");
+            PropertyInfo coreSessionProperty = typeof(SimulationActiveSession).GetProperty(
+                "CoreRuntimeSession", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(coreSessionProperty, Is.Not.Null);
+            object sourceCoreSession = coreSessionProperty.GetValue(sourceSession);
+            MethodInfo beginExclusive = application.GetType().GetMethod(
+                "TryBeginExclusiveOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginExclusive, Is.Not.Null);
+            object[] exclusiveArguments = { sourceCoreSession, null };
+            Assert.That((bool)beginExclusive.Invoke(application, exclusiveArguments), Is.True,
+                "The exact active Core session must be exclusively reserved before replacement.");
+            object exclusiveOperation = exclusiveArguments[1];
+            Assert.That(exclusiveOperation, Is.Not.Null);
+            MethodInfo commitRestored = typeof(TesteSimulacao).GetMethod(
+                "TryPublishRestoredSession",
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                null,
+                new[] { typeof(SimulationActiveSession), typeof(SimulationActiveSession), exclusiveOperation.GetType() },
+                null);
+            Assert.That(commitRestored, Is.Not.Null);
+            using ((IDisposable)exclusiveOperation)
+            {
+                Assert.That((bool)commitRestored.Invoke(
+                    activeOwner, new[] { sourceSession, candidateSession, exclusiveOperation }), Is.True,
+                    "An admitted restored candidate may publish under its exact idle owner-thread reservation.");
+            }
             Assert.That(ReadPrivateField<SimulationActiveSession>(activeOwner, "activeSession"), Is.SameAs(candidateSession));
             Assert.That(activeOwner.Bootstrap, Is.SameAs(candidateSession.Composition));
             Assert.That(activeOwner.Runtime, Is.SameAs(candidateSession.Runtime));

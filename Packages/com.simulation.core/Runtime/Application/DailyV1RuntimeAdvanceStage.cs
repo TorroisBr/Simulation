@@ -28,6 +28,19 @@ internal interface IDailyV1RuntimeAdvanceBoundary
 }
 
 /// <summary>
+/// Read-only host attestations required when Core commits an already staged
+/// restore candidate. These inspect the exact bound execution state; the Core
+/// application owns all replacement policy and the active-session exchange.
+/// </summary>
+internal interface IDailyV1RestoredSessionCommitBoundary
+{
+    DailyV1ExecutionBoundaryState ExecutionState { get; }
+    bool IsHealthyDailyOwnerThreadBoundary();
+    bool HasValidCompletedDailyBoundaryAdmission();
+    bool HasValidRestoredDailyBoundaryAdmission();
+}
+
+/// <summary>
 /// Adds the selected Daily-v1 outer advance protocol to the Core-owned runtime
 /// state: lease acquisition, P12 operation lifetime, completed-boundary
 /// accounting, exception faulting, and the sole completed-token publication
