@@ -15,10 +15,13 @@ internal static partial class P12GDailyV1RestoreCoordinator
         out SimulationActiveSession restoredSession,
         out P12GDailyV1RestoreFailure failure,
         out string diagnostic,
-        Action<P12GDailyV1RestoreStage> stageObserver = null)
+        Action<P12GDailyV1RestoreStage> stageObserver = null,
+        DailyV1Application application = null,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
         => TryCreateRestoredSessionFromImageCore(image, expectedCompatibility, null,
             configuration, effective, calendar, selectedDefinitions, bootstrapAdmissionContext,
-            out restoredSession, out failure, out diagnostic, stageObserver);
+            out restoredSession, out failure, out diagnostic, stageObserver,
+            application, replacementOperation);
 
     internal static bool TryCreateRestoredSessionFromDotNetV2Image(
         P12AContinuationImage image,
@@ -31,10 +34,13 @@ internal static partial class P12GDailyV1RestoreCoordinator
         out SimulationActiveSession restoredSession,
         out P12GDailyV1RestoreFailure failure,
         out string diagnostic,
-        Action<P12GDailyV1RestoreStage> stageObserver = null)
+        Action<P12GDailyV1RestoreStage> stageObserver = null,
+        DailyV1Application application = null,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
         => TryCreateRestoredSessionFromImageCore(image, null, expectedCompatibility,
             configuration, effective, calendar, selectedDefinitions, bootstrapAdmissionContext,
-            out restoredSession, out failure, out diagnostic, stageObserver);
+            out restoredSession, out failure, out diagnostic, stageObserver,
+            application, replacementOperation);
 
     /// <summary>
     /// Builds a private Daily-v1 candidate solely from a fully decoded persisted
@@ -53,7 +59,9 @@ internal static partial class P12GDailyV1RestoreCoordinator
         out SimulationActiveSession restoredSession,
         out P12GDailyV1RestoreFailure failure,
         out string diagnostic,
-        Action<P12GDailyV1RestoreStage> stageObserver = null)
+        Action<P12GDailyV1RestoreStage> stageObserver = null,
+        DailyV1Application application = null,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
     {
         restoredSession = null;
         failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
@@ -187,6 +195,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     image.Header.LastEconomySnapshotDay, stagedC, stagedD, stagedE, stagedF,
                     stagedTime, eventStore, history, decisions, decisionRecorder,
                     eventRecorder, economyTransactions, logger, null,
+                    application, replacementOperation,
                     out SimulationActiveSession candidate, out diagnostic)
                 || candidate == null)
             {

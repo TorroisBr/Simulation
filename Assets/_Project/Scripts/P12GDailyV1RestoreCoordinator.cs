@@ -117,7 +117,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null,
         Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null,
         Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest = null,
-        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null,
+        DailyV1Application application = null)
     {
         return TryCreateRestoredSession(
             sourceSession,
@@ -134,7 +135,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
             factionSnapshotOverrideForTest,
             actorChoiceSnapshotOverrideForTest,
             restoredAdmissionContextFactoryForTest,
-            replacementOperation);
+            replacementOperation,
+            application);
     }
 
     internal static bool TryCreateRestoredSession(
@@ -152,7 +154,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null,
         Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null,
         Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest = null,
-        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null,
+        DailyV1Application application = null)
     {
         return TryCreateRestoredSessionCore(sourceSession, bootstrapAdmissionContext, false, null, out _, out restoredSession,
             out failure, out diagnostic, stageObserver, privateCandidateObserver,
@@ -160,7 +163,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
             politicalClaimSnapshotOverrideForTest, politicalSupportSnapshotOverrideForTest,
             factionSnapshotOverrideForTest, actorChoiceSnapshotOverrideForTest,
             restoredAdmissionContextFactoryForTest,
-            replacementOperation);
+            replacementOperation,
+            application);
     }
 
     internal static bool TryCreateRestoredSessionAndCaptureImage(
@@ -231,7 +235,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest,
         Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest,
         Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest,
-        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null,
+        DailyV1Application application = null)
     {
         continuationImage = null;
         restoredSession = null;
@@ -513,6 +518,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     economyTransactions,
                     logger,
                     restoredAdmissionContextFactoryForTest,
+                    application,
+                    replacementOperation,
                     out SimulationActiveSession candidate,
                     out diagnostic))
             {
@@ -1117,6 +1124,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         EconomyTransactionService economyTransactions,
         SimulationLogger logger,
         Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest,
+        DailyV1Application application,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
         out SimulationActiveSession candidate,
         out string diagnostic)
     {
@@ -1343,14 +1352,24 @@ internal static partial class P12GDailyV1RestoreCoordinator
             selectedDefinitions);
 
         DailyV1ActiveRuntimeSession coreRuntimeSession = null;
-        if (runtime.ExecutionBoundaryState.HasAdmittedSelectedDailyExecution
-            && !DailyV1ActiveRuntimeSession.TryCreate(
-                runtime.ExecutionBoundaryState,
-                selectedDefinitions,
-                lastEconomySnapshotDay,
-                out coreRuntimeSession,
-                out diagnostic))
-            return false;
+        if (runtime.ExecutionBoundaryState.HasAdmittedSelectedDailyExecution)
+        {
+            bool coreSessionCreated = application == null
+                ? DailyV1ActiveRuntimeSession.TryCreate(
+                    runtime.ExecutionBoundaryState,
+                    selectedDefinitions,
+                    lastEconomySnapshotDay,
+                    out coreRuntimeSession,
+                    out diagnostic)
+                : application.TryCreateRestoredActiveRuntimeSession(
+                    runtime.ExecutionBoundaryState,
+                    selectedDefinitions,
+                    lastEconomySnapshotDay,
+                    replacementOperation,
+                    out coreRuntimeSession,
+                    out diagnostic);
+            if (!coreSessionCreated) return false;
+        }
 
         candidate = new SimulationActiveSession(
             composition,

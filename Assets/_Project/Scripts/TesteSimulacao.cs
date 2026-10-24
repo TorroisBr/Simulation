@@ -372,7 +372,8 @@ public class TesteSimulacao : MonoBehaviour
         if (!P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
                 image, compatibility, simulationConfig, effective, calendar, currentDefinitions,
                 runtimeAdmissionContext, out SimulationActiveSession candidate,
-                out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic))
+                out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic,
+                application: dailyV1Application))
         {
             bootstrapFailed = true;
             UnityEngine.Debug.LogError("P12-A detached continuation restoration failed; genesis was not started. "
@@ -1202,7 +1203,9 @@ public class TesteSimulacao : MonoBehaviour
                     expectedSession.Runtime.Configuration, expectedSession.Composition.Calendar,
                     expectedSession.Composition.SelectedDefinitions,
                     runtimeAdmissionContext, out SimulationActiveSession candidate,
-                    out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic))
+                    out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic,
+                    application: dailyV1Application,
+                    replacementOperation: exclusiveOperation))
             {
                 resultCode = P12AResultCode.OwnerGraphRejected.ToString();
                 expectedSession.Logger.LogError("P12-A detached load failed: " + restoreFailure + ": " + restoreDiagnostic);
@@ -1351,7 +1354,8 @@ public class TesteSimulacao : MonoBehaviour
                     politicalSupportSnapshotOverrideForTest,
                     factionSnapshotOverrideForTest,
                     actorChoiceSnapshotOverrideForTest,
-                    replacementOperation: exclusiveOperation))
+                    replacementOperation: exclusiveOperation,
+                    application: dailyV1Application))
                 return false;
 
             try

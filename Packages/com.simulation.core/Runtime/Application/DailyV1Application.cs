@@ -165,6 +165,95 @@ internal sealed class DailyV1Application
         return true;
     }
 
+    /// <summary>
+    /// Creates the Core session binding for a detached, already admitted
+    /// restore candidate. The application checks that the restored execution
+    /// state descends from this application's bootstrap and, for replacement,
+    /// that the exact current session is still reserved by its owner thread.
+    /// The Unity restore projection supplies no session authority.
+    /// </summary>
+    internal bool TryCreateRestoredActiveRuntimeSession(
+        DailyV1ExecutionBoundaryState executionBoundaryState,
+        DailyV1EffectiveDefinitions expectedDefinitions,
+        long lastEconomySnapshotDay,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out DailyV1ActiveRuntimeSession candidate,
+        out string diagnostic)
+    {
+        candidate = null;
+        diagnostic = null;
+        if (executionBoundaryState == null || expectedDefinitions == null)
+        {
+            diagnostic = "The restored Core session requires its exact execution boundary and effective definitions.";
+            return false;
+        }
+
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph = executionBoundaryState.SelectedRuntimeOwnerGraph;
+        if (!executionBoundaryState.HasAdmittedSelectedDailyExecution
+            || ownerGraph == null
+            || !ReferenceEquals(ownerGraph.Definitions, expectedDefinitions))
+        {
+            diagnostic = "The restored Core execution boundary is not admitted for the exact selected definitions.";
+            return false;
+        }
+
+        lock (activeSessionGate.SyncRoot)
+        {
+            SimulationRuntimeAdmissionContext admissionContext = bootstrapAdmissionContext;
+            DailyV1ActiveRuntimeSession current = activeSessionGate.Current;
+            if (admissionContext == null
+                || !admissionContext.IsOwnedByCurrentThread()
+                || !IsBootstrapOrRestoredDescendant(executionBoundaryState.AdmissionContext)
+                || !executionBoundaryState.AdmissionContext.IsOwnedByCurrentThread())
+            {
+                diagnostic = "The restored Core session does not descend from this application's current owner-thread bootstrap.";
+                return false;
+            }
+
+            if (current == null)
+            {
+                if (replacementOperation != null
+                    || activeSessionGate.ActiveOperationCount != 0
+                    || initialGenesisPreparationAttempted
+                    || preparedInitialGenesis != null
+                    || preparedInitialSession != null)
+                {
+                    diagnostic = "Initial restoration requires an unused Core application with no active session or operation.";
+                    return false;
+                }
+            }
+            else if (replacementOperation == null
+                || !ReferenceEquals(replacementOperation.ExpectedSession, current)
+                || !replacementOperation.AuthorizesSessionReplacementCapture(
+                    current.ExecutionBoundaryState)
+                || activeSessionGate.ActiveOperationCount != 0)
+            {
+                diagnostic = "Restoration replacement requires the exact current Core session's owner-thread reservation.";
+                return false;
+            }
+
+            if (!DailyV1ActiveRuntimeSession.TryCreate(
+                    executionBoundaryState,
+                    expectedDefinitions,
+                    lastEconomySnapshotDay,
+                    out candidate,
+                    out diagnostic))
+            {
+                candidate = null;
+                return false;
+            }
+
+            if (current != null && !current.IsProfileCompatibleWith(candidate))
+            {
+                candidate = null;
+                diagnostic = "The restored Core session is incompatible with the published profile.";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     internal object ActiveSessionSyncRoot => activeSessionGate.SyncRoot;
     internal DailyV1ActiveRuntimeSession ActiveSession => activeSessionGate.Current;
     internal int ActiveOperationCount => activeSessionGate.ActiveOperationCount;
