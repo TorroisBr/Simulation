@@ -341,7 +341,7 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
-    public void ProjectionIndependentTargetedNormalActionCommitsTargetStatusFromCoreSlot()
+    public void ProjectionIndependentTargetedNormalActionCommitsExactTargetAndRejectsAliasedProjectionTarget()
     {
         SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
@@ -406,10 +406,26 @@ public sealed class SimulationRuntimeAdmissionTests
 
             long mutationEpochBefore = runtime.ExecutionBoundaryState
                 .MutationEpochState.CurrentEpoch;
-            WritePrivateField<NpcActionRuntime>(actor, "currentActionRuntime", null);
-            WritePrivateField<NpcActionData>(actor, "currentAction", null);
-            Assert.That(actor.CurrentActionRuntime, Is.Null,
-                "The selected action must execute without its Unity NpcActionRuntime projection.");
+
+            // A projection can still match the payload's serialized RuntimeId
+            // while pointing at a different runtime object. The log and any
+            // compatibility projection must use the graph's exact runtime.
+            NpcRuntime staleTargetAlias = new NpcRuntime(
+                target.RuntimeId, SimulationTestFactory.CreateNpc(
+                    "core-normal-target-status-stale-projection-alias"));
+            NpcActionRuntime staleProjection = new NpcActionRuntime(
+                normalWithTargetEffect, target);
+            Assert.That(staleProjection.TryUseSelectedPayload(
+                payload, actor.SelectedDailyV1DefinitionGraph), Is.True);
+            WritePrivateField(staleProjection, "targetNpc", staleTargetAlias);
+            WritePrivateField(actor, "currentActionRuntime", staleProjection);
+            WritePrivateField(actor, "currentAction", normalWithTargetEffect);
+
+            List<string> output = new List<string>();
+            SimulationLogger selectedLogger = new SimulationLogger(
+                new SimulationLogSettings(), Path.GetTempPath(),
+                (_, message) => output.Add(message));
+            WritePrivateField(runtime, "logger", selectedLogger);
 
             MethodInfo execute = typeof(SimulationRuntime).GetMethod(
                 "TryExecuteSelectedCurrentAction", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -429,6 +445,9 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(runtime.ExecutionBoundaryState.MutationEpochState.CurrentEpoch,
                 Is.EqualTo(mutationEpochBefore + 1L),
                 "The successful Core target-status write must invalidate the runtime capture epoch once.");
+            Assert.That(output.Any(message => message.Contains("escolheu")
+                && message.Contains(staleTargetAlias.NpcName)), Is.False,
+                "The target log must not name a runtime object that only aliases the Core target RuntimeId.");
         }
         finally
         {

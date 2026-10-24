@@ -12085,16 +12085,28 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
             NpcActionRuntime actionRuntime = exactRuntime.CurrentActionRuntime;
-            return actionRuntime != null
-                && ReferenceEquals(actionRuntime.Action, exactRuntime.CurrentAction)
-                && actionRuntime.MatchesSelectedOwner()
-                && ReferenceEquals(exactRuntime.SelectedRuntimeOwnerGraph, graph)
-                && graph.ContainsExactNpcOwner(actor)
-                && exactRuntime.TryGetSelectedDailyV1ActionNode(
+            if (actionRuntime == null
+                || !ReferenceEquals(actionRuntime.Action, exactRuntime.CurrentAction)
+                || !actionRuntime.MatchesSelectedOwner()
+                || !ReferenceEquals(exactRuntime.SelectedRuntimeOwnerGraph, graph)
+                || !graph.ContainsExactNpcOwner(actor)
+                || !exactRuntime.TryGetSelectedDailyV1ActionNode(
                     actionRuntime.Action, out DailyV1ActionDefinition actionNode)
-                && ReferenceEquals(actor.ActionSlot?.CurrentAction, actionNode)
-                && ReferenceEquals(actor.ActionSlot?.CurrentPayload,
-                    actionRuntime.SelectedOwner);
+                || !ReferenceEquals(actor.ActionSlot?.CurrentAction, actionNode)
+                || !ReferenceEquals(actor.ActionSlot?.CurrentPayload,
+                    actionRuntime.SelectedOwner))
+                return false;
+
+            DailyV1NpcActionPayloadOwner payload = actor.ActionSlot?.CurrentPayload;
+            if (string.IsNullOrWhiteSpace(payload?.TargetNpcRuntimeId))
+                return actionRuntime.TargetNpc == null;
+
+            return graph.TryGetNpcOwner(payload.TargetNpcRuntimeId,
+                    out DailyV1NpcRuntimeOwners exactTargetOwner)
+                && graph.ContainsExactNpcOwner(exactTargetOwner)
+                && runtimeByOwner.TryGetValue(exactTargetOwner,
+                    out NpcRuntime exactTargetRuntime)
+                && ReferenceEquals(actionRuntime.TargetNpc, exactTargetRuntime);
         }
 
         private bool IsProjectionIndependentNormalActionSlot(DailyV1NpcRuntimeOwners actor)
