@@ -117,6 +117,24 @@ public sealed class DailyV1ApplicationSessionGateTests
             new WorldId(Guid.NewGuid())));
     }
 
+    private static DailyV1Application CreateApplicationWithAdvanceBoundary(
+        Action onOperationEntry,
+        out DailyV1ActiveRuntimeSession session,
+        out ApplicationAdvanceBoundary boundary)
+    {
+        DailyV1Application application = new DailyV1Application();
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out session, out string diagnostic), Is.True, diagnostic);
+        boundary = new ApplicationAdvanceBoundary(session.ExecutionBoundaryState, onOperationEntry);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, boundary), Is.True);
+        Assert.That(application.TryPublishInitial(session), Is.True);
+        return application;
+    }
+
     [Test]
     public void SessionReportStateRetainsAndAdvancesEconomySnapshotDay()
     {
@@ -333,25 +351,20 @@ public sealed class DailyV1ApplicationSessionGateTests
     [Test]
     public void ApplicationAdvanceReservesItsExactSessionAndReleasesAfterRejectedStageConstruction()
     {
-        DailyV1EffectiveDefinitions definitions =
-            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
-        DailyV1Application application = new DailyV1Application();
-        Assert.That(application.TryCreateAndPublishInitialGenesis(
-            definitions, null, out string diagnostic), Is.True, diagnostic);
-        DailyV1ActiveRuntimeSession session = application.ActiveSession;
+        DailyV1Application application = null;
+        DailyV1ActiveRuntimeSession session = null;
         bool applicationReentryAccepted = false;
-        ApplicationAdvanceBoundary boundary = new ApplicationAdvanceBoundary(
-            session.ExecutionBoundaryState,
+        application = CreateApplicationWithAdvanceBoundary(
             () =>
             {
                 applicationReentryAccepted = application.TryBeginOperation(
                     session, DailyV1OperationScopeKind.Application, out _);
                 if (applicationReentryAccepted)
                     application.EndOperation(DailyV1OperationScopeKind.Application);
-            });
+            }, out session, out ApplicationAdvanceBoundary boundary);
 
         Assert.That(application.TryAdvanceDay(
-            session, boundary, out SimulationRuntimeAdvanceFailure failure), Is.False);
+            session, out SimulationRuntimeAdvanceFailure failure), Is.False);
 
         Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(boundary.OperationEntered, Is.True);
@@ -373,25 +386,20 @@ public sealed class DailyV1ApplicationSessionGateTests
     [Test]
     public void ApplicationBatchAdvanceReservesExactSessionAndReleasesAfterRejectedStageConstruction()
     {
-        DailyV1EffectiveDefinitions definitions =
-            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
-        DailyV1Application application = new DailyV1Application();
-        Assert.That(application.TryCreateAndPublishInitialGenesis(
-            definitions, null, out string diagnostic), Is.True, diagnostic);
-        DailyV1ActiveRuntimeSession session = application.ActiveSession;
+        DailyV1Application application = null;
+        DailyV1ActiveRuntimeSession session = null;
         bool applicationReentryAccepted = false;
-        ApplicationAdvanceBoundary boundary = new ApplicationAdvanceBoundary(
-            session.ExecutionBoundaryState,
+        application = CreateApplicationWithAdvanceBoundary(
             () =>
             {
                 applicationReentryAccepted = application.TryBeginOperation(
                     session, DailyV1OperationScopeKind.Application, out _);
                 if (applicationReentryAccepted)
                     application.EndOperation(DailyV1OperationScopeKind.Application);
-            });
+            }, out session, out ApplicationAdvanceBoundary boundary);
 
         Assert.That(application.TryAdvanceDays(
-            session, boundary, 3, out int daysAdvanced,
+            session, 3, out int daysAdvanced,
             out SimulationRuntimeAdvanceFailure failure), Is.False);
 
         Assert.That(daysAdvanced, Is.Zero,
@@ -417,17 +425,12 @@ public sealed class DailyV1ApplicationSessionGateTests
     [Test]
     public void ApplicationBatchAdvanceDelegatesInvalidCountWithoutOpeningDailyScope()
     {
-        DailyV1EffectiveDefinitions definitions =
-            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
-        DailyV1Application application = new DailyV1Application();
-        Assert.That(application.TryCreateAndPublishInitialGenesis(
-            definitions, null, out string diagnostic), Is.True, diagnostic);
-        DailyV1ActiveRuntimeSession session = application.ActiveSession;
-        ApplicationAdvanceBoundary boundary = new ApplicationAdvanceBoundary(
-            session.ExecutionBoundaryState, null);
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
 
         Assert.That(application.TryAdvanceDays(
-            session, boundary, -1, out int daysAdvanced,
+            session, -1, out int daysAdvanced,
             out SimulationRuntimeAdvanceFailure failure), Is.False);
 
         Assert.That(daysAdvanced, Is.Zero);
@@ -442,6 +445,37 @@ public sealed class DailyV1ApplicationSessionGateTests
             out DailyV1ActiveRuntimeSession admitted), Is.True);
         Assert.That(admitted, Is.SameAs(session));
         application.EndOperation(DailyV1OperationScopeKind.Application);
+    }
+
+    [Test]
+    public void ApplicationBindsOneExactRuntimeAdvanceBoundaryBeforePublication()
+    {
+        DailyV1Application application = new DailyV1Application();
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession session, out string diagnostic), Is.True, diagnostic);
+
+        ApplicationAdvanceBoundary exact = new ApplicationAdvanceBoundary(
+            session.ExecutionBoundaryState, null);
+        ApplicationAdvanceBoundary replacement = new ApplicationAdvanceBoundary(
+            session.ExecutionBoundaryState, null);
+        ApplicationAdvanceBoundary foreign = new ApplicationAdvanceBoundary(
+            new DailyV1ExecutionBoundaryState(), null);
+
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, foreign), Is.False,
+            "A host adapter for another Core execution state cannot bind to this session.");
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, exact), Is.True);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, exact), Is.True,
+            "Binding the same adapter is idempotent for retry-safe publication.");
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, replacement), Is.False,
+            "A session cannot switch host mutation and capture authorities after binding.");
+        Assert.That(application.TryPublishInitial(session), Is.True);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, replacement), Is.False,
+            "A published session cannot replace its exact host adapter.");
+        Assert.That(session.RuntimeAdvanceBoundary, Is.SameAs(exact));
     }
     [Test]
     public void ApplicationRejectsAnotherGenesisAfterPublishingItsInitialSession()

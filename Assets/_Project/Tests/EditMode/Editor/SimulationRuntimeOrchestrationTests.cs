@@ -4,6 +4,54 @@ using NUnit.Framework;
 
 public sealed class SimulationRuntimeOrchestrationTests
 {
+    private sealed class RejectedApplicationAdvanceBoundary : IDailyV1RuntimeAdvanceBoundary
+    {
+        internal RejectedApplicationAdvanceBoundary(DailyV1ExecutionBoundaryState state) =>
+            ExecutionState = state;
+
+        public DailyV1ExecutionBoundaryState ExecutionState { get; }
+        public bool HasIntradayTimeline => false;
+
+        public bool TryEnterDailyAdvanceOperation(out System.IDisposable operationScope)
+        {
+            operationScope = null;
+            return false;
+        }
+
+        public bool TryCreateSelectedDailyExecutionBoundary(
+            out IDailyV1SelectedDailyExecutionBoundary executionBoundary)
+        {
+            executionBoundary = null;
+            return false;
+        }
+
+        public bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
+        {
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
+
+        public bool TryAdvanceIntradayToNextDayBoundary(out SimulationRuntimeAdvanceFailure failure)
+        {
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
+
+        public bool TryCaptureCompletedDailyCaptureEvidence(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        public void FaultRuntimeAdmission() => ExecutionState.MutationGuard.MarkFaulted(
+            AuthoritativeMutationFaultReason.RollbackRestoreFailed);
+    }
+
     [SetUp]
     public void SetUp()
     {
@@ -545,6 +593,39 @@ public sealed class SimulationRuntimeOrchestrationTests
         Assert.That(overflowRuntime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retryFailure), Is.False);
         Assert.That(retryFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow),
             "typed failure releases the lease rather than converting the retry into reentrancy rejection");
+
+        System.InvalidOperationException overflowException = Assert.Throws<System.InvalidOperationException>(
+            () => overflowRuntime.AdvanceDay());
+        Assert.That(overflowException.Message,
+            Is.EqualTo("SimulationTime cannot advance beyond the maximum AbsoluteDay."),
+            "The direct-runtime API retains its established typed-failure diagnostic.");
+    }
+
+    [Test]
+    public void ApplicationBoundSimulationLoopPreservesTypedAdvanceFailureDiagnostic()
+    {
+        DailyV1Application application = new DailyV1Application();
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession session, out string diagnostic), Is.True, diagnostic);
+
+        RejectedApplicationAdvanceBoundary boundary =
+            new RejectedApplicationAdvanceBoundary(session.ExecutionBoundaryState);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, boundary), Is.True);
+        Assert.That(application.TryPublishInitial(session), Is.True);
+
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(0L), null, null, economyEnabled: false);
+        System.InvalidOperationException exception = Assert.Throws<System.InvalidOperationException>(
+            () => TesteSimulacao.AdvanceCoreSessionThroughApplication(application, session, runtime));
+
+        Assert.That(exception.Message,
+            Is.EqualTo("A faulted SimulationRuntime cannot advance its world."));
+        Assert.That(session.ExecutionBoundaryState.AdvanceLeaseHeld, Is.False);
+        Assert.That(application.ActiveOperationCount, Is.Zero);
     }
 
     private sealed class ReentrantActionProvider : INpcActionProvider

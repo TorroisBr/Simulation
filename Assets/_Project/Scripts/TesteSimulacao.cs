@@ -1003,7 +1003,9 @@ public class TesteSimulacao : MonoBehaviour
             if (coreSession == null)
                 return compatibilitySessionGate.TryPublishInitial(candidateSession);
 
-            if (activeSessionProjections.ContainsKey(coreSession)) return false;
+            if (activeSessionProjections.ContainsKey(coreSession)
+                || !dailyV1Application.TryBindRuntimeAdvanceBoundary(
+                    coreSession, candidateSession.Runtime)) return false;
             activeSessionProjections.Add(coreSession, candidateSession);
             if (dailyV1Application.TryPublishInitial(coreSession)) return true;
 
@@ -1102,6 +1104,8 @@ public class TesteSimulacao : MonoBehaviour
     {
         if (coreSession == null || projection == null || activeSessionProjections.ContainsKey(coreSession))
             return false;
+        if (!dailyV1Application.TryBindRuntimeAdvanceBoundary(coreSession, projection.Runtime))
+            return false;
         activeSessionProjections.Add(coreSession, projection);
         if (dailyV1Application.TryPublishInitial(coreSession)) return true;
         activeSessionProjections.Remove(coreSession);
@@ -1119,6 +1123,10 @@ public class TesteSimulacao : MonoBehaviour
             || !activeSessionProjections.TryGetValue(expectedCoreSession, out SimulationActiveSession currentProjection)
             || !ReferenceEquals(currentProjection, expectedProjection)
             || activeSessionProjections.ContainsKey(candidateCoreSession))
+            return false;
+
+        if (!dailyV1Application.TryBindRuntimeAdvanceBoundary(
+                candidateCoreSession, candidateProjection.Runtime))
             return false;
 
         // Register the host projection before the Core exchange. Both writes
@@ -2218,8 +2226,8 @@ public class TesteSimulacao : MonoBehaviour
             if (coreSession == null)
                 expectedSession.Runtime.AdvanceDay();
             else
-                expectedSession.Runtime.AdvanceDayThroughApplication(
-                    dailyV1Application, coreSession);
+                AdvanceCoreSessionThroughApplication(
+                    dailyV1Application, coreSession, expectedSession.Runtime);
 
             SimulationActiveSession session;
             if (!TryBeginActiveSessionOperation(expectedSession, out session)) return;
@@ -2261,6 +2269,16 @@ public class TesteSimulacao : MonoBehaviour
         {
             EndActiveSessionOperation();
         }
+    }
+
+    internal static void AdvanceCoreSessionThroughApplication(
+        DailyV1Application application,
+        DailyV1ActiveRuntimeSession coreSession,
+        SimulationRuntime runtime)
+    {
+        if (!application.TryAdvanceDay(
+                coreSession, out SimulationRuntimeAdvanceFailure advanceFailure))
+            throw runtime.CreateAdvanceFailureException(advanceFailure);
     }
 
     private void Simulate(int daysToSimulate)

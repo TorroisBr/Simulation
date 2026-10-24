@@ -30,6 +30,8 @@ internal sealed class DailyV1SessionReportState
 /// </summary>
 internal sealed class DailyV1ActiveRuntimeSession
 {
+    private IDailyV1RuntimeAdvanceBoundary runtimeAdvanceBoundary;
+
     private DailyV1ActiveRuntimeSession(
         DailyV1ExecutionBoundaryState executionBoundaryState,
         DailyV1EffectiveDefinitions definitions,
@@ -53,6 +55,26 @@ internal sealed class DailyV1ActiveRuntimeSession
     internal EffectiveSimulationConfiguration EffectiveConfiguration => ExecutionBoundaryState.ConfigurationIdentity;
     internal SimulationCalendar Calendar => ExecutionBoundaryState.CalendarIdentity;
     internal string ProfileFingerprint { get; }
+    internal IDailyV1RuntimeAdvanceBoundary RuntimeAdvanceBoundary => runtimeAdvanceBoundary;
+
+    /// <summary>
+    /// Binds the session once to the host boundary constructed for this exact
+    /// Core execution state. The application establishes this association
+    /// before publication so an advance cannot substitute another host
+    /// mutation or capture authority.
+    /// </summary>
+    internal bool TryBindRuntimeAdvanceBoundary(IDailyV1RuntimeAdvanceBoundary boundary)
+    {
+        if (boundary == null
+            || !ReferenceEquals(boundary.ExecutionState, ExecutionBoundaryState))
+            return false;
+        if (runtimeAdvanceBoundary == null)
+        {
+            runtimeAdvanceBoundary = boundary;
+            return true;
+        }
+        return ReferenceEquals(runtimeAdvanceBoundary, boundary);
+    }
 
     internal static bool TryCreate(
         DailyV1ExecutionBoundaryState executionBoundaryState,

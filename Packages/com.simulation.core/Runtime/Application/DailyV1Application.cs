@@ -216,6 +216,30 @@ internal sealed class DailyV1Application
         activeSessionGate.TryBeginExclusiveOperation(expectedSession, out operation);
 
     /// <summary>
+    /// Associates an unpublished or replacement Core session with the exact
+    /// host boundary built for its execution state. Once published, the
+    /// session's boundary is immutable; advances resolve it from the session
+    /// rather than accepting a host-selected boundary on each call.
+    /// </summary>
+    internal bool TryBindRuntimeAdvanceBoundary(
+        DailyV1ActiveRuntimeSession candidateSession,
+        IDailyV1RuntimeAdvanceBoundary runtimeBoundary)
+    {
+        if (candidateSession == null || runtimeBoundary == null) return false;
+        lock (activeSessionGate.SyncRoot)
+        {
+            DailyV1ActiveRuntimeSession current = activeSessionGate.Current;
+            if (ReferenceEquals(current, candidateSession))
+                return ReferenceEquals(candidateSession.RuntimeAdvanceBoundary, runtimeBoundary);
+            if (!IsBootstrapOrRestoredDescendant(candidateSession.AdmissionContext)
+                || activeSessionGate.ActiveOperationCount != 0
+                || (current != null && !current.IsProfileCompatibleWith(candidateSession)))
+                return false;
+            return candidateSession.TryBindRuntimeAdvanceBoundary(runtimeBoundary);
+        }
+    }
+
+    /// <summary>
     /// Advances only the exact published Core session. The application gate
     /// reserves that session against queries, saves, and replacement while
     /// the existing Core runtime protocol owns its single DailyAdvance scope,
@@ -223,9 +247,9 @@ internal sealed class DailyV1Application
     /// </summary>
     internal bool TryAdvanceDay(
         DailyV1ActiveRuntimeSession expectedSession,
-        IDailyV1RuntimeAdvanceBoundary runtimeBoundary,
         out SimulationRuntimeAdvanceFailure failure)
     {
+        IDailyV1RuntimeAdvanceBoundary runtimeBoundary = expectedSession?.RuntimeAdvanceBoundary;
         failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
         if (expectedSession == null || runtimeBoundary == null
             || !ReferenceEquals(activeSessionGate.Current, expectedSession)
@@ -261,11 +285,11 @@ internal sealed class DailyV1Application
     /// </summary>
     internal bool TryAdvanceDays(
         DailyV1ActiveRuntimeSession expectedSession,
-        IDailyV1RuntimeAdvanceBoundary runtimeBoundary,
         int dayCount,
         out int daysAdvanced,
         out SimulationRuntimeAdvanceFailure failure)
     {
+        IDailyV1RuntimeAdvanceBoundary runtimeBoundary = expectedSession?.RuntimeAdvanceBoundary;
         daysAdvanced = 0;
         failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
         if (expectedSession == null || runtimeBoundary == null
