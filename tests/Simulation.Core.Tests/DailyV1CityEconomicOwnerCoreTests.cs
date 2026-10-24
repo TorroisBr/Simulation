@@ -79,6 +79,103 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
     }
 
     [Test]
+    public void RestoredP12DCityOwnersAreHydratedInCoreWithExactDefinitionsAndRevisions()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1CityDefinition city = definitions.Cities.Values.First();
+        DailyV1ItemDefinition item = definitions.Items[city.Values.marketItems[0].item];
+        SettlementPopulationTransition transition = PopulationOwnerBridge.CreateDecodedTransition(
+            "restored-city",
+            2L,
+            1190,
+            new PopulationChangeSet(10, 0, 0, 0),
+            10L,
+            1200);
+        PopulationOperationReceiptSnapshot receipt = new PopulationOperationReceiptSnapshot(
+            "population-operation-1", "population-fingerprint-1", transition);
+        Assert.That(DailyV1MarketItemState.TryCreate(item, 17, 60, 4.25f,
+            out DailyV1MarketItemState row), Is.True);
+
+        Assert.That(DailyV1CityRuntimeOwners.TryCreateRestoredP12DOwners(
+            "restored-city",
+            "restored-location",
+            "restored-city",
+            "population-restored-city",
+            definitions,
+            city,
+            1200,
+            3L,
+            new[] { receipt },
+            7L,
+            new[] { row },
+            11L,
+            new[] { "npc-second", "npc-first" },
+            9L,
+            out DailyV1CityRuntimeOwners restored), Is.True);
+
+        Assert.That(restored.Definitions, Is.SameAs(definitions));
+        Assert.That(restored.Definition, Is.SameAs(city));
+        Assert.That(restored.LocationRuntimeId, Is.EqualTo("restored-location"));
+        Assert.That(restored.Population.CurrentPopulation, Is.EqualTo(1200));
+        Assert.That(restored.Population.Revision, Is.EqualTo(3L));
+        PopulationOwnerBridge.GetOperationReceiptCensus(
+            restored.Population, out int receiptCount, out long receiptRevision);
+        Assert.That(receiptCount, Is.EqualTo(1));
+        Assert.That(receiptRevision, Is.EqualTo(7L));
+        Assert.That(restored.Population.TryCaptureOperationReceiptSnapshot(
+            out IReadOnlyList<PopulationOperationReceiptSnapshot> restoredReceipts, out long restoredReceiptRevision),
+            Is.True);
+        Assert.That(restoredReceiptRevision, Is.EqualTo(7L));
+        Assert.That(restoredReceipts, Has.Count.EqualTo(1));
+        Assert.That(restoredReceipts[0].Identity, Is.EqualTo(receipt.Identity));
+        Assert.That(restoredReceipts[0].Fingerprint, Is.EqualTo(receipt.Fingerprint));
+        Assert.That(restoredReceipts[0].Transition, Is.EqualTo(receipt.Transition));
+        Assert.That(restoredReceipts[0].Transition, Is.Not.SameAs(receipt.Transition));
+        Assert.That(restored.Market.Revision, Is.EqualTo(11L));
+        Assert.That(restored.Market.Items, Has.Count.EqualTo(1));
+        Assert.That(restored.Market.Items[0].Item, Is.SameAs(item));
+        Assert.That(restored.Market.Items[0].Amount, Is.EqualTo(17));
+        Assert.That(restored.Market.Items[0].DesiredAmount, Is.EqualTo(60));
+        Assert.That(restored.Market.Items[0].CurrentPrice, Is.EqualTo(4.25f));
+        Assert.That(restored.Counterparty.CounterpartyRuntimeId, Is.EqualTo("restored-city"));
+        Assert.That(restored.Counterparty.LiquidityMode, Is.EqualTo(MarketLiquidityMode.Open));
+        Assert.That(restored.Counterparty.MoneyAccount, Is.Null);
+        Assert.That(restored.PopulationEconomy.PopulationEconomicRuntimeId,
+            Is.EqualTo("population-restored-city"));
+        Assert.That(restored.NpcPresence.OrderedNpcRuntimeIds,
+            Is.EqualTo(new[] { "npc-second", "npc-first" }));
+        Assert.That(restored.NpcPresence.Revision, Is.EqualTo(9L));
+    }
+
+    [Test]
+    public void RestoredP12DCityOwnersRejectForeignDefinitionHandlesAndDuplicateMembership()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1EffectiveDefinitions foreignDefinitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1CityDefinition city = definitions.Cities.Values.First();
+        DailyV1ItemDefinition foreignItem = foreignDefinitions.Items[city.Values.marketItems[0].item];
+        Assert.That(DailyV1MarketItemState.TryCreate(foreignItem, 1, 1, 1f,
+            out DailyV1MarketItemState foreignRow), Is.True);
+
+        Assert.That(DailyV1CityRuntimeOwners.TryCreateRestoredP12DOwners(
+            "restored-city", "restored-location", "restored-city", "population-restored-city",
+            definitions, city, 1, 0L, System.Array.Empty<PopulationOperationReceiptSnapshot>(), 0L,
+            new[] { foreignRow }, 0L, System.Array.Empty<string>(), 0L, out DailyV1CityRuntimeOwners rejectedForeign),
+            Is.False);
+        Assert.That(rejectedForeign, Is.Null);
+
+        DailyV1ItemDefinition admittedItem = definitions.Items[city.Values.marketItems[0].item];
+        Assert.That(DailyV1MarketItemState.TryCreate(admittedItem, 1, 1, 1f,
+            out DailyV1MarketItemState admittedRow), Is.True);
+        Assert.That(DailyV1CityRuntimeOwners.TryCreateRestoredP12DOwners(
+            "restored-city", "restored-location", "restored-city", "population-restored-city",
+            definitions, city, 1, 0L, System.Array.Empty<PopulationOperationReceiptSnapshot>(), 0L,
+            new[] { admittedRow }, 0L, new[] { "npc-one", "npc-one" }, 1L,
+            out DailyV1CityRuntimeOwners rejectedDuplicate), Is.False);
+        Assert.That(rejectedDuplicate, Is.Null);
+    }
+
+    [Test]
     public void CoreSelectedCityCompositionOwnsFiniteReserveStateByCanonicalItemIdentity()
     {
         DailyV1CityData cityValues = new DailyV1CityData(

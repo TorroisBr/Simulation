@@ -196,12 +196,18 @@ public sealed class P12DCityRootOwnerSnapshotTests
             "Selected P12 restore resolves City identity from the typed graph without retaining CityData.");
         Assert.That(restoredCity.DefinitionId, Is.EqualTo(authoredCity.DefinitionId));
         Assert.That(restoredCity.SelectedDailyV1Definition, Is.SameAs(cityDefinition));
-        Assert.That(restoredCity.SelectedRuntimeOwners, Is.Null,
-            "The selected owner join waits until the captured membership linker fills.");
-        Assert.That(restoredCity.Market.SelectedDailyV1Owner, Is.Not.Null);
+        DailyV1CityRuntimeOwners restoredOwners = restoredCity.SelectedRuntimeOwners;
+        Assert.That(restoredOwners, Is.Not.Null,
+            "P12-D hydrates the selected City owner bundle in Core before constructing its Unity projection.");
+        Assert.That(restoredCity.Market.SelectedDailyV1Owner, Is.SameAs(restoredOwners.Market));
+        Assert.That(restoredCity.Population, Is.SameAs(restoredOwners.Population));
+        Assert.That(restoredCity.MarketCounterparty, Is.SameAs(restoredOwners.Counterparty));
+        Assert.That(restoredCity.PopulationEconomy, Is.SameAs(restoredOwners.PopulationEconomy));
+        Assert.That(restoredOwners.NpcPresence.OrderedNpcRuntimeIds,
+            Is.EqualTo(capture.Snapshot.ImportantNpcRuntimeIds));
         Assert.That(linker.TryFillOnce(Array.Empty<NpcRuntime>()), Is.True);
         Assert.That(restoredCity.TryBindSelectedDailyV1Definition(cityDefinition, definitions, bindings), Is.True);
-        Assert.That(restoredCity.SelectedRuntimeOwners, Is.Not.Null);
+        Assert.That(restoredCity.SelectedRuntimeOwners, Is.SameAs(restoredOwners));
         Assert.That(restoredCity.SelectedRuntimeOwners.Definitions, Is.SameAs(definitions));
         Assert.That(restoredCity.SelectedRuntimeOwners.Definition, Is.SameAs(cityDefinition));
         Assert.That(restoredCity.SelectedRuntimeOwners.LocationRuntimeId, Is.EqualTo(location.RuntimeId));

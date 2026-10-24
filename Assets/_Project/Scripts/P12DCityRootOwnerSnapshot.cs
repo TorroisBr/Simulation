@@ -432,6 +432,57 @@ internal sealed class P12DCityRootOwnerSnapshot
             marketRows.Add(stagedRow);
         }
 
+        if (selectedDefinitions != null)
+        {
+            if (!DailyV1CityRuntimeOwners.TryCreateRestoredP12DOwners(
+                    CityRuntimeId,
+                    location.RuntimeId,
+                    PopulationRuntimeId,
+                    PopulationEconomicRuntimeId,
+                    selectedDefinitions,
+                    selectedCityDefinition,
+                    CurrentPopulation,
+                    PopulationRevision,
+                    PopulationReceipts,
+                    PopulationReceiptRevision,
+                    selectedMarketRows,
+                    MarketRevision,
+                    ImportantNpcRuntimeIds,
+                    ImportantNpcRevision,
+                    out DailyV1CityRuntimeOwners restoredOwners))
+            {
+                failure = P12DCityRootOwnerSnapshotFailure.InvalidSnapshot;
+                return false;
+            }
+
+            MarketRuntime selectedMarket = new MarketRuntime(restoredOwners.Market);
+            if (!CityRuntime.TryCreateFromOwnerSnapshot(
+                    CityRuntimeId,
+                    null,
+                    location,
+                    restoredOwners.Counterparty,
+                    selectedMarket,
+                    restoredOwners.PopulationEconomy,
+                    restoredOwners.Population,
+                    ImportantNpcRevision,
+                    ImportantNpcRuntimeIds,
+                    captureEnvelope,
+                    out city,
+                    out membershipLinker,
+                    selectedCityDefinition,
+                    selectedDefinitions,
+                    restoredOwners))
+            {
+                failure = P12DCityRootOwnerSnapshotFailure.StageFailed;
+                city = null;
+                membershipLinker = null;
+                return false;
+            }
+
+            failure = P12DCityRootOwnerSnapshotFailure.None;
+            return true;
+        }
+
         if (!PopulationOwnerBridge.TryCreateFromOwnerSnapshot(
                 PopulationRuntimeId,
                 CurrentPopulation,

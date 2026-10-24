@@ -1488,7 +1488,8 @@ public class CityRuntime
         out CityRuntime city,
         out P12DCityMembershipLinker membershipLinker,
         DailyV1CityDefinition selectedDefinition = null,
-        DailyV1EffectiveDefinitions selectedDefinitions = null)
+        DailyV1EffectiveDefinitions selectedDefinitions = null,
+        DailyV1CityRuntimeOwners restoredSelectedOwners = null)
     {
         city = null;
         membershipLinker = null;
@@ -1538,13 +1539,30 @@ public class CityRuntime
             }
         }
 
+        if (restoredSelectedOwners != null
+            && (selectedDefinition == null
+                || selectedDefinitions == null
+                || !string.Equals(restoredSelectedOwners.RuntimeId, snapshotRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(restoredSelectedOwners.LocationRuntimeId, snapshotLocation.RuntimeId, StringComparison.Ordinal)
+                || !ReferenceEquals(restoredSelectedOwners.Definitions, selectedDefinitions)
+                || !ReferenceEquals(restoredSelectedOwners.Definition, selectedDefinition)
+                || !ReferenceEquals(restoredSelectedOwners.Population, snapshotPopulation)
+                || !ReferenceEquals(restoredSelectedOwners.Market, snapshotMarket.SelectedDailyV1Owner)
+                || !ReferenceEquals(restoredSelectedOwners.Counterparty, snapshotCounterparty)
+                || !ReferenceEquals(restoredSelectedOwners.PopulationEconomy, snapshotPopulationEconomy)
+                || restoredSelectedOwners.NpcPresence.Revision != snapshotImportantNpcRevision
+                || !restoredSelectedOwners.NpcPresence.OrderedNpcRuntimeIds.SequenceEqual(orderedNpcRuntimeIds)))
+        {
+            return false;
+        }
+
         CityRuntime staged = new CityRuntime
         {
             runtimeId = snapshotRuntimeId,
             cityData = selectedDefinition == null ? snapshotCityData : null,
             selectedDailyV1Definition = selectedDefinition,
             selectedDefinitionGraph = selectedDefinitions,
-            selectedRuntimeOwners = null,
+            selectedRuntimeOwners = restoredSelectedOwners,
             location = snapshotLocation,
             marketCounterparty = snapshotCounterparty,
             market = snapshotMarket,

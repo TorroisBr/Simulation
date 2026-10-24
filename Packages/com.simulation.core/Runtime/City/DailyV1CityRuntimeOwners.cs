@@ -126,6 +126,80 @@ internal sealed partial class DailyV1CityRuntimeOwners
         return true;
     }
 
+    /// <summary>
+    /// Hydrates the admitted P12-D City owner bundle directly from detached Core
+    /// values. Unity may build a compatibility projection from the returned
+    /// owners, but it must not construct a second population, market, or
+    /// membership authority for the selected profile.
+    /// </summary>
+    internal static bool TryCreateRestoredP12DOwners(
+        string runtimeId,
+        string locationRuntimeId,
+        string populationRuntimeId,
+        string populationEconomicRuntimeId,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1CityDefinition definition,
+        int currentPopulation,
+        long populationRevision,
+        IReadOnlyList<PopulationOperationReceiptSnapshot> populationReceipts,
+        long populationReceiptRevision,
+        IReadOnlyList<DailyV1MarketItemState> marketRows,
+        long marketRevision,
+        IReadOnlyList<string> orderedNpcRuntimeIds,
+        long importantNpcRevision,
+        out DailyV1CityRuntimeOwners owners)
+    {
+        owners = null;
+        if (string.IsNullOrWhiteSpace(runtimeId)
+            || string.IsNullOrWhiteSpace(locationRuntimeId)
+            || !string.Equals(populationRuntimeId, runtimeId, StringComparison.Ordinal)
+            || !string.Equals(populationEconomicRuntimeId, "population-" + runtimeId, StringComparison.Ordinal)
+            || marketRows == null
+            || orderedNpcRuntimeIds == null
+            || marketRevision < 0L
+            || importantNpcRevision < 0L
+            || !IsAdmitted(definitions, definition)
+            || !SettlementPopulationRuntime.TryCreateFromOwnerSnapshot(
+                populationRuntimeId,
+                currentPopulation,
+                populationRevision,
+                populationReceipts,
+                populationReceiptRevision,
+                out SettlementPopulationRuntime population))
+            return false;
+
+        MarketCounterpartyRuntime counterparty = MarketCounterpartyRuntime.CreateOpen(runtimeId);
+        DailyV1MarketOwner market = new DailyV1MarketOwner(definitions, counterparty);
+        if (!market.TryCreateFromOwnerSnapshot(
+                marketRows, marketRevision, counterparty, out DailyV1MarketOwner restoredMarket)
+            || !DailyV1CityNpcPresenceOwner.TryCreateBound(
+                runtimeId, orderedNpcRuntimeIds, importantNpcRevision,
+                out DailyV1CityNpcPresenceOwner npcPresence))
+            return false;
+
+        PopulationEconomyRuntime populationEconomy = new PopulationEconomyRuntime(
+            runtimeId,
+            ConsumptionPaymentMode.Free,
+            0f,
+            MarketLiquidityMode.Open);
+        if (!TryCreateBound(
+                runtimeId,
+                locationRuntimeId,
+                definitions,
+                definition,
+                population,
+                restoredMarket,
+                counterparty,
+                populationEconomy,
+                npcPresence,
+                out DailyV1CityRuntimeOwners restoredOwners)
+            || restoredOwners.HasLocalDailyMaterialFlow)
+            return false;
+
+        owners = restoredOwners;
+        return true;
+    }
+
     private static bool IsAdmitted(
         DailyV1EffectiveDefinitions definitions,
         DailyV1CityDefinition definition) =>
