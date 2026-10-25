@@ -255,6 +255,47 @@ public sealed class DailyV1ApplicationSessionGateTests
         return sections;
     }
 
+    private static OwnerSectionCensusSnapshot[] CreateCoreBoundCityAndP12FSectionVector(
+        DailyV1ActiveRuntimeSession session)
+    {
+        OwnerSectionCensusSnapshot[] existing = CreateCoreBoundP12FSectionVector(session);
+        List<OwnerSectionCensusSnapshot> sections = new List<OwnerSectionCensusSnapshot>();
+        foreach (OwnerSectionCensusSnapshot section in existing)
+        {
+            bool citySection = false;
+            foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.CityPrefixes)
+                if (section.SectionId.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    citySection = true;
+                    break;
+                }
+            if (!citySection) sections.Add(section);
+        }
+
+        foreach (DailyV1CityRuntimeOwners city in session.OwnerGraph.Cities)
+        {
+            string cityKey = P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(city.RuntimeId);
+            Add(DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId),
+                city.NpcPresence, city.NpcPresence.OrderedNpcRuntimeIds.Count, city.NpcPresence.Revision);
+            Add(DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix + cityKey,
+                city.Market, city.Market.Items.Count, city.Market.Revision);
+            string populationId = DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix + cityKey;
+            string receiptsId = DailyV1SelectedOwnerSectionCensusContract.CityPopulationOperationReceiptsSectionPrefix + cityKey;
+            Assert.That(city.Population.TryCaptureOperationReceiptSnapshot(
+                out IReadOnlyList<PopulationOperationReceiptSnapshot> receipts, out long receiptRevision), Is.True);
+            Add(populationId, city.Population, 1, city.Population.Revision);
+            Add(receiptsId, city.Population, receipts.Count, receiptRevision);
+        }
+        return sections.ToArray();
+
+        void Add(string id, object identity, int cardinality, long revision)
+        {
+            sections.Add(new OwnerSectionCensusSnapshot(id,
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                OwnerSectionRole.Required, identity, cardinality, revision));
+        }
+    }
+
     [Test]
     public void ContinuationSaveOperationRetainsExactCompletedSourceWitnessAndClosesScope()
     {
@@ -435,6 +476,126 @@ public sealed class DailyV1ApplicationSessionGateTests
             DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary));
         Assert.That(application.ActiveOperationCount, Is.EqualTo(1),
             "A rejected capture keeps its enclosing save lease active until disposal.");
+        operation.Dispose();
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void CoreBoundCitySourcesCaptureExactCityOwnerValuesAndRevisionVector()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCityAndP12FSectionVector(session);
+        InstallCompletedBoundaryToken(session, boundary, sections);
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
+
+        Assert.That(DailyV1P12GCoreBoundCityOwnerSources.TryCapture(
+            operation, out DailyV1P12GCoreBoundCityOwnerSources sources,
+            out DailyV1P12GCoreCitySourceCaptureFailure failure,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(failure, Is.EqualTo(DailyV1P12GCoreCitySourceCaptureFailure.None));
+        Assert.That(sources.IsFor(operation), Is.True);
+        Assert.That(sources.Cities.Count, Is.EqualTo(session.OwnerGraph.Cities.Count));
+        for (int index = 0; index < sources.Cities.Count; index++)
+        {
+            DailyV1P12GCoreCityOwnerSource source = sources.Cities[index];
+            DailyV1CityRuntimeOwners owner = session.OwnerGraph.Cities[index];
+            Assert.That(source.Owner, Is.SameAs(owner));
+            Assert.That(source.Input.CityRuntimeId, Is.EqualTo(owner.RuntimeId));
+            Assert.That(source.Input.CityDefinitionId, Is.EqualTo(owner.Definition.DefinitionId));
+            Assert.That(source.Input.ResolvedLocationRuntimeId, Is.EqualTo(owner.LocationRuntimeId));
+            Assert.That(source.Input.ImportantNpcRuntimeIds,
+                Is.EqualTo(owner.NpcPresence.OrderedNpcRuntimeIds));
+            Assert.That(source.Input.ImportantNpcRevision, Is.EqualTo(owner.NpcPresence.Revision));
+            Assert.That(source.Input.MarketRevision, Is.EqualTo(owner.Market.Revision));
+            Assert.That(source.Input.MarketItems.Count, Is.EqualTo(owner.Market.Items.Count));
+            Assert.That(source.Input.CurrentPopulation, Is.EqualTo(owner.Population.CurrentPopulation));
+            Assert.That(source.Input.PopulationRevision, Is.EqualTo(owner.Population.Revision));
+            Assert.That(source.Sections.Count, Is.EqualTo(4));
+
+            string cityKey = P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(owner.RuntimeId);
+            P12AOwnerSection presence = source.Sections.Single(section => section.Id ==
+                DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(owner.RuntimeId));
+            P12AOwnerSection market = source.Sections.Single(section => section.Id ==
+                DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix + cityKey);
+            P12AOwnerSection population = source.Sections.Single(section => section.Id ==
+                DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix + cityKey);
+            P12AOwnerSection receipts = source.Sections.Single(section => section.Id ==
+                DailyV1SelectedOwnerSectionCensusContract.CityPopulationOperationReceiptsSectionPrefix + cityKey);
+            Assert.That(presence.Rows.Count, Is.EqualTo(owner.NpcPresence.OrderedNpcRuntimeIds.Count));
+            Assert.That(presence.Revision, Is.EqualTo(owner.NpcPresence.Revision));
+            Assert.That(market.Rows.Count, Is.EqualTo(owner.Market.Items.Count));
+            Assert.That(market.Revision, Is.EqualTo(owner.Market.Revision));
+            Assert.That(population.Rows.Count, Is.EqualTo(1));
+            Assert.That(population.Revision, Is.EqualTo(owner.Population.Revision));
+            Assert.That(receipts.Rows.Count, Is.EqualTo(source.Input.PopulationReceipts.Count));
+            Assert.That(receipts.Revision, Is.EqualTo(source.Input.PopulationReceiptRevision));
+        }
+        Assert.That(operation.TryRevalidate(out DailyCaptureEligibilityFailure revalidationFailure), Is.True);
+        Assert.That(revalidationFailure, Is.EqualTo(DailyCaptureEligibilityFailure.None));
+        operation.Dispose();
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void CoreBoundCitySourcesRejectMismatchedOwnerIdentityWithoutPartialOutput()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCityAndP12FSectionVector(session);
+        string presenceId = DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(
+            session.OwnerGraph.Cities[0].RuntimeId);
+        int index = Array.FindIndex(sections, section => section.SectionId == presenceId);
+        Assert.That(index, Is.GreaterThanOrEqualTo(0));
+        OwnerSectionCensusSnapshot current = sections[index];
+        sections[index] = new OwnerSectionCensusSnapshot(current.SectionId,
+            current.SchemaVersion, current.Role, new object(),
+            current.Cardinality, current.Revision);
+        InstallCompletedBoundaryToken(session, boundary, sections);
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
+
+        Assert.That(DailyV1P12GCoreBoundCityOwnerSources.TryCapture(
+            operation, out DailyV1P12GCoreBoundCityOwnerSources sources,
+            out DailyV1P12GCoreCitySourceCaptureFailure failure,
+            out string diagnostic), Is.False, diagnostic);
+        Assert.That(sources, Is.Null);
+        Assert.That(failure, Is.EqualTo(DailyV1P12GCoreCitySourceCaptureFailure.OwnerCensusMismatch));
+        Assert.That(application.ActiveOperationCount, Is.EqualTo(1));
+        operation.Dispose();
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void CoreBoundCitySourcesDiscardAllStagedRowsWhenWitnessChangesDuringRecapture()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCityAndP12FSectionVector(session);
+        InstallCompletedBoundaryToken(session, boundary, sections);
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
+        boundary.SetContinuationSaveEvidenceCaptureCallback(captureCount =>
+        {
+            if (captureCount != 3) return;
+            OwnerSectionCensusSnapshot current = sections[0];
+            sections[0] = new OwnerSectionCensusSnapshot(current.SectionId,
+                current.SchemaVersion, current.Role, current.OwnerInstanceIdentity,
+                current.Cardinality, current.Revision + 1L);
+        });
+
+        Assert.That(DailyV1P12GCoreBoundCityOwnerSources.TryCapture(
+            operation, out DailyV1P12GCoreBoundCityOwnerSources sources,
+            out DailyV1P12GCoreCitySourceCaptureFailure failure,
+            out string diagnostic), Is.False, diagnostic);
+        Assert.That(sources, Is.Null);
+        Assert.That(failure, Is.EqualTo(DailyV1P12GCoreCitySourceCaptureFailure.StaleSourceBoundary));
+        Assert.That(application.ActiveOperationCount, Is.EqualTo(1));
         operation.Dispose();
         Assert.That(application.ActiveOperationCount, Is.Zero);
     }
