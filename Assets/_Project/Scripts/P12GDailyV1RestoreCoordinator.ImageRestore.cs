@@ -346,37 +346,17 @@ internal static partial class P12GDailyV1RestoreCoordinator
             return false;
         }
 
-        if (!DailyV1P12DSelectedOwnerGraphStager.TryCreate(
-                selectedDefinitions,
-                stagedD.SelectedCityOwners,
-                stagedD.SelectedNpcOwners,
-                stagedD.SpatialNetwork.SelectedOwner,
-                stagedE.Justice.CoreOwner,
-                stagedF.TravelParties,
-                stagedD.RuntimeIdentities.CoreIdentityIndex,
-                stagedD.Persons,
-                stagedF.ScheduledDirectives,
-                stagedF.Expeditions,
-                out DailyV1SelectedRuntimeOwnerGraph ownerGraph,
-                out DailyV1P12DSelectedOwnerGraphFailure ownerGraphFailure)
-            || ownerGraph == null
-            || ownerGraphFailure != DailyV1P12DSelectedOwnerGraphFailure.None)
-        {
-            diagnostic = "Core rejected the exact staged P12 City/NPC owners or their cross-owner relationships.";
-            return false;
-        }
-
-        selectedCalendar = new SimulationCalendar(calendarDefinition);
         if (!DailyV1RestoredExecutionBoundaryComposer.TryCreate(
-                selectedDefinitions, effectiveConfiguration, selectedCalendar, stagedTime,
-                restoredAdmissionContext, stagedC.WorldIdentity, ownerGraph,
+                selectedDefinitions, effectiveConfiguration, calendarDefinition, stagedTime,
+                restoredAdmissionContext, stagedC.WorldIdentity,
+                stagedD.SelectedCityOwners, stagedD.SelectedNpcOwners,
+                stagedD.SpatialNetwork.SelectedOwner, stagedE.Justice.CoreOwner,
+                stagedF.TravelParties, stagedD.RuntimeIdentities.CoreIdentityIndex,
+                stagedD.Persons, stagedF.ScheduledDirectives, stagedF.Expeditions,
                 stagedC.RuntimeIdAllocator, stagedC.DeterministicRandom,
                 stagedC.RecordSequence, decisionStore, stagedF.ActorChoices,
-                out executionBoundaryState, out diagnostic))
-        {
-            selectedCalendar = null;
+                out executionBoundaryState, out selectedCalendar, out diagnostic))
             return false;
-        }
 
         return true;
     }
