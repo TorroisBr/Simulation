@@ -196,6 +196,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ActorChoiceCensusProviders.cs" Link="Persistence/ActorChoiceCensusProviders.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12FActorChoiceSnapshot.cs" Link="Persistence/P12FActorChoiceSnapshot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12FTravelPartyOwnerSnapshot.cs" Link="Persistence/P12FTravelPartyOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AFCommitmentOwnerCodec.cs" Link="Persistence/P12AFCommitmentOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/TravelPartyCensusProvider.cs" Link="Persistence/TravelPartyCensusProvider.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ContinuationDescriptorV2.cs" Link="Persistence/ContinuationDescriptorV2.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/AtomicFileSlot.cs" Link="Persistence/AtomicFileSlot.cs" />

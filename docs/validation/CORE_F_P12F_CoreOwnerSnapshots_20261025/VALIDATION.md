@@ -86,3 +86,17 @@ A first post-cleanup CoreValidation invocation (`0902e8211b29419891f14c00289284c
 The CoreValidation originals remain in private owner-only E: retention. The DotNetTrx packager was not given a fabricated context: passing the `simulation-core-validation/v1` manifest directly is rejected because the approved adapter requires `dotnet-trx-source-context-v1`. No normalized .NET package is claimed. Resolve that established source-context packaging step before any Core canonical promotion requiring permanent .NET evidence; the private cold/warm results remain available for this candidate review.
 
 Independent exact-tip review follows the candidate commit. The implementation remains a bounded source migration only; the rest of CORE-F runtime/session, application, restoration-host and continuation acceptance remains open.
+## Shared Core wire-codec extraction — exact-source focused validation
+
+This follow-on candidate moves the existing TravelParty/Expedition commitment wire codec into `Simulation.Core` without changing its contract strings, owner section IDs, row keys, row revisions, payload field ordering, enum encodings, or validation rules. The original Unity `.meta` identity moved with the source. The Unity image decoder/encoder remains the caller through the repository's existing narrow `Assembly-CSharp` internal-visibility boundary; cross-owner NPC and geography validation remains in Unity staging.
+
+The validated working source was based on commit `32141470818d83f56851395d450d50c63d1a56f0` and was bound by CoreValidation input digest `0d0b5cb0c5fb03db8a0a54537dbee6f3b0f113d19de187522df56c53558c9e17` and Unity input digest `73b5a44f28fd1f2b93176ff8e7f715e46f144c66ef489f2e02b9a9529329c435`. The new .NET tests exercise TravelParty role/order and negative-zero float-bit round trip, Expedition progress/order round trip, exact section/row identities, and rejection of trailing payload bytes. Existing Unity codec contract tests remained unchanged.
+
+| Gate | Result | Evidence |
+|---|---:|---|
+| Official CoreValidation cold | 758/758 passed | Run `666e60e3298740558d80ce28c56311b4`; private cold TRX SHA-256 `c7e8cf49f4420767749730e81280d5e040c49fe3bee50cab4f03f4670ef8e78f` |
+| Official CoreValidation warm | 758/758 passed | Same run; private warm TRX SHA-256 `8425b0d0971098c904837018447ed911449d60cfe9a21e81249265b1a030a328` |
+| Official Unity EditMode (`P12AContinuationCodecTests`) | 37/37 passed; zero failed, skipped, or inconclusive | Run `f75e813f104b44939ecaaea4fee3d78c`; Unity `6000.3.9f1` / Test Framework `1.6.0`; 1,884 input files, digest above; private XML SHA-256 `2a77d9b31d11393c196462df7cdb4f9f86cfbe8be619c92a3056cc8913083c96` |
+| `git diff --check` | PASS | Exact validated source changes |
+
+The runner manifests and original TRX/XML remain in owner-only E: evidence storage. No public .NET/TRX package is claimed. This was a focused integration run, not a new ALL EditMode or Smoke result; the prior full-suite evidence above applies to the previous source checkpoint only. The new code checkpoint still requires an independent exact-tip review. CoreValidation reports `worktreeLibraryAbsent=false`; this run makes no Library-independent-host claim.
