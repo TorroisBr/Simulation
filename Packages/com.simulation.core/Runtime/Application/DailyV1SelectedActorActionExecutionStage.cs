@@ -106,8 +106,16 @@ internal static class DailyV1SelectedActorActionExecutionStage
         PersonStore personStore,
         IAuthoritativeRandomSource randomSource,
         long absoluteDay,
-        IDailyV1SelectedActorActionExecutionBoundary boundary)
+        IDailyV1SelectedActorActionExecutionBoundary boundary,
+        DailyV1ActorTurnCoreRoots coreRoots = null)
     {
+        if (coreRoots != null)
+        {
+            if (!coreRoots.IsBoundToGraph(graph))
+                throw new InvalidOperationException(
+                    "The selected action received Core decision roots from another owner graph.");
+            randomSource = coreRoots.RandomSource;
+        }
         if (graph == null || actor == null || personStore == null
             || randomSource == null || boundary == null
             || absoluteDay < 0L
@@ -149,7 +157,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
         }
         else if (!TryCommitSelectedActionSlot(
                      graph, actor, selected, decisionBoundary, NpcDecisionOrigin.Autonomous,
-                     absoluteDay, boundary))
+                     absoluteDay, boundary, coreRoots))
             throw new InvalidOperationException(
                 "The exact selected Daily-v1 action could not be installed through its admitted Core owner boundary.");
 
@@ -175,7 +183,8 @@ internal static class DailyV1SelectedActorActionExecutionStage
         IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
         NpcDecisionOrigin origin,
         long absoluteDay,
-        IDailyV1SelectedActorActionExecutionBoundary boundary)
+        IDailyV1SelectedActorActionExecutionBoundary boundary,
+        DailyV1ActorTurnCoreRoots coreRoots)
     {
         DailyV1NpcActionPayloadOwner payload = selected?.PreparedPayload;
         if (graph == null || actor == null || selected?.Action == null
@@ -183,6 +192,9 @@ internal static class DailyV1SelectedActorActionExecutionStage
             || !graph.ContainsExactNpcOwner(actor)
             || !ReferenceEquals(graph.Definitions, actor.Definitions))
             return false;
+        if (coreRoots != null && !coreRoots.IsBoundToGraph(graph))
+            throw new InvalidOperationException(
+                "The selected action slot cannot use decision roots from another owner graph.");
 
         if (payload == null
             && !DailyV1NpcActionPayloadOwner.TryCreate(
@@ -197,10 +209,22 @@ internal static class DailyV1SelectedActorActionExecutionStage
             && boundary.TryPrepareSelectedActionProjection(
                 actor, selected, decisionBoundary, candidate);
         Func<bool> slotAdmission = () => boundary.CanCommitSelectedActionSlot(actor, payload);
-        bool hasDecisionOwners = boundary.TryGetDecisionRecordOwners(
-            actor, out RuntimeIdAllocator idAllocator,
-            out SimulationRecordSequence recordSequence,
-            out NpcDecisionStore decisionStore);
+        RuntimeIdAllocator idAllocator;
+        SimulationRecordSequence recordSequence;
+        NpcDecisionStore decisionStore;
+        bool hasDecisionOwners;
+        if (coreRoots != null)
+        {
+            idAllocator = coreRoots.IdAllocator;
+            recordSequence = coreRoots.RecordSequence;
+            decisionStore = coreRoots.DecisionStore;
+            hasDecisionOwners = true;
+        }
+        else
+        {
+            hasDecisionOwners = boundary.TryGetDecisionRecordOwners(
+                actor, out idAllocator, out recordSequence, out decisionStore);
+        }
 
         bool committed;
         bool existingTravelDecision = selected.Action.Values.actionType?.Value
@@ -295,10 +319,18 @@ internal static class DailyV1SelectedActorActionExecutionStage
         ScheduledDirective directive,
         IAuthoritativeRandomSource randomSource,
         long absoluteDay,
-        IDailyV1SelectedActorActionExecutionBoundary boundary)
+        IDailyV1SelectedActorActionExecutionBoundary boundary,
+        DailyV1ActorTurnCoreRoots coreRoots = null)
     {
         const string incompatibleReason =
             "Actor is not in a compatible state for the requested action.";
+        if (coreRoots != null)
+        {
+            if (!coreRoots.IsBoundToGraph(graph))
+                throw new InvalidOperationException(
+                    "The scheduled selected action received Core decision roots from another owner graph.");
+            randomSource = coreRoots.RandomSource;
+        }
         if (graph == null || actor == null || directive == null
             || randomSource == null || boundary == null || absoluteDay < 0L
             || !graph.ContainsExactNpcOwner(actor)
@@ -338,7 +370,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
 
         if (!TryCommitSelectedActionSlot(
                 graph, actor, requested, decisionBoundary,
-                NpcDecisionOrigin.ScheduledDirective, absoluteDay, boundary))
+                NpcDecisionOrigin.ScheduledDirective, absoluteDay, boundary, coreRoots))
         {
             directive.MarkSkipped(absoluteDay, incompatibleReason);
             return;

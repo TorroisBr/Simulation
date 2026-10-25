@@ -15,6 +15,10 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         ActorChoiceStore choices = new ActorChoiceStore(people);
         ScheduledDirectiveStore directives = new ScheduledDirectiveStore(new SimulationTime(5L));
         RecordingBoundary boundary = new RecordingBoundary();
+        DailyV1ExecutionBoundaryState executionState = CreateActorTurnExecutionState(
+            graph, choices, new RuntimeIdAllocator(), new DeterministicRandomSource(5),
+            new SimulationRecordSequence(), new NpcDecisionStore());
+        DailyV1ActorTurnCoreRoots coreRoots = new DailyV1ActorTurnCoreRoots(executionState, graph);
         long actionRevision = actor.ActionSlot.Revision;
 
         InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
@@ -27,7 +31,8 @@ public sealed class DailyV1ActorTurnExecutionStageTests
                 absoluteDay: 5L,
                 merchantTradeEnabled: false,
                 requireCoreOwnedSelectedOperations: true,
-                boundary));
+                coreRoots: coreRoots,
+                boundary: boundary));
 
         Assert.That(failure.Message, Does.Contain("Core-owned action and actor-choice"));
         Assert.That(boundary.Events, Is.Empty,
@@ -534,6 +539,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 
         PersonStore people = new PersonStore();
         PersonId personId = RegisterMaterializedPerson(people, actor, "person-core-choice-sale");
+        Assert.That(graph.TryBindPersonStore(people), Is.True);
         ActorChoiceStore choices = new ActorChoiceStore(people);
         int choiceAdmissionCount = 0;
         int choiceCommitCount = 0;
@@ -546,6 +552,14 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             out ActorChoiceInput input, out ActorChoiceStoreFailureCode captureFailure),
             Is.True, captureFailure.ToString());
 
+        RuntimeIdAllocator coreIdAllocator = new RuntimeIdAllocator();
+        IAuthoritativeRandomSource coreRandom = new FixedRandom(0.75f);
+        SimulationRecordSequence coreRecordSequence = new SimulationRecordSequence();
+        NpcDecisionStore coreDecisionStore = new NpcDecisionStore();
+        DailyV1ExecutionBoundaryState executionState = CreateActorTurnExecutionState(
+            graph, choices, coreIdAllocator, coreRandom, coreRecordSequence, coreDecisionStore);
+        DailyV1ActorTurnCoreRoots coreRoots = new DailyV1ActorTurnCoreRoots(executionState, graph);
+
         int inventoryBefore = actor.Inventory.GetAmount(iron);
         int marketBefore = city.Market.GetAmount(iron);
         float balanceBefore = actor.MoneyAccount.Balance;
@@ -555,10 +569,12 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 
         CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary();
         boundary.BindGraph(graph);
+        boundary.WithdrawSelectedExecutionAfterPreflight = true;
         Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
             graph,
             new[] { new DailyV1ActorTurnRosterEntry(0, personId, actor) },
-            people, choices, null, 20L, merchantTradeEnabled: false, boundary: boundary), Is.True);
+            people, choices, null, 20L, merchantTradeEnabled: false,
+            requireCoreOwnedSelectedOperations: true, coreRoots: coreRoots, boundary: boundary), Is.True);
 
         Assert.That(boundary.Events, Does.Contain("complete-dispatch"),
             "The committed actor-choice slot was dispatched through the Core selected action stage.");
@@ -567,7 +583,18 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         Assert.That(choices.TryGet(input.InputId, out ActorChoiceInput attempted), Is.True);
         Assert.That(attempted.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
         Assert.That(attempted.Dispositions[0].DecisionRecordId,
-            Is.EqualTo(boundary.Decisions.Decisions.Single().DecisionId));
+            Is.EqualTo(coreDecisionStore.Decisions.Single().DecisionId));
+        Assert.That(boundary.Decisions.Decisions, Is.Empty,
+            "The admitted Core roots own decision recording even when the host boundary exposes different decision owners.");
+        Assert.That(boundary.DecisionOwnerLookupCount, Is.Zero,
+            "The admitted Core path never asks the Unity boundary for allocator, sequence or decision-store roots.");
+        Assert.That(boundary.SelectedExecutionChecks, Is.EqualTo(1),
+            "A committed Core choice still dispatches after Unity withdraws its selection flag following preflight.");
+        Assert.That(coreIdAllocator.CaptureSnapshot().Counters.Single(counter =>
+            counter.FamilyId == "decision").NextSequence, Is.EqualTo(2L),
+            "The Core decision allocator consumes one identity from its initial next-sequence value.");
+        Assert.That(coreRecordSequence.CaptureSnapshot().NextSequence, Is.EqualTo(2L),
+            "The Core record sequence owns both the actor-choice and its action result records.");
         Assert.That(attempted.Dispositions[1].AttemptOutcome,
             Is.EqualTo(ActorChoiceAttemptOutcome.Succeeded));
         DailyV1NpcActionPayloadOwner salePayload = actor.ActionSlot.CurrentPayload;
@@ -586,6 +613,73 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         Assert.That(choiceAdmissionCount, Is.EqualTo(3),
             "Capture, dispatch-start and returned-attempt transitions each use their existing P12 boundary.");
         Assert.That(choiceCommitCount, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void AdmittedActorTurnConsumesCoreRandomAndDecisionRootsInsteadOfHostRoots()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
+        PersonStore people = new PersonStore();
+        PersonId personId = RegisterMaterializedPerson(people, actor, "person-core-roots-autonomous");
+        Assert.That(graph.TryBindPersonStore(people), Is.True);
+        ActorChoiceStore choices = new ActorChoiceStore(people);
+        RuntimeIdAllocator coreIdAllocator = new RuntimeIdAllocator();
+        FixedRandom coreRandom = new FixedRandom(0f);
+        SimulationRecordSequence coreRecordSequence = new SimulationRecordSequence();
+        NpcDecisionStore coreDecisionStore = new NpcDecisionStore();
+        DailyV1ExecutionBoundaryState executionState = CreateActorTurnExecutionState(
+            graph, choices, coreIdAllocator, coreRandom, coreRecordSequence, coreDecisionStore);
+        DailyV1ActorTurnCoreRoots coreRoots = new DailyV1ActorTurnCoreRoots(executionState, graph);
+        CoreSelectedActionBoundary host = new CoreSelectedActionBoundary();
+        host.BindGraph(graph);
+        long coreSequenceBefore = coreRecordSequence.CaptureSnapshot().NextSequence;
+
+        Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
+            graph, new[] { new DailyV1ActorTurnRosterEntry(0, personId, actor) },
+            people, choices, null, 12L, merchantTradeEnabled: false,
+            requireCoreOwnedSelectedOperations: true, coreRoots: coreRoots, boundary: host), Is.True);
+
+        Assert.That(coreRandom.Calls, Is.EqualTo(1),
+            "The admitted Core action selector consumes the execution-state RNG root.");
+        Assert.That(host.Random.Calls, Is.Zero,
+            "A different RNG exposed by the Unity host cannot drive admitted action selection.");
+        Assert.That(coreDecisionStore.Decisions, Has.Count.EqualTo(1));
+        Assert.That(host.Decisions.Decisions, Is.Empty,
+            "Admitted action decisions are recorded in the execution-state Core store.");
+        Assert.That(host.DecisionOwnerLookupCount, Is.Zero,
+            "The admitted turn does not ask Unity for allocator, sequence or decision-store roots.");
+        Assert.That(coreRecordSequence.CaptureSnapshot().NextSequence,
+            Is.GreaterThan(coreSequenceBefore));
+        Assert.That(actor.ActionSlot.CurrentPayload.OriginDecisionId,
+            Is.EqualTo(coreDecisionStore.Decisions.Single().DecisionId));
+    }
+
+    private static DailyV1ExecutionBoundaryState CreateActorTurnExecutionState(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        ActorChoiceStore actorChoiceStore,
+        RuntimeIdAllocator idAllocator,
+        IAuthoritativeRandomSource randomSource,
+        SimulationRecordSequence recordSequence,
+        NpcDecisionStore decisionStore)
+    {
+        Assert.That(graph.TryBindPersonStore(actorChoiceStore.PersonStore), Is.True);
+        DailyV1CalendarDefinition calendarDefinition = graph.Definitions.Calendar;
+        CalendarDefinition calendar = calendarDefinition.monthLengths != null
+            && calendarDefinition.monthLengths.Count > 0
+            ? new CalendarDefinition(new List<int>(calendarDefinition.monthLengths), calendarDefinition.daysPerWeek)
+            : new CalendarDefinition(calendarDefinition.monthsPerYear,
+                calendarDefinition.weeksPerMonth, calendarDefinition.daysPerWeek);
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(20L),
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            SimulationRuntimeCompositionProfile.Standard, new WorldId(Guid.NewGuid()));
+        Assert.That(state.TryBindRuntimeConfiguration(
+            graph.Definitions.EffectiveConfiguration, new SimulationCalendar(calendar)), Is.True);
+        Assert.That(state.TryBindSelectedRuntimeOwnerGraph(graph), Is.True);
+        Assert.That(state.TryBindInitialSelectedRuntimeActorRosterFromOwnerGraph(), Is.True);
+        Assert.That(state.TryBindSelectedRuntimeExecutionRoots(
+            idAllocator, randomSource, recordSequence, decisionStore, actorChoiceStore), Is.True);
+        return state;
     }
 
     [Test]
@@ -910,6 +1004,10 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         PersonStore people = new PersonStore();
         PersonId personId = RegisterMaterializedPerson(people, actor, "person-forced-escape");
         ActorChoiceStore choices = new ActorChoiceStore(people);
+        DailyV1ExecutionBoundaryState executionState = CreateActorTurnExecutionState(
+            graph, choices, new RuntimeIdAllocator(), new DeterministicRandomSource(12),
+            new SimulationRecordSequence(), new NpcDecisionStore());
+        DailyV1ActorTurnCoreRoots coreRoots = new DailyV1ActorTurnCoreRoots(executionState, graph);
         DailyV1ActionDefinition escape = definitions.Actions.Values.Single(
             value => value.Values.actionType?.Value
                 == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue);
@@ -923,10 +1021,12 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 
         CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary();
         boundary.BindGraph(graph);
+        boundary.WithdrawSelectedExecutionAfterPreflight = true;
         Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
             graph, new[] { new DailyV1ActorTurnRosterEntry(0, personId, actor) },
             people, choices, directives, 12L, false,
-            requireCoreOwnedSelectedOperations: true, boundary), Is.True);
+            requireCoreOwnedSelectedOperations: true, coreRoots: coreRoots,
+            boundary: boundary), Is.True);
 
         Assert.That(directive.State, Is.EqualTo(ScheduledDirectiveState.Succeeded), directive.ResultReason);
         Assert.That(justice.ContainsSentence(sentence), Is.False);
@@ -939,6 +1039,8 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             "Selected RequestAction/ForceOutcome directives execute through Core, not the Unity gameplay callback.");
         Assert.That(boundary.Events, Does.Not.Contain("reserved-query"),
             "The selected Daily-v1 exact-empty reservation fact is established by the admitted profile and Core owner graph.");
+        Assert.That(boundary.SelectedExecutionChecks, Is.EqualTo(1),
+            "After the admitted graph proves Core actor execution once, directive and reservation handling must not ask Unity whether Core execution remains selected.");
     }
 
     private static DailyV1SelectedRuntimeOwnerGraph CreateGraph(out DailyV1NpcRuntimeOwners actor)
@@ -1224,6 +1326,9 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         private DailyV1NpcActionPayloadOwner preparedProjectionPayload;
         internal bool RejectNextActionSlotAdmission;
         internal bool CanProjectSelectedAction = true;
+        internal bool WithdrawSelectedExecutionAfterPreflight;
+        internal int SelectedExecutionChecks;
+        internal int DecisionOwnerLookupCount;
         internal bool RejectDispatchBoundary;
         internal bool RejectActionStatusBoundary;
         internal int DispatchBoundaryRequests;
@@ -1239,7 +1344,11 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         internal long NextRecordSequence => sequence.CaptureSnapshot().NextSequence;
 
         public IAuthoritativeRandomSource RandomSource => Random;
-        public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor) => true;
+        public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor)
+        {
+            SelectedExecutionChecks++;
+            return !WithdrawSelectedExecutionAfterPreflight || SelectedExecutionChecks == 1;
+        }
         public void LogSkippedDirective(ScheduledDirective directive, string reason) =>
             Events.Add("skipped:" + reason);
 
@@ -1265,6 +1374,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             out SimulationRecordSequence recordSequence,
             out NpcDecisionStore decisionStore)
         {
+            DecisionOwnerLookupCount++;
             idAllocator = allocator;
             recordSequence = sequence;
             decisionStore = Decisions;

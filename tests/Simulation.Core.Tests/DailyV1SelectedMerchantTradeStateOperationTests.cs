@@ -439,6 +439,7 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
             return null;
         }
 
+        public void LogTradeDecisionFailure(string message) { }
         public void LogTrade(string message) { }
     }
 
@@ -609,6 +610,7 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
         public void ClearTradeTravelPlan(DailyV1NpcRuntimeOwners actor) { }
         public NpcDecisionRecord RecordTradeRedirect(DailyV1NpcRuntimeOwners actor,
             string targetLocationRuntimeId, CommercialDecisionEvidence evidence) => null;
+        public void LogTradeDecisionFailure(string message) { }
         public void LogTrade(string message) { }
     }
 }

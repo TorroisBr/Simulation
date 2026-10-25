@@ -74,7 +74,76 @@ internal interface IDailyV1SelectedActorTurnExecutionContext
     IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
     PersonStore PersonStore { get; }
     ActorChoiceStore ActorChoiceStore { get; }
+    DailyV1ActorTurnCoreRoots CoreRoots { get; }
     IDailyV1ActorTurnExecutionBoundary Boundary { get; }
+}
+
+/// <summary>
+/// Exact decision and random roots already bound to the admitted Core runtime.
+/// The Unity action adapter may project those decisions, but it cannot choose
+/// or replace the allocator, sequence, decision store, or random source used
+/// by an admitted actor turn.
+/// </summary>
+internal sealed class DailyV1ActorTurnCoreRoots
+{
+    private readonly DailyV1ExecutionBoundaryState executionState;
+    private readonly DailyV1SelectedRuntimeOwnerGraph ownerGraph;
+
+    internal IAuthoritativeRandomSource RandomSource { get; }
+    internal RuntimeIdAllocator IdAllocator { get; }
+    internal SimulationRecordSequence RecordSequence { get; }
+    internal NpcDecisionStore DecisionStore { get; }
+
+    internal DailyV1ActorTurnCoreRoots(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph)
+    {
+        this.executionState = executionState ?? throw new ArgumentNullException(nameof(executionState));
+        this.ownerGraph = ownerGraph ?? throw new ArgumentNullException(nameof(ownerGraph));
+        RandomSource = executionState.SelectedRandomSource
+            ?? throw new ArgumentException("The Core actor-turn random source is unavailable.", nameof(executionState));
+        IdAllocator = executionState.SelectedRuntimeIdAllocator
+            ?? throw new ArgumentException("The Core actor-turn ID allocator is unavailable.", nameof(executionState));
+        RecordSequence = executionState.SelectedRecordSequence
+            ?? throw new ArgumentException("The Core actor-turn record sequence is unavailable.", nameof(executionState));
+        DecisionStore = executionState.SelectedDecisionStore
+            ?? throw new ArgumentException("The Core actor-turn decision store is unavailable.", nameof(executionState));
+    }
+
+    internal bool IsBoundTo(
+        DailyV1ExecutionBoundaryState candidateState,
+        DailyV1SelectedRuntimeOwnerGraph candidateGraph,
+        PersonStore personStore,
+        ActorChoiceStore actorChoiceStore)
+    {
+        return ReferenceEquals(executionState, candidateState)
+            && ReferenceEquals(ownerGraph, candidateGraph)
+            && candidateState != null
+            && candidateState.SelectedRuntimeExecutionRootsBound
+            && ReferenceEquals(candidateState.SelectedRuntimeOwnerGraph, ownerGraph)
+            && ReferenceEquals(candidateState.SelectedRandomSource, RandomSource)
+            && ReferenceEquals(candidateState.SelectedRuntimeIdAllocator, IdAllocator)
+            && ReferenceEquals(candidateState.SelectedRecordSequence, RecordSequence)
+            && ReferenceEquals(candidateState.SelectedDecisionStore, DecisionStore)
+            && ReferenceEquals(ownerGraph.PersonStore, personStore)
+            && ReferenceEquals(candidateState.SelectedActorChoiceStore, actorChoiceStore)
+            && ReferenceEquals(actorChoiceStore?.PersonStore, personStore);
+    }
+
+    internal bool IsBoundTo(
+        DailyV1SelectedRuntimeOwnerGraph candidateGraph,
+        PersonStore personStore,
+        ActorChoiceStore actorChoiceStore) => IsBoundTo(
+            executionState, candidateGraph, personStore, actorChoiceStore);
+
+    internal bool IsBoundToGraph(DailyV1SelectedRuntimeOwnerGraph candidateGraph) =>
+        ReferenceEquals(ownerGraph, candidateGraph)
+        && executionState.SelectedRuntimeExecutionRootsBound
+        && ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, ownerGraph)
+        && ReferenceEquals(executionState.SelectedRandomSource, RandomSource)
+        && ReferenceEquals(executionState.SelectedRuntimeIdAllocator, IdAllocator)
+        && ReferenceEquals(executionState.SelectedRecordSequence, RecordSequence)
+        && ReferenceEquals(executionState.SelectedDecisionStore, DecisionStore);
 }
 
 /// <summary>
@@ -103,10 +172,21 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             || actorBoundary == null)
             return false;
 
+        DailyV1ActorTurnCoreRoots coreRoots;
+        try
+        {
+            coreRoots = new DailyV1ActorTurnCoreRoots(executionState, graph);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+
         context = new CoreSelectedActorTurnExecutionContext(
             executionState.SelectedRuntimeActorRoster,
             graph.PersonStore,
             executionState.SelectedActorChoiceStore,
+            coreRoots,
             actorBoundary);
         return true;
     }
@@ -118,17 +198,20 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             IReadOnlyList<DailyV1ActorTurnRosterProjection> runtimeRoster,
             PersonStore personStore,
             ActorChoiceStore actorChoiceStore,
+            DailyV1ActorTurnCoreRoots coreRoots,
             IDailyV1ActorTurnExecutionBoundary boundary)
         {
             RuntimeRoster = runtimeRoster ?? throw new ArgumentNullException(nameof(runtimeRoster));
             PersonStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
             ActorChoiceStore = actorChoiceStore ?? throw new ArgumentNullException(nameof(actorChoiceStore));
+            CoreRoots = coreRoots ?? throw new ArgumentNullException(nameof(coreRoots));
             Boundary = boundary ?? throw new ArgumentNullException(nameof(boundary));
         }
 
         public IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
         public PersonStore PersonStore { get; }
         public ActorChoiceStore ActorChoiceStore { get; }
+        public DailyV1ActorTurnCoreRoots CoreRoots { get; }
         public IDailyV1ActorTurnExecutionBoundary Boundary { get; }
     }
 }
@@ -390,6 +473,7 @@ internal static class DailyV1SelectedDailyExecutionStage
                 absoluteDay,
                 graph.Definitions.EffectiveConfiguration.MerchantTrade.Enabled,
                 requireCoreOwnedSelectedOperations: executionState != null,
+                actorTurnContext.CoreRoots,
                 actorTurnContext.Boundary))
             throw new InvalidOperationException(
                 "The selected Core actor-turn stage could not run with the exact admitted graph and runtime roster.");
@@ -422,6 +506,14 @@ internal static class DailyV1SelectedDailyExecutionStage
         out string failure)
     {
         failure = null;
+        if (actorTurnContext.CoreRoots == null
+            || !actorTurnContext.CoreRoots.IsBoundTo(
+                executionState, graph, actorTurnContext.PersonStore,
+                actorTurnContext.ActorChoiceStore))
+        {
+            failure = "Core actor-turn decision roots differ from the exact execution-state roots";
+            return false;
+        }
         if (!(actorTurnContext.Boundary is IDailyV1SelectedActorActionExecutionBoundary actionBoundary))
         {
             failure = "actor action boundary does not implement the selected Core contract";
@@ -442,17 +534,10 @@ internal static class DailyV1SelectedDailyExecutionStage
             return false;
         }
         if (!executionState.HasExactSelectedRuntimeActorTurnRoots(
-                graph,
-                actorTurnContext.PersonStore,
-                actorTurnContext.ActorChoiceStore,
-                actionBoundary.RandomSource))
+                graph, actorTurnContext.PersonStore, actorTurnContext.ActorChoiceStore,
+                actorTurnContext.CoreRoots.RandomSource))
         {
-            failure = "execution-state graph, PersonStore, ActorChoiceStore, or random-source identity differs";
-            return false;
-        }
-        if (!ReferenceEquals(actionBoundary.RandomSource, executionState.SelectedRandomSource))
-        {
-            failure = "action-boundary random source differs from the selected execution-state root";
+            failure = "execution-state graph, PersonStore, ActorChoiceStore, or Core random-source identity differs";
             return false;
         }
 
@@ -482,41 +567,9 @@ internal static class DailyV1SelectedDailyExecutionStage
                     + actor.RuntimeId;
                 return false;
             }
-            IDailyV1ActorChoiceExecutionBoundary selectedChoiceBoundary =
-                coreActorChoiceBoundary;
-            if (!ReferenceEquals(coreActorChoiceBoundary.RandomSource,
-                    executionState.SelectedRandomSource)
-                || !selectedChoiceBoundary.TryGetDecisionRecordOwners(
-                    actor,
-                    out RuntimeIdAllocator actorChoiceIdAllocator,
-                    out SimulationRecordSequence actorChoiceRecordSequence,
-                    out NpcDecisionStore actorChoiceDecisionStore)
-                || !ReferenceEquals(actorChoiceIdAllocator,
-                    executionState.SelectedRuntimeIdAllocator)
-                || !ReferenceEquals(actorChoiceRecordSequence,
-                    executionState.SelectedRecordSequence)
-                || !ReferenceEquals(actorChoiceDecisionStore,
-                    executionState.SelectedDecisionStore))
+            if (!ReferenceEquals(coreActorChoiceBoundary, actionBoundary))
             {
-                failure = "actor-choice boundary does not use the exact selected random and decision-record roots for actor "
-                    + actor.RuntimeId;
-                return false;
-            }
-
-            if (!actionBoundary.TryGetDecisionRecordOwners(
-                actor,
-                out RuntimeIdAllocator idAllocator,
-                out SimulationRecordSequence recordSequence,
-                out NpcDecisionStore decisionStore))
-            {
-                failure = "decision-record owners are incomplete for actor " + actor.RuntimeId;
-                return false;
-            }
-            if (!ReferenceEquals(idAllocator, executionState.SelectedRuntimeIdAllocator)
-                || !ReferenceEquals(recordSequence, executionState.SelectedRecordSequence)
-                || !ReferenceEquals(decisionStore, executionState.SelectedDecisionStore))
-            {
-                failure = "allocator, record sequence, or decision store identity differs for actor "
+                failure = "actor-choice projection/admission adapter differs from the exact selected actor-turn adapter for actor "
                     + actor.RuntimeId;
                 return false;
             }

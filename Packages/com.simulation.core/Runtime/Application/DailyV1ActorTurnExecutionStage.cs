@@ -233,6 +233,24 @@ internal static class DailyV1ActorTurnExecutionStage
         bool requireCoreOwnedSelectedOperations,
         IDailyV1ActorTurnExecutionBoundary boundary)
     {
+        return TryRunOrdered(
+            graph, roster, personStore, actorChoiceStore, scheduledDirectiveStore,
+            absoluteDay, merchantTradeEnabled, requireCoreOwnedSelectedOperations,
+            null, boundary);
+    }
+
+    internal static bool TryRunOrdered(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<DailyV1ActorTurnRosterEntry> roster,
+        PersonStore personStore,
+        ActorChoiceStore actorChoiceStore,
+        ScheduledDirectiveStore scheduledDirectiveStore,
+        long absoluteDay,
+        bool merchantTradeEnabled,
+        bool requireCoreOwnedSelectedOperations,
+        DailyV1ActorTurnCoreRoots coreRoots,
+        IDailyV1ActorTurnExecutionBoundary boundary)
+    {
         if (graph == null || roster == null || personStore == null
             || actorChoiceStore == null || boundary == null)
             throw new ArgumentNullException("Selected actor turns require their exact graph, roster, owners and host boundary.");
@@ -269,6 +287,12 @@ internal static class DailyV1ActorTurnExecutionStage
         // a graph-owned actor omitted from the host roster to miss its turn.
         if (!graph.MatchesExactOwnerInstances(graph.Cities, rosterOwners))
             return false;
+
+        if (requireCoreOwnedSelectedOperations
+            && (coreRoots == null
+                || !coreRoots.IsBoundTo(graph, personStore, actorChoiceStore)))
+            throw new InvalidOperationException(
+                "The admitted Daily-v1 actor turn requires exact Core roots from its bound execution state and owner graph.");
 
         if (requireCoreOwnedSelectedOperations)
         {
@@ -317,7 +341,8 @@ internal static class DailyV1ActorTurnExecutionStage
 
             if (hasPendingChoice && graph.IsPersonInSpatialTransit(personId))
             {
-                TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary);
+                TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary,
+                    requireCoreOwnedSelectedOperations, coreRoots);
                 DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,
                     rosterOrdinal, ActorChoiceDeferralReason.Traveling);
                 continue;
@@ -325,7 +350,8 @@ internal static class DailyV1ActorTurnExecutionStage
 
             if (actor.Travel.IsTraveling)
             {
-                TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary);
+                TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary,
+                    requireCoreOwnedSelectedOperations, coreRoots);
                 DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,
                     rosterOrdinal, ActorChoiceDeferralReason.Traveling);
                 continue;
@@ -333,13 +359,14 @@ internal static class DailyV1ActorTurnExecutionStage
 
             if (graph.Expeditions != null && graph.Expeditions.IsNpcOnActiveExpedition(actor.RuntimeId))
             {
-                TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary);
+                TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary,
+                    requireCoreOwnedSelectedOperations, coreRoots);
                 DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,
                     rosterOrdinal, ActorChoiceDeferralReason.ExpeditionParticipant);
                 continue;
             }
 
-            if (IsReservedToday(actor, boundary))
+            if (IsReservedToday(actor, boundary, requireCoreOwnedSelectedOperations))
             {
                 DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,
                     rosterOrdinal, ActorChoiceDeferralReason.ReservedExpeditionActivity);
@@ -348,7 +375,8 @@ internal static class DailyV1ActorTurnExecutionStage
 
             if (actorChoiceStore.TryGetNextPendingForActor(personId, out _))
             {
-                if (TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary))
+                if (TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary,
+                        requireCoreOwnedSelectedOperations, coreRoots))
                 {
                     DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,
                         rosterOrdinal, ActorChoiceDeferralReason.ScheduledDirective);
@@ -357,14 +385,16 @@ internal static class DailyV1ActorTurnExecutionStage
 
                 if (TryProcessActorChoice(graph, actor, personId, actorChoiceStore,
                         absoluteDay, rosterOrdinal, boundary,
-                        requireCoreOwnedSelectedOperations))
+                        requireCoreOwnedSelectedOperations, coreRoots))
                     continue;
             }
 
             if (merchantTradeEnabled)
-                AdvanceMerchantTradeState(graph, actor, absoluteDay, boundary);
+                AdvanceMerchantTradeState(graph, actor, absoluteDay, boundary,
+                    requireCoreOwnedSelectedOperations, coreRoots);
 
-            if (TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary))
+            if (TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary,
+                    requireCoreOwnedSelectedOperations, coreRoots))
             {
                 DeferActorChoiceForPerson(actorChoiceStore, personId, absoluteDay,
                     rosterOrdinal, ActorChoiceDeferralReason.ScheduledDirective);
@@ -373,21 +403,37 @@ internal static class DailyV1ActorTurnExecutionStage
 
             if (TryProcessActorChoice(graph, actor, personId, actorChoiceStore,
                     absoluteDay, rosterOrdinal, boundary,
-                    requireCoreOwnedSelectedOperations))
+                    requireCoreOwnedSelectedOperations, coreRoots))
                 continue;
 
-            if (boundary is IDailyV1SelectedActorActionExecutionBoundary selectedActionBoundary
-                && selectedActionBoundary.UsesSelectedDailyV1ActionExecution(actor))
+            if (requireCoreOwnedSelectedOperations)
             {
+                if (!(boundary is IDailyV1SelectedActorActionExecutionBoundary selectedActionBoundary))
+                    throw new InvalidOperationException(
+                        "The admitted Daily-v1 actor lost its Core-owned action boundary during its turn.");
                 if (!DailyV1SelectedActorActionExecutionStage.TryExecuteAutonomousAction(
-                        graph, actor, personStore, selectedActionBoundary.RandomSource,
-                        absoluteDay, selectedActionBoundary))
+                        graph, actor, personStore,
+                        requireCoreOwnedSelectedOperations
+                            ? coreRoots.RandomSource : selectedActionBoundary.RandomSource,
+                        absoluteDay, selectedActionBoundary, coreRoots))
                     throw new InvalidOperationException(
                         "The exact selected Daily-v1 actor could not complete its Core-owned action turn.");
             }
             else
             {
-                boundary.EvaluateAndExecuteAction(actor);
+                if (boundary is IDailyV1SelectedActorActionExecutionBoundary selectedActionBoundary
+                    && selectedActionBoundary.UsesSelectedDailyV1ActionExecution(actor))
+                {
+                    if (!DailyV1SelectedActorActionExecutionStage.TryExecuteAutonomousAction(
+                            graph, actor, personStore, selectedActionBoundary.RandomSource,
+                            absoluteDay, selectedActionBoundary))
+                        throw new InvalidOperationException(
+                            "The exact selected Daily-v1 actor could not complete its Core-owned action turn.");
+                }
+                else
+                {
+                    boundary.EvaluateAndExecuteAction(actor);
+                }
             }
         }
 
@@ -400,20 +446,29 @@ internal static class DailyV1ActorTurnExecutionStage
         DailyV1NpcRuntimeOwners actor,
         ScheduledDirectiveStore directiveStore,
         long absoluteDay,
-        IDailyV1ActorTurnExecutionBoundary boundary)
+        IDailyV1ActorTurnExecutionBoundary boundary,
+        bool requireCoreOwnedSelectedOperations,
+        DailyV1ActorTurnCoreRoots coreRoots)
     {
+        if (requireCoreOwnedSelectedOperations
+            && !(boundary is IDailyV1SelectedActorActionExecutionBoundary))
+            throw new InvalidOperationException(
+                "The admitted Daily-v1 actor lost its Core-owned directive boundary during its turn.");
         if (directiveStore == null
             || !directiveStore.TryTakeDirective(actor.RuntimeId, out ScheduledDirective directive))
             return false;
 
         if (boundary is IDailyV1SelectedActorActionExecutionBoundary selectedActionBoundary
-            && selectedActionBoundary.UsesSelectedDailyV1ActionExecution(actor))
+            && (requireCoreOwnedSelectedOperations
+                || selectedActionBoundary.UsesSelectedDailyV1ActionExecution(actor)))
         {
             if (directive.Mode == ScheduledDirectiveMode.RequestAction)
             {
                 DailyV1SelectedActorActionExecutionStage.ProcessScheduledRequestAction(
-                    graph, actor, directive, selectedActionBoundary.RandomSource,
-                    absoluteDay, selectedActionBoundary);
+                    graph, actor, directive,
+                    requireCoreOwnedSelectedOperations
+                        ? coreRoots.RandomSource : selectedActionBoundary.RandomSource,
+                    absoluteDay, selectedActionBoundary, coreRoots);
             }
             else if (directive.Mode == ScheduledDirectiveMode.ForceOutcome)
             {
@@ -428,6 +483,9 @@ internal static class DailyV1ActorTurnExecutionStage
         }
         else
         {
+            if (requireCoreOwnedSelectedOperations)
+                throw new InvalidOperationException(
+                    "The admitted Daily-v1 actor cannot delegate directive execution to its host.");
             boundary.ProcessScheduledDirective(actor, directive);
         }
         return true;
@@ -441,10 +499,16 @@ internal static class DailyV1ActorTurnExecutionStage
         long absoluteDay,
         int rosterOrdinal,
         IDailyV1ActorTurnExecutionBoundary boundary,
-        bool requireCoreOwnedSelectedOperations)
+        bool requireCoreOwnedSelectedOperations,
+        DailyV1ActorTurnCoreRoots coreRoots)
     {
+        if (requireCoreOwnedSelectedOperations
+            && !(boundary is IDailyV1SelectedActorActionExecutionBoundary))
+            throw new InvalidOperationException(
+                "The admitted Daily-v1 actor lost its Core-owned choice boundary during its turn.");
         if (boundary is IDailyV1SelectedActorActionExecutionBoundary selectedActionBoundary
-            && selectedActionBoundary.UsesSelectedDailyV1ActionExecution(actor))
+            && (requireCoreOwnedSelectedOperations
+                || selectedActionBoundary.UsesSelectedDailyV1ActionExecution(actor)))
         {
             // This helper is also reached after the ordinary directive slot
             // when no choice is pending. Avoid entering the strict selected
@@ -466,9 +530,9 @@ internal static class DailyV1ActorTurnExecutionStage
                     "The selected Core actor-choice context omitted its projection/admission boundary.");
             if (requireCoreOwnedSelectedOperations
                 && (!(executionBoundary is IDailyV1CoreActorChoiceExecutionBoundary coreChoiceBoundary)
-                    || !coreChoiceBoundary.UsesSelectedDailyV1ActionExecution(actor)))
+                    || !ReferenceEquals(coreChoiceBoundary, selectedActionBoundary)))
                 throw new InvalidOperationException(
-                    "The admitted Daily-v1 actor choice cannot dispatch through host-owned action execution.");
+                    "The admitted Daily-v1 actor choice must use the exact actor-turn Core boundary.");
             EffectiveMerchantTradeConfiguration merchantTrade =
                 graph.Definitions.EffectiveConfiguration?.MerchantTrade;
             if (merchantTrade == null)
@@ -477,9 +541,13 @@ internal static class DailyV1ActorTurnExecutionStage
             return DailyV1ActorChoiceExecutionStage.TryProcessPending(
                 graph, actor, personId, store, absoluteDay, rosterOrdinal,
                 graph.IsActorAtCurrentCityLocation(actor), merchantTrade.Enabled,
-                decisionSystemAvailable, executionBoundary);
+                decisionSystemAvailable, executionBoundary,
+                requireCoreOwnedSelectedOperations, coreRoots);
         }
 
+        if (requireCoreOwnedSelectedOperations)
+            throw new InvalidOperationException(
+                "The admitted Daily-v1 actor cannot delegate actor-choice execution to its host.");
         return boundary.TryProcessActorChoice(actor, rosterOrdinal);
     }
 
@@ -487,10 +555,17 @@ internal static class DailyV1ActorTurnExecutionStage
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
         long absoluteDay,
-        IDailyV1ActorTurnExecutionBoundary boundary)
+        IDailyV1ActorTurnExecutionBoundary boundary,
+        bool requireCoreOwnedSelectedOperations,
+        DailyV1ActorTurnCoreRoots coreRoots)
     {
+        if (requireCoreOwnedSelectedOperations
+            && !(boundary is IDailyV1SelectedActorActionExecutionBoundary))
+            throw new InvalidOperationException(
+                "The admitted Daily-v1 actor lost its Core-owned Merchant boundary during its turn.");
         if (boundary is IDailyV1SelectedActorActionExecutionBoundary selectedActionBoundary
-            && selectedActionBoundary.UsesSelectedDailyV1ActionExecution(actor))
+            && (requireCoreOwnedSelectedOperations
+                || selectedActionBoundary.UsesSelectedDailyV1ActionExecution(actor)))
         {
             if (!(boundary is IDailyV1SelectedMerchantTradeStateBoundary merchantBoundary)
                 || !(boundary is IDailyV1SelectedMerchantTradeStateAdmissionBoundary admissionBoundary))
@@ -499,7 +574,7 @@ internal static class DailyV1ActorTurnExecutionStage
             if (!admissionBoundary.ExecuteWithinSelectedMerchantDailyOperation(
                     actor,
                     () => DailyV1SelectedMerchantTradeStateOperation.TryAdvance(
-                        graph, actor, absoluteDay, merchantBoundary)))
+                        graph, actor, absoluteDay, merchantBoundary, coreRoots)))
                 throw new InvalidOperationException(
                     "The selected Core Merchant daily operation could not complete through its admitted owner graph.");
             return;
@@ -507,13 +582,24 @@ internal static class DailyV1ActorTurnExecutionStage
 
         // Legacy hosts outside the selected Core boundary retain their
         // existing per-actor callback path.
+        if (requireCoreOwnedSelectedOperations)
+            throw new InvalidOperationException(
+                "The admitted Daily-v1 actor cannot delegate Merchant state execution to its host.");
         boundary.AdvanceMerchantTradeState(actor);
     }
 
     private static bool IsReservedToday(
         DailyV1NpcRuntimeOwners actor,
-        IDailyV1ActorTurnExecutionBoundary boundary)
+        IDailyV1ActorTurnExecutionBoundary boundary,
+        bool requireCoreOwnedSelectedOperations)
     {
+        if (requireCoreOwnedSelectedOperations)
+        {
+            // This admitted profile has no site, place, notable-item, or
+            // expedition-autonomy producer. Core owns the exact-empty result;
+            // a selected Unity host must not supply reservation truth.
+            return false;
+        }
         if (boundary is IDailyV1SelectedActorActionExecutionBoundary selectedBoundary
             && selectedBoundary.UsesSelectedDailyV1ActionExecution(actor))
         {

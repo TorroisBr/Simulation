@@ -411,36 +411,29 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
-    public void AdvanceRejectsSelectedActorWithoutExactDecisionRecordRootsBeforeActorDispatch()
+    public void AdvanceUsesStateBoundDecisionRootsWhenHostOwnerLookupFails()
     {
-        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
-            DailyV1CapturedSelectedContentFixture.CreateDefinitions());
-        DailyV1ExecutionBoundaryState state = CreateCaptureState(22L, graph);
-        Assert.That(state.TryBindSelectedRuntimeOwnerGraph(graph), Is.True);
-        RuntimeIdAllocator runtimeIdAllocator = new RuntimeIdAllocator();
-        IAuthoritativeRandomSource randomSource = new DeterministicRandomSource(23);
-        SimulationRecordSequence recordSequence = new SimulationRecordSequence();
-        NpcDecisionStore decisionStore = new NpcDecisionStore();
-        ActorChoiceStore actorChoiceStore = new ActorChoiceStore(graph.PersonStore);
-        Assert.That(state.TryBindSelectedRuntimeExecutionRoots(
-            runtimeIdAllocator, randomSource, recordSequence, decisionStore, actorChoiceStore), Is.True);
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
         FakeBoundary boundary = new FakeBoundary(
-            runtimeIdAllocator, randomSource, recordSequence, decisionStore, actorChoiceStore)
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore)
         {
             UseSelectedActionExecution = true,
             FailDecisionRecordOwnerResolution = true
         };
 
-        Assert.Throws<InvalidOperationException>(() =>
-            DailyV1SelectedDailyExecutionStage.Advance(
-                state, graph, boundary));
+        FakeRuntimeAdvanceBoundary advanceBoundary = new FakeRuntimeAdvanceBoundary(state, boundary);
+        Assert.That(state.TryAdvanceDay(
+            advanceBoundary, out SimulationRuntimeAdvanceFailure failure), Is.True, failure.ToString());
 
-        Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context" }),
-            "The root proof runs before logger output, demography, day-start, economy, directives, or knowledge writes.");
-        Assert.That(boundary.SelectedActionDispatchLookupCount, Is.Zero,
-            "An actor dispatch boundary is never requested after root preflight fails.");
-        Assert.That(boundary.Calls, Does.Not.Contain("travel-context"),
-            "A selected actor cannot begin Core execution when the exact decision roots are unavailable.");
+        Assert.That(boundary.Calls, Does.Contain("actor-context"));
+        Assert.That(boundary.DecisionOwnerLookupCount, Is.Zero,
+            "The state-bound Core roots are authoritative; the host's failing owner lookup is not consulted.");
+        Assert.That(state.CompletedCoreSequence, Is.EqualTo(1L));
+        Assert.That(state.CurrentCaptureToken, Is.Not.Null);
     }
 
     [Test]
@@ -478,7 +471,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
-    public void RuntimeAdvanceRootRejectionFaultsBeforeDailyWritesAndCapturePublication()
+    public void RuntimeAdvanceUsesStateBoundRootsWhenHostOwnerLookupFails()
     {
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
         DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
@@ -493,15 +486,16 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         };
         FakeRuntimeAdvanceBoundary advanceBoundary = new FakeRuntimeAdvanceBoundary(state, dailyBoundary);
 
-        Assert.Throws<InvalidOperationException>(() =>
-            state.TryAdvanceDay(advanceBoundary, out _));
+        Assert.That(state.TryAdvanceDay(
+            advanceBoundary, out SimulationRuntimeAdvanceFailure failure), Is.True, failure.ToString());
 
-        Assert.That(dailyBoundary.Calls, Is.EqualTo(new[] { "actor-context" }));
-        Assert.That(dailyBoundary.SelectedActionDispatchLookupCount, Is.Zero);
-        Assert.That(advanceBoundary.Calls, Does.Contain("fault"));
-        Assert.That(advanceBoundary.Calls, Does.Not.Contain("capture-evidence"));
-        Assert.That(state.CompletedCoreSequence, Is.Zero);
-        Assert.That(state.CurrentCaptureToken, Is.Null);
+        Assert.That(dailyBoundary.Calls, Does.Contain("actor-context"));
+        Assert.That(dailyBoundary.DecisionOwnerLookupCount, Is.Zero,
+            "A runtime advance consumes only the roots bound to its execution state.");
+        Assert.That(advanceBoundary.Calls, Does.Not.Contain("fault"));
+        Assert.That(advanceBoundary.Calls, Does.Contain("capture-evidence"));
+        Assert.That(state.CompletedCoreSequence, Is.EqualTo(1L));
+        Assert.That(state.CurrentCaptureToken, Is.Not.Null);
         Assert.That(state.AdvanceLeaseHeld, Is.False);
     }
 
@@ -582,6 +576,12 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(context.PersonStore, Is.SameAs(graph.PersonStore));
         Assert.That(context.ActorChoiceStore, Is.SameAs(state.SelectedActorChoiceStore));
         Assert.That(context.ActorChoiceStore.PersonStore, Is.SameAs(context.PersonStore));
+        Assert.That(context.CoreRoots.RandomSource, Is.SameAs(state.SelectedRandomSource));
+        Assert.That(context.CoreRoots.IdAllocator, Is.SameAs(state.SelectedRuntimeIdAllocator));
+        Assert.That(context.CoreRoots.RecordSequence, Is.SameAs(state.SelectedRecordSequence));
+        Assert.That(context.CoreRoots.DecisionStore, Is.SameAs(state.SelectedDecisionStore));
+        Assert.That(context.CoreRoots.IsBoundTo(
+            state, graph, context.PersonStore, context.ActorChoiceStore), Is.True);
         Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context" }));
     }
 
@@ -877,6 +877,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal bool UseSelectedActionExecution { get; set; }
         internal bool? ActorChoiceSelectedActionExecutionOverride { get; set; }
         internal bool FailDecisionRecordOwnerResolution { get; set; }
+        internal int DecisionOwnerLookupCount { get; private set; }
         internal int SelectedActionDispatchLookupCount { get; private set; }
         internal DailyV1JusticeRecordsOwner SubstituteJusticeRecordsOwner { get; set; }
         public void BeginLoggerDay(long absoluteDay) => Calls.Add("logger:" + absoluteDay);
@@ -1058,6 +1059,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
             public PersonStore PersonStore { get; }
             public ActorChoiceStore ActorChoiceStore { get; }
+            public DailyV1ActorTurnCoreRoots CoreRoots => null;
             public IDailyV1ActorTurnExecutionBoundary Boundary { get; }
         }
 
@@ -1171,6 +1173,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 DailyV1NpcRuntimeOwners actor,
                 string targetLocationRuntimeId,
                 CommercialDecisionEvidence evidence) => null;
+            public void LogTradeDecisionFailure(string message) { }
             public void LogTrade(string message) { }
         }
 
@@ -1250,6 +1253,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 DailyV1NpcRuntimeOwners actor,
                 string targetLocationRuntimeId,
                 CommercialDecisionEvidence evidence) => null;
+            public void LogTradeDecisionFailure(string message) { }
             public void LogTrade(string message) { }
             public bool ExecuteWithinSelectedMerchantDailyOperation(
                 DailyV1NpcRuntimeOwners actor,
@@ -1269,6 +1273,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 out SimulationRecordSequence recordSequence,
                 out NpcDecisionStore decisionStore)
             {
+                owner.DecisionOwnerLookupCount++;
                 idAllocator = owner.runtimeIdAllocator;
                 recordSequence = owner.recordSequence;
                 decisionStore = owner.decisionStore;

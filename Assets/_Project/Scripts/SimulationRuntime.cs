@@ -11542,6 +11542,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         public IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
         public PersonStore PersonStore { get; }
         public ActorChoiceStore ActorChoiceStore { get; }
+        public DailyV1ActorTurnCoreRoots CoreRoots => null;
         public IDailyV1ActorTurnExecutionBoundary Boundary { get; }
     }
 
@@ -11848,6 +11849,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return runtime.decisionRecorder?.Record(actor.RuntimeId,
                 NpcDecisionType.TradeRedirect, NpcDecisionOrigin.Autonomous,
                 null, null, targetLocationRuntimeId, evidence);
+        }
+
+        public void LogTradeDecisionFailure(string message)
+        {
+            runtime.logger?.LogError(message);
         }
 
         public void LogTrade(string message)
