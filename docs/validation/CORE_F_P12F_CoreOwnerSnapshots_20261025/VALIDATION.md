@@ -108,4 +108,11 @@ This follow-on moves the existing terminal P11 ActorChoice wire codec into `Simu
 - Official CoreValidation run `ac0c88eacaad4f38a09c6d208d73355b`: cold 761/761 and warm 761/761 passed; stable input inventory. Private manifest SHA-256 `6dbf470093d9895efd02fa2c3606939a0d1f9d2f4133a4a973bb5fdaa8310cc5`; cold TRX SHA-256 `964833b4dd4f4a75649535f9eb09885f2f9b2a7e1a4e63f91d4aae54bd465195`; warm TRX SHA-256 `01ba9d16894474fdd4dd7dd8e2eab90425ea647f495868ce53247c5c94e09b82`.
 - `git diff --check`: PASS for the source/test working changes.
 - The private .NET manifest and reports remain in the owner-only E: evidence store. This record does not claim a public TRX package. The runner reported `worktreeLibraryAbsent=false`; this is not Library-free host evidence.
-- Unity EditMode validation of this exact source identity is pending; earlier Unity test results apply to the prior codec source tree only.
+- The exact-source focused Unity EditMode run below is now complete. No full EditMode or Smoke result is claimed for this codec-move source tree.
+### Focused Unity revalidation on the ActorChoice codec move
+
+- Exact candidate code commit/tree: `88ca9532a06483935c5bca880c4c43c94c596373` / `a222cf98c4e3e96f56468d5d1b4c358c8db17784`.
+- Official Unity EditMode run `225b373adbcf4ebba8624ce851d3c046`, filter `P12AContinuationCodecTests`: 37/37 passed; zero failures, skips, or inconclusive cases. Unity Editor `6000.3.9f1`; input inventory 1,884 files, stable SHA-256 `a73845dc5ea4948c07a7c80683c25e47bac3d0d5830fb5e83a38a5921bf4405a`.
+- Private run-manifest SHA-256 `29eda97db5a51fc7e8ab6582c095b9756a18d1370b0463faa665eb22bf8d15d1`; original XML SHA-256 `4a3f47f2529c1af966b850c6577798e5d2e0c5a20cb0202b81352347336fef3c`; raw log SHA-256 `99a80cf0973d9c4166b532dfe207be9557e2adf5431ab89ac0e17adb414f5a8d`. The manifest and originals remain private in the owner-only E: evidence store.
+- Validation ran in a detached E: worktree at the exact commit. The two pre-existing local ProjectSettings files were copied byte-for-byte into that disposable worktree; their implementation-worktree copies remain unstaged and unchanged. Unity's before/after source inventory was stable.
+- This was the focused changed-suite gate only. Full EditMode/Smoke evidence cited earlier in this file remains tied to the earlier source checkpoint, not `88ca953`.
