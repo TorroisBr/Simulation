@@ -7,6 +7,9 @@ using System.Text;
 /// <summary>Explicit codecs for the selected Daily-v1 legacy spatial owner.</summary>
 internal static class P12ASpatialNetworkOwnerCodec
 {
+    internal const string LocationsSectionId = "p12d.legacy-spatial-network.locations";
+    internal const string RoutesSectionId = "p12d.legacy-spatial-network.routes";
+    internal const int SchemaVersion = 1;
     private const string RoutePayloadContract = "p12a.legacy-spatial-route/v1";
 
     internal static bool TryEncode(SpatialNetworkOwnerSnapshot snapshot,
@@ -15,7 +18,7 @@ internal static class P12ASpatialNetworkOwnerCodec
         locations = null;
         routes = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            SpatialNetworkCensusProvider.LocationsSectionId);
+            LocationsSectionId);
         if (!TryValidate(snapshot, out List<string> locationIds, out result)) return false;
 
         try
@@ -39,20 +42,20 @@ internal static class P12ASpatialNetworkOwnerCodec
                     if (stream.Length > P12AContinuationCodec.MaxSectionBytes)
                     {
                         result = new P12AResult(P12AResultCode.LimitExceeded,
-                            SpatialNetworkCensusProvider.RoutesSectionId, route.RuntimeId);
+                            RoutesSectionId, route.RuntimeId);
                         return false;
                     }
                     routeRows.Add(new P12AOwnerRow(route.RuntimeId, snapshot.Revision, stream.ToArray()));
                 }
             }
 
-            locations = new P12AOwnerSection(SpatialNetworkCensusProvider.LocationsSectionId,
-                SpatialNetworkCensusProvider.SchemaVersion, 0, OwnerSectionRole.Required,
-                P12ADailyV1Census.ExpectedAliasGroupForSection(SpatialNetworkCensusProvider.LocationsSectionId),
+            locations = new P12AOwnerSection(LocationsSectionId,
+                SchemaVersion, 0, OwnerSectionRole.Required,
+                P12ADailyV1Census.ExpectedAliasGroupForSection(LocationsSectionId),
                 snapshot.Revision, locationRows);
-            routes = new P12AOwnerSection(SpatialNetworkCensusProvider.RoutesSectionId,
-                SpatialNetworkCensusProvider.SchemaVersion, 0, OwnerSectionRole.Required,
-                P12ADailyV1Census.ExpectedAliasGroupForSection(SpatialNetworkCensusProvider.RoutesSectionId),
+            routes = new P12AOwnerSection(RoutesSectionId,
+                SchemaVersion, 0, OwnerSectionRole.Required,
+                P12ADailyV1Census.ExpectedAliasGroupForSection(RoutesSectionId),
                 snapshot.Revision, routeRows);
             result = null;
             return true;
@@ -62,7 +65,7 @@ internal static class P12ASpatialNetworkOwnerCodec
             locations = routes = null;
             result = new P12AResult(exception is P12ALimitException || exception is OverflowException
                 ? P12AResultCode.LimitExceeded : P12AResultCode.InvalidOwnerValue,
-                SpatialNetworkCensusProvider.LocationsSectionId);
+                LocationsSectionId);
             return false;
         }
     }
@@ -72,9 +75,9 @@ internal static class P12ASpatialNetworkOwnerCodec
     {
         snapshot = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            SpatialNetworkCensusProvider.LocationsSectionId);
-        if (!IsSection(locations, SpatialNetworkCensusProvider.LocationsSectionId)
-            || !IsSection(routes, SpatialNetworkCensusProvider.RoutesSectionId)
+            LocationsSectionId);
+        if (!IsSection(locations, LocationsSectionId)
+            || !IsSection(routes, RoutesSectionId)
             || locations.Revision != routes.Revision
             || !RowsStrictlyAscending(locations)) return false;
 
@@ -128,7 +131,7 @@ internal static class P12ASpatialNetworkOwnerCodec
     {
         orderedLocations = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            SpatialNetworkCensusProvider.LocationsSectionId);
+            LocationsSectionId);
         if (snapshot == null || snapshot.SchemaVersion != SpatialNetworkOwnerSnapshot.CurrentSchemaVersion
             || snapshot.Revision < 0 || snapshot.LocationRuntimeIds == null || snapshot.Routes == null
             || snapshot.LocationRuntimeIds.Count > P12AContinuationCodec.MaxRows
@@ -143,7 +146,7 @@ internal static class P12ASpatialNetworkOwnerCodec
             if (string.IsNullOrWhiteSpace(id) || !identities.Add(id)) return false;
             try { P12AWire.GetEncodedStringByteCount(id); }
             catch (Exception exception) when (IsWireException(exception))
-            { result = new P12AResult(P12AResultCode.LimitExceeded, SpatialNetworkCensusProvider.LocationsSectionId); return false; }
+            { result = new P12AResult(P12AResultCode.LimitExceeded, LocationsSectionId); return false; }
             locations.Add(id);
         }
         locations.Sort(StringComparer.Ordinal);
@@ -159,7 +162,7 @@ internal static class P12ASpatialNetworkOwnerCodec
                 || !locationSet.Contains(route.DestinationLocationRuntimeId))
             {
                 result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                    SpatialNetworkCensusProvider.RoutesSectionId, route?.RuntimeId);
+                    RoutesSectionId, route?.RuntimeId);
                 return false;
             }
             try
@@ -171,7 +174,7 @@ internal static class P12ASpatialNetworkOwnerCodec
             catch (Exception exception) when (IsWireException(exception))
             {
                 result = new P12AResult(P12AResultCode.LimitExceeded,
-                    SpatialNetworkCensusProvider.RoutesSectionId, route.RuntimeId);
+                    RoutesSectionId, route.RuntimeId);
                 return false;
             }
         }
@@ -182,7 +185,7 @@ internal static class P12ASpatialNetworkOwnerCodec
 
     private static bool IsSection(P12AOwnerSection section, string id)
         => section != null && section.Id == id
-            && section.Major == SpatialNetworkCensusProvider.SchemaVersion && section.Minor == 0
+            && section.Major == SchemaVersion && section.Minor == 0
             && section.Role == OwnerSectionRole.Required
             && section.AliasGroup == P12ADailyV1Census.ExpectedAliasGroupForSection(id)
             && section.Revision >= 0 && section.Rows.Count <= P12AContinuationCodec.MaxRows;

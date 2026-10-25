@@ -30,6 +30,7 @@
     <Compile Include="DailyV1MutationEpochStateTests.cs" />
     <Compile Include="DailyV1RuntimeIdentityIndexTests.cs" />
     <Compile Include="P12ARuntimeIdentityOwnerCodecTests.cs" Link="Persistence/P12ARuntimeIdentityOwnerCodecTests.cs" />
+    <Compile Include="SpatialNetworkOwnerCodecTests.cs" Link="Persistence/SpatialNetworkOwnerCodecTests.cs" />
     <Compile Include="MoneyAccountRuntimeCoreTests.cs" />
     <Compile Include="DailyV1MoneyTransferOperationTests.cs" Link="Economy/DailyV1MoneyTransferOperationTests.cs" />
     <Compile Include="DailyV1CityEconomicOwnerCoreTests.cs" />
