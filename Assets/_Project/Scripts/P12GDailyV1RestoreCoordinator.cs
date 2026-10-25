@@ -1265,31 +1265,62 @@ internal static partial class P12GDailyV1RestoreCoordinator
             }
         }
 
-        if (!TryCreateRestoredCoreExecutionBoundary(
-                selectedDefinitions, effective, calendar, time, restoredAdmissionContext,
-                stagedC, stagedD, stagedE, stagedF, decisions,
-                out DailyV1ExecutionBoundaryState restoredExecutionBoundary,
-                out SimulationCalendar restoredCalendar, out diagnostic))
-            return false;
-
+        DailyV1ExecutionBoundaryState restoredExecutionBoundary;
+        SimulationCalendar restoredCalendar;
         DailyV1ActiveRuntimeSession coreRuntimeSession = null;
-        if (restoredExecutionBoundary.HasAdmittedSelectedDailyExecution)
+        if (application == null)
         {
-            bool coreSessionCreated = application == null
-                ? DailyV1ActiveRuntimeSession.TryCreate(
+            if (!TryCreateRestoredCoreExecutionBoundary(
+                    selectedDefinitions, effective, calendar, time, restoredAdmissionContext,
+                    stagedC, stagedD, stagedE, stagedF, decisions,
+                    out restoredExecutionBoundary, out restoredCalendar, out diagnostic))
+                return false;
+
+            if (restoredExecutionBoundary.HasAdmittedSelectedDailyExecution
+                && !DailyV1ActiveRuntimeSession.TryCreate(
                     restoredExecutionBoundary,
                     selectedDefinitions,
                     lastEconomySnapshotDay,
                     out coreRuntimeSession,
-                    out diagnostic)
-                : application.TryCreateRestoredActiveRuntimeSession(
-                    restoredExecutionBoundary,
+                    out diagnostic))
+                return false;
+        }
+        else
+        {
+            if (!application.TryCreateRestoredActiveRuntimeSession(
                     selectedDefinitions,
+                    effective,
+                    calendar,
+                    time,
+                    restoredAdmissionContext,
+                    stagedC.WorldIdentity,
+                    stagedD.SelectedCityOwners,
+                    stagedD.SelectedNpcOwners,
+                    stagedD.SpatialNetwork.SelectedOwner,
+                    stagedE.Justice.CoreOwner,
+                    stagedF.TravelParties,
+                    stagedD.RuntimeIdentities.CoreIdentityIndex,
+                    stagedD.Persons,
+                    stagedF.ScheduledDirectives,
+                    stagedF.Expeditions,
+                    stagedC.RuntimeIdAllocator,
+                    stagedC.DeterministicRandom,
+                    stagedC.RecordSequence,
+                    decisions,
+                    stagedF.ActorChoices,
                     lastEconomySnapshotDay,
                     replacementOperation,
                     out coreRuntimeSession,
-                    out diagnostic);
-            if (!coreSessionCreated) return false;
+                    out restoredCalendar,
+                    out diagnostic))
+                return false;
+
+            if (coreRuntimeSession == null)
+            {
+                diagnostic = "Core application restore composition returned no active session.";
+                return false;
+            }
+            restoredExecutionBoundary = coreRuntimeSession.ExecutionBoundaryState;
         }
 
         SimulationRuntime runtime = new SimulationRuntime(

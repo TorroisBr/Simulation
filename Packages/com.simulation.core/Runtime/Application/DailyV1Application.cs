@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 
 /// <summary>
@@ -251,6 +252,89 @@ internal sealed class DailyV1Application
             }
         }
 
+        return true;
+    }
+
+    /// <summary>
+    /// Composes the selected Core owner graph, restored execution boundary,
+    /// and unpublished application session in the owning application. A
+    /// persistence host supplies already-staged Core owners and P12 roots; it
+    /// cannot assemble or publish a competing Core session.
+    /// </summary>
+    internal bool TryCreateRestoredActiveRuntimeSession(
+        DailyV1EffectiveDefinitions definitions,
+        EffectiveSimulationConfiguration effectiveConfiguration,
+        CalendarDefinition calendarDefinition,
+        SimulationTime simulationTime,
+        SimulationRuntimeAdmissionContext admissionContext,
+        WorldId worldId,
+        IReadOnlyList<DailyV1CityRuntimeOwners> cityOwners,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> npcOwners,
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1JusticeRecordsOwner justiceRecords,
+        TravelPartyStore travelParties,
+        DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
+        PersonStore personStore,
+        ScheduledDirectiveStore directives,
+        ExpeditionStore expeditions,
+        RuntimeIdAllocator runtimeIdAllocator,
+        IAuthoritativeRandomSource randomSource,
+        SimulationRecordSequence recordSequence,
+        NpcDecisionStore decisionStore,
+        ActorChoiceStore actorChoiceStore,
+        long lastEconomySnapshotDay,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out DailyV1ActiveRuntimeSession candidate,
+        out SimulationCalendar calendar,
+        out string diagnostic)
+    {
+        candidate = null;
+        calendar = null;
+        diagnostic = null;
+        if (definitions == null
+            || !ReferenceEquals(definitions.EffectiveConfiguration, effectiveConfiguration))
+        {
+            diagnostic = "Restored Core session composition requires the exact selected definitions and configuration.";
+            return false;
+        }
+
+        if (!DailyV1RestoredExecutionBoundaryComposer.TryCreate(
+                definitions,
+                effectiveConfiguration,
+                calendarDefinition,
+                simulationTime,
+                admissionContext,
+                worldId,
+                cityOwners,
+                npcOwners,
+                spatialNetwork,
+                justiceRecords,
+                travelParties,
+                runtimeIdentityIndex,
+                personStore,
+                directives,
+                expeditions,
+                runtimeIdAllocator,
+                randomSource,
+                recordSequence,
+                decisionStore,
+                actorChoiceStore,
+                out DailyV1ExecutionBoundaryState executionBoundaryState,
+                out SimulationCalendar candidateCalendar,
+                out diagnostic))
+            return false;
+
+        if (!TryCreateRestoredActiveRuntimeSession(
+                executionBoundaryState,
+                definitions,
+                lastEconomySnapshotDay,
+                replacementOperation,
+                out DailyV1ActiveRuntimeSession candidateSession,
+                out diagnostic))
+            return false;
+
+        candidate = candidateSession;
+        calendar = candidateCalendar;
         return true;
     }
 
