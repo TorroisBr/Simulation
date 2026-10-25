@@ -277,6 +277,99 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void CoreRestoreReplacementAcceptsRestoredSourceTokenAndRejectsStaleSourceCensus()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext bootstrapAdmission), Is.True);
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions, bootstrapAdmission, out DailyV1GenesisComposition sourceComposition,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions, bootstrapAdmission, out DailyV1GenesisComposition candidateComposition,
+            out diagnostic), Is.True, diagnostic);
+
+        SimulationRuntimeAdmissionContext sourceAdmission =
+            bootstrapAdmission.CreateRestoredContinuationContext();
+        DailyV1ExecutionBoundaryState sourceState =
+            CreateBoundaryWithAdmission(sourceComposition, sourceAdmission);
+        OwnerSectionCensusSnapshot[] sourceOwners =
+            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        const long sourceEpoch = 23L;
+        Assert.That(sourceState.TryCreateRestoredContinuationToken(
+            sourceAdmission,
+            sourceState.ConfigurationIdentity,
+            sourceState.CalendarIdentity,
+            sourceState.CompositionProfile,
+            sourceState.WorldId,
+            sourceState.SimulationTime.AbsoluteDay,
+            1L,
+            sourceEpoch,
+            sourceOwners,
+            out DailyCaptureEligibilityToken sourceToken), Is.True);
+        Assert.That(sourceToken.BoundaryProvenance,
+            Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
+        Assert.That(application.TryCreateRestoredActiveRuntimeSession(
+            sourceState, definitions, 0L, null,
+            out DailyV1ActiveRuntimeSession sourceSession, out diagnostic), Is.True, diagnostic);
+
+        ApplicationAdvanceBoundary sourceBoundary = new ApplicationAdvanceBoundary(
+            sourceState, null, sourceOwners, sourceEpoch);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(sourceSession, sourceBoundary), Is.True);
+        Assert.That(application.TryCommitRestoredCandidate(
+            null, sourceSession, null, out diagnostic), Is.True, diagnostic);
+        Assert.That(application.ActiveSession, Is.SameAs(sourceSession));
+
+        SimulationRuntimeAdmissionContext candidateAdmission =
+            bootstrapAdmission.CreateRestoredContinuationContext();
+        DailyV1ExecutionBoundaryState candidateState =
+            CreateBoundaryWithAdmission(candidateComposition, candidateAdmission);
+        OwnerSectionCensusSnapshot[] candidateOwners =
+            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        const long candidateEpoch = 31L;
+        Assert.That(candidateState.TryCreateRestoredContinuationToken(
+            candidateAdmission,
+            candidateState.ConfigurationIdentity,
+            candidateState.CalendarIdentity,
+            candidateState.CompositionProfile,
+            candidateState.WorldId,
+            candidateState.SimulationTime.AbsoluteDay,
+            2L,
+            candidateEpoch,
+            candidateOwners,
+            out _), Is.True);
+
+        Assert.That(application.TryBeginExclusiveOperation(sourceSession, out var replacementOperation), Is.True);
+        using (replacementOperation)
+        {
+            Assert.That(application.TryCreateRestoredActiveRuntimeSession(
+                candidateState, definitions, 0L, replacementOperation,
+                out DailyV1ActiveRuntimeSession candidate, out diagnostic), Is.True, diagnostic);
+            ApplicationAdvanceBoundary candidateBoundary = new ApplicationAdvanceBoundary(
+                candidateState, null, candidateOwners, candidateEpoch);
+            Assert.That(application.TryBindRuntimeAdvanceBoundary(candidate, candidateBoundary), Is.True);
+
+            List<OwnerSectionCensusSnapshot> staleSourceOwners = new List<OwnerSectionCensusSnapshot>(sourceOwners);
+            OwnerSectionCensusSnapshot first = staleSourceOwners[0];
+            staleSourceOwners[0] = new OwnerSectionCensusSnapshot(
+                first.SectionId, first.SchemaVersion, first.Role, new object(),
+                first.Cardinality, first.Revision);
+            sourceBoundary.SetAdmissionEvidence(staleSourceOwners, sourceEpoch);
+            Assert.That(application.TryCommitRestoredCandidate(
+                sourceSession, candidate, replacementOperation, out diagnostic), Is.False);
+            Assert.That(application.ActiveSession, Is.SameAs(sourceSession),
+                "A replacement must retain the current restored session when its fresh source census is stale.");
+
+            sourceBoundary.SetAdmissionEvidence(sourceOwners, sourceEpoch);
+            Assert.That(application.TryCommitRestoredCandidate(
+                sourceSession, candidate, replacementOperation, out diagnostic), Is.True, diagnostic);
+            Assert.That(application.ActiveSession, Is.SameAs(candidate));
+            Assert.That(sourceBoundary.RequestedSessionReplacement, Is.EqualTo(true));
+        }
+    }
+
+    [Test]
     public void ApplicationCapturesItsCallingHostThreadWithoutUnityThreadFactory()
     {
         DailyV1Application application = new DailyV1Application();

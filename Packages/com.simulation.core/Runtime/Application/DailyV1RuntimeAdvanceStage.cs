@@ -61,7 +61,11 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     internal bool HasValidCompletedDailyBoundaryAdmission(
         IDailyV1RuntimeAdvanceBoundary boundary,
         bool sessionReplacement) => HasValidDailyBoundaryAdmission(
-            boundary, DailyCaptureBoundaryProvenance.CompletedAdvance, sessionReplacement);
+            boundary,
+            sessionReplacement
+                ? (DailyCaptureBoundaryProvenance?)null
+                : DailyCaptureBoundaryProvenance.CompletedAdvance,
+            sessionReplacement);
 
     internal bool HasValidRestoredDailyBoundaryAdmission(
         IDailyV1RuntimeAdvanceBoundary boundary) => HasValidDailyBoundaryAdmission(
@@ -69,14 +73,14 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
     private bool HasValidDailyBoundaryAdmission(
         IDailyV1RuntimeAdvanceBoundary boundary,
-        DailyCaptureBoundaryProvenance expectedProvenance,
+        DailyCaptureBoundaryProvenance? expectedProvenance,
         bool sessionReplacement)
     {
         DailyCaptureEligibilityToken current = currentCaptureToken;
         if (boundary == null || !ReferenceEquals(boundary.ExecutionState, this)
             || !IsHealthyDailyOwnerThreadBoundary()
             || current == null
-            || current.BoundaryProvenance != expectedProvenance
+            || !HasAllowedDailyBoundaryProvenance(current, expectedProvenance, sessionReplacement)
             || !boundary.TryCaptureDailyBoundaryAdmissionEvidence(
                 sessionReplacement,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
@@ -86,7 +90,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
         return IsHealthyDailyOwnerThreadBoundary()
             && ReferenceEquals(currentCaptureToken, current)
-            && current.BoundaryProvenance == expectedProvenance
+            && HasAllowedDailyBoundaryProvenance(current, expectedProvenance, sessionReplacement)
             && SimulationTime != null
             && TryCompareCurrentCaptureToken(
                 current,
@@ -98,6 +102,20 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 SimulationTime.AbsoluteDay,
                 ownerSections,
                 mutationEpoch);
+    }
+
+    private static bool HasAllowedDailyBoundaryProvenance(
+        DailyCaptureEligibilityToken token,
+        DailyCaptureBoundaryProvenance? expectedProvenance,
+        bool sessionReplacement)
+    {
+        if (token == null) return false;
+        if (expectedProvenance.HasValue)
+            return token.BoundaryProvenance == expectedProvenance.Value;
+
+        return sessionReplacement
+            && (token.BoundaryProvenance == DailyCaptureBoundaryProvenance.CompletedAdvance
+                || token.BoundaryProvenance == DailyCaptureBoundaryProvenance.RestoredContinuation);
     }
 
     internal bool TryAdvanceDay(
