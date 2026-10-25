@@ -30,6 +30,7 @@ internal sealed class DailyV1NpcRuntimeOwners
     internal SpatialKnowledgeRuntime SpatialKnowledge { get; }
     internal DailyV1ExplorableSiteKnowledgeOwner ExplorableSiteKnowledge { get; }
     internal DailyV1AdventureSiteIntelKnowledgeOwner AdventureSiteIntelKnowledge { get; }
+    internal DailyV1NpcLocalTopologyKnowledgeEmptyOwner LocalTopologyKnowledgeEmptyOwner { get; }
     internal DailyV1NpcLifecycleOwner Lifecycle { get; }
     internal DailyV1NpcActionSlotOwner ActionSlot { get; }
     internal DailyV1NpcTravelOwner Travel { get; }
@@ -61,6 +62,7 @@ internal sealed class DailyV1NpcRuntimeOwners
         SpatialKnowledge = spatialKnowledge;
         ExplorableSiteKnowledge = explorableSiteKnowledge;
         AdventureSiteIntelKnowledge = adventureSiteIntelKnowledge;
+        LocalTopologyKnowledgeEmptyOwner = new DailyV1NpcLocalTopologyKnowledgeEmptyOwner(runtimeId);
         Lifecycle = new DailyV1NpcLifecycleOwner();
         ActionSlot = new DailyV1NpcActionSlotOwner(definitions);
         Travel = new DailyV1NpcTravelOwner(runtimeId);
@@ -319,6 +321,8 @@ internal sealed class DailyV1NpcRuntimeOwners
             || !ReferenceEquals(SpatialKnowledge, state.SpatialKnowledge)
             || !ReferenceEquals(ExplorableSiteKnowledge, state.ExplorableSiteKnowledge)
             || !ReferenceEquals(AdventureSiteIntelKnowledge, state.AdventureSiteIntelKnowledge)
+            || LocalTopologyKnowledgeEmptyOwner == null
+            || !LocalTopologyKnowledgeEmptyOwner.MatchesRuntimeId(RuntimeId)
             || Status == null || state.Statuses == null
             || Status.Statuses.Count != state.Statuses.Count
             || ActionSlot == null

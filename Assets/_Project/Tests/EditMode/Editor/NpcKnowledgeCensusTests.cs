@@ -34,6 +34,35 @@ public sealed class NpcKnowledgeCensusTests
     }
 
     [Test]
+    public void SelectedDailyV1LocalTopologySectionsShareCoreEmptyOwnerAndRejectProjectionDrift()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition definition = definitions.Npcs.Values.First();
+        NpcRuntime npc = NpcRuntime.CreateSelectedDailyV1(
+            "selected-empty-local-topology", definition, definitions, (CityRuntime)null, 0f);
+        DailyV1NpcLocalTopologyKnowledgeEmptyOwner owner =
+            npc.SelectedRuntimeOwners.LocalTopologyKnowledgeEmptyOwner;
+        IReadOnlyList<IOwnerSectionCensusProvider> providers =
+            NpcKnowledgeCensusProvider.CreateProviders(new[] { npc });
+
+        OwnerSectionCensusWitness places = providers[1].GetCurrentCensus();
+        OwnerSectionCensusWitness connections = providers[2].GetCurrentCensus();
+        Assert.That(places.OwnerInstanceIdentity, Is.SameAs(owner));
+        Assert.That(connections.OwnerInstanceIdentity, Is.SameAs(owner));
+        Assert.That(places.Cardinality, Is.Zero);
+        Assert.That(connections.Cardinality, Is.Zero);
+        Assert.That(places.Revision, Is.Zero);
+        Assert.That(connections.Revision, Is.Zero);
+        Assert.That(ReferenceEquals(places.OwnerInstanceIdentity, connections.OwnerInstanceIdentity), Is.True);
+
+        Assert.That(npc.LocalTopologyKnowledge.RecordPlaceObservation(Place(
+            "unsupported-place", 1, "Unsupported")), Is.True);
+        Assert.Throws<InvalidOperationException>(() => providers[1].GetCurrentCensus());
+        Assert.Throws<InvalidOperationException>(() =>
+            NpcKnowledgeCensusProvider.CreateProviders(new[] { npc }));
+    }
+
+    [Test]
     public void SimulationRuntimeReconcilesKnowledgeFamilyThroughNpcMembershipOperations()
     {
         SimulationRuntime runtime = new SimulationRuntime(

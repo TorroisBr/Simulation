@@ -59,7 +59,7 @@ public static class NpcKnowledgeCensusProvider
                 DailyV1NpcRuntimeOwners selected = npc.SelectedRuntimeOwners;
                 if (selected == null) return kind == 0 ? (object)explorable : kind <= 2 ? local : kind <= 6 ? adventure : commercial;
                 return kind == 0 ? (object)selected.ExplorableSiteKnowledge
-                    : kind <= 2 ? local
+                    : kind <= 2 ? selected.LocalTopologyKnowledgeEmptyOwner
                     : kind <= 6 ? selected.AdventureSiteIntelKnowledge
                     : commercial;
             }
@@ -76,8 +76,27 @@ public static class NpcKnowledgeCensusProvider
                     cardinality = selected == null ? explorable.Observations.Count : selected.ExplorableSiteKnowledge.Observations.Count;
                     revision = selected == null ? explorable.Revision : selected.ExplorableSiteKnowledge.Revision;
                     break;
-                case 1: cardinality = local.PlaceObservations.Count; revision = local.Revision; break;
-                case 2: cardinality = local.ConnectionObservations.Count; revision = local.Revision; break;
+                case 1:
+                case 2:
+                    if (selected == null)
+                    {
+                        cardinality = kind == 1 ? local.PlaceObservations.Count : local.ConnectionObservations.Count;
+                        revision = local.Revision;
+                    }
+                    else
+                    {
+                        DailyV1NpcLocalTopologyKnowledgeEmptyOwner emptyOwner = selected.LocalTopologyKnowledgeEmptyOwner;
+                        if (emptyOwner == null || !emptyOwner.MatchesProjection(
+                                npc.RuntimeId, local.OwnerRuntimeId,
+                                local.PlaceObservations.Count, local.ConnectionObservations.Count, local.Revision))
+                            throw new InvalidOperationException(
+                                "Selected Daily-v1 LocalTopology census requires the exact empty Core owner projection.");
+                        cardinality = kind == 1
+                            ? emptyOwner.PlaceObservationCount
+                            : emptyOwner.ConnectionObservationCount;
+                        revision = emptyOwner.Revision;
+                    }
+                    break;
                 case 3:
                     cardinality = selected == null ? adventure.OppositionObservations.Count : selected.AdventureSiteIntelKnowledge.OppositionObservations.Count;
                     revision = selected == null ? adventure.Revision : selected.AdventureSiteIntelKnowledge.Revision;
@@ -124,7 +143,11 @@ public static class NpcKnowledgeCensusProvider
                 || !string.Equals(adventure.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
                 || (selected != null
                     && (!ReferenceEquals(explorable.SelectedOwner, selected.ExplorableSiteKnowledge)
-                        || !ReferenceEquals(adventure.SelectedOwner, selected.AdventureSiteIntelKnowledge))))
+                        || !ReferenceEquals(adventure.SelectedOwner, selected.AdventureSiteIntelKnowledge)
+                        || selected.LocalTopologyKnowledgeEmptyOwner == null
+                        || !selected.LocalTopologyKnowledgeEmptyOwner.MatchesProjection(
+                            npc.RuntimeId, local.OwnerRuntimeId,
+                            local.PlaceObservations.Count, local.ConnectionObservations.Count, local.Revision))))
                 throw new InvalidOperationException("Knowledge census requires existing exact NPC-owned Knowledge runtimes and their bound Core owners.");
             ordered.Add(npc);
         }

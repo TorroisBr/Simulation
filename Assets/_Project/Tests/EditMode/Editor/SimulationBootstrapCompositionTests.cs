@@ -1324,11 +1324,16 @@ public sealed class SimulationBootstrapCompositionTests
                 Assert.That((int)projected.Source, Is.EqualTo((int)coreRow.Source));
             }
 
+            LocalTopologyKnowledgeRuntime localTopologyProjection =
+                ReadPrivateField<LocalTopologyKnowledgeRuntime>(npc, "localTopologyKnowledge");
+            Assert.That(localTopologyProjection.PlaceObservations, Is.Empty);
+            Assert.That(localTopologyProjection.ConnectionObservations, Is.Empty);
+            Assert.That(localTopologyProjection.Revision, Is.Zero);
             object[] typedOwners =
             {
                 coreNpc.ExplorableSiteKnowledge,
-                ReadPrivateField<LocalTopologyKnowledgeRuntime>(npc, "localTopologyKnowledge"),
-                ReadPrivateField<LocalTopologyKnowledgeRuntime>(npc, "localTopologyKnowledge"),
+                coreNpc.LocalTopologyKnowledgeEmptyOwner,
+                coreNpc.LocalTopologyKnowledgeEmptyOwner,
                 coreNpc.AdventureSiteIntelKnowledge,
                 coreNpc.AdventureSiteIntelKnowledge,
                 coreNpc.AdventureSiteIntelKnowledge,
@@ -1340,8 +1345,8 @@ public sealed class SimulationBootstrapCompositionTests
             int[] expectedCardinalities =
             {
                 coreNpc.ExplorableSiteKnowledge.Observations.Count,
-                ((LocalTopologyKnowledgeRuntime)typedOwners[1]).PlaceObservations.Count,
-                ((LocalTopologyKnowledgeRuntime)typedOwners[2]).ConnectionObservations.Count,
+                coreNpc.LocalTopologyKnowledgeEmptyOwner.PlaceObservationCount,
+                coreNpc.LocalTopologyKnowledgeEmptyOwner.ConnectionObservationCount,
                 coreNpc.AdventureSiteIntelKnowledge.OppositionObservations.Count,
                 coreNpc.AdventureSiteIntelKnowledge.NotableItemObservations.Count,
                 coreNpc.AdventureSiteIntelKnowledge.CommonResourceObservations.Count,
@@ -1353,8 +1358,8 @@ public sealed class SimulationBootstrapCompositionTests
             long[] expectedRevisions =
             {
                 coreNpc.ExplorableSiteKnowledge.Revision,
-                ((LocalTopologyKnowledgeRuntime)typedOwners[1]).Revision,
-                ((LocalTopologyKnowledgeRuntime)typedOwners[2]).Revision,
+                coreNpc.LocalTopologyKnowledgeEmptyOwner.Revision,
+                coreNpc.LocalTopologyKnowledgeEmptyOwner.Revision,
                 coreNpc.AdventureSiteIntelKnowledge.Revision,
                 coreNpc.AdventureSiteIntelKnowledge.Revision,
                 coreNpc.AdventureSiteIntelKnowledge.Revision,
@@ -3631,11 +3636,12 @@ public sealed class SimulationBootstrapCompositionTests
             int receiptCount = receipts.Count;
             long commercialRevision = commercial.Revision;
 
+            object localTopologyOwner = (object)selected?.LocalTopologyKnowledgeEmptyOwner ?? local;
             object[] owners =
             {
                 (object)selected?.ExplorableSiteKnowledge ?? explorable,
-                local,
-                local,
+                localTopologyOwner,
+                localTopologyOwner,
                 (object)selected?.AdventureSiteIntelKnowledge ?? adventure,
                 (object)selected?.AdventureSiteIntelKnowledge ?? adventure,
                 (object)selected?.AdventureSiteIntelKnowledge ?? adventure,
@@ -3647,8 +3653,8 @@ public sealed class SimulationBootstrapCompositionTests
             int[] cardinalities =
             {
                 explorable.Observations.Count,
-                local.PlaceObservations.Count,
-                local.ConnectionObservations.Count,
+                selected == null ? local.PlaceObservations.Count : selected.LocalTopologyKnowledgeEmptyOwner.PlaceObservationCount,
+                selected == null ? local.ConnectionObservations.Count : selected.LocalTopologyKnowledgeEmptyOwner.ConnectionObservationCount,
                 adventure.OppositionObservations.Count,
                 adventure.NotableItemObservations.Count,
                 adventure.CommonResourceObservations.Count,
@@ -3660,8 +3666,8 @@ public sealed class SimulationBootstrapCompositionTests
             long[] revisions =
             {
                 explorable.Revision,
-                local.Revision,
-                local.Revision,
+                selected == null ? local.Revision : selected.LocalTopologyKnowledgeEmptyOwner.Revision,
+                selected == null ? local.Revision : selected.LocalTopologyKnowledgeEmptyOwner.Revision,
                 adventure.Revision,
                 adventure.Revision,
                 adventure.Revision,
@@ -3802,12 +3808,13 @@ public sealed class SimulationBootstrapCompositionTests
                     "The Unity serialization projection must bind to the selected Core AdventureSiteIntelKnowledge owner.");
             }
             object explorableKnowledge = (object)selectedOwners?.ExplorableSiteKnowledge ?? explorableProjection;
+            object localTopologyKnowledge = (object)selectedOwners?.LocalTopologyKnowledgeEmptyOwner ?? localKnowledge;
             object adventureKnowledge = (object)selectedOwners?.AdventureSiteIntelKnowledge ?? adventureProjection;
             object[] knowledgeOwners =
             {
                 explorableKnowledge,
-                localKnowledge,
-                localKnowledge,
+                localTopologyKnowledge,
+                localTopologyKnowledge,
                 adventureKnowledge,
                 adventureKnowledge,
                 adventureKnowledge,

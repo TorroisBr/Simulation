@@ -71,6 +71,10 @@ public sealed class DailyV1P12DNpcCoreOwnerHydratorTests
         Assert.That(owners.CommercialKnowledge.Revision, Is.EqualTo(38L));
         Assert.That(owners.CommercialKnowledge.Observations.Single().ItemDefinition, Is.SameAs(item));
         Assert.That(owners.SpatialKnowledge.Revision, Is.EqualTo(39L));
+        Assert.That(owners.LocalTopologyKnowledgeEmptyOwner.OwnerRuntimeId, Is.EqualTo(runtimeId));
+        Assert.That(owners.LocalTopologyKnowledgeEmptyOwner.PlaceObservationCount, Is.Zero);
+        Assert.That(owners.LocalTopologyKnowledgeEmptyOwner.ConnectionObservationCount, Is.Zero);
+        Assert.That(owners.LocalTopologyKnowledgeEmptyOwner.Revision, Is.Zero);
     }
 
     [TestCase("unknown-status", (int)DailyV1P12DNpcCoreOwnerHydrationFailure.InvalidStatusDefinition)]

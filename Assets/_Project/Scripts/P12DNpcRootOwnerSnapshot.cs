@@ -1680,15 +1680,32 @@ internal static class P12DNpcRootOwnerSnapshot
                     owner, receipts, revision);
         }
 
-        bool localOwners(LocalTopologyKnowledgeRuntime owner) =>
-            TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(1, npc.RuntimeId),
-                NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                owner, owner.PlaceObservations.Count, owner.Revision)
-            && owner.PlaceObservations.Count == 0 && owner.Revision == 0L
-            && TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(2, npc.RuntimeId),
-                NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                owner, owner.ConnectionObservations.Count, owner.Revision)
-            && owner.ConnectionObservations.Count == 0 && owner.Revision == 0L;
+        bool localOwners(LocalTopologyKnowledgeRuntime projection)
+        {
+            DailyV1NpcLocalTopologyKnowledgeEmptyOwner selected =
+                npc.SelectedRuntimeOwners?.LocalTopologyKnowledgeEmptyOwner;
+            if (selected == null)
+            {
+                return TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(1, npc.RuntimeId),
+                        NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
+                        projection, projection.PlaceObservations.Count, projection.Revision)
+                    && projection.PlaceObservations.Count == 0 && projection.Revision == 0L
+                    && TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(2, npc.RuntimeId),
+                        NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
+                        projection, projection.ConnectionObservations.Count, projection.Revision)
+                    && projection.ConnectionObservations.Count == 0 && projection.Revision == 0L;
+            }
+
+            if (!selected.MatchesProjection(npc.RuntimeId, projection.OwnerRuntimeId,
+                    projection.PlaceObservations.Count, projection.ConnectionObservations.Count, projection.Revision))
+                return false;
+            return TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(1, npc.RuntimeId),
+                    NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
+                    selected, selected.PlaceObservationCount, selected.Revision)
+                && TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(2, npc.RuntimeId),
+                    NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
+                    selected, selected.ConnectionObservationCount, selected.Revision);
+        }
     }
 
     private static bool TryRequireSection(

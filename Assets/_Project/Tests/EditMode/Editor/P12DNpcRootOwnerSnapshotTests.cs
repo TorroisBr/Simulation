@@ -152,6 +152,13 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         Assert.That(restored.MerchantTradePlan.SelectedOwner, Is.SameAs(owners.MerchantTradePlan));
         Assert.That(restored.MerchantTradePlan.Item, Is.SameAs(itemAsset));
         Assert.That(restored.SpatialKnowledge, Is.SameAs(owners.SpatialKnowledge));
+        Assert.That(owners.LocalTopologyKnowledgeEmptyOwner.OwnerRuntimeId, Is.EqualTo(runtimeId));
+        Assert.That(owners.LocalTopologyKnowledgeEmptyOwner.PlaceObservationCount, Is.Zero);
+        Assert.That(owners.LocalTopologyKnowledgeEmptyOwner.ConnectionObservationCount, Is.Zero);
+        Assert.That(owners.LocalTopologyKnowledgeEmptyOwner.Revision, Is.Zero);
+        Assert.That(restored.LocalTopologyKnowledge.OwnerRuntimeId, Is.EqualTo(runtimeId));
+        Assert.That(restored.LocalTopologyKnowledge.PlaceObservations, Is.Empty);
+        Assert.That(restored.LocalTopologyKnowledge.ConnectionObservations, Is.Empty);
         Assert.That(owners.ActionSlot.Revision, Is.EqualTo(5L));
         Assert.That(restored.CurrentActionRuntime.SelectedOwner,
             Is.SameAs(owners.ActionSlot.CurrentPayload));
@@ -1189,6 +1196,45 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         };
         Assert.That((bool)collect.Invoke(null, emptyArguments), Is.False,
             "A completely empty selected owner vector cannot establish its definition identity.");
+    }
+
+    [Test]
+    public void SelectedDailyV1CaptureUsesSharedCoreLocalTopologyEmptyOwnerForAliasedSections()
+    {
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        NpcData npcAsset = SimulationTestFactory.CreateNpc("p12d-selected-empty-topology-definition");
+        config.Npcs.Add(new NpcSimulationConfig { npc = npcAsset, initialMoney = 0f });
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: config.CreateConfigurationOverrides());
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(config.Calendar, out _);
+        DailyV1EffectiveDefinitions definitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            config, effective, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        DailyV1NpcDefinition definition = definitions.Npcs[npcAsset.DefinitionId];
+        NpcRuntime selectedNpc = NpcRuntime.CreateSelectedDailyV1(
+            "p12d-selected-empty-topology", npcAsset, definition, definitions,
+            bindings, (CityRuntime)null, 0f);
+        DailyFixture fixture = CreateDailyFixture(null, selectedNpc);
+        DailyCaptureEligibilityToken token = CompleteDailyBoundary(fixture.Runtime);
+
+        Assert.That(P12DNpcRootOwnerSnapshot.TryCapture(
+            fixture.Runtime, token, new object(), token.OwnerSections,
+            out P12DNpcDProjection d, out P12DNpcFProjection f,
+            out P12DNpcRootOwnerSnapshotFailure failure), Is.True, failure.ToString());
+        Assert.That(d.Rows, Has.Count.EqualTo(fixture.Npcs.Length));
+        Assert.That(f.Rows, Has.Count.EqualTo(fixture.Npcs.Length));
+
+        DailyV1NpcLocalTopologyKnowledgeEmptyOwner emptyOwner =
+            selectedNpc.SelectedRuntimeOwners.LocalTopologyKnowledgeEmptyOwner;
+        OwnerSectionCensusSnapshot places = token.OwnerSections.Single(row =>
+            row.SectionId == NpcKnowledgeCensusProvider.SectionIdFor(1, selectedNpc.RuntimeId));
+        OwnerSectionCensusSnapshot connections = token.OwnerSections.Single(row =>
+            row.SectionId == NpcKnowledgeCensusProvider.SectionIdFor(2, selectedNpc.RuntimeId));
+        Assert.That(places.OwnerInstanceIdentity, Is.SameAs(emptyOwner));
+        Assert.That(connections.OwnerInstanceIdentity, Is.SameAs(emptyOwner));
+        Assert.That(places.Cardinality, Is.Zero);
+        Assert.That(connections.Cardinality, Is.Zero);
+        Assert.That(places.Revision, Is.Zero);
+        Assert.That(connections.Revision, Is.Zero);
     }
 
     [Test]

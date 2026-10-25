@@ -286,6 +286,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 || !definitions.Npcs.TryGetValue(owner.Definition.DefinitionId, out DailyV1NpcDefinition npc)
                 || !ReferenceEquals(npc, owner.Definition)
                 || !runtimeIds.Add(owner.RuntimeId)
+                || owner.LocalTopologyKnowledgeEmptyOwner == null
+                || !owner.LocalTopologyKnowledgeEmptyOwner.MatchesRuntimeId(owner.RuntimeId)
                 || !MatchesCity(cities, owner.MerchantTradePlan?.OriginCityRuntimeId)
                 || !MatchesCity(cities, owner.MerchantTradePlan?.TargetCityRuntimeId)
                 || !MatchesCityLocation(cities, owner.Travel?.CurrentCityRuntimeId,

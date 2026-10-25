@@ -74,4 +74,25 @@ public sealed class DailyV1NpcKnowledgeOwnerTests
         Assert.That(owner.AccessObservations, Is.Empty);
         Assert.That(owner.Revision, Is.EqualTo(0L));
     }
+
+    [Test]
+    public void LocalTopologyEmptyOwnerHasStableIdentityAndOnlyMatchesExactEmptyProjection()
+    {
+        DailyV1NpcLocalTopologyKnowledgeEmptyOwner owner =
+            new DailyV1NpcLocalTopologyKnowledgeEmptyOwner("npc-empty-topology");
+
+        Assert.That(owner.OwnerRuntimeId, Is.EqualTo("npc-empty-topology"));
+        Assert.That(owner.PlaceObservationCount, Is.Zero);
+        Assert.That(owner.ConnectionObservationCount, Is.Zero);
+        Assert.That(owner.Revision, Is.Zero);
+        Assert.That(owner.MatchesRuntimeId("npc-empty-topology"), Is.True);
+        Assert.That(owner.MatchesRuntimeId("npc-other"), Is.False);
+        Assert.That(owner.MatchesProjection("npc-empty-topology", "npc-empty-topology", 0, 0, 0L), Is.True);
+        Assert.That(owner.MatchesProjection("npc-empty-topology", "npc-other", 0, 0, 0L), Is.False);
+        Assert.That(owner.MatchesProjection("npc-empty-topology", "npc-empty-topology", 1, 0, 0L), Is.False);
+        Assert.That(owner.MatchesProjection("npc-empty-topology", "npc-empty-topology", 0, 1, 0L), Is.False);
+        Assert.That(owner.MatchesProjection("npc-empty-topology", "npc-empty-topology", 0, 0, 1L), Is.False);
+        Assert.Throws<System.ArgumentException>(() =>
+            new DailyV1NpcLocalTopologyKnowledgeEmptyOwner(" "));
+    }
 }

@@ -78,6 +78,10 @@ public sealed class DailyV1NpcActionSlotOwnerTests
         Assert.That(owners.SpatialKnowledge, Is.SameAs(spatial));
         Assert.That(owners.ExplorableSiteKnowledge, Is.SameAs(state.ExplorableSiteKnowledge));
         Assert.That(owners.AdventureSiteIntelKnowledge, Is.SameAs(state.AdventureSiteIntelKnowledge));
+        Assert.That(owners.LocalTopologyKnowledgeEmptyOwner.OwnerRuntimeId, Is.EqualTo(state.RuntimeId));
+        Assert.That(owners.LocalTopologyKnowledgeEmptyOwner.PlaceObservationCount, Is.Zero);
+        Assert.That(owners.LocalTopologyKnowledgeEmptyOwner.ConnectionObservationCount, Is.Zero);
+        Assert.That(owners.LocalTopologyKnowledgeEmptyOwner.Revision, Is.Zero);
         Assert.That(owners.ActionSlot.CurrentAction, Is.SameAs(action));
         Assert.That(owners.ActionSlot.CurrentPayload, Is.SameAs(payload));
         Assert.That(owners.ActionSlot.Revision, Is.EqualTo(17L));

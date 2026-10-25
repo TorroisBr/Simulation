@@ -359,8 +359,8 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         Assert.That(npc.ExistingAdventureSiteIntelKnowledge.SelectedOwner,
             Is.SameAs(selectedOwners.AdventureSiteIntelKnowledge));
         AssertSection(rows, site, selectedOwners.ExplorableSiteKnowledge, 1, 1L);
-        AssertSection(rows, places, npc.ExistingLocalTopologyKnowledge, 0, 0L);
-        AssertSection(rows, connections, npc.ExistingLocalTopologyKnowledge, 0, 0L);
+        AssertSection(rows, places, selectedOwners.LocalTopologyKnowledgeEmptyOwner, 0, 0L);
+        AssertSection(rows, connections, selectedOwners.LocalTopologyKnowledgeEmptyOwner, 0, 0L);
         AssertSection(rows, opposition, selectedOwners.AdventureSiteIntelKnowledge, 1, 4L);
         AssertSection(rows, notable, selectedOwners.AdventureSiteIntelKnowledge, 1, 4L);
         AssertSection(rows, resources, selectedOwners.AdventureSiteIntelKnowledge, 1, 4L);
