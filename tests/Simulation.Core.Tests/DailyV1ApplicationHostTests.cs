@@ -54,7 +54,7 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
-    public void DotNetV2HeaderAdmitsOnlyDotNetAndUsesASeparateContinuationSlot()
+    public void DotNetV2HeaderAdmitsOnlySupportedDotNetHostKind()
     {
         P12ACompatibilityDescriptorV2 dotNet = ToDescriptor(DotNetIdentity());
         Assert.That(V2Header(dotNet).IsValid, Is.True);
