@@ -697,7 +697,7 @@ internal static class P12DNpcRootOwnerSnapshot
         => TryStageCore(sourceRuntime, token, dProjection, fProjection,
             cityMembershipLinkers, stagedPersonStore, npcDefinitions, actionDefinitions,
             statusDefinitions, itemDefinitions, stagedLocations, stagedRouteRuntimeIds,
-            stagedTravelPartyIds, true, out stagedNpcRoster, out failure, selectedDefinitions, stagingAttempt);
+            stagedTravelPartyIds, true, out stagedNpcRoster, out failure, selectedDefinitions, stagingAttempt, null);
 
     internal static bool TryStageForImage(
         IReadOnlyList<P12DNpcDRow> dRows,
@@ -714,7 +714,8 @@ internal static class P12DNpcRootOwnerSnapshot
         IReadOnlyList<P12AOwnerSection> ownerSections,
         out IReadOnlyList<NpcRuntime> stagedNpcRoster,
         out P12DNpcRootOwnerSnapshotFailure failure,
-        DailyV1EffectiveDefinitions selectedDefinitions = null)
+        DailyV1EffectiveDefinitions selectedDefinitions = null,
+        IReadOnlyDictionary<string, DailyV1NpcRuntimeOwners> stagedSelectedOwners = null)
     {
         stagedNpcRoster = null;
         failure = P12DNpcRootOwnerSnapshotFailure.InvalidCaptureEvidence;
@@ -739,7 +740,8 @@ internal static class P12DNpcRootOwnerSnapshot
             new P12DNpcFProjection(null, null, null, null, fRows),
             cityMembershipLinkers, stagedPersonStore, npcDefinitions, actionDefinitions,
             statusDefinitions, itemDefinitions, stagedLocations, stagedRouteRuntimeIds,
-            stagedTravelPartyIds, false, out stagedNpcRoster, out failure, selectedDefinitions, null);
+            stagedTravelPartyIds, false, out stagedNpcRoster, out failure,
+            selectedDefinitions, null, stagedSelectedOwners);
     }
 
     private static bool TryStageCore(
@@ -760,7 +762,8 @@ internal static class P12DNpcRootOwnerSnapshot
         out IReadOnlyList<NpcRuntime> stagedNpcRoster,
         out P12DNpcRootOwnerSnapshotFailure failure,
         DailyV1EffectiveDefinitions selectedDefinitions = null,
-        DailyCaptureStagingAttempt stagingAttempt = null)
+        DailyCaptureStagingAttempt stagingAttempt = null,
+        IReadOnlyDictionary<string, DailyV1NpcRuntimeOwners> stagedSelectedOwners = null)
     {
         stagedNpcRoster = null;
         failure = P12DNpcRootOwnerSnapshotFailure.InvalidCaptureEvidence;
@@ -855,13 +858,25 @@ internal static class P12DNpcRootOwnerSnapshot
             new Dictionary<string, P12DNpcPreparedSelectedCoreOwner>(StringComparer.Ordinal);
         if (selectedDefinitions != null)
         {
+            if (stagedSelectedOwners != null && stagedSelectedOwners.Count != dProjection.Rows.Count)
+            {
+                failure = P12DNpcRootOwnerSnapshotFailure.InvalidNpcIdentity;
+                return false;
+            }
             for (int i = 0; i < dProjection.Rows.Count; i++)
             {
                 P12DNpcDRow d = dProjection.Rows[i];
                 P12DNpcFRow f = fProjection.Rows[i];
+                DailyV1NpcRuntimeOwners stagedOwner = null;
+                if (stagedSelectedOwners != null
+                    && !stagedSelectedOwners.TryGetValue(d.RuntimeId, out stagedOwner))
+                {
+                    failure = P12DNpcRootOwnerSnapshotFailure.InvalidNpcIdentity;
+                    return false;
+                }
                 if (!TryPrepareSelectedCoreOwner(d, f, selectedDefinitions,
                         locationsById, citiesById, routeIds, partyIds, stagedNpcRuntimeIds,
-                        selectedItemBindings,
+                        selectedItemBindings, stagedOwner,
                         out P12DNpcPreparedSelectedCoreOwner prepared, out failure)
                     || prepared == null
                     || !preparedSelectedOwners.TryAdd(d.RuntimeId, prepared))
@@ -1310,6 +1325,7 @@ internal static class P12DNpcRootOwnerSnapshot
         HashSet<string> travelPartyIds,
         HashSet<string> npcRuntimeIds,
         DailyV1DefinitionAdapter.SelectedBindings selectedItemBindings,
+        DailyV1NpcRuntimeOwners stagedOwner,
         out P12DNpcPreparedSelectedCoreOwner prepared,
         out P12DNpcRootOwnerSnapshotFailure failure)
     {
@@ -1323,49 +1339,46 @@ internal static class P12DNpcRootOwnerSnapshot
             || !string.Equals(selectedNpcDefinition.DefinitionId, d.NpcDefinitionId, StringComparison.Ordinal))
             return false;
 
-        List<DailyV1CommercialKnowledgeShareReceipt> receipts =
-            new List<DailyV1CommercialKnowledgeShareReceipt>(f.CommercialShareReceipts.Count);
-        foreach (CommercialKnowledgeShareReceipt receipt in f.CommercialShareReceipts)
+        DailyV1NpcRuntimeOwners runtimeOwners = stagedOwner;
+        if (runtimeOwners == null)
         {
-            receipts.Add(receipt == null ? null : new DailyV1CommercialKnowledgeShareReceipt(
-                receipt.OperationIdentity, receipt.Fingerprint, receipt.BoundaryOccurrenceId,
-                receipt.SenderRuntimeId, receipt.SenderPersonId, receipt.ReceiverRuntimeId,
-                receipt.ReceiverPersonId, receipt.SourceSnapshotFingerprint,
-                receipt.AppliedObservationCount));
-        }
-
-        DailyV1P12DNpcCoreOwnerHydrationInput input =
-            new DailyV1P12DNpcCoreOwnerHydrationInput(
-                d, f.Action, f.TravelDaysRemaining, f.TravelDaysTotal,
-                f.TravelRouteRuntimeId, f.TravelStartedToday, f.TravelOriginDecisionId,
-                f.ActiveTravelPartyId, f.TravelStateRevision, f.MerchantPlan, f.TravelPlan,
-                f.KnownLocationRuntimeIds, f.KnownRouteRuntimeIds, f.SpatialKnowledgeRevision,
-                f.CommercialMarkets, f.CommercialLiquidity, receipts,
-                f.CommercialKnowledgeRevision);
-
-        if (!DailyV1P12DNpcCoreOwnerHydrator.TryCreate(
-                input, definitions, citiesById.Keys,
-                locationsById.Keys, routeIds, travelPartyIds, npcRuntimeIds,
-                out DailyV1NpcRuntimeOwners runtimeOwners,
-                out DailyV1P12DNpcCoreOwnerHydrationFailure hydrationFailure)
-            || runtimeOwners == null)
-        {
-            failure = hydrationFailure switch
+            if (!TryCreateSelectedCoreHydrationInput(d, f,
+                    out DailyV1P12DNpcCoreOwnerHydrationInput input)
+                || input == null)
             {
-                DailyV1P12DNpcCoreOwnerHydrationFailure.InvalidNpcIdentity =>
-                    P12DNpcRootOwnerSnapshotFailure.InvalidNpcIdentity,
-                DailyV1P12DNpcCoreOwnerHydrationFailure.InvalidNpcDefinition =>
-                    P12DNpcRootOwnerSnapshotFailure.InvalidSelectedNpcDefinition,
-                DailyV1P12DNpcCoreOwnerHydrationFailure.InvalidStatusDefinition =>
-                    P12DNpcRootOwnerSnapshotFailure.InvalidSelectedStatusDefinition,
-                DailyV1P12DNpcCoreOwnerHydrationFailure.InvalidInventoryItem =>
-                    P12DNpcRootOwnerSnapshotFailure.InvalidSelectedInventoryItem,
-                DailyV1P12DNpcCoreOwnerHydrationFailure.InvalidReference =>
-                    P12DNpcRootOwnerSnapshotFailure.InvalidReference,
-                DailyV1P12DNpcCoreOwnerHydrationFailure.UnsupportedValue =>
-                    P12DNpcRootOwnerSnapshotFailure.UnsupportedValue,
-                _ => P12DNpcRootOwnerSnapshotFailure.InvalidDefinition
-            };
+                failure = P12DNpcRootOwnerSnapshotFailure.UnsupportedValue;
+                return false;
+            }
+
+            if (!DailyV1P12DNpcCoreOwnerHydrator.TryCreate(
+                    input, definitions, citiesById.Keys,
+                    locationsById.Keys, routeIds, travelPartyIds, npcRuntimeIds,
+                    out runtimeOwners, out DailyV1P12DNpcCoreOwnerHydrationFailure hydrationFailure)
+                || runtimeOwners == null)
+            {
+                failure = hydrationFailure switch
+                {
+                    DailyV1P12DNpcCoreOwnerHydrationFailure.InvalidNpcIdentity =>
+                        P12DNpcRootOwnerSnapshotFailure.InvalidNpcIdentity,
+                    DailyV1P12DNpcCoreOwnerHydrationFailure.InvalidNpcDefinition =>
+                        P12DNpcRootOwnerSnapshotFailure.InvalidSelectedNpcDefinition,
+                    DailyV1P12DNpcCoreOwnerHydrationFailure.InvalidStatusDefinition =>
+                        P12DNpcRootOwnerSnapshotFailure.InvalidSelectedStatusDefinition,
+                    DailyV1P12DNpcCoreOwnerHydrationFailure.InvalidInventoryItem =>
+                        P12DNpcRootOwnerSnapshotFailure.InvalidSelectedInventoryItem,
+                    DailyV1P12DNpcCoreOwnerHydrationFailure.InvalidReference =>
+                        P12DNpcRootOwnerSnapshotFailure.InvalidReference,
+                    DailyV1P12DNpcCoreOwnerHydrationFailure.UnsupportedValue =>
+                        P12DNpcRootOwnerSnapshotFailure.UnsupportedValue,
+                    _ => P12DNpcRootOwnerSnapshotFailure.InvalidDefinition
+                };
+                return false;
+            }
+        }
+        else if (!ReferenceEquals(runtimeOwners.Definitions, definitions)
+            || !string.Equals(runtimeOwners.RuntimeId, d.RuntimeId, StringComparison.Ordinal))
+        {
+            failure = P12DNpcRootOwnerSnapshotFailure.InvalidNpcIdentity;
             return false;
         }
 
@@ -1387,6 +1400,36 @@ internal static class P12DNpcRootOwnerSnapshot
             CurrentActionPayload = runtimeOwners.ActionSlot.CurrentPayload
         };
         failure = P12DNpcRootOwnerSnapshotFailure.None;
+        return true;
+    }
+
+    internal static bool TryCreateSelectedCoreHydrationInput(
+        P12DNpcDRow d,
+        P12DNpcFRow f,
+        out DailyV1P12DNpcCoreOwnerHydrationInput input)
+    {
+        input = null;
+        if (d == null || f == null
+            || !string.Equals(d.RuntimeId, f.RuntimeId, StringComparison.Ordinal)
+            || f.CommercialShareReceipts == null)
+            return false;
+
+        List<DailyV1CommercialKnowledgeShareReceipt> receipts =
+            new List<DailyV1CommercialKnowledgeShareReceipt>(f.CommercialShareReceipts.Count);
+        foreach (CommercialKnowledgeShareReceipt receipt in f.CommercialShareReceipts)
+            receipts.Add(receipt == null ? null : new DailyV1CommercialKnowledgeShareReceipt(
+                receipt.OperationIdentity, receipt.Fingerprint, receipt.BoundaryOccurrenceId,
+                receipt.SenderRuntimeId, receipt.SenderPersonId, receipt.ReceiverRuntimeId,
+                receipt.ReceiverPersonId, receipt.SourceSnapshotFingerprint,
+                receipt.AppliedObservationCount));
+
+        input = new DailyV1P12DNpcCoreOwnerHydrationInput(
+            d, f.Action, f.TravelDaysRemaining, f.TravelDaysTotal,
+            f.TravelRouteRuntimeId, f.TravelStartedToday, f.TravelOriginDecisionId,
+            f.ActiveTravelPartyId, f.TravelStateRevision, f.MerchantPlan, f.TravelPlan,
+            f.KnownLocationRuntimeIds, f.KnownRouteRuntimeIds, f.SpatialKnowledgeRevision,
+            f.CommercialMarkets, f.CommercialLiquidity, receipts,
+            f.CommercialKnowledgeRevision);
         return true;
     }
 

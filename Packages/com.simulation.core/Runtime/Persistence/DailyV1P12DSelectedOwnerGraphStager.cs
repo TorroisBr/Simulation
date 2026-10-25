@@ -118,7 +118,7 @@ internal static class DailyV1P12DSelectedOwnerGraphStager
         return true;
     }
 
-    private static bool HasConsistentRestoredMembership(
+    internal static bool HasConsistentRestoredMembership(
         IReadOnlyList<DailyV1CityRuntimeOwners> cities,
         IReadOnlyList<DailyV1NpcRuntimeOwners> npcs)
     {

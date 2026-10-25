@@ -334,7 +334,8 @@ internal sealed class P12DCityRootOwnerSnapshot
         out CityRuntime city,
         out P12DCityMembershipLinker membershipLinker,
         out P12DCityRootOwnerSnapshotFailure failure,
-        DailyV1EffectiveDefinitions selectedDefinitions = null)
+        DailyV1EffectiveDefinitions selectedDefinitions = null,
+        DailyV1CityRuntimeOwners stagedSelectedOwner = null)
     {
         city = null;
         membershipLinker = null;
@@ -382,42 +383,32 @@ internal sealed class P12DCityRootOwnerSnapshot
 
         if (selectedDefinitions != null)
         {
-            DailyV1P12DCityCoreOwnerHydrationInput input = new DailyV1P12DCityCoreOwnerHydrationInput(
-                CityRuntimeId,
-                CityDefinitionId,
-                LegacyLocationRuntimeId,
-                location.RuntimeId,
-                ImportantNpcRevision,
-                ImportantNpcRuntimeIds,
-                MarketCounterpartyRuntimeId,
-                MarketLiquidityMode,
-                MarketCounterpartyHasAccount,
-                MarketRevision,
-                MarketItems,
-                PopulationEconomicRuntimeId,
-                PopulationPaymentMode,
-                PopulationEconomyHasAccount,
-                PopulationRuntimeId,
-                CurrentPopulation,
-                PopulationRevision,
-                PopulationReceiptRevision,
-                PopulationReceipts);
-            if (!DailyV1P12DCityCoreOwnerHydrator.TryCreate(
-                    input,
-                    selectedDefinitions,
-                    out DailyV1CityRuntimeOwners restoredOwners,
-                    out DailyV1P12DCityCoreOwnerHydrationFailure hydrationFailure))
+            DailyV1CityRuntimeOwners restoredOwners = stagedSelectedOwner;
+            if (restoredOwners == null)
             {
-                failure = hydrationFailure switch
+                DailyV1P12DCityCoreOwnerHydrationInput input = CreateSelectedCoreHydrationInput(location.RuntimeId);
+                if (!DailyV1P12DCityCoreOwnerHydrator.TryCreate(
+                        input, selectedDefinitions, out restoredOwners,
+                        out DailyV1P12DCityCoreOwnerHydrationFailure hydrationFailure))
                 {
-                    DailyV1P12DCityCoreOwnerHydrationFailure.MissingCityDefinition =>
-                        P12DCityRootOwnerSnapshotFailure.MissingCityDefinition,
-                    DailyV1P12DCityCoreOwnerHydrationFailure.MissingItemDefinition =>
-                        P12DCityRootOwnerSnapshotFailure.MissingItemDefinition,
-                    DailyV1P12DCityCoreOwnerHydrationFailure.InvalidMarketItem =>
-                        P12DCityRootOwnerSnapshotFailure.MissingItemDefinition,
-                    _ => P12DCityRootOwnerSnapshotFailure.InvalidSnapshot
-                };
+                    failure = hydrationFailure switch
+                    {
+                        DailyV1P12DCityCoreOwnerHydrationFailure.MissingCityDefinition =>
+                            P12DCityRootOwnerSnapshotFailure.MissingCityDefinition,
+                        DailyV1P12DCityCoreOwnerHydrationFailure.MissingItemDefinition =>
+                            P12DCityRootOwnerSnapshotFailure.MissingItemDefinition,
+                        DailyV1P12DCityCoreOwnerHydrationFailure.InvalidMarketItem =>
+                            P12DCityRootOwnerSnapshotFailure.MissingItemDefinition,
+                        _ => P12DCityRootOwnerSnapshotFailure.InvalidSnapshot
+                    };
+                    return false;
+                }
+            }
+            else if (!ReferenceEquals(restoredOwners.Definitions, selectedDefinitions)
+                || !string.Equals(restoredOwners.RuntimeId, CityRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(restoredOwners.LocationRuntimeId, location.RuntimeId, StringComparison.Ordinal))
+            {
+                failure = P12DCityRootOwnerSnapshotFailure.InvalidSnapshot;
                 return false;
             }
 
@@ -546,9 +537,19 @@ internal sealed class P12DCityRootOwnerSnapshot
         out CityRuntime city,
         out P12DCityMembershipLinker membershipLinker,
         out P12DCityRootOwnerSnapshotFailure failure,
-        DailyV1EffectiveDefinitions selectedDefinitions = null)
+        DailyV1EffectiveDefinitions selectedDefinitions = null,
+        DailyV1CityRuntimeOwners stagedSelectedOwner = null)
         => TryStageCore(admittedCityDefinitions, admittedItemDefinitions, stagedLocations,
-            null, out city, out membershipLinker, out failure, selectedDefinitions);
+            null, out city, out membershipLinker, out failure, selectedDefinitions, stagedSelectedOwner);
+
+    internal DailyV1P12DCityCoreOwnerHydrationInput CreateSelectedCoreHydrationInput(
+        string resolvedLocationRuntimeId) => new DailyV1P12DCityCoreOwnerHydrationInput(
+            CityRuntimeId, CityDefinitionId, LegacyLocationRuntimeId, resolvedLocationRuntimeId,
+            ImportantNpcRevision, ImportantNpcRuntimeIds, MarketCounterpartyRuntimeId,
+            MarketLiquidityMode, MarketCounterpartyHasAccount, MarketRevision, MarketItems,
+            PopulationEconomicRuntimeId, PopulationPaymentMode, PopulationEconomyHasAccount,
+            PopulationRuntimeId, CurrentPopulation, PopulationRevision,
+            PopulationReceiptRevision, PopulationReceipts);
 
     private static bool MatchesUniqueSection(
         IReadOnlyList<OwnerSectionCensusSnapshot> sections,

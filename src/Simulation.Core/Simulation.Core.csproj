@@ -196,6 +196,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1RestoredOwnerVectorContract.cs" Link="Persistence/DailyV1RestoredOwnerVectorContract.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12DRelationshipValidator.cs" Link="Persistence/DailyV1P12DRelationshipValidator.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12DSelectedOwnerGraphStager.cs" Link="Persistence/DailyV1P12DSelectedOwnerGraphStager.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12DSelectedCoreOwnerStager.cs" Link="Persistence/DailyV1P12DSelectedCoreOwnerStager.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12DSelectedOwnerRows.cs" Link="Persistence/P12DSelectedOwnerRows.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12DCityCoreOwnerHydrator.cs" Link="Persistence/DailyV1P12DCityCoreOwnerHydrator.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12DNpcCoreOwnerHydrator.cs" Link="Persistence/DailyV1P12DNpcCoreOwnerHydrator.cs" />
