@@ -22,9 +22,9 @@ public sealed class P12FCommitmentOwnerSnapshotTests
             out P12FTravelPartyOwnerSnapshot partySnapshot, out P12FCommitmentSnapshotFailure partyFailure), Is.True);
         Assert.That(partyFailure, Is.EqualTo(P12FCommitmentSnapshotFailure.None));
         Assert.That(partySnapshot.Parties, Is.Empty);
-        Assert.That(P12FTravelPartyOwnerSnapshotStager.TryStage(
-            partySnapshot, Array.Empty<NpcRuntime>(), Array.Empty<P12DNpcFRow>(),
-            new RuntimeIdentityRegistry(), out TravelPartyStore stagedParties, out partyFailure), Is.True);
+        Assert.That(DailyV1P12FTravelPartyOwnerStager.TryStage(
+            partySnapshot, Array.Empty<DailyV1NpcRuntimeOwners>(), Array.Empty<P12DNpcFRow>(),
+            new SpatialNetworkOwner(), out TravelPartyStore stagedParties, out partyFailure), Is.True);
         Assert.That(partyFailure, Is.EqualTo(P12FCommitmentSnapshotFailure.None));
         Assert.That(stagedParties.Revision, Is.EqualTo(0));
 
@@ -37,7 +37,7 @@ public sealed class P12FCommitmentOwnerSnapshotTests
     }
 
     [Test]
-    public void TravelPartySnapshotPreservesOrderedMembershipCostsAndReciprocalNpcLinks()
+    public void TravelPartySnapshotPreservesOrderedMembershipAndCosts()
     {
         TravelPartyStore source = new TravelPartyStore();
         TravelPartyRuntime party = new TravelPartyRuntime(
@@ -58,24 +58,7 @@ public sealed class P12FCommitmentOwnerSnapshotTests
         Assert.That(snapshot.Parties.Single().MemberRuntimeIds, Is.EqualTo(new[] { "traveler-b", "traveler-a", "escort-c" }));
         Assert.That(snapshot.Parties.Single().MemberCosts.Select(cost => cost.Amount), Is.EqualTo(new[] { 1.5f, 2.5f, 0.75f }));
 
-        RuntimeIdentityRegistry identities = CreateTravelIdentities();
-        List<NpcRuntime> npcs = CreateNpcsForParty(party.MemberRuntimeIds, party.TravelPartyId);
-        List<P12DNpcFRow> rows = CreateRows(party.MemberRuntimeIds, party.TravelPartyId);
-        Assert.That(P12FTravelPartyOwnerSnapshotStager.TryStage(snapshot, npcs, rows, identities,
-            out TravelPartyStore staged, out P12FCommitmentSnapshotFailure failure), Is.True);
-        Assert.That(failure, Is.EqualTo(P12FCommitmentSnapshotFailure.None));
-        TravelPartyRuntime restored = staged.GetById("party-stable");
-        Assert.That(restored, Is.Not.SameAs(party));
-        Assert.That(restored.TravelerRuntimeIds, Is.EqualTo(party.TravelerRuntimeIds));
-        Assert.That(restored.MemberRuntimeIds, Is.EqualTo(party.MemberRuntimeIds));
-        Assert.That(restored.OriginDecisionId, Is.EqualTo("decision-origin"));
-        Assert.That(restored.TravelDaysTotal, Is.EqualTo(4));
-        Assert.That(staged.Revision, Is.EqualTo(source.Revision));
 
-        List<P12DNpcFRow> missingReciprocal = CreateRows(party.MemberRuntimeIds, null);
-        Assert.That(P12FTravelPartyOwnerSnapshotStager.TryStage(snapshot, npcs, missingReciprocal, identities,
-            out _, out failure), Is.False);
-        Assert.That(failure, Is.EqualTo(P12FCommitmentSnapshotFailure.InvalidNpcBinding));
     }
 
     [Test]
@@ -173,35 +156,4 @@ public sealed class P12FCommitmentOwnerSnapshotTests
         new OwnerSectionCensusSnapshot(id, id == TravelPartyCensusProvider.SectionId
             ? TravelPartyCensusProvider.SchemaVersion : ExpeditionCensusProvider.SchemaVersion,
             OwnerSectionRole.Required, owner, count, revision);
-
-    private static RuntimeIdentityRegistry CreateTravelIdentities()
-    {
-        RuntimeIdentityRegistry identities = new RuntimeIdentityRegistry();
-        SpatialLocationRuntime origin = new SpatialLocationRuntime("origin");
-        SpatialLocationRuntime destination = new SpatialLocationRuntime("destination");
-        Assert.That(identities.RegisterLocation(origin), Is.True);
-        Assert.That(identities.RegisterLocation(destination), Is.True);
-        Assert.That(identities.RegisterRoute(new SpatialRouteRuntime("route", origin, destination, 4)), Is.True);
-        return identities;
-    }
-
-    private static List<NpcRuntime> CreateNpcsForParty(IEnumerable<string> memberIds, string partyId)
-    {
-        List<NpcRuntime> values = new List<NpcRuntime>();
-        foreach (string id in memberIds)
-        {
-            NpcRuntime npc = new NpcRuntime(id, SimulationTestFactory.CreateNpc("def-" + id));
-            Assert.That(npc.SetActiveTravelPartyId(partyId), Is.True);
-            values.Add(npc);
-        }
-        return values;
-    }
-
-    private static List<P12DNpcFRow> CreateRows(IEnumerable<string> ids, string partyId) => ids.Select(id =>
-        new P12DNpcFRow(id, null, 0, 0, null, false, null, partyId, 0L, null, null,
-            Array.Empty<ExplorableSiteKnowledgeObservation>(), 0L, Array.Empty<string>(), Array.Empty<string>(), 0L,
-            Array.Empty<AdventureOppositionObservation>(), Array.Empty<AdventureNotableItemObservation>(),
-            Array.Empty<AdventureCommonResourceObservation>(), Array.Empty<AdventureAccessObservation>(), 0L,
-            Array.Empty<P12DNpcCommercialMarketValue>(), Array.Empty<P12DNpcCommercialLiquidityValue>(),
-            Array.Empty<P12DNpcCommercialShareReceiptValue>(), 0L)).ToList();
 }

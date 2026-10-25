@@ -174,6 +174,8 @@ internal sealed class P12FDailyV1OwnerCapture
             || !ReferenceEquals(context.P12DPackage.StagingAttempt, context.StagingAttempt)
             || !ReferenceEquals(stagedE.StagingAttempt, context.StagingAttempt)
             || context.P12DPackage.Npcs == null || context.P12DPackage.NpcFRows == null
+            || context.P12DPackage.SelectedNpcOwners == null
+            || context.P12DPackage.SpatialNetwork == null
             || context.P12DPackage.RuntimeIdentities == null
             || context.P12DPackage.Npcs.Count != context.P12DPackage.NpcFRows.Count
             || context.StagedSimulationTime == null
@@ -237,9 +239,9 @@ internal sealed class P12FDailyV1OwnerCapture
         }
         stageObserver?.Invoke(P12GDailyV1RestoreStage.FActorChoicesStaged);
 
-        if (!P12FTravelPartyOwnerSnapshotStager.TryStage(
-                travelParties, stagedD.Npcs, stagedD.NpcFRows,
-                stagedD.RuntimeIdentities, out TravelPartyStore stagedTravelParties, out _))
+        if (!DailyV1P12FTravelPartyOwnerStager.TryStage(
+                travelParties, stagedD.SelectedNpcOwners, stagedD.NpcFRows,
+                stagedD.SpatialNetwork.SelectedOwner, out TravelPartyStore stagedTravelParties, out _))
         {
             failure = P12FDailyV1OwnerPackageFailure.StageFailed;
             return false;
@@ -340,6 +342,8 @@ internal sealed class P12FDailyV1OwnerPackage
             || context.StagingAttempt != null || context.P12CRoots?.StagingAttempt != null
             || context.P12DPackage?.StagingAttempt != null || stagedE.StagingAttempt != null
             || context.P12DPackage?.Npcs == null || context.P12DPackage.NpcFRows == null
+            || context.P12DPackage.SelectedNpcOwners == null
+            || context.P12DPackage.SpatialNetwork == null
             || context.P12DPackage.RuntimeIdentities == null
             || context.P12DPackage.Npcs.Count != context.P12DPackage.NpcFRows.Count
             || context.StagedSimulationTime == null || context.StagedSimulationTime.AbsoluteDay != image.Header.Day
@@ -385,9 +389,9 @@ internal sealed class P12FDailyV1OwnerPackage
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.FActorChoicesStaged);
 
-            if (!P12FTravelPartyOwnerSnapshotStager.TryStage(decoded.TravelParties,
-                    context.P12DPackage.Npcs, context.P12DPackage.NpcFRows,
-                    context.P12DPackage.RuntimeIdentities,
+            if (!DailyV1P12FTravelPartyOwnerStager.TryStage(decoded.TravelParties,
+                    context.P12DPackage.SelectedNpcOwners, context.P12DPackage.NpcFRows,
+                    context.P12DPackage.SpatialNetwork.SelectedOwner,
                     out TravelPartyStore travelParties, out _))
             {
                 failure = P12FDailyV1OwnerPackageFailure.StageFailed;
