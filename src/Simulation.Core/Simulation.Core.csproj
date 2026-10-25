@@ -194,6 +194,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ARuntimeIdentityOwnerCodec.cs" Link="Persistence/P12ARuntimeIdentityOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ASpatialNetworkOwnerCodec.cs" Link="Persistence/P12ASpatialNetworkOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/SpatialNetworkOwnerSnapshot.cs" Link="Persistence/SpatialNetworkOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12DSpatialNetworkOwnerHydrator.cs" Link="Persistence/P12DSpatialNetworkOwnerHydrator.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12CSelectedCoreRootStager.cs" Link="Persistence/P12CSelectedCoreRootStager.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1RestoredOwnerVectorContract.cs" Link="Persistence/DailyV1RestoredOwnerVectorContract.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12DRelationshipValidator.cs" Link="Persistence/DailyV1P12DRelationshipValidator.cs" />

@@ -292,9 +292,10 @@ public sealed class SpatialNetworkCensusTests
         Assert.That(snapshot.Routes[1].DestinationLocationRuntimeId, Is.EqualTo("legacy-destination"));
         Assert.That(snapshot.Routes[1].TravelDays, Is.EqualTo(9));
 
+        RuntimeIdentityRegistry restoredRegistry = new RuntimeIdentityRegistry();
         Assert.That(SpatialNetworkRuntime.TryCreateFromOwnerSnapshot(
             snapshot,
-            new RuntimeIdentityRegistry(),
+            restoredRegistry,
             out SpatialNetworkRuntime restored,
             out SpatialNetworkSnapshotFailure failure), Is.True, failure.Message);
         Assert.That(failure.Code, Is.EqualTo(SpatialNetworkSnapshotFailureCode.None));
@@ -310,6 +311,13 @@ public sealed class SpatialNetworkCensusTests
             ).Select(route => route.RuntimeId), Is.EqualTo(new[] { "legacy-route-first", "legacy-route-parallel" }));
         Assert.That(restored.Routes[0].TravelDays, Is.EqualTo(4));
         Assert.That(restored.Routes[1].TravelDays, Is.EqualTo(9));
+        Assert.That(restoredRegistry.TryGetLocation("legacy-origin",
+            out SpatialLocationRuntime registeredOrigin), Is.True);
+        Assert.That(restored.Locations.Single(location => location.RuntimeId == "legacy-origin"),
+            Is.SameAs(registeredOrigin));
+        Assert.That(restoredRegistry.TryGetRoute("legacy-route-first",
+            out SpatialRouteRuntime registeredRoute), Is.True);
+        Assert.That(restored.Routes[0], Is.SameAs(registeredRoute));
     }
 
     [Test]

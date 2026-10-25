@@ -72,3 +72,42 @@ internal sealed class SpatialRouteOwnerSnapshotRecord
         TravelDays = travelDays;
     }
 }
+
+internal enum SpatialNetworkSnapshotFailureCode
+{
+    None = 0,
+    InvalidSnapshot,
+    UnsupportedSnapshotSchema,
+    InvalidLocationId,
+    DuplicateRuntimeId,
+    InvalidRoute,
+    MissingRouteEndpoint,
+    SelfRoute,
+    InvalidTravelDays,
+    RuntimeIdentityCollision,
+    RuntimeIdentityRevisionExhausted
+}
+
+internal sealed class SpatialNetworkSnapshotFailure
+{
+    internal static readonly SpatialNetworkSnapshotFailure None =
+        new SpatialNetworkSnapshotFailure(SpatialNetworkSnapshotFailureCode.None, string.Empty);
+
+    internal SpatialNetworkSnapshotFailureCode Code { get; }
+    internal string Message { get; }
+
+    private SpatialNetworkSnapshotFailure(SpatialNetworkSnapshotFailureCode code, string message)
+    {
+        Code = code;
+        Message = message ?? string.Empty;
+    }
+
+    internal static SpatialNetworkSnapshotFailure Create(
+        SpatialNetworkSnapshotFailureCode code,
+        string message)
+    {
+        return code == SpatialNetworkSnapshotFailureCode.None
+            ? None
+            : new SpatialNetworkSnapshotFailure(code, message);
+    }
+}
