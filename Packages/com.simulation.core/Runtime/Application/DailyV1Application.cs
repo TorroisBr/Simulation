@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 
 /// <summary>
@@ -375,14 +376,47 @@ internal sealed class DailyV1Application
             || !ReferenceEquals(admittedSession, expectedSession))
             return false;
 
-        if (!TryCaptureContinuationSourceWitness(expectedSession,
-                out DailyV1P12GSourceBoundaryWitness witness, out failure))
+        DailyV1P12GContinuationSaveOperation candidateOperation = null;
+        bool witnessCaptured;
+        try
+        {
+            witnessCaptured = TryCaptureContinuationSourceWitness(expectedSession,
+                out DailyV1P12GSourceBoundaryWitness witness, out failure);
+            if (witnessCaptured)
+                candidateOperation = new DailyV1P12GContinuationSaveOperation(
+                    this, expectedSession, witness);
+        }
+        catch (Exception captureException)
+        {
+            try
+            {
+                activeSessionGate.EndOperation(DailyV1OperationScopeKind.ContinuationSave);
+            }
+            catch (Exception cleanupException)
+            {
+                // Do not replace the original capture/construction failure if
+                // cleanup also fails. Keep the cleanup diagnostic attached.
+                try
+                {
+                    captureException.Data["ContinuationSaveScopeCleanupException"] = cleanupException;
+                }
+                catch
+                {
+                    // Exception data is diagnostic only; never mask the original failure.
+                }
+            }
+
+            ExceptionDispatchInfo.Capture(captureException).Throw();
+            throw;
+        }
+
+        if (!witnessCaptured)
         {
             activeSessionGate.EndOperation(DailyV1OperationScopeKind.ContinuationSave);
             return false;
         }
 
-        operation = new DailyV1P12GContinuationSaveOperation(this, expectedSession, witness);
+        operation = candidateOperation;
         return true;
     }
 

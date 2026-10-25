@@ -22,6 +22,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         private readonly Action onOperationEntry;
         private IReadOnlyList<OwnerSectionCensusSnapshot> admissionOwnerSections;
         private long admissionMutationEpoch;
+        private Exception continuationSaveCaptureException;
 
         internal ApplicationAdvanceBoundary(
             DailyV1ExecutionBoundaryState state,
@@ -39,6 +40,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         internal bool SelectedBoundaryRequested { get; private set; }
         internal bool Faulted { get; private set; }
         internal bool? RequestedSessionReplacement { get; private set; }
+        internal void ThrowOnContinuationSaveCapture(Exception exception) =>
+            continuationSaveCaptureException = exception;
         internal void SetAdmissionEvidence(
             IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
             long mutationEpoch)
@@ -112,9 +115,13 @@ public sealed class DailyV1ApplicationSessionGateTests
         public bool TryCaptureContinuationSaveEvidence(
             out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
             out long mutationEpoch,
-            out DailyCaptureEligibilityFailure failure) =>
-            TryCaptureDailyBoundaryAdmissionEvidence(
+            out DailyCaptureEligibilityFailure failure)
+        {
+            if (continuationSaveCaptureException != null)
+                throw continuationSaveCaptureException;
+            return TryCaptureDailyBoundaryAdmissionEvidence(
                 sessionReplacement: false, out ownerSections, out mutationEpoch, out failure);
+        }
 
         public void FaultRuntimeAdmission()
         {
@@ -277,6 +284,25 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryBeginContinuationSaveOperation(
             session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.False);
         Assert.That(operation, Is.Null);
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void ContinuationSaveCaptureExceptionClosesRegisteredScopeAndPreservesOriginalException()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        InstallCompletedBoundaryToken(session, boundary);
+        InvalidOperationException expected = new InvalidOperationException(
+            "Synthetic continuation-save evidence failure.");
+        boundary.ThrowOnContinuationSaveCapture(expected);
+
+        InvalidOperationException actual = Assert.Throws<InvalidOperationException>(() =>
+            application.TryBeginContinuationSaveOperation(
+                session, out DailyV1P12GContinuationSaveOperation _, out _));
+
+        Assert.That(actual, Is.SameAs(expected));
         Assert.That(application.ActiveOperationCount, Is.Zero);
     }
 
