@@ -144,17 +144,34 @@ public sealed class DailyV1P12DCityCoreOwnerHydratorTests
         Assert.That(membershipFailure, Is.EqualTo(DailyV1P12DCityCoreOwnerHydrationFailure.InvalidOwnerValue));
     }
 
+    [Test]
+    public void P12DCityCoreHydratorRejectsUnsupportedSchemaWithoutReturningOwners()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1CityDefinition city = definitions.Cities.Values.First();
+        DailyV1P12DCityCoreOwnerHydrationInput input = CreateInput(
+            city.DefinitionId, Array.Empty<P12DCityMarketItemSnapshot>(),
+            Array.Empty<PopulationOperationReceiptSnapshot>(), schemaVersion: 2);
+
+        Assert.That(DailyV1P12DCityCoreOwnerHydrator.TryCreate(input, definitions,
+            out DailyV1CityRuntimeOwners owners,
+            out DailyV1P12DCityCoreOwnerHydrationFailure failure), Is.False);
+        Assert.That(owners, Is.Null);
+        Assert.That(failure, Is.EqualTo(DailyV1P12DCityCoreOwnerHydrationFailure.InvalidInput));
+    }
+
     private static DailyV1P12DCityCoreOwnerHydrationInput CreateInput(
         string cityDefinitionId,
         P12DCityMarketItemSnapshot[] rows,
         PopulationOperationReceiptSnapshot[] receipts,
         string resolvedLocationRuntimeId = "location/p12d-hydrator",
-        string[] importantNpcRuntimeIds = null) =>
+        string[] importantNpcRuntimeIds = null,
+        int schemaVersion = 1) =>
         new DailyV1P12DCityCoreOwnerHydrationInput(
             "city/p12d-hydrator", cityDefinitionId, "location/p12d-hydrator",
             resolvedLocationRuntimeId, 9L,
             importantNpcRuntimeIds ?? new[] { "npc/second", "npc/first" },
             "city/p12d-hydrator", MarketLiquidityMode.Open, false, 11L, rows,
             "population-city/p12d-hydrator", ConsumptionPaymentMode.Free, false,
-            "city/p12d-hydrator", 1200, 3L, 7L, receipts);
+            "city/p12d-hydrator", 1200, 3L, 7L, receipts, schemaVersion);
 }

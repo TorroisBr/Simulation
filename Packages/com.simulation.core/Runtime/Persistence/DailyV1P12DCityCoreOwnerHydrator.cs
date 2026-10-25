@@ -9,6 +9,7 @@ using System.Collections.ObjectModel;
 /// </summary>
 internal sealed class DailyV1P12DCityCoreOwnerHydrationInput
 {
+    internal int SchemaVersion { get; }
     internal string CityRuntimeId { get; }
     internal string CityDefinitionId { get; }
     internal string LegacyLocationRuntimeId { get; }
@@ -48,8 +49,10 @@ internal sealed class DailyV1P12DCityCoreOwnerHydrationInput
         int currentPopulation,
         long populationRevision,
         long populationReceiptRevision,
-        IEnumerable<PopulationOperationReceiptSnapshot> populationReceipts)
+        IEnumerable<PopulationOperationReceiptSnapshot> populationReceipts,
+        int schemaVersion = 1)
     {
+        SchemaVersion = schemaVersion;
         CityRuntimeId = cityRuntimeId;
         CityDefinitionId = cityDefinitionId;
         LegacyLocationRuntimeId = legacyLocationRuntimeId;
@@ -101,7 +104,7 @@ internal static class DailyV1P12DCityCoreOwnerHydrator
     {
         owners = null;
         failure = DailyV1P12DCityCoreOwnerHydrationFailure.InvalidInput;
-        if (input == null || definitions == null
+        if (input == null || definitions == null || input.SchemaVersion != P12DCityOwnerImageSectionCodec.SchemaVersion
             || input.ImportantNpcRuntimeIds == null
             || input.MarketItems == null
             || input.PopulationReceipts == null

@@ -187,7 +187,7 @@ internal static class P12DCityOwnerImageSectionCodec
             presence.Revision, importantNpcIds, cityId, MarketLiquidityMode.Open, false,
             market.Revision, marketItems, economicId, paymentMode, false,
             populationRuntimeId, currentPopulation, population.Revision,
-            receipts.Revision, populationReceipts);
+            receipts.Revision, populationReceipts, SchemaVersion);
         result = null;
         return true;
     }
@@ -319,7 +319,7 @@ internal static class P12DCityOwnerImageSectionCodec
 
     private static bool IsSupported(DailyV1P12DCityCoreOwnerHydrationInput snapshot)
     {
-        if (snapshot == null
+        if (snapshot == null || snapshot.SchemaVersion != SchemaVersion
             || !ValidId(snapshot.CityRuntimeId) || !ValidId(snapshot.CityDefinitionId)
             || !ValidId(snapshot.LegacyLocationRuntimeId) || snapshot.ImportantNpcRevision < 0L
             || snapshot.ImportantNpcRuntimeIds == null || snapshot.MarketCounterpartyHasAccount

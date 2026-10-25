@@ -74,6 +74,7 @@ internal static class P12ACityOwnerCodec
             snapshot.CurrentPopulation,
             snapshot.PopulationRevision,
             snapshot.PopulationReceiptRevision,
-            snapshot.PopulationReceipts);
+            snapshot.PopulationReceipts,
+            snapshot.SchemaVersion);
     }
 }

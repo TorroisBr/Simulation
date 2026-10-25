@@ -549,7 +549,7 @@ internal sealed class P12DCityRootOwnerSnapshot
             MarketLiquidityMode, MarketCounterpartyHasAccount, MarketRevision, MarketItems,
             PopulationEconomicRuntimeId, PopulationPaymentMode, PopulationEconomyHasAccount,
             PopulationRuntimeId, CurrentPopulation, PopulationRevision,
-            PopulationReceiptRevision, PopulationReceipts);
+            PopulationReceiptRevision, PopulationReceipts, SchemaVersion);
 
     private static bool MatchesUniqueSection(
         IReadOnlyList<OwnerSectionCensusSnapshot> sections,

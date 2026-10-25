@@ -364,7 +364,7 @@ internal sealed class P12DDailyV1OwnerPackage
 
     internal static bool TryStageFromImage(
         IReadOnlyList<P12AOwnerSection> ownerSections,
-        IReadOnlyList<P12DCityRootOwnerSnapshot> citySnapshots,
+        IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> cityInputs,
         IReadOnlyList<P12DNpcDRow> npcDRows,
         IReadOnlyList<P12DNpcFRow> npcFRows,
         SpatialNetworkOwnerSnapshot spatialSnapshot,
@@ -386,7 +386,7 @@ internal sealed class P12DDailyV1OwnerPackage
     {
         package = null;
         failure = P12DDailyV1OwnerPackageFailure.InvalidCaptureContext;
-        if (ownerSections == null || citySnapshots == null || citySnapshots.Count == 0
+        if (ownerSections == null || cityInputs == null || cityInputs.Count == 0
             || npcDRows == null || npcFRows == null || spatialSnapshot == null
             || personSnapshot == null || genealogySnapshot == null || siteSnapshot == null
             || stagedRuntimeIdentities == null || stagedWorldId == null
@@ -417,24 +417,30 @@ internal sealed class P12DDailyV1OwnerPackage
             || !TryBuildUniqueMap(itemDefinitions, definition => definition?.DefinitionId, out _))
         { failure = P12DDailyV1OwnerPackageFailure.InvalidDefinition; return false; }
 
-        List<CityRuntime> stagedCities = new List<CityRuntime>(citySnapshots.Count);
-        List<P12DCityMembershipLinker> cityLinkers = new List<P12DCityMembershipLinker>(citySnapshots.Count);
+        List<P12DCityRootOwnerSnapshot> citySnapshots = new List<P12DCityRootOwnerSnapshot>(cityInputs.Count);
+        List<CityRuntime> stagedCities = new List<CityRuntime>(cityInputs.Count);
+        List<P12DCityMembershipLinker> cityLinkers = new List<P12DCityMembershipLinker>(cityInputs.Count);
         List<DailyV1P12DCityCoreOwnerHydrationInput> selectedCityInputs =
-            selectedDefinitions == null ? null : new List<DailyV1P12DCityCoreOwnerHydrationInput>(citySnapshots.Count);
+            selectedDefinitions == null ? null : new List<DailyV1P12DCityCoreOwnerHydrationInput>(cityInputs);
         Dictionary<string, string> cityLocationIds = new Dictionary<string, string>(StringComparer.Ordinal);
         HashSet<string> cityIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (P12DCityRootOwnerSnapshot snapshot in citySnapshots)
+        foreach (DailyV1P12DCityCoreOwnerHydrationInput input in cityInputs)
         {
-            if (snapshot == null || snapshot.SchemaVersion != P12DCityRootOwnerSnapshot.CurrentSchemaVersion
-                || snapshot.ImportantNpcRuntimeIds == null || snapshot.MarketItems == null
-                || snapshot.PopulationReceipts == null || !cityIds.Add(snapshot.CityRuntimeId)
-                || !locationsById.TryGetValue(snapshot.LegacyLocationRuntimeId,
+            if (input == null || input.SchemaVersion != P12DCityRootOwnerSnapshot.CurrentSchemaVersion
+                || input.ImportantNpcRuntimeIds == null || input.MarketItems == null
+                || input.PopulationReceipts == null || string.IsNullOrWhiteSpace(input.CityRuntimeId)
+                || string.IsNullOrWhiteSpace(input.LegacyLocationRuntimeId) || !cityIds.Add(input.CityRuntimeId)
+                || !locationsById.TryGetValue(input.LegacyLocationRuntimeId,
                     out SpatialLocationRuntime location)
-                || !stagedRuntimeIdentities.IsRuntimeIdAvailable(snapshot.CityRuntimeId))
+                || !string.Equals(input.ResolvedLocationRuntimeId, location.RuntimeId, StringComparison.Ordinal)
+                || !stagedRuntimeIdentities.IsRuntimeIdAvailable(input.CityRuntimeId))
             { failure = P12DDailyV1OwnerPackageFailure.InvalidIdentityRoot; return false; }
-            cityLocationIds.Add(snapshot.CityRuntimeId, snapshot.LegacyLocationRuntimeId);
-            if (selectedCityInputs != null)
-                selectedCityInputs.Add(snapshot.CreateSelectedCoreHydrationInput(location.RuntimeId));
+
+            P12DCityRootOwnerSnapshot snapshot = P12ACityOwnerCodec.FromCoreValue(input);
+            if (snapshot == null)
+            { failure = P12DDailyV1OwnerPackageFailure.InvalidOwnerSnapshot; return false; }
+            citySnapshots.Add(snapshot);
+            cityLocationIds.Add(snapshot.CityRuntimeId, location.RuntimeId);
         }
 
         DailyV1P12DSelectedCoreOwnerStage selectedCoreOwnerStage = null;

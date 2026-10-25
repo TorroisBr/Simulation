@@ -34,6 +34,7 @@ public sealed class P12DCityOwnerImageDecoderTests
             sections[0], sections[3], sections[1], sections[2],
             out DailyV1P12DCityCoreOwnerHydrationInput decoded, out P12AResult decodeError),
             Is.True, decodeError?.SectionCode + ":" + decodeError?.Code);
+        Assert.That(decoded.SchemaVersion, Is.EqualTo(source.SchemaVersion));
         Assert.That(decoded.CityRuntimeId, Is.EqualTo(source.CityRuntimeId));
         Assert.That(decoded.CityDefinitionId, Is.EqualTo(source.CityDefinitionId));
         Assert.That(decoded.LegacyLocationRuntimeId, Is.EqualTo(source.LegacyLocationRuntimeId));
