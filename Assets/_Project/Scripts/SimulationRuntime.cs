@@ -10972,6 +10972,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             out mutationEpoch,
             out failure);
 
+    bool IDailyV1RuntimeAdvanceBoundary.TryCaptureContinuationSaveEvidence(
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure) =>
+        TryReadDailyCaptureEvidence(
+            finalizingHeldAdvance: false,
+            DailyV1CaptureScopeAllowance.ContinuationSave,
+            out ownerSections,
+            out mutationEpoch,
+            out failure);
+
     void IDailyV1RuntimeAdvanceBoundary.FaultRuntimeAdmission() => FaultRuntimeAdmission();
 
     /// <summary>

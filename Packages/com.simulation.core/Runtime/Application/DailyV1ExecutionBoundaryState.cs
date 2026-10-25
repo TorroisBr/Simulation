@@ -740,6 +740,73 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             && AreOwnerSectionsEqual(token.OwnerSections, currentOwnerSections);
     }
 
+    /// <summary>
+    /// Revalidates the current completed boundary while exactly one P12-G
+    /// continuation-save operation is registered. The returned owner list is
+    /// the exact census source which must be retained by detached staging.
+    /// </summary>
+    internal bool TryCaptureContinuationSaveBoundaryEvidence(
+        IDailyV1RuntimeAdvanceBoundary boundary,
+        out DailyCaptureEligibilityToken token,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        token = null;
+        ownerSections = null;
+        mutationEpoch = 0L;
+        failure = DailyCaptureEligibilityFailure.OperationInProgress;
+        if (boundary == null || !ReferenceEquals(boundary.ExecutionState, this)
+            || !TryAssessCaptureScope(DailyV1CaptureScopeAllowance.ContinuationSave)
+            || AdmissionContext == null
+            || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !AdmissionContext.IsOwnedByCurrentThread()
+            || AdvanceLeaseHeld || !mutationGuard.CanMutate
+            || SimulationTime == null || WorldId == null
+            || !runtimeIdentityBound || !runtimeConfigurationBound)
+            return false;
+
+        DailyCaptureEligibilityToken current = currentCaptureToken;
+        if (current == null)
+        {
+            failure = DailyCaptureEligibilityFailure.NoCompletedBoundary;
+            return false;
+        }
+
+        if (current.BoundaryProvenance != DailyCaptureBoundaryProvenance.CompletedAdvance
+            && current.BoundaryProvenance != DailyCaptureBoundaryProvenance.RestoredContinuation)
+        {
+            failure = DailyCaptureEligibilityFailure.StaleToken;
+            return false;
+        }
+
+        if (!boundary.TryCaptureContinuationSaveEvidence(
+                out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+                out long capturedMutationEpoch,
+                out failure))
+            return false;
+
+        if (captured == null || capturedMutationEpoch < 0L
+            || !DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured)
+            || !TryCompareCurrentCaptureToken(
+                current, AdmissionContext, ConfigurationIdentity, CalendarIdentity,
+                CompositionProfile, WorldId, SimulationTime.AbsoluteDay,
+                captured, capturedMutationEpoch)
+            || !TryAssessCaptureScope(DailyV1CaptureScopeAllowance.ContinuationSave)
+            || !AdmissionContext.IsOwnedByCurrentThread()
+            || !mutationGuard.CanMutate)
+        {
+            failure = DailyCaptureEligibilityFailure.StaleToken;
+            return false;
+        }
+
+        token = current;
+        ownerSections = captured;
+        mutationEpoch = capturedMutationEpoch;
+        failure = DailyCaptureEligibilityFailure.None;
+        return true;
+    }
+
     internal static bool AreOwnerSectionsEqual(
         IReadOnlyList<OwnerSectionCensusSnapshot> left,
         IReadOnlyList<OwnerSectionCensusSnapshot> right)

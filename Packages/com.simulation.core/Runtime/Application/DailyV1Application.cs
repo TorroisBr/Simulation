@@ -348,6 +348,100 @@ internal sealed class DailyV1Application
         out DailyV1ActiveRuntimeSession session) =>
         activeSessionGate.TryBeginOperation(expectedSession, scopeKind, out session);
 
+    /// <summary>
+    /// Starts the single Core-owned P12-G save operation and captures the
+    /// exact current completed-boundary witness before detached staging. The
+    /// returned operation keeps the save scope registered until disposal and
+    /// supports repeated source recapture between P12 stages.
+    /// </summary>
+    internal bool TryBeginContinuationSaveOperation(
+        DailyV1ActiveRuntimeSession expectedSession,
+        out DailyV1P12GContinuationSaveOperation operation,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        operation = null;
+        failure = DailyCaptureEligibilityFailure.OperationInProgress;
+        if (expectedSession == null
+            || !ReferenceEquals(activeSessionGate.Current, expectedSession)
+            || !expectedSession.ExecutionBoundaryState.IsHealthyDailyOwnerThreadBoundary()
+            || expectedSession.RuntimeAdvanceBoundary == null
+            || !ReferenceEquals(expectedSession.RuntimeAdvanceBoundary.ExecutionState,
+                expectedSession.ExecutionBoundaryState))
+            return false;
+
+        if (!activeSessionGate.TryBeginOperation(
+                expectedSession, DailyV1OperationScopeKind.ContinuationSave,
+                out DailyV1ActiveRuntimeSession admittedSession)
+            || !ReferenceEquals(admittedSession, expectedSession))
+            return false;
+
+        if (!TryCaptureContinuationSourceWitness(expectedSession,
+                out DailyV1P12GSourceBoundaryWitness witness, out failure))
+        {
+            activeSessionGate.EndOperation(DailyV1OperationScopeKind.ContinuationSave);
+            return false;
+        }
+
+        operation = new DailyV1P12GContinuationSaveOperation(this, expectedSession, witness);
+        return true;
+    }
+
+    internal bool TryRevalidateContinuationSaveOperation(
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1P12GSourceBoundaryWitness expectedWitness,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        failure = DailyCaptureEligibilityFailure.OperationInProgress;
+        if (expectedSession == null || expectedWitness == null
+            || !ReferenceEquals(activeSessionGate.Current, expectedSession)
+            || !expectedSession.AdmissionContext.IsOwnedByCurrentThread())
+            return false;
+
+        if (!TryCaptureContinuationSourceWitness(expectedSession,
+                out DailyV1P12GSourceBoundaryWitness currentWitness, out failure))
+            return false;
+
+        if (!expectedWitness.Matches(currentWitness))
+        {
+            failure = DailyCaptureEligibilityFailure.StaleToken;
+            return false;
+        }
+
+        return true;
+    }
+
+    internal void EndContinuationSaveOperation()
+    {
+        activeSessionGate.EndOperation(DailyV1OperationScopeKind.ContinuationSave);
+    }
+
+    private static bool TryCaptureContinuationSourceWitness(
+        DailyV1ActiveRuntimeSession session,
+        out DailyV1P12GSourceBoundaryWitness witness,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        witness = null;
+        failure = DailyCaptureEligibilityFailure.OperationInProgress;
+        if (session == null || session.RuntimeAdvanceBoundary == null
+            || !session.ExecutionBoundaryState.TryCaptureContinuationSaveBoundaryEvidence(
+                session.RuntimeAdvanceBoundary,
+                out DailyCaptureEligibilityToken token,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> currentSections,
+                out long mutationEpoch,
+                out failure))
+            return false;
+
+        if (!DailyV1P12GSourceBoundaryWitness.TryCreate(
+                token, currentSections, mutationEpoch, out witness))
+        {
+            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        failure = DailyCaptureEligibilityFailure.None;
+        return true;
+    }
+
     internal void EndOperation(DailyV1OperationScopeKind scopeKind) =>
         activeSessionGate.EndOperation(scopeKind);
 

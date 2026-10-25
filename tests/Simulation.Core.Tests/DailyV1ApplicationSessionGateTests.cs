@@ -109,6 +109,13 @@ public sealed class DailyV1ApplicationSessionGateTests
             return admissionOwnerSections != null;
         }
 
+        public bool TryCaptureContinuationSaveEvidence(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure) =>
+            TryCaptureDailyBoundaryAdmissionEvidence(
+                sessionReplacement: false, out ownerSections, out mutationEpoch, out failure);
+
         public void FaultRuntimeAdmission()
         {
             Faulted = true;
@@ -162,6 +169,115 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryBindRuntimeAdvanceBoundary(session, boundary), Is.True);
         Assert.That(application.TryPublishInitial(session), Is.True);
         return application;
+    }
+
+    private static DailyCaptureEligibilityToken InstallCompletedBoundaryToken(
+        DailyV1ActiveRuntimeSession session,
+        ApplicationAdvanceBoundary boundary,
+        OwnerSectionCensusSnapshot[] sections = null,
+        long mutationEpoch = 0L)
+    {
+        sections ??= DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        Assert.That(state.TryRecordCompletedCore(), Is.True);
+        Assert.That(state.TryCreateCompletedAdvanceToken(
+            session.AdmissionContext,
+            session.EffectiveConfiguration,
+            session.Calendar,
+            state.CompositionProfile,
+            session.WorldId,
+            session.SimulationTime.AbsoluteDay,
+            mutationEpoch,
+            sections,
+            out DailyCaptureEligibilityToken token), Is.True);
+        boundary.SetAdmissionEvidence(sections, mutationEpoch);
+        return token;
+    }
+
+    private static void AssertOwnerSectionSnapshotsMatch(
+        IReadOnlyList<OwnerSectionCensusSnapshot> expected,
+        IReadOnlyList<OwnerSectionCensusSnapshot> actual)
+    {
+        Assert.That(actual, Has.Count.EqualTo(expected.Count));
+        for (int index = 0; index < expected.Count; index++)
+        {
+            Assert.That(actual[index].SectionId, Is.EqualTo(expected[index].SectionId));
+            Assert.That(actual[index].SchemaVersion, Is.EqualTo(expected[index].SchemaVersion));
+            Assert.That(actual[index].Role, Is.EqualTo(expected[index].Role));
+            Assert.That(actual[index].OwnerInstanceIdentity,
+                Is.SameAs(expected[index].OwnerInstanceIdentity));
+            Assert.That(actual[index].Cardinality, Is.EqualTo(expected[index].Cardinality));
+            Assert.That(actual[index].Revision, Is.EqualTo(expected[index].Revision));
+        }
+    }
+
+    [Test]
+    public void ContinuationSaveOperationRetainsExactCompletedSourceWitnessAndClosesScope()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        DailyCaptureEligibilityToken sourceToken =
+            InstallCompletedBoundaryToken(session, boundary);
+
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation,
+            out DailyCaptureEligibilityFailure failure), Is.True);
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.None));
+        Assert.That(operation, Is.Not.Null);
+        Assert.That(operation.SourceWitness.Token, Is.SameAs(sourceToken));
+        Assert.That(operation.SourceWitness.TokenOwnerSections,
+            Is.SameAs(sourceToken.OwnerSections));
+        Assert.That(operation.SourceWitness.TokenOwnerSectionsSnapshot,
+            Is.Not.SameAs(sourceToken.OwnerSections));
+        AssertOwnerSectionSnapshotsMatch(sourceToken.OwnerSections,
+            operation.SourceWitness.TokenOwnerSectionsSnapshot);
+        Assert.That(operation.SourceWitness.Manifest, Is.Not.Null);
+        Assert.That(application.ActiveOperationCount, Is.EqualTo(1));
+        Assert.That(operation.TryRevalidate(out failure), Is.True);
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.None));
+
+        operation.Dispose();
+        operation.Dispose();
+        Assert.That(operation.IsActive, Is.False);
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void ContinuationSaveRevalidationRejectsChangedOwnerCensusAndBalancesScope()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        OwnerSectionCensusSnapshot[] sections =
+            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        InstallCompletedBoundaryToken(session, boundary, sections);
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
+
+        OwnerSectionCensusSnapshot original = sections[0];
+        sections[0] = new OwnerSectionCensusSnapshot(
+            original.SectionId, original.SchemaVersion, original.Role,
+            original.OwnerInstanceIdentity, original.Cardinality, original.Revision + 1L);
+        boundary.SetAdmissionEvidence(sections, 0L);
+
+        Assert.That(operation.TryRevalidate(out DailyCaptureEligibilityFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.StaleToken));
+        operation.Dispose();
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void ContinuationSaveDoesNotRegisterWhenCompletedBoundaryIsUnavailable()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out _);
+
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.False);
+        Assert.That(operation, Is.Null);
+        Assert.That(application.ActiveOperationCount, Is.Zero);
     }
 
     [Test]

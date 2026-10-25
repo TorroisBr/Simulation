@@ -35,6 +35,15 @@ internal interface IDailyV1RuntimeAdvanceBoundary
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
         out DailyCaptureEligibilityFailure failure);
+    /// <summary>
+    /// Captures the live census for the one registered continuation-save
+    /// operation. This is distinct from idle admission evidence: P12-G keeps
+    /// the save operation registered while it stages detached owners.
+    /// </summary>
+    bool TryCaptureContinuationSaveEvidence(
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure);
     void FaultRuntimeAdmission();
 }
 

@@ -60,6 +60,17 @@ public sealed class SimulationRuntimeOrchestrationTests
             return false;
         }
 
+        public bool TryCaptureContinuationSaveEvidence(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
         public void FaultRuntimeAdmission() => ExecutionState.MutationGuard.MarkFaulted(
             AuthoritativeMutationFaultReason.RollbackRestoreFailed);
     }

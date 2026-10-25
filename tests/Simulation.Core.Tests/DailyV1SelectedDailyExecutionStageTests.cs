@@ -1398,6 +1398,13 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             return true;
         }
 
+        public bool TryCaptureContinuationSaveEvidence(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure) =>
+            TryCaptureDailyBoundaryAdmissionEvidence(
+                sessionReplacement: false, out ownerSections, out mutationEpoch, out failure);
+
         public void FaultRuntimeAdmission() => Calls.Add("fault");
     }
 
