@@ -807,7 +807,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 recordSequence, spatialAuthority, p9Manifest.CoreValue, randomRoot,
                 out P12ACausalRootPayload causalRoots,
                 out IReadOnlyList<P12AOwnerSection> causalSections, out result)
-            || !P12CRuntimeIdentityOwnerSnapshot.TryCapture(sourceSession.IdentityRegistry,
+            || !P12CRuntimeIdentityOwnerCaptureAdapter.TryCapture(sourceSession.IdentityRegistry,
                 out P12CRuntimeIdentityOwnerSnapshot identitySnapshot)
             || !P12ADailyV1OwnerSectionEncoder.TryEncode(ownerSections, identitySnapshot,
                 d, e, f, token.AbsoluteDay,

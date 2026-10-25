@@ -11,10 +11,10 @@ internal static class P12ARuntimeIdentityOwnerCodec
 
     private static readonly IdentityFamily[] AdmittedFamilies =
     {
-        new IdentityFamily("npc", RuntimeIdentityRegistryCensusProvider.NpcsSectionId),
-        new IdentityFamily("city", RuntimeIdentityRegistryCensusProvider.CitiesSectionId),
-        new IdentityFamily("location", RuntimeIdentityRegistryCensusProvider.LocationsSectionId),
-        new IdentityFamily("route", RuntimeIdentityRegistryCensusProvider.RoutesSectionId)
+        new IdentityFamily("npc", P12CRuntimeIdentitySectionContract.NpcsSectionId),
+        new IdentityFamily("city", P12CRuntimeIdentitySectionContract.CitiesSectionId),
+        new IdentityFamily("location", P12CRuntimeIdentitySectionContract.LocationsSectionId),
+        new IdentityFamily("route", P12CRuntimeIdentitySectionContract.RoutesSectionId)
     };
 
     internal static bool TryEncode(P12CRuntimeIdentityOwnerSnapshot snapshot,
@@ -49,7 +49,7 @@ internal static class P12ARuntimeIdentityOwnerCodec
                     }
                 }
                 encoded.Add(new P12AOwnerSection(family.SectionId,
-                    RuntimeIdentityRegistryCensusProvider.SchemaVersion, 0, OwnerSectionRole.Required,
+                    P12CRuntimeIdentitySectionContract.SchemaVersion, 0, OwnerSectionRole.Required,
                     P12ADailyV1Census.ExpectedAliasGroupForSection(family.SectionId),
                     snapshot.Revision, rows));
             }
@@ -171,7 +171,7 @@ internal static class P12ARuntimeIdentityOwnerCodec
 
     private static bool IsSection(P12AOwnerSection section, IdentityFamily family)
         => section != null && section.Id == family.SectionId
-            && section.Major == RuntimeIdentityRegistryCensusProvider.SchemaVersion && section.Minor == 0
+            && section.Major == P12CRuntimeIdentitySectionContract.SchemaVersion && section.Minor == 0
             && section.Role == OwnerSectionRole.Required
             && section.AliasGroup == P12ADailyV1Census.ExpectedAliasGroupForSection(family.SectionId)
             && section.Revision >= 0 && section.Rows.Count <= P12AContinuationCodec.MaxRows;
@@ -195,10 +195,10 @@ internal static class P12ARuntimeIdentityOwnerCodec
         => P12AWire.ReadString(reader, out value) && !string.IsNullOrWhiteSpace(value);
 
     private static string EmptySectionForFamily(string familyId)
-        => familyId == "site" ? RuntimeIdentityRegistryCensusProvider.ExplorableSitesSectionId
-            : familyId == "local-place" ? RuntimeIdentityRegistryCensusProvider.LocalPlacesSectionId
-            : familyId == "local-connection" ? RuntimeIdentityRegistryCensusProvider.LocalConnectionsSectionId
-            : RuntimeIdentityRegistryCensusProvider.NotableItemsSectionId;
+        => familyId == "site" ? P12CRuntimeIdentitySectionContract.ExplorableSitesSectionId
+            : familyId == "local-place" ? P12CRuntimeIdentitySectionContract.LocalPlacesSectionId
+            : familyId == "local-connection" ? P12CRuntimeIdentitySectionContract.LocalConnectionsSectionId
+            : P12CRuntimeIdentitySectionContract.NotableItemsSectionId;
 
     private static bool IsWireException(Exception exception)
         => exception is IOException || exception is ArgumentException || exception is InvalidOperationException

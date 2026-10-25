@@ -19,15 +19,15 @@ internal enum RuntimeIdentityCensusIndex
 /// </summary>
 public sealed class RuntimeIdentityRegistryCensusProvider : IOwnerSectionCensusProvider
 {
-    public const int SchemaVersion = 1;
-    public const string NpcsSectionId = "p12c.runtime-identities.npcs";
-    public const string CitiesSectionId = "p12c.runtime-identities.cities";
-    public const string LocationsSectionId = "p12c.runtime-identities.locations";
-    public const string RoutesSectionId = "p12c.runtime-identities.routes";
-    public const string ExplorableSitesSectionId = "p12c.runtime-identities.explorable-sites";
-    public const string LocalPlacesSectionId = "p12c.runtime-identities.local-places";
-    public const string LocalConnectionsSectionId = "p12c.runtime-identities.local-connections";
-    public const string NotableItemsSectionId = "p12c.runtime-identities.notable-items";
+    public const int SchemaVersion = P12CRuntimeIdentitySectionContract.SchemaVersion;
+    public const string NpcsSectionId = P12CRuntimeIdentitySectionContract.NpcsSectionId;
+    public const string CitiesSectionId = P12CRuntimeIdentitySectionContract.CitiesSectionId;
+    public const string LocationsSectionId = P12CRuntimeIdentitySectionContract.LocationsSectionId;
+    public const string RoutesSectionId = P12CRuntimeIdentitySectionContract.RoutesSectionId;
+    public const string ExplorableSitesSectionId = P12CRuntimeIdentitySectionContract.ExplorableSitesSectionId;
+    public const string LocalPlacesSectionId = P12CRuntimeIdentitySectionContract.LocalPlacesSectionId;
+    public const string LocalConnectionsSectionId = P12CRuntimeIdentitySectionContract.LocalConnectionsSectionId;
+    public const string NotableItemsSectionId = P12CRuntimeIdentitySectionContract.NotableItemsSectionId;
 
     private readonly RuntimeIdentityRegistry owner;
     private readonly RuntimeIdentityCensusIndex index;

@@ -189,6 +189,9 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ADailyV1ImageComposer.cs" Link="Persistence/P12ADailyV1ImageComposer.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/SpatialAuthorityContinuationSnapshot.cs" Link="Persistence/SpatialAuthorityContinuationSnapshot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12CWorldIdentitySnapshot.cs" Link="Persistence/P12CWorldIdentitySnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12CRuntimeIdentityOwnerSnapshot.cs" Link="Persistence/P12CRuntimeIdentityOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12CRuntimeIdentitySectionContract.cs" Link="Persistence/P12CRuntimeIdentitySectionContract.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ARuntimeIdentityOwnerCodec.cs" Link="Persistence/P12ARuntimeIdentityOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12CSelectedCoreRootStager.cs" Link="Persistence/P12CSelectedCoreRootStager.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1RestoredOwnerVectorContract.cs" Link="Persistence/DailyV1RestoredOwnerVectorContract.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12DRelationshipValidator.cs" Link="Persistence/DailyV1P12DRelationshipValidator.cs" />
