@@ -212,7 +212,7 @@ internal sealed class P12FDailyV1OwnerCapture
         }
         stageObserver?.Invoke(P12GDailyV1RestoreStage.FPoliticalKnowledgeStaged);
 
-        if (BuildNpcMap(stagedD.Npcs) == null)
+        if (!TryGetNpcRuntimeIds(stagedD.Npcs, out IReadOnlyList<string> stagedNpcRuntimeIds))
         {
             failure = P12FDailyV1OwnerPackageFailure.InvalidStagingContext;
             return false;
@@ -249,8 +249,9 @@ internal sealed class P12FDailyV1OwnerCapture
         stageObserver?.Invoke(P12GDailyV1RestoreStage.FTravelPartiesStaged);
 
         if (!P12FExpeditionOwnerSnapshotStager.TryStage(
-                expeditions, stagedD.Npcs, stagedD.NpcFRows,
-                stagedD.RuntimeIdentities, stagedTravelParties,
+                expeditions, stagedNpcRuntimeIds, stagedD.NpcFRows,
+                stagedD.SelectedNpcOwners, stagedD.RuntimeIdentities.CoreIdentityIndex,
+                stagedD.SpatialNetwork.SelectedOwner, stagedD.EmptyExplorableSites, stagedTravelParties,
                 out ExpeditionStore stagedExpeditions, out _))
         {
             failure = P12FDailyV1OwnerPackageFailure.StageFailed;
@@ -273,16 +274,23 @@ internal sealed class P12FDailyV1OwnerCapture
         return true;
     }
 
-    private static Dictionary<string, NpcRuntime> BuildNpcMap(IReadOnlyList<NpcRuntime> npcs)
+    private static bool TryGetNpcRuntimeIds(
+        IReadOnlyList<NpcRuntime> npcs,
+        out IReadOnlyList<string> runtimeIds)
     {
-        Dictionary<string, NpcRuntime> result = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        runtimeIds = null;
+        if (npcs == null) return false;
+        List<string> ids = new List<string>(npcs.Count);
+        HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (NpcRuntime npc in npcs)
         {
-            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId) || result.ContainsKey(npc.RuntimeId))
-                return null;
-            result.Add(npc.RuntimeId, npc);
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId) || !seen.Add(npc.RuntimeId))
+                return false;
+            ids.Add(npc.RuntimeId);
         }
-        return result;
+
+        runtimeIds = new ReadOnlyCollection<string>(ids);
+        return true;
     }
 
 }
@@ -354,7 +362,7 @@ internal sealed class P12FDailyV1OwnerPackage
             || decoded.TravelParties == null || decoded.Expeditions == null)
             return false;
 
-        if (BuildNpcMap(context.P12DPackage.Npcs) == null)
+        if (!TryGetNpcRuntimeIds(context.P12DPackage.Npcs, out IReadOnlyList<string> stagedNpcRuntimeIds))
         {
             failure = P12FDailyV1OwnerPackageFailure.InvalidStagingContext;
             return false;
@@ -399,9 +407,10 @@ internal sealed class P12FDailyV1OwnerPackage
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.FTravelPartiesStaged);
 
-            if (!P12FExpeditionOwnerSnapshotStager.TryStage(decoded.Expeditions,
-                    context.P12DPackage.Npcs, context.P12DPackage.NpcFRows,
-                    context.P12DPackage.RuntimeIdentities, travelParties,
+            if (!P12FExpeditionOwnerSnapshotStager.TryStage(
+                    decoded.Expeditions, stagedNpcRuntimeIds, context.P12DPackage.NpcFRows,
+                    context.P12DPackage.SelectedNpcOwners, context.P12DPackage.RuntimeIdentities.CoreIdentityIndex,
+                    context.P12DPackage.SpatialNetwork.SelectedOwner, context.P12DPackage.EmptyExplorableSites, travelParties,
                     out ExpeditionStore expeditions, out _))
             {
                 failure = P12FDailyV1OwnerPackageFailure.StageFailed;
@@ -424,15 +433,22 @@ internal sealed class P12FDailyV1OwnerPackage
         }
     }
 
-    private static Dictionary<string, NpcRuntime> BuildNpcMap(IReadOnlyList<NpcRuntime> npcs)
+    private static bool TryGetNpcRuntimeIds(
+        IReadOnlyList<NpcRuntime> npcs,
+        out IReadOnlyList<string> runtimeIds)
     {
-        Dictionary<string, NpcRuntime> result = new Dictionary<string, NpcRuntime>(System.StringComparer.Ordinal);
+        runtimeIds = null;
+        if (npcs == null) return false;
+        List<string> ids = new List<string>(npcs.Count);
+        HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (NpcRuntime npc in npcs)
         {
-            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId) || result.ContainsKey(npc.RuntimeId))
-                return null;
-            result.Add(npc.RuntimeId, npc);
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId) || !seen.Add(npc.RuntimeId))
+                return false;
+            ids.Add(npc.RuntimeId);
         }
-        return result;
+
+        runtimeIds = new ReadOnlyCollection<string>(ids);
+        return true;
     }
 }

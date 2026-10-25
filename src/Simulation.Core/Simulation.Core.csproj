@@ -57,6 +57,8 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/GeographyRecords.cs" Link="Geography/GeographyRecords.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialPassageIdentity.cs" Link="Geography/SpatialPassageIdentity.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialRuntimeValues.cs" Link="Geography/SpatialRuntimeValues.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/ExplorableSiteRuntime.cs" Link="Geography/ExplorableSiteRuntime.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/ExplorableSiteStore.cs" Link="Geography/ExplorableSiteStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialNetworkOwner.cs" Link="Geography/SpatialNetworkOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialGeography.cs" Link="Geography/SpatialGeography.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialAuthority.cs" Link="Geography/SpatialAuthority.cs" />
@@ -152,6 +154,8 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AFScheduledDirectiveCodec.cs" Link="Persistence/P12AFScheduledDirectiveCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/ExpeditionCensusProvider.cs" Link="Expedition/ExpeditionCensusProvider.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/P12FExpeditionOwnerSnapshot.cs" Link="Expedition/P12FExpeditionOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ExplorableSiteOwnerSnapshot.cs" Link="Persistence/ExplorableSiteOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12FExpeditionOwnerSnapshotStager.cs" Link="Persistence/P12FExpeditionOwnerSnapshotStager.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/AggregateDemographyPolicyContracts.cs" Link="Population/AggregateDemographyPolicyContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/DemographicSampling.cs" Link="Population/DemographicSampling.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/DeterministicAggregateDemographyProvider.cs" Link="Population/DeterministicAggregateDemographyProvider.cs" />
