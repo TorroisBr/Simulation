@@ -22,13 +22,13 @@ public sealed class P12FCommitmentOwnerSnapshotTests
             out P12FTravelPartyOwnerSnapshot partySnapshot, out P12FCommitmentSnapshotFailure partyFailure), Is.True);
         Assert.That(partyFailure, Is.EqualTo(P12FCommitmentSnapshotFailure.None));
         Assert.That(partySnapshot.Parties, Is.Empty);
-        Assert.That(P12FTravelPartyOwnerSnapshot.TryStage(
+        Assert.That(P12FTravelPartyOwnerSnapshotStager.TryStage(
             partySnapshot, Array.Empty<NpcRuntime>(), Array.Empty<P12DNpcFRow>(),
             new RuntimeIdentityRegistry(), out TravelPartyStore stagedParties, out partyFailure), Is.True);
         Assert.That(partyFailure, Is.EqualTo(P12FCommitmentSnapshotFailure.None));
         Assert.That(stagedParties.Revision, Is.EqualTo(0));
 
-        Assert.That(P12FExpeditionOwnerSnapshotOperations.TryCapture(expeditions, token, token.OwnerSections,
+        Assert.That(P12FExpeditionOwnerSnapshot.TryCapture(expeditions, token, token.OwnerSections,
             out P12FExpeditionOwnerSnapshot expeditionSnapshot, out P12FCommitmentSnapshotFailure expeditionFailure), Is.True);
         Assert.That(expeditionFailure, Is.EqualTo(P12FCommitmentSnapshotFailure.None));
         Assert.That(expeditionSnapshot.Expeditions, Is.Empty);
@@ -61,7 +61,7 @@ public sealed class P12FCommitmentOwnerSnapshotTests
         RuntimeIdentityRegistry identities = CreateTravelIdentities();
         List<NpcRuntime> npcs = CreateNpcsForParty(party.MemberRuntimeIds, party.TravelPartyId);
         List<P12DNpcFRow> rows = CreateRows(party.MemberRuntimeIds, party.TravelPartyId);
-        Assert.That(P12FTravelPartyOwnerSnapshot.TryStage(snapshot, npcs, rows, identities,
+        Assert.That(P12FTravelPartyOwnerSnapshotStager.TryStage(snapshot, npcs, rows, identities,
             out TravelPartyStore staged, out P12FCommitmentSnapshotFailure failure), Is.True);
         Assert.That(failure, Is.EqualTo(P12FCommitmentSnapshotFailure.None));
         TravelPartyRuntime restored = staged.GetById("party-stable");
@@ -73,7 +73,7 @@ public sealed class P12FCommitmentOwnerSnapshotTests
         Assert.That(staged.Revision, Is.EqualTo(source.Revision));
 
         List<P12DNpcFRow> missingReciprocal = CreateRows(party.MemberRuntimeIds, null);
-        Assert.That(P12FTravelPartyOwnerSnapshot.TryStage(snapshot, npcs, missingReciprocal, identities,
+        Assert.That(P12FTravelPartyOwnerSnapshotStager.TryStage(snapshot, npcs, missingReciprocal, identities,
             out _, out failure), Is.False);
         Assert.That(failure, Is.EqualTo(P12FCommitmentSnapshotFailure.InvalidNpcBinding));
     }
@@ -94,7 +94,7 @@ public sealed class P12FCommitmentOwnerSnapshotTests
         Assert.That(expedition.TryTraverseLocalConnection("connection-2", "place-current", out _), Is.True);
         DailyCaptureEligibilityToken token = CreateToken(Sections(new TravelPartyStore(), source));
 
-        Assert.That(P12FExpeditionOwnerSnapshotOperations.TryCapture(source, token, token.OwnerSections,
+        Assert.That(P12FExpeditionOwnerSnapshot.TryCapture(source, token, token.OwnerSections,
             out P12FExpeditionOwnerSnapshot snapshot, out P12FCommitmentSnapshotFailure failure), Is.True);
         Assert.That(failure, Is.EqualTo(P12FCommitmentSnapshotFailure.None));
         P12FExpeditionOwnerSnapshotRecord row = snapshot.Expeditions.Single();
@@ -150,7 +150,7 @@ public sealed class P12FCommitmentOwnerSnapshotTests
         ExpeditionRuntime added = new ExpeditionRuntime("exp-added", "site", "origin", "target", "route",
             new[] { "npc" }, new[] { "npc" }, Array.Empty<string>());
         Assert.That(expeditions.Add(added), Is.True);
-        Assert.That(P12FExpeditionOwnerSnapshotOperations.TryCapture(expeditions, staleExpeditionToken,
+        Assert.That(P12FExpeditionOwnerSnapshot.TryCapture(expeditions, staleExpeditionToken,
             staleExpeditionSections, out _, out failure), Is.False);
         Assert.That(failure, Is.EqualTo(P12FCommitmentSnapshotFailure.InvalidOwner));
     }

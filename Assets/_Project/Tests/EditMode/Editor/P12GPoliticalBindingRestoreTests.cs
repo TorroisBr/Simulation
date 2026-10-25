@@ -659,7 +659,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             anchorToken.OwnerSections,
             eContext,
             stagedE,
-            config.Actions,
+            anchorComposition.SelectedDefinitions,
             out P12FDailyV1OwnerPackage stagedF,
             out P12FDailyV1OwnerPackageFailure fStageFailure), Is.True, fStageFailure.ToString());
 
@@ -2871,7 +2871,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             AppendValue(signature, key + "/origin-decision", row.OriginDecisionId);
         }
 
-        Assert.That(P12FExpeditionOwnerSnapshotOperations.TryCapture(
+        Assert.That(P12FExpeditionOwnerSnapshot.TryCapture(
             session.Composition.Expeditions, token, vector,
             out P12FExpeditionOwnerSnapshot expeditions,
             out P12FCommitmentSnapshotFailure expeditionFailure), Is.True, expeditionFailure.ToString());

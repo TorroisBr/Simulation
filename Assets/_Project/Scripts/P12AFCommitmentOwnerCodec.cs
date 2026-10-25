@@ -116,7 +116,7 @@ internal static class P12AFCommitmentOwnerCodec
             HashSet<string> ids = new HashSet<string>(StringComparer.Ordinal);
             foreach (P12FExpeditionOwnerSnapshotRecord expedition in snapshot.Expeditions)
             {
-                if (!P12FExpeditionOwnerSnapshotOperations.IsValid(expedition) || !ids.Add(expedition.ExpeditionId)) return false;
+                if (!P12FExpeditionOwnerSnapshot.IsValidRecord(expedition) || !ids.Add(expedition.ExpeditionId)) return false;
                 using (MemoryStream stream = new MemoryStream())
                 using (BinaryWriter writer = new BinaryWriter(stream, P12AWire.Utf8, true))
                 {
@@ -164,7 +164,7 @@ internal static class P12AFCommitmentOwnerCodec
             {
                 if (!TryReadPayload(row, ExpeditionPayloadContract, out P12FExpeditionOwnerSnapshotRecord expedition)
                     || row.OwnerKey != ExpeditionOwnerPrefix + expedition.ExpeditionId
-                    || !P12FExpeditionOwnerSnapshotOperations.IsValid(expedition) || !ids.Add(expedition.ExpeditionId))
+                    || !P12FExpeditionOwnerSnapshot.IsValidRecord(expedition) || !ids.Add(expedition.ExpeditionId))
                 { result = new P12AResult(P12AResultCode.InvalidOwnerValue, section.Id, row?.OwnerKey); return false; }
                 expeditions.Add(expedition);
             }

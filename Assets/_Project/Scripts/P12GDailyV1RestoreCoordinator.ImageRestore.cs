@@ -178,7 +178,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
             stageObserver?.Invoke(P12GDailyV1RestoreStage.EStaged);
 
             if (!P12FDailyV1OwnerPackage.TryStageFromImage(image, decoded, eContext,
-                    stagedE, configuration.Actions,
+                    stagedE, selectedDefinitions,
                     out P12FDailyV1OwnerPackage stagedF,
                     out P12FDailyV1OwnerPackageFailure fFailure)
                 || stagedF == null || stagedF.StagingAttempt != null)

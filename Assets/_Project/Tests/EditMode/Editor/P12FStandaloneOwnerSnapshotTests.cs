@@ -78,6 +78,7 @@ public sealed class P12FStandaloneOwnerSnapshotTests
     public void ScheduledDirectiveEmptyCaptureStagesAgainstSuppliedSimulationTime()
     {
         ScheduledDirectiveStore source = new ScheduledDirectiveStore(new SimulationTime());
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyCaptureEligibilityToken token = Token(source,
             ScheduledDirectiveCensusProvider.SectionId, ScheduledDirectiveCensusProvider.SchemaVersion,
             out IReadOnlyList<OwnerSectionCensusSnapshot> vector);
@@ -85,8 +86,7 @@ public sealed class P12FStandaloneOwnerSnapshotTests
             out P12FScheduledDirectiveOwnerSnapshot snapshot, out string failure), Is.True, failure);
 
         SimulationTime stagedTime = new SimulationTime();
-        Assert.That(snapshot.TryStage(token, vector, stagedTime,
-            new Dictionary<string, NpcRuntime>(), new Dictionary<string, NpcActionData>(),
+        Assert.That(snapshot.TryStage(token, vector, stagedTime, definitions,
             out ScheduledDirectiveStore staged, out failure), Is.True, failure);
         Assert.That(staged.Directives, Is.Empty);
         Assert.That(staged.Revision, Is.Zero);
@@ -98,11 +98,13 @@ public sealed class P12FStandaloneOwnerSnapshotTests
     {
         SimulationTime sourceTime = new SimulationTime();
         ScheduledDirectiveStore source = new ScheduledDirectiveStore(sourceTime);
-        NpcActionData action = SimulationTestFactory.CreateAction("p12f-directive-action",
-            NpcActionType.EscapePrison, NpcActionCategory.Justice);
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ActionDefinition action = FindAction(definitions,
+            DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue);
         ScheduledDirective directive = new ScheduledDirective("directive-terminal", 4L,
             ScheduledDirectiveMode.RequestAction, ScheduledDirectiveOperation.EscapePrison,
-            "npc-missing-is-preserved", action.DefinitionId, (int)action.actionType);
+            "npc-missing-is-preserved", action.DefinitionId,
+            DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue);
         Assert.That(source.Add(directive), Is.True);
         Assert.That(directive.MarkSkipped(2L, "preserved terminal reason"), Is.True);
         long sourceRevision = source.Revision;
@@ -115,20 +117,13 @@ public sealed class P12FStandaloneOwnerSnapshotTests
         Assert.That(source.Revision, Is.EqualTo(sourceRevision), "capture does not dispatch or mutate directives");
         Assert.That(directive.State, Is.EqualTo(ScheduledDirectiveState.Skipped));
 
-        NpcActionData stagedAction = SimulationTestFactory.CreateAction("p12f-directive-action",
-            NpcActionType.EscapePrison, NpcActionCategory.Justice);
-        Dictionary<string, NpcActionData> actions = new Dictionary<string, NpcActionData>
-        {
-            { stagedAction.DefinitionId, stagedAction }
-        };
         SimulationTime stagedTime = new SimulationTime();
-        Assert.That(snapshot.TryStage(token, vector, stagedTime,
-            new Dictionary<string, NpcRuntime>(), actions,
+        Assert.That(snapshot.TryStage(token, vector, stagedTime, definitions,
             out ScheduledDirectiveStore staged, out failure), Is.True, failure);
         Assert.That(staged.Revision, Is.EqualTo(sourceRevision));
         Assert.That(staged.Directives, Has.Count.EqualTo(1));
         Assert.That(staged.Directives[0], Is.Not.SameAs(directive));
-        Assert.That(staged.Directives[0].ActionDefinitionId, Is.EqualTo(stagedAction.DefinitionId));
+        Assert.That(staged.Directives[0].ActionDefinitionId, Is.EqualTo(action.DefinitionId));
         Assert.That(staged.Directives[0].ActorRuntimeId, Is.EqualTo("npc-missing-is-preserved"));
         Assert.That(staged.Directives[0].State, Is.EqualTo(ScheduledDirectiveState.Skipped));
         Assert.That(staged.Directives[0].ProcessedDay, Is.EqualTo(2L));
@@ -145,6 +140,15 @@ public sealed class P12FStandaloneOwnerSnapshotTests
         OfficeStore offices = new OfficeStore(institutions);
         PropertyOwnershipStore properties = new PropertyOwnershipStore(people);
         return new PoliticalRoots(people, institutions, claims, factions, offices, properties);
+    }
+
+    private static DailyV1ActionDefinition FindAction(
+        DailyV1EffectiveDefinitions definitions, int actionType)
+    {
+        foreach (DailyV1ActionDefinition definition in definitions.Actions.Values)
+            if (definition?.Values?.actionType?.Value == actionType) return definition;
+        Assert.Fail("The selected Daily-v1 graph is missing action type " + actionType + ".");
+        return null;
     }
 
     private static DailyCaptureEligibilityToken Token(

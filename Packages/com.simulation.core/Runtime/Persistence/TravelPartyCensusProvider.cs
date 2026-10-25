@@ -15,6 +15,7 @@ public sealed class TravelPartyCensusProvider : IOwnerSectionCensusProvider
 
     public OwnerSectionCensusWitness GetCurrentCensus()
     {
-        return new OwnerSectionCensusWitness(SectionId, SchemaVersion, owner, owner.ActiveParties.Count, owner.Revision);
+        return new OwnerSectionCensusWitness(SectionId, SchemaVersion, owner,
+            owner.ActiveParties.Count, owner.Revision);
     }
 }

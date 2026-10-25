@@ -112,7 +112,7 @@ internal sealed class P12FDailyV1OwnerCapture
                 || !P12FTravelPartyOwnerSnapshot.TryCapture(
                     travelPartyOwner, token, exactOwnerSectionVector,
                     out P12FTravelPartyOwnerSnapshot travelPartySnapshot, out _)
-                || !P12FExpeditionOwnerSnapshotOperations.TryCapture(
+                || !P12FExpeditionOwnerSnapshot.TryCapture(
                     expeditionOwner, token, exactOwnerSectionVector,
                     out P12FExpeditionOwnerSnapshot expeditionSnapshot, out _))
             {
@@ -155,7 +155,7 @@ internal sealed class P12FDailyV1OwnerCapture
         IReadOnlyList<OwnerSectionCensusSnapshot> exactOwnerSectionVector,
         P12EDailyV1OwnerStagingContext context,
         P12EDailyV1OwnerPackage stagedE,
-        IReadOnlyList<NpcActionData> admittedActionDefinitions,
+        DailyV1EffectiveDefinitions selectedDefinitions,
         out P12FDailyV1OwnerPackage package,
         out P12FDailyV1OwnerPackageFailure failure,
         Action<P12GDailyV1RestoreStage> stageObserver = null,
@@ -164,7 +164,7 @@ internal sealed class P12FDailyV1OwnerCapture
         package = null;
         failure = P12FDailyV1OwnerPackageFailure.InvalidStagingContext;
         if (sourceRuntime == null || exactCompletedToken == null || exactOwnerSectionVector == null
-            || context == null || stagedE == null || admittedActionDefinitions == null
+            || context == null || stagedE == null || selectedDefinitions == null
             || !IsFor(exactCompletedToken, exactOwnerSectionVector)
             || context.StagingAttempt == null
             || !context.StagingAttempt.IsCurrentFor(sourceRuntime, exactCompletedToken, exactOwnerSectionVector)
@@ -183,13 +183,6 @@ internal sealed class P12FDailyV1OwnerCapture
             || !context.StagingAttempt.IsCurrentFor(
                 sourceRuntime, exactCompletedToken, exactOwnerSectionVector))
             return false;
-
-        if (!TryBuildActionMap(admittedActionDefinitions,
-                out Dictionary<string, NpcActionData> actionsById))
-        {
-            failure = P12FDailyV1OwnerPackageFailure.InvalidActionDefinitions;
-            return false;
-        }
 
         for (int i = 0; i < context.P12DPackage.Npcs.Count; i++)
         {
@@ -217,9 +210,14 @@ internal sealed class P12FDailyV1OwnerCapture
         }
         stageObserver?.Invoke(P12GDailyV1RestoreStage.FPoliticalKnowledgeStaged);
 
+        if (BuildNpcMap(stagedD.Npcs) == null)
+        {
+            failure = P12FDailyV1OwnerPackageFailure.InvalidStagingContext;
+            return false;
+        }
         if (!directives.TryStage(
                 exactCompletedToken, exactOwnerSectionVector, context.StagedSimulationTime,
-                BuildNpcMap(stagedD.Npcs), actionsById,
+                selectedDefinitions,
                 out ScheduledDirectiveStore stagedDirectives, out _))
         {
             failure = P12FDailyV1OwnerPackageFailure.StageFailed;
@@ -239,7 +237,7 @@ internal sealed class P12FDailyV1OwnerCapture
         }
         stageObserver?.Invoke(P12GDailyV1RestoreStage.FActorChoicesStaged);
 
-        if (!P12FTravelPartyOwnerSnapshot.TryStage(
+        if (!P12FTravelPartyOwnerSnapshotStager.TryStage(
                 travelParties, stagedD.Npcs, stagedD.NpcFRows,
                 stagedD.RuntimeIdentities, out TravelPartyStore stagedTravelParties, out _))
         {
@@ -248,7 +246,7 @@ internal sealed class P12FDailyV1OwnerCapture
         }
         stageObserver?.Invoke(P12GDailyV1RestoreStage.FTravelPartiesStaged);
 
-        if (!P12FExpeditionOwnerSnapshotOperations.TryStage(
+        if (!P12FExpeditionOwnerSnapshotStager.TryStage(
                 expeditions, stagedD.Npcs, stagedD.NpcFRows,
                 stagedD.RuntimeIdentities, stagedTravelParties,
                 out ExpeditionStore stagedExpeditions, out _))
@@ -285,22 +283,6 @@ internal sealed class P12FDailyV1OwnerCapture
         return result;
     }
 
-    private static bool TryBuildActionMap(IReadOnlyList<NpcActionData> definitions,
-        out Dictionary<string, NpcActionData> actionsById)
-    {
-        actionsById = new Dictionary<string, NpcActionData>(StringComparer.Ordinal);
-        foreach (NpcActionData definition in definitions)
-        {
-            if (definition == null || string.IsNullOrWhiteSpace(definition.DefinitionId)
-                || actionsById.ContainsKey(definition.DefinitionId))
-            {
-                actionsById = null;
-                return false;
-            }
-            actionsById.Add(definition.DefinitionId, definition);
-        }
-        return true;
-    }
 }
 
 /// <summary>Private unpublished F candidates consumed later by P12-G.</summary>
@@ -347,7 +329,7 @@ internal sealed class P12FDailyV1OwnerPackage
         P12ADailyV1ImageOwnerSnapshots decoded,
         P12EDailyV1OwnerStagingContext context,
         P12EDailyV1OwnerPackage stagedE,
-        IReadOnlyList<NpcActionData> admittedActionDefinitions,
+        DailyV1EffectiveDefinitions selectedDefinitions,
         out P12FDailyV1OwnerPackage package,
         out P12FDailyV1OwnerPackageFailure failure,
         Action<P12GDailyV1RestoreStage> stageObserver = null)
@@ -363,19 +345,12 @@ internal sealed class P12FDailyV1OwnerPackage
             || context.StagedSimulationTime == null || context.StagedSimulationTime.AbsoluteDay != image.Header.Day
             || stagedE.WorldId == null || stagedE.WorldId.Value != image.Header.WorldId
             || context.P12DPackage.WorldId == null || context.P12DPackage.WorldId.Value != image.Header.WorldId
-            || admittedActionDefinitions == null || decoded.PoliticalKnowledge == null
+            || selectedDefinitions == null || decoded.PoliticalKnowledge == null
             || decoded.Directives == null || decoded.ActorChoices == null
             || decoded.TravelParties == null || decoded.Expeditions == null)
             return false;
 
-        if (!TryBuildActionMap(admittedActionDefinitions,
-                out Dictionary<string, NpcActionData> actionsById))
-        {
-            failure = P12FDailyV1OwnerPackageFailure.InvalidActionDefinitions;
-            return false;
-        }
-        Dictionary<string, NpcRuntime> stagedNpcs = BuildNpcMap(context.P12DPackage.Npcs);
-        if (stagedNpcs == null)
+        if (BuildNpcMap(context.P12DPackage.Npcs) == null)
         {
             failure = P12FDailyV1OwnerPackageFailure.InvalidStagingContext;
             return false;
@@ -395,7 +370,7 @@ internal sealed class P12FDailyV1OwnerPackage
             stageObserver?.Invoke(P12GDailyV1RestoreStage.FPoliticalKnowledgeStaged);
 
             if (!decoded.Directives.TryStageForImage(context.StagedSimulationTime,
-                    stagedNpcs, actionsById, out ScheduledDirectiveStore directives, out _))
+                    selectedDefinitions, out ScheduledDirectiveStore directives, out _))
             {
                 failure = P12FDailyV1OwnerPackageFailure.StageFailed;
                 return false;
@@ -410,7 +385,7 @@ internal sealed class P12FDailyV1OwnerPackage
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.FActorChoicesStaged);
 
-            if (!P12FTravelPartyOwnerSnapshot.TryStage(decoded.TravelParties,
+            if (!P12FTravelPartyOwnerSnapshotStager.TryStage(decoded.TravelParties,
                     context.P12DPackage.Npcs, context.P12DPackage.NpcFRows,
                     context.P12DPackage.RuntimeIdentities,
                     out TravelPartyStore travelParties, out _))
@@ -420,7 +395,7 @@ internal sealed class P12FDailyV1OwnerPackage
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.FTravelPartiesStaged);
 
-            if (!P12FExpeditionOwnerSnapshotOperations.TryStage(decoded.Expeditions,
+            if (!P12FExpeditionOwnerSnapshotStager.TryStage(decoded.Expeditions,
                     context.P12DPackage.Npcs, context.P12DPackage.NpcFRows,
                     context.P12DPackage.RuntimeIdentities, travelParties,
                     out ExpeditionStore expeditions, out _))
@@ -443,23 +418,6 @@ internal sealed class P12FDailyV1OwnerPackage
             failure = P12FDailyV1OwnerPackageFailure.StageFailed;
             return false;
         }
-    }
-
-    private static bool TryBuildActionMap(IReadOnlyList<NpcActionData> definitions,
-        out Dictionary<string, NpcActionData> actionsById)
-    {
-        actionsById = new Dictionary<string, NpcActionData>(System.StringComparer.Ordinal);
-        foreach (NpcActionData definition in definitions)
-        {
-            if (definition == null || string.IsNullOrWhiteSpace(definition.DefinitionId)
-                || actionsById.ContainsKey(definition.DefinitionId))
-            {
-                actionsById = null;
-                return false;
-            }
-            actionsById.Add(definition.DefinitionId, definition);
-        }
-        return true;
     }
 
     private static Dictionary<string, NpcRuntime> BuildNpcMap(IReadOnlyList<NpcRuntime> npcs)

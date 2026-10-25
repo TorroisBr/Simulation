@@ -97,14 +97,13 @@ internal static class P12AFScheduledDirectiveCodec
     }
 
     internal static bool TryStageForImage(P12FScheduledDirectiveOwnerSnapshot snapshot,
-        SimulationTime stagedTime, IReadOnlyDictionary<string, NpcRuntime> stagedNpcs,
-        IReadOnlyDictionary<string, NpcActionData> stagedActionDefinitions,
+        SimulationTime stagedTime, DailyV1EffectiveDefinitions selectedDefinitions,
         out ScheduledDirectiveStore staged, out string failure)
     {
         staged = null;
         failure = null;
-        return snapshot != null && snapshot.TryStageForImage(stagedTime, stagedNpcs,
-            stagedActionDefinitions, out staged, out failure);
+        return snapshot != null && snapshot.TryStageForImage(stagedTime,
+            selectedDefinitions, out staged, out failure);
     }
 
     private static bool IsValid(P12FScheduledDirectiveOwnerSnapshot.Row row)

@@ -475,7 +475,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     sourceOwnerSections,
                     eContext,
                     stagedE,
-                    sourceSession.Configuration.Actions,
+                    sourceComposition.SelectedDefinitions,
                     out P12FDailyV1OwnerPackage stagedF,
                     out P12FDailyV1OwnerPackageFailure fStageFailure,
                     stageObserver,

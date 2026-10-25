@@ -11886,7 +11886,7 @@ public sealed class SimulationRuntimeAdmissionTests
             out P12FTravelPartyOwnerSnapshot travelPartySnapshot,
             out P12FCommitmentSnapshotFailure travelPartyFailure), Is.True, travelPartyFailure.ToString());
         snapshots.Add("F/TravelParties", travelPartySnapshot);
-        Assert.That(P12FExpeditionOwnerSnapshotOperations.TryCapture(
+        Assert.That(P12FExpeditionOwnerSnapshot.TryCapture(
             composition.Expeditions, token, vector,
             out P12FExpeditionOwnerSnapshot expeditionSnapshot,
             out P12FCommitmentSnapshotFailure expeditionFailure), Is.True, expeditionFailure.ToString());
