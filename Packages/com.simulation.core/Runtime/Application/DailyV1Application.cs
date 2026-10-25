@@ -437,9 +437,9 @@ internal sealed class DailyV1Application
     /// Commits one already staged P12 restored candidate. All admission,
     /// provenance, owner-thread, source-boundary, profile, and reservation
     /// checks are made against the exact Core sessions under the same lock as
-    /// the sole active-session exchange. The runtime boundary supplies only
-    /// read-only attestations over its exact execution state; it does not
-    /// choose or publish the replacement.
+    /// the sole active-session exchange. The host boundary supplies only a
+    /// fresh owner census; Core verifies the token, identities, revisions,
+    /// epoch, provenance, and replacement reservation before publication.
     /// </summary>
     internal bool TryCommitRestoredCandidate(
         DailyV1ActiveRuntimeSession expectedSession,
@@ -457,19 +457,15 @@ internal sealed class DailyV1Application
         lock (activeSessionGate.SyncRoot)
         {
             SimulationRuntimeAdmissionContext candidateAdmission = candidate.AdmissionContext;
-            IDailyV1RestoredSessionCommitBoundary candidateBoundary =
-                candidate.RuntimeAdvanceBoundary as IDailyV1RestoredSessionCommitBoundary;
             if (bootstrapAdmissionContext == null
                 || !bootstrapAdmissionContext.IsOwnedByCurrentThread()
                 || candidateAdmission == null
                 || !candidateAdmission.IsRestoredContinuation
                 || !candidateAdmission.IsOwnedByCurrentThread()
                 || !IsBootstrapOrRestoredDescendant(candidateAdmission)
-                || candidateBoundary == null
-                || !ReferenceEquals(candidateBoundary.ExecutionState,
-                    candidate.ExecutionBoundaryState)
-                || !candidateBoundary.IsHealthyDailyOwnerThreadBoundary()
-                || !candidateBoundary.HasValidRestoredDailyBoundaryAdmission()
+                || !candidate.ExecutionBoundaryState.IsHealthyDailyOwnerThreadBoundary()
+                || !candidate.ExecutionBoundaryState.HasValidRestoredDailyBoundaryAdmission(
+                    candidate.RuntimeAdvanceBoundary)
                 || candidate.ExecutionBoundaryState.ActiveOperationCount != 0)
             {
                 diagnostic = "The restored candidate is not a healthy, idle, exact Core continuation admitted on this application's owner thread.";
@@ -494,8 +490,6 @@ internal sealed class DailyV1Application
                 return true;
             }
 
-            IDailyV1RestoredSessionCommitBoundary currentBoundary =
-                current.RuntimeAdvanceBoundary as IDailyV1RestoredSessionCommitBoundary;
             if (expectedSession == null
                 || !ReferenceEquals(expectedSession, current)
                 || replacementOperation == null
@@ -503,11 +497,9 @@ internal sealed class DailyV1Application
                 || !replacementOperation.AuthorizesSessionReplacementCapture(
                     current.ExecutionBoundaryState)
                 || activeSessionGate.ActiveOperationCount != 0
-                || currentBoundary == null
-                || !ReferenceEquals(currentBoundary.ExecutionState,
-                    current.ExecutionBoundaryState)
-                || !currentBoundary.IsHealthyDailyOwnerThreadBoundary()
-                || !currentBoundary.HasValidCompletedDailyBoundaryAdmission()
+                || !current.ExecutionBoundaryState.IsHealthyDailyOwnerThreadBoundary()
+                || !current.ExecutionBoundaryState.HasValidCompletedDailyBoundaryAdmission(
+                    current.RuntimeAdvanceBoundary, sessionReplacement: true)
                 || !current.IsProfileCompatibleWith(candidate)
                 || !activeSessionGate.TryPublishReplacement(
                     replacementOperation, candidate))

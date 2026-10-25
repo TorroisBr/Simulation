@@ -20,18 +20,32 @@ public sealed class DailyV1ApplicationSessionGateTests
     {
         private readonly DailyV1ExecutionBoundaryState state;
         private readonly Action onOperationEntry;
+        private IReadOnlyList<OwnerSectionCensusSnapshot> admissionOwnerSections;
+        private long admissionMutationEpoch;
 
         internal ApplicationAdvanceBoundary(
             DailyV1ExecutionBoundaryState state,
-            Action onOperationEntry)
+            Action onOperationEntry,
+            IReadOnlyList<OwnerSectionCensusSnapshot> admissionOwnerSections = null,
+            long admissionMutationEpoch = 0L)
         {
             this.state = state;
             this.onOperationEntry = onOperationEntry;
+            this.admissionOwnerSections = admissionOwnerSections;
+            this.admissionMutationEpoch = admissionMutationEpoch;
         }
 
         internal bool OperationEntered { get; private set; }
         internal bool SelectedBoundaryRequested { get; private set; }
         internal bool Faulted { get; private set; }
+        internal bool? RequestedSessionReplacement { get; private set; }
+        internal void SetAdmissionEvidence(
+            IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            long mutationEpoch)
+        {
+            admissionOwnerSections = ownerSections;
+            admissionMutationEpoch = mutationEpoch;
+        }
         public DailyV1ExecutionBoundaryState ExecutionState => state;
         public bool HasIntradayTimeline => false;
 
@@ -78,6 +92,21 @@ public sealed class DailyV1ApplicationSessionGateTests
             mutationEpoch = 0L;
             failure = DailyCaptureEligibilityFailure.OperationInProgress;
             return false;
+        }
+
+        public bool TryCaptureDailyBoundaryAdmissionEvidence(
+            bool sessionReplacement,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            RequestedSessionReplacement = sessionReplacement;
+            ownerSections = admissionOwnerSections;
+            mutationEpoch = admissionMutationEpoch;
+            failure = admissionOwnerSections == null
+                ? DailyCaptureEligibilityFailure.OperationInProgress
+                : DailyCaptureEligibilityFailure.None;
+            return admissionOwnerSections != null;
         }
 
         public void FaultRuntimeAdmission()
@@ -188,6 +217,63 @@ public sealed class DailyV1ApplicationSessionGateTests
             out DailyV1ActiveRuntimeSession session, out diagnostic), Is.True, diagnostic);
         Assert.That(application.TryPublishInitial(session), Is.True);
         Assert.That(application.ActiveSession, Is.SameAs(session));
+    }
+
+    [Test]
+    public void CoreRestoreCommitRechecksCandidateCensusBeforeInitialPublication()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext bootstrapAdmission), Is.True);
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions, bootstrapAdmission, out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        SimulationRuntimeAdmissionContext restoredAdmission =
+            bootstrapAdmission.CreateRestoredContinuationContext();
+        DailyV1ExecutionBoundaryState restoredState =
+            CreateBoundaryWithAdmission(composition, restoredAdmission);
+        OwnerSectionCensusSnapshot[] ownerSections =
+            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        Assert.That(restoredState.TryCreateRestoredContinuationToken(
+            restoredAdmission,
+            restoredState.ConfigurationIdentity,
+            restoredState.CalendarIdentity,
+            restoredState.CompositionProfile,
+            restoredState.WorldId,
+            restoredState.SimulationTime.AbsoluteDay,
+            1L,
+            23L,
+            ownerSections,
+            out _), Is.True);
+        Assert.That(application.TryCreateRestoredActiveRuntimeSession(
+            restoredState, definitions, 0L, null,
+            out DailyV1ActiveRuntimeSession candidate, out diagnostic), Is.True, diagnostic);
+
+        ApplicationAdvanceBoundary boundary = new ApplicationAdvanceBoundary(
+            restoredState, null, ownerSections, 23L);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(candidate, boundary), Is.True);
+
+        List<OwnerSectionCensusSnapshot> changedOwners = new List<OwnerSectionCensusSnapshot>(ownerSections);
+        OwnerSectionCensusSnapshot original = changedOwners[0];
+        changedOwners[0] = new OwnerSectionCensusSnapshot(
+            original.SectionId, original.SchemaVersion, original.Role, new object(),
+            original.Cardinality, original.Revision);
+        // The adapter remains identity-bound; mutate only its fresh read-only
+        // census to model an owner change between staging and commit.
+        boundary.SetAdmissionEvidence(changedOwners, 23L);
+        Assert.That(application.TryCommitRestoredCandidate(
+            null, candidate, null, out diagnostic), Is.False);
+        Assert.That(application.ActiveSession, Is.Null,
+            "A stale private target must not become the initial application session.");
+        Assert.That(diagnostic, Does.Contain("healthy, idle, exact Core continuation"));
+
+        boundary.SetAdmissionEvidence(ownerSections, 23L);
+        Assert.That(application.TryCommitRestoredCandidate(
+            null, candidate, null, out diagnostic), Is.True, diagnostic);
+        Assert.That(application.ActiveSession, Is.SameAs(candidate));
+        Assert.That(boundary.RequestedSessionReplacement, Is.EqualTo(false));
     }
 
     [Test]

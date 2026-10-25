@@ -397,6 +397,19 @@ public sealed class DailyV1RuntimeAdvanceStageTests
             return true;
         }
 
+        public bool TryCaptureDailyBoundaryAdmissionEvidence(
+            bool sessionReplacement,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            Calls.Add("admission-evidence");
+            ownerSections = DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+            mutationEpoch = 1L;
+            failure = DailyCaptureEligibilityFailure.None;
+            return true;
+        }
+
         public void FaultRuntimeAdmission() => Calls.Add("fault");
 
         private bool Advance(string call, out SimulationRuntimeAdvanceFailure failure)

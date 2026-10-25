@@ -80,8 +80,7 @@ public sealed class SimulationRuntimeSpatialInvariantReport
     }
 }
 
-public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDailyV1RuntimeAdvanceBoundary,
-    IDailyV1RestoredSessionCommitBoundary
+public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDailyV1RuntimeAdvanceBoundary
 {
     [ThreadStatic]
     private static DailyGameplayExecutionProbeForTest activeDailyGameplayExecutionProbeForTest;
@@ -10754,30 +10753,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
     internal bool HasValidCompletedDailyBoundaryAdmission()
     {
-        return HasValidDailyBoundaryAdmission(requiredProvenance: null);
+        return dailyExecutionBoundary.HasValidCompletedDailyBoundaryAdmission(
+            this, sessionReplacement: true);
     }
 
     internal bool HasValidRestoredDailyBoundaryAdmission()
     {
-        return HasValidDailyBoundaryAdmission(DailyCaptureBoundaryProvenance.RestoredContinuation);
-    }
-
-    private bool HasValidDailyBoundaryAdmission(DailyCaptureBoundaryProvenance? requiredProvenance)
-    {
-        if (!TryReadDailyCaptureEvidence(
-                finalizingHeldAdvance: false,
-                requiredProvenance.HasValue
-                    ? DailyV1CaptureScopeAllowance.None
-                    : DailyV1CaptureScopeAllowance.SessionReplacementValidation,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
-                out long mutationEpoch,
-                out _))
-            return false;
-
-        DailyCaptureEligibilityToken current = currentDailyCaptureToken;
-        return current != null
-            && (!requiredProvenance.HasValue || current.BoundaryProvenance == requiredProvenance.Value)
-            && TryCompareDailyCaptureToken(current, ownerSections, mutationEpoch);
+        return dailyExecutionBoundary.HasValidRestoredDailyBoundaryAdmission(this);
     }
 
     internal bool TryValidateCompletedDailyCaptureToken(
@@ -10919,13 +10901,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
     DailyV1ExecutionBoundaryState IDailyV1RuntimeAdvanceBoundary.ExecutionState => dailyExecutionBoundary;
     bool IDailyV1RuntimeAdvanceBoundary.HasIntradayTimeline => p18dTimeline != null;
-    DailyV1ExecutionBoundaryState IDailyV1RestoredSessionCommitBoundary.ExecutionState => dailyExecutionBoundary;
-    bool IDailyV1RestoredSessionCommitBoundary.IsHealthyDailyOwnerThreadBoundary() =>
-        IsHealthyDailyOwnerThreadBoundary();
-    bool IDailyV1RestoredSessionCommitBoundary.HasValidCompletedDailyBoundaryAdmission() =>
-        HasValidCompletedDailyBoundaryAdmission();
-    bool IDailyV1RestoredSessionCommitBoundary.HasValidRestoredDailyBoundaryAdmission() =>
-        HasValidRestoredDailyBoundaryAdmission();
 
     bool IDailyV1RuntimeAdvanceBoundary.TryEnterDailyAdvanceOperation(
         out IDisposable operationScope)
@@ -10982,6 +10957,20 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         out long mutationEpoch,
         out DailyCaptureEligibilityFailure failure) =>
         TryCaptureCompletedDailyCaptureEvidence(out ownerSections, out mutationEpoch, out failure);
+
+    bool IDailyV1RuntimeAdvanceBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
+        bool sessionReplacement,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure) =>
+        TryReadDailyCaptureEvidence(
+            finalizingHeldAdvance: false,
+            sessionReplacement
+                ? DailyV1CaptureScopeAllowance.SessionReplacementValidation
+                : DailyV1CaptureScopeAllowance.None,
+            out ownerSections,
+            out mutationEpoch,
+            out failure);
 
     void IDailyV1RuntimeAdvanceBoundary.FaultRuntimeAdmission() => FaultRuntimeAdmission();
 

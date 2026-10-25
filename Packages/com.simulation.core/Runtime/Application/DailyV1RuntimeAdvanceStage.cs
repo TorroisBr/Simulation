@@ -24,20 +24,18 @@ internal interface IDailyV1RuntimeAdvanceBoundary
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
         out DailyCaptureEligibilityFailure failure);
+    /// <summary>
+    /// Re-captures owner evidence for Core's exact-session continuation
+    /// admission. This is distinct from advance-finalization evidence: the
+    /// source may be under its exclusive replacement reservation, while a
+    /// detached candidate must be idle without that reservation.
+    /// </summary>
+    bool TryCaptureDailyBoundaryAdmissionEvidence(
+        bool sessionReplacement,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure);
     void FaultRuntimeAdmission();
-}
-
-/// <summary>
-/// Read-only host attestations required when Core commits an already staged
-/// restore candidate. These inspect the exact bound execution state; the Core
-/// application owns all replacement policy and the active-session exchange.
-/// </summary>
-internal interface IDailyV1RestoredSessionCommitBoundary
-{
-    DailyV1ExecutionBoundaryState ExecutionState { get; }
-    bool IsHealthyDailyOwnerThreadBoundary();
-    bool HasValidCompletedDailyBoundaryAdmission();
-    bool HasValidRestoredDailyBoundaryAdmission();
 }
 
 /// <summary>
@@ -49,6 +47,59 @@ internal interface IDailyV1RestoredSessionCommitBoundary
 /// </summary>
 internal sealed partial class DailyV1ExecutionBoundaryState
 {
+    internal bool IsHealthyDailyOwnerThreadBoundary()
+    {
+        return AdmissionContext != null
+            && AdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            && AdmissionContext.IsOwnedByCurrentThread()
+            && !AdvanceLeaseHeld
+            && ActiveOperationCount == 0
+            && WorldId != null
+            && mutationGuard.CanMutate;
+    }
+
+    internal bool HasValidCompletedDailyBoundaryAdmission(
+        IDailyV1RuntimeAdvanceBoundary boundary,
+        bool sessionReplacement) => HasValidDailyBoundaryAdmission(
+            boundary, DailyCaptureBoundaryProvenance.CompletedAdvance, sessionReplacement);
+
+    internal bool HasValidRestoredDailyBoundaryAdmission(
+        IDailyV1RuntimeAdvanceBoundary boundary) => HasValidDailyBoundaryAdmission(
+            boundary, DailyCaptureBoundaryProvenance.RestoredContinuation, sessionReplacement: false);
+
+    private bool HasValidDailyBoundaryAdmission(
+        IDailyV1RuntimeAdvanceBoundary boundary,
+        DailyCaptureBoundaryProvenance expectedProvenance,
+        bool sessionReplacement)
+    {
+        DailyCaptureEligibilityToken current = currentCaptureToken;
+        if (boundary == null || !ReferenceEquals(boundary.ExecutionState, this)
+            || !IsHealthyDailyOwnerThreadBoundary()
+            || current == null
+            || current.BoundaryProvenance != expectedProvenance
+            || !boundary.TryCaptureDailyBoundaryAdmissionEvidence(
+                sessionReplacement,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+                out long mutationEpoch,
+                out _))
+            return false;
+
+        return IsHealthyDailyOwnerThreadBoundary()
+            && ReferenceEquals(currentCaptureToken, current)
+            && current.BoundaryProvenance == expectedProvenance
+            && SimulationTime != null
+            && TryCompareCurrentCaptureToken(
+                current,
+                AdmissionContext,
+                ConfigurationIdentity,
+                CalendarIdentity,
+                CompositionProfile,
+                WorldId,
+                SimulationTime.AbsoluteDay,
+                ownerSections,
+                mutationEpoch);
+    }
+
     internal bool TryAdvanceDay(
         IDailyV1RuntimeAdvanceBoundary boundary,
         out SimulationRuntimeAdvanceFailure failure)
