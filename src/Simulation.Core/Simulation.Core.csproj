@@ -155,6 +155,9 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Genealogy/GenealogyContracts.cs" Link="Genealogy/GenealogyContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Genealogy/GenealogyOwnerBridge.cs" Link="Genealogy/GenealogyOwnerBridge.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Genealogy/GenealogyStore.cs" Link="Genealogy/GenealogyStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Genealogy/GenealogyCensusProvider.cs" Link="Genealogy/GenealogyCensusProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/GenealogyOwnerSnapshot.cs" Link="Persistence/GenealogyOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AGenealogyOwnerCodec.cs" Link="Persistence/P12AGenealogyOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketItemDefinition.cs" Link="Economy/MarketItemDefinition.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1InventoryMarketOwners.cs" Link="Economy/DailyV1InventoryMarketOwners.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedOpenMarketSale.cs" Link="Economy/DailyV1SelectedOpenMarketSale.cs" />

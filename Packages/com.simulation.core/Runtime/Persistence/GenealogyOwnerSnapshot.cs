@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// Internal immutable P12-D adapter value. Core owns the public domain edge
-/// and failure contracts; this wire-facing wrapper remains in Unity.
+/// Internal immutable P12-D adapter value retained beside the Core wire codec.
+/// It carries no world identity or capture-token authority.
 /// </summary>
 internal sealed class GenealogyOwnerSnapshot
 {
