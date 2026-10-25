@@ -4,22 +4,23 @@ using System.Collections.Generic;
 /// <summary>Passive per-NPC census witnesses for the selected P12 Knowledge owners.</summary>
 public static class NpcKnowledgeCensusProvider
 {
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
     private static readonly string[] Prefixes =
     {
-        "p12f.explorable-site-knowledge/",
-        "p12f.local-topology-knowledge.places/",
-        "p12f.local-topology-knowledge.connections/",
-        "p12f.adventure-intel.opposition/",
-        "p12f.adventure-intel.notable-items/",
-        "p12f.adventure-intel.common-resources/",
-        "p12f.adventure-intel.access/",
-        "p12f.commercial-knowledge.markets/",
-        "p12f.commercial-knowledge.liquidity/",
-        "p12f.commercial-knowledge.share-receipts/"
+        DailyV1SelectedOwnerSectionCensusContract.NpcExplorableSiteKnowledgePrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyPlacesPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyConnectionsPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcAdventureOppositionPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcAdventureNotableItemsPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcAdventureCommonResourcesPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcAdventureAccessPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix
     };
 
-    internal static string SectionIdFor(int kind, string runtimeId) => Prefixes[kind] + runtimeId;
+    internal static string SectionIdFor(int kind, string runtimeId) =>
+        DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(kind, runtimeId);
 
     internal interface INpcKnowledgeSectionCensusProvider : IOwnerSectionCensusProvider
     {

@@ -49,14 +49,14 @@ internal static class P12ANpcSpatialKnowledgeOwnerCodec
         locations = null;
         routes = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            SpatialKnowledgeCensusProvider.LocationsSectionPrefix, source?.RuntimeId);
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix, source?.RuntimeId);
         if (source == null || source.KnownLocationRuntimeIds == null || source.KnownRouteRuntimeIds == null)
             return false;
         if (source.KnownLocationRuntimeIds.Count > P12AContinuationCodec.MaxRows
             || source.KnownRouteRuntimeIds.Count > P12AContinuationCodec.MaxRows)
         {
             result = new P12AResult(P12AResultCode.LimitExceeded,
-                SpatialKnowledgeCensusProvider.LocationsSectionPrefix, source.RuntimeId);
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix, source.RuntimeId);
             return false;
         }
         return TryEncode(new P12ANpcSpatialKnowledgeOwnerValue(source.RuntimeId,
@@ -70,7 +70,7 @@ internal static class P12ANpcSpatialKnowledgeOwnerCodec
         locations = null;
         routes = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            SpatialKnowledgeCensusProvider.LocationsSectionPrefix, value?.RuntimeId);
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix, value?.RuntimeId);
         if (!TryValidate(value, out string locationsId, out string routesId,
             out string locationsAlias, out string routesAlias)) return false;
         try
@@ -83,9 +83,9 @@ internal static class P12ANpcSpatialKnowledgeOwnerCodec
                 "location", locationsId, out List<P12AOwnerRow> locationRows, out result)
                 || !TryEncodeRows(value.RuntimeId, value.RouteIds, value.Revision,
                     "route", routesId, out List<P12AOwnerRow> routeRows, out result)) return false;
-            locations = new P12AOwnerSection(locationsId, SpatialKnowledgeCensusProvider.SchemaVersion, 0,
+            locations = new P12AOwnerSection(locationsId, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0,
                 OwnerSectionRole.Required, locationsAlias, value.Revision, locationRows);
-            routes = new P12AOwnerSection(routesId, SpatialKnowledgeCensusProvider.SchemaVersion, 0,
+            routes = new P12AOwnerSection(routesId, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0,
                 OwnerSectionRole.Required, routesAlias, value.Revision, routeRows);
             result = null;
             return true;
@@ -106,11 +106,11 @@ internal static class P12ANpcSpatialKnowledgeOwnerCodec
     {
         value = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            locations?.Id ?? SpatialKnowledgeCensusProvider.LocationsSectionPrefix);
-        if (!TryDecodeSection(locations, SpatialKnowledgeCensusProvider.LocationsSectionPrefix,
+            locations?.Id ?? DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix);
+        if (!TryDecodeSection(locations, DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix,
                 "location", out string locationRuntimeId, out IReadOnlyList<string> locationIds,
                 out long locationRevision, out result)
-            || !TryDecodeSection(routes, SpatialKnowledgeCensusProvider.RoutesSectionPrefix,
+            || !TryDecodeSection(routes, DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix,
                 "route", out string routeRuntimeId, out IReadOnlyList<string> routeIds,
                 out long routeRevision, out result)) return false;
         if (locationRuntimeId != routeRuntimeId || locationRevision != routeRevision)
@@ -173,7 +173,7 @@ internal static class P12ANpcSpatialKnowledgeOwnerCodec
         result = new P12AResult(P12AResultCode.InvalidOwnerValue, section?.Id ?? prefix);
         if (section == null || string.IsNullOrWhiteSpace(section.Id)
             || !section.Id.StartsWith(prefix, StringComparison.Ordinal)
-            || section.Major != SpatialKnowledgeCensusProvider.SchemaVersion || section.Minor != 0
+            || section.Major != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion || section.Minor != 0
             || section.Role != OwnerSectionRole.Required || section.Revision < 0L
             || section.Rows.Count > P12AContinuationCodec.MaxRows
             || section.Rows.Count > section.Revision)
@@ -185,7 +185,7 @@ internal static class P12ANpcSpatialKnowledgeOwnerCodec
         runtimeId = section.Id.Substring(prefix.Length);
         if (!IsRuntimeId(runtimeId)
             || section.Id != prefix + runtimeId
-            || section.AliasGroup != P12ADailyV1Census.ExpectedAliasGroupForSection(section.Id))
+            || section.AliasGroup != DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(section.Id))
         {
             runtimeId = null;
             return false;
@@ -275,10 +275,10 @@ internal static class P12ANpcSpatialKnowledgeOwnerCodec
             || value.LocationIds.Count > P12AContinuationCodec.MaxRows
             || value.RouteIds.Count > P12AContinuationCodec.MaxRows
             || (long)value.LocationIds.Count + value.RouteIds.Count > value.Revision) return false;
-        locationsId = SpatialKnowledgeCensusProvider.LocationsSectionPrefix + value.RuntimeId;
-        routesId = SpatialKnowledgeCensusProvider.RoutesSectionPrefix + value.RuntimeId;
-        locationsAlias = P12ADailyV1Census.ExpectedAliasGroupForSection(locationsId);
-        routesAlias = P12ADailyV1Census.ExpectedAliasGroupForSection(routesId);
+        locationsId = DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + value.RuntimeId;
+        routesId = DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + value.RuntimeId;
+        locationsAlias = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(locationsId);
+        routesAlias = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(routesId);
         return !string.IsNullOrWhiteSpace(locationsAlias) && !string.IsNullOrWhiteSpace(routesAlias);
     }
 

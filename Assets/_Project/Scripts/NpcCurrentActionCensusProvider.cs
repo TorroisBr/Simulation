@@ -4,8 +4,8 @@ using System.Collections.Generic;
 /// <summary>Passive per-NPC witness for its optional current action slot.</summary>
 public sealed class NpcCurrentActionCensusProvider : IOwnerSectionCensusProvider
 {
-    public const string SectionPrefix = "p12b.npc-current-action/";
-    public const int SchemaVersion = 1;
+    public const string SectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
 
     private readonly NpcRuntime owner;
     private readonly Func<NpcRuntime, NpcActionRuntime, bool> validateActionReferences;

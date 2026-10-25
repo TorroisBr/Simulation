@@ -12,7 +12,7 @@ internal static class P12ANpcCurrentActionOwnerCodec
     {
         section = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            NpcCurrentActionCensusProvider.SectionPrefix, dRow?.RuntimeId);
+            DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix, dRow?.RuntimeId);
         if (dRow == null || fRow == null
             || !string.Equals(dRow.RuntimeId, fRow.RuntimeId, StringComparison.Ordinal)
             || (dRow.CurrentActionDefinitionId == null) != (fRow.Action == null)
@@ -28,8 +28,8 @@ internal static class P12ANpcCurrentActionOwnerCodec
     {
         section = null;
         string sectionId = IsRuntimeId(runtimeId)
-            ? NpcCurrentActionCensusProvider.SectionIdFor(runtimeId)
-            : NpcCurrentActionCensusProvider.SectionPrefix;
+            ? DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(20, runtimeId)
+            : DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue, sectionId, runtimeId);
         if (!IsRuntimeId(runtimeId) || revision < 0L
             || (action == null) != (actionDefinitionId == null)
@@ -39,12 +39,12 @@ internal static class P12ANpcCurrentActionOwnerCodec
         {
             P12AWire.GetEncodedStringByteCount(sectionId);
             P12AWire.GetEncodedStringByteCount(runtimeId);
-            string alias = P12ADailyV1Census.ExpectedAliasGroupForSection(sectionId);
+            string alias = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(sectionId);
             if (string.IsNullOrWhiteSpace(alias)) return false;
             P12AWire.GetEncodedStringByteCount(alias);
             if (action == null)
             {
-                section = new P12AOwnerSection(sectionId, NpcCurrentActionCensusProvider.SchemaVersion,
+                section = new P12AOwnerSection(sectionId, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
                     0, OwnerSectionRole.Required, alias, revision, Array.Empty<P12AOwnerRow>());
                 result = null;
                 return true;
@@ -61,7 +61,7 @@ internal static class P12ANpcCurrentActionOwnerCodec
                 writer.Flush();
                 payload = stream.ToArray();
             }
-            section = new P12AOwnerSection(sectionId, NpcCurrentActionCensusProvider.SchemaVersion,
+            section = new P12AOwnerSection(sectionId, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
                 0, OwnerSectionRole.Required, alias, revision,
                 new[] { new P12AOwnerRow(runtimeId, revision, payload) });
             result = null;
@@ -84,16 +84,16 @@ internal static class P12ANpcCurrentActionOwnerCodec
         action = null;
         revision = 0L;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            section?.Id ?? NpcCurrentActionCensusProvider.SectionPrefix);
-        string prefix = NpcCurrentActionCensusProvider.SectionPrefix;
+            section?.Id ?? DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix);
+        string prefix = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix;
         if (section == null || string.IsNullOrWhiteSpace(section.Id)
             || !section.Id.StartsWith(prefix, StringComparison.Ordinal)
-            || section.Major != NpcCurrentActionCensusProvider.SchemaVersion || section.Minor != 0
+            || section.Major != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion || section.Minor != 0
             || section.Role != OwnerSectionRole.Required || section.Revision < 0L
             || section.Rows == null || section.Rows.Count > 1) return false;
         string candidate = section.Id.Substring(prefix.Length);
-        if (!IsRuntimeId(candidate) || section.Id != NpcCurrentActionCensusProvider.SectionIdFor(candidate)
-            || section.AliasGroup != P12ADailyV1Census.ExpectedAliasGroupForSection(section.Id)) return false;
+        if (!IsRuntimeId(candidate) || section.Id != DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(20, candidate)
+            || section.AliasGroup != DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(section.Id)) return false;
         try
         {
             P12AWire.GetEncodedStringByteCount(section.Id);

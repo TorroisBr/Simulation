@@ -47,7 +47,7 @@ internal static class P12ANpcAdventureIntelOwnerCodec
     {
         opposition = notableItems = resources = access = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            NpcKnowledgeCensusProvider.SectionIdFor(OppositionKind, source?.RuntimeId), source?.RuntimeId);
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(OppositionKind, source?.RuntimeId), source?.RuntimeId);
         if (source == null || source.OppositionObservations == null || source.NotableItemObservations == null
             || source.CommonResourceObservations == null || source.AccessObservations == null) return false;
         int exceededKind = FirstExceededKind(source.OppositionObservations.Count,
@@ -56,7 +56,7 @@ internal static class P12ANpcAdventureIntelOwnerCodec
         if (exceededKind >= 0)
         {
             result = new P12AResult(P12AResultCode.LimitExceeded,
-                NpcKnowledgeCensusProvider.SectionIdFor(exceededKind, source.RuntimeId), source.RuntimeId);
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(exceededKind, source.RuntimeId), source.RuntimeId);
             return false;
         }
         return TryEncode(new P12ANpcAdventureIntelOwnerValue(source.RuntimeId,
@@ -72,41 +72,41 @@ internal static class P12ANpcAdventureIntelOwnerCodec
     {
         opposition = notableItems = resources = access = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            NpcKnowledgeCensusProvider.SectionIdFor(OppositionKind, value?.RuntimeId), value?.RuntimeId);
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(OppositionKind, value?.RuntimeId), value?.RuntimeId);
         int exceededKind = value == null ? -1 : FirstExceededKind(value.Opposition?.Count ?? 0,
             value.NotableItems?.Count ?? 0, value.Resources?.Count ?? 0, value.Access?.Count ?? 0);
         if (exceededKind >= 0)
         {
             result = new P12AResult(P12AResultCode.LimitExceeded,
-                NpcKnowledgeCensusProvider.SectionIdFor(exceededKind, value.RuntimeId), value.RuntimeId);
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(exceededKind, value.RuntimeId), value.RuntimeId);
             return false;
         }
         if (!Validate(value)) return false;
         try
         {
             string[] ids = SectionIds(value.RuntimeId);
-            string[] aliases = ids.Select(P12ADailyV1Census.ExpectedAliasGroupForSection).ToArray();
+            string[] aliases = ids.Select(DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection).ToArray();
             if (aliases.Any(string.IsNullOrWhiteSpace) || aliases.Any(alias => alias != aliases[0])) return false;
             foreach (string id in ids) P12AWire.GetEncodedStringByteCount(id);
             P12AWire.GetEncodedStringByteCount(aliases[0]);
 
             if (!TryEncodeRows(value.Opposition, value.RuntimeId, value.Revision, ids[0],
-                    observation => SpatialStableKey.Encode(observation.SiteRuntimeId,
+                    observation => StableKeyEncoding.Encode(observation.SiteRuntimeId,
                         observation.LocalPlaceRuntimeId, observation.OppositionRuntimeId),
                     observation => EncodeOpposition(value.RuntimeId, value.Revision, observation),
                     out List<P12AOwnerRow> oppositionRows, out result)
                 || !TryEncodeRows(value.NotableItems, value.RuntimeId, value.Revision, ids[1],
-                    observation => SpatialStableKey.Encode(observation.SiteRuntimeId,
+                    observation => StableKeyEncoding.Encode(observation.SiteRuntimeId,
                         observation.LocalPlaceRuntimeId, observation.NotableItemRuntimeId),
                     observation => EncodeNotableItem(value.RuntimeId, value.Revision, observation),
                     out List<P12AOwnerRow> notableRows, out result)
                 || !TryEncodeRows(value.Resources, value.RuntimeId, value.Revision, ids[2],
-                    observation => SpatialStableKey.Encode(observation.SiteRuntimeId,
+                    observation => StableKeyEncoding.Encode(observation.SiteRuntimeId,
                         observation.LocalPlaceRuntimeId, observation.ItemDefinitionId),
                     observation => EncodeResource(value.RuntimeId, value.Revision, observation),
                     out List<P12AOwnerRow> resourceRows, out result)
                 || !TryEncodeRows(value.Access, value.RuntimeId, value.Revision, ids[3],
-                    observation => SpatialStableKey.Encode(observation.SiteRuntimeId,
+                    observation => StableKeyEncoding.Encode(observation.SiteRuntimeId,
                         observation.LocalPlaceRuntimeId),
                     observation => EncodeAccess(value.RuntimeId, value.Revision, observation),
                     out List<P12AOwnerRow> accessRows, out result)) return false;
@@ -123,7 +123,7 @@ internal static class P12ANpcAdventureIntelOwnerCodec
             opposition = notableItems = resources = access = null;
             result = new P12AResult(IsLimitException(exception)
                 ? P12AResultCode.LimitExceeded : P12AResultCode.InvalidOwnerValue,
-                NpcKnowledgeCensusProvider.SectionIdFor(OppositionKind, value.RuntimeId), value.RuntimeId);
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(OppositionKind, value.RuntimeId), value.RuntimeId);
             return false;
         }
     }
@@ -134,7 +134,7 @@ internal static class P12ANpcAdventureIntelOwnerCodec
     {
         value = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            opposition?.Id ?? NpcKnowledgeCensusProvider.SectionIdFor(OppositionKind, string.Empty));
+            opposition?.Id ?? DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(OppositionKind, string.Empty));
         if (!TryReadSection(opposition, OppositionKind, out string runtimeId, out long revision,
                 out IReadOnlyList<P12AOwnerRow> oppositionRows, out result)
             || !TryReadSection(notableItems, NotableItemKind, out string notableRuntimeId, out long notableRevision,
@@ -194,10 +194,10 @@ internal static class P12ANpcAdventureIntelOwnerCodec
 
     private static string[] SectionIds(string runtimeId)
         => new[] { OppositionKind, NotableItemKind, CommonResourceKind, AccessKind }
-            .Select(kind => NpcKnowledgeCensusProvider.SectionIdFor(kind, runtimeId)).ToArray();
+            .Select(kind => DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(kind, runtimeId)).ToArray();
 
     private static P12AOwnerSection Section(string id, string alias, long revision, List<P12AOwnerRow> rows)
-        => new P12AOwnerSection(id, NpcKnowledgeCensusProvider.SchemaVersion, 0,
+        => new P12AOwnerSection(id, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0,
             OwnerSectionRole.Required, alias, revision, rows);
 
     private static bool TryEncodeRows<T>(IReadOnlyList<T> values, string runtimeId, long revision,
@@ -238,11 +238,11 @@ internal static class P12ANpcAdventureIntelOwnerCodec
     private static bool TryReadSection(P12AOwnerSection section, int kind, out string runtimeId,
         out long revision, out IReadOnlyList<P12AOwnerRow> rows, out P12AResult result)
     {
-        string prefix = NpcKnowledgeCensusProvider.SectionIdFor(kind, string.Empty);
+        string prefix = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(kind, string.Empty);
         runtimeId = null; revision = 0L; rows = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue, section?.Id ?? prefix);
         if (section == null || string.IsNullOrWhiteSpace(section.Id) || !section.Id.StartsWith(prefix, StringComparison.Ordinal)
-            || section.Major != NpcKnowledgeCensusProvider.SchemaVersion || section.Minor != 0
+            || section.Major != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion || section.Minor != 0
             || section.Role != OwnerSectionRole.Required || section.Revision < 0L
             || section.Rows == null || section.Rows.Count > P12AContinuationCodec.MaxRows
             || section.Rows.Count > section.Revision)
@@ -253,7 +253,7 @@ internal static class P12ANpcAdventureIntelOwnerCodec
         }
         string candidate = section.Id.Substring(prefix.Length);
         if (!IsRuntimeId(candidate) || section.Id != prefix + candidate
-            || section.AliasGroup != P12ADailyV1Census.ExpectedAliasGroupForSection(section.Id)) return false;
+            || section.AliasGroup != DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(section.Id)) return false;
         try
         {
             P12AWire.GetEncodedStringByteCount(section.Id);
@@ -437,13 +437,13 @@ internal static class P12ANpcAdventureIntelOwnerCodec
     }
 
     private static string OppositionIdentity(AdventureOppositionObservation value)
-        => SpatialStableKey.Encode(value.SiteRuntimeId, value.LocalPlaceRuntimeId, value.OppositionRuntimeId);
+        => StableKeyEncoding.Encode(value.SiteRuntimeId, value.LocalPlaceRuntimeId, value.OppositionRuntimeId);
     private static string NotableIdentity(AdventureNotableItemObservation value)
-        => SpatialStableKey.Encode(value.SiteRuntimeId, value.LocalPlaceRuntimeId, value.NotableItemRuntimeId);
+        => StableKeyEncoding.Encode(value.SiteRuntimeId, value.LocalPlaceRuntimeId, value.NotableItemRuntimeId);
     private static string ResourceIdentity(AdventureCommonResourceObservation value)
-        => SpatialStableKey.Encode(value.SiteRuntimeId, value.LocalPlaceRuntimeId, value.ItemDefinitionId);
+        => StableKeyEncoding.Encode(value.SiteRuntimeId, value.LocalPlaceRuntimeId, value.ItemDefinitionId);
     private static string AccessIdentity(AdventureAccessObservation value)
-        => SpatialStableKey.Encode(value.SiteRuntimeId, value.LocalPlaceRuntimeId);
+        => StableKeyEncoding.Encode(value.SiteRuntimeId, value.LocalPlaceRuntimeId);
 
     private static bool IsRuntimeId(string value)
         => !string.IsNullOrWhiteSpace(value) && value.IndexOf('/') < 0 && value.IndexOf('\0') < 0;

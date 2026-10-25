@@ -16,15 +16,15 @@ internal static class P12ANpcLocalTopologyKnowledgeEmptyOwnerCodec
         places = null;
         connections = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            NpcKnowledgeCensusProvider.SectionIdFor(PlaceSectionKind, runtimeId), runtimeId);
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(PlaceSectionKind, runtimeId), runtimeId);
         if (!IsRuntimeId(runtimeId) || placeWitness == null || connectionWitness == null) return false;
-        string placeId = NpcKnowledgeCensusProvider.SectionIdFor(PlaceSectionKind, runtimeId);
-        string connectionId = NpcKnowledgeCensusProvider.SectionIdFor(ConnectionSectionKind, runtimeId);
+        string placeId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(PlaceSectionKind, runtimeId);
+        string connectionId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(ConnectionSectionKind, runtimeId);
         if (!IsExactEmpty(placeWitness, placeId) || !IsExactEmpty(connectionWitness, connectionId)
             || !ReferenceEquals(placeWitness.OwnerInstanceIdentity, connectionWitness.OwnerInstanceIdentity))
             return false;
-        string placeAlias = P12ADailyV1Census.ExpectedAliasGroupForSection(placeId);
-        string connectionAlias = P12ADailyV1Census.ExpectedAliasGroupForSection(connectionId);
+        string placeAlias = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(placeId);
+        string connectionAlias = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(connectionId);
         if (string.IsNullOrWhiteSpace(placeAlias) || placeAlias != connectionAlias) return false;
         try
         {
@@ -39,9 +39,9 @@ internal static class P12ANpcLocalTopologyKnowledgeEmptyOwnerCodec
                 ? P12AResultCode.LimitExceeded : P12AResultCode.InvalidOwnerValue, placeId, runtimeId);
             return false;
         }
-        places = new P12AOwnerSection(placeId, NpcKnowledgeCensusProvider.SchemaVersion, 0,
+        places = new P12AOwnerSection(placeId, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0,
             OwnerSectionRole.Required, placeAlias, 0L, Array.Empty<P12AOwnerRow>());
-        connections = new P12AOwnerSection(connectionId, NpcKnowledgeCensusProvider.SchemaVersion, 0,
+        connections = new P12AOwnerSection(connectionId, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0,
             OwnerSectionRole.Required, connectionAlias, 0L, Array.Empty<P12AOwnerRow>());
         result = null;
         return true;
@@ -52,14 +52,14 @@ internal static class P12ANpcLocalTopologyKnowledgeEmptyOwnerCodec
     {
         runtimeId = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            places?.Id ?? NpcKnowledgeCensusProvider.SectionIdFor(PlaceSectionKind, string.Empty));
+            places?.Id ?? DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(PlaceSectionKind, string.Empty));
         if (places == null || connections == null
             || string.IsNullOrWhiteSpace(places.Id)
             || !places.Id.StartsWith("p12f.local-topology-knowledge.places/", StringComparison.Ordinal))
             return false;
         string candidateId = places.Id.Substring("p12f.local-topology-knowledge.places/".Length);
-        string placeId = NpcKnowledgeCensusProvider.SectionIdFor(PlaceSectionKind, candidateId);
-        string connectionId = NpcKnowledgeCensusProvider.SectionIdFor(ConnectionSectionKind, candidateId);
+        string placeId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(PlaceSectionKind, candidateId);
+        string connectionId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(ConnectionSectionKind, candidateId);
         if (!IsRuntimeId(candidateId) || !IsExactEmptySection(places, placeId)
             || !IsExactEmptySection(connections, connectionId)
             || places.AliasGroup != connections.AliasGroup)
@@ -84,17 +84,17 @@ internal static class P12ANpcLocalTopologyKnowledgeEmptyOwnerCodec
 
     private static bool IsExactEmpty(OwnerSectionCensusSnapshot witness, string id)
         => witness != null && witness.SectionId == id
-            && witness.SchemaVersion == NpcKnowledgeCensusProvider.SchemaVersion
+            && witness.SchemaVersion == DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
             && witness.Role == OwnerSectionRole.Required
             && witness.Cardinality == 0 && witness.Revision == 0L
             && witness.OwnerInstanceIdentity != null;
 
     private static bool IsExactEmptySection(P12AOwnerSection section, string id)
         => section != null && section.Id == id
-            && section.Major == NpcKnowledgeCensusProvider.SchemaVersion && section.Minor == 0
+            && section.Major == DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion && section.Minor == 0
             && section.Role == OwnerSectionRole.Required && section.Revision == 0L
             && section.Rows.Count == 0
-            && section.AliasGroup == P12ADailyV1Census.ExpectedAliasGroupForSection(id);
+            && section.AliasGroup == DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(id);
 
     private static bool IsRuntimeId(string value)
         => !string.IsNullOrWhiteSpace(value) && value.IndexOf('/') < 0 && value.IndexOf('\0') < 0;

@@ -4,11 +4,11 @@ using System.Collections.Generic;
 /// <summary>Exact selected-profile witnesses for NPC status and legacy Justice facts.</summary>
 public static class P12CrimeJusticeCensusProvider
 {
-    public const string NpcStatusSectionPrefix = "p12b.npc-status-crime-state/";
+    public const string NpcStatusSectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimePrefix;
     public const string JusticeRecordsSectionId = "p12b.justice-records";
     public const string CrimeP18ReceiptsSectionId = "p12b.crime-p18-receipts";
     public const string JusticeP18ReceiptsSectionId = "p12b.justice-p18-receipts";
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
 
     public static string NpcStatusSectionIdFor(string runtimeId)
     {

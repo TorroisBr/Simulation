@@ -38,7 +38,7 @@ internal sealed class P12ANpcStatusCrimeOwnerValue
 internal static class P12ANpcStatusCrimeOwnerCodec
 {
     private const string PayloadContract = "p12a.npc-status-crime-state/v1";
-    private const string SectionPrefix = P12CrimeJusticeCensusProvider.NpcStatusSectionPrefix;
+    private const string SectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimePrefix;
 
     internal static bool TryEncode(P12DNpcDRow source,
         out P12AOwnerSection section, out P12AResult result)
@@ -53,7 +53,7 @@ internal static class P12ANpcStatusCrimeOwnerCodec
         {
             section = null;
             result = new P12AResult(P12AResultCode.LimitExceeded,
-                P12CrimeJusticeCensusProvider.NpcStatusSectionPrefix, source.RuntimeId);
+                DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimePrefix, source.RuntimeId);
             return false;
         }
 
@@ -71,7 +71,7 @@ internal static class P12ANpcStatusCrimeOwnerCodec
 
         try
         {
-            string aliasGroup = P12ADailyV1Census.ExpectedAliasGroupForSection(sectionId);
+            string aliasGroup = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(sectionId);
             if (aliasGroup == null) return false;
             P12AWire.GetEncodedStringByteCount(sectionId);
             P12AWire.GetEncodedStringByteCount(aliasGroup);
@@ -109,7 +109,7 @@ internal static class P12ANpcStatusCrimeOwnerCodec
                 }
 
                 section = new P12AOwnerSection(sectionId,
-                    P12CrimeJusticeCensusProvider.SchemaVersion, 0, OwnerSectionRole.Required,
+                    DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0, OwnerSectionRole.Required,
                     aliasGroup, value.Revision,
                     new[] { new P12AOwnerRow(value.RuntimeId, value.Revision, stream.ToArray()) });
             }
@@ -135,14 +135,14 @@ internal static class P12ANpcStatusCrimeOwnerCodec
             section?.Id ?? SectionPrefix);
         if (section == null || string.IsNullOrWhiteSpace(section.Id)
             || !section.Id.StartsWith(SectionPrefix, StringComparison.Ordinal)
-            || section.Major != P12CrimeJusticeCensusProvider.SchemaVersion || section.Minor != 0
+            || section.Major != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion || section.Minor != 0
             || section.Role != OwnerSectionRole.Required || section.Revision < 0L
             || section.Rows.Count != 1)
             return false;
 
         string sectionRuntimeId = section.Id.Substring(SectionPrefix.Length);
         if (!IsRuntimeId(sectionRuntimeId)
-            || section.Id != P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(sectionRuntimeId))
+            || section.Id != DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(19, sectionRuntimeId))
             return false;
 
         try
@@ -157,7 +157,7 @@ internal static class P12ANpcStatusCrimeOwnerCodec
             return false;
         }
         if (!string.Equals(section.AliasGroup,
-            P12ADailyV1Census.ExpectedAliasGroupForSection(section.Id), StringComparison.Ordinal))
+            DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(section.Id), StringComparison.Ordinal))
             return false;
 
         P12AOwnerRow row = section.Rows[0];
@@ -232,7 +232,7 @@ internal static class P12ANpcStatusCrimeOwnerCodec
 
         try
         {
-            sectionId = P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(value.RuntimeId);
+            sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(19, value.RuntimeId);
             return true;
         }
         catch (ArgumentException)

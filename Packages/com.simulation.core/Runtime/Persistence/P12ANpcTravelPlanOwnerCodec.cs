@@ -14,7 +14,7 @@ internal static class P12ANpcTravelPlanOwnerCodec
         {
             section = null;
             result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                NpcPlanCensusProvider.TravelPlanSectionPrefix, source?.RuntimeId);
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanPrefix, source?.RuntimeId);
             return false;
         }
         P12DNpcTravelPlanValue plan = source.TravelPlan;
@@ -30,7 +30,7 @@ internal static class P12ANpcTravelPlanOwnerCodec
     {
         section = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            NpcPlanCensusProvider.TravelPlanSectionPrefix, runtimeId);
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanPrefix, runtimeId);
         if (!TryValidate(runtimeId, targetLocationRuntimeId, targetCityRuntimeId,
             reason, utility, expectedCost, revision, out string sectionId)) return false;
 
@@ -67,7 +67,7 @@ internal static class P12ANpcTravelPlanOwnerCodec
                     result = new P12AResult(P12AResultCode.InvalidOwnerValue, sectionId, runtimeId);
                     return false;
                 }
-                section = new P12AOwnerSection(sectionId, NpcPlanCensusProvider.SchemaVersion, 0,
+                section = new P12AOwnerSection(sectionId, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0,
                     OwnerSectionRole.Required, null, revision,
                     new[] { new P12AOwnerRow(runtimeId, revision, stream.ToArray()) });
             }
@@ -89,16 +89,16 @@ internal static class P12ANpcTravelPlanOwnerCodec
     {
         value = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            section?.Id ?? NpcPlanCensusProvider.TravelPlanSectionPrefix);
+            section?.Id ?? DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanPrefix);
         if (section == null || string.IsNullOrWhiteSpace(section.Id)
-            || !section.Id.StartsWith(NpcPlanCensusProvider.TravelPlanSectionPrefix, StringComparison.Ordinal)
-            || section.Major != NpcPlanCensusProvider.SchemaVersion || section.Minor != 0
+            || !section.Id.StartsWith(DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanPrefix, StringComparison.Ordinal)
+            || section.Major != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion || section.Minor != 0
             || section.Role != OwnerSectionRole.Required || section.AliasGroup != null
             || section.Revision < 0L || section.Rows.Count != 1) return false;
-        string runtimeId = section.Id.Substring(NpcPlanCensusProvider.TravelPlanSectionPrefix.Length);
+        string runtimeId = section.Id.Substring(DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanPrefix.Length);
         if (!IsRuntimeId(runtimeId)
-            || section.Id != NpcPlanCensusProvider.SectionIdFor(
-                NpcPlanCensusProvider.TravelPlanKind, runtimeId)) return false;
+            || section.Id != DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, runtimeId)) return false;
         P12AOwnerRow row = section.Rows[0];
         if (row == null || row.OwnerKey != runtimeId || row.Revision != section.Revision
             || row.PayloadLength < 0 || row.PayloadLength > P12AContinuationCodec.MaxSectionBytes) return false;
@@ -153,8 +153,8 @@ internal static class P12ANpcTravelPlanOwnerCodec
             || (targetLocationId == null && (targetCityId != null || reason != NpcTravelReason.None))
             || (targetLocationId != null && string.IsNullOrWhiteSpace(targetLocationId))
             || (targetCityId != null && string.IsNullOrWhiteSpace(targetCityId))) return false;
-        sectionId = NpcPlanCensusProvider.SectionIdFor(
-            NpcPlanCensusProvider.TravelPlanKind, runtimeId);
+        sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, runtimeId);
         return true;
     }
 

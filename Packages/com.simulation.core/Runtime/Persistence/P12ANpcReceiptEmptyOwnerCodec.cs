@@ -13,8 +13,8 @@ internal static class P12ANpcReceiptEmptyOwnerCodec
         out P12AResult result)
     {
         localObservation = merchantTradeState = null;
-        string localId = P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionPrefix + (runtimeId ?? string.Empty);
-        string merchantId = P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionPrefix + (runtimeId ?? string.Empty);
+        string localId = DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix + (runtimeId ?? string.Empty);
+        string merchantId = DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix + (runtimeId ?? string.Empty);
         result = new P12AResult(P12AResultCode.InvalidOwnerValue, localId, runtimeId);
         if (!IsRuntimeId(runtimeId) || localObservationWitness == null || merchantTradeStateWitness == null
             || !IsExactEmpty(localObservationWitness, localId)
@@ -44,16 +44,16 @@ internal static class P12ANpcReceiptEmptyOwnerCodec
     {
         runtimeId = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            localObservation?.Id ?? P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionPrefix);
+            localObservation?.Id ?? DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix);
         if (localObservation == null || merchantTradeState == null
             || string.IsNullOrWhiteSpace(localObservation.Id)
-            || !localObservation.Id.StartsWith(P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionPrefix,
+            || !localObservation.Id.StartsWith(DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
                 StringComparison.Ordinal)) return false;
         string candidate = localObservation.Id.Substring(
-            P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionPrefix.Length);
+            DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix.Length);
         if (!IsRuntimeId(candidate)) return false;
-        string localId = P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(candidate);
-        string merchantId = P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(candidate);
+        string localId = DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsSectionIdFor(candidate);
+        string merchantId = DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsSectionIdFor(candidate);
         if (!IsRuntimeId(candidate) || !IsExactEmpty(localObservation, localId)
             || !IsExactEmpty(merchantTradeState, merchantId)) return false;
         try
@@ -74,18 +74,18 @@ internal static class P12ANpcReceiptEmptyOwnerCodec
     }
 
     private static P12AOwnerSection EmptySection(string id)
-        => new P12AOwnerSection(id, P12DNpcReceiptOwnerCensusProvider.SchemaVersion, 0,
+        => new P12AOwnerSection(id, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0,
             OwnerSectionRole.Required, null, 0L, Array.Empty<P12AOwnerRow>());
 
     private static bool IsExactEmpty(OwnerSectionCensusSnapshot witness, string id)
         => witness != null && witness.SectionId == id
-            && witness.SchemaVersion == P12DNpcReceiptOwnerCensusProvider.SchemaVersion
+            && witness.SchemaVersion == DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
             && witness.Role == OwnerSectionRole.Required && witness.Cardinality == 0
             && witness.Revision == 0L && witness.OwnerInstanceIdentity != null;
 
     private static bool IsExactEmpty(P12AOwnerSection section, string id)
         => section != null && section.Id == id
-            && section.Major == P12DNpcReceiptOwnerCensusProvider.SchemaVersion && section.Minor == 0
+            && section.Major == DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion && section.Minor == 0
             && section.Role == OwnerSectionRole.Required && section.AliasGroup == null
             && section.Revision == 0L && section.Rows != null && section.Rows.Count == 0;
 

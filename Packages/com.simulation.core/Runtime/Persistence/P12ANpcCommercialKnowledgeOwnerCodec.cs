@@ -10,7 +10,7 @@ internal sealed class P12ANpcCommercialKnowledgeOwnerValue
     internal P12ANpcCommercialKnowledgeOwnerValue(string runtimeId,
         IEnumerable<P12DNpcCommercialMarketValue> markets,
         IEnumerable<P12DNpcCommercialLiquidityValue> liquidity,
-        IEnumerable<CommercialKnowledgeShareReceipt> receipts, long revision)
+        IEnumerable<P12DNpcCommercialShareReceiptValue> receipts, long revision)
     {
         RuntimeId = runtimeId;
         Markets = Copy(markets);
@@ -22,7 +22,7 @@ internal sealed class P12ANpcCommercialKnowledgeOwnerValue
     internal string RuntimeId { get; }
     internal IReadOnlyList<P12DNpcCommercialMarketValue> Markets { get; }
     internal IReadOnlyList<P12DNpcCommercialLiquidityValue> Liquidity { get; }
-    internal IReadOnlyList<CommercialKnowledgeShareReceipt> Receipts { get; }
+    internal IReadOnlyList<P12DNpcCommercialShareReceiptValue> Receipts { get; }
     internal long Revision { get; }
 
     private static IReadOnlyList<T> Copy<T>(IEnumerable<T> source)
@@ -43,7 +43,7 @@ internal static class P12ANpcCommercialKnowledgeOwnerCodec
     {
         markets = liquidity = receipts = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            NpcKnowledgeCensusProvider.SectionIdFor(MarketKind, source?.RuntimeId), source?.RuntimeId);
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(MarketKind, source?.RuntimeId), source?.RuntimeId);
         if (source == null || source.CommercialMarkets == null || source.CommercialLiquidity == null
             || source.CommercialShareReceipts == null) return false;
         if (source.CommercialMarkets.Count > P12AContinuationCodec.MaxRows
@@ -51,7 +51,7 @@ internal static class P12ANpcCommercialKnowledgeOwnerCodec
             || source.CommercialShareReceipts.Count > P12AContinuationCodec.MaxRows)
         {
             result = new P12AResult(P12AResultCode.LimitExceeded,
-                NpcKnowledgeCensusProvider.SectionIdFor(MarketKind, source.RuntimeId), source.RuntimeId);
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(MarketKind, source.RuntimeId), source.RuntimeId);
             return false;
         }
         return TryEncode(new P12ANpcCommercialKnowledgeOwnerValue(source.RuntimeId,
@@ -65,32 +65,32 @@ internal static class P12ANpcCommercialKnowledgeOwnerCodec
     {
         markets = liquidity = receipts = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            NpcKnowledgeCensusProvider.SectionIdFor(MarketKind, value?.RuntimeId), value?.RuntimeId);
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(MarketKind, value?.RuntimeId), value?.RuntimeId);
         if (value != null && (value.Markets?.Count > P12AContinuationCodec.MaxRows
             || value.Liquidity?.Count > P12AContinuationCodec.MaxRows
             || value.Receipts?.Count > P12AContinuationCodec.MaxRows))
         {
             result = new P12AResult(P12AResultCode.LimitExceeded,
-                NpcKnowledgeCensusProvider.SectionIdFor(MarketKind, value.RuntimeId), value.RuntimeId);
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(MarketKind, value.RuntimeId), value.RuntimeId);
             return false;
         }
         if (!Validate(value)) return false;
         try
         {
-            string marketId = NpcKnowledgeCensusProvider.SectionIdFor(MarketKind, value.RuntimeId);
-            string liquidityId = NpcKnowledgeCensusProvider.SectionIdFor(LiquidityKind, value.RuntimeId);
-            string receiptId = NpcKnowledgeCensusProvider.SectionIdFor(ReceiptKind, value.RuntimeId);
-            string alias = P12ADailyV1Census.ExpectedAliasGroupForSection(marketId);
+            string marketId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(MarketKind, value.RuntimeId);
+            string liquidityId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(LiquidityKind, value.RuntimeId);
+            string receiptId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(ReceiptKind, value.RuntimeId);
+            string alias = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(marketId);
             if (string.IsNullOrWhiteSpace(alias)
-                || alias != P12ADailyV1Census.ExpectedAliasGroupForSection(liquidityId)
-                || alias != P12ADailyV1Census.ExpectedAliasGroupForSection(receiptId)) return false;
+                || alias != DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(liquidityId)
+                || alias != DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(receiptId)) return false;
             P12AWire.GetEncodedStringByteCount(marketId);
             P12AWire.GetEncodedStringByteCount(liquidityId);
             P12AWire.GetEncodedStringByteCount(receiptId);
             P12AWire.GetEncodedStringByteCount(alias);
 
             if (!TryEncodeRows(value.Markets, value.RuntimeId, value.Revision, marketId,
-                    row => SpatialStableKey.Encode(row.LocationRuntimeId, row.ItemDefinitionId),
+                    row => StableKeyEncoding.Encode(row.LocationRuntimeId, row.ItemDefinitionId),
                     row => EncodeMarket(value.RuntimeId, value.Revision, row),
                     out List<P12AOwnerRow> marketRows, out result)
                 || !TryEncodeRows(value.Liquidity, value.RuntimeId, value.Revision, liquidityId,
@@ -113,7 +113,7 @@ internal static class P12ANpcCommercialKnowledgeOwnerCodec
             markets = liquidity = receipts = null;
             result = new P12AResult(IsLimitException(exception)
                 ? P12AResultCode.LimitExceeded : P12AResultCode.InvalidOwnerValue,
-                NpcKnowledgeCensusProvider.SectionIdFor(MarketKind, value.RuntimeId), value.RuntimeId);
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(MarketKind, value.RuntimeId), value.RuntimeId);
             return false;
         }
     }
@@ -123,7 +123,7 @@ internal static class P12ANpcCommercialKnowledgeOwnerCodec
     {
         value = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            markets?.Id ?? NpcKnowledgeCensusProvider.SectionIdFor(MarketKind, string.Empty));
+            markets?.Id ?? DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(MarketKind, string.Empty));
         if (!TryReadSection(markets, MarketKind, enforceCardinalityBound: false, out string runtimeId, out long revision,
                 out IReadOnlyList<P12AOwnerRow> marketRows, out result)
             || !TryReadSection(liquidity, LiquidityKind, enforceCardinalityBound: false, out string liquidityRuntimeId,
@@ -147,7 +147,7 @@ internal static class P12ANpcCommercialKnowledgeOwnerCodec
             || !TryDecodeRows(liquidityRows, runtimeId, revision, "liquidity", LiquidityIdentity,
                 DecodeLiquidity, out List<P12DNpcCommercialLiquidityValue> liquidityValues)
             || !TryDecodeRows(receiptRows, runtimeId, revision, "share-receipt", ReceiptIdentity,
-                DecodeReceipt, out List<CommercialKnowledgeShareReceipt> receiptValues))
+                DecodeReceipt, out List<P12DNpcCommercialShareReceiptValue> receiptValues))
         {
             result = new P12AResult(P12AResultCode.InvalidOwnerValue, markets.Id, runtimeId);
             return false;
@@ -172,7 +172,7 @@ internal static class P12ANpcCommercialKnowledgeOwnerCodec
         foreach (P12DNpcCommercialLiquidityValue row in value.Liquidity)
             if (!IsValidLiquidity(row) || !liquidityKeys.Add(LiquidityIdentity(row))) return false;
         HashSet<string> receiptKeys = new HashSet<string>(StringComparer.Ordinal);
-        foreach (CommercialKnowledgeShareReceipt row in value.Receipts)
+        foreach (P12DNpcCommercialShareReceiptValue row in value.Receipts)
             if (!IsValidReceipt(row) || !receiptKeys.Add(ReceiptIdentity(row))) return false;
         return true;
     }
@@ -200,10 +200,10 @@ internal static class P12ANpcCommercialKnowledgeOwnerCodec
                 : !float.IsNaN(value.PurchasingPower) && !float.IsInfinity(value.PurchasingPower)
                     && value.PurchasingPower >= 0f);
 
-    private static bool IsValidReceipt(CommercialKnowledgeShareReceipt value)
+    private static bool IsValidReceipt(P12DNpcCommercialShareReceiptValue value)
     {
         if (value == null) return false;
-        return CommercialKnowledgeShareReceipt.TryCreateFromOwnerSnapshot(value.OperationIdentity,
+        return P12DNpcCommercialShareReceiptValue.TryCreateFromOwnerSnapshot(value.OperationIdentity,
             value.Fingerprint, value.BoundaryOccurrenceId, value.SenderRuntimeId, value.SenderPersonId,
             value.ReceiverRuntimeId, value.ReceiverPersonId, value.SourceSnapshotFingerprint,
             value.AppliedObservationCount, out _);
@@ -215,7 +215,7 @@ internal static class P12ANpcCommercialKnowledgeOwnerCodec
                 ? !string.IsNullOrWhiteSpace(sourceRuntimeId) : sourceRuntimeId == null);
 
     private static P12AOwnerSection Section(string id, string alias, long revision, List<P12AOwnerRow> rows)
-        => new P12AOwnerSection(id, NpcKnowledgeCensusProvider.SchemaVersion, 0,
+        => new P12AOwnerSection(id, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0,
             OwnerSectionRole.Required, alias, revision, rows);
 
     private static bool TryEncodeRows<T>(IReadOnlyList<T> values, string runtimeId, long revision,
@@ -256,11 +256,11 @@ internal static class P12ANpcCommercialKnowledgeOwnerCodec
     private static bool TryReadSection(P12AOwnerSection section, int kind, bool enforceCardinalityBound,
         out string runtimeId, out long revision, out IReadOnlyList<P12AOwnerRow> rows, out P12AResult result)
     {
-        string prefix = NpcKnowledgeCensusProvider.SectionIdFor(kind, string.Empty);
+        string prefix = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(kind, string.Empty);
         runtimeId = null; revision = 0L; rows = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue, section?.Id ?? prefix);
         if (section == null || string.IsNullOrWhiteSpace(section.Id) || !section.Id.StartsWith(prefix, StringComparison.Ordinal)
-            || section.Major != NpcKnowledgeCensusProvider.SchemaVersion || section.Minor != 0
+            || section.Major != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion || section.Minor != 0
             || section.Role != OwnerSectionRole.Required || section.Revision < 0L
             || section.Rows == null || section.Rows.Count > P12AContinuationCodec.MaxRows
             || (enforceCardinalityBound && section.Rows.Count > section.Revision))
@@ -271,7 +271,7 @@ internal static class P12ANpcCommercialKnowledgeOwnerCodec
         }
         string candidate = section.Id.Substring(prefix.Length);
         if (!IsRuntimeId(candidate) || section.Id != prefix + candidate
-            || section.AliasGroup != P12ADailyV1Census.ExpectedAliasGroupForSection(section.Id)) return false;
+            || section.AliasGroup != DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(section.Id)) return false;
         try
         {
             P12AWire.GetEncodedStringByteCount(section.Id);
@@ -359,7 +359,7 @@ internal static class P12ANpcCommercialKnowledgeOwnerCodec
             writer.Write((int)value.Source); P12AWire.WriteString(writer, value.SourceRuntimeId);
         });
 
-    private static byte[] EncodeReceipt(string runtimeId, long revision, CommercialKnowledgeShareReceipt value)
+    private static byte[] EncodeReceipt(string runtimeId, long revision, P12DNpcCommercialShareReceiptValue value)
         => Encode(runtimeId, revision, "share-receipt", writer =>
         {
             P12AWire.WriteString(writer, value.OperationIdentity);
@@ -428,7 +428,7 @@ internal static class P12ANpcCommercialKnowledgeOwnerCodec
         }
     }
 
-    private static CommercialKnowledgeShareReceipt DecodeReceipt(byte[] data)
+    private static P12DNpcCommercialShareReceiptValue DecodeReceipt(byte[] data)
     {
         using (MemoryStream stream = new MemoryStream(data, false))
         using (BinaryReader reader = new BinaryReader(stream, P12AWire.Utf8, true))
@@ -443,17 +443,17 @@ internal static class P12ANpcCommercialKnowledgeOwnerCodec
                 || !P12AWire.ReadString(reader, out string sourceSnapshot)) return null;
             int applied = reader.ReadInt32();
             if (stream.Position != stream.Length) return null;
-            return CommercialKnowledgeShareReceipt.TryCreateFromOwnerSnapshot(operation, fingerprint,
+            return P12DNpcCommercialShareReceiptValue.TryCreateFromOwnerSnapshot(operation, fingerprint,
                 boundary, sender, senderPerson, receiver, receiverPerson, sourceSnapshot,
-                applied, out CommercialKnowledgeShareReceipt receipt) ? receipt : null;
+                applied, out P12DNpcCommercialShareReceiptValue receipt) ? receipt : null;
         }
     }
 
     private static string MarketIdentity(P12DNpcCommercialMarketValue value)
-        => SpatialStableKey.Encode(value.LocationRuntimeId, value.ItemDefinitionId);
+        => StableKeyEncoding.Encode(value.LocationRuntimeId, value.ItemDefinitionId);
     private static string LiquidityIdentity(P12DNpcCommercialLiquidityValue value)
         => value.LocationRuntimeId;
-    private static string ReceiptIdentity(CommercialKnowledgeShareReceipt value) => value.OperationIdentity;
+    private static string ReceiptIdentity(P12DNpcCommercialShareReceiptValue value) => value.OperationIdentity;
     private static bool IsRuntimeId(string value)
         => !string.IsNullOrWhiteSpace(value) && value.IndexOf('/') < 0 && value.IndexOf('\0') < 0;
     private static bool IsFiniteNonNegative(float value)

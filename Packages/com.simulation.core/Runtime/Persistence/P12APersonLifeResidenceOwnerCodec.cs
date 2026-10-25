@@ -42,7 +42,7 @@ internal static class P12APersonLifeResidenceOwnerCodec
         {
             section = null;
             result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                PersonLifeResidenceCensusProvider.SectionPrefix);
+                DailyV1SelectedOwnerSectionCensusContract.PersonLifeResidencePrefix);
             return false;
         }
         return TryEncode(new P12APersonLifeResidenceOwnerValue(
@@ -55,7 +55,7 @@ internal static class P12APersonLifeResidenceOwnerCodec
     {
         section = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            PersonLifeResidenceCensusProvider.SectionPrefix);
+            DailyV1SelectedOwnerSectionCensusContract.PersonLifeResidencePrefix);
         if (!TryValidate(value, out string sectionId)) return false;
 
         try
@@ -63,7 +63,7 @@ internal static class P12APersonLifeResidenceOwnerCodec
             P12AWire.GetEncodedStringByteCount(sectionId);
             P12AWire.GetEncodedStringByteCount(value.PersonIdValue);
             P12AWire.GetEncodedStringByteCount(
-                P12ADailyV1Census.ExpectedAliasGroupForSection(sectionId));
+                DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(sectionId));
             using (MemoryStream stream = new MemoryStream())
             using (BinaryWriter writer = new BinaryWriter(stream, P12AWire.Utf8, true))
             {
@@ -80,9 +80,9 @@ internal static class P12APersonLifeResidenceOwnerCodec
                     return false;
                 }
 
-                section = new P12AOwnerSection(sectionId, PersonLifeResidenceCensusProvider.SchemaVersion, 0,
+                section = new P12AOwnerSection(sectionId, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0,
                     OwnerSectionRole.Required,
-                    P12ADailyV1Census.ExpectedAliasGroupForSection(sectionId), value.Revision,
+                    DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(sectionId), value.Revision,
                     new[] { new P12AOwnerRow(value.PersonIdValue, value.Revision, stream.ToArray()) });
             }
             result = null;
@@ -93,7 +93,7 @@ internal static class P12APersonLifeResidenceOwnerCodec
             section = null;
             result = new P12AResult(exception is P12ALimitException || exception is OverflowException
                 ? P12AResultCode.LimitExceeded : P12AResultCode.InvalidOwnerValue,
-                PersonLifeResidenceCensusProvider.SectionPrefix, value.PersonIdValue);
+                DailyV1SelectedOwnerSectionCensusContract.PersonLifeResidencePrefix, value.PersonIdValue);
             return false;
         }
     }
@@ -103,12 +103,12 @@ internal static class P12APersonLifeResidenceOwnerCodec
     {
         value = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            section?.Id ?? PersonLifeResidenceCensusProvider.SectionPrefix);
+            section?.Id ?? DailyV1SelectedOwnerSectionCensusContract.PersonLifeResidencePrefix);
         if (section == null || string.IsNullOrWhiteSpace(section.Id) || section.Rows.Count != 1
-            || section.Major != PersonLifeResidenceCensusProvider.SchemaVersion || section.Minor != 0
+            || section.Major != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion || section.Minor != 0
             || section.Role != OwnerSectionRole.Required
             || !string.Equals(section.AliasGroup,
-                P12ADailyV1Census.ExpectedAliasGroupForSection(section.Id), StringComparison.Ordinal)
+                DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(section.Id), StringComparison.Ordinal)
             || section.Revision < 0L)
             return false;
 
@@ -173,7 +173,7 @@ internal static class P12APersonLifeResidenceOwnerCodec
 
         try
         {
-            sectionId = PersonLifeResidenceCensusProvider.SectionIdFor(personId);
+            sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcLifeResidenceSectionIdFor(personId);
             return true;
         }
         catch (ArgumentException)

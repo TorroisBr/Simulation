@@ -14,7 +14,7 @@ internal static class P12ANpcMerchantTradePlanOwnerCodec
         {
             section = null;
             result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                NpcPlanCensusProvider.MerchantTradePlanSectionPrefix, source?.RuntimeId);
+                DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanPrefix, source?.RuntimeId);
             return false;
         }
         P12DNpcMerchantPlanValue plan = source.MerchantPlan;
@@ -32,7 +32,7 @@ internal static class P12ANpcMerchantTradePlanOwnerCodec
     {
         section = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            NpcPlanCensusProvider.MerchantTradePlanSectionPrefix, runtimeId);
+            DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanPrefix, runtimeId);
         if (!TryValidate(runtimeId, itemDefinitionId, originCityRuntimeId, targetCityRuntimeId,
             plannedAmount, rawRemainingAmount, purchasePricePerItem, waitDaysAtDestination,
             pendingTravelDays, revision, out string sectionId)) return false;
@@ -74,7 +74,7 @@ internal static class P12ANpcMerchantTradePlanOwnerCodec
                     result = new P12AResult(P12AResultCode.InvalidOwnerValue, sectionId, runtimeId);
                     return false;
                 }
-                section = new P12AOwnerSection(sectionId, NpcPlanCensusProvider.SchemaVersion, 0,
+                section = new P12AOwnerSection(sectionId, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0,
                     OwnerSectionRole.Required, null, revision,
                     new[] { new P12AOwnerRow(runtimeId, revision, stream.ToArray()) });
             }
@@ -86,7 +86,7 @@ internal static class P12ANpcMerchantTradePlanOwnerCodec
             section = null;
             result = new P12AResult(exception is P12ALimitException || exception is OverflowException
                 ? P12AResultCode.LimitExceeded : P12AResultCode.InvalidOwnerValue,
-                NpcPlanCensusProvider.MerchantTradePlanSectionPrefix + runtimeId, runtimeId);
+                DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanPrefix + runtimeId, runtimeId);
             return false;
         }
     }
@@ -96,15 +96,15 @@ internal static class P12ANpcMerchantTradePlanOwnerCodec
     {
         value = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            section?.Id ?? NpcPlanCensusProvider.MerchantTradePlanSectionPrefix);
+            section?.Id ?? DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanPrefix);
         if (section == null || string.IsNullOrWhiteSpace(section.Id)
-            || !section.Id.StartsWith(NpcPlanCensusProvider.MerchantTradePlanSectionPrefix, StringComparison.Ordinal)
-            || section.Major != NpcPlanCensusProvider.SchemaVersion || section.Minor != 0
+            || !section.Id.StartsWith(DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanPrefix, StringComparison.Ordinal)
+            || section.Major != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion || section.Minor != 0
             || section.Role != OwnerSectionRole.Required || section.AliasGroup != null
             || section.Revision < 0L || section.Rows.Count != 1) return false;
-        string runtimeId = section.Id.Substring(NpcPlanCensusProvider.MerchantTradePlanSectionPrefix.Length);
+        string runtimeId = section.Id.Substring(DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanPrefix.Length);
         if (!IsRuntimeId(runtimeId)
-            || section.Id != NpcPlanCensusProvider.SectionIdFor(NpcPlanCensusProvider.MerchantTradePlanKind, runtimeId))
+            || section.Id != DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanKind, runtimeId))
             return false;
         P12AOwnerRow row = section.Rows[0];
         if (row == null || row.OwnerKey != runtimeId || row.Revision != section.Revision
@@ -162,8 +162,8 @@ internal static class P12ANpcMerchantTradePlanOwnerCodec
             || (itemId != null && string.IsNullOrWhiteSpace(itemId))
             || (originCityId != null && string.IsNullOrWhiteSpace(originCityId))
             || (targetCityId != null && string.IsNullOrWhiteSpace(targetCityId))) return false;
-        sectionId = NpcPlanCensusProvider.SectionIdFor(
-            NpcPlanCensusProvider.MerchantTradePlanKind, runtimeId);
+        sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+            DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanKind, runtimeId);
         return true;
     }
 

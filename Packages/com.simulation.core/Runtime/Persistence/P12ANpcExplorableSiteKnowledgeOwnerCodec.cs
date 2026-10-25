@@ -25,7 +25,7 @@ internal static class P12ANpcExplorableSiteKnowledgeOwnerCodec
             return false;
         }
 
-        string sectionId = NpcKnowledgeCensusProvider.SectionIdFor(SectionKind, source.RuntimeId);
+        string sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(SectionKind, source.RuntimeId);
         try
         {
             P12AWire.GetEncodedStringByteCount(sectionId);
@@ -47,8 +47,8 @@ internal static class P12ANpcExplorableSiteKnowledgeOwnerCodec
                     return false;
                 }
             }
-            string aliasGroup = P12ADailyV1Census.ExpectedAliasGroupForSection(sectionId);
-            section = new P12AOwnerSection(sectionId, NpcKnowledgeCensusProvider.SchemaVersion, 0,
+            string aliasGroup = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(sectionId);
+            section = new P12AOwnerSection(sectionId, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0,
                 OwnerSectionRole.Required, aliasGroup, source.SiteKnowledgeRevision, rows);
             result = null;
             return true;
@@ -73,7 +73,7 @@ internal static class P12ANpcExplorableSiteKnowledgeOwnerCodec
         result = new P12AResult(P12AResultCode.InvalidOwnerValue, section?.Id ?? SectionPrefix);
         if (section == null || string.IsNullOrWhiteSpace(section.Id)
             || !section.Id.StartsWith(SectionPrefix, StringComparison.Ordinal)
-            || section.Major != NpcKnowledgeCensusProvider.SchemaVersion || section.Minor != 0
+            || section.Major != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion || section.Minor != 0
             || section.Role != OwnerSectionRole.Required || section.Revision < 0L
             || section.Rows.Count > P12AContinuationCodec.MaxRows
             || section.Rows.Count > section.Revision)
@@ -84,8 +84,8 @@ internal static class P12ANpcExplorableSiteKnowledgeOwnerCodec
         }
         runtimeId = section.Id.Substring(SectionPrefix.Length);
         if (!IsRuntimeId(runtimeId)
-            || section.Id != NpcKnowledgeCensusProvider.SectionIdFor(SectionKind, runtimeId)
-            || section.AliasGroup != P12ADailyV1Census.ExpectedAliasGroupForSection(section.Id))
+            || section.Id != DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(SectionKind, runtimeId)
+            || section.AliasGroup != DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(section.Id))
         {
             runtimeId = null;
             return false;

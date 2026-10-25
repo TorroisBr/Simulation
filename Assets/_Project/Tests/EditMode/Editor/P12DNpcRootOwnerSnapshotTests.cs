@@ -118,7 +118,7 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             Array.Empty<AdventureAccessObservation>(), 0L,
             Array.Empty<P12DNpcCommercialMarketValue>(),
             Array.Empty<P12DNpcCommercialLiquidityValue>(),
-            Array.Empty<CommercialKnowledgeShareReceipt>(), 0L);
+            Array.Empty<P12DNpcCommercialShareReceiptValue>(), 0L);
         P12AOwnerSection[] receiptSections =
         {
             new P12AOwnerSection(

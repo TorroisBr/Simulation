@@ -8,8 +8,8 @@ using System.Collections.ObjectModel;
 /// </summary>
 public sealed class PersonMembershipCensusProvider : IOwnerSectionCensusProvider
 {
-    public const string SectionId = "p12d.person.membership";
-    public const int SchemaVersion = 1;
+    public const string SectionId = DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
 
     private readonly PersonStore owner;
 
@@ -30,8 +30,8 @@ public sealed class PersonMembershipCensusProvider : IOwnerSectionCensusProvider
 /// </summary>
 public sealed class PersonMaterializationBindingCensusProvider : IOwnerSectionCensusProvider
 {
-    public const string SectionId = "p12d.person.materialization-binding";
-    public const int SchemaVersion = 1;
+    public const string SectionId = DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
 
     private readonly PersonStore owner;
 

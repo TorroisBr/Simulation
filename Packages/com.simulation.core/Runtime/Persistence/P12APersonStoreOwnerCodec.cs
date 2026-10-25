@@ -21,12 +21,12 @@ internal static class P12APersonStoreOwnerCodec
         membership = null;
         bindings = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            PersonMembershipCensusProvider.SectionId);
+            DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId);
         if (!TryValidateSnapshot(snapshot, out bool validationLimitExceeded))
         {
             if (validationLimitExceeded)
                 result = new P12AResult(P12AResultCode.LimitExceeded,
-                    PersonMembershipCensusProvider.SectionId);
+                    DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId);
             return false;
         }
 
@@ -60,7 +60,7 @@ internal static class P12APersonStoreOwnerCodec
                     if (stream.Length > P12AContinuationCodec.MaxSectionBytes)
                     {
                         result = new P12AResult(P12AResultCode.LimitExceeded,
-                            PersonMembershipCensusProvider.SectionId, ownerKey);
+                            DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId, ownerKey);
                         return false;
                     }
                     // PersonStore exposes insertion order. The ordinal preserves it
@@ -82,7 +82,7 @@ internal static class P12APersonStoreOwnerCodec
                         if (stream.Length > P12AContinuationCodec.MaxSectionBytes)
                         {
                             result = new P12AResult(P12AResultCode.LimitExceeded,
-                                PersonMaterializationBindingCensusProvider.SectionId, ownerKey);
+                                DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId, ownerKey);
                             return false;
                         }
                         bindingRows.Add(new P12AOwnerRow(ownerKey, 0L, stream.ToArray()));
@@ -90,15 +90,15 @@ internal static class P12APersonStoreOwnerCodec
                 }
             }
 
-            string alias = P12ADailyV1Census.ExpectedAliasGroupForSection(
-                PersonMembershipCensusProvider.SectionId);
-            membership = new P12AOwnerSection(PersonMembershipCensusProvider.SectionId,
-                PersonMembershipCensusProvider.SchemaVersion, 0, OwnerSectionRole.Required,
+            string alias = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(
+                DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId);
+            membership = new P12AOwnerSection(DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0, OwnerSectionRole.Required,
                 alias, snapshot.Revision, membershipRows);
-            bindings = new P12AOwnerSection(PersonMaterializationBindingCensusProvider.SectionId,
-                PersonMaterializationBindingCensusProvider.SchemaVersion, 0, OwnerSectionRole.Required,
-                P12ADailyV1Census.ExpectedAliasGroupForSection(
-                    PersonMaterializationBindingCensusProvider.SectionId), snapshot.Revision, bindingRows);
+            bindings = new P12AOwnerSection(DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0, OwnerSectionRole.Required,
+                DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(
+                    DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId), snapshot.Revision, bindingRows);
             result = null;
             return true;
         }
@@ -108,7 +108,7 @@ internal static class P12APersonStoreOwnerCodec
             bindings = null;
             result = new P12AResult(exception is P12ALimitException || exception is OverflowException
                 ? P12AResultCode.LimitExceeded : P12AResultCode.InvalidOwnerValue,
-                PersonMembershipCensusProvider.SectionId);
+                DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId);
             return false;
         }
     }
@@ -118,11 +118,11 @@ internal static class P12APersonStoreOwnerCodec
     {
         snapshot = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            membership?.Id ?? PersonMembershipCensusProvider.SectionId);
-        if (!IsSection(membership, PersonMembershipCensusProvider.SectionId,
-                PersonMembershipCensusProvider.SchemaVersion)
-            || !IsSection(bindings, PersonMaterializationBindingCensusProvider.SectionId,
-                PersonMaterializationBindingCensusProvider.SchemaVersion)
+            membership?.Id ?? DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId);
+        if (!IsSection(membership, DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion)
+            || !IsSection(bindings, DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion)
             || membership.Revision != bindings.Revision)
             return false;
 
@@ -146,7 +146,7 @@ internal static class P12APersonStoreOwnerCodec
                         && declaredBindingCount.Value != value.DeclaredBindingCount))
                 {
                     result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                        PersonMembershipCensusProvider.SectionId, row?.OwnerKey);
+                        DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId, row?.OwnerKey);
                     return false;
                 }
                 declaredMembershipCount = value.DeclaredMembershipCount;
@@ -176,7 +176,7 @@ internal static class P12APersonStoreOwnerCodec
                     || (bindingRowCount.HasValue && bindingRowCount.Value != declaredBindings))
                 {
                     result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                        PersonMaterializationBindingCensusProvider.SectionId, row?.OwnerKey);
+                        DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId, row?.OwnerKey);
                     return false;
                 }
                 bindingMembershipCount = declaredPersonCount;
@@ -234,7 +234,7 @@ internal static class P12APersonStoreOwnerCodec
         try
         {
             P12AWire.GetEncodedStringByteCount(
-                P12ADailyV1Census.ExpectedAliasGroupForSection(PersonMembershipCensusProvider.SectionId));
+                DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId));
             foreach (PersonStoreOwnerSnapshotRow row in snapshot.Rows)
             {
                 if (row == null || string.IsNullOrWhiteSpace(row.PersonIdValue)
@@ -261,7 +261,7 @@ internal static class P12APersonStoreOwnerCodec
                 }
             }
             P12AWire.GetEncodedStringByteCount(
-                P12ADailyV1Census.ExpectedAliasGroupForSection(PersonMaterializationBindingCensusProvider.SectionId));
+                DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId));
         }
         catch (Exception exception) when (exception is P12ALimitException
             || exception is EncoderFallbackException || exception is ArgumentException)
@@ -275,7 +275,7 @@ internal static class P12APersonStoreOwnerCodec
     private static bool IsSection(P12AOwnerSection section, string id, int schemaVersion)
         => section != null && section.Id == id && section.Major == schemaVersion && section.Minor == 0
             && section.Role == OwnerSectionRole.Required
-            && section.AliasGroup == P12ADailyV1Census.ExpectedAliasGroupForSection(id)
+            && section.AliasGroup == DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(id)
             && section.Revision >= 0 && section.Rows.Count <= P12AContinuationCodec.MaxRows
             && section.Rows.All(row => row != null && row.Revision == 0L
                 && row.PayloadLength >= 0 && row.PayloadLength <= P12AContinuationCodec.MaxSectionBytes);

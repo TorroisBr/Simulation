@@ -48,14 +48,14 @@ internal static class P12ANpcInventoryOwnerCodec
         {
             section = null;
             result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                NpcInventoryCensusProvider.SectionPrefix);
+                DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix);
             return false;
         }
         if (source.InventoryRows.Count > P12AContinuationCodec.MaxRows)
         {
             section = null;
             result = new P12AResult(P12AResultCode.LimitExceeded,
-                NpcInventoryCensusProvider.SectionPrefix, source.RuntimeId);
+                DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix, source.RuntimeId);
             return false;
         }
         return TryEncode(new P12ANpcInventoryOwnerValue(source.RuntimeId,
@@ -67,7 +67,7 @@ internal static class P12ANpcInventoryOwnerCodec
     {
         section = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            NpcInventoryCensusProvider.SectionPrefix, value?.RuntimeId);
+            DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix, value?.RuntimeId);
         if (!TryValidate(value, out string sectionId, out string aliasGroup)) return false;
 
         try
@@ -125,7 +125,7 @@ internal static class P12ANpcInventoryOwnerCodec
                 }
             }
 
-            section = new P12AOwnerSection(sectionId, NpcInventoryCensusProvider.SchemaVersion, 0,
+            section = new P12AOwnerSection(sectionId, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0,
                 OwnerSectionRole.Required, aliasGroup, value.Revision, rows);
             result = null;
             return true;
@@ -145,10 +145,10 @@ internal static class P12ANpcInventoryOwnerCodec
     {
         value = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            section?.Id ?? NpcInventoryCensusProvider.SectionPrefix);
+            section?.Id ?? DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix);
         if (section == null || string.IsNullOrWhiteSpace(section.Id)
-            || !section.Id.StartsWith(NpcInventoryCensusProvider.SectionPrefix, StringComparison.Ordinal)
-            || section.Major != NpcInventoryCensusProvider.SchemaVersion || section.Minor != 0
+            || !section.Id.StartsWith(DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix, StringComparison.Ordinal)
+            || section.Major != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion || section.Minor != 0
             || section.Role != OwnerSectionRole.Required || section.Revision < 0L
             || section.Rows.Count > P12AContinuationCodec.MaxRows)
         {
@@ -157,11 +157,11 @@ internal static class P12ANpcInventoryOwnerCodec
             return false;
         }
 
-        string runtimeId = section.Id.Substring(NpcInventoryCensusProvider.SectionPrefix.Length);
+        string runtimeId = section.Id.Substring(DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix.Length);
         if (!IsRuntimeId(runtimeId)
-            || section.Id != NpcInventoryCensusProvider.SectionPrefix + runtimeId
+            || section.Id != DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + runtimeId
             || !string.Equals(section.AliasGroup,
-                P12ADailyV1Census.ExpectedAliasGroupForSection(section.Id), StringComparison.Ordinal))
+                DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(section.Id), StringComparison.Ordinal))
             return false;
 
         try
@@ -249,8 +249,8 @@ internal static class P12ANpcInventoryOwnerCodec
                 || !itemIds.Add(item.ItemDefinitionId)) return false;
         }
 
-        sectionId = NpcInventoryCensusProvider.SectionPrefix + value.RuntimeId;
-        aliasGroup = P12ADailyV1Census.ExpectedAliasGroupForSection(sectionId);
+        sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + value.RuntimeId;
+        aliasGroup = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(sectionId);
         return true;
     }
 

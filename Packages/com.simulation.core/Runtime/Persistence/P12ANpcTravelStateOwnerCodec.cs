@@ -54,7 +54,7 @@ internal static class P12ANpcTravelStateOwnerCodec
         {
             section = null;
             result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                NpcTravelStateCensusProvider.SectionPrefix);
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix);
             return false;
         }
         return TryEncode(new P12ANpcTravelStateOwnerValue(source.RuntimeId,
@@ -71,7 +71,7 @@ internal static class P12ANpcTravelStateOwnerCodec
         {
             section = null;
             result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                NpcTravelStateCensusProvider.SectionPrefix, dSource?.RuntimeId);
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix, dSource?.RuntimeId);
             return false;
         }
         if ((fSource.TravelDaysRemaining > 0
@@ -82,7 +82,7 @@ internal static class P12ANpcTravelStateOwnerCodec
         {
             section = null;
             result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                NpcTravelStateCensusProvider.SectionIdFor(dSource.RuntimeId), dSource.RuntimeId);
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(12, dSource.RuntimeId), dSource.RuntimeId);
             return false;
         }
         return TryEncode(new P12ANpcTravelStateOwnerValue(dSource.RuntimeId,
@@ -98,7 +98,7 @@ internal static class P12ANpcTravelStateOwnerCodec
     {
         section = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            NpcTravelStateCensusProvider.SectionPrefix, value?.RuntimeId);
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix, value?.RuntimeId);
         if (!TryValidate(value, out string sectionId, out string aliasGroup)) return false;
 
         try
@@ -143,7 +143,7 @@ internal static class P12ANpcTravelStateOwnerCodec
                     result = new P12AResult(P12AResultCode.InvalidOwnerValue, sectionId, value.RuntimeId);
                     return false;
                 }
-                section = new P12AOwnerSection(sectionId, NpcTravelStateCensusProvider.SchemaVersion, 0,
+                section = new P12AOwnerSection(sectionId, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0,
                     OwnerSectionRole.Required, aliasGroup, value.Revision,
                     new[] { new P12AOwnerRow(value.RuntimeId, value.Revision, stream.ToArray()) });
             }
@@ -165,16 +165,16 @@ internal static class P12ANpcTravelStateOwnerCodec
     {
         value = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            section?.Id ?? NpcTravelStateCensusProvider.SectionPrefix);
+            section?.Id ?? DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix);
         if (section == null || string.IsNullOrWhiteSpace(section.Id)
-            || !section.Id.StartsWith(NpcTravelStateCensusProvider.SectionPrefix, StringComparison.Ordinal)
-            || section.Major != NpcTravelStateCensusProvider.SchemaVersion || section.Minor != 0
+            || !section.Id.StartsWith(DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix, StringComparison.Ordinal)
+            || section.Major != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion || section.Minor != 0
             || section.Role != OwnerSectionRole.Required || section.Revision < 0L
             || section.Rows.Count != 1) return false;
 
-        string runtimeId = section.Id.Substring(NpcTravelStateCensusProvider.SectionPrefix.Length);
+        string runtimeId = section.Id.Substring(DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix.Length);
         if (!IsRuntimeId(runtimeId)
-            || section.Id != NpcTravelStateCensusProvider.SectionIdFor(runtimeId)) return false;
+            || section.Id != DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(12, runtimeId)) return false;
         try
         {
             P12AWire.GetEncodedStringByteCount(section.Id);
@@ -187,7 +187,7 @@ internal static class P12ANpcTravelStateOwnerCodec
             return false;
         }
         if (!string.Equals(section.AliasGroup,
-            P12ADailyV1Census.ExpectedAliasGroupForSection(section.Id), StringComparison.Ordinal)) return false;
+            DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(section.Id), StringComparison.Ordinal)) return false;
 
         P12AOwnerRow row = section.Rows[0];
         if (row == null || row.OwnerKey != runtimeId || row.Revision != section.Revision
@@ -250,8 +250,8 @@ internal static class P12ANpcTravelStateOwnerCodec
             || !IsOptionalRuntimeId(value.DestinationLocationRuntimeId)
             || (value.CurrentCityRuntimeId == null) != (value.CurrentLocationRuntimeId == null)
             || (value.DestinationCityRuntimeId == null) != (value.DestinationLocationRuntimeId == null)) return false;
-        sectionId = NpcTravelStateCensusProvider.SectionIdFor(value.RuntimeId);
-        aliasGroup = P12ADailyV1Census.ExpectedAliasGroupForSection(sectionId);
+        sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(12, value.RuntimeId);
+        aliasGroup = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(sectionId);
         return !string.IsNullOrWhiteSpace(aliasGroup);
     }
 

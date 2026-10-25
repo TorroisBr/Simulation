@@ -14,16 +14,29 @@ internal static class P12ANpcOwnerDecoder
         dRow = null;
         fRow = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            NpcCurrentActionCensusProvider.SectionPrefix, runtimeId);
+            DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix, runtimeId);
         if (image == null || image.Sections == null || !IsRuntimeId(runtimeId)) return false;
 
-        if (!TryGetUnique(image, PersonMembershipCensusProvider.SectionId,
+        if (!TryGetUnique(image, DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId,
                 out P12AOwnerSection membership, out result)
-            || !TryGetUnique(image, PersonMaterializationBindingCensusProvider.SectionId,
+            || !TryGetUnique(image, DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId,
                 out P12AOwnerSection bindings, out result)
             || !P12APersonStoreOwnerCodec.TryDecode(membership, bindings,
                 out PersonStoreOwnerSnapshot persons, out result))
             return false;
+
+        return TryDecode(image, runtimeId, persons, out dRow, out fRow, out result);
+    }
+
+    internal static bool TryDecode(P12AContinuationImage image, string runtimeId,
+        PersonStoreOwnerSnapshot persons,
+        out P12DNpcDRow dRow, out P12DNpcFRow fRow, out P12AResult result)
+    {
+        dRow = null;
+        fRow = null;
+        result = new P12AResult(P12AResultCode.InvalidOwnerValue,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix, runtimeId);
+        if (image == null || image.Sections == null || persons == null || !IsRuntimeId(runtimeId)) return false;
 
         PersonStoreOwnerSnapshotRow boundPerson = null;
         foreach (PersonStoreOwnerSnapshotRow person in persons.Rows)
@@ -31,7 +44,7 @@ internal static class P12ANpcOwnerDecoder
             if (person == null || person.MaterializedNpcRuntimeId != runtimeId) continue;
             if (boundPerson != null)
             {
-                result = Invalid(NpcCurrentActionCensusProvider.SectionIdFor(runtimeId), runtimeId);
+                result = Invalid(DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(20, runtimeId), runtimeId);
                 return false;
             }
             boundPerson = person;
@@ -45,7 +58,7 @@ internal static class P12ANpcOwnerDecoder
             sections.Add(id, section);
         }
 
-        string residenceSectionId = NpcLifecycleCensusProvider.SectionIdFor(runtimeId, residence: true);
+        string residenceSectionId = DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(runtimeId);
         bool hasNpcResidenceSection = TryGetOptionalUnique(image, residenceSectionId,
             out P12AOwnerSection npcResidenceSection, out result);
         if (result != null) return false;
@@ -56,102 +69,102 @@ internal static class P12ANpcOwnerDecoder
         }
 
         if (!P12ANpcLifeStateOwnerCodec.TryDecode(
-                sections[NpcLifecycleCensusProvider.SectionIdFor(runtimeId, residence: false)],
+                sections[DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(21, runtimeId)],
                 out P12ANpcLifeStateOwnerValue life, out result)
             || !SameRuntimeId(runtimeId, life?.RuntimeId,
-                NpcLifecycleCensusProvider.SectionIdFor(runtimeId, residence: false), out result)) return false;
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(21, runtimeId), out result)) return false;
 
         if (!P12ANpcStatusCrimeOwnerCodec.TryDecode(
-                sections[P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(runtimeId)],
+                sections[DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(19, runtimeId)],
                 out P12ANpcStatusCrimeOwnerValue status, out result)
             || !SameRuntimeId(runtimeId, status?.RuntimeId,
-                P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(runtimeId), out result)) return false;
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(19, runtimeId), out result)) return false;
 
         if (!P12ANpcCurrentActionOwnerCodec.TryDecode(
-                sections[NpcCurrentActionCensusProvider.SectionIdFor(runtimeId)],
+                sections[DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(20, runtimeId)],
                 out string actionRuntimeId, out string actionDefinitionId,
                 out P12DNpcActionValue action, out long currentActionRevision, out result)
             || !SameRuntimeId(runtimeId, actionRuntimeId,
-                NpcCurrentActionCensusProvider.SectionIdFor(runtimeId), out result)
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(20, runtimeId), out result)
             || (action == null) != (actionDefinitionId == null)
             || (action != null && action.ActionDefinitionId != actionDefinitionId))
         {
-            if (result == null) result = Invalid(NpcCurrentActionCensusProvider.SectionIdFor(runtimeId), runtimeId);
+            if (result == null) result = Invalid(DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(20, runtimeId), runtimeId);
             return false;
         }
 
         if (!P12ANpcTravelStateOwnerCodec.TryDecode(
-                sections[NpcTravelStateCensusProvider.SectionIdFor(runtimeId)],
+                sections[DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(12, runtimeId)],
                 out P12ANpcTravelStateOwnerValue travel, out result)
             || !SameRuntimeId(runtimeId, travel?.RuntimeId,
-                NpcTravelStateCensusProvider.SectionIdFor(runtimeId), out result)
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(12, runtimeId), out result)
             || !HasConsistentPresenceBindings(travel))
         {
-            if (result == null) result = Invalid(NpcTravelStateCensusProvider.SectionIdFor(runtimeId), runtimeId);
+            if (result == null) result = Invalid(DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(12, runtimeId), runtimeId);
             return false;
         }
 
         if (!P12ANpcInventoryOwnerCodec.TryDecode(
-                sections[NpcInventoryCensusProvider.SectionPrefix + runtimeId],
+                sections[DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + runtimeId],
                 out P12ANpcInventoryOwnerValue inventory, out result)
             || !SameRuntimeId(runtimeId, inventory?.RuntimeId,
-                NpcInventoryCensusProvider.SectionPrefix + runtimeId, out result)) return false;
+                DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + runtimeId, out result)) return false;
 
         if (!P12ANpcMoneyAccountOwnerCodec.TryDecode(
-                sections[NpcMoneyAccountCensusProvider.SectionPrefix + runtimeId],
+                sections[DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + runtimeId],
                 out P12ANpcMoneyAccountOwnerValue money, out result)
             || !SameRuntimeId(runtimeId, money?.RuntimeId,
-                NpcMoneyAccountCensusProvider.SectionPrefix + runtimeId, out result)) return false;
+                DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + runtimeId, out result)) return false;
 
-        string merchantPlanId = NpcPlanCensusProvider.SectionIdFor(
-            NpcPlanCensusProvider.MerchantTradePlanKind, runtimeId);
+        string merchantPlanId = DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+            DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanKind, runtimeId);
         if (!P12ANpcMerchantTradePlanOwnerCodec.TryDecode(sections[merchantPlanId],
                 out P12DNpcMerchantPlanValue merchantPlan, out result)) return false;
 
-        string travelPlanId = NpcPlanCensusProvider.SectionIdFor(
-            NpcPlanCensusProvider.TravelPlanKind, runtimeId);
+        string travelPlanId = DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, runtimeId);
         if (!P12ANpcTravelPlanOwnerCodec.TryDecode(sections[travelPlanId],
                 out P12DNpcTravelPlanValue travelPlan, out result)) return false;
 
-        string siteId = NpcKnowledgeCensusProvider.SectionIdFor(0, runtimeId);
+        string siteId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(0, runtimeId);
         if (!P12ANpcExplorableSiteKnowledgeOwnerCodec.TryDecode(sections[siteId],
                 out string siteRuntimeId, out IReadOnlyList<ExplorableSiteKnowledgeObservation> siteObservations,
                 out long siteRevision, out result)
             || !SameRuntimeId(runtimeId, siteRuntimeId, siteId, out result)) return false;
 
-        string topologyPlacesId = NpcKnowledgeCensusProvider.SectionIdFor(1, runtimeId);
-        string topologyConnectionsId = NpcKnowledgeCensusProvider.SectionIdFor(2, runtimeId);
+        string topologyPlacesId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(1, runtimeId);
+        string topologyConnectionsId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(2, runtimeId);
         if (!P12ANpcLocalTopologyKnowledgeEmptyOwnerCodec.TryDecode(
                 sections[topologyPlacesId], sections[topologyConnectionsId],
                 out string topologyRuntimeId, out result)
             || !SameRuntimeId(runtimeId, topologyRuntimeId, topologyPlacesId, out result)) return false;
 
-        string oppositionId = NpcKnowledgeCensusProvider.SectionIdFor(3, runtimeId);
-        string notableId = NpcKnowledgeCensusProvider.SectionIdFor(4, runtimeId);
-        string resourcesId = NpcKnowledgeCensusProvider.SectionIdFor(5, runtimeId);
-        string accessId = NpcKnowledgeCensusProvider.SectionIdFor(6, runtimeId);
+        string oppositionId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(3, runtimeId);
+        string notableId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(4, runtimeId);
+        string resourcesId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(5, runtimeId);
+        string accessId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(6, runtimeId);
         if (!P12ANpcAdventureIntelOwnerCodec.TryDecode(
                 sections[oppositionId], sections[notableId], sections[resourcesId], sections[accessId],
                 out P12ANpcAdventureIntelOwnerValue adventure, out result)
             || !SameRuntimeId(runtimeId, adventure?.RuntimeId, oppositionId, out result)) return false;
 
-        string marketsId = NpcKnowledgeCensusProvider.SectionIdFor(7, runtimeId);
-        string liquidityId = NpcKnowledgeCensusProvider.SectionIdFor(8, runtimeId);
-        string shareReceiptsId = NpcKnowledgeCensusProvider.SectionIdFor(9, runtimeId);
+        string marketsId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(7, runtimeId);
+        string liquidityId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(8, runtimeId);
+        string shareReceiptsId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(9, runtimeId);
         if (!P12ANpcCommercialKnowledgeOwnerCodec.TryDecode(
                 sections[marketsId], sections[liquidityId], sections[shareReceiptsId],
                 out P12ANpcCommercialKnowledgeOwnerValue commercial, out result)
             || !SameRuntimeId(runtimeId, commercial?.RuntimeId, marketsId, out result)) return false;
 
-        string knownLocationsId = SpatialKnowledgeCensusProvider.LocationsSectionPrefix + runtimeId;
-        string knownRoutesId = SpatialKnowledgeCensusProvider.RoutesSectionPrefix + runtimeId;
+        string knownLocationsId = DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + runtimeId;
+        string knownRoutesId = DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + runtimeId;
         if (!P12ANpcSpatialKnowledgeOwnerCodec.TryDecode(
                 sections[knownLocationsId], sections[knownRoutesId],
                 out P12ANpcSpatialKnowledgeOwnerValue spatial, out result)
             || !SameRuntimeId(runtimeId, spatial?.RuntimeId, knownLocationsId, out result)) return false;
 
-        string localReceiptsId = P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(runtimeId);
-        string tradeReceiptsId = P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(runtimeId);
+        string localReceiptsId = DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsSectionIdFor(runtimeId);
+        string tradeReceiptsId = DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsSectionIdFor(runtimeId);
         if (!P12ANpcReceiptEmptyOwnerCodec.TryDecode(
                 sections[localReceiptsId], sections[tradeReceiptsId],
                 out string receiptRuntimeId, out result)
@@ -175,10 +188,10 @@ internal static class P12ANpcOwnerDecoder
         {
             if (!PersonId.TryCreate(boundPerson.PersonIdValue, out PersonId typedPersonId))
             {
-                result = Invalid(PersonMembershipCensusProvider.SectionId, runtimeId);
+                result = Invalid(DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId, runtimeId);
                 return false;
             }
-            string personResidenceId = PersonLifeResidenceCensusProvider.SectionIdFor(typedPersonId);
+            string personResidenceId = DailyV1SelectedOwnerSectionCensusContract.NpcLifeResidenceSectionIdFor(typedPersonId);
             if (!TryGetUnique(image, personResidenceId, out P12AOwnerSection personResidenceSection, out result)
                 || !P12APersonLifeResidenceOwnerCodec.TryDecode(personResidenceSection,
                     out P12APersonLifeResidenceOwnerValue personResidence, out result)
@@ -210,7 +223,7 @@ internal static class P12ANpcOwnerDecoder
         {
             dRow = null;
             fRow = null;
-            result = Invalid(NpcCurrentActionCensusProvider.SectionIdFor(runtimeId), runtimeId);
+            result = Invalid(DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(20, runtimeId), runtimeId);
             return false;
         }
 
@@ -222,19 +235,19 @@ internal static class P12ANpcOwnerDecoder
     {
         List<string> ids = new List<string>(22);
         for (int kind = 0; kind < 10; kind++)
-            ids.Add(NpcKnowledgeCensusProvider.SectionIdFor(kind, runtimeId));
-        ids.Add(SpatialKnowledgeCensusProvider.LocationsSectionPrefix + runtimeId);
-        ids.Add(SpatialKnowledgeCensusProvider.RoutesSectionPrefix + runtimeId);
-        ids.Add(NpcTravelStateCensusProvider.SectionIdFor(runtimeId));
-        ids.Add(NpcInventoryCensusProvider.SectionPrefix + runtimeId);
-        ids.Add(NpcMoneyAccountCensusProvider.SectionPrefix + runtimeId);
-        ids.Add(NpcPlanCensusProvider.SectionIdFor(NpcPlanCensusProvider.MerchantTradePlanKind, runtimeId));
-        ids.Add(NpcPlanCensusProvider.SectionIdFor(NpcPlanCensusProvider.TravelPlanKind, runtimeId));
-        ids.Add(P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(runtimeId));
-        ids.Add(P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(runtimeId));
-        ids.Add(P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(runtimeId));
-        ids.Add(NpcCurrentActionCensusProvider.SectionIdFor(runtimeId));
-        ids.Add(NpcLifecycleCensusProvider.SectionIdFor(runtimeId, residence: false));
+            ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(kind, runtimeId));
+        ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + runtimeId);
+        ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + runtimeId);
+        ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(12, runtimeId));
+        ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + runtimeId);
+        ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + runtimeId);
+        ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanKind, runtimeId));
+        ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, runtimeId));
+        ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsSectionIdFor(runtimeId));
+        ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsSectionIdFor(runtimeId));
+        ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(19, runtimeId));
+        ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(20, runtimeId));
+        ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(21, runtimeId));
         return ids;
     }
 
@@ -306,7 +319,7 @@ internal static class P12ANpcOwnerDecoder
             && person.ResidenceSettlementRuntimeId == lifeResidence.ResidenceSettlementRuntimeId
             && person.LifeResidenceRevision == lifeResidence.Revision)
             return true;
-        result = Invalid(PersonMembershipCensusProvider.SectionId, runtimeId);
+        result = Invalid(DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId, runtimeId);
         return false;
     }
 

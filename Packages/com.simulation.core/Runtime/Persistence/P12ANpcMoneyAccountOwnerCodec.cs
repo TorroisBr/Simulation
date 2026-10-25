@@ -29,7 +29,7 @@ internal static class P12ANpcMoneyAccountOwnerCodec
         {
             section = null;
             result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                NpcMoneyAccountCensusProvider.SectionPrefix);
+                DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix);
             return false;
         }
         return TryEncode(new P12ANpcMoneyAccountOwnerValue(source.RuntimeId,
@@ -41,7 +41,7 @@ internal static class P12ANpcMoneyAccountOwnerCodec
     {
         section = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            NpcMoneyAccountCensusProvider.SectionPrefix, value?.RuntimeId);
+            DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix, value?.RuntimeId);
         if (!TryValidate(value, out string sectionId)) return false;
 
         try
@@ -61,7 +61,7 @@ internal static class P12ANpcMoneyAccountOwnerCodec
                     result = new P12AResult(P12AResultCode.LimitExceeded, sectionId, value.RuntimeId);
                     return false;
                 }
-                section = new P12AOwnerSection(sectionId, NpcMoneyAccountCensusProvider.SchemaVersion, 0,
+                section = new P12AOwnerSection(sectionId, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0,
                     OwnerSectionRole.Required, null, value.Revision,
                     new[] { new P12AOwnerRow(value.RuntimeId, value.Revision, stream.ToArray()) });
             }
@@ -83,16 +83,16 @@ internal static class P12ANpcMoneyAccountOwnerCodec
     {
         value = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            section?.Id ?? NpcMoneyAccountCensusProvider.SectionPrefix);
+            section?.Id ?? DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix);
         if (section == null || string.IsNullOrWhiteSpace(section.Id)
-            || !section.Id.StartsWith(NpcMoneyAccountCensusProvider.SectionPrefix, StringComparison.Ordinal)
-            || section.Major != NpcMoneyAccountCensusProvider.SchemaVersion || section.Minor != 0
+            || !section.Id.StartsWith(DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix, StringComparison.Ordinal)
+            || section.Major != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion || section.Minor != 0
             || section.Role != OwnerSectionRole.Required || section.AliasGroup != null
             || section.Revision < 0L || section.Rows.Count != 1) return false;
 
-        string runtimeId = section.Id.Substring(NpcMoneyAccountCensusProvider.SectionPrefix.Length);
+        string runtimeId = section.Id.Substring(DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix.Length);
         if (!IsRuntimeId(runtimeId)
-            || section.Id != NpcMoneyAccountCensusProvider.SectionPrefix + runtimeId) return false;
+            || section.Id != DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + runtimeId) return false;
         P12AOwnerRow row = section.Rows[0];
         if (row == null || row.OwnerKey != runtimeId || row.Revision != section.Revision
             || row.PayloadLength < 0 || row.PayloadLength > P12AContinuationCodec.MaxSectionBytes) return false;
@@ -135,7 +135,7 @@ internal static class P12ANpcMoneyAccountOwnerCodec
         if (value == null || !IsRuntimeId(value.RuntimeId) || value.Revision < 0L
             || float.IsNaN(value.Balance) || float.IsInfinity(value.Balance) || value.Balance < 0f)
             return false;
-        sectionId = NpcMoneyAccountCensusProvider.SectionPrefix + value.RuntimeId;
+        sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + value.RuntimeId;
         return true;
     }
 

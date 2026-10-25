@@ -131,18 +131,9 @@ internal static class P12ADailyV1ImageOwnerDecoder
                 ExplorableSiteOwnerSnapshot.CurrentSchemaVersion, siteSection.Revision,
                 Array.Empty<ExplorableSiteOwnerSnapshotRecord>());
 
-            List<string> npcIds = identities.IdentityValues
-                .Where(pair => pair.Key == "npc").Select(pair => pair.Value)
-                .OrderBy(value => value, StringComparer.Ordinal).ToList();
-            List<P12DNpcDRow> npcDRows = new List<P12DNpcDRow>(npcIds.Count);
-            List<P12DNpcFRow> npcFRows = new List<P12DNpcFRow>(npcIds.Count);
-            foreach (string npcId in npcIds)
-            {
-                if (!P12ANpcOwnerDecoder.TryDecode(image, npcId,
-                        out P12DNpcDRow dRow, out P12DNpcFRow fRow, out result)) return false;
-                npcDRows.Add(dRow);
-                npcFRows.Add(fRow);
-            }
+            if (!P12ADailyV1NpcOwnerBatchDecoder.TryDecode(image, identities, persons,
+                    out IReadOnlyList<P12DNpcDRow> npcDRows,
+                    out IReadOnlyList<P12DNpcFRow> npcFRows, out result)) return false;
 
             long day = image.Header.Day;
             if (!P12EInstitutionOfficeOwnerCodec.TryDecode(
@@ -210,7 +201,7 @@ internal static class P12ADailyV1ImageOwnerDecoder
                     out P12FExpeditionOwnerSnapshot expeditions, out result)) return false;
 
             snapshots = new P12ADailyV1ImageOwnerSnapshots(c, identities, spatial, persons,
-                genealogy, sites, cities, npcDRows.AsReadOnly(), npcFRows.AsReadOnly(),
+                genealogy, sites, cities, npcDRows, npcFRows,
                 institutionOffice, propertyEstate, faction, claims, support, decisions,
                 military, conflicts, wars, battles, justice, crimeSocial, crimeReceipts,
                 justiceReceipts, politicalKnowledge, directives, actorChoices,

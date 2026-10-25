@@ -2136,7 +2136,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             AppendValue(signature, entry + "/source-runtime", observation.SourceRuntimeId);
         }
         index = 0;
-        foreach (CommercialKnowledgeShareReceipt receipt in row.CommercialShareReceipts)
+        foreach (P12DNpcCommercialShareReceiptValue receipt in row.CommercialShareReceipts)
         {
             string entry = key + "/commercial-share-receipt/" + index++;
             AppendValue(signature, entry + "/operation", receipt.OperationIdentity);

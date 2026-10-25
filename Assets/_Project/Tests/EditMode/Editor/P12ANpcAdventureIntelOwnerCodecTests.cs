@@ -151,7 +151,7 @@ public sealed class P12ANpcAdventureIntelOwnerCodecTests
             resources ?? Array.Empty<AdventureCommonResourceObservation>(),
             access ?? Array.Empty<AdventureAccessObservation>(), revision,
             Array.Empty<P12DNpcCommercialMarketValue>(), Array.Empty<P12DNpcCommercialLiquidityValue>(),
-            Array.Empty<CommercialKnowledgeShareReceipt>(), 0L);
+            Array.Empty<P12DNpcCommercialShareReceiptValue>(), 0L);
 
     private static P12AOwnerSection Copy(P12AOwnerSection source, long revision,
         System.Collections.Generic.IEnumerable<P12AOwnerRow> rows, string alias = null)

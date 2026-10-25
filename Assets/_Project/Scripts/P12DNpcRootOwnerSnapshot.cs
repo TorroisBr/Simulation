@@ -29,81 +29,6 @@ internal enum P12DNpcRootOwnerSnapshotFailure
     InvalidSelectedInventoryItem
 }
 
-internal sealed class P12DNpcFRow
-{
-    internal string RuntimeId { get; }
-    internal P12DNpcActionValue Action { get; }
-    internal int TravelDaysRemaining { get; }
-    internal int TravelDaysTotal { get; }
-    internal string TravelRouteRuntimeId { get; }
-    internal bool TravelStartedToday { get; }
-    internal string TravelOriginDecisionId { get; }
-    internal string ActiveTravelPartyId { get; }
-    internal long TravelStateRevision { get; }
-    internal P12DNpcMerchantPlanValue MerchantPlan { get; }
-    internal P12DNpcTravelPlanValue TravelPlan { get; }
-    internal IReadOnlyList<ExplorableSiteKnowledgeObservation> SiteObservations { get; }
-    internal long SiteKnowledgeRevision { get; }
-    internal IReadOnlyList<string> KnownLocationRuntimeIds { get; }
-    internal IReadOnlyList<string> KnownRouteRuntimeIds { get; }
-    internal long SpatialKnowledgeRevision { get; }
-    internal IReadOnlyList<AdventureOppositionObservation> OppositionObservations { get; }
-    internal IReadOnlyList<AdventureNotableItemObservation> NotableItemObservations { get; }
-    internal IReadOnlyList<AdventureCommonResourceObservation> CommonResourceObservations { get; }
-    internal IReadOnlyList<AdventureAccessObservation> AccessObservations { get; }
-    internal long AdventureKnowledgeRevision { get; }
-    internal IReadOnlyList<P12DNpcCommercialMarketValue> CommercialMarkets { get; }
-    internal IReadOnlyList<P12DNpcCommercialLiquidityValue> CommercialLiquidity { get; }
-    internal IReadOnlyList<CommercialKnowledgeShareReceipt> CommercialShareReceipts { get; }
-    internal long CommercialKnowledgeRevision { get; }
-
-    internal P12DNpcFRow(string runtimeId, P12DNpcActionValue action,
-        int travelDaysRemaining, int travelDaysTotal, string travelRouteRuntimeId,
-        bool travelStartedToday, string travelOriginDecisionId, string activeTravelPartyId,
-        long travelStateRevision, P12DNpcMerchantPlanValue merchantPlan,
-        P12DNpcTravelPlanValue travelPlan,
-        IEnumerable<ExplorableSiteKnowledgeObservation> siteObservations, long siteKnowledgeRevision,
-        IEnumerable<string> knownLocations, IEnumerable<string> knownRoutes, long spatialKnowledgeRevision,
-        IEnumerable<AdventureOppositionObservation> opposition,
-        IEnumerable<AdventureNotableItemObservation> notableItems,
-        IEnumerable<AdventureCommonResourceObservation> resources,
-        IEnumerable<AdventureAccessObservation> access, long adventureKnowledgeRevision,
-        IEnumerable<P12DNpcCommercialMarketValue> commercialMarkets,
-        IEnumerable<P12DNpcCommercialLiquidityValue> commercialLiquidity,
-        IEnumerable<CommercialKnowledgeShareReceipt> commercialShareReceipts,
-        long commercialKnowledgeRevision)
-    {
-        RuntimeId = runtimeId;
-        Action = action;
-        TravelDaysRemaining = travelDaysRemaining;
-        TravelDaysTotal = travelDaysTotal;
-        TravelRouteRuntimeId = travelRouteRuntimeId;
-        TravelStartedToday = travelStartedToday;
-        TravelOriginDecisionId = travelOriginDecisionId;
-        ActiveTravelPartyId = activeTravelPartyId;
-        TravelStateRevision = travelStateRevision;
-        MerchantPlan = merchantPlan;
-        TravelPlan = travelPlan;
-        SiteObservations = Copy(siteObservations);
-        SiteKnowledgeRevision = siteKnowledgeRevision;
-        KnownLocationRuntimeIds = Copy(knownLocations);
-        KnownRouteRuntimeIds = Copy(knownRoutes);
-        SpatialKnowledgeRevision = spatialKnowledgeRevision;
-        OppositionObservations = Copy(opposition);
-        NotableItemObservations = Copy(notableItems);
-        CommonResourceObservations = Copy(resources);
-        AccessObservations = Copy(access);
-        AdventureKnowledgeRevision = adventureKnowledgeRevision;
-        CommercialMarkets = Copy(commercialMarkets);
-        CommercialLiquidity = Copy(commercialLiquidity);
-        CommercialShareReceipts = Copy(commercialShareReceipts);
-        CommercialKnowledgeRevision = commercialKnowledgeRevision;
-    }
-
-    private static IReadOnlyList<T> Copy<T>(IEnumerable<T> source) =>
-        new ReadOnlyCollection<T>(new List<T>(source ?? throw new ArgumentNullException(nameof(source))));
-}
-
 internal sealed class P12DNpcDProjection
 {
     internal P12DCityNpcProjectionCaptureEvidence Evidence { get; }
@@ -488,6 +413,28 @@ internal static class P12DNpcRootOwnerSnapshot
             return false;
         }
 
+        List<P12DNpcCommercialShareReceiptValue> receiptValues =
+            new List<P12DNpcCommercialShareReceiptValue>(receipts.Count);
+        foreach (CommercialKnowledgeShareReceipt receipt in receipts)
+        {
+            if (receipt == null)
+            {
+                receiptValues.Add(null);
+                continue;
+            }
+            if (!P12DNpcCommercialShareReceiptValue.TryCreateFromOwnerSnapshot(
+                    receipt.OperationIdentity, receipt.Fingerprint, receipt.BoundaryOccurrenceId,
+                    receipt.SenderRuntimeId, receipt.SenderPersonId, receipt.ReceiverRuntimeId,
+                    receipt.ReceiverPersonId, receipt.SourceSnapshotFingerprint,
+                    receipt.AppliedObservationCount,
+                    out P12DNpcCommercialShareReceiptValue detachedReceipt))
+            {
+                failure = P12DNpcRootOwnerSnapshotFailure.UnsupportedValue;
+                return false;
+            }
+            receiptValues.Add(detachedReceipt);
+        }
+
         List<P12DNpcCommercialMarketValue> marketValues =
             new List<P12DNpcCommercialMarketValue>(markets.Count);
         foreach (CommercialMarketObservation observation in markets)
@@ -670,7 +617,7 @@ internal static class P12DNpcRootOwnerSnapshot
             new List<string>(spatial.KnownRouteRuntimeIds), spatial.Revision,
             adventure.OppositionObservations, adventure.NotableItemObservations,
             adventure.CommonResourceObservations, adventure.AccessObservations, adventure.Revision,
-            marketValues, liquidityValues, receipts, commercial.Revision);
+            marketValues, liquidityValues, receiptValues, commercial.Revision);
         failure = P12DNpcRootOwnerSnapshotFailure.None;
         return true;
     }
@@ -1416,7 +1363,7 @@ internal static class P12DNpcRootOwnerSnapshot
 
         List<DailyV1CommercialKnowledgeShareReceipt> receipts =
             new List<DailyV1CommercialKnowledgeShareReceipt>(f.CommercialShareReceipts.Count);
-        foreach (CommercialKnowledgeShareReceipt receipt in f.CommercialShareReceipts)
+        foreach (P12DNpcCommercialShareReceiptValue receipt in f.CommercialShareReceipts)
             receipts.Add(receipt == null ? null : new DailyV1CommercialKnowledgeShareReceipt(
                 receipt.OperationIdentity, receipt.Fingerprint, receipt.BoundaryOccurrenceId,
                 receipt.SenderRuntimeId, receipt.SenderPersonId, receipt.ReceiverRuntimeId,
@@ -1496,8 +1443,21 @@ internal static class P12DNpcRootOwnerSnapshot
             catch (ArgumentException) { return false; }
         }
 
+        List<CommercialKnowledgeShareReceipt> receipts =
+            new List<CommercialKnowledgeShareReceipt>(row.CommercialShareReceipts.Count);
+        foreach (P12DNpcCommercialShareReceiptValue value in row.CommercialShareReceipts)
+        {
+            if (value == null || !CommercialKnowledgeShareReceipt.TryCreateFromOwnerSnapshot(
+                    value.OperationIdentity, value.Fingerprint, value.BoundaryOccurrenceId,
+                    value.SenderRuntimeId, value.SenderPersonId, value.ReceiverRuntimeId,
+                    value.ReceiverPersonId, value.SourceSnapshotFingerprint,
+                    value.AppliedObservationCount, out CommercialKnowledgeShareReceipt receipt))
+                return false;
+            receipts.Add(receipt);
+        }
+
         if (!CommercialKnowledgeRuntime.TryCreateFromOwnerSnapshot(
-                markets, liquidity, row.CommercialShareReceipts,
+                markets, liquidity, receipts,
                 row.CommercialKnowledgeRevision, out staged)) return false;
         if (selectedDefinitions == null) return selectedItemBindings == null;
         return selectedItemBindings != null

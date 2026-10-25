@@ -79,5 +79,5 @@ public sealed class P12ANpcOwnerCodecTests
             Array.Empty<AdventureOppositionObservation>(), Array.Empty<AdventureNotableItemObservation>(),
             Array.Empty<AdventureCommonResourceObservation>(), Array.Empty<AdventureAccessObservation>(), 0L,
             Array.Empty<P12DNpcCommercialMarketValue>(), Array.Empty<P12DNpcCommercialLiquidityValue>(),
-            Array.Empty<CommercialKnowledgeShareReceipt>(), 0L);
+            Array.Empty<P12DNpcCommercialShareReceiptValue>(), 0L);
 }

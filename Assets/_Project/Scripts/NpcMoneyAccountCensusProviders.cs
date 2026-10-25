@@ -4,8 +4,8 @@ using System.Collections.Generic;
 /// <summary>Passive per-NPC witnesses for installed MoneyAccountRuntime owners.</summary>
 public static class NpcMoneyAccountCensusProvider
 {
-    public const string SectionPrefix = "p12e.npc-money-account/";
-    public const int SchemaVersion = 1;
+    public const string SectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
 
     internal interface INpcMoneyAccountSectionCensusProvider : IOwnerSectionCensusProvider
     {

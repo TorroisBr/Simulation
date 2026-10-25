@@ -30,7 +30,7 @@ internal static class P12ANpcResidenceOwnerCodec
     {
         section = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            NpcLifecycleCensusProvider.ResidenceSectionPrefix);
+            DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix);
         if (source == null || string.IsNullOrWhiteSpace(source.RuntimeId)
             || source.RuntimeId.Contains("/") || source.ResidenceRevision < 0L
             || (source.PersonIdValue != null && string.IsNullOrWhiteSpace(source.PersonIdValue))) return false;
@@ -48,7 +48,7 @@ internal static class P12ANpcResidenceOwnerCodec
     {
         section = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            NpcLifecycleCensusProvider.ResidenceSectionPrefix);
+            DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix);
         if (!TryValidate(value, out string sectionId)) return false;
 
         try
@@ -57,7 +57,7 @@ internal static class P12ANpcResidenceOwnerCodec
             P12AWire.GetEncodedStringByteCount(value.RuntimeId);
             P12AWire.GetEncodedStringByteCount(value.ResidenceSettlementRuntimeId);
             P12AWire.GetEncodedStringByteCount(
-                P12ADailyV1Census.ExpectedAliasGroupForSection(sectionId));
+                DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(sectionId));
             using (MemoryStream stream = new MemoryStream())
             using (BinaryWriter writer = new BinaryWriter(stream, P12AWire.Utf8, true))
             {
@@ -71,9 +71,9 @@ internal static class P12ANpcResidenceOwnerCodec
                     result = new P12AResult(P12AResultCode.LimitExceeded, sectionId, value.RuntimeId);
                     return false;
                 }
-                section = new P12AOwnerSection(sectionId, NpcLifecycleCensusProvider.SchemaVersion, 0,
+                section = new P12AOwnerSection(sectionId, DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0,
                     OwnerSectionRole.Required,
-                    P12ADailyV1Census.ExpectedAliasGroupForSection(sectionId), value.Revision,
+                    DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(sectionId), value.Revision,
                     new[] { new P12AOwnerRow(value.RuntimeId, value.Revision, stream.ToArray()) });
             }
             result = null;
@@ -93,13 +93,13 @@ internal static class P12ANpcResidenceOwnerCodec
     {
         value = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            section?.Id ?? NpcLifecycleCensusProvider.ResidenceSectionPrefix);
+            section?.Id ?? DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix);
         if (section == null || string.IsNullOrWhiteSpace(section.Id) || section.Rows.Count != 1
-            || !section.Id.StartsWith(NpcLifecycleCensusProvider.ResidenceSectionPrefix, StringComparison.Ordinal)
-            || section.Major != NpcLifecycleCensusProvider.SchemaVersion || section.Minor != 0
+            || !section.Id.StartsWith(DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix, StringComparison.Ordinal)
+            || section.Major != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion || section.Minor != 0
             || section.Role != OwnerSectionRole.Required
             || !string.Equals(section.AliasGroup,
-                P12ADailyV1Census.ExpectedAliasGroupForSection(section.Id), StringComparison.Ordinal)
+                DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(section.Id), StringComparison.Ordinal)
             || section.Revision < 0L) return false;
 
         P12AOwnerRow row = section.Rows[0];
@@ -110,7 +110,7 @@ internal static class P12ANpcResidenceOwnerCodec
         {
             P12AWire.GetEncodedStringByteCount(section.Id);
             P12AWire.GetEncodedStringByteCount(row.OwnerKey);
-            if (section.Id != NpcLifecycleCensusProvider.SectionIdFor(row.OwnerKey, residence: true)) return false;
+            if (section.Id != DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(row.OwnerKey)) return false;
             byte[] payload = row.Payload;
             if (payload == null || payload.Length != row.PayloadLength) return false;
             using (MemoryStream stream = new MemoryStream(payload, false))
@@ -143,7 +143,7 @@ internal static class P12ANpcResidenceOwnerCodec
             || value.RuntimeId.Contains("/") || value.Revision < 0L
             || (value.ResidenceSettlementRuntimeId != null
                 && string.IsNullOrWhiteSpace(value.ResidenceSettlementRuntimeId))) return false;
-        try { sectionId = NpcLifecycleCensusProvider.SectionIdFor(value.RuntimeId, residence: true); }
+        try { sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(value.RuntimeId); }
         catch (ArgumentException) { return false; }
         return true;
     }
