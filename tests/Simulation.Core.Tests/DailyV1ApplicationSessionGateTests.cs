@@ -642,6 +642,8 @@ public sealed class DailyV1ApplicationSessionGateTests
             definitions, 0L,
             out DailyV1ActiveRuntimeSession foreignRestoredSession, out diagnostic),
             Is.True, diagnostic);
+        Assert.That(foreignRestoredSession.TryBindRuntimeAdvanceBoundary(
+            new ApplicationAdvanceBoundary(foreignRestoredSession.ExecutionBoundaryState, null)), Is.True);
         Assert.That(application.TryPublishInitial(foreignRestoredSession), Is.False,
             "An application cannot publish a restored session admitted by a different bootstrap context on the same thread.");
 
@@ -651,6 +653,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
             CreateBoundaryWithAdmission(composition, restoredAdmission), definitions, 0L,
             out DailyV1ActiveRuntimeSession session, out diagnostic), Is.True, diagnostic);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(
+            session, new ApplicationAdvanceBoundary(session.ExecutionBoundaryState, null)), Is.True);
         Assert.That(application.TryPublishInitial(session), Is.True);
         Assert.That(application.ActiveSession, Is.SameAs(session));
     }
@@ -835,8 +839,16 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1Application application = new DailyV1Application();
         var completedStages = new System.Collections.Generic.List<string>();
 
-        Assert.That(application.TryCreateAndPublishInitialGenesis(
-            definitions, completedStages.Add, out string diagnostic), Is.True, diagnostic);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: completedStages.Add,
+            out _, out DailyV1ActiveRuntimeSession prepared, out string diagnostic), Is.True, diagnostic);
+        Assert.That(application.ActiveSession, Is.Null,
+            "Core genesis remains unpublished until its exact runtime advance authority is bound.");
+        Assert.That(application.TryPublishInitial(prepared), Is.False,
+            "A prepared Core session without a runtime boundary cannot become active.");
+        var boundary = new ApplicationAdvanceBoundary(prepared.ExecutionBoundaryState, null);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(prepared, boundary), Is.True);
+        Assert.That(application.TryPublishInitial(prepared), Is.True);
 
         DailyV1ActiveRuntimeSession session = application.ActiveSession;
         Assert.That(session, Is.Not.Null);
@@ -891,8 +903,10 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryPublishInitial(unrelatedSession), Is.False,
             "A host cannot publish a different Core candidate after preparing this application's genesis.");
         Assert.That(application.ActiveSession, Is.Null);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(
+            prepared, new ApplicationAdvanceBoundary(prepared.ExecutionBoundaryState, null)), Is.True);
         Assert.That(application.TryPublishInitial(prepared), Is.True,
-            "The exact Core candidate may publish once its host projection is ready.");
+            "The exact Core candidate may publish only after its runtime boundary is bound.");
         Assert.That(application.ActiveSession, Is.SameAs(prepared));
         Assert.That(application.ActiveSession.OwnerGraph, Is.SameAs(composition.OwnerGraph));
     }
@@ -938,6 +952,8 @@ public sealed class DailyV1ApplicationSessionGateTests
             "Initial publication is reserved as soon as genesis preparation begins.");
         Assert.That(application.ActiveSession, Is.Null,
             "Only the exact candidate returned by preparation may publish after the host projection checks.");
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(
+            prepared, new ApplicationAdvanceBoundary(prepared.ExecutionBoundaryState, null)), Is.True);
         Assert.That(application.TryPublishInitial(prepared), Is.True);
         Assert.That(application.ActiveSession, Is.SameAs(prepared));
         Assert.That(application.ActiveSession.OwnerGraph, Is.SameAs(composition.OwnerGraph));
@@ -1097,10 +1113,17 @@ public sealed class DailyV1ApplicationSessionGateTests
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1Application application = new DailyV1Application();
-        Assert.That(application.TryCreateAndPublishInitialGenesis(definitions, null, out _), Is.True);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession candidate, out string diagnostic), Is.True, diagnostic);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(
+            candidate, new ApplicationAdvanceBoundary(candidate.ExecutionBoundaryState, null)), Is.True);
+        Assert.That(application.TryPublishInitial(candidate), Is.True);
         DailyV1ActiveRuntimeSession published = application.ActiveSession;
 
-        Assert.That(application.TryCreateAndPublishInitialGenesis(definitions, null, out string diagnostic), Is.False);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out _, out diagnostic), Is.False);
 
         Assert.That(diagnostic, Does.Contain("second bootstrap admission context"));
         Assert.That(application.ActiveSession, Is.SameAs(published));
@@ -1133,6 +1156,10 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
             foreignComposition.ExecutionBoundaryState, definitions, 0L,
             out DailyV1ActiveRuntimeSession foreignSession, out diagnostic), Is.True, diagnostic);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(
+            session, new ApplicationAdvanceBoundary(session.ExecutionBoundaryState, null)), Is.True);
+        Assert.That(foreignApplication.TryBindRuntimeAdvanceBoundary(
+            foreignSession, new ApplicationAdvanceBoundary(foreignSession.ExecutionBoundaryState, null)), Is.True);
         Assert.That(session.IsProfileCompatibleWith(foreignSession), Is.True,
             "Profile compatibility remains independent of application ownership lineage.");
 
@@ -1293,8 +1320,14 @@ public sealed class DailyV1ApplicationSessionGateTests
             replacementComposition.ExecutionBoundaryState, definitions, 0L,
             out DailyV1ActiveRuntimeSession replacement, out diagnostic), Is.True, diagnostic);
 
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(
+            first, new ApplicationAdvanceBoundary(first.ExecutionBoundaryState, null)), Is.True);
         Assert.That(application.TryPublishInitial(first), Is.True);
         Assert.That(application.ActiveSession, Is.SameAs(first));
+        Assert.That(application.TryPublishReplacement(first, replacement), Is.False,
+            "A replacement without its exact runtime advance boundary cannot become active.");
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(
+            replacement, new ApplicationAdvanceBoundary(replacement.ExecutionBoundaryState, null)), Is.True);
         Assert.That(application.TryBeginOperation(
             first, DailyV1OperationScopeKind.Application,
             out DailyV1ActiveRuntimeSession admitted), Is.True);

@@ -47,35 +47,6 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
-    /// Composes and publishes the Core-owned initial session after the caller
-    /// has established that no continuation slot exists. This is the genesis
-    /// fallback used by the eventual public TryStart path; it intentionally
-    /// does not inspect host storage or construct a Unity runtime projection.
-    /// </summary>
-    internal bool TryCreateAndPublishInitialGenesis(
-        DailyV1EffectiveDefinitions definitions,
-        Action<string> stageCompleted,
-        out string diagnostic)
-    {
-        if (!TryPrepareInitialGenesis(
-                definitions,
-                allocateWorldId: null,
-                stageCompleted,
-                out _,
-                out DailyV1ActiveRuntimeSession candidate,
-                out diagnostic))
-            return false;
-
-        if (!TryPublishInitial(candidate))
-        {
-            diagnostic = "The Core application rejected its exact initial genesis session.";
-            return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
     /// Builds one unpublished selected Daily-v1 genesis candidate under the
     /// application-captured bootstrap context. A host may finish creating its
     /// projections and validate its publication boundary before calling
@@ -481,7 +452,10 @@ internal sealed class DailyV1Application
 
     internal bool TryPublishInitial(DailyV1ActiveRuntimeSession candidate)
     {
-        if (candidate == null) return false;
+        // A Core session is not active until its exact execution boundary is
+        // bound. Publishing an unbound genesis value creates a session that
+        // cannot advance and leaves the application with no valid runtime.
+        if (candidate?.RuntimeAdvanceBoundary == null) return false;
         lock (activeSessionGate.SyncRoot)
         {
             if (preparedInitialSession != null)
@@ -623,7 +597,7 @@ internal sealed class DailyV1Application
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation operation,
         DailyV1ActiveRuntimeSession candidate)
     {
-        if (candidate == null) return false;
+        if (candidate?.RuntimeAdvanceBoundary == null) return false;
         lock (activeSessionGate.SyncRoot)
         {
             return bootstrapAdmissionContext != null
@@ -636,7 +610,7 @@ internal sealed class DailyV1Application
         DailyV1ActiveRuntimeSession expectedSession,
         DailyV1ActiveRuntimeSession candidate)
     {
-        if (candidate == null) return false;
+        if (candidate?.RuntimeAdvanceBoundary == null) return false;
         lock (activeSessionGate.SyncRoot)
         {
             return bootstrapAdmissionContext != null
