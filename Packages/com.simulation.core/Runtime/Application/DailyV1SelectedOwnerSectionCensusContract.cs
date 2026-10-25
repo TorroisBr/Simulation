@@ -11,6 +11,11 @@ using System.Collections.ObjectModel;
 internal static class DailyV1SelectedOwnerSectionCensusContract
 {
     internal const int NpcSectionSchemaVersion = 1;
+    internal const int CitySectionSchemaVersion = 1;
+    internal const string CityImportantNpcSectionPrefix = "p12b.city.important-npcs/";
+    internal const string CityMarketStockRowsSectionPrefix = "p12e.city-market-stock-rows/";
+    internal const string CityPopulationAggregateSectionPrefix = "p12d.city-population.aggregate/";
+    internal const string CityPopulationOperationReceiptsSectionPrefix = "p12d.city-population.operation-receipts/";
     internal const int NpcMerchantTradePlanKind = 0;
     internal const int NpcTravelPlanKind = 1;
 
@@ -57,8 +62,8 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
 
     internal static IReadOnlyList<string> CityPrefixes { get; } = ReadOnly(new[]
     {
-        "p12b.city.important-npcs/", "p12e.city-market-stock-rows/",
-        "p12d.city-population.aggregate/", "p12d.city-population.operation-receipts/"
+        CityImportantNpcSectionPrefix, CityMarketStockRowsSectionPrefix,
+        CityPopulationAggregateSectionPrefix, CityPopulationOperationReceiptsSectionPrefix
     });
 
     internal static IReadOnlyList<string> FixedEmpty { get; } = ReadOnly(new[]
@@ -118,9 +123,11 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
 
     internal static IReadOnlyList<string> CityPopulationAliasFamily { get; } = ReadOnly(new[]
     {
-        "p12d.city-population.aggregate/", "p12d.city-population.operation-receipts/"
+        CityPopulationAggregateSectionPrefix, CityPopulationOperationReceiptsSectionPrefix
     });
 
+    internal static string CityImportantNpcSectionIdFor(string cityRuntimeId) =>
+        CityImportantNpcSectionPrefix + cityRuntimeId;
     internal static string NpcSectionPrefixFor(int familyIndex) => NpcPrefixes[familyIndex];
 
     internal static string NpcSectionIdFor(int familyIndex, string runtimeId) =>

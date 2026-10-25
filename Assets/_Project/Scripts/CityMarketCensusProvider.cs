@@ -8,8 +8,8 @@ using System.Globalization;
 /// </summary>
 public static class CityMarketCensusProvider
 {
-    public const int SchemaVersion = 1;
-    public const string SectionIdPrefix = "p12e.city-market-stock-rows/";
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion;
+    public const string SectionIdPrefix = DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix;
 
     private sealed class SectionProvider : IOwnerSectionCensusProvider
     {

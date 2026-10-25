@@ -13,86 +13,19 @@ internal static class P12ACityOwnerSetCodec
     {
         snapshots = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue);
-        if (sections == null || sections.Count == 0 || sections.Count % SectionsPerCity != 0
-            || sections.Count / SectionsPerCity > P12AContinuationCodec.MaxSections / SectionsPerCity)
+        if (!P12DCityOwnerSetImageDecoder.TryDecode(sections,
+                out IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> decoded, out result))
             return false;
 
-        Dictionary<string, P12AOwnerSection> byId = new Dictionary<string, P12AOwnerSection>(StringComparer.Ordinal);
-        foreach (P12AOwnerSection section in sections)
-        {
-            if (section == null || string.IsNullOrWhiteSpace(section.Id) || !byId.TryAdd(section.Id, section))
-            {
-                result = new P12AResult(P12AResultCode.MissingOrDuplicateSection, section?.Id);
-                return false;
-            }
-        }
+        List<P12DCityRootOwnerSnapshot> adapted =
+            new List<P12DCityRootOwnerSnapshot>(decoded.Count);
+        foreach (DailyV1P12DCityCoreOwnerHydrationInput value in decoded)
+            adapted.Add(P12ACityOwnerCodec.FromCoreValue(value));
 
-        List<string> cityIds = new List<string>();
-        HashSet<string> uniqueCityIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (P12AOwnerSection section in sections)
-        {
-            if (!section.Id.StartsWith(CityNpcPresenceCensusProvider.SectionIdPrefix, StringComparison.Ordinal))
-                continue;
-            string cityId = section.Id.Substring(CityNpcPresenceCensusProvider.SectionIdPrefix.Length);
-            if (string.IsNullOrWhiteSpace(cityId) || cityId.Contains("/") || cityId.IndexOf('\0') >= 0
-                || !uniqueCityIds.Add(cityId))
-            {
-                result = new P12AResult(P12AResultCode.InvalidOwnerValue, section.Id);
-                return false;
-            }
-            cityIds.Add(cityId);
-        }
-        if (cityIds.Count == 0 || cityIds.Count * SectionsPerCity != sections.Count)
-        {
-            result = new P12AResult(P12AResultCode.MissingOrDuplicateSection);
-            return false;
-        }
-        cityIds.Sort(StringComparer.Ordinal);
-
-        List<P12DCityRootOwnerSnapshot> decoded = new List<P12DCityRootOwnerSnapshot>(cityIds.Count);
-        HashSet<string> consumed = new HashSet<string>(StringComparer.Ordinal);
-        foreach (string cityId in cityIds)
-        {
-            string cityKey;
-            try { cityKey = P12ACityOwnerCodec.EncodeCityKeyForSection(cityId); }
-            catch (ArgumentException)
-            {
-                result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                    CityNpcPresenceCensusProvider.SectionIdFor(cityId), cityId);
-                return false;
-            }
-            string presenceId = CityNpcPresenceCensusProvider.SectionIdFor(cityId);
-            string marketId = CityMarketCensusProvider.SectionIdPrefix + cityKey;
-            string populationId = SettlementPopulationCensusProvider.AggregateSectionPrefix + cityKey;
-            string receiptsId = SettlementPopulationCensusProvider.OperationReceiptsSectionPrefix + cityKey;
-            if (!byId.TryGetValue(presenceId, out P12AOwnerSection presence)
-                || !byId.TryGetValue(marketId, out P12AOwnerSection market)
-                || !byId.TryGetValue(populationId, out P12AOwnerSection population)
-                || !byId.TryGetValue(receiptsId, out P12AOwnerSection receipts)
-                || !consumed.Add(presenceId) || !consumed.Add(marketId)
-                || !consumed.Add(populationId) || !consumed.Add(receiptsId))
-            {
-                result = new P12AResult(P12AResultCode.MissingOrDuplicateSection, presenceId, cityId);
-                return false;
-            }
-            if (!P12ACityOwnerCodec.TryDecode(presence, market, population, receipts,
-                    out P12DCityRootOwnerSnapshot snapshot, out result))
-            {
-                result = result ?? new P12AResult(P12AResultCode.InvalidOwnerValue, presenceId, cityId);
-                return false;
-            }
-            decoded.Add(snapshot);
-        }
-        if (consumed.Count != sections.Count)
-        {
-            result = new P12AResult(P12AResultCode.MissingOrDuplicateSection);
-            return false;
-        }
-        snapshots = new ReadOnlyCollection<P12DCityRootOwnerSnapshot>(decoded);
+        snapshots = new ReadOnlyCollection<P12DCityRootOwnerSnapshot>(adapted);
         result = null;
         return true;
     }
-
     internal static bool TryEncode(IReadOnlyList<P12DCityRootOwnerSnapshot> snapshots,
         IReadOnlyList<OwnerSectionCensusSnapshot> exactOwnerSections,
         out IReadOnlyList<P12AOwnerSection> sections, out P12AResult result)

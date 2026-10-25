@@ -5,9 +5,9 @@ using System.Globalization;
 /// <summary>Passive per-City population and operation-receipt census providers.</summary>
 public static class SettlementPopulationCensusProvider
 {
-    public const int SchemaVersion = 1;
-    public const string AggregateSectionPrefix = "p12d.city-population.aggregate/";
-    public const string OperationReceiptsSectionPrefix = "p12d.city-population.operation-receipts/";
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion;
+    public const string AggregateSectionPrefix = DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix;
+    public const string OperationReceiptsSectionPrefix = DailyV1SelectedOwnerSectionCensusContract.CityPopulationOperationReceiptsSectionPrefix;
 
     private enum Section
     {
