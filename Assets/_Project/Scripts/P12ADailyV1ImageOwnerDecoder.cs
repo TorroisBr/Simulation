@@ -90,7 +90,7 @@ internal static class P12ADailyV1ImageOwnerDecoder
         snapshots = null;
         result = new P12AResult(P12AResultCode.OwnerGraphRejected);
         if (image == null || !P12ADailyV1Census.TryCreateForImage(image, out _, out result)
-            || !P12ACausalRootImageAdapter.TryDecode(image,
+            || !P12ACausalRootImageCodec.TryDecode(image,
                 out P12ACausalRootImageSnapshots c, out result)) return false;
 
         P12AOwnerSection Section(string id) => Unique(image, id, out P12AResult sectionError)

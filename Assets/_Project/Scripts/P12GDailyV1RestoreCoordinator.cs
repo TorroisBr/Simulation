@@ -803,8 +803,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 "P8-A", p8Fingerprint, sourceSession.Runtime.PoliticalWorldRevision,
                 compatibilityV2);
         if (!header.IsValid
-            || !P12ACausalRootImageAdapter.TryEncode(header, worldIdentity, allocator,
-                recordSequence, spatialAuthority, p9Manifest, randomRoot,
+            || !P12ACausalRootImageCodec.TryEncode(header, worldIdentity, allocator,
+                recordSequence, spatialAuthority, p9Manifest.CoreValue, randomRoot,
                 out P12ACausalRootPayload causalRoots,
                 out IReadOnlyList<P12AOwnerSection> causalSections, out result)
             || !P12CRuntimeIdentityOwnerSnapshot.TryCapture(sourceSession.IdentityRegistry,

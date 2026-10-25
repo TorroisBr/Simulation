@@ -6,8 +6,8 @@ using System;
 /// </summary>
 public sealed class SpatialHexCensusProvider : IOwnerSectionCensusProvider
 {
-    public const string SectionId = "p8a.hexes";
-    public const int SchemaVersion = 1;
+    public const string SectionId = P12P8AImageSectionContract.HexSectionId;
+    public const int SchemaVersion = P12P8AImageSectionContract.SchemaVersion;
 
     private readonly SpatialAuthorityStore owner;
 
@@ -28,8 +28,8 @@ public sealed class SpatialHexCensusProvider : IOwnerSectionCensusProvider
 /// </summary>
 public sealed class SpatialLocationCensusProvider : IOwnerSectionCensusProvider
 {
-    public const string SectionId = "p8a.locations";
-    public const int SchemaVersion = 1;
+    public const string SectionId = P12P8AImageSectionContract.LocationSectionId;
+    public const int SchemaVersion = P12P8AImageSectionContract.SchemaVersion;
 
     private readonly SpatialAuthorityStore owner;
 
@@ -50,8 +50,8 @@ public sealed class SpatialLocationCensusProvider : IOwnerSectionCensusProvider
 /// </summary>
 public sealed class SpatialScaleContextCensusProvider : IOwnerSectionCensusProvider
 {
-    public const string SectionId = "p8a.scale-context";
-    public const int SchemaVersion = 1;
+    public const string SectionId = P12P8AImageSectionContract.ScaleContextSectionId;
+    public const int SchemaVersion = P12P8AImageSectionContract.SchemaVersion;
 
     private readonly SpatialAuthorityStore owner;
 

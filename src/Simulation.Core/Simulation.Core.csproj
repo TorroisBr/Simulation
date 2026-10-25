@@ -178,6 +178,9 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AContinuationImage.cs" Link="Persistence/P12AContinuationImage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AContinuationCodec.cs" Link="Persistence/P12AContinuationCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ACausalRootOwnerCodec.cs" Link="Persistence/P12ACausalRootOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ACausalRootImageCodec.cs" Link="Persistence/P12ACausalRootImageCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ACSpatialAuthorityCodec.cs" Link="Persistence/P12ACSpatialAuthorityCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12P8AImageSectionContract.cs" Link="Persistence/P12P8AImageSectionContract.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ACP9ManifestCodec.cs" Link="Persistence/P12ACP9ManifestCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocatorCensusProviders.cs" Link="Identity/RuntimeIdAllocatorCensusProviders.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/SimulationRecordSequenceCensus.cs" Link="Persistence/SimulationRecordSequenceCensus.cs" />

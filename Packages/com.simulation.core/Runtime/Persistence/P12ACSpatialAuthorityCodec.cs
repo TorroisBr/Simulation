@@ -16,34 +16,34 @@ internal static class P12ACSpatialAuthorityCodec
         out P12AOwnerSection scaleSection, out P12AResult result)
     {
         hexSection = null; locationSection = null; scaleSection = null;
-        result = new P12AResult(P12AResultCode.InvalidOwnerValue, "p8a.hexes");
+        result = new P12AResult(P12AResultCode.InvalidOwnerValue, P12P8AImageSectionContract.HexSectionId);
         if (!IsSupported(snapshot)) return false;
         try
         {
             byte[] hexPayload = EncodeHexes(snapshot);
             byte[] locationPayload = EncodeLocations(snapshot);
             byte[] scalePayload = EncodeScale(snapshot);
-            hexSection = Section("p8a.hexes", HexOwnerKey, aliasGroup, snapshot.OwnerRevision,
-                SpatialHexCensusProvider.SchemaVersion, hexPayload);
-            locationSection = Section("p8a.locations", LocationOwnerKey, aliasGroup, snapshot.OwnerRevision,
-                SpatialLocationCensusProvider.SchemaVersion, locationPayload);
-            scaleSection = Section("p8a.scale-context", ScaleOwnerKey, aliasGroup, snapshot.OwnerRevision,
-                SpatialScaleContextCensusProvider.SchemaVersion, scalePayload);
+            hexSection = Section(P12P8AImageSectionContract.HexSectionId, HexOwnerKey, aliasGroup, snapshot.OwnerRevision,
+                P12P8AImageSectionContract.SchemaVersion, hexPayload);
+            locationSection = Section(P12P8AImageSectionContract.LocationSectionId, LocationOwnerKey, aliasGroup, snapshot.OwnerRevision,
+                P12P8AImageSectionContract.SchemaVersion, locationPayload);
+            scaleSection = Section(P12P8AImageSectionContract.ScaleContextSectionId, ScaleOwnerKey, aliasGroup, snapshot.OwnerRevision,
+                P12P8AImageSectionContract.SchemaVersion, scalePayload);
             result = null; return true;
         }
         catch (Exception exception) when (exception is P12ALimitException || exception is IOException
             || exception is ArgumentException || exception is OverflowException || exception is EncoderFallbackException)
         { hexSection = null; locationSection = null; scaleSection = null;
-          result = new P12AResult(P12AResultCode.InvalidOwnerValue, "p8a.hexes"); return false; }
+          result = new P12AResult(P12AResultCode.InvalidOwnerValue, P12P8AImageSectionContract.HexSectionId); return false; }
     }
 
     internal static bool TryDecode(P12AOwnerSection hexSection, P12AOwnerSection locationSection,
         P12AOwnerSection scaleSection, out P12CSpatialAuthoritySnapshot snapshot, out P12AResult result)
     {
-        snapshot = null; result = new P12AResult(P12AResultCode.InvalidOwnerValue, "p8a.hexes");
-        if (!IsSection(hexSection, "p8a.hexes", HexOwnerKey, SpatialHexCensusProvider.SchemaVersion)
-            || !IsSection(locationSection, "p8a.locations", LocationOwnerKey, SpatialLocationCensusProvider.SchemaVersion)
-            || !IsSection(scaleSection, "p8a.scale-context", ScaleOwnerKey, SpatialScaleContextCensusProvider.SchemaVersion)
+        snapshot = null; result = new P12AResult(P12AResultCode.InvalidOwnerValue, P12P8AImageSectionContract.HexSectionId);
+        if (!IsSection(hexSection, P12P8AImageSectionContract.HexSectionId, HexOwnerKey, P12P8AImageSectionContract.SchemaVersion)
+            || !IsSection(locationSection, P12P8AImageSectionContract.LocationSectionId, LocationOwnerKey, P12P8AImageSectionContract.SchemaVersion)
+            || !IsSection(scaleSection, P12P8AImageSectionContract.ScaleContextSectionId, ScaleOwnerKey, P12P8AImageSectionContract.SchemaVersion)
             || hexSection.AliasGroup != locationSection.AliasGroup
             || hexSection.AliasGroup != scaleSection.AliasGroup
             || hexSection.Revision != locationSection.Revision || hexSection.Revision != scaleSection.Revision)
@@ -70,7 +70,7 @@ internal static class P12ACSpatialAuthorityCodec
         && snapshot.SchemaId == P12CSpatialAuthoritySnapshot.CurrentSchemaId
         && snapshot.SchemaVersion == P12CSpatialAuthoritySnapshot.CurrentSchemaVersion
         && snapshot.AdmissionProfile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
-        && snapshot.P9ProfileContractIdentity == SimulationGenesisPipeline.GeographyProfileContractIdentity
+        && snapshot.P9ProfileContractIdentity == P12CP9GenesisContract.GeographyProfileContractIdentity
         && snapshot.P9ProfileSchemaVersion == 2 && snapshot.OwnerRevision == 1L
         && snapshot.CoordinateConventionVersion == HexCoordinate.ConventionVersion
         && snapshot.CoordinateCanonicalOrder == HexCoordinate.CanonicalOrder
@@ -129,7 +129,7 @@ internal static class P12ACSpatialAuthorityCodec
         try
         {
             byte[][] payloads = { EncodeHexes(snapshot), EncodeLocations(snapshot), EncodeScale(snapshot) };
-            string[] ids = { "p8a.hexes", "p8a.locations", "p8a.scale-context" };
+            string[] ids = { P12P8AImageSectionContract.HexSectionId, P12P8AImageSectionContract.LocationSectionId, P12P8AImageSectionContract.ScaleContextSectionId };
             using (MemoryStream stream = new MemoryStream())
             using (BinaryWriter writer = new BinaryWriter(stream, P12AWire.Utf8, true))
             {
@@ -203,7 +203,7 @@ internal static class P12ACSpatialAuthorityCodec
         {
             if (!ReadHeader(reader, out header)) return false;
             int count = reader.ReadInt32(); if (count != 1) return false;
-            if (section.Id == "p8a.hexes")
+            if (section.Id == P12P8AImageSectionContract.HexSectionId)
             {
                 string id = Required(reader);
                 int q = reader.ReadInt32(), r = reader.ReadInt32();
@@ -212,7 +212,7 @@ internal static class P12ACSpatialAuthorityCodec
                 header.Hexes = new[] { new P12CSpatialHexSnapshot(id, q, r, terrain, authoredRevision) };
                 return true;
             }
-            if (section.Id == "p8a.locations")
+            if (section.Id == P12P8AImageSectionContract.LocationSectionId)
             {
                 string id = Required(reader), anchor = Required(reader);
                 if (stream.Position != stream.Length || string.IsNullOrWhiteSpace(id)) return false;
@@ -239,7 +239,7 @@ internal static class P12ACSpatialAuthorityCodec
             p9, p9Version, ownerRevision, coordinate, canonicalOrder);
         return schema == P12CSpatialAuthoritySnapshot.CurrentSchemaId
             && schemaVersion == P12CSpatialAuthoritySnapshot.CurrentSchemaVersion
-            && p9 == SimulationGenesisPipeline.GeographyProfileContractIdentity && p9Version == 2
+            && p9 == P12CP9GenesisContract.GeographyProfileContractIdentity && p9Version == 2
             && ownerRevision == 1L && coordinate == HexCoordinate.ConventionVersion
             && canonicalOrder == HexCoordinate.CanonicalOrder;
     }

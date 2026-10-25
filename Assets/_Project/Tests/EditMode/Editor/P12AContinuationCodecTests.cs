@@ -1321,8 +1321,8 @@ public sealed class P12AContinuationCodecTests
             worldIdentity.WorldIdValue, runtime.CurrentDay, 1L, -1L,
             p9Manifest.SelectedP9ContractIdentity, p9Manifest.Fingerprint,
             "P8-A", p8Fingerprint, 37L, descriptor);
-        Assert.That(P12ACausalRootImageAdapter.TryEncode(header, worldIdentity,
-            allocatorSnapshot, recordSequenceSnapshot, geography, p9Manifest, randomSnapshot,
+        Assert.That(P12ACausalRootImageCodec.TryEncode(header, worldIdentity,
+            allocatorSnapshot, recordSequenceSnapshot, geography, p9Manifest.CoreValue, randomSnapshot,
             out P12ACausalRootPayload typedRoots, out IReadOnlyList<P12AOwnerSection> typedCSections,
             out P12AResult rootEncodeError), Is.True, rootEncodeError?.Code.ToString());
 
@@ -1364,7 +1364,7 @@ public sealed class P12AContinuationCodecTests
         Assert.That(decodedImage.Sections, Has.Count.EqualTo(299));
         Assert.That(decodedImage.CausalRoots.P9Manifest.Fingerprint, Is.EqualTo(GetP9Manifest().Fingerprint));
         Assert.That(decodedImage.CausalRoots.RandomRoot.Seed, Is.EqualTo(GetP9Manifest().Seed));
-        Assert.That(P12ACausalRootImageAdapter.TryDecode(decodedImage,
+        Assert.That(P12ACausalRootImageCodec.TryDecode(decodedImage,
             out P12ACausalRootImageSnapshots decodedC, out P12AResult rootDecodeError), Is.True,
             rootDecodeError?.Code.ToString());
         AssertAllocatorSnapshotsEqual(allocatorSnapshot, decodedC.Allocator);
