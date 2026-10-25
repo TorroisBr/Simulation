@@ -106,6 +106,7 @@
       <Compile Include="DailyV1JusticeRecordsOwnerTests.cs" Link="Person/DailyV1JusticeRecordsOwnerTests.cs" />
     <Compile Include="DailyV1CrimeSocialAppraisalOwnerTests.cs" Link="Social/DailyV1CrimeSocialAppraisalOwnerTests.cs" />
     <Compile Include="SpatialKnowledgeRuntimeCoreTests.cs" Link="Knowledge/SpatialKnowledgeRuntimeCoreTests.cs" />
+    <Compile Include="DailyV1NpcKnowledgeOwnerTests.cs" Link="Knowledge/DailyV1NpcKnowledgeOwnerTests.cs" />
     <Compile Include="ActionExecutionTests.cs" Link="Application/ActionExecutionTests.cs" />
       <Compile Include="DailyV1ApplicationHostTests.cs" Link="Application/DailyV1ApplicationHostTests.cs" />
       <Compile Include="DailyV1CompatibilityDescriptorFactoryTests.cs" Link="Persistence/DailyV1CompatibilityDescriptorFactoryTests.cs" />

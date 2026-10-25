@@ -119,6 +119,8 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/DailyV1NpcMerchantTradePlanOwner.cs" Link="Person/DailyV1NpcMerchantTradePlanOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/NpcLifeState.cs" Link="Person/NpcLifeState.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/DailyV1CommercialKnowledgeOwner.cs" Link="Knowledge/DailyV1CommercialKnowledgeOwner.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/DailyV1ExplorableSiteKnowledgeOwner.cs" Link="Knowledge/DailyV1ExplorableSiteKnowledgeOwner.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/DailyV1AdventureSiteIntelKnowledgeOwner.cs" Link="Knowledge/DailyV1AdventureSiteIntelKnowledgeOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/SpatialKnowledgeRuntime.cs" Link="Knowledge/SpatialKnowledgeRuntime.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/CommercialActionEvidence.cs" Link="Knowledge/CommercialActionEvidence.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/ExplorableSiteKnowledgeValues.cs" Link="Knowledge/ExplorableSiteKnowledgeValues.cs" />

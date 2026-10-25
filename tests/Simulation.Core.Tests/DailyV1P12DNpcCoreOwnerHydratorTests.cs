@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 
@@ -25,13 +26,31 @@ public sealed class DailyV1P12DNpcCoreOwnerHydratorTests
             item.DefinitionId,
             locationId,
             new[] { new P12DNpcCommercialMarketValue(locationId, item.DefinitionId,
-                3.5f, 7, 4L, 5L, CommercialKnowledgeSource.DirectObservation, null) });
+                3.5f, 7, 4L, 5L, CommercialKnowledgeSource.DirectObservation, null) },
+            siteObservations, 45L, oppositionObservations,
+            notableItemObservations, commonResourceObservations,
+            accessObservations, 46L);
 
         Assert.That(DailyV1P12DNpcCoreOwnerHydrator.TryCreate(
             input, definitions, Array.Empty<string>(), new[] { locationId },
             Array.Empty<string>(), Array.Empty<string>(), new[] { runtimeId },
             out DailyV1NpcRuntimeOwners owners,
             out DailyV1P12DNpcCoreOwnerHydrationFailure failure), Is.True, failure.ToString());
+
+        Assert.That(owners.ExplorableSiteKnowledge.Revision, Is.EqualTo(45L));
+        Assert.That(owners.ExplorableSiteKnowledge.Observations.Single().SiteRuntimeId,
+            Is.EqualTo("site/p12d-core-hydration"));
+        Assert.That(owners.ExplorableSiteKnowledge.Observations.Single().LocationRuntimeId,
+            Is.EqualTo(locationId));
+        Assert.That(owners.AdventureSiteIntelKnowledge.Revision, Is.EqualTo(46L));
+        Assert.That(owners.AdventureSiteIntelKnowledge.OppositionObservations.Single().ObservedState,
+            Is.EqualTo(AdventureOppositionObservedState.Resolved));
+        Assert.That(owners.AdventureSiteIntelKnowledge.NotableItemObservations.Single().ItemDefinitionId,
+            Is.EqualTo("item-definition/p12d"));
+        Assert.That(owners.AdventureSiteIntelKnowledge.CommonResourceObservations.Single().ObservedAmount,
+            Is.EqualTo(7));
+        Assert.That(owners.AdventureSiteIntelKnowledge.AccessObservations.Single().ObservedAccessState,
+            Is.EqualTo(PlaceAccessState.Contested));
 
         Assert.That(owners.Definitions, Is.SameAs(definitions));
         Assert.That(owners.Definition, Is.SameAs(npc));
@@ -112,12 +131,49 @@ public sealed class DailyV1P12DNpcCoreOwnerHydratorTests
             actionDefinitionId, null, null, null, null, inventory,
             31L, 17.5f, 32L, 33L, 0L, 34L, 35L);
 
+    private static readonly ExplorableSiteKnowledgeObservation[] siteObservations =
+    {
+        new ExplorableSiteKnowledgeObservation("site/p12d-core-hydration",
+            "location/p12d-core-hydration", 2L, 3L,
+            ExplorableSiteKnowledgeSource.DirectObservation)
+    };
+    private static readonly AdventureOppositionObservation[] oppositionObservations =
+    {
+        new AdventureOppositionObservation("site/p12d-core-hydration", null,
+            "opposition/p12d", AdventureOppositionObservedState.Resolved, 3L, 4L,
+            AdventureIntelSource.DirectObservation)
+    };
+    private static readonly AdventureNotableItemObservation[] notableItemObservations =
+    {
+        new AdventureNotableItemObservation("site/p12d-core-hydration", null,
+            "item/p12d", "item-definition/p12d", 4L, 5L,
+            AdventureIntelSource.DirectObservation)
+    };
+    private static readonly AdventureCommonResourceObservation[] commonResourceObservations =
+    {
+        new AdventureCommonResourceObservation("site/p12d-core-hydration", null,
+            "item-definition/p12d", 7, "resource/p12d", 5L, 6L,
+            AdventureIntelSource.DirectObservation)
+    };
+    private static readonly AdventureAccessObservation[] accessObservations =
+    {
+        new AdventureAccessObservation("site/p12d-core-hydration", null,
+            PlaceAccessState.Contested, 6L, 7L, AdventureIntelSource.DirectObservation)
+    };
+
     private static DailyV1P12DNpcCoreOwnerHydrationInput CreateInput(
         P12DNpcDRow d,
         string actionDefinitionId,
         string targetItemDefinitionId,
         string commercialLocationId,
-        P12DNpcCommercialMarketValue[] markets)
+        P12DNpcCommercialMarketValue[] markets,
+        IReadOnlyList<ExplorableSiteKnowledgeObservation> siteObservations = null,
+        long siteRevision = 0L,
+        IReadOnlyList<AdventureOppositionObservation> oppositionObservations = null,
+        IReadOnlyList<AdventureNotableItemObservation> notableItemObservations = null,
+        IReadOnlyList<AdventureCommonResourceObservation> commonResourceObservations = null,
+        IReadOnlyList<AdventureAccessObservation> accessObservations = null,
+        long adventureRevision = 0L)
     {
         P12DNpcActionValue action = actionDefinitionId == null ? null
             : new P12DNpcActionValue(actionDefinitionId, null, null, targetItemDefinitionId,
@@ -128,6 +184,11 @@ public sealed class DailyV1P12DNpcCoreOwnerHydratorTests
             new P12DNpcTravelPlanValue(null, null, NpcTravelReason.None, 0f, 0f, null, 37L),
             string.IsNullOrEmpty(commercialLocationId) ? Array.Empty<string>() : new[] { commercialLocationId },
             Array.Empty<string>(), 39L, markets, Array.Empty<P12DNpcCommercialLiquidityValue>(),
-            Array.Empty<DailyV1CommercialKnowledgeShareReceipt>(), 38L);
+            Array.Empty<DailyV1CommercialKnowledgeShareReceipt>(), 38L,
+            siteObservations ?? Array.Empty<ExplorableSiteKnowledgeObservation>(), siteRevision,
+            oppositionObservations ?? Array.Empty<AdventureOppositionObservation>(),
+            notableItemObservations ?? Array.Empty<AdventureNotableItemObservation>(),
+            commonResourceObservations ?? Array.Empty<AdventureCommonResourceObservation>(),
+            accessObservations ?? Array.Empty<AdventureAccessObservation>(), adventureRevision);
     }
 }

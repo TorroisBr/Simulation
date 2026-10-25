@@ -351,13 +351,20 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         string notable = NpcKnowledgeCensusProvider.SectionIdFor(4, npc.RuntimeId);
         string resources = NpcKnowledgeCensusProvider.SectionIdFor(5, npc.RuntimeId);
         string access = NpcKnowledgeCensusProvider.SectionIdFor(6, npc.RuntimeId);
-        AssertSection(rows, site, npc.ExistingExplorableSiteKnowledge, 1, 1L);
+        DailyV1NpcRuntimeOwners selectedOwners = npc.SelectedRuntimeOwners;
+        Assert.That(selectedOwners, Is.Not.Null,
+            "The selected Daily-v1 restore fixture must publish its exact Core NPC owner graph.");
+        Assert.That(npc.ExistingExplorableSiteKnowledge.SelectedOwner,
+            Is.SameAs(selectedOwners.ExplorableSiteKnowledge));
+        Assert.That(npc.ExistingAdventureSiteIntelKnowledge.SelectedOwner,
+            Is.SameAs(selectedOwners.AdventureSiteIntelKnowledge));
+        AssertSection(rows, site, selectedOwners.ExplorableSiteKnowledge, 1, 1L);
         AssertSection(rows, places, npc.ExistingLocalTopologyKnowledge, 0, 0L);
         AssertSection(rows, connections, npc.ExistingLocalTopologyKnowledge, 0, 0L);
-        AssertSection(rows, opposition, npc.ExistingAdventureSiteIntelKnowledge, 1, 4L);
-        AssertSection(rows, notable, npc.ExistingAdventureSiteIntelKnowledge, 1, 4L);
-        AssertSection(rows, resources, npc.ExistingAdventureSiteIntelKnowledge, 1, 4L);
-        AssertSection(rows, access, npc.ExistingAdventureSiteIntelKnowledge, 1, 4L);
+        AssertSection(rows, opposition, selectedOwners.AdventureSiteIntelKnowledge, 1, 4L);
+        AssertSection(rows, notable, selectedOwners.AdventureSiteIntelKnowledge, 1, 4L);
+        AssertSection(rows, resources, selectedOwners.AdventureSiteIntelKnowledge, 1, 4L);
+        AssertSection(rows, access, selectedOwners.AdventureSiteIntelKnowledge, 1, 4L);
         Assert.That(rows.Single(row => row.SectionId == places).OwnerInstanceIdentity,
             Is.SameAs(rows.Single(row => row.SectionId == connections).OwnerInstanceIdentity));
         Assert.That(rows.Single(row => row.SectionId == places).Role, Is.EqualTo(OwnerSectionRole.Required));

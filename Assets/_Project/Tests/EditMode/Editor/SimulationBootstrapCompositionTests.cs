@@ -1326,39 +1326,39 @@ public sealed class SimulationBootstrapCompositionTests
 
             object[] typedOwners =
             {
-                ReadPrivateField<ExplorableSiteKnowledgeRuntime>(npc, "explorableSiteKnowledge"),
+                coreNpc.ExplorableSiteKnowledge,
                 ReadPrivateField<LocalTopologyKnowledgeRuntime>(npc, "localTopologyKnowledge"),
                 ReadPrivateField<LocalTopologyKnowledgeRuntime>(npc, "localTopologyKnowledge"),
-                ReadPrivateField<AdventureSiteIntelKnowledgeRuntime>(npc, "adventureSiteIntelKnowledge"),
-                ReadPrivateField<AdventureSiteIntelKnowledgeRuntime>(npc, "adventureSiteIntelKnowledge"),
-                ReadPrivateField<AdventureSiteIntelKnowledgeRuntime>(npc, "adventureSiteIntelKnowledge"),
-                ReadPrivateField<AdventureSiteIntelKnowledgeRuntime>(npc, "adventureSiteIntelKnowledge"),
+                coreNpc.AdventureSiteIntelKnowledge,
+                coreNpc.AdventureSiteIntelKnowledge,
+                coreNpc.AdventureSiteIntelKnowledge,
+                coreNpc.AdventureSiteIntelKnowledge,
                 commercial,
                 commercial,
                 commercial
             };
             int[] expectedCardinalities =
             {
-                ((ExplorableSiteKnowledgeRuntime)typedOwners[0]).Observations.Count,
+                coreNpc.ExplorableSiteKnowledge.Observations.Count,
                 ((LocalTopologyKnowledgeRuntime)typedOwners[1]).PlaceObservations.Count,
                 ((LocalTopologyKnowledgeRuntime)typedOwners[2]).ConnectionObservations.Count,
-                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[3]).OppositionObservations.Count,
-                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[4]).NotableItemObservations.Count,
-                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[5]).CommonResourceObservations.Count,
-                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[6]).AccessObservations.Count,
+                coreNpc.AdventureSiteIntelKnowledge.OppositionObservations.Count,
+                coreNpc.AdventureSiteIntelKnowledge.NotableItemObservations.Count,
+                coreNpc.AdventureSiteIntelKnowledge.CommonResourceObservations.Count,
+                coreNpc.AdventureSiteIntelKnowledge.AccessObservations.Count,
                 marketCount,
                 liquidityCount,
                 shareReceiptCount
             };
             long[] expectedRevisions =
             {
-                ((ExplorableSiteKnowledgeRuntime)typedOwners[0]).Revision,
+                coreNpc.ExplorableSiteKnowledge.Revision,
                 ((LocalTopologyKnowledgeRuntime)typedOwners[1]).Revision,
                 ((LocalTopologyKnowledgeRuntime)typedOwners[2]).Revision,
-                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[3]).Revision,
-                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[4]).Revision,
-                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[5]).Revision,
-                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[6]).Revision,
+                coreNpc.AdventureSiteIntelKnowledge.Revision,
+                coreNpc.AdventureSiteIntelKnowledge.Revision,
+                coreNpc.AdventureSiteIntelKnowledge.Revision,
+                coreNpc.AdventureSiteIntelKnowledge.Revision,
                 commercialRevision,
                 commercialRevision,
                 commercialRevision
@@ -3618,6 +3618,12 @@ public sealed class SimulationBootstrapCompositionTests
                 ReadPrivateField<AdventureSiteIntelKnowledgeRuntime>(npc, "adventureSiteIntelKnowledge");
             CommercialKnowledgeRuntime commercial =
                 ReadPrivateField<CommercialKnowledgeRuntime>(npc, "commercialKnowledge");
+            DailyV1NpcRuntimeOwners selected = npc.SelectedRuntimeOwners;
+            if (selected != null)
+            {
+                Assert.That(explorable.SelectedOwner, Is.SameAs(selected.ExplorableSiteKnowledge));
+                Assert.That(adventure.SelectedOwner, Is.SameAs(selected.AdventureSiteIntelKnowledge));
+            }
             List<CommercialKnowledgeShareReceipt> receipts =
                 ReadPrivateField<List<CommercialKnowledgeShareReceipt>>(commercial, "shareReceipts");
             int marketCount = commercial.Observations.Count;
@@ -3627,13 +3633,13 @@ public sealed class SimulationBootstrapCompositionTests
 
             object[] owners =
             {
-                explorable,
+                (object)selected?.ExplorableSiteKnowledge ?? explorable,
                 local,
                 local,
-                adventure,
-                adventure,
-                adventure,
-                adventure,
+                (object)selected?.AdventureSiteIntelKnowledge ?? adventure,
+                (object)selected?.AdventureSiteIntelKnowledge ?? adventure,
+                (object)selected?.AdventureSiteIntelKnowledge ?? adventure,
+                (object)selected?.AdventureSiteIntelKnowledge ?? adventure,
                 commercial,
                 commercial,
                 commercial
@@ -3780,10 +3786,23 @@ public sealed class SimulationBootstrapCompositionTests
             candidate => candidate.RuntimeId, System.StringComparer.Ordinal))
         {
             string runtimeId = npc.RuntimeId;
-            object explorableKnowledge = ReadNonPublicProperty(npc, "ExistingExplorableSiteKnowledge");
-            object localKnowledge = ReadNonPublicProperty(npc, "ExistingLocalTopologyKnowledge");
-            object adventureKnowledge = ReadNonPublicProperty(npc, "ExistingAdventureSiteIntelKnowledge");
+            ExplorableSiteKnowledgeRuntime explorableProjection =
+                (ExplorableSiteKnowledgeRuntime)ReadNonPublicProperty(npc, "ExistingExplorableSiteKnowledge");
+            LocalTopologyKnowledgeRuntime localKnowledge =
+                (LocalTopologyKnowledgeRuntime)ReadNonPublicProperty(npc, "ExistingLocalTopologyKnowledge");
+            AdventureSiteIntelKnowledgeRuntime adventureProjection =
+                (AdventureSiteIntelKnowledgeRuntime)ReadNonPublicProperty(npc, "ExistingAdventureSiteIntelKnowledge");
             object commercialKnowledge = ReadNonPublicProperty(npc, "ExistingCommercialKnowledge");
+            DailyV1NpcRuntimeOwners selectedOwners = npc.SelectedRuntimeOwners;
+            if (selectedOwners != null)
+            {
+                Assert.That(explorableProjection.SelectedOwner, Is.SameAs(selectedOwners.ExplorableSiteKnowledge),
+                    "The Unity serialization projection must bind to the selected Core ExplorableSiteKnowledge owner.");
+                Assert.That(adventureProjection.SelectedOwner, Is.SameAs(selectedOwners.AdventureSiteIntelKnowledge),
+                    "The Unity serialization projection must bind to the selected Core AdventureSiteIntelKnowledge owner.");
+            }
+            object explorableKnowledge = (object)selectedOwners?.ExplorableSiteKnowledge ?? explorableProjection;
+            object adventureKnowledge = (object)selectedOwners?.AdventureSiteIntelKnowledge ?? adventureProjection;
             object[] knowledgeOwners =
             {
                 explorableKnowledge,

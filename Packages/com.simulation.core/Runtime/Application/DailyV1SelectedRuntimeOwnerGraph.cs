@@ -670,6 +670,27 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         SpatialKnowledgeRuntime spatialKnowledge,
         out DailyV1NpcRuntimeOwners owners)
     {
+        return TryCreateBoundNpcOwner(runtimeId, definitions, definition, statuses,
+            inventory, moneyAccount, commercialKnowledge, merchantTradePlan, spatialKnowledge,
+            string.IsNullOrWhiteSpace(runtimeId) ? null : new DailyV1ExplorableSiteKnowledgeOwner(runtimeId),
+            string.IsNullOrWhiteSpace(runtimeId) ? null : new DailyV1AdventureSiteIntelKnowledgeOwner(runtimeId),
+            out owners);
+    }
+
+    internal static bool TryCreateBoundNpcOwner(
+        string runtimeId,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1NpcDefinition definition,
+        IEnumerable<DailyV1StatusDefinition> statuses,
+        DailyV1InventoryOwner inventory,
+        MoneyAccountRuntime moneyAccount,
+        DailyV1CommercialKnowledgeOwner commercialKnowledge,
+        DailyV1NpcMerchantTradePlanOwner merchantTradePlan,
+        SpatialKnowledgeRuntime spatialKnowledge,
+        DailyV1ExplorableSiteKnowledgeOwner explorableSiteKnowledge,
+        DailyV1AdventureSiteIntelKnowledgeOwner adventureSiteIntelKnowledge,
+        out DailyV1NpcRuntimeOwners owners)
+    {
         owners = null;
         if (spatialKnowledge == null) return false;
         if (merchantTradePlan == null
@@ -678,6 +699,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         bool created = DailyV1NpcRuntimeOwners.TryCreateBound(
             runtimeId, definitions, definition, statuses, inventory, moneyAccount,
             commercialKnowledge, merchantTradePlan, spatialKnowledge,
+            explorableSiteKnowledge, adventureSiteIntelKnowledge,
             out DailyV1NpcRuntimeOwners candidate);
         // A bound NPC can be staged before its City owners are composed (notably
         // during detached P12 restore). Cross-owner City joins are validated by

@@ -85,6 +85,11 @@ public sealed class DailyV1P12DSelectedCoreOwnerStagerTests
             Array.Empty<string>(), Array.Empty<string>(), 0L,
             Array.Empty<P12DNpcCommercialMarketValue>(),
             Array.Empty<P12DNpcCommercialLiquidityValue>(),
-            Array.Empty<DailyV1CommercialKnowledgeShareReceipt>(), 0L);
+            Array.Empty<DailyV1CommercialKnowledgeShareReceipt>(), 0L,
+            Array.Empty<ExplorableSiteKnowledgeObservation>(), 0L,
+            Array.Empty<AdventureOppositionObservation>(),
+            Array.Empty<AdventureNotableItemObservation>(),
+            Array.Empty<AdventureCommonResourceObservation>(),
+            Array.Empty<AdventureAccessObservation>(), 0L);
     }
 }

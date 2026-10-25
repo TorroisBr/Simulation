@@ -36,6 +36,8 @@ public sealed class DailyV1NpcActionSlotOwnerTests
             CommercialKnowledge = commercial,
             MerchantTradePlan = merchantPlan,
             SpatialKnowledge = spatial,
+            ExplorableSiteKnowledge = new DailyV1ExplorableSiteKnowledgeOwner("npc/restored"),
+            AdventureSiteIntelKnowledge = new DailyV1AdventureSiteIntelKnowledgeOwner("npc/restored"),
             CurrentAction = action,
             CurrentActionPayload = payload,
             ActionRevision = 17L,
@@ -74,6 +76,8 @@ public sealed class DailyV1NpcActionSlotOwnerTests
         Assert.That(owners.CommercialKnowledge, Is.SameAs(commercial));
         Assert.That(owners.MerchantTradePlan, Is.SameAs(merchantPlan));
         Assert.That(owners.SpatialKnowledge, Is.SameAs(spatial));
+        Assert.That(owners.ExplorableSiteKnowledge, Is.SameAs(state.ExplorableSiteKnowledge));
+        Assert.That(owners.AdventureSiteIntelKnowledge, Is.SameAs(state.AdventureSiteIntelKnowledge));
         Assert.That(owners.ActionSlot.CurrentAction, Is.SameAs(action));
         Assert.That(owners.ActionSlot.CurrentPayload, Is.SameAs(payload));
         Assert.That(owners.ActionSlot.Revision, Is.EqualTo(17L));
@@ -128,6 +132,8 @@ public sealed class DailyV1NpcActionSlotOwnerTests
             CommercialKnowledge = new DailyV1CommercialKnowledgeOwner(definitions),
             MerchantTradePlan = merchantPlan,
             SpatialKnowledge = new SpatialKnowledgeRuntime("npc/restored"),
+            ExplorableSiteKnowledge = new DailyV1ExplorableSiteKnowledgeOwner("npc/restored"),
+            AdventureSiteIntelKnowledge = new DailyV1AdventureSiteIntelKnowledgeOwner("npc/restored"),
             CurrentAction = foreignAction,
             CurrentActionPayload = foreignPayload,
             ActionRevision = 4L,

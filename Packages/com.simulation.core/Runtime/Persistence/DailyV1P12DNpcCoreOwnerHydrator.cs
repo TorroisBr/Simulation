@@ -28,6 +28,13 @@ internal sealed class DailyV1P12DNpcCoreOwnerHydrationInput
     internal IReadOnlyList<P12DNpcCommercialLiquidityValue> CommercialLiquidity { get; }
     internal IReadOnlyList<DailyV1CommercialKnowledgeShareReceipt> CommercialShareReceipts { get; }
     internal long CommercialKnowledgeRevision { get; }
+    internal IReadOnlyList<ExplorableSiteKnowledgeObservation> SiteObservations { get; }
+    internal long SiteKnowledgeRevision { get; }
+    internal IReadOnlyList<AdventureOppositionObservation> OppositionObservations { get; }
+    internal IReadOnlyList<AdventureNotableItemObservation> NotableItemObservations { get; }
+    internal IReadOnlyList<AdventureCommonResourceObservation> CommonResourceObservations { get; }
+    internal IReadOnlyList<AdventureAccessObservation> AccessObservations { get; }
+    internal long AdventureKnowledgeRevision { get; }
 
     internal DailyV1P12DNpcCoreOwnerHydrationInput(
         P12DNpcDRow dRow,
@@ -47,7 +54,14 @@ internal sealed class DailyV1P12DNpcCoreOwnerHydrationInput
         IEnumerable<P12DNpcCommercialMarketValue> commercialMarkets,
         IEnumerable<P12DNpcCommercialLiquidityValue> commercialLiquidity,
         IEnumerable<DailyV1CommercialKnowledgeShareReceipt> commercialShareReceipts,
-        long commercialKnowledgeRevision)
+        long commercialKnowledgeRevision,
+        IEnumerable<ExplorableSiteKnowledgeObservation> siteObservations,
+        long siteKnowledgeRevision,
+        IEnumerable<AdventureOppositionObservation> oppositionObservations,
+        IEnumerable<AdventureNotableItemObservation> notableItemObservations,
+        IEnumerable<AdventureCommonResourceObservation> commonResourceObservations,
+        IEnumerable<AdventureAccessObservation> accessObservations,
+        long adventureKnowledgeRevision)
     {
         DRow = dRow;
         Action = action;
@@ -67,6 +81,13 @@ internal sealed class DailyV1P12DNpcCoreOwnerHydrationInput
         CommercialLiquidity = Copy(commercialLiquidity);
         CommercialShareReceipts = Copy(commercialShareReceipts);
         CommercialKnowledgeRevision = commercialKnowledgeRevision;
+        SiteObservations = Copy(siteObservations);
+        SiteKnowledgeRevision = siteKnowledgeRevision;
+        OppositionObservations = Copy(oppositionObservations);
+        NotableItemObservations = Copy(notableItemObservations);
+        CommonResourceObservations = Copy(commonResourceObservations);
+        AccessObservations = Copy(accessObservations);
+        AdventureKnowledgeRevision = adventureKnowledgeRevision;
     }
 
     private static IReadOnlyList<T> Copy<T>(IEnumerable<T> source) =>
@@ -109,6 +130,9 @@ internal static class DailyV1P12DNpcCoreOwnerHydrator
             || input.KnownLocationRuntimeIds == null || input.KnownRouteRuntimeIds == null
             || input.CommercialMarkets == null || input.CommercialLiquidity == null
             || input.CommercialShareReceipts == null
+            || input.SiteObservations == null || input.OppositionObservations == null
+            || input.NotableItemObservations == null || input.CommonResourceObservations == null
+            || input.AccessObservations == null
             || !TryBuildIdSet(cityRuntimeIds, out HashSet<string> cities)
             || !TryBuildIdSet(locationRuntimeIds, out HashSet<string> locations)
             || !TryBuildIdSet(routeRuntimeIds, out HashSet<string> routes)
@@ -192,6 +216,20 @@ internal static class DailyV1P12DNpcCoreOwnerHydrator
             return false;
         }
 
+        DailyV1ExplorableSiteKnowledgeOwner siteKnowledge =
+            new DailyV1ExplorableSiteKnowledgeOwner(d.RuntimeId);
+        DailyV1AdventureSiteIntelKnowledgeOwner adventureKnowledge =
+            new DailyV1AdventureSiteIntelKnowledgeOwner(d.RuntimeId);
+        if (!siteKnowledge.TryCreateInitialSnapshot(input.SiteObservations, input.SiteKnowledgeRevision)
+            || !adventureKnowledge.TryCreateInitialSnapshot(
+                input.OppositionObservations, input.NotableItemObservations,
+                input.CommonResourceObservations, input.AccessObservations,
+                input.AdventureKnowledgeRevision))
+        {
+            failure = DailyV1P12DNpcCoreOwnerHydrationFailure.UnsupportedValue;
+            return false;
+        }
+
         DailyV1ActionDefinition selectedAction = null;
         DailyV1NpcActionPayloadOwner actionPayload = null;
         if (input.Action != null
@@ -229,6 +267,8 @@ internal static class DailyV1P12DNpcCoreOwnerHydrator
             CommercialKnowledge = commercialKnowledge,
             MerchantTradePlan = merchantPlan,
             SpatialKnowledge = spatialKnowledge,
+            ExplorableSiteKnowledge = siteKnowledge,
+            AdventureSiteIntelKnowledge = adventureKnowledge,
             CurrentAction = selectedAction,
             CurrentActionPayload = actionPayload,
             ActionRevision = d.CurrentActionRevision,

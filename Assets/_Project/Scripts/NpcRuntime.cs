@@ -1404,6 +1404,12 @@ public class NpcRuntime : ICapabilityConditionSource
         explorableSiteKnowledge = new ExplorableSiteKnowledgeRuntime(runtimeId);
         localTopologyKnowledge = new LocalTopologyKnowledgeRuntime(runtimeId);
         adventureSiteIntelKnowledge = new AdventureSiteIntelKnowledgeRuntime(runtimeId);
+        if (selectedRuntimeOwners != null
+            && (!explorableSiteKnowledge.TryBindSelectedOwner(selectedRuntimeOwners.ExplorableSiteKnowledge)
+                || !adventureSiteIntelKnowledge.TryBindSelectedOwner(selectedRuntimeOwners.AdventureSiteIntelKnowledge)))
+            throw new ArgumentException(
+                "The selected NPC Knowledge projections must bind the exact Core owners.",
+                nameof(selectedDefinition));
 		if (selectedDefinition == null)
             moneyAccount = new MoneyAccountRuntime(initialMoney);
 
@@ -1622,6 +1628,11 @@ public class NpcRuntime : ICapabilityConditionSource
             if (!MerchantTradePlan.TryBindSelectedOwner(
                     selectedRuntimeOwners.MerchantTradePlan, bindings,
                     resolveCityRuntime ?? (_ => null))) return false;
+            if (!ExplorableSiteKnowledge.CanBindSelectedOwner(selectedRuntimeOwners.ExplorableSiteKnowledge)
+                || !AdventureSiteIntelKnowledge.CanBindSelectedOwner(selectedRuntimeOwners.AdventureSiteIntelKnowledge)
+                || !ExplorableSiteKnowledge.TryBindSelectedOwner(selectedRuntimeOwners.ExplorableSiteKnowledge)
+                || !AdventureSiteIntelKnowledge.TryBindSelectedOwner(selectedRuntimeOwners.AdventureSiteIntelKnowledge))
+                return false;
 
             // A detached P12 stage already owns the canonical status nodes.
             // Bind only the Unity compatibility projection here; never rebuild
@@ -1693,6 +1704,11 @@ public class NpcRuntime : ICapabilityConditionSource
         if (currentActionRuntime != null
             && !currentActionRuntime.TryBindSelectedOwner(
                 stagedCurrentActionPayload, definitions, bindings)) return false;
+        if (!ExplorableSiteKnowledge.CanBindSelectedOwner(stagedOwners.ExplorableSiteKnowledge)
+            || !AdventureSiteIntelKnowledge.CanBindSelectedOwner(stagedOwners.AdventureSiteIntelKnowledge)
+            || !ExplorableSiteKnowledge.TryBindSelectedOwner(stagedOwners.ExplorableSiteKnowledge)
+            || !AdventureSiteIntelKnowledge.TryBindSelectedOwner(stagedOwners.AdventureSiteIntelKnowledge))
+            return false;
         selectedRuntimeOwners = stagedOwners;
         p12CrimeJusticeRevision = 0L;
         selectedDefinitionBindings = bindings;
@@ -1857,6 +1873,19 @@ public class NpcRuntime : ICapabilityConditionSource
                 return false;
             NpcTravelPlanState stagedTravelPlanState = state.TravelPlan.CaptureOwnerState();
             if (stagedTravelPlanState == null) return false;
+            DailyV1ExplorableSiteKnowledgeOwner stagedExplorableOwner =
+                state.SelectedRuntimeOwners?.ExplorableSiteKnowledge;
+            if (stagedExplorableOwner == null
+                && !state.ExplorableSiteKnowledge.TryCreateSelectedOwnerSnapshot(out stagedExplorableOwner))
+                return false;
+            DailyV1AdventureSiteIntelKnowledgeOwner stagedAdventureOwner =
+                state.SelectedRuntimeOwners?.AdventureSiteIntelKnowledge;
+            if (stagedAdventureOwner == null
+                && !state.AdventureSiteIntelKnowledge.TryCreateSelectedOwnerSnapshot(out stagedAdventureOwner))
+                return false;
+            if (!state.ExplorableSiteKnowledge.CanBindSelectedOwner(stagedExplorableOwner)
+                || !state.AdventureSiteIntelKnowledge.CanBindSelectedOwner(stagedAdventureOwner))
+                return false;
             DailyV1NpcActionPayloadOwner stagedCurrentActionPayload = state.SelectedCurrentActionPayload;
             if ((state.CurrentActionRuntime == null && stagedCurrentActionPayload != null)
                 || (state.CurrentActionRuntime != null
@@ -1876,6 +1905,8 @@ public class NpcRuntime : ICapabilityConditionSource
                 CommercialKnowledge = state.CommercialKnowledge.SelectedOwner,
                 MerchantTradePlan = state.SelectedMerchantTradePlanOwner,
                 SpatialKnowledge = state.SpatialKnowledge,
+                ExplorableSiteKnowledge = stagedExplorableOwner,
+                AdventureSiteIntelKnowledge = stagedAdventureOwner,
                 CurrentAction = stagedCurrentAction,
                 CurrentActionPayload = stagedCurrentActionPayload,
                 ActionRevision = state.CurrentActionRevision,
@@ -1912,7 +1943,11 @@ public class NpcRuntime : ICapabilityConditionSource
                 || !state.TravelPlan.TryBindSelectedOwner(stagedSelectedOwners.TravelPlan)
                 || (state.CurrentActionRuntime != null
                     && !ReferenceEquals(state.CurrentActionRuntime.SelectedOwner,
-                        stagedCurrentActionPayload)))
+                        stagedCurrentActionPayload))
+                || !state.ExplorableSiteKnowledge.CanBindSelectedOwner(
+                    stagedSelectedOwners.ExplorableSiteKnowledge)
+                || !state.AdventureSiteIntelKnowledge.CanBindSelectedOwner(
+                    stagedSelectedOwners.AdventureSiteIntelKnowledge))
                 return false;
         }
         else if (state.SelectedNpcDefinition != null
@@ -1965,6 +2000,10 @@ public class NpcRuntime : ICapabilityConditionSource
         explorableSiteKnowledge = state.ExplorableSiteKnowledge;
         localTopologyKnowledge = state.LocalTopologyKnowledge;
         adventureSiteIntelKnowledge = state.AdventureSiteIntelKnowledge;
+        if (stagedSelectedOwners != null
+            && (!explorableSiteKnowledge.TryBindSelectedOwner(stagedSelectedOwners.ExplorableSiteKnowledge)
+                || !adventureSiteIntelKnowledge.TryBindSelectedOwner(stagedSelectedOwners.AdventureSiteIntelKnowledge)))
+            return false;
         lifeStateRevision = stagedSelectedOwners == null ? state.LifeStateRevision : 0L;
         residenceRevision = state.ResidenceRevision;
         p12CrimeJusticeRevision = stagedSelectedOwners == null ? state.CrimeJusticeRevision : 0L;

@@ -52,21 +52,48 @@ public static class NpcKnowledgeCensusProvider
         public string RuntimeId => npc.RuntimeId;
         public NpcRuntime NpcOwner => npc;
         public int SectionKind => kind;
-        public object TypedOwner => kind == 0 ? (object)explorable : kind <= 2 ? local : kind <= 6 ? adventure : commercial;
+        public object TypedOwner
+        {
+            get
+            {
+                DailyV1NpcRuntimeOwners selected = npc.SelectedRuntimeOwners;
+                if (selected == null) return kind == 0 ? (object)explorable : kind <= 2 ? local : kind <= 6 ? adventure : commercial;
+                return kind == 0 ? (object)selected.ExplorableSiteKnowledge
+                    : kind <= 2 ? local
+                    : kind <= 6 ? selected.AdventureSiteIntelKnowledge
+                    : commercial;
+            }
+        }
 
         public OwnerSectionCensusWitness GetCurrentCensus()
         {
             int cardinality;
             long revision;
+            DailyV1NpcRuntimeOwners selected = npc.SelectedRuntimeOwners;
             switch (kind)
             {
-                case 0: cardinality = explorable.Observations.Count; revision = explorable.Revision; break;
+                case 0:
+                    cardinality = selected == null ? explorable.Observations.Count : selected.ExplorableSiteKnowledge.Observations.Count;
+                    revision = selected == null ? explorable.Revision : selected.ExplorableSiteKnowledge.Revision;
+                    break;
                 case 1: cardinality = local.PlaceObservations.Count; revision = local.Revision; break;
                 case 2: cardinality = local.ConnectionObservations.Count; revision = local.Revision; break;
-                case 3: cardinality = adventure.OppositionObservations.Count; revision = adventure.Revision; break;
-                case 4: cardinality = adventure.NotableItemObservations.Count; revision = adventure.Revision; break;
-                case 5: cardinality = adventure.CommonResourceObservations.Count; revision = adventure.Revision; break;
-                case 6: cardinality = adventure.AccessObservations.Count; revision = adventure.Revision; break;
+                case 3:
+                    cardinality = selected == null ? adventure.OppositionObservations.Count : selected.AdventureSiteIntelKnowledge.OppositionObservations.Count;
+                    revision = selected == null ? adventure.Revision : selected.AdventureSiteIntelKnowledge.Revision;
+                    break;
+                case 4:
+                    cardinality = selected == null ? adventure.NotableItemObservations.Count : selected.AdventureSiteIntelKnowledge.NotableItemObservations.Count;
+                    revision = selected == null ? adventure.Revision : selected.AdventureSiteIntelKnowledge.Revision;
+                    break;
+                case 5:
+                    cardinality = selected == null ? adventure.CommonResourceObservations.Count : selected.AdventureSiteIntelKnowledge.CommonResourceObservations.Count;
+                    revision = selected == null ? adventure.Revision : selected.AdventureSiteIntelKnowledge.Revision;
+                    break;
+                case 6:
+                    cardinality = selected == null ? adventure.AccessObservations.Count : selected.AdventureSiteIntelKnowledge.AccessObservations.Count;
+                    revision = selected == null ? adventure.Revision : selected.AdventureSiteIntelKnowledge.Revision;
+                    break;
                 default:
                     if (!commercial.TryReadCensus(out int markets, out int liquidity, out int receipts, out revision))
                         throw new InvalidOperationException("Commercial Knowledge census requires all backing lists to exist.");
@@ -90,11 +117,15 @@ public static class NpcKnowledgeCensusProvider
             LocalTopologyKnowledgeRuntime local = npc.ExistingLocalTopologyKnowledge;
             AdventureSiteIntelKnowledgeRuntime adventure = npc.ExistingAdventureSiteIntelKnowledge;
             CommercialKnowledgeRuntime commercial = npc.ExistingCommercialKnowledge;
+            DailyV1NpcRuntimeOwners selected = npc.SelectedRuntimeOwners;
             if (explorable == null || local == null || adventure == null || commercial == null
                 || !string.Equals(explorable.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
                 || !string.Equals(local.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
-                || !string.Equals(adventure.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal))
-                throw new InvalidOperationException("Knowledge census requires existing exact NPC-owned Knowledge runtimes.");
+                || !string.Equals(adventure.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
+                || (selected != null
+                    && (!ReferenceEquals(explorable.SelectedOwner, selected.ExplorableSiteKnowledge)
+                        || !ReferenceEquals(adventure.SelectedOwner, selected.AdventureSiteIntelKnowledge))))
+                throw new InvalidOperationException("Knowledge census requires existing exact NPC-owned Knowledge runtimes and their bound Core owners.");
             ordered.Add(npc);
         }
         ordered.Sort((a, b) => StringComparer.Ordinal.Compare(a.RuntimeId, b.RuntimeId));

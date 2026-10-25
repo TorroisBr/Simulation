@@ -28,6 +28,8 @@ internal sealed class DailyV1NpcRuntimeOwners
     internal MoneyAccountRuntime MoneyAccount { get; }
     internal DailyV1CommercialKnowledgeOwner CommercialKnowledge { get; }
     internal SpatialKnowledgeRuntime SpatialKnowledge { get; }
+    internal DailyV1ExplorableSiteKnowledgeOwner ExplorableSiteKnowledge { get; }
+    internal DailyV1AdventureSiteIntelKnowledgeOwner AdventureSiteIntelKnowledge { get; }
     internal DailyV1NpcLifecycleOwner Lifecycle { get; }
     internal DailyV1NpcActionSlotOwner ActionSlot { get; }
     internal DailyV1NpcTravelOwner Travel { get; }
@@ -44,7 +46,9 @@ internal sealed class DailyV1NpcRuntimeOwners
         DailyV1NpcStatusOwner status,
         MoneyAccountRuntime moneyAccount,
         DailyV1CommercialKnowledgeOwner commercialKnowledge,
-        SpatialKnowledgeRuntime spatialKnowledge)
+        SpatialKnowledgeRuntime spatialKnowledge,
+        DailyV1ExplorableSiteKnowledgeOwner explorableSiteKnowledge,
+        DailyV1AdventureSiteIntelKnowledgeOwner adventureSiteIntelKnowledge)
     {
         RuntimeId = runtimeId;
         Definitions = definitions;
@@ -55,6 +59,8 @@ internal sealed class DailyV1NpcRuntimeOwners
         MoneyAccount = moneyAccount;
         CommercialKnowledge = commercialKnowledge;
         SpatialKnowledge = spatialKnowledge;
+        ExplorableSiteKnowledge = explorableSiteKnowledge;
+        AdventureSiteIntelKnowledge = adventureSiteIntelKnowledge;
         Lifecycle = new DailyV1NpcLifecycleOwner();
         ActionSlot = new DailyV1NpcActionSlotOwner(definitions);
         Travel = new DailyV1NpcTravelOwner(runtimeId);
@@ -102,7 +108,8 @@ internal sealed class DailyV1NpcRuntimeOwners
         MoneyAccountRuntime moneyAccount = new MoneyAccountRuntime(initialMoney);
         return TryCreateBound(runtimeId, definitions, definition, statuses, inventory, moneyAccount,
             new DailyV1CommercialKnowledgeOwner(definitions), merchantTradePlan,
-            spatialKnowledge, out owners);
+            spatialKnowledge, new DailyV1ExplorableSiteKnowledgeOwner(runtimeId),
+            new DailyV1AdventureSiteIntelKnowledgeOwner(runtimeId), out owners);
     }
 
     internal static bool TryCreateBound(
@@ -133,6 +140,27 @@ internal sealed class DailyV1NpcRuntimeOwners
         SpatialKnowledgeRuntime spatialKnowledge,
         out DailyV1NpcRuntimeOwners owners)
     {
+        return TryCreateBound(runtimeId, definitions, definition, statuses, inventory,
+            moneyAccount, commercialKnowledge, merchantTradePlan, spatialKnowledge,
+            string.IsNullOrWhiteSpace(runtimeId) ? null : new DailyV1ExplorableSiteKnowledgeOwner(runtimeId),
+            string.IsNullOrWhiteSpace(runtimeId) ? null : new DailyV1AdventureSiteIntelKnowledgeOwner(runtimeId),
+            out owners);
+    }
+
+    internal static bool TryCreateBound(
+        string runtimeId,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1NpcDefinition definition,
+        IEnumerable<DailyV1StatusDefinition> statuses,
+        DailyV1InventoryOwner inventory,
+        MoneyAccountRuntime moneyAccount,
+        DailyV1CommercialKnowledgeOwner commercialKnowledge,
+        DailyV1NpcMerchantTradePlanOwner merchantTradePlan,
+        SpatialKnowledgeRuntime spatialKnowledge,
+        DailyV1ExplorableSiteKnowledgeOwner explorableSiteKnowledge,
+        DailyV1AdventureSiteIntelKnowledgeOwner adventureSiteIntelKnowledge,
+        out DailyV1NpcRuntimeOwners owners)
+    {
         owners = null;
         if (string.IsNullOrWhiteSpace(runtimeId)
             || !IsAdmitted(definitions, definition)
@@ -144,13 +172,18 @@ internal sealed class DailyV1NpcRuntimeOwners
             || !ReferenceEquals(merchantTradePlan.Definitions, definitions)
             || spatialKnowledge == null
             || !string.Equals(spatialKnowledge.OwnerRuntimeId, runtimeId, StringComparison.Ordinal)
+            || explorableSiteKnowledge == null
+            || !string.Equals(explorableSiteKnowledge.OwnerRuntimeId, runtimeId, StringComparison.Ordinal)
+            || adventureSiteIntelKnowledge == null
+            || !string.Equals(adventureSiteIntelKnowledge.OwnerRuntimeId, runtimeId, StringComparison.Ordinal)
             || (inventory != null && !ReferenceEquals(inventory.Definitions, definitions))
             || !DailyV1NpcStatusOwner.TryCreate(definitions, statuses, out DailyV1NpcStatusOwner statusOwner))
             return false;
 
         owners = new DailyV1NpcRuntimeOwners(
             runtimeId, definitions, definition, inventory, merchantTradePlan,
-            statusOwner, moneyAccount, commercialKnowledge, spatialKnowledge);
+            statusOwner, moneyAccount, commercialKnowledge, spatialKnowledge,
+            explorableSiteKnowledge, adventureSiteIntelKnowledge);
         return true;
     }
 
@@ -213,6 +246,8 @@ internal sealed class DailyV1NpcRuntimeOwners
             || state.CommercialKnowledge == null
             || state.MerchantTradePlan == null
             || state.SpatialKnowledge == null
+            || state.ExplorableSiteKnowledge == null
+            || state.AdventureSiteIntelKnowledge == null
             || state.ActionRevision < 0L
             || state.LifeStateRevision < 0L
             || state.CrimeJusticeRevision < 0L
@@ -229,6 +264,8 @@ internal sealed class DailyV1NpcRuntimeOwners
                 state.CommercialKnowledge,
                 state.MerchantTradePlan,
                 state.SpatialKnowledge,
+                state.ExplorableSiteKnowledge,
+                state.AdventureSiteIntelKnowledge,
                 out DailyV1NpcRuntimeOwners candidate)
             || candidate == null
             || !candidate.ActionSlot.TrySetCurrentAction(state.CurrentAction, state.CurrentActionPayload)
@@ -280,6 +317,8 @@ internal sealed class DailyV1NpcRuntimeOwners
             || !ReferenceEquals(CommercialKnowledge, state.CommercialKnowledge)
             || !ReferenceEquals(MerchantTradePlan, state.MerchantTradePlan)
             || !ReferenceEquals(SpatialKnowledge, state.SpatialKnowledge)
+            || !ReferenceEquals(ExplorableSiteKnowledge, state.ExplorableSiteKnowledge)
+            || !ReferenceEquals(AdventureSiteIntelKnowledge, state.AdventureSiteIntelKnowledge)
             || Status == null || state.Statuses == null
             || Status.Statuses.Count != state.Statuses.Count
             || ActionSlot == null
@@ -354,6 +393,8 @@ internal sealed class DailyV1NpcRuntimeRestoreState
     internal DailyV1CommercialKnowledgeOwner CommercialKnowledge { get; set; }
     internal DailyV1NpcMerchantTradePlanOwner MerchantTradePlan { get; set; }
     internal SpatialKnowledgeRuntime SpatialKnowledge { get; set; }
+    internal DailyV1ExplorableSiteKnowledgeOwner ExplorableSiteKnowledge { get; set; }
+    internal DailyV1AdventureSiteIntelKnowledgeOwner AdventureSiteIntelKnowledge { get; set; }
     internal DailyV1ActionDefinition CurrentAction { get; set; }
     internal DailyV1NpcActionPayloadOwner CurrentActionPayload { get; set; }
     internal long ActionRevision { get; set; }

@@ -1376,7 +1376,11 @@ internal static class P12DNpcRootOwnerSnapshot
             f.ActiveTravelPartyId, f.TravelStateRevision, f.MerchantPlan, f.TravelPlan,
             f.KnownLocationRuntimeIds, f.KnownRouteRuntimeIds, f.SpatialKnowledgeRevision,
             f.CommercialMarkets, f.CommercialLiquidity, receipts,
-            f.CommercialKnowledgeRevision);
+            f.CommercialKnowledgeRevision,
+            f.SiteObservations, f.SiteKnowledgeRevision,
+            f.OppositionObservations, f.NotableItemObservations,
+            f.CommonResourceObservations, f.AccessObservations,
+            f.AdventureKnowledgeRevision);
         return true;
     }
 
@@ -1623,24 +1627,43 @@ internal static class P12DNpcRootOwnerSnapshot
                 SpatialKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
                 owner, owner.KnownRouteCount, owner.Revision);
 
-        bool siteOwners(ExplorableSiteKnowledgeRuntime owner) =>
-            TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(0, npc.RuntimeId),
+        bool siteOwners(ExplorableSiteKnowledgeRuntime projection)
+        {
+            DailyV1ExplorableSiteKnowledgeOwner selected =
+                npc.SelectedRuntimeOwners?.ExplorableSiteKnowledge;
+            if (selected != null && !ReferenceEquals(projection.SelectedOwner, selected)) return false;
+            object owner = selected ?? (object)projection;
+            int cardinality = selected?.Observations.Count ?? projection.Observations.Count;
+            long revision = selected?.Revision ?? projection.Revision;
+            return TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(0, npc.RuntimeId),
                 NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                owner, owner.Observations.Count, owner.Revision);
+                owner, cardinality, revision);
+        }
 
-        bool adventureOwners(AdventureSiteIntelKnowledgeRuntime owner) =>
-            TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(3, npc.RuntimeId),
-                NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                owner, owner.OppositionObservations.Count, owner.Revision)
-            && TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(4, npc.RuntimeId),
-                NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                owner, owner.NotableItemObservations.Count, owner.Revision)
-            && TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(5, npc.RuntimeId),
-                NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                owner, owner.CommonResourceObservations.Count, owner.Revision)
-            && TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(6, npc.RuntimeId),
-                NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                owner, owner.AccessObservations.Count, owner.Revision);
+        bool adventureOwners(AdventureSiteIntelKnowledgeRuntime projection)
+        {
+            DailyV1AdventureSiteIntelKnowledgeOwner selected =
+                npc.SelectedRuntimeOwners?.AdventureSiteIntelKnowledge;
+            if (selected != null && !ReferenceEquals(projection.SelectedOwner, selected)) return false;
+            object owner = selected ?? (object)projection;
+            int opposition = selected?.OppositionObservations.Count ?? projection.OppositionObservations.Count;
+            int notableItems = selected?.NotableItemObservations.Count ?? projection.NotableItemObservations.Count;
+            int commonResources = selected?.CommonResourceObservations.Count ?? projection.CommonResourceObservations.Count;
+            int access = selected?.AccessObservations.Count ?? projection.AccessObservations.Count;
+            long revision = selected?.Revision ?? projection.Revision;
+            return TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(3, npc.RuntimeId),
+                    NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
+                    owner, opposition, revision)
+                && TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(4, npc.RuntimeId),
+                    NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
+                    owner, notableItems, revision)
+                && TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(5, npc.RuntimeId),
+                    NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
+                    owner, commonResources, revision)
+                && TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(6, npc.RuntimeId),
+                    NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
+                    owner, access, revision);
+        }
 
         bool commercialOwners(CommercialKnowledgeRuntime owner)
         {

@@ -3,21 +3,23 @@ using System.Collections.Generic;
 using UnityEngine;
 
 [Serializable]
-public sealed class AdventureSiteIntelKnowledgeRuntime
+public sealed class AdventureSiteIntelKnowledgeRuntime : ISerializationCallbackReceiver
 {
     private readonly string ownerRuntimeId;
     [SerializeField] private long revision;
+    [NonSerialized] private DailyV1AdventureSiteIntelKnowledgeOwner selectedOwner;
     private readonly List<AdventureOppositionObservation> oppositionObservations = new List<AdventureOppositionObservation>();
     private readonly List<AdventureNotableItemObservation> notableItemObservations = new List<AdventureNotableItemObservation>();
     private readonly List<AdventureCommonResourceObservation> commonResourceObservations = new List<AdventureCommonResourceObservation>();
     private readonly List<AdventureAccessObservation> accessObservations = new List<AdventureAccessObservation>();
 
     public string OwnerRuntimeId => ownerRuntimeId;
-    public long Revision => revision;
-    public IReadOnlyList<AdventureOppositionObservation> OppositionObservations => oppositionObservations.AsReadOnly();
-    public IReadOnlyList<AdventureNotableItemObservation> NotableItemObservations => notableItemObservations.AsReadOnly();
-    public IReadOnlyList<AdventureCommonResourceObservation> CommonResourceObservations => commonResourceObservations.AsReadOnly();
-    public IReadOnlyList<AdventureAccessObservation> AccessObservations => accessObservations.AsReadOnly();
+    public long Revision => selectedOwner?.Revision ?? revision;
+    public IReadOnlyList<AdventureOppositionObservation> OppositionObservations => selectedOwner?.OppositionObservations ?? oppositionObservations.AsReadOnly();
+    public IReadOnlyList<AdventureNotableItemObservation> NotableItemObservations => selectedOwner?.NotableItemObservations ?? notableItemObservations.AsReadOnly();
+    public IReadOnlyList<AdventureCommonResourceObservation> CommonResourceObservations => selectedOwner?.CommonResourceObservations ?? commonResourceObservations.AsReadOnly();
+    public IReadOnlyList<AdventureAccessObservation> AccessObservations => selectedOwner?.AccessObservations ?? accessObservations.AsReadOnly();
+    internal DailyV1AdventureSiteIntelKnowledgeOwner SelectedOwner => selectedOwner;
 
     public AdventureSiteIntelKnowledgeRuntime(string ownerRuntimeId)
     {
@@ -27,6 +29,78 @@ public sealed class AdventureSiteIntelKnowledgeRuntime
         }
 
         this.ownerRuntimeId = ownerRuntimeId;
+    }
+
+    internal bool CanBindSelectedOwner(DailyV1AdventureSiteIntelKnowledgeOwner owner)
+    {
+        if (owner == null || !string.Equals(owner.OwnerRuntimeId, ownerRuntimeId, StringComparison.Ordinal)
+            || (selectedOwner != null && !ReferenceEquals(selectedOwner, owner))) return false;
+        if (selectedOwner != null) return true;
+
+        bool hasProjection = revision != 0L || oppositionObservations.Count != 0
+            || notableItemObservations.Count != 0 || commonResourceObservations.Count != 0
+            || accessObservations.Count != 0;
+        if (!hasProjection) return true;
+        if (owner.Revision == 0L && owner.OppositionObservations.Count == 0
+            && owner.NotableItemObservations.Count == 0 && owner.CommonResourceObservations.Count == 0
+            && owner.AccessObservations.Count == 0)
+            return owner.CanCreateInitialSnapshot(oppositionObservations, notableItemObservations,
+                commonResourceObservations, accessObservations, revision);
+        return owner.MatchesSnapshot(oppositionObservations, notableItemObservations,
+            commonResourceObservations, accessObservations, revision);
+    }
+
+    internal bool TryBindSelectedOwner(DailyV1AdventureSiteIntelKnowledgeOwner owner)
+    {
+        if (!CanBindSelectedOwner(owner)) return false;
+        bool hasProjection = revision != 0L || oppositionObservations.Count != 0
+            || notableItemObservations.Count != 0 || commonResourceObservations.Count != 0
+            || accessObservations.Count != 0;
+        if (selectedOwner == null && hasProjection && owner.Revision == 0L
+            && owner.OppositionObservations.Count == 0 && owner.NotableItemObservations.Count == 0
+            && owner.CommonResourceObservations.Count == 0 && owner.AccessObservations.Count == 0
+            && !owner.TryCreateInitialSnapshot(oppositionObservations, notableItemObservations,
+                commonResourceObservations, accessObservations, revision)) return false;
+        selectedOwner = owner;
+        CopySelectedOwnerToSerializationProjection();
+        return true;
+    }
+
+    internal bool TryCreateSelectedOwnerSnapshot(
+        out DailyV1AdventureSiteIntelKnowledgeOwner owner)
+    {
+        if (selectedOwner != null)
+        {
+            owner = selectedOwner;
+            return true;
+        }
+        DailyV1AdventureSiteIntelKnowledgeOwner candidate =
+            new DailyV1AdventureSiteIntelKnowledgeOwner(ownerRuntimeId);
+        if (!candidate.TryCreateInitialSnapshot(oppositionObservations, notableItemObservations,
+            commonResourceObservations, accessObservations, revision))
+        {
+            owner = null;
+            return false;
+        }
+        owner = candidate;
+        return true;
+    }
+
+    public void OnBeforeSerialize() => CopySelectedOwnerToSerializationProjection();
+    public void OnAfterDeserialize() => selectedOwner = null;
+
+    private void CopySelectedOwnerToSerializationProjection()
+    {
+        if (selectedOwner == null) return;
+        oppositionObservations.Clear();
+        oppositionObservations.AddRange(selectedOwner.OppositionObservations);
+        notableItemObservations.Clear();
+        notableItemObservations.AddRange(selectedOwner.NotableItemObservations);
+        commonResourceObservations.Clear();
+        commonResourceObservations.AddRange(selectedOwner.CommonResourceObservations);
+        accessObservations.Clear();
+        accessObservations.AddRange(selectedOwner.AccessObservations);
+        revision = selectedOwner.Revision;
     }
 
     /// <summary>Builds an unpublished owner from copied exact values without replaying observations.</summary>
@@ -99,7 +173,7 @@ public sealed class AdventureSiteIntelKnowledgeRuntime
         string oppositionRuntimeId,
         out AdventureOppositionObservation observation)
     {
-        foreach (AdventureOppositionObservation candidate in oppositionObservations)
+        foreach (AdventureOppositionObservation candidate in OppositionObservations)
         {
             if (candidate != null
                 && string.Equals(candidate.SiteRuntimeId, siteRuntimeId, StringComparison.Ordinal)
@@ -116,7 +190,7 @@ public sealed class AdventureSiteIntelKnowledgeRuntime
 
     public bool KnowsNotableItem(string siteRuntimeId, string notableItemRuntimeId)
     {
-        foreach (AdventureNotableItemObservation observation in notableItemObservations)
+        foreach (AdventureNotableItemObservation observation in NotableItemObservations)
         {
             if (observation != null
                 && string.Equals(observation.SiteRuntimeId, siteRuntimeId, StringComparison.Ordinal)
@@ -131,7 +205,7 @@ public sealed class AdventureSiteIntelKnowledgeRuntime
 
     public bool KnowsCommonResource(string siteRuntimeId, string itemDefinitionId)
     {
-        foreach (AdventureCommonResourceObservation observation in commonResourceObservations)
+        foreach (AdventureCommonResourceObservation observation in CommonResourceObservations)
         {
             if (observation != null
                 && observation.ObservedAmount > 0
@@ -147,6 +221,20 @@ public sealed class AdventureSiteIntelKnowledgeRuntime
 
     private bool Record<T>(List<T> observations, T incoming) where T : AdventureSiteIntelObservation
     {
+        if (selectedOwner != null)
+        {
+            bool committed = incoming is AdventureOppositionObservation opposition
+                ? selectedOwner.RecordObservation(opposition)
+                : incoming is AdventureNotableItemObservation notable
+                    ? selectedOwner.RecordObservation(notable)
+                    : incoming is AdventureCommonResourceObservation resource
+                        ? selectedOwner.RecordObservation(resource)
+                        : incoming is AdventureAccessObservation access
+                            && selectedOwner.RecordObservation(access);
+            if (committed) CopySelectedOwnerToSerializationProjection();
+            return committed;
+        }
+
         if (incoming == null)
         {
             return false;
