@@ -126,6 +126,7 @@
       <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/CORE_F_CompatibilityParityTests.cs" Link="Compatibility/CORE_F_CompatibilityParityTests.cs" />
       <Compile Include="PopulationOwnerContractTests.cs" Link="Population/PopulationOwnerContractTests.cs" />
       <Compile Include="Genealogy/GenealogyOwnerTests.cs" Link="Genealogy/GenealogyOwnerTests.cs" />
+      <Compile Include="P12AFPoliticalKnowledgeOwnerCodecTests.cs" Link="Persistence/P12AFPoliticalKnowledgeOwnerCodecTests.cs" />
     <Compile Include="Persistence/P12AGenealogyOwnerCodecTests.cs" Link="Persistence/P12AGenealogyOwnerCodecTests.cs" />
   </ItemGroup>
 </Project>

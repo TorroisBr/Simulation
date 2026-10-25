@@ -26,7 +26,17 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimStore.cs" Link="Political/PoliticalClaimStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimTransitions.cs" Link="Political/PoliticalClaimTransitions.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimOwnerBridge.cs" Link="Political/PoliticalClaimOwnerBridge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/FactionContracts.cs" Link="Political/FactionContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/FactionStore.cs" Link="Political/FactionStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/FactionTransitions.cs" Link="Political/FactionTransitions.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/FactualReadAdmission.cs" Link="Application/FactualReadAdmission.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalKnowledge.cs" Link="Political/PoliticalKnowledge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalKnowledgeStore.cs" Link="Political/PoliticalKnowledgeStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalKnowledgeStoreCensusProvider.cs" Link="Political/PoliticalKnowledgeStoreCensusProvider.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Property/PropertyContracts.cs" Link="Property/PropertyContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Property/PropertyOwnershipStore.cs" Link="Property/PropertyOwnershipStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Property/PropertyTransferContracts.cs" Link="Property/PropertyTransferContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Property/PropertyTransferSystem.cs" Link="Property/PropertyTransferSystem.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationTypes.cs" Link="Configuration/SimulationConfigurationTypes.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationDefaults.cs" Link="Configuration/SimulationConfigurationDefaults.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationResolver.cs" Link="Configuration/SimulationConfigurationResolver.cs" />
@@ -137,6 +147,8 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/ExpeditionStore.cs" Link="Expedition/ExpeditionStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ScheduledDirectiveCensusProvider.cs" Link="Persistence/ScheduledDirectiveCensusProvider.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12FScheduledDirectiveOwnerSnapshot.cs" Link="Persistence/P12FScheduledDirectiveOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12FStandaloneOwnerSnapshots.cs" Link="Persistence/P12FStandaloneOwnerSnapshots.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AFPoliticalKnowledgeCodec.cs" Link="Persistence/P12AFPoliticalKnowledgeCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AFScheduledDirectiveCodec.cs" Link="Persistence/P12AFScheduledDirectiveCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/ExpeditionCensusProvider.cs" Link="Expedition/ExpeditionCensusProvider.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/P12FExpeditionOwnerSnapshot.cs" Link="Expedition/P12FExpeditionOwnerSnapshot.cs" />
