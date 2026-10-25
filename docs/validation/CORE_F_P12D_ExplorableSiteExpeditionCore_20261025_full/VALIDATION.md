@@ -49,8 +49,11 @@ stable during Unity validation and remain outside the candidate commit.
 - The approved result-only package is
   [`coref-p12d-site-expedition-full-20261025.zip`](coref-p12d-site-expedition-full-20261025.zip),
   SHA-256 `8240e45f2ede62ef2b3cadda052604040426746bdd61e30d391ee273cb6b648d`,
-  172,447 bytes. Its public manifest SHA-256 is
-  `5834b3de1a00fef391e20f5128d3bd6d15fd398344585cff18501d2c78234dda`; package
+  172,447 bytes. Manifest SHA-256 is
+  `5834b3de1a00fef391e20f5128d3bd6d15fd398344585cff18501d2c78234dda` in the
+  CRLF worktree checkout (`core.autocrlf=true`) and
+  `b05d1735cf34b8577ae19f3140ad6f55f862c83382afeec901b5e0235036f77d` in the
+  committed LF Git blob. Package
   verification passed against the protected original. The package contains the
   complete full EditMode report; exact identities for both focused cases and
   all five Smoke cases were confirmed present in that report. Filtered reports
