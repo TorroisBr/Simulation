@@ -56,7 +56,9 @@ metadata recorded in the manifests.
 - Raw log SHA-256: 08fdd353af7307bad773f8cfc189d0a07a21b85d7ba4d453691f71f7b4592e79 (237,528,384 bytes; protected, not published).
 - Result-only package: coref-p12d-political-knowledge-editmode.zip, 172,562 bytes,
   SHA-256 9dcbf002648e1e5675a664643135c464c8568de82997b3920934a61eb52615ed.
-- Public package manifest SHA-256:
+- Committed package manifest content SHA-256 (GitHub/Git blob LF bytes):
+  8424372d0f51cf3de4a4cdafa96434e14aa8f23a02ddae53ffd3faccfb437eb3.
+- Windows checkout CRLF representation SHA-256 (not the committed blob):
   17d6913c5c76179fb9df69f4753837d42dc2b3bea9d6a71de86247c47a5dc25a.
 - The official package verifier accepted the bundle (runs=1, entries=1);
   a separate privacy scan found no workstation path patterns.
