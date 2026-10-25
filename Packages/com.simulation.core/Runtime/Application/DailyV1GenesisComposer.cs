@@ -232,7 +232,7 @@ internal static class DailyV1GenesisComposer
 
                 if (string.Equals(stage, ValidateProfileStage, StringComparison.Ordinal))
                 {
-                    if (!builder.TryBuild(justice, travelParties, directives,
+                    if (!builder.TryBuild(justice, travelParties, directives, expeditions,
                             out DailyV1SelectedRuntimeOwnerGraph graph))
                         return Fail("Core selected owner graph failed exact genesis admission.", out diagnostic);
                     if (!graph.TryBindPersonStore(personStore)

@@ -2613,6 +2613,17 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
         ScheduledDirectiveStore scheduledDirectives,
         out DailyV1SelectedRuntimeOwnerGraph graph)
     {
+        return TryBuild(justiceRecordsOwner, travelParties, scheduledDirectives,
+            null, out graph);
+    }
+
+    internal bool TryBuild(
+        DailyV1JusticeRecordsOwner justiceRecordsOwner,
+        TravelPartyStore travelParties,
+        ScheduledDirectiveStore scheduledDirectives,
+        ExpeditionStore expeditions,
+        out DailyV1SelectedRuntimeOwnerGraph graph)
+    {
         graph = null;
         if (built || !MatchesConfiguredCityRows() || !MatchesConfiguredNpcRows()
             || !HasConsistentInitialPresence()) return false;
@@ -2621,7 +2632,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
                 definitions, cities, npcs, spatialNetwork, justiceRecordsOwner,
                 travelParties, identityIndex, out graph))
             return false;
-        if (scheduledDirectives != null && !graph.TryBindScheduledDirectives(scheduledDirectives))
+        if ((scheduledDirectives != null && !graph.TryBindScheduledDirectives(scheduledDirectives))
+            || (expeditions != null && !graph.TryBindExpeditionStore(expeditions)))
         {
             graph = null;
             return false;

@@ -24,6 +24,10 @@ public sealed class DailyV1GenesisComposerTests
 
         Assert.That(allocations, Is.EqualTo(1));
         Assert.That(composition.WorldId, Is.SameAs(expectedWorldId));
+        Assert.That(composition.OwnerGraph.Expeditions, Is.SameAs(composition.Expeditions),
+            "The Core graph must retain the exact ExpeditionStore created by genesis.");
+        Assert.That(composition.OwnerGraph.TryBindExpeditionStore(new ExpeditionStore()), Is.False,
+            "A different ExpeditionStore cannot replace the genesis owner identity.");
         Assert.That(completed, Is.EqualTo(definitions.StageOrder.Take(definitions.StageOrder.Count - 2)));
     }
 
@@ -40,7 +44,8 @@ public sealed class DailyV1GenesisComposerTests
             out DailyV1GenesisComposition source,
             out string sourceDiagnostic), Is.True, sourceDiagnostic);
 
-        Assert.That(source.OwnerGraph.TryBindExpeditionStore(new ExpeditionStore()), Is.True);
+        Assert.That(source.OwnerGraph.TryBindExpeditionStore(new ExpeditionStore()), Is.False,
+            "A restored graph cannot replace the exact ExpeditionStore retained by Core genesis.");
         SimulationRuntimeAdmissionContext restoredAdmission =
             source.AdmissionContext.CreateRestoredContinuationContext();
         SimulationTime restoredTime = new SimulationTime(source.SimulationTime.AbsoluteDay);
@@ -334,8 +339,8 @@ public sealed class DailyV1GenesisComposerTests
         Assert.That(composition.Expeditions, Is.Not.Null);
         Assert.That(composition.Expeditions.ActiveExpeditions, Is.Empty);
         Assert.That(composition.Expeditions.Revision, Is.Zero);
-        Assert.That(composition.OwnerGraph.Expeditions, Is.Null,
-            "P9 genesis retains the P12 exact-empty owner without admitting P10 expedition participation into the selected profile graph.");
+        Assert.That(composition.OwnerGraph.Expeditions, Is.SameAs(composition.Expeditions),
+            "P9 genesis binds the exact P12 owner instance while its supported initial content remains exact-empty.");
         Assert.That(composition.ExecutionBoundaryState.SelectedRuntimeOwnerGraph,
             Is.SameAs(composition.OwnerGraph));
         IReadOnlyList<DailyV1ActorTurnRosterProjection> actorRoster =
@@ -428,8 +433,10 @@ public sealed class DailyV1GenesisComposerTests
         Assert.That(composition.OwnerGraph.ScheduledDirectives.Directives, Is.Empty);
         Assert.That(composition.OwnerGraph.TravelParties, Is.SameAs(composition.TravelPartyStore));
         Assert.That(composition.TravelPartyStore.ActiveParties, Is.Empty);
-        Assert.That(composition.OwnerGraph.Expeditions, Is.Null,
-            "The accepted Daily-v1 profile has no selected P10 expedition content.");
+        Assert.That(composition.OwnerGraph.Expeditions, Is.SameAs(composition.Expeditions),
+            "The accepted Daily-v1 profile binds its exact P12 owner while selecting no P10 expedition content.");
+        Assert.That(composition.OwnerGraph.Expeditions.ActiveExpeditions, Is.Empty);
+        Assert.That(composition.OwnerGraph.Expeditions.Revision, Is.Zero);
         Assert.That(composition.LegacySpatialAnchorBindings.Count, Is.Zero,
             "No City anchor is fabricated when the accepted definitions contain no City material-flow LocationId.");
         Assert.That(definitions.ExplorableSites, Is.Empty,

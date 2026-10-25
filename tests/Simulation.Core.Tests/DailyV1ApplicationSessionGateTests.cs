@@ -23,6 +23,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         private IReadOnlyList<OwnerSectionCensusSnapshot> admissionOwnerSections;
         private long admissionMutationEpoch;
         private Exception continuationSaveCaptureException;
+        private Action<int> onContinuationSaveEvidenceCapture;
 
         internal ApplicationAdvanceBoundary(
             DailyV1ExecutionBoundaryState state,
@@ -40,8 +41,11 @@ public sealed class DailyV1ApplicationSessionGateTests
         internal bool SelectedBoundaryRequested { get; private set; }
         internal bool Faulted { get; private set; }
         internal bool? RequestedSessionReplacement { get; private set; }
+        internal int ContinuationSaveEvidenceCaptureCount { get; private set; }
         internal void ThrowOnContinuationSaveCapture(Exception exception) =>
             continuationSaveCaptureException = exception;
+        internal void SetContinuationSaveEvidenceCaptureCallback(Action<int> callback) =>
+            onContinuationSaveEvidenceCapture = callback;
         internal void SetAdmissionEvidence(
             IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
             long mutationEpoch)
@@ -119,6 +123,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         {
             if (continuationSaveCaptureException != null)
                 throw continuationSaveCaptureException;
+            ContinuationSaveEvidenceCaptureCount++;
+            onContinuationSaveEvidenceCapture?.Invoke(ContinuationSaveEvidenceCaptureCount);
             return TryCaptureDailyBoundaryAdmissionEvidence(
                 sessionReplacement: false, out ownerSections, out mutationEpoch, out failure);
         }
@@ -218,6 +224,37 @@ public sealed class DailyV1ApplicationSessionGateTests
         }
     }
 
+    private static void ReplaceOwnerSectionWithCurrentCensus(
+        OwnerSectionCensusSnapshot[] sections,
+        OwnerSectionCensusWitness census)
+    {
+        int index = Array.FindIndex(sections,
+            section => string.Equals(section.SectionId, census.SectionId, StringComparison.Ordinal));
+        Assert.That(index, Is.GreaterThanOrEqualTo(0), census.SectionId);
+        OwnerSectionCensusSnapshot previous = sections[index];
+        sections[index] = new OwnerSectionCensusSnapshot(
+            previous.SectionId, previous.SchemaVersion, previous.Role,
+            census.OwnerInstanceIdentity, census.Cardinality, census.Revision);
+    }
+
+    private static OwnerSectionCensusSnapshot[] CreateCoreBoundP12FSectionVector(
+        DailyV1ActiveRuntimeSession session)
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
+        OwnerSectionCensusSnapshot[] sections =
+            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            new ActorChoiceP11CensusProvider(actorChoices).GetCurrentCensus());
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            new ScheduledDirectiveCensusProvider(graph.ScheduledDirectives).GetCurrentCensus());
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            new TravelPartyCensusProvider(graph.TravelParties).GetCurrentCensus());
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus());
+        return sections;
+    }
+
     [Test]
     public void ContinuationSaveOperationRetainsExactCompletedSourceWitnessAndClosesScope()
     {
@@ -303,6 +340,102 @@ public sealed class DailyV1ApplicationSessionGateTests
                 session, out DailyV1P12GContinuationSaveOperation _, out _));
 
         Assert.That(actual, Is.SameAs(expected));
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void CoreBoundP12FSourcesCaptureFromExactActiveSessionAndSaveWitness()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
+        Assert.That(graph.Expeditions, Is.Not.Null,
+            "Core genesis must bind its ExpeditionStore into the selected owner graph.");
+        Assert.That(graph.ScheduledDirectives, Is.Not.Null);
+
+        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundP12FSectionVector(session);
+        InstallCompletedBoundaryToken(session, boundary, sections);
+
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
+        Assert.That(DailyV1P12GCoreBoundOwnerSources.TryCapture(
+            operation, out DailyV1P12GCoreBoundOwnerSources sources,
+            out DailyV1P12GCoreBoundOwnerSourceCaptureFailure failure,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(failure, Is.EqualTo(DailyV1P12GCoreBoundOwnerSourceCaptureFailure.None));
+        Assert.That(sources.IsFor(operation), Is.True);
+        Assert.That(sources.ActorChoices.Inputs.Count, Is.EqualTo(actorChoices.P11InputCount));
+        Assert.That(sources.ActorChoices.NextInputSequence, Is.EqualTo(actorChoices.NextInputSequence));
+        Assert.That(sources.ActorChoices.CensusRevision, Is.EqualTo(actorChoices.CensusRevision));
+        Assert.That(sources.Directives.Rows.Count,
+            Is.EqualTo(graph.ScheduledDirectives.GetCurrentCensus().Cardinality));
+        Assert.That(sources.Directives.Revision, Is.EqualTo(graph.ScheduledDirectives.Revision));
+        Assert.That(sources.TravelParties.Parties.Count, Is.EqualTo(graph.TravelParties.ActiveParties.Count));
+        Assert.That(sources.TravelParties.Revision, Is.EqualTo(graph.TravelParties.Revision));
+        Assert.That(sources.Expeditions.Expeditions.Count,
+            Is.EqualTo(new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus().Cardinality));
+        Assert.That(sources.Expeditions.Revision, Is.EqualTo(graph.Expeditions.Revision));
+        Assert.That(operation.TryRevalidate(out DailyCaptureEligibilityFailure revalidationFailure), Is.True);
+        Assert.That(revalidationFailure, Is.EqualTo(DailyCaptureEligibilityFailure.None));
+        Assert.That(application.ActiveOperationCount, Is.EqualTo(1));
+
+        operation.Dispose();
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void CoreBoundP12FSourcesRejectMissingOwnerGraphBindings()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        DailyV1SelectedRuntimeOwnerGraph current = session.OwnerGraph;
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            session.Definitions, current.Cities, current.Npcs, current.SpatialNetwork,
+            current.JusticeRecordsOwner, current.TravelParties, current.RuntimeIdentityIndex,
+            current.PersonStore, out DailyV1SelectedRuntimeOwnerGraph unboundGraph), Is.True);
+        Assert.That(unboundGraph.ScheduledDirectives, Is.Null);
+        Assert.That(unboundGraph.Expeditions, Is.Null);
+        Assert.That(DailyV1P12GCoreBoundOwnerSources.HasRequiredCoreOwnerBindings(
+            unboundGraph, session.ExecutionBoundaryState.SelectedActorChoiceStore), Is.False);
+        Assert.That(DailyV1P12GCoreBoundOwnerSources.HasRequiredCoreOwnerBindings(
+            current, session.ExecutionBoundaryState.SelectedActorChoiceStore), Is.True);
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void CoreBoundP12FSourcesRejectWitnessChangedDuringRecapture()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundP12FSectionVector(session);
+        InstallCompletedBoundaryToken(session, boundary, sections);
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
+
+        boundary.SetContinuationSaveEvidenceCaptureCallback(captureCount =>
+        {
+            if (captureCount != 3) return;
+            OwnerSectionCensusSnapshot current = sections[0];
+            sections[0] = new OwnerSectionCensusSnapshot(
+                current.SectionId, current.SchemaVersion, current.Role,
+                current.OwnerInstanceIdentity, current.Cardinality, current.Revision + 1L);
+        });
+
+        Assert.That(DailyV1P12GCoreBoundOwnerSources.TryCapture(
+            operation, out DailyV1P12GCoreBoundOwnerSources sources,
+            out DailyV1P12GCoreBoundOwnerSourceCaptureFailure failure,
+            out string diagnostic), Is.False, diagnostic);
+        Assert.That(sources, Is.Null);
+        Assert.That(failure, Is.EqualTo(
+            DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary));
+        Assert.That(application.ActiveOperationCount, Is.EqualTo(1),
+            "A rejected capture keeps its enclosing save lease active until disposal.");
+        operation.Dispose();
         Assert.That(application.ActiveOperationCount, Is.Zero);
     }
 
