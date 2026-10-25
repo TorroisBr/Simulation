@@ -100,3 +100,12 @@ The validated working source was based on commit `32141470818d83f56851395d450d50
 | `git diff --check` | PASS | Exact validated source changes |
 
 The runner manifests and original TRX/XML remain in owner-only E: evidence storage. No public .NET/TRX package is claimed. This was a focused integration run, not a new ALL EditMode or Smoke result; the prior full-suite evidence above applies to the previous source checkpoint only. The new code checkpoint still requires an independent exact-tip review. CoreValidation reports `worktreeLibraryAbsent=false`; this run makes no Library-independent-host claim.
+## ActorChoice wire codec Core source move — exact-source .NET validation
+
+This follow-on moves the existing terminal P11 ActorChoice wire codec into `Simulation.Core` unchanged, with its Unity metadata GUID preserved. The Unity encoder/decoder callsites and existing Unity contract assertions remain in place. Core tests add direct coverage for terminal history and store-sequence round trip, the exact empty initial owner, and rejection of pending history and a row whose key does not match its input identity.
+
+- Validated source identity before the implementation commit: candidate branch working source based on `6bb9bd688ef91974083ab37348b0c01c0aa74776`; the codec and test changes were bound by stable CoreValidation input digest `72052e1f4cfaa7cb8fc6bc04f34b1b2fc3dceed72ff7490cc54d05f63c1184f6`.
+- Official CoreValidation run `ac0c88eacaad4f38a09c6d208d73355b`: cold 761/761 and warm 761/761 passed; stable input inventory. Private manifest SHA-256 `6dbf470093d9895efd02fa2c3606939a0d1f9d2f4133a4a973bb5fdaa8310cc5`; cold TRX SHA-256 `964833b4dd4f4a75649535f9eb09885f2f9b2a7e1a4e63f91d4aae54bd465195`; warm TRX SHA-256 `01ba9d16894474fdd4dd7dd8e2eab90425ea647f495868ce53247c5c94e09b82`.
+- `git diff --check`: PASS for the source/test working changes.
+- The private .NET manifest and reports remain in the owner-only E: evidence store. This record does not claim a public TRX package. The runner reported `worktreeLibraryAbsent=false`; this is not Library-free host evidence.
+- Unity EditMode validation of this exact source identity is pending; earlier Unity test results apply to the prior codec source tree only.

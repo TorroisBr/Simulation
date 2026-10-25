@@ -39,6 +39,7 @@
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12FActorChoiceSnapshotTests.cs" Link="Persistence/P12FActorChoiceSnapshotTests.cs" />
     <Compile Include="P12FTravelPartyOwnerSnapshotCoreTests.cs" Link="Persistence/P12FTravelPartyOwnerSnapshotCoreTests.cs" />
     <Compile Include="P12FCommitmentOwnerCodecCoreTests.cs" Link="Persistence/P12FCommitmentOwnerCodecCoreTests.cs" />
+    <Compile Include="P12FActorChoiceCodecCoreTests.cs" Link="Persistence/P12FActorChoiceCodecCoreTests.cs" />
     <Compile Include="P12FScheduledDirectiveOwnerSnapshotCoreTests.cs" Link="Persistence/P12FScheduledDirectiveOwnerSnapshotCoreTests.cs" />
     <Compile Include="DailyV1PopulationConsumptionOperationTests.cs" />
     <Compile Include="DailyV1SelectedTravelTransitionPlanTests.cs" />
