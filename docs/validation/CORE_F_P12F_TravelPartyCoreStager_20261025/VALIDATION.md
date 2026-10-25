@@ -28,7 +28,8 @@ The official result-only package contains the normalized full EditMode result XM
 - Archive: [coref-p12f-travelparty-all-editmode.zip](coref-p12f-travelparty-all-editmode.zip)
 - Archive SHA-256: `b0d1f41e4a92edd229479499475d3e7ee2ad86bd27597f5bf128dfdbb4a6fc44`
 - Manifest: [coref-p12f-travelparty-all-editmode.manifest.json](coref-p12f-travelparty-all-editmode.manifest.json)
-- Manifest SHA-256: `5197ba6fb62b37b884d6f4eab249889ecaf7f994dc5b29162ce636f86fee7f51`
+- Committed manifest Git-blob SHA-256 (LF bytes): `0603950c7391466cbc91ea75d917d782add7ca5d933bb0d59bdd15ffa7056543`.
+- Windows checkout manifest SHA-256 (CRLF bytes): `5197ba6fb62b37b884d6f4eab249889ecaf7f994dc5b29162ce636f86fee7f51`.
 - Normalized XML SHA-256: `8a283dffad7416ea1678e1033fbd8a0f62d1301b16f29333b0fbedcb8ca89aca`
 
 The original Unity XML/logs and original CoreValidation TRX/logs remain unchanged in protected E: evidence storage. The CoreValidation manifest records the exact input digest and test counters. The current validation policy does not yet provide the approved public .NET TRX adapter/package; therefore these private originals and manifest are not presented as a permanent public .NET evidence package. This candidate is not ready for canonical promotion on that basis.
