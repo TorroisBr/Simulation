@@ -53,6 +53,22 @@ public sealed class DailyV1ApplicationHostTests
             null, "numeric", 1));
     }
 
+    [Test]
+    public void DotNetV2HeaderAdmitsOnlyDotNetAndUsesASeparateContinuationSlot()
+    {
+        P12ACompatibilityDescriptorV2 dotNet = ToDescriptor(DotNetIdentity());
+        Assert.That(V2Header(dotNet).IsValid, Is.True);
+
+        P12ACompatibilityDescriptorV2 unsupportedHost = new P12ACompatibilityDescriptorV2(
+            "UnityBootstrap-Daily-v1", 1, 2,
+            ".NET 8.0", "8.0.1.0", "Windows", "win-x64", "x64", "net8.0",
+            dotNet.Assemblies, "numeric", 1, "configuration", "content", "providers",
+            "calendar", 1, "calendar-fingerprint", "p9", "p8");
+        Assert.That(V2Header(unsupportedHost).IsValid, Is.False,
+            "Encoding must not accept a descriptor that the .NET-v2 decoder will reject.");
+
+    }
+
     private static DailyV1HostEnvironmentIdentity DotNetIdentity(ushort hostKind = 1) =>
         new DailyV1HostEnvironmentIdentity(hostKind,
             ".NET 8.0", "8.0.1.0", "Windows", "win-x64", "x64", "net8.0",
@@ -67,6 +83,10 @@ public sealed class DailyV1ApplicationHostTests
             identity.NumericProfileId, identity.NumericProfileVersion,
             "configuration", "content", "providers", "calendar", 1,
             "calendar-fingerprint", "p9", "p8");
+
+    private static P12AContinuationHeader V2Header(P12ACompatibilityDescriptorV2 descriptor) =>
+        P12AContinuationHeader.ForDotNetV2("world:00112233445566778899aabbccddeeff", 0, 1, -1,
+            "p9-stage", "p9", "P8-A", "p8", 0, descriptor);
 
     private static bool ContainsSubsequence(byte[] value, byte[] sequence)
     {

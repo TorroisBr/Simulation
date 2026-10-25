@@ -225,8 +225,17 @@ public sealed class P12AContinuationCodecTests
     public void DotNetV2DescriptorRoundTripsThroughExplicitAtomicSlotAndUnityRejectsBeforeStaging()
     {
         string root = Path.Combine(Path.GetTempPath(), "P12AContinuationStoreTests", Guid.NewGuid().ToString("N"));
+        string unityRoot = Path.Combine(root, "unity-host");
+        string dotNetRoot = Path.Combine(root, "dotnet-host");
         try
         {
+            P12ACompatibilityDescriptor unityCompatibility = Descriptor();
+            Assert.That(P12AContinuationCodec.TryEncode(
+                Image(unityCompatibility, new byte[] { 1, 2, 3 }), Manifest,
+                out byte[] unityBytes, out P12AResult unityEncoded), Is.True, unityEncoded?.Code.ToString());
+            Assert.That(P12AContinuationStore.TrySave(unityBytes, Manifest, unityCompatibility,
+                unityRoot, out P12AResult unitySaved), Is.True, unitySaved?.Code.ToString());
+
             P12ACompatibilityDescriptorV2 expected = DotNetDescriptorV2("content");
             P12AContinuationImage image = Image(expected, new byte[] { 9, 8, 7 });
             Assert.That(P12AContinuationCodec.TryEncode(image, Manifest, out byte[] bytes, out P12AResult encoded),
@@ -244,10 +253,33 @@ public sealed class P12AContinuationCodecTests
                 out P12AResult unityRejection), Is.False);
             Assert.That(unityRejection.Code, Is.EqualTo(P12AResultCode.UnsupportedSchema));
 
-            Assert.That(P12AContinuationStore.TrySaveDotNetV2(bytes, Manifest, expected, root,
+            Assert.That(P12AContinuationStore.TrySaveDotNetV2(bytes, Manifest, expected, dotNetRoot,
                 SystemAtomicFileSlotOperations.Instance, out P12AResult saved), Is.True, saved?.Code.ToString());
             Assert.That(saved.Code, Is.EqualTo(P12AResultCode.Saved));
-            Assert.That(P12AContinuationStore.TryLoadDotNetV2(Manifest, expected, root,
+            string unitySlot = P12AContinuationStore.SlotPath(unityRoot);
+            string dotNetSlot = P12AContinuationStore.SlotPath(dotNetRoot);
+            Assert.That(File.ReadAllBytes(unitySlot), Is.EqualTo(unityBytes),
+                "Saving to the .NET host root must not alter Unity-v1 bytes in its host root.");
+            Assert.That(P12AContinuationStore.TryHasSlot(unityRoot,
+                SystemAtomicFileSlotOperations.Instance, out bool unityExists, out P12AResult unityPresence), Is.True);
+            Assert.That(unityExists, Is.True);
+            Assert.That(unityPresence.Code, Is.EqualTo(P12AResultCode.Loaded));
+            Assert.That(P12AContinuationStore.TryHasSlot(dotNetRoot,
+                SystemAtomicFileSlotOperations.Instance, out bool dotNetExists, out P12AResult dotNetPresence), Is.True);
+            Assert.That(dotNetExists, Is.True);
+            Assert.That(dotNetPresence.Code, Is.EqualTo(P12AResultCode.Loaded));
+            Assert.That(P12AContinuationStore.TryLoad(Manifest, unityCompatibility, unityRoot,
+                out P12AContinuationImage unityLoaded, out P12AResult unityLoadResult), Is.True);
+            Assert.That(unityLoadResult.Code, Is.EqualTo(P12AResultCode.Loaded));
+            Assert.That(P12AContinuationCodec.TryEncode(unityLoaded, Manifest, out byte[] unityRoundTrip, out _), Is.True);
+            Assert.That(unityRoundTrip, Is.EqualTo(unityBytes));
+            Assert.That(P12AContinuationStore.TryLoad(Manifest, unityCompatibility, dotNetRoot,
+                out _, out P12AResult unityRejectsDotNet), Is.False);
+            Assert.That(unityRejectsDotNet.Code, Is.EqualTo(P12AResultCode.UnsupportedSchema));
+            Assert.That(P12AContinuationStore.TryLoadDotNetV2(Manifest, expected, unityRoot,
+                SystemAtomicFileSlotOperations.Instance, out _, out P12AResult dotNetRejectsUnity), Is.False);
+            Assert.That(dotNetRejectsUnity.Code, Is.EqualTo(P12AResultCode.IncompatibleBuildOrRuntime));
+            Assert.That(P12AContinuationStore.TryLoadDotNetV2(Manifest, expected, dotNetRoot,
                 SystemAtomicFileSlotOperations.Instance, out P12AContinuationImage loaded,
                 out P12AResult loadedResult), Is.True, loadedResult?.Code.ToString());
             Assert.That(loadedResult.Code, Is.EqualTo(P12AResultCode.Loaded));
@@ -258,6 +290,11 @@ public sealed class P12AContinuationCodecTests
             Assert.That(P12AContinuationCodec.TryDecodeDotNetV2(bytes, Manifest, changedContent,
                 out _, out P12AResult contentMismatch), Is.False);
             Assert.That(contentMismatch.Code, Is.EqualTo(P12AResultCode.IncompatibleContentOrConfiguration));
+
+            P12ACompatibilityDescriptorV2 unsupportedHost = DotNetDescriptorV2("content", 2);
+            Assert.That(P12AContinuationCodec.TryEncode(Image(unsupportedHost, new byte[] { 5 }),
+                Manifest, out _, out P12AResult unsupportedHostResult), Is.False);
+            Assert.That(unsupportedHostResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
         }
         finally
         {
@@ -1413,10 +1450,10 @@ public sealed class P12AContinuationCodecTests
         return image;
     }
 
-    private P12ACompatibilityDescriptorV2 DotNetDescriptorV2(string contentFingerprint)
+    private P12ACompatibilityDescriptorV2 DotNetDescriptorV2(string contentFingerprint, ushort hostKind = 1)
     {
         P12CP9GenesisManifestSnapshot manifest = GetP9Manifest();
-        return new P12ACompatibilityDescriptorV2("UnityBootstrap-Daily-v1", 1, 1,
+        return new P12ACompatibilityDescriptorV2("UnityBootstrap-Daily-v1", 1, hostKind,
             ".NET 8.0", "8.0.1.0", "Windows", "win-x64", "x64", "net8.0",
             new[] { new P12AAssemblyIdentityV2("Simulation.Core", "1.0.0.0",
                 "4b37a0ac-246b-47c5-9bbc-fd79704e0666") },
