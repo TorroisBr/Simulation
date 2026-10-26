@@ -145,6 +145,62 @@ internal sealed class P12FDailyV1OwnerCapture
         }
     }
 
+    internal static bool TryCapture(
+        DailyV1P12GContinuationSaveOperation operation,
+        out P12FDailyV1OwnerCapture capture,
+        out P12FDailyV1OwnerPackageFailure failure,
+        Action<P12GDailyV1RestoreStage> stageObserver = null)
+    {
+        capture = null;
+        failure = P12FDailyV1OwnerPackageFailure.InvalidCaptureContext;
+        if (operation == null || !operation.IsActive
+            || !operation.TryRevalidate(out _))
+        {
+            failure = P12FDailyV1OwnerPackageFailure.StaleBoundary;
+            return false;
+        }
+
+        if (!DailyV1P12GCoreBoundOwnerSources.TryCapture(
+                operation,
+                out DailyV1P12GCoreBoundOwnerSources sources,
+                out DailyV1P12GCoreBoundOwnerSourceCaptureFailure sourceFailure,
+                out _))
+        {
+            failure = sourceFailure == DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary
+                ? P12FDailyV1OwnerPackageFailure.StaleBoundary
+                : sourceFailure == DailyV1P12GCoreBoundOwnerSourceCaptureFailure.OwnerCaptureFailed
+                    ? P12FDailyV1OwnerPackageFailure.CaptureFailed
+                    : P12FDailyV1OwnerPackageFailure.InvalidCaptureContext;
+            return false;
+        }
+
+        DailyV1P12GSourceBoundaryWitness witness = operation.SourceWitness;
+        if (sources == null || !sources.IsFor(operation)
+            || !operation.TryRevalidate(out _))
+        {
+            failure = P12FDailyV1OwnerPackageFailure.StaleBoundary;
+            return false;
+        }
+
+        stageObserver?.Invoke(P12GDailyV1RestoreStage.FOwnerSnapshotsCaptured);
+        if (!operation.TryRevalidate(out _))
+        {
+            failure = P12FDailyV1OwnerPackageFailure.StaleBoundary;
+            return false;
+        }
+
+        capture = new P12FDailyV1OwnerCapture(
+            witness.Token,
+            witness.TokenOwnerSections,
+            sources.PoliticalKnowledge,
+            sources.Directives,
+            sources.ActorChoices,
+            sources.TravelParties,
+            sources.Expeditions);
+        failure = P12FDailyV1OwnerPackageFailure.None;
+        return true;
+    }
+
     internal bool IsFor(DailyCaptureEligibilityToken candidateToken,
         IReadOnlyList<OwnerSectionCensusSnapshot> candidateOwnerSections) =>
         ReferenceEquals(token, candidateToken) && ReferenceEquals(ownerSections, candidateOwnerSections);

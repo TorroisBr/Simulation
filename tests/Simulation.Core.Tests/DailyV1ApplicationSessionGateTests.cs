@@ -241,9 +241,13 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1ActiveRuntimeSession session)
     {
         DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        PoliticalKnowledgeStore politicalKnowledge =
+            graph.PoliticalKnowledgeStore ?? CreateAndBindCorePoliticalKnowledgeStore(graph);
         ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
         OwnerSectionCensusSnapshot[] sections =
             DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            new PoliticalKnowledgeStoreCensusProvider(politicalKnowledge).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
             new ActorChoiceP11CensusProvider(actorChoices).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
@@ -253,6 +257,23 @@ public sealed class DailyV1ApplicationSessionGateTests
         ReplaceOwnerSectionWithCurrentCensus(sections,
             new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus());
         return sections;
+    }
+
+    private static PoliticalKnowledgeStore CreateAndBindCorePoliticalKnowledgeStore(
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        Assert.That(graph, Is.Not.Null);
+        Assert.That(graph.PersonStore, Is.Not.Null);
+        InstitutionStore institutions = new InstitutionStore();
+        PoliticalKnowledgeStore store = new PoliticalKnowledgeStore(
+            graph.PersonStore,
+            institutions,
+            new PoliticalClaimStore(),
+            new FactionStore(graph.PersonStore),
+            new OfficeStore(institutions),
+            new PropertyOwnershipStore(graph.PersonStore));
+        Assert.That(graph.TryBindPoliticalKnowledgeStore(store), Is.True);
+        return store;
     }
 
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundCityAndP12FSectionVector(
@@ -391,7 +412,9 @@ public sealed class DailyV1ApplicationSessionGateTests
             onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
             out ApplicationAdvanceBoundary boundary);
         DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        PoliticalKnowledgeStore politicalKnowledge = CreateAndBindCorePoliticalKnowledgeStore(graph);
         ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
+        Assert.That(graph.PoliticalKnowledgeStore, Is.SameAs(politicalKnowledge));
         Assert.That(graph.Expeditions, Is.Not.Null,
             "Core genesis must bind its ExpeditionStore into the selected owner graph.");
         Assert.That(graph.ScheduledDirectives, Is.Not.Null);
@@ -408,6 +431,8 @@ public sealed class DailyV1ApplicationSessionGateTests
 
         Assert.That(failure, Is.EqualTo(DailyV1P12GCoreBoundOwnerSourceCaptureFailure.None));
         Assert.That(sources.IsFor(operation), Is.True);
+        Assert.That(sources.PoliticalKnowledge.Cardinality, Is.EqualTo(politicalKnowledge.Count));
+        Assert.That(sources.PoliticalKnowledge.Revision, Is.EqualTo(politicalKnowledge.Revision));
         Assert.That(sources.ActorChoices.Inputs.Count, Is.EqualTo(actorChoices.P11InputCount));
         Assert.That(sources.ActorChoices.NextInputSequence, Is.EqualTo(actorChoices.NextInputSequence));
         Assert.That(sources.ActorChoices.CensusRevision, Is.EqualTo(actorChoices.CensusRevision));
@@ -434,6 +459,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
             out ApplicationAdvanceBoundary boundary);
         DailyV1SelectedRuntimeOwnerGraph current = session.OwnerGraph;
+        CreateAndBindCorePoliticalKnowledgeStore(current);
         Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
             session.Definitions, current.Cities, current.Npcs, current.SpatialNetwork,
             current.JusticeRecordsOwner, current.TravelParties, current.RuntimeIdentityIndex,

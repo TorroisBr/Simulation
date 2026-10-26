@@ -402,29 +402,76 @@ public class TesteSimulacao : MonoBehaviour
     private bool TrySaveDailyV1ContinuationAtPath(string persistentDataPath, out string resultCode)
     {
         resultCode = P12AResultCode.Busy.ToString();
+        SimulationActiveSession session = CaptureActiveSession();
+        if (session == null) return false;
+        bool saved = TrySaveContinuationForSession(
+            session, persistentDataPath, out P12AResult result);
+        resultCode = result?.Code.ToString() ?? (saved
+            ? P12AResultCode.Saved.ToString()
+            : P12AResultCode.CaptureRejected.ToString());
+        return saved;
+    }
+
+    private bool TrySaveContinuationForSession(
+        SimulationActiveSession expectedSession,
+        string persistentDataPath,
+        out P12AResult result)
+    {
+        result = new P12AResult(P12AResultCode.Busy);
+        if (expectedSession == null) return false;
+
+        DailyV1ActiveRuntimeSession coreSession = expectedSession.CoreRuntimeSession;
+        if (coreSession != null)
+        {
+            if (dailyV1Application == null
+                || !dailyV1Application.TryBeginContinuationSaveOperation(
+                    coreSession,
+                    out DailyV1P12GContinuationSaveOperation continuationSaveOperation,
+                    out _))
+                return false;
+
+            using (continuationSaveOperation)
+            {
+                if (!ReferenceEquals(CaptureActiveSession(), expectedSession)
+                    || !ReferenceEquals(dailyV1Application.ActiveSession, coreSession))
+                {
+                    result = new P12AResult(P12AResultCode.CaptureRejected);
+                    return false;
+                }
+                return TrySaveCompletedDailyV1Boundary(
+                    expectedSession, persistentDataPath, continuationSaveOperation, out result);
+            }
+        }
+
         if (!TryBeginActiveSessionOperation(
+                expectedSession,
                 DailyV1OperationScopeKind.ContinuationSave,
-                out SimulationActiveSession session))
+                out SimulationActiveSession admittedSession))
             return false;
         try
         {
-            bool saved = TrySaveCompletedDailyV1Boundary(session, persistentDataPath, out P12AResult result);
-            resultCode = result?.Code.ToString() ?? (saved
-                ? P12AResultCode.Saved.ToString()
-                : P12AResultCode.CaptureRejected.ToString());
-            return saved;
+            return TrySaveCompletedDailyV1Boundary(admittedSession, persistentDataPath, out result);
         }
         finally
         {
             EndActiveSessionOperation(DailyV1OperationScopeKind.ContinuationSave);
         }
     }
+
     private bool TrySaveCompletedDailyV1Boundary(SimulationActiveSession session, out P12AResult result)
-        => TrySaveCompletedDailyV1Boundary(session, UnityEngine.Application.persistentDataPath, out result);
+        => TrySaveCompletedDailyV1Boundary(
+            session, UnityEngine.Application.persistentDataPath, out result);
 
     private bool TrySaveCompletedDailyV1Boundary(
         SimulationActiveSession session,
         string persistentDataPath,
+        out P12AResult result) =>
+        TrySaveCompletedDailyV1Boundary(session, persistentDataPath, null, out result);
+
+    private bool TrySaveCompletedDailyV1Boundary(
+        SimulationActiveSession session,
+        string persistentDataPath,
+        DailyV1P12GContinuationSaveOperation continuationSaveOperation,
         out P12AResult result)
     {
         result = new P12AResult(P12AResultCode.CaptureRejected);
@@ -436,19 +483,42 @@ public class TesteSimulacao : MonoBehaviour
             result = new P12AResult(P12AResultCode.WrongThread);
             return false;
         }
-        if (!session.Runtime.IsHealthyDailyOwnerThreadBoundary())
+        if (!session.Runtime.IsHealthyDailyOwnerThreadBoundary()
+            || (continuationSaveOperation != null
+                && (!continuationSaveOperation.IsActive
+                    || !ReferenceEquals(session.CoreRuntimeSession, continuationSaveOperation.Session)
+                    || !continuationSaveOperation.TryRevalidate(out _))))
         {
             result = new P12AResult(P12AResultCode.CaptureRejected);
             return false;
         }
 
-        if (!P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+        P12AContinuationImage image;
+        P12GDailyV1RestoreFailure captureFailure;
+        string captureDiagnostic;
+        bool imageCaptured;
+        if (continuationSaveOperation != null)
+        {
+            imageCaptured = P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
                 session,
                 runtimeAdmissionContext,
-                out P12AContinuationImage image,
+                continuationSaveOperation,
+                out image,
                 out _,
-                out P12GDailyV1RestoreFailure captureFailure,
-                out string captureDiagnostic))
+                out captureFailure,
+                out captureDiagnostic);
+        }
+        else
+        {
+            imageCaptured = P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+                session,
+                runtimeAdmissionContext,
+                out image,
+                out _,
+                out captureFailure,
+                out captureDiagnostic);
+        }
+        if (!imageCaptured)
         {
             result = new P12AResult(P12AResultCode.CaptureRejected);
             session.Logger.LogError("P12-A continuation save failed: " + result.Code
@@ -2229,18 +2299,10 @@ public class TesteSimulacao : MonoBehaviour
                 EndActiveSessionOperation();
             }
 
-            if (!TryBeginActiveSessionOperation(
+            if (!TrySaveContinuationForSession(
                     expectedSession,
-                    DailyV1OperationScopeKind.ContinuationSave,
-                    out session)) return;
-            try
-            {
-                TrySaveCompletedDailyV1Boundary(session, out _);
-            }
-            finally
-            {
-                EndActiveSessionOperation(DailyV1OperationScopeKind.ContinuationSave);
-            }
+                    UnityEngine.Application.persistentDataPath,
+                    out _)) return;
         }
 
         if (!TryBeginActiveSessionOperation(expectedSession, out SimulationActiveSession finalSession)) return;

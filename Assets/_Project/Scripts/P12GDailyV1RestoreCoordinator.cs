@@ -91,9 +91,17 @@ internal static partial class P12GDailyV1RestoreCoordinator
         SimulationRuntime sourceRuntime,
         DailyCaptureEligibilityToken sourceToken,
         bool captureContinuationImage,
-        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        DailyV1P12GContinuationSaveOperation continuationSaveOperation = null)
     {
-        if (sourceRuntime == null || sourceToken == null) return false;
+        if (sourceToken == null) return false;
+        if (continuationSaveOperation != null)
+            return captureContinuationImage
+                && replacementOperation == null
+                && continuationSaveOperation.IsActive
+                && ReferenceEquals(continuationSaveOperation.SourceWitness.Token, sourceToken)
+                && continuationSaveOperation.TryRevalidate(out _);
+        if (sourceRuntime == null) return false;
         if (replacementOperation != null)
             return !captureContinuationImage
                 && sourceRuntime.TryValidateCompletedDailyCaptureTokenForSessionReplacement(
@@ -169,6 +177,31 @@ internal static partial class P12GDailyV1RestoreCoordinator
 
     internal static bool TryCreateRestoredSessionAndCaptureImage(
         SimulationActiveSession sourceSession,
+        SimulationRuntimeAdmissionContext bootstrapAdmissionContext,
+        DailyV1P12GContinuationSaveOperation continuationSaveOperation,
+        out P12AContinuationImage image,
+        out SimulationActiveSession restoredSession,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic)
+    {
+        if (continuationSaveOperation == null)
+        {
+            image = null;
+            restoredSession = null;
+            failure = P12GDailyV1RestoreFailure.SourceBoundaryUnavailable;
+            diagnostic = "A Core-owned continuation-save operation is required for this capture path.";
+            return false;
+        }
+
+        return TryCreateRestoredSessionCore(
+            sourceSession, bootstrapAdmissionContext, true, null,
+            out image, out restoredSession, out failure, out diagnostic,
+            null, null, null, null, null, null, null, null, null,
+            null, null, continuationSaveOperation);
+    }
+
+    internal static bool TryCreateRestoredSessionAndCaptureImage(
+        SimulationActiveSession sourceSession,
         out P12AContinuationImage image,
         out SimulationActiveSession restoredSession,
         out P12GDailyV1RestoreFailure failure,
@@ -236,7 +269,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest,
         Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest,
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null,
-        DailyV1Application application = null)
+        DailyV1Application application = null,
+        DailyV1P12GContinuationSaveOperation continuationSaveOperation = null)
     {
         continuationImage = null;
         restoredSession = null;
@@ -250,19 +284,33 @@ internal static partial class P12GDailyV1RestoreCoordinator
         DailyCaptureEligibilityToken sourceToken;
         DailyCaptureEligibilityFailure tokenFailure = DailyCaptureEligibilityFailure.OperationInProgress;
         sourceToken = null;
-        bool sourceTokenAvailable = replacementOperation != null
-            ? (!captureContinuationImage
-                && sourceRuntime.TryGetCompletedDailyCaptureTokenForSessionReplacement(
-                    replacementOperation, out sourceToken, out tokenFailure))
-            : captureContinuationImage
-                ? sourceRuntime.TryGetCompletedDailyCaptureTokenForContinuationSave(
-                    out sourceToken, out tokenFailure)
-                : sourceRuntime.TryGetCompletedDailyCaptureToken(
-                    out sourceToken, out tokenFailure);
+        bool sourceTokenAvailable;
+        if (continuationSaveOperation != null)
+        {
+            sourceToken = continuationSaveOperation.SourceWitness?.Token;
+            sourceTokenAvailable = captureContinuationImage
+                && replacementOperation == null
+                && ReferenceEquals(sourceSession.CoreRuntimeSession, continuationSaveOperation.Session)
+                && continuationSaveOperation.IsActive
+                && continuationSaveOperation.TryRevalidate(out tokenFailure);
+        }
+        else
+        {
+            sourceTokenAvailable = replacementOperation != null
+                ? (!captureContinuationImage
+                    && sourceRuntime.TryGetCompletedDailyCaptureTokenForSessionReplacement(
+                        replacementOperation, out sourceToken, out tokenFailure))
+                : captureContinuationImage
+                    ? sourceRuntime.TryGetCompletedDailyCaptureTokenForContinuationSave(
+                        out sourceToken, out tokenFailure)
+                    : sourceRuntime.TryGetCompletedDailyCaptureToken(
+                        out sourceToken, out tokenFailure);
+        }
         bool sourceTokenCurrent = sourceTokenAvailable
             && sourceToken != null
             && IsSourceTokenCurrent(
-                sourceRuntime, sourceToken, captureContinuationImage, replacementOperation);
+                sourceRuntime, sourceToken, captureContinuationImage, replacementOperation,
+                continuationSaveOperation);
         if (!sourceTokenCurrent)
         {
             failure = P12GDailyV1RestoreFailure.SourceBoundaryUnavailable;
@@ -298,15 +346,21 @@ internal static partial class P12GDailyV1RestoreCoordinator
             // F checks the source ActorChoice temporal section before C allocates
             // any candidate root. Keep this capture for staging later in the
             // same attempt.
-            if (!P12FDailyV1OwnerCapture.TryCapture(
-                    sourceRuntime,
-                    sourceComposition,
-                    sourceToken,
-                    sourceOwnerSections,
-                    out P12FDailyV1OwnerCapture capturedF,
-                    out P12FDailyV1OwnerPackageFailure fCaptureFailure,
-                    stageObserver,
-                    replacementOperation))
+            bool capturedOwnerSources;
+            P12FDailyV1OwnerCapture capturedF;
+            P12FDailyV1OwnerPackageFailure fCaptureFailure;
+            if (continuationSaveOperation != null)
+            {
+                capturedOwnerSources = P12FDailyV1OwnerCapture.TryCapture(
+                    continuationSaveOperation, out capturedF, out fCaptureFailure, stageObserver);
+            }
+            else
+            {
+                capturedOwnerSources = P12FDailyV1OwnerCapture.TryCapture(
+                    sourceRuntime, sourceComposition, sourceToken, sourceOwnerSections,
+                    out capturedF, out fCaptureFailure, stageObserver, replacementOperation);
+            }
+            if (!capturedOwnerSources)
             {
                 failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
                 diagnostic = "P12-F source capture rejected the completed boundary: " + fCaptureFailure + ".";

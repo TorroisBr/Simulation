@@ -106,6 +106,9 @@ public sealed class PoliticalKnowledgeStore : IAuthoritativeMutationGuardBindabl
         }
     }
 
+    internal bool IsBoundToPersonStore(PersonStore expected) =>
+        expected != null && ReferenceEquals(personStore, expected);
+
     public bool TryRegisterHolder(
         PoliticalKnowledgeHolder holder,
         long currentWorldDay,

@@ -24,6 +24,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal PersonSpatialPositionStore PersonSpatialPositionStore { get; private set; }
     internal LegacySpatialAnchorBindingStore LegacySpatialAnchors { get; private set; }
     internal ScheduledDirectiveStore ScheduledDirectives { get; private set; }
+    internal PoliticalKnowledgeStore PoliticalKnowledgeStore { get; private set; }
 
     private DailyV1SelectedRuntimeOwnerGraph(
         DailyV1EffectiveDefinitions definitions,
@@ -57,6 +58,21 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         if (PersonStore != null) return ReferenceEquals(PersonStore, personStore);
         if (!MatchesPersonStore(personStore, npcs)) return false;
         PersonStore = personStore;
+        return true;
+    }
+
+    /// <summary>
+    /// Binds the exact PoliticalKnowledge authority installed by the runtime.
+    /// It must use this graph's PersonStore so captured beliefs cannot come
+    /// from a parallel selected-owner root.
+    /// </summary>
+    internal bool TryBindPoliticalKnowledgeStore(PoliticalKnowledgeStore store)
+    {
+        if (store == null || PersonStore == null
+            || !store.IsBoundToPersonStore(PersonStore)) return false;
+        if (PoliticalKnowledgeStore != null)
+            return ReferenceEquals(PoliticalKnowledgeStore, store);
+        PoliticalKnowledgeStore = store;
         return true;
     }
 

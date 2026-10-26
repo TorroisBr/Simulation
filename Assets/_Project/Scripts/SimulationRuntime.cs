@@ -2933,6 +2933,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         {
             throw new InvalidOperationException("The selected owner graph could not be bound to this runtime boundary.");
         }
+        if (selectedOwnerGraph != null && this.politicalKnowledgeStore != null
+            && !selectedOwnerGraph.TryBindPoliticalKnowledgeStore(this.politicalKnowledgeStore))
+            throw new InvalidOperationException(
+                "The selected owner graph could not bind the exact PoliticalKnowledge authority installed by this runtime.");
         if (selectedOwnerGraph != null
             && !selectedOwnerGraph.TryBindPersonSpatialPositionStore(resolvedPersonSpatialPositionStore))
             throw new InvalidOperationException(

@@ -12,9 +12,8 @@ internal enum DailyV1P12GCoreBoundOwnerSourceCaptureFailure
 
 /// <summary>
 /// Detached snapshots for the P12-F owners already bound to the active Core
-/// session: actor choices, scheduled directives, TravelParties, and
-/// expeditions. PoliticalKnowledge is intentionally not represented here; it
-/// is not yet joined to DailyV1ActiveRuntimeSession.OwnerGraph.
+/// session: PoliticalKnowledge, actor choices, scheduled directives,
+/// TravelParties, and expeditions.
 /// </summary>
 internal sealed class DailyV1P12GCoreBoundOwnerSources
 {
@@ -24,6 +23,7 @@ internal sealed class DailyV1P12GCoreBoundOwnerSources
     private DailyV1P12GCoreBoundOwnerSources(
         DailyCaptureEligibilityToken token,
         IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        P12FPoliticalKnowledgeOwnerSnapshot politicalKnowledge,
         P12FActorChoiceSnapshot actorChoices,
         P12FScheduledDirectiveOwnerSnapshot directives,
         P12FTravelPartyOwnerSnapshot travelParties,
@@ -31,12 +31,14 @@ internal sealed class DailyV1P12GCoreBoundOwnerSources
     {
         this.token = token;
         this.ownerSections = ownerSections;
+        PoliticalKnowledge = politicalKnowledge;
         ActorChoices = actorChoices;
         Directives = directives;
         TravelParties = travelParties;
         Expeditions = expeditions;
     }
 
+    internal P12FPoliticalKnowledgeOwnerSnapshot PoliticalKnowledge { get; }
     internal P12FActorChoiceSnapshot ActorChoices { get; }
     internal P12FScheduledDirectiveOwnerSnapshot Directives { get; }
     internal P12FTravelPartyOwnerSnapshot TravelParties { get; }
@@ -46,6 +48,7 @@ internal sealed class DailyV1P12GCoreBoundOwnerSources
         DailyV1SelectedRuntimeOwnerGraph graph,
         ActorChoiceStore actorChoices) =>
         graph != null
+        && graph.PoliticalKnowledgeStore != null
         && actorChoices != null
         && ReferenceEquals(actorChoices.PersonStore, graph.PersonStore)
         && graph.TravelParties != null
@@ -88,6 +91,17 @@ internal sealed class DailyV1P12GCoreBoundOwnerSources
         IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections = witness.TokenOwnerSections;
         try
         {
+            if (!P12FPoliticalKnowledgeOwnerSnapshot.TryCapture(
+                    graph.PoliticalKnowledgeStore, token, ownerSections,
+                    out P12FPoliticalKnowledgeOwnerSnapshot politicalKnowledgeSnapshot,
+                    out string politicalKnowledgeFailure))
+            {
+                failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.OwnerCaptureFailed;
+                diagnostic = "The Core PoliticalKnowledge source snapshot was rejected: "
+                    + politicalKnowledgeFailure + ".";
+                return false;
+            }
+
             if (!P12FActorChoiceSnapshot.TryCapture(actorChoices, token, ownerSections,
                     out P12FActorChoiceSnapshot actorChoiceSnapshot,
                     out P12FActorChoiceSnapshotFailure actorChoiceFailure))
@@ -137,7 +151,7 @@ internal sealed class DailyV1P12GCoreBoundOwnerSources
             }
 
             sources = new DailyV1P12GCoreBoundOwnerSources(
-                token, ownerSections, actorChoiceSnapshot, directiveSnapshot,
+                token, ownerSections, politicalKnowledgeSnapshot, actorChoiceSnapshot, directiveSnapshot,
                 travelPartySnapshot, expeditionSnapshot);
             failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.None;
             return true;
