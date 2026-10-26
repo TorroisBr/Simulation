@@ -47,10 +47,25 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
-    /// Builds one unpublished selected Daily-v1 genesis candidate under the
-    /// application-captured bootstrap context. A host may finish creating its
-    /// projections and validate its publication boundary before calling
-    /// TryPublishInitial with the returned exact Core session.
+    /// Prepares selected Daily-v1 genesis using Core-owned WorldId allocation.
+    /// Production host adapters may observe the established stage sequence,
+    /// but cannot supply or replace runtime identities. The allocator-injection
+    /// overload below remains an internal deterministic test seam.
+    /// </summary>
+    internal bool TryPrepareInitialGenesis(
+        DailyV1EffectiveDefinitions definitions,
+        Action<string> stageCompleted,
+        out DailyV1GenesisComposition composition,
+        out DailyV1ActiveRuntimeSession candidate,
+        out string diagnostic) =>
+        TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted,
+            out composition, out candidate, out diagnostic);
+
+    /// <summary>
+    /// Deterministic identity-injection seam for Core tests. Production hosts
+    /// use the overload without an allocator so identity authority remains in
+    /// Core.
     /// </summary>
     internal bool TryPrepareInitialGenesis(
         DailyV1EffectiveDefinitions definitions,
@@ -613,19 +628,22 @@ internal sealed class DailyV1Application
     /// </summary>
     internal bool TryBindRuntimeAdvanceBoundary(
         DailyV1ActiveRuntimeSession candidateSession,
-        IDailyV1RuntimeAdvanceBoundary runtimeBoundary)
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts)
     {
-        if (candidateSession == null || runtimeBoundary == null) return false;
+        if (candidateSession == null || hostPorts == null
+            || !ReferenceEquals(hostPorts.ExecutionState,
+                candidateSession.ExecutionBoundaryState))
+            return false;
         lock (activeSessionGate.SyncRoot)
         {
             DailyV1ActiveRuntimeSession current = activeSessionGate.Current;
             if (ReferenceEquals(current, candidateSession))
-                return ReferenceEquals(candidateSession.RuntimeAdvanceBoundary, runtimeBoundary);
+                return candidateSession.TryBindSelectedRuntimeAdvanceHostPorts(hostPorts);
             if (!IsBootstrapOrRestoredDescendant(candidateSession.AdmissionContext)
                 || activeSessionGate.ActiveOperationCount != 0
                 || (current != null && !current.IsProfileCompatibleWith(candidateSession)))
                 return false;
-            return candidateSession.TryBindRuntimeAdvanceBoundary(runtimeBoundary);
+            return candidateSession.TryBindSelectedRuntimeAdvanceHostPorts(hostPorts);
         }
     }
 
@@ -639,7 +657,7 @@ internal sealed class DailyV1Application
         DailyV1ActiveRuntimeSession expectedSession,
         out SimulationRuntimeAdvanceFailure failure)
     {
-        IDailyV1RuntimeAdvanceBoundary runtimeBoundary = expectedSession?.RuntimeAdvanceBoundary;
+        IDailyV1RuntimeAdvanceEvidenceBoundary runtimeBoundary = expectedSession?.RuntimeAdvanceBoundary;
         failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
         if (expectedSession == null || runtimeBoundary == null
             || !ReferenceEquals(activeSessionGate.Current, expectedSession)
@@ -662,8 +680,9 @@ internal sealed class DailyV1Application
                 || !ReferenceEquals(activeSessionGate.Current, expectedSession))
                 return false;
 
-            return expectedSession.ExecutionBoundaryState.TryAdvanceDay(
-                runtimeBoundary, out failure);
+            return runtimeBoundary is DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary
+                && expectedSession.ExecutionBoundaryState.TryAdvanceSelectedDailyV1Day(
+                    coreBoundary, out failure);
         }
     }
 
@@ -679,7 +698,7 @@ internal sealed class DailyV1Application
         out int daysAdvanced,
         out SimulationRuntimeAdvanceFailure failure)
     {
-        IDailyV1RuntimeAdvanceBoundary runtimeBoundary = expectedSession?.RuntimeAdvanceBoundary;
+        IDailyV1RuntimeAdvanceEvidenceBoundary runtimeBoundary = expectedSession?.RuntimeAdvanceBoundary;
         daysAdvanced = 0;
         failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
         if (expectedSession == null || runtimeBoundary == null
@@ -703,8 +722,9 @@ internal sealed class DailyV1Application
                 || !ReferenceEquals(activeSessionGate.Current, expectedSession))
                 return false;
 
-            return expectedSession.ExecutionBoundaryState.TryAdvanceDays(
-                runtimeBoundary, dayCount, out daysAdvanced, out failure);
+            return runtimeBoundary is DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary
+                && expectedSession.ExecutionBoundaryState.TryAdvanceSelectedDailyV1Days(
+                    coreBoundary, dayCount, out daysAdvanced, out failure);
         }
     }
 

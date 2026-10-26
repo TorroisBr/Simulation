@@ -36,6 +36,18 @@ internal sealed class DailyV1P12CrimeJusticeOwnerBinding
             DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(owner.RuntimeId),
             () => owner.CrimeJusticeRevision);
     }
+
+    internal static DailyV1P12CrimeJusticeOwnerBinding ForJusticeRecordsOwner(
+        object censusOwnerIdentity,
+        DailyV1JusticeRecordsOwner owner)
+    {
+        if (censusOwnerIdentity == null) throw new ArgumentNullException(nameof(censusOwnerIdentity));
+        if (owner == null) throw new ArgumentNullException(nameof(owner));
+        return new DailyV1P12CrimeJusticeOwnerBinding(
+            censusOwnerIdentity,
+            DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
+            () => owner.Revision);
+    }
 }
 
 /// <summary>
@@ -45,6 +57,7 @@ internal sealed class DailyV1P12CrimeJusticeOwnerBinding
 /// </summary>
 internal interface IDailyV1P12CrimeJusticeMutationProtocol
 {
+    void FaultClosed();
     bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds);
     bool TryReserveMutationEpoch(out object reservation);
     bool TryNotifyReservedCommittedMutations(object reservation, IReadOnlyCollection<string> sectionIds);
@@ -83,6 +96,7 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         internal HashSet<string> AllowedSections;
         internal HashSet<string> ChangedSections = new HashSet<string>(StringComparer.Ordinal);
         internal object EpochReservation;
+        internal DailyV1ExecutionBoundaryState ExecutionState;
 
         internal bool IsOwnedByCurrentThread() => ReferenceEquals(OwnerThread, Thread.CurrentThread)
             && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
@@ -128,13 +142,41 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
     internal bool CanBeginDailyMutation() => !isAdmissionEnabled()
         || (isOwnerThreadCurrent() && activeContext == null);
 
+    /// <summary>
+    /// Core preflight for the selected daily mutation boundary. It verifies
+    /// the exact admitted execution state and owner thread before a Unity
+    /// compatibility adapter inspects system projections.
+    /// </summary>
+    internal bool CanBeginSelectedDailyMutation(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (executionState != null
+            && graph != null
+            && ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+            && executionState.HasAdmittedSelectedDailyExecution
+            && executionState.AdmissionContext != null
+            && executionState.AdmissionContext.IsOwnedByCurrentThread()
+            && activeContext == null)
+            return true;
+
+        FaultSelected(executionState);
+        return false;
+    }
+
     internal void ExecuteDailyMutation(
         IReadOnlyList<DailyV1P12CrimeJusticeOwnerBinding> owners,
         IReadOnlyList<string> sectionIds,
-        Action mutation)
+        Action mutation) => ExecuteDailyMutation(owners, sectionIds, mutation, null);
+
+    private void ExecuteDailyMutation(
+        IReadOnlyList<DailyV1P12CrimeJusticeOwnerBinding> owners,
+        IReadOnlyList<string> sectionIds,
+        Action mutation,
+        DailyV1ExecutionBoundaryState executionState)
     {
         if (mutation == null) throw new ArgumentNullException(nameof(mutation));
-        if (!isAdmissionEnabled())
+        if (executionState == null && !isAdmissionEnabled())
         {
             mutation();
             return;
@@ -145,13 +187,13 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
             return;
         }
 
-        if (!TryBuildContext(ScopeMode.DailyReserved, owners, sectionIds,
+        if (!TryBuildContext(ScopeMode.DailyReserved, owners, sectionIds, executionState,
                 out Context context)
-            || !isOwnerThreadCurrent()
+            || !IsOwnerThreadCurrent(context)
             || activeContext != null
             || sectionIds.Count == 0)
         {
-            Reject("P12 Crime/Justice daily mutation scope is unavailable.");
+            Reject("P12 Crime/Justice daily mutation scope is unavailable.", executionState);
             return;
         }
 
@@ -159,7 +201,7 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
             || !protocol.TryReserveMutationEpoch(out object reservation)
             || reservation == null)
         {
-            Reject("P12 Crime/Justice daily mutation could not reserve its owner baseline and epoch.");
+            Reject("P12 Crime/Justice daily mutation could not reserve its owner baseline and epoch.", executionState);
             return;
         }
 
@@ -182,6 +224,120 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
             throw new InvalidOperationException("P12 Crime/Justice daily mutation notification failed.");
     }
 
+    /// <summary>
+    /// Admits one selected Daily-v1 Crime/Justice phase from the exact Core
+    /// runtime graph. Core derives every NPC status owner, Justice revision
+    /// source, and section identity. The host supplies opaque Crime and Justice
+    /// owner/census identity tokens; Core verifies both receipt bindings and
+    /// each phase remains a separate reserved P12 scope.
+    /// </summary>
+    internal void ExecuteSelectedDailyMutation(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1SelectedCrimeJusticeDailyPhase phase,
+        object crimeOwnerIdentity,
+        object crimeReceiptCensusOwnerIdentity,
+        object justiceOwnerIdentity,
+        object justiceReceiptCensusOwnerIdentity,
+        bool includeCrimeReceiptSection,
+        bool includeJusticeReceiptSection,
+        Action mutation)
+    {
+        if (mutation == null) throw new ArgumentNullException(nameof(mutation));
+        if (!Enum.IsDefined(typeof(DailyV1SelectedCrimeJusticeDailyPhase), phase)
+            || executionState == null
+            || graph == null
+            || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+            || !executionState.HasAdmittedSelectedDailyExecution
+            || executionState.AdmissionContext == null
+            || !executionState.AdmissionContext.IsOwnedByCurrentThread()
+            || graph.Npcs == null
+            || !graph.MatchesExactOwnerInstances(graph.Cities, graph.Npcs)
+            || includeCrimeReceiptSection != (crimeOwnerIdentity != null)
+            || !ReferenceEquals(crimeOwnerIdentity, crimeReceiptCensusOwnerIdentity)
+            || includeJusticeReceiptSection != (justiceOwnerIdentity != null)
+            || !ReferenceEquals(justiceOwnerIdentity, justiceReceiptCensusOwnerIdentity)
+            || (justiceOwnerIdentity != null && graph.JusticeRecordsOwner == null))
+        {
+            Reject("P12 selected Crime/Justice daily mutation does not match its exact Core owner graph or phase contract, or lacks the exact Crime receipt census identity or exact Justice census identity.", executionState);
+            return;
+        }
+
+        List<DailyV1P12CrimeJusticeOwnerBinding> npcBindings =
+            new List<DailyV1P12CrimeJusticeOwnerBinding>(graph.Npcs.Count);
+        HashSet<string> npcSectionSet = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            if (npc == null
+                || !graph.ContainsExactNpcOwner(npc)
+                || !ReferenceEquals(npc.Definitions, graph.Definitions))
+            {
+                Reject("P12 selected Crime/Justice daily mutation encountered a non-exact Core NPC owner.", executionState);
+                return;
+            }
+
+            DailyV1P12CrimeJusticeOwnerBinding binding =
+                DailyV1P12CrimeJusticeOwnerBinding.ForNpcStatusOwner(npc);
+            if (!npcSectionSet.Add(binding.SectionId))
+            {
+                Reject("P12 selected Crime/Justice daily mutation contains duplicate NPC status sections.", executionState);
+                return;
+            }
+            npcBindings.Add(binding);
+        }
+
+        npcBindings.Sort((left, right) => StringComparer.Ordinal.Compare(
+            ((DailyV1NpcRuntimeOwners)left.OwnerIdentity).RuntimeId,
+            ((DailyV1NpcRuntimeOwners)right.OwnerIdentity).RuntimeId));
+
+        List<DailyV1P12CrimeJusticeOwnerBinding> owners =
+            new List<DailyV1P12CrimeJusticeOwnerBinding>(graph.Npcs.Count + 1);
+        List<string> sections = new List<string>(graph.Npcs.Count + 3);
+        HashSet<string> sectionSet = new HashSet<string>(StringComparer.Ordinal);
+
+        DailyV1P12CrimeJusticeOwnerBinding justiceRecordsBinding =
+            justiceReceiptCensusOwnerIdentity == null
+                ? null
+                : DailyV1P12CrimeJusticeOwnerBinding.ForJusticeRecordsOwner(
+                    justiceReceiptCensusOwnerIdentity, graph.JusticeRecordsOwner);
+        if (justiceRecordsBinding != null)
+        {
+            owners.Add(justiceRecordsBinding);
+            if (!sectionSet.Add(justiceRecordsBinding.SectionId))
+            {
+                Reject("P12 selected Crime/Justice daily mutation contains a duplicate Justice section.", executionState);
+                return;
+            }
+            sections.Add(justiceRecordsBinding.SectionId);
+        }
+
+        if (includeJusticeReceiptSection
+            && sectionSet.Add(DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId))
+            sections.Add(DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId);
+        if (includeCrimeReceiptSection
+            && sectionSet.Add(DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId))
+            sections.Add(DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId);
+
+        foreach (DailyV1P12CrimeJusticeOwnerBinding binding in npcBindings)
+        {
+            owners.Add(binding);
+            if (!sectionSet.Add(binding.SectionId))
+            {
+                Reject("P12 selected Crime/Justice daily mutation contains a duplicate owner section.", executionState);
+                return;
+            }
+            sections.Add(binding.SectionId);
+        }
+
+        if (sections.Count == 0)
+        {
+            Reject("P12 selected Crime/Justice daily mutation has no admitted owner sections.", executionState);
+            return;
+        }
+
+        ExecuteDailyMutation(owners, sections, mutation, executionState);
+    }
+
     internal bool TryBeginImmediateMutation(
         IReadOnlyList<DailyV1P12CrimeJusticeOwnerBinding> owners,
         IReadOnlyList<string> sectionIds,
@@ -189,7 +345,7 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
     {
         scope = null;
         if (!isAdmissionEnabled()) return true;
-        if (!TryBuildContext(ScopeMode.ActionImmediate, owners, sectionIds,
+        if (!TryBuildContext(ScopeMode.ActionImmediate, owners, sectionIds, null,
                 out Context context)
             || !isOwnerThreadCurrent()
             || activeContext != null
@@ -260,7 +416,7 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         IReadOnlyList<string> sectionIds)
     {
         if (!isAdmissionEnabled()) return true;
-        if (!TryBuildContext(ScopeMode.ActionImmediate, owners, sectionIds,
+        if (!TryBuildContext(ScopeMode.ActionImmediate, owners, sectionIds, null,
                 out Context expected)
             || !isOwnerThreadCurrent()
             || activeContext == null
@@ -277,13 +433,13 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
 
     internal bool CanCommit(object ownerIdentity, string sectionId)
     {
-        if (!isAdmissionEnabled()) return true;
         Context context = activeContext;
+        if (!IsAdmissionEnabled(context)) return true;
         if (!TryGetBinding(context, ownerIdentity, sectionId,
                 out DailyV1P12CrimeJusticeOwnerBinding binding)
-            || !context.IsOwnedByCurrentThread())
+            || !IsOwnerThreadCurrent(context))
         {
-            faultAdmission();
+            Fault(context);
             return false;
         }
 
@@ -291,12 +447,12 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         try { revision = binding.ReadRevision(); }
         catch
         {
-            faultAdmission();
+            Fault(context);
             return false;
         }
         if (revision == long.MaxValue)
         {
-            faultAdmission();
+            Fault(context);
             return false;
         }
 
@@ -310,7 +466,7 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
             || !protocol.TryValidateUnchangedSections(new[] { sectionId })
             || !protocol.TryValidateMutationEpochCapacity())
         {
-            faultAdmission();
+            Fault(context);
             return false;
         }
         return true;
@@ -318,13 +474,13 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
 
     internal void NotifyCommitted(object ownerIdentity, string sectionId)
     {
-        if (!isAdmissionEnabled()) return;
         Context context = activeContext;
+        if (!IsAdmissionEnabled(context)) return;
         if (!TryGetBinding(context, ownerIdentity, sectionId,
                 out _)
-            || !context.IsOwnedByCurrentThread())
+            || !IsOwnerThreadCurrent(context))
         {
-            faultAdmission();
+            Fault(context);
             return;
         }
         if (context.Mode == ScopeMode.DailyReserved)
@@ -334,19 +490,19 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         }
         if (context.Mode != ScopeMode.ActionImmediate
             || !protocol.NotifyCommittedMutation(sectionId))
-            faultAdmission();
+            Fault(context);
     }
 
     private bool EndDailyScope(Context context)
     {
         bool valid = context != null
             && context.Mode == ScopeMode.DailyReserved
-            && context.IsOwnedByCurrentThread()
+            && IsOwnerThreadCurrent(context)
             && ReferenceEquals(activeContext, context)
             && context.EpochReservation != null;
         if (!valid)
         {
-            faultAdmission();
+            Fault(context);
             if (context != null && context.EpochReservation != null)
                 TryRelease(context.EpochReservation);
             if (ReferenceEquals(activeContext, context)) activeContext = null;
@@ -368,7 +524,7 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
             notified = protocol.TryNotifyReservedCommittedMutations(
                 context.EpochReservation, context.ChangedSections);
         }
-        if (!notified) faultAdmission();
+        if (!notified) Fault(context);
         activeContext = null;
         return notified;
     }
@@ -387,6 +543,7 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         ScopeMode mode,
         IReadOnlyList<DailyV1P12CrimeJusticeOwnerBinding> owners,
         IReadOnlyList<string> sectionIds,
+        DailyV1ExecutionBoundaryState executionState,
         out Context context)
     {
         context = null;
@@ -411,7 +568,8 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
             OwnerThread = Thread.CurrentThread,
             OwnerManagedThreadId = Thread.CurrentThread.ManagedThreadId,
             Owners = ownerMap,
-            AllowedSections = allowedSections
+            AllowedSections = allowedSections,
+            ExecutionState = executionState
         };
         return true;
     }
@@ -446,9 +604,40 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         return true;
     }
 
-    private void Reject(string message)
+    private bool IsAdmissionEnabled(Context context) =>
+        context?.ExecutionState != null || isAdmissionEnabled();
+
+    private bool IsOwnerThreadCurrent(Context context) => context?.ExecutionState != null
+        ? context.ExecutionState.AdmissionContext != null
+            && context.ExecutionState.AdmissionContext.IsOwnedByCurrentThread()
+        : isOwnerThreadCurrent();
+
+    private void Fault(Context context)
     {
+        if (context?.ExecutionState != null)
+        {
+            FaultSelected(context.ExecutionState);
+            return;
+        }
         faultAdmission();
+    }
+
+    private void FaultSelected(DailyV1ExecutionBoundaryState executionState)
+    {
+        try { protocol.FaultClosed(); }
+        catch { }
+    }
+
+    private void Reject(string message, DailyV1ExecutionBoundaryState executionState = null)
+    {
+        if (executionState != null)
+        {
+            FaultSelected(executionState);
+        }
+        else
+        {
+            faultAdmission();
+        }
         throw new InvalidOperationException(message);
     }
 

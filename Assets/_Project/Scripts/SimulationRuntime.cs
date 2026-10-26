@@ -80,7 +80,8 @@ public sealed class SimulationRuntimeSpatialInvariantReport
     }
 }
 
-public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDailyV1RuntimeAdvanceBoundary
+public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
+    IDailyV1RuntimeAdvanceBoundary, IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     [ThreadStatic]
     private static DailyGameplayExecutionProbeForTest activeDailyGameplayExecutionProbeForTest;
@@ -10912,10 +10913,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         return true;
     }
 
-    DailyV1ExecutionBoundaryState IDailyV1RuntimeAdvanceBoundary.ExecutionState => dailyExecutionBoundary;
+    DailyV1ExecutionBoundaryState IDailyV1RuntimeAdvanceEvidenceBoundary.ExecutionState => dailyExecutionBoundary;
     bool IDailyV1RuntimeAdvanceBoundary.HasIntradayTimeline => p18dTimeline != null;
 
-    bool IDailyV1RuntimeAdvanceBoundary.TryEnterDailyAdvanceOperation(
+    bool IDailyV1RuntimeAdvanceEvidenceBoundary.TryEnterDailyAdvanceOperation(
         out IDisposable operationScope)
     {
         operationScope = null;
@@ -10927,7 +10928,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         return true;
     }
 
-    bool IDailyV1RuntimeAdvanceBoundary.TryCreateSelectedDailyExecutionBoundary(
+    bool IDailyV1RuntimeAdvanceEvidenceBoundary.TryCreateSelectedDailyExecutionBoundary(
         out IDailyV1SelectedDailyExecutionBoundary executionBoundary)
     {
         DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
@@ -10965,13 +10966,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         return advanced;
     }
 
-    bool IDailyV1RuntimeAdvanceBoundary.TryCaptureCompletedDailyCaptureEvidence(
+    bool IDailyV1RuntimeAdvanceEvidenceBoundary.TryCaptureCompletedDailyCaptureEvidence(
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
         out DailyCaptureEligibilityFailure failure) =>
         TryCaptureCompletedDailyCaptureEvidence(out ownerSections, out mutationEpoch, out failure);
 
-    bool IDailyV1RuntimeAdvanceBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
+    bool IDailyV1RuntimeAdvanceEvidenceBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
         bool sessionReplacement,
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
@@ -10985,7 +10986,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             out mutationEpoch,
             out failure);
 
-    bool IDailyV1RuntimeAdvanceBoundary.TryCaptureContinuationSaveEvidence(
+    bool IDailyV1RuntimeAdvanceEvidenceBoundary.TryCaptureContinuationSaveEvidence(
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
         out DailyCaptureEligibilityFailure failure) =>
@@ -10996,7 +10997,48 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             out mutationEpoch,
             out failure);
 
-    void IDailyV1RuntimeAdvanceBoundary.FaultRuntimeAdmission() => FaultRuntimeAdmission();
+    void IDailyV1RuntimeAdvanceEvidenceBoundary.FaultRuntimeAdmission() => FaultRuntimeAdmission();
+
+    // Selected Daily-v1 sessions bind a Core-owned boundary to these narrow
+    // P12/projection ports. The Unity runtime's legacy day and intraday
+    // methods remain available only to the non-selected compatibility path.
+    DailyV1ExecutionBoundaryState IDailyV1SelectedRuntimeAdvanceHostPorts.ExecutionState =>
+        dailyExecutionBoundary;
+
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryEnterDailyAdvanceOperation(
+        out IDisposable operationScope) =>
+        ((IDailyV1RuntimeAdvanceEvidenceBoundary)this).TryEnterDailyAdvanceOperation(
+            out operationScope);
+
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCreateSelectedDailyExecutionBoundary(
+        out IDailyV1SelectedDailyExecutionBoundary executionBoundary) =>
+        ((IDailyV1RuntimeAdvanceEvidenceBoundary)this).TryCreateSelectedDailyExecutionBoundary(
+            out executionBoundary);
+
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCaptureCompletedDailyCaptureEvidence(
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure) =>
+        ((IDailyV1RuntimeAdvanceEvidenceBoundary)this).TryCaptureCompletedDailyCaptureEvidence(
+            out ownerSections, out mutationEpoch, out failure);
+
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCaptureDailyBoundaryAdmissionEvidence(
+        bool sessionReplacement,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure) =>
+        ((IDailyV1RuntimeAdvanceEvidenceBoundary)this).TryCaptureDailyBoundaryAdmissionEvidence(
+            sessionReplacement, out ownerSections, out mutationEpoch, out failure);
+
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCaptureContinuationSaveEvidence(
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure) =>
+        ((IDailyV1RuntimeAdvanceEvidenceBoundary)this).TryCaptureContinuationSaveEvidence(
+            out ownerSections, out mutationEpoch, out failure);
+
+    void IDailyV1SelectedRuntimeAdvanceHostPorts.FaultRuntimeAdmission() =>
+        ((IDailyV1RuntimeAdvanceEvidenceBoundary)this).FaultRuntimeAdmission();
 
     /// <summary>
     /// Acquires this runtime's single-writer advance lease for a larger composed
@@ -11614,7 +11656,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             Action mutation)
         {
             if (mutation == null) throw new ArgumentNullException(nameof(mutation));
-            runtime.RunP12CrimeJusticeDailyMutation(mutation);
+            runtime.RunP12CrimeJusticeDailyMutation(graph, phase, mutation);
         }
 
         public DailyV1JusticeRecordsOwner JusticeRecordsOwner => graph.JusticeRecordsOwner;

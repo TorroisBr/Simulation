@@ -128,7 +128,7 @@ internal sealed class DailyV1P12CRuntimeRoots
 /// </summary>
 internal sealed class DailyV1ActiveRuntimeSession
 {
-    private IDailyV1RuntimeAdvanceBoundary runtimeAdvanceBoundary;
+    private IDailyV1RuntimeAdvanceEvidenceBoundary runtimeAdvanceBoundary;
 
     private DailyV1ActiveRuntimeSession(
         DailyV1ExecutionBoundaryState executionBoundaryState,
@@ -159,7 +159,7 @@ internal sealed class DailyV1ActiveRuntimeSession
     internal EffectiveSimulationConfiguration EffectiveConfiguration => ExecutionBoundaryState.ConfigurationIdentity;
     internal SimulationCalendar Calendar => ExecutionBoundaryState.CalendarIdentity;
     internal string ProfileFingerprint { get; }
-    internal IDailyV1RuntimeAdvanceBoundary RuntimeAdvanceBoundary => runtimeAdvanceBoundary;
+    internal IDailyV1RuntimeAdvanceEvidenceBoundary RuntimeAdvanceBoundary => runtimeAdvanceBoundary;
 
     /// <summary>
     /// Binds the session once to the host boundary constructed for this exact
@@ -167,17 +167,26 @@ internal sealed class DailyV1ActiveRuntimeSession
     /// before publication so an advance cannot substitute another host
     /// mutation or capture authority.
     /// </summary>
-    internal bool TryBindRuntimeAdvanceBoundary(IDailyV1RuntimeAdvanceBoundary boundary)
+    internal bool TryBindSelectedRuntimeAdvanceHostPorts(
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts)
     {
-        if (boundary == null
-            || !ReferenceEquals(boundary.ExecutionState, ExecutionBoundaryState))
+        if (hostPorts == null
+            || !ReferenceEquals(hostPorts.ExecutionState, ExecutionBoundaryState)
+            || !ExecutionBoundaryState.HasAdmittedSelectedDailyExecution
+            || ExecutionBoundaryState.SelectedRuntimeOwnerGraph == null
+            || ExecutionBoundaryState.AdmissionContext?.Profile
+                != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
             return false;
+
         if (runtimeAdvanceBoundary == null)
         {
-            runtimeAdvanceBoundary = boundary;
+            runtimeAdvanceBoundary = new DailyV1CoreSelectedRuntimeAdvanceBoundary(
+                ExecutionBoundaryState, hostPorts);
             return true;
         }
-        return ReferenceEquals(runtimeAdvanceBoundary, boundary);
+
+        return runtimeAdvanceBoundary is DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary
+            && coreBoundary.IsBoundTo(ExecutionBoundaryState, hostPorts);
     }
 
     internal static bool TryCreate(

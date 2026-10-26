@@ -356,7 +356,7 @@ public sealed class DailyV1RuntimeAdvanceStageTests
         internal int OperationCountAtP12ScopeBegin { get; private set; }
         internal int OperationCountAtCapture { get; private set; }
         internal IReadOnlyList<OwnerSectionCensusSnapshot> CapturedOwnerSections { get; private set; }
-        DailyV1ExecutionBoundaryState IDailyV1RuntimeAdvanceBoundary.ExecutionState => state;
+        DailyV1ExecutionBoundaryState IDailyV1RuntimeAdvanceEvidenceBoundary.ExecutionState => state;
         bool IDailyV1RuntimeAdvanceBoundary.HasIntradayTimeline => HasIntradayTimeline;
 
         public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope)

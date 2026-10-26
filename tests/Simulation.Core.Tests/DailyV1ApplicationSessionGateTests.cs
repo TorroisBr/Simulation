@@ -16,7 +16,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         }
     }
 
-    private sealed class ApplicationAdvanceBoundary : IDailyV1RuntimeAdvanceBoundary
+    private sealed class ApplicationAdvanceBoundary : IDailyV1RuntimeAdvanceBoundary,
+        IDailyV1SelectedRuntimeAdvanceHostPorts
     {
         private readonly DailyV1ExecutionBoundaryState state;
         private readonly Action onOperationEntry;
@@ -39,6 +40,7 @@ public sealed class DailyV1ApplicationSessionGateTests
 
         internal bool OperationEntered { get; private set; }
         internal bool SelectedBoundaryRequested { get; private set; }
+        internal int LegacyAdvanceInvocationCount { get; private set; }
         internal bool Faulted { get; private set; }
         internal bool? RequestedSessionReplacement { get; private set; }
         internal int ContinuationSaveEvidenceCaptureCount { get; private set; }
@@ -80,12 +82,14 @@ public sealed class DailyV1ApplicationSessionGateTests
 
         public bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
         {
+            LegacyAdvanceInvocationCount++;
             failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
             return false;
         }
 
         public bool TryAdvanceIntradayToNextDayBoundary(out SimulationRuntimeAdvanceFailure failure)
         {
+            LegacyAdvanceInvocationCount++;
             failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
             return false;
         }
@@ -739,7 +743,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             definitions, 0L,
             out DailyV1ActiveRuntimeSession foreignRestoredSession, out diagnostic),
             Is.True, diagnostic);
-        Assert.That(foreignRestoredSession.TryBindRuntimeAdvanceBoundary(
+        Assert.That(foreignRestoredSession.TryBindSelectedRuntimeAdvanceHostPorts(
             new ApplicationAdvanceBoundary(foreignRestoredSession.ExecutionBoundaryState, null)), Is.True);
         Assert.That(application.TryPublishInitial(foreignRestoredSession), Is.False,
             "An application cannot publish a restored session admitted by a different bootstrap context on the same thread.");
@@ -930,6 +934,29 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void ProductionGenesisPreparationAllocatesWorldIdentityInsideCore()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        var completedStages = new System.Collections.Generic.List<string>();
+
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, completedStages.Add,
+            out DailyV1GenesisComposition composition,
+            out DailyV1ActiveRuntimeSession candidate,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(composition, Is.Not.Null);
+        Assert.That(candidate, Is.Not.Null);
+        Assert.That(composition.WorldId, Is.SameAs(candidate.WorldId));
+        Assert.That(composition.ExecutionBoundaryState.WorldId, Is.SameAs(composition.WorldId));
+        Assert.That(completedStages, Is.Not.Empty);
+        Assert.That(application.ActiveSession, Is.Null,
+            "Core-owned genesis remains private until a real runtime boundary is bound and published.");
+    }
+
+    [Test]
     public void ApplicationPublishesTheExactCoreGenesisOwnerGraph()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -1099,6 +1126,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(boundary.OperationEntered, Is.True);
         Assert.That(boundary.SelectedBoundaryRequested, Is.True);
+        Assert.That(boundary.LegacyAdvanceInvocationCount, Is.Zero,
+            "The selected Core session cannot delegate a failed stage to the host day or intraday advance.");
         Assert.That(boundary.Faulted, Is.True);
         Assert.That(applicationReentryAccepted, Is.False,
             "Application queries cannot reenter the active session while Core owns its daily advance reservation.");
@@ -1137,6 +1166,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(boundary.OperationEntered, Is.True);
         Assert.That(boundary.SelectedBoundaryRequested, Is.True);
+        Assert.That(boundary.LegacyAdvanceInvocationCount, Is.Zero,
+            "A selected multi-day Core session cannot delegate to the host day or intraday advance.");
         Assert.That(boundary.Faulted, Is.True);
         Assert.That(applicationReentryAccepted, Is.False,
             "Application queries cannot reenter the active session during a batch reservation.");
@@ -1178,7 +1209,7 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
-    public void ApplicationBindsOneExactRuntimeAdvanceBoundaryBeforePublication()
+    public void ApplicationBindsCoreBoundaryToOneExactSelectedHostPortSetBeforePublication()
     {
         DailyV1Application application = new DailyV1Application();
         DailyV1EffectiveDefinitions definitions =
@@ -1205,7 +1236,12 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryPublishInitial(session), Is.True);
         Assert.That(application.TryBindRuntimeAdvanceBoundary(session, replacement), Is.False,
             "A published session cannot replace its exact host adapter.");
-        Assert.That(session.RuntimeAdvanceBoundary, Is.SameAs(exact));
+        DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
+            session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
+        Assert.That(coreBoundary, Is.Not.Null,
+            "The session publishes its Core-owned boundary rather than the Unity host runtime.");
+        Assert.That(coreBoundary.ExecutionState, Is.SameAs(session.ExecutionBoundaryState));
+        Assert.That(coreBoundary.IsBoundTo(session.ExecutionBoundaryState, exact), Is.True);
     }
     [Test]
     public void ApplicationRejectsAnotherGenesisAfterPublishingItsInitialSession()

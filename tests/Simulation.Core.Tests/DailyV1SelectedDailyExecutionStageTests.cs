@@ -111,6 +111,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             UseSelectedActionExecution = true,
             UseSelectedDayStartContext = true,
+            HasUnselectedLiveRuntimeMember = true,
             CrimeSystemPresent = true,
             JusticeSystemPresent = true,
             DayStartRuntimeRosterOverride = Array.Empty<DailyV1ActorTurnRosterProjection>()
@@ -133,14 +134,23 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     public void StateBackedDayStartLetsCoreSelectCompatibilityForUnselectedLiveMember()
     {
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> priorRoster =
+            state.SelectedRuntimeActorRoster;
+        Assert.That(state.TryCreateSelectedRuntimeActorRosterWithAppendedMember(
+                new DailyV1ActorTurnRosterProjection("runtime/unselected-dynamic", null),
+                composition.OwnerGraph,
+                out IReadOnlyList<DailyV1ActorTurnRosterProjection> rosterWithUnselectedMember), Is.True,
+            "The Core roster can retain an unselected runtime identity without assigning it an owner.");
+        Assert.That(state.TryCommitSelectedRuntimeActorRoster(priorRoster, rosterWithUnselectedMember), Is.True);
+
         FakeBoundary boundary = new FakeBoundary(
             composition.RuntimeIdAllocator, composition.RandomSource,
             composition.RecordSequence, composition.DecisionStore,
             composition.ActorChoiceStore)
         {
             UseSelectedActionExecution = true,
-            UseSelectedDayStartContext = true,
-            HasUnselectedLiveRuntimeMember = true,
+            HasUnselectedLiveRuntimeMember = false,
             CrimeSystemPresent = true,
             JusticeSystemPresent = true,
             DayStartRuntimeRosterOverride = Array.Empty<DailyV1ActorTurnRosterProjection>()
@@ -150,10 +160,37 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             composition.ExecutionBoundaryState, composition.OwnerGraph, boundary);
 
         Assert.That(boundary.Calls.Count(call => call == "begin-day"), Is.EqualTo(1),
-            "Core selects the single whole-stage compatibility callback from the host fact.");
+            "Core selects the compatibility callback from its exact roster even when the host cannot provide a selected day-start context.");
         Assert.That(boundary.DayStartPhases, Is.Empty,
             "The Core-selected day-start scopes do not run alongside the whole-stage fallback.");
         Assert.That(boundary.Calls, Does.Not.Contain("merchant-plan"));
+    }
+
+    [Test]
+    public void AdmittedStageRejectsMissingSelectedDayStartContextInsteadOfDelegatingToUnityWholeDay()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        FakeBoundary boundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore)
+        {
+            UseSelectedActionExecution = true,
+            UseSelectedDayStartContext = false
+        };
+
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            DailyV1SelectedDailyExecutionStage.Advance(
+                composition.ExecutionBoundaryState, composition.OwnerGraph, boundary));
+
+        Assert.That(failure.Message, Does.Contain(
+            "The admitted Daily-v1 host could not provide its selected day-start boundary."));
+        Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context", "logger:0" }),
+            "A selected execution cannot fall back to Unity's whole-day authority when its exact owner boundary is missing.");
+        Assert.That(boundary.Calls, Does.Not.Contain("begin-day"));
+        Assert.That(boundary.Calls, Does.Not.Contain("economy-preflight"));
+        Assert.That(boundary.Calls, Does.Not.Contain("knowledge-preflight"));
+        Assert.That(boundary.Calls, Does.Not.Contain("travel-context"));
     }
 
     [Test]
@@ -384,7 +421,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             composition.RecordSequence, composition.DecisionStore,
             composition.ActorChoiceStore)
         {
-            UseSelectedActionExecution = true
+            UseSelectedActionExecution = true,
+            UseSelectedDayStartContext = true
         };
         FakeRuntimeAdvanceBoundary advanceBoundary = new FakeRuntimeAdvanceBoundary(
             state, dailyBoundary);
@@ -400,7 +438,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "The state-backed Core actor-turn stage consumes its exact graph-bound directive.");
         Assert.That(dailyBoundary.Calls, Does.Not.Contain("directive"),
             "Selected directives execute through Core rather than the legacy host callback.");
-        Assert.That(dailyBoundary.Calls, Does.Contain("begin-day"));
+        Assert.That(dailyBoundary.Calls, Does.Not.Contain("begin-day"),
+            "The admitted selected path runs the Core day-start stages instead of delegating to Unity's whole-day callback.");
         Assert.That(dailyBoundary.Calls, Does.Contain("actor-context"));
         Assert.That(dailyBoundary.Calls, Does.Contain("travel-context"));
         Assert.That(state.CompletedCoreSequence, Is.EqualTo(1L));
@@ -422,6 +461,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             composition.ActorChoiceStore)
         {
             UseSelectedActionExecution = true,
+            UseSelectedDayStartContext = true,
             FailDecisionRecordOwnerResolution = true
         };
 
@@ -482,6 +522,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             composition.ActorChoiceStore)
         {
             UseSelectedActionExecution = true,
+            UseSelectedDayStartContext = true,
             FailDecisionRecordOwnerResolution = true
         };
         FakeRuntimeAdvanceBoundary advanceBoundary = new FakeRuntimeAdvanceBoundary(state, dailyBoundary);

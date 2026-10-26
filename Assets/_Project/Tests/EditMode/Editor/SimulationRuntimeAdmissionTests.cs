@@ -4604,6 +4604,58 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void SelectedCrimeJusticeDailyMutationRejectsMissingExactCrimeReceiptIdentity()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject hostObject = new GameObject("P12 selected Crime receipt identity mismatch");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
+        DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(graph, Is.Not.Null);
+        Assert.That(ReadPrivateField<CrimeSystem>(runtime, "crimeSystem"), Is.Not.Null);
+
+        FieldInfo boundCrimeField = typeof(SimulationRuntime).GetField(
+            "p12CrimeJusticeBoundCrimeSystem", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(boundCrimeField, Is.Not.Null);
+        boundCrimeField.SetValue(runtime, null);
+
+        MethodInfo runMutation = typeof(SimulationRuntime).GetMethod(
+            "RunP12CrimeJusticeDailyMutation",
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            types: new[]
+            {
+                typeof(DailyV1SelectedRuntimeOwnerGraph),
+                typeof(DailyV1SelectedCrimeJusticeDailyPhase),
+                typeof(Action)
+            },
+            modifiers: null);
+        Assert.That(runMutation, Is.Not.Null);
+        int mutationCalls = 0;
+        TargetInvocationException failure = Assert.Throws<TargetInvocationException>(() =>
+            runMutation.Invoke(runtime, new object[]
+            {
+                graph,
+                DailyV1SelectedCrimeJusticeDailyPhase.AdvanceHiddenStatuses,
+                (Action)(() => mutationCalls++)
+            }));
+
+        Assert.That(failure.InnerException, Is.TypeOf<InvalidOperationException>());
+        Assert.That(failure.InnerException.Message,
+            Does.Contain("exact Crime receipt census identity"));
+        Assert.That(mutationCalls, Is.Zero,
+            "A missing exact Crime receipt census binding is rejected before the admitted mutation runs.");
+    }
+
+    [Test]
     public void SelectedCrimeJusticeDailyStageContinuesAcrossPublicDailyAdvances()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(

@@ -389,7 +389,8 @@ public sealed class SimulationBootstrapCompositionTests
 
         Assert.That(failure.InnerException, Is.TypeOf<System.InvalidOperationException>());
         AssertPublicWorldAccessorsUnavailable(simulation, "after failure");
-        Assert.That(identityAllocationCount, Is.EqualTo(1));
+        Assert.That(identityAllocationCount, Is.Zero,
+            "A failed selected Daily-v1 genesis does not invoke Unity identity allocation on retry.");
         Assert.That(typeof(TesteSimulacao).GetField("unpublishedWorldId", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(simulation), Is.Null);
         Assert.That(typeof(TesteSimulacao).GetField("draftComposition", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -401,7 +402,8 @@ public sealed class SimulationBootstrapCompositionTests
         int retryCallbackCount = 0;
         InvokeBootstrapInitialize(simulation, _ => retryCallbackCount++);
         Assert.That(retryCallbackCount, Is.Zero);
-        Assert.That(identityAllocationCount, Is.EqualTo(1));
+        Assert.That(identityAllocationCount, Is.Zero,
+            "A failed selected Daily-v1 genesis does not invoke Unity identity allocation on retry.");
         AssertPublicWorldAccessorsUnavailable(simulation, "after retry attempts");
     }
 
@@ -2032,7 +2034,7 @@ public sealed class SimulationBootstrapCompositionTests
     }
 
     [Test]
-    public void SelectedDailyV1DefinitionGraphIsPreparedBeforeWorldIdentityAllocation()
+    public void SelectedDailyV1CoreGenesisOwnsWorldIdentityAllocation()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
@@ -2045,34 +2047,30 @@ public sealed class SimulationBootstrapCompositionTests
         typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
 
-        DailyV1EffectiveDefinitions graphAtIdentityAllocation = null;
-        string fingerprintAtIdentityAllocation = null;
-        WorldId worldId = new WorldId(new System.Guid("2e6212da-7d5a-4b99-81f1-4881df17049a"));
+        int unityWorldIdentityAllocatorCalls = 0;
         typeof(TesteSimulacao).GetField("worldIdentityAllocator", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(simulation, new System.Func<WorldId>(() =>
             {
-                graphAtIdentityAllocation = (DailyV1EffectiveDefinitions)typeof(TesteSimulacao)
-                    .GetField("selectedDefinitions", BindingFlags.Instance | BindingFlags.NonPublic)
-                    .GetValue(simulation);
-                if (graphAtIdentityAllocation != null)
-                    fingerprintAtIdentityAllocation = DailyV1DefinitionIdentity.CreateP9Fingerprint(
-                        graphAtIdentityAllocation, out _);
-                return worldId;
+                unityWorldIdentityAllocatorCalls++;
+                return new WorldId(new System.Guid("2e6212da-7d5a-4b99-81f1-4881df17049a"));
             }));
 
         simulation.Start();
 
-        Assert.That(graphAtIdentityAllocation, Is.Not.Null,
-            "The selected typed graph must be built and admitted before any world identity is allocated.");
-        Assert.That(simulation.Bootstrap.SelectedDefinitions, Is.SameAs(graphAtIdentityAllocation),
-            "The exact pre-allocation graph must be retained by the published composition.");
-        Assert.That(fingerprintAtIdentityAllocation, Is.EqualTo(simulation.Bootstrap.ProfileFingerprint),
-            "Moving graph construction earlier must preserve the canonical P9 fingerprint.");
-        Assert.That(simulation.Bootstrap.WorldId, Is.SameAs(worldId));
+        DailyV1EffectiveDefinitions graph = simulation.Bootstrap.SelectedDefinitions;
+        Assert.That(graph, Is.Not.Null,
+            "The selected typed graph must be admitted before Core genesis publishes its composition.");
+        Assert.That(unityWorldIdentityAllocatorCalls, Is.Zero,
+            "Selected Daily-v1 WorldId allocation belongs to Core genesis; the Unity allocator remains only a legacy host hook.");
+        Assert.That(simulation.Bootstrap.WorldId, Is.Not.Null,
+            "Core genesis publishes the WorldId it allocated for the admitted selected graph.");
+        Assert.That(DailyV1DefinitionIdentity.CreateP9Fingerprint(graph, out _),
+            Is.EqualTo(simulation.Bootstrap.ProfileFingerprint),
+            "Core-owned identity allocation preserves the selected graph's canonical P9 fingerprint.");
 
         foreach (CityRuntime city in simulation.Runtime.Cities)
         {
-            Assert.That(graphAtIdentityAllocation.Cities.TryGetValue(city.DefinitionId, out DailyV1CityDefinition cityNode), Is.True);
+            Assert.That(graph.Cities.TryGetValue(city.DefinitionId, out DailyV1CityDefinition cityNode), Is.True);
             Assert.That(city.SelectedDailyV1Definition, Is.SameAs(cityNode),
                 "The live City must retain the exact typed node admitted before runtime identity allocation.");
             Assert.That(city.CityName, Is.EqualTo(cityNode.Values.cityName));
@@ -2081,7 +2079,7 @@ public sealed class SimulationBootstrapCompositionTests
         }
         foreach (NpcRuntime npc in simulation.Runtime.NpcRuntimes)
         {
-            Assert.That(graphAtIdentityAllocation.Npcs.TryGetValue(npc.DefinitionId, out DailyV1NpcDefinition npcNode), Is.True);
+            Assert.That(graph.Npcs.TryGetValue(npc.DefinitionId, out DailyV1NpcDefinition npcNode), Is.True);
             Assert.That(npc.SelectedDailyV1Definition, Is.SameAs(npcNode),
                 "The live NPC must retain the exact typed node admitted before runtime identity allocation.");
             Assert.That(npc.NpcName, Is.EqualTo(npcNode.Values.name));

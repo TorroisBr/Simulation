@@ -4,7 +4,8 @@ using NUnit.Framework;
 
 public sealed class SimulationRuntimeOrchestrationTests
 {
-    private sealed class RejectedApplicationAdvanceBoundary : IDailyV1RuntimeAdvanceBoundary
+    private sealed class RejectedApplicationAdvanceBoundary : IDailyV1RuntimeAdvanceBoundary,
+        IDailyV1SelectedRuntimeAdvanceHostPorts
     {
         internal RejectedApplicationAdvanceBoundary(DailyV1ExecutionBoundaryState state) =>
             ExecutionState = state;

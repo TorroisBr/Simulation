@@ -807,7 +807,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     /// the exact census source which must be retained by detached staging.
     /// </summary>
     internal bool TryCaptureContinuationSaveBoundaryEvidence(
-        IDailyV1RuntimeAdvanceBoundary boundary,
+        IDailyV1RuntimeAdvanceEvidenceBoundary boundary,
         out DailyCaptureEligibilityToken token,
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,

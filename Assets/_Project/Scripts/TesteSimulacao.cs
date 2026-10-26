@@ -674,7 +674,6 @@ public class TesteSimulacao : MonoBehaviour
 
                             if (!dailyV1Application.TryPrepareInitialGenesis(
                                     stagedSelectedDefinitions,
-                                    worldIdentityAllocator,
                                     completedStage =>
                                     {
                                         if (!coreGenesisCompletedStages.Add(completedStage))

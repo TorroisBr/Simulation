@@ -49,6 +49,11 @@ internal interface IDailyV1SelectedDailyExecutionBoundary
 internal interface IDailyV1SelectedDayStartExecutionContext
 {
     IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
+    /// <summary>
+    /// Compatibility signal for callers outside an admitted execution state.
+    /// An admitted runtime derives unselected membership from its Core-bound
+    /// ordered identity roster instead.
+    /// </summary>
     bool HasUnselectedLiveRuntimeMember { get; }
     bool CrimeSystemPresent { get; }
     bool JusticeSystemPresent { get; }
@@ -358,18 +363,23 @@ internal static class DailyV1SelectedDailyExecutionStage
             demographyResult = new DailyV1SelectedDemographyResult(absoluteDay);
         }
         boundary.PublishSelectedDemographyResult(demographyResult);
-        if (boundary.TryCreateSelectedDayStartContext(
-                graph, out IDailyV1SelectedDayStartExecutionContext dayStartContext))
+        bool hasSelectedDayStartContext = boundary.TryCreateSelectedDayStartContext(
+            graph, out IDailyV1SelectedDayStartExecutionContext dayStartContext);
+        if (hasSelectedDayStartContext)
         {
             if (dayStartContext == null)
                 throw new InvalidOperationException(
                     "The selected Daily-v1 host returned a null day-start context.");
 
-            if (dayStartContext.HasUnselectedLiveRuntimeMember)
+            bool hasUnselectedRuntimeMember = executionState == null
+                ? dayStartContext.HasUnselectedLiveRuntimeMember
+                : HasUnselectedRuntimeMemberFromCoreRoster(executionState, actorRoster);
+            if (hasUnselectedRuntimeMember)
             {
-                // Core selects the established Unity compatibility path from
-                // the host's factual capability signal. It does not let the
-                // host choose the Core roster or selected operation owners.
+                // For an admitted runtime, Core selects the established
+                // whole-stage compatibility path from its exact ordered
+                // identity roster and owner graph. A Unity adapter's parallel
+                // runtime-membership flag cannot select execution authority.
                 boundary.BeginSimulationDay();
             }
             else
@@ -414,8 +424,17 @@ internal static class DailyV1SelectedDailyExecutionStage
         }
         else
         {
-            // Dynamic or otherwise unselected members retain the established
-            // whole-stage Unity lifecycle until their owner closure is admitted.
+            // A Core-bound unselected runtime member still selects the
+            // established mixed-roster compatibility path. Otherwise, an
+            // admitted execution state must not silently delegate a missing
+            // selected boundary back to Unity: Core has already bound its
+            // exact owner graph and selected runtime roots.
+            bool coreSelectedCompatibility = executionState != null
+                && HasUnselectedRuntimeMemberFromCoreRoster(executionState, actorRoster);
+            if (executionState != null && !coreSelectedCompatibility)
+                throw new InvalidOperationException(
+                    "The admitted Daily-v1 host could not provide its selected day-start boundary.");
+
             boundary.BeginSimulationDay();
         }
         if (scheduledDirectives != null)
@@ -492,6 +511,32 @@ internal static class DailyV1SelectedDailyExecutionStage
             throw new InvalidOperationException(
                 "The selected Core post-travel market observation could not apply to its exact owner graph.");
         travelContext.ObserveCompletedTravelResults();
+    }
+
+    private static bool HasUnselectedRuntimeMemberFromCoreRoster(
+        DailyV1ExecutionBoundaryState executionState,
+        IReadOnlyList<DailyV1ActorTurnRosterEntry> coreActorRoster)
+    {
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> runtimeRoster =
+            executionState?.SelectedRuntimeActorRoster;
+        if (runtimeRoster == null || coreActorRoster == null
+            || runtimeRoster.Count != coreActorRoster.Count)
+            throw new InvalidOperationException(
+                "Core cannot select Daily-v1 compatibility execution without its exact ordered runtime roster.");
+
+        for (int ordinal = 0; ordinal < runtimeRoster.Count; ordinal++)
+        {
+            DailyV1ActorTurnRosterProjection projection = runtimeRoster[ordinal];
+            DailyV1ActorTurnRosterEntry entry = coreActorRoster[ordinal];
+            if (entry == null || entry.RosterOrdinal != ordinal)
+                throw new InvalidOperationException(
+                    "Core cannot select Daily-v1 compatibility execution from a malformed owner roster.");
+
+            if (projection != null && entry.ActorOwner == null)
+                return true;
+        }
+
+        return false;
     }
 
     private static bool HasExactSelectedExecutionRoots(

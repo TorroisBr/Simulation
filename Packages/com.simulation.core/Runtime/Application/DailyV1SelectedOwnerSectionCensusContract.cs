@@ -45,6 +45,9 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
     internal const string PersonLifeResidencePrefix = "p12b.person-life-residence/";
     internal const string PersonMembershipSectionId = "p12d.person.membership";
     internal const string PersonMaterializationBindingSectionId = "p12d.person.materialization-binding";
+    internal const string JusticeRecordsSectionId = "p12b.justice-records";
+    internal const string CrimeP18ReceiptsSectionId = "p12b.crime-p18-receipts";
+    internal const string JusticeP18ReceiptsSectionId = "p12b.justice-p18-receipts";
 
     internal static IReadOnlyList<string> NpcPrefixes { get; } = ReadOnly(new[]
     {
@@ -85,8 +88,8 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
         "p12c.runtime-id-allocator.decisions", "p12c.runtime-id-allocator.travel-parties",
         "p12c.simulation-record-sequence", "p12d.genealogy.parentage", "p12f.political-knowledge.holders",
         "p12f.political-decisions.records", "p12.crime-social-appraisal.outcomes",
-        "p12.crime-social-appraisal.knowledge", "p12.crime-social-appraisal.reactions", "p12b.justice-records",
-        "p12b.crime-p18-receipts", "p12b.justice-p18-receipts", "p12e.armed-force.forces",
+        "p12.crime-social-appraisal.knowledge", "p12.crime-social-appraisal.reactions", JusticeRecordsSectionId,
+        CrimeP18ReceiptsSectionId, JusticeP18ReceiptsSectionId, "p12e.armed-force.forces",
         "p12e.armed-force.contingents", "p12e.armed-force.relevant-person-references",
         "p12e.contingent-manpower.states", "p12e.armed-force-spatial.positions", "p12e.conflicts",
         "p12e.wars", "p12e.battles", "p12e.institution.records", "p12e.office.records",
@@ -99,7 +102,7 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
 
     internal static IReadOnlyList<IReadOnlyList<string>> FixedAliasGroups { get; } = ReadOnlyGroups(new[]
     {
-        new[] { "p12b.justice-p18-receipts", "p12b.justice-records" },
+        new[] { JusticeP18ReceiptsSectionId, JusticeRecordsSectionId },
         new[] { "p12c.runtime-id-allocator.decisions", "p12c.runtime-id-allocator.events", "p12c.runtime-id-allocator.travel-parties" },
         new[] { "p12c.runtime-identities.cities", "p12c.runtime-identities.explorable-sites", "p12c.runtime-identities.local-connections", "p12c.runtime-identities.local-places", "p12c.runtime-identities.locations", "p12c.runtime-identities.notable-items", "p12c.runtime-identities.npcs", "p12c.runtime-identities.routes" },
         new[] { "p12d.legacy-spatial-network.locations", "p12d.legacy-spatial-network.routes" },

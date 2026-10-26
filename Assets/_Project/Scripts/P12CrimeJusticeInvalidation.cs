@@ -31,6 +31,8 @@ public sealed partial class SimulationRuntime
             Func<ContinuationCensusProtocol> resolveProtocol) =>
             this.resolveProtocol = resolveProtocol ?? throw new ArgumentNullException(nameof(resolveProtocol));
 
+        public void FaultClosed() => resolveProtocol()?.FaultClosed();
+
         public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
             resolveProtocol()?.TryValidateUnchangedSections(sectionIds, out _) == true;
 
@@ -324,6 +326,73 @@ public sealed partial class SimulationRuntime
             throw new InvalidOperationException("P12 Crime/Justice owner inventory is invalid.");
         }
         P12CrimeJusticeMutationCoordinator.ExecuteDailyMutation(owners, sections, mutation);
+    }
+
+    private void RunP12CrimeJusticeDailyMutation(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1SelectedCrimeJusticeDailyPhase phase,
+        Action mutation)
+    {
+        if (mutation == null) throw new ArgumentNullException(nameof(mutation));
+        if (runtimeAdmissionContext == null)
+        {
+            mutation();
+            return;
+        }
+
+        if (!P12CrimeJusticeMutationCoordinator.CanBeginSelectedDailyMutation(
+                dailyExecutionBoundary, graph))
+            throw new InvalidOperationException(
+                "P12 selected Crime/Justice daily mutation lost its Core admission state or owner thread.");
+
+        if (npcRosterCensusProtocol == null)
+        {
+            FaultRuntimeAdmission();
+            throw new InvalidOperationException(
+                "P12 selected Crime/Justice daily mutation lost its exact runtime admission boundary.");
+        }
+
+        if (justiceSystem != null
+            && (graph.JusticeRecordsOwner == null
+                || !ReferenceEquals(justiceSystem.CoreOwner, graph.JusticeRecordsOwner)))
+        {
+            FaultRuntimeAdmission();
+            throw new InvalidOperationException(
+                "P12 selected Crime/Justice daily mutation lost its exact Justice owner projection.");
+        }
+        if (crimeSystem != null
+            && (graph.JusticeRecordsOwner == null
+                || !ReferenceEquals(crimeSystem.JusticeOwner?.CoreOwner,
+                    graph.JusticeRecordsOwner)))
+        {
+            FaultRuntimeAdmission();
+            throw new InvalidOperationException(
+                "P12 selected Crime/Justice daily mutation lost its exact Crime-to-Justice owner projection.");
+        }
+        object crimeCensusOwnerIdentity = crimeSystem;
+        object crimeReceiptCensusOwnerIdentity = p12CrimeJusticeBoundCrimeSystem;
+        object justiceOwnerIdentity = justiceSystem;
+        object justiceReceiptCensusOwnerIdentity = p12CrimeJusticeBoundJusticeSystem;
+
+        try
+        {
+            P12CrimeJusticeMutationCoordinator.ExecuteSelectedDailyMutation(
+                dailyExecutionBoundary,
+                graph,
+                phase,
+                crimeCensusOwnerIdentity,
+                crimeReceiptCensusOwnerIdentity,
+                justiceOwnerIdentity,
+                justiceReceiptCensusOwnerIdentity,
+                includeCrimeReceiptSection: crimeSystem != null,
+                includeJusticeReceiptSection: justiceSystem != null,
+                mutation);
+        }
+        catch
+        {
+            FaultRuntimeAdmission();
+            throw;
+        }
     }
 
     private bool TryBeginP12CrimeJusticeActionScope(

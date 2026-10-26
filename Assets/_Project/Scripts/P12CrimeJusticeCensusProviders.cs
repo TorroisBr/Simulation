@@ -5,9 +5,9 @@ using System.Collections.Generic;
 public static class P12CrimeJusticeCensusProvider
 {
     public const string NpcStatusSectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimePrefix;
-    public const string JusticeRecordsSectionId = "p12b.justice-records";
-    public const string CrimeP18ReceiptsSectionId = "p12b.crime-p18-receipts";
-    public const string JusticeP18ReceiptsSectionId = "p12b.justice-p18-receipts";
+    public const string JusticeRecordsSectionId = DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId;
+    public const string CrimeP18ReceiptsSectionId = DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId;
+    public const string JusticeP18ReceiptsSectionId = DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId;
     public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
 
     public static string NpcStatusSectionIdFor(string runtimeId)
